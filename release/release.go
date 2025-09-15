@@ -18,6 +18,10 @@ var embedded embed.FS
 const Port = 8666
 
 func main() {
+	// Create required directories
+	os.MkdirAll("data", 0755)
+	os.MkdirAll("static", 0755)
+
 	distFS, err := fs.Sub(embedded, "dist")
 	if err != nil {
 		log.Fatalf("failed to sub‐fs: %v", err)

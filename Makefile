@@ -11,7 +11,7 @@ NAS_SERVICE  ?= family_portal_service
 
 # ── build settings ─────────────────────────────────────────────────────────────
 BUILD_DIR    := build
-BINARY_NAME  := family_portal
+BINARY_NAME  := family_site
 
 GOOS         := linux
 GOARCH       := amd64
@@ -25,9 +25,9 @@ build:
 	# make sure build dir exists
 	mkdir -p $(BUILD_DIR)
 	# (b) compile release.go into a self‑contained Linux binary
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
-	  go build -ldflags="-s -w" \
-	    -o $(BUILD_DIR)/$(BINARY_NAME) release/release.go
+	cd release && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
+	  go build -tags release -ldflags="-s -w" \
+	    -o ../$(BUILD_DIR)/$(BINARY_NAME) release.go
 
 stop_service:
 	@echo "Stopping $(NAS_SERVICE) on NAS..."
