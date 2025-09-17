@@ -16,7 +16,7 @@ export function view(
   return (
     <div>
       <Header isHome={true} />
-      <main id="app" class="landing-container">
+      <main id="app" className="landing-container">
         <LandingPage />
       </main>
       <Footer />
@@ -25,70 +25,70 @@ export function view(
 }
 
 const LandingPage = () => (
-  <div class="landing-page">
-    <section class="landing-hero">
-      <div class="hero-content">
-        <h1 class="hero-title">Family Portal</h1>
-        <p class="hero-subtitle">
+  <div className="landing-page">
+    <section className="landing-hero">
+      <div className="hero-content">
+        <h1 className="hero-title">Family Portal</h1>
+        <p className="hero-subtitle">
           A private space for your family to share photos, coordinate schedules, and stay connected.
         </p>
-        <div class="hero-actions">
-          <button class="btn btn-primary btn-large">
+        <div className="hero-actions">
+          <button className="btn btn-primary btn-large">
             Create Account
           </button>
-          <button class="btn btn-secondary btn-large">
+          <button className="btn btn-secondary btn-large">
             Log In
           </button>
         </div>
       </div>
-      <div class="hero-visual">
-        <div class="floating-card card-1">
-          <div class="card-icon">📸</div>
-          <div class="card-text">Photos</div>
+      <div className="hero-visual">
+        <div className="floating-card card-1">
+          <div className="card-icon">📸</div>
+          <div className="card-text">Photos</div>
         </div>
-        <div class="floating-card card-2">
-          <div class="card-icon">📅</div>
-          <div class="card-text">Calendar</div>
+        <div className="floating-card card-2">
+          <div className="card-icon">📅</div>
+          <div className="card-text">Calendar</div>
         </div>
-        <div class="floating-card card-3">
-          <div class="card-icon">💬</div>
-          <div class="card-text">Messages</div>
+        <div className="floating-card card-3">
+          <div className="card-icon">💬</div>
+          <div className="card-text">Messages</div>
         </div>
       </div>
     </section>
 
-    <section class="features-section">
-      <h2 class="section-title">What you can do</h2>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">🏠</div>
+    <section className="features-section">
+      <h2 className="section-title">What you can do</h2>
+      <div className="features-grid">
+        <div className="feature-card">
+          <div className="feature-icon">🏠</div>
           <h3>Family Space</h3>
           <p>Create a private group just for your family. Invite members with a simple link.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">📸</div>
+        <div className="feature-card">
+          <div className="feature-icon">📸</div>
           <h3>Photo Albums</h3>
           <p>Share photos in organized albums. Everyone can contribute and download.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">📅</div>
+        <div className="feature-card">
+          <div className="feature-icon">📅</div>
           <h3>Shared Calendar</h3>
           <p>Keep track of birthdays, events, and family plans in one place.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">💬</div>
+        <div className="feature-card">
+          <div className="feature-icon">💬</div>
           <h3>Group Chat</h3>
           <p>Simple messaging to stay in touch. No ads, no algorithms, just family.</p>
         </div>
       </div>
     </section>
 
-    <section class="cta-section">
-      <div class="cta-content">
+    <section className="cta-section">
+      <div className="cta-content">
         <h2>Getting started is simple</h2>
         <p>Create an account, set up your family group, and invite members.</p>
-        <div class="cta-actions">
-          <button class="btn btn-primary btn-large">
+        <div className="cta-actions">
+          <button className="btn btn-primary btn-large">
             Create Account
           </button>
         </div>
