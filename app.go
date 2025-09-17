@@ -1,6 +1,7 @@
 package family
 
 import (
+	"family/backend"
 	"family/cfg"
 
 	"go.hasen.dev/vbeam"
@@ -18,6 +19,10 @@ func OpenDB(dbpath string) *vbolt.DB {
 func MakeApplication() *vbeam.Application {
 	db := OpenDB(cfg.DBPath)
 	var app = vbeam.NewApplication("FamilyPortal", db)
+
+	backend.SetupAuth(app)
+	backend.RegisterUserMethods(app)
+
 	return app
 }
 

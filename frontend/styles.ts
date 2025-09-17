@@ -1052,6 +1052,34 @@ block(`
 `);
 
 block(`
+.error-message {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+[data-theme="dark"] .error-message {
+  background: #450a0a;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+`);
+
+block(`
+.form-group input:disabled,
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+`);
+
+block(`
 @media (max-width: 480px) {
   .create-account-container {
     padding: 20px 16px;
