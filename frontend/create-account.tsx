@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import { Header } from "./header"
+import { Header, Footer } from "./layout"
 
 type Data = {};
 
@@ -105,10 +105,3 @@ const CreateAccountPage = () => (
   </div>
 );
 
-const Footer = () => (
-  <footer className="site-footer">
-    <p>
-      © <span id="year">2025</span> Family Portal. All rights reserved.
-    </p>
-  </footer>
-);

@@ -67,6 +67,14 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
   );
 };
 
+export const Footer = () => (
+  <footer className="site-footer">
+    <p>
+      © <span id="year">2025</span> Family Portal. All rights reserved.
+    </p>
+  </footer>
+);
+
 const themeToggleClicked = (themeRef: Ref) => {
   const html = document.documentElement;
   html.classList.add("theme-transition");
