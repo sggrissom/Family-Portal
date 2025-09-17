@@ -37,5 +37,10 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
+      - name: Pre-build esbuild binary
+        run: |
+          # Force download and extract the esbuild binary
+          go run -modfile=go.mod github.com/evanw/esbuild/cmd/esbuild@v0.24.0 --version
+
       - name: Build project
         run: make build
