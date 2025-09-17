@@ -47,6 +47,13 @@ jobs:
           ls -la frontend/
           go version
           echo "PATH: $PATH"
+          # Test esbuild with a simple file
+          echo 'console.log("test")' > test.js
+          esbuild test.js --outfile=test.out.js --format=esm || echo "esbuild test failed"
+          rm -f test.js test.out.js
 
       - name: Build project
-        run: make build
+        run: |
+          # Ensure esbuild is in PATH for Go processes
+          export PATH="/opt/hostedtoolcache/node/20.19.5/x64/bin:$PATH"
+          make build
