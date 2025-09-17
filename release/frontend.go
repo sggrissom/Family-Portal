@@ -43,12 +43,17 @@ func main() {
 	log.Printf("Build options: FERoot=%s, EntryTS=%v, Outdir=%s\n",
 		options.FERoot, options.EntryTS, options.Outdir)
 
+	// Try to ensure esbuild is available
+	log.Println("Calling FEBuild...")
 	ok := esbuilder.FEBuild(options, reportCh)
 
+	log.Printf("FEBuild returned: %v, waiting for report...\n", ok)
 	report := <-reportCh
+	log.Printf("Got report with %d errors\n", len(report.Errors))
 
 	if !ok {
-		log.Println("Build failed: FEBuild returned false")
+		log.Println("Build failed: FEBuild returned false (likely esbuild binary issue)")
+		log.Println("This often happens when esbuild binary is not installed or accessible")
 		os.Exit(1)
 	}
 

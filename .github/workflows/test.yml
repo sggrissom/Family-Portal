@@ -19,6 +19,11 @@ jobs:
         with:
           go-version: 1.22
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
       - name: Cache Go modules
         uses: actions/cache@v3
         with:
@@ -28,6 +33,9 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+      - name: Download Go dependencies
+        run: go mod download
 
       - name: Build project
         run: make build
