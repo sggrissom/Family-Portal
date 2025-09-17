@@ -33,12 +33,12 @@ const LandingPage = () => (
           A private space for your family to share photos, coordinate schedules, and stay connected.
         </p>
         <div className="hero-actions">
-          <button className="btn btn-primary btn-large">
+          <a href="/create-account" className="btn btn-primary btn-large">
             Create Account
-          </button>
-          <button className="btn btn-secondary btn-large">
+          </a>
+          <a href="/login" className="btn btn-secondary btn-large">
             Log In
-          </button>
+          </a>
         </div>
       </div>
       <div className="hero-visual">
@@ -88,9 +88,9 @@ const LandingPage = () => (
         <h2>Getting started is simple</h2>
         <p>Create an account, set up your family group, and invite members.</p>
         <div className="cta-actions">
-          <button className="btn btn-primary btn-large">
+          <a href="/create-account" className="btn btn-primary btn-large">
             Create Account
-          </button>
+          </a>
         </div>
       </div>
     </section>
