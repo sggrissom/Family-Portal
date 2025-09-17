@@ -34,7 +34,7 @@ export function view(
 ): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
-    core.setRoute('/');
+    core.setRoute('/dashboard');
   }
 
   const form = useLoginForm();
@@ -76,8 +76,8 @@ async function onLoginClicked(form: LoginForm, event: Event) {
       rpc.setAuthHeaders({'x-auth-token': result.token});
       // Cache auth data
       auth.setAuth(result.auth);
-      // Redirect to home/dashboard
-      core.setRoute('/');
+      // Redirect to dashboard
+      core.setRoute('/dashboard');
     } else {
       form.error = result.error || "Login failed";
     }

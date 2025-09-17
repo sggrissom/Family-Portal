@@ -1238,47 +1238,6 @@ block(`
 }
 `);
 
-// Authentication status styles
-block(`
-.auth-status {
-  margin-bottom: 16px;
-}
-`);
-
-block(`
-.auth-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(90deg, var(--accent), var(--primary-accent));
-  color: var(--button-text);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(105, 219, 124, 0.3);
-}
-`);
-
-block(`
-.authenticated-actions {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-}
-`);
-
-block(`
-.authenticated-actions p {
-  margin: 0;
-  color: var(--text);
-  font-size: 1.1rem;
-  line-height: 1.5;
-}
-`);
-
 // Header authentication styles
 block(`
 .user-info-container {
@@ -1363,6 +1322,118 @@ block(`
     width: 100%;
     justify-content: center;
     margin-top: 4px;
+  }
+}
+`);
+
+// Dashboard Page Styles
+block(`
+.dashboard-container {
+  max-width: 1200px;
+  padding: 40px 20px;
+  margin: 0 auto;
+}
+`);
+
+block(`
+.dashboard-page {
+  width: 100%;
+}
+`);
+
+block(`
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+`);
+
+block(`
+.dashboard-header h1 {
+  font-size: clamp(2rem, 4vw, 2.5rem);
+  margin: 0 0 8px;
+  color: var(--text);
+}
+`);
+
+block(`
+.dashboard-header p {
+  font-size: 1.2rem;
+  color: var(--muted);
+  margin: 0;
+}
+`);
+
+block(`
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+`);
+
+block(`
+.dashboard-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+`);
+
+block(`
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+`);
+
+block(`
+.dashboard-card .card-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  display: block;
+}
+`);
+
+block(`
+.dashboard-card h3 {
+  font-size: 1.3rem;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+`);
+
+block(`
+.dashboard-card p {
+  color: var(--muted);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+`);
+
+block(`
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 30px 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .dashboard-card {
+    padding: 24px;
+  }
+
+  .dashboard-header {
+    margin-bottom: 30px;
   }
 }
 `);
