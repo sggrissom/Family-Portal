@@ -32,5 +32,11 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
+      - name: Create minimal dist for Go embed
+        run: |
+          mkdir -p release/dist
+          echo '<!DOCTYPE html><html><body>CI Build</body></html>' > release/dist/index.html
+          echo 'console.log("CI build");' > release/dist/main.js
+
       - name: Build Go binary only
         run: make build-go
