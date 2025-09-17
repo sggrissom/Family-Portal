@@ -1237,3 +1237,132 @@ block(`
   }
 }
 `);
+
+// Authentication status styles
+block(`
+.auth-status {
+  margin-bottom: 16px;
+}
+`);
+
+block(`
+.auth-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(90deg, var(--accent), var(--primary-accent));
+  color: var(--button-text);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(105, 219, 124, 0.3);
+}
+`);
+
+block(`
+.authenticated-actions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+`);
+
+block(`
+.authenticated-actions p {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+`);
+
+// Header authentication styles
+block(`
+.user-info-container {
+  padding: 0;
+}
+`);
+
+block(`
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text) !important;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--accent), var(--primary-accent));
+  color: var(--button-text) !important;
+  pointer-events: none;
+  user-select: none;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(105, 219, 124, 0.2);
+  margin: 4px 0;
+}
+`);
+
+block(`
+.user-avatar {
+  font-size: 1rem;
+}
+`);
+
+block(`
+.user-name {
+  color: var(--button-text) !important;
+  font-weight: 600;
+}
+`);
+
+block(`
+.logout-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+}
+`);
+
+block(`
+.logout-button:hover {
+  background: var(--hover-bg);
+  border-color: #dc2626;
+  color: #dc2626;
+}
+`);
+
+block(`
+.nav-links .logout-button {
+  padding: 10px 12px;
+  width: auto;
+}
+`);
+
+// Mobile-specific user info styling
+block(`
+@media (max-width: 640px) {
+  .user-info-container {
+    order: -1;
+    margin-bottom: 8px;
+  }
+
+  .user-info {
+    justify-content: center;
+    margin: 0 0 8px 0;
+    padding: 10px 16px;
+  }
+
+  .logout-button {
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+  }
+}
+`);

@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
+import * as auth from "./authCache";
 import { Header, Footer } from "./layout"
 
 type Data = {};
@@ -24,23 +25,40 @@ export function view(
   );
 }
 
-const LandingPage = () => (
-  <div className="landing-page">
-    <section className="landing-hero">
-      <div className="hero-content">
-        <h1 className="hero-title">Family Portal</h1>
-        <p className="hero-subtitle">
-          A private space for your family to share photos, coordinate schedules, and stay connected.
-        </p>
-        <div className="hero-actions">
-          <a href="/create-account" className="btn btn-primary btn-large">
-            Create Account
-          </a>
-          <a href="/login" className="btn btn-secondary btn-large">
-            Log In
-          </a>
+const LandingPage = () => {
+  const currentAuth = auth.getAuth();
+  const isAuthenticated = currentAuth && currentAuth.id > 0;
+
+  return (
+    <div className="landing-page">
+      <section className="landing-hero">
+        <div className="hero-content">
+          {isAuthenticated && (
+            <div className="auth-status">
+              <span className="auth-indicator">✓ Signed in</span>
+            </div>
+          )}
+          <h1 className="hero-title">Family Portal</h1>
+          <p className="hero-subtitle">
+            A private space for your family to share photos, coordinate schedules, and stay connected.
+          </p>
+          <div className="hero-actions">
+            {isAuthenticated ? (
+              <div className="authenticated-actions">
+                <p>Welcome back! You're signed in as a family member.</p>
+              </div>
+            ) : (
+              <>
+                <a href="/create-account" className="btn btn-primary btn-large">
+                  Create Account
+                </a>
+                <a href="/login" className="btn btn-secondary btn-large">
+                  Log In
+                </a>
+              </>
+            )}
+          </div>
         </div>
-      </div>
       <div className="hero-visual">
         <div className="floating-card card-1">
           <div className="card-icon">📸</div>
@@ -95,5 +113,6 @@ const LandingPage = () => (
       </div>
     </section>
   </div>
-);
+  );
+};
 

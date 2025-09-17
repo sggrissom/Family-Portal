@@ -1,8 +1,27 @@
 import * as preact from "preact";
+import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
+import * as core from "vlens/core";
+import * as auth from "./authCache";
 import { Header, Footer } from "./layout"
 
 type Data = {};
+
+type LoginForm = {
+  email: string;
+  password: string;
+  remember: boolean;
+  error: string;
+  loading: boolean;
+}
+
+const useLoginForm = vlens.declareHook((): LoginForm => ({
+  email: "",
+  password: "",
+  remember: false,
+  error: "",
+  loading: false
+}))
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
@@ -13,18 +32,78 @@ export function view(
   prefix: string,
   data: Data,
 ): preact.ComponentChild {
+  const currentAuth = auth.getAuth();
+  if (currentAuth && currentAuth.id > 0) {
+    core.setRoute('/');
+  }
+
+  const form = useLoginForm();
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="login-container">
-        <LoginPage />
+        <LoginPage form={form} />
       </main>
       <Footer />
     </div>
   );
 }
 
-const LoginPage = () => (
+async function onLoginClicked(form: LoginForm, event: Event) {
+  event.preventDefault();
+  form.loading = true;
+  form.error = "";
+  vlens.scheduleRedraw();
+
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch('/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password
+      })
+    });
+
+    const result = await res.json();
+    form.loading = false;
+
+    if (result.success) {
+      // Set auth token for future RPC calls
+      rpc.setAuthHeaders({'x-auth-token': result.token});
+      // Cache auth data
+      auth.setAuth(result.auth);
+      // Redirect to home/dashboard
+      core.setRoute('/');
+    } else {
+      form.error = result.error || "Login failed";
+    }
+  } catch (error) {
+    form.loading = false;
+    form.error = "Network error. Please try again.";
+  }
+
+  vlens.scheduleRedraw();
+
+  // Scroll to error if there is one
+  if (form.error) {
+    setTimeout(() => {
+      const errorElement = document.querySelector('.error-message');
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  }
+}
+
+interface LoginPageProps {
+  form: LoginForm;
+}
+
+const LoginPage = ({ form }: LoginPageProps) => (
   <div className="login-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -32,8 +111,12 @@ const LoginPage = () => (
         <p>Sign in to your family portal</p>
       </div>
 
+      {form.error && (
+        <div className="error-message">{form.error}</div>
+      )}
+
       <div className="auth-methods">
-        <button className="btn btn-google">
+        <button className="btn btn-google" disabled={form.loading}>
           <GoogleIcon />
           Continue with Google
         </button>
@@ -42,15 +125,16 @@ const LoginPage = () => (
           <span>or</span>
         </div>
 
-        <form className="auth-form">
+        <form className="auth-form" onSubmit={vlens.cachePartial(onLoginClicked, form)}>
           <div className="form-group">
             <label htmlFor="email">Email Address</label>
             <input
               type="email"
               id="email"
-              name="email"
               placeholder="Enter your email"
+              {...vlens.attrsBindInput(vlens.ref(form, "email"))}
               required
+              disabled={form.loading}
             />
           </div>
 
@@ -59,15 +143,20 @@ const LoginPage = () => (
             <input
               type="password"
               id="password"
-              name="password"
               placeholder="Enter your password"
+              {...vlens.attrsBindInput(vlens.ref(form, "password"))}
               required
+              disabled={form.loading}
             />
           </div>
 
           <div className="form-options">
             <label className="checkbox-label">
-              <input type="checkbox" name="remember" />
+              <input
+                type="checkbox"
+                {...vlens.attrsBindInput(vlens.ref(form, "remember"))}
+                disabled={form.loading}
+              />
               <span className="checkbox-text">Remember me</span>
             </label>
             <a href="/forgot-password" className="auth-link">
@@ -75,8 +164,12 @@ const LoginPage = () => (
             </a>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-large auth-submit">
-            Sign In
+          <button
+            type="submit"
+            className="btn btn-primary btn-large auth-submit"
+            disabled={form.loading}
+          >
+            {form.loading ? "Signing In..." : "Sign In"}
           </button>
         </form>
       </div>

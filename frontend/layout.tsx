@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
+import * as auth from "./authCache";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -28,6 +29,9 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
   const headerData = useHeader();
   const themeRef = vlens.ref(headerData, "theme");
   const menuRef = vlens.ref(headerData, "isMenuOpen");
+  const currentAuth = auth.getAuth();
+  const isAuthenticated = currentAuth && currentAuth.id > 0;
+
   return (
     <header className="site-header">
       <nav className="nav" aria-label="main">
@@ -53,6 +57,33 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
               Home
             </a>
           </li>
+          {isAuthenticated ? (
+            <>
+              <li className="user-info-container">
+                <div className="user-info">
+                  <span className="user-avatar">👤</span>
+                  <span className="user-name">{currentAuth.name}</span>
+                </div>
+              </li>
+              <li>
+                <button
+                  onClick={logoutClicked}
+                  className="logout-button"
+                >
+                  Logout
+                </button>
+              </li>
+            </>
+          ) : (
+            <>
+              <li>
+                <a href="/login">Login</a>
+              </li>
+              <li>
+                <a href="/create-account">Sign Up</a>
+              </li>
+            </>
+          )}
           <li>
             <button
               onClick={vlens.cachePartial(themeToggleClicked, themeRef)}
@@ -75,6 +106,16 @@ export const Footer = () => (
   </footer>
 );
 
+const logoutClicked = (event: Event) => {
+  event.preventDefault();
+  // Close mobile menu first if it's open
+  const menuToggle = document.getElementById('navToggle');
+  if (menuToggle && menuToggle.getAttribute('aria-expanded') === 'true') {
+    menuToggle.click();
+  }
+  auth.logout();
+};
+
 const themeToggleClicked = (themeRef: Ref) => {
   const html = document.documentElement;
   html.classList.add("theme-transition");
@@ -96,7 +137,8 @@ const menuClicked = (menuRef: Ref) => {
       if (
         event.target.tagName !== "A" &&
         !event.target.classList.contains("nav-toggle") &&
-        !event.target.classList.contains("theme-switch")
+        !event.target.classList.contains("theme-switch") &&
+        !event.target.classList.contains("logout-button")
       ) {
         document.removeEventListener("mousedown", handleClickOutside);
         vlens.refSet(menuRef, false);
