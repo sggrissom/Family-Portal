@@ -40,5 +40,13 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
+      - name: Debug environment
+        run: |
+          which esbuild || echo "esbuild not found in PATH"
+          esbuild --version || echo "esbuild not executable"
+          ls -la frontend/
+          go version
+          echo "PATH: $PATH"
+
       - name: Build project
         run: make build
