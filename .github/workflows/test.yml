@@ -19,14 +19,6 @@ jobs:
         with:
           go-version: 1.22
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-
-      - name: Install esbuild globally
-        run: npm install -g esbuild@0.24.0
-
       - name: Cache Go modules
         uses: actions/cache@v3
         with:
@@ -40,20 +32,5 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
-      - name: Debug environment
-        run: |
-          which esbuild || echo "esbuild not found in PATH"
-          esbuild --version || echo "esbuild not executable"
-          ls -la frontend/
-          go version
-          echo "PATH: $PATH"
-          # Test esbuild with a simple file
-          echo 'console.log("test")' > test.js
-          esbuild test.js --outfile=test.out.js --format=esm || echo "esbuild test failed"
-          rm -f test.js test.out.js
-
-      - name: Build project
-        run: |
-          # Ensure esbuild is in PATH for Go processes
-          export PATH="/opt/hostedtoolcache/node/20.19.5/x64/bin:$PATH"
-          make build
+      - name: Build Go binary only
+        run: make build-go

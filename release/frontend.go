@@ -12,18 +12,6 @@ import (
 func main() {
 	log.Println("Starting frontend build…")
 
-	if _, err := os.Stat("frontend"); os.IsNotExist(err) {
-		log.Fatal("Error: frontend directory does not exist")
-	}
-
-	if _, err := os.Stat("frontend/main.tsx"); os.IsNotExist(err) {
-		log.Fatal("Error: frontend/main.tsx does not exist")
-	}
-
-	if _, err := os.Stat("frontend/index.html"); os.IsNotExist(err) {
-		log.Fatal("Error: frontend/index.html does not exist")
-	}
-
 	reportCh := make(chan esbuilder.ESReport, 2)
 
 	options := esbuilder.FEBuildOptions{
@@ -40,40 +28,20 @@ func main() {
 		},
 	}
 
-	log.Printf("Build options: FERoot=%s, EntryTS=%v, Outdir=%s\n",
-		options.FERoot, options.EntryTS, options.Outdir)
-
-	// Try to ensure esbuild is available
-	log.Println("Calling FEBuild...")
 	ok := esbuilder.FEBuild(options, reportCh)
 
-	log.Printf("FEBuild returned: %v, waiting for report...\n", ok)
 	report := <-reportCh
-	log.Printf("Got report with %d errors\n", len(report.Errors))
 
-	if !ok {
-		log.Println("Build failed: FEBuild returned false (likely esbuild binary issue)")
-		log.Println("This often happens when esbuild binary is not installed or accessible")
-		os.Exit(1)
-	}
-
-	if len(report.Errors) > 0 {
-		log.Printf("Build completed with %d error(s):\n", len(report.Errors))
-		for i, e := range report.Errors {
-			log.Printf("Error %d: %s\n", i+1, e.Text)
-			if e.Location.File != "" {
-				log.Printf("  File: %s\n", e.Location.File)
-				log.Printf("  Line: %d, Column: %d\n", e.Location.Line, e.Location.Column)
-			}
-			if e.Location.LineText != "" {
-				log.Printf("  Code: %s\n", e.Location.LineText)
-			}
+	if !ok || len(report.Errors) > 0 {
+		log.Println("Build completed with errors:")
+		for _, e := range report.Errors {
+			log.Printf("  %s (%d:%d)\n", e.Text, e.Location.Line, e.Location.Column)
 		}
 		os.Exit(1)
 	}
 
 	fmt.Printf(" Built into release/dist in %s (started at %s)\n",
-		report.Duration.Truncate(time.Millisecond),
-		report.Time.Format("15:04:05"),
-	)
+	report.Duration.Truncate(time.Millisecond),
+	report.Time.Format("15:04:05"),
+)
 }

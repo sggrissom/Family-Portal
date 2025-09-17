@@ -17,10 +17,11 @@ GOOS         := linux
 GOARCH       := amd64
 CGO_ENABLED  := 0
 
-build:
+build-frontend:
 	@echo "Building frontend..."
 	go run release/frontend.go
 
+build-go:
 	@echo "Building $(BINARY_NAME)..."
 	# make sure build dir exists
 	mkdir -p $(BUILD_DIR)
@@ -28,6 +29,8 @@ build:
 	cd release && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
 	  go build -tags release -ldflags="-s -w" \
 	    -o ../$(BUILD_DIR)/$(BINARY_NAME) release.go
+
+build: build-frontend build-go
 
 stop_service:
 	@echo "Stopping $(NAS_SERVICE) on NAS..."
