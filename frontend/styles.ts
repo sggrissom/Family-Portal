@@ -1437,3 +1437,231 @@ block(`
   }
 }
 `);
+
+// Family Members Section Styles
+block(`
+.family-section {
+  margin-bottom: 50px;
+}
+`);
+
+block(`
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+`);
+
+block(`
+.section-header h2 {
+  font-size: 1.8rem;
+  margin: 0;
+  color: var(--text);
+}
+`);
+
+block(`
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+`);
+
+block(`
+.empty-state p {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin: 0 0 20px;
+}
+`);
+
+block(`
+.people-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+`);
+
+block(`
+.people-group h3 {
+  font-size: 1.3rem;
+  margin: 0 0 16px;
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 8px;
+  display: inline-block;
+}
+`);
+
+block(`
+.people-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+`);
+
+block(`
+.person-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+`);
+
+block(`
+.person-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+`);
+
+block(`
+.person-avatar {
+  font-size: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: var(--bg);
+  border-radius: 50%;
+  border: 2px solid var(--border);
+}
+`);
+
+block(`
+.person-info h4 {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+`);
+
+block(`
+.person-details {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+}
+`);
+
+// Add Person Page Styles
+block(`
+.add-person-container {
+  max-width: 500px;
+  padding: 40px 20px;
+  margin: 0 auto;
+  min-height: calc(100vh - 200px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+`);
+
+block(`
+.add-person-page {
+  width: 100%;
+}
+`);
+
+block(`
+.form-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+`);
+
+block(`
+.form-actions .btn {
+  flex: 1;
+}
+`);
+
+block(`
+.form-group select {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  transition: border-color var(--transition-speed) ease;
+  width: 100%;
+}
+`);
+
+block(`
+.form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+`);
+
+block(`
+.success-message {
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+[data-theme="dark"] .success-message {
+  background: #064e3b;
+  border-color: #047857;
+  color: #6ee7b7;
+}
+`);
+
+// Mobile responsive styles for person management
+block(`
+@media (max-width: 768px) {
+  .section-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .people-list {
+    grid-template-columns: 1fr;
+  }
+
+  .person-card {
+    padding: 16px;
+  }
+
+  .person-avatar {
+    width: 50px;
+    height: 50px;
+    font-size: 2rem;
+  }
+
+  .add-person-container {
+    padding: 30px 16px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+}
+`);

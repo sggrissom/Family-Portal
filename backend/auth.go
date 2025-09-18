@@ -149,50 +149,6 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 	return
 }
 
-func getTokenFromRequest(r *http.Request) string {
-	// Try cookie first
-	if cookie, err := r.Cookie("authToken"); err == nil {
-		return cookie.Value
-	}
-
-	// Try Authorization header
-	auth := r.Header.Get("Authorization")
-	if len(auth) > 7 && auth[:7] == "Bearer " {
-		return auth[7:]
-	}
-
-	return ""
-}
-
-func validateToken(tokenString string) (User, error) {
-	var user User
-
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return jwtKey, nil
-	})
-
-	if err != nil || !token.Valid {
-		return user, ErrAuthFailure
-	}
-
-	if claims, ok := token.Claims.(*Claims); ok {
-		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-			userId := GetUserId(tx, claims.Username)
-			if userId != 0 {
-				user = GetUser(tx, userId)
-			}
-		})
-	}
-
-	if user.Id == 0 {
-		return user, ErrAuthFailure
-	}
-
-	return user, nil
-}
 
 func GetAuthUser(ctx *vbeam.Context) (user User, err error) {
 	if len(ctx.Token) == 0 {
