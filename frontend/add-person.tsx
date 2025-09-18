@@ -72,7 +72,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
 
     form.loading = false;
 
-    if (resp && resp.success) {
+    if (resp) {
       form.success = true;
       // Clear form
       form.name = "";
@@ -82,7 +82,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
 
       core.setRoute('/dashboard');
     } else {
-      form.error = resp?.error || err || "Failed to add family member";
+      form.error = err || "Failed to add family member";
     }
   } catch (error) {
     form.loading = false;

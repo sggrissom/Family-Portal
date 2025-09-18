@@ -46,16 +46,16 @@ export interface AddPersonRequest {
     birthdate: string
 }
 
-export interface AddPersonResponse {
-    success: boolean
-    error: string
+export interface GetPersonResponse {
     person: Person
 }
 
 export interface ListPeopleResponse {
-    success: boolean
-    error: string
     people: Person[]
+}
+
+export interface GetPersonRequest {
+    id: number
 }
 
 export interface Person {
@@ -76,11 +76,15 @@ export async function GetAuthContext(data: Empty): Promise<rpc.Response<AuthResp
     return await rpc.call<AuthResponse>('GetAuthContext', JSON.stringify(data));
 }
 
-export async function AddPerson(data: AddPersonRequest): Promise<rpc.Response<AddPersonResponse>> {
-    return await rpc.call<AddPersonResponse>('AddPerson', JSON.stringify(data));
+export async function AddPerson(data: AddPersonRequest): Promise<rpc.Response<GetPersonResponse>> {
+    return await rpc.call<GetPersonResponse>('AddPerson', JSON.stringify(data));
 }
 
 export async function ListPeople(data: Empty): Promise<rpc.Response<ListPeopleResponse>> {
     return await rpc.call<ListPeopleResponse>('ListPeople', JSON.stringify(data));
+}
+
+export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<GetPersonResponse>> {
+    return await rpc.call<GetPersonResponse>('GetPerson', JSON.stringify(data));
 }
 

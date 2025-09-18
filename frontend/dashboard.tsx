@@ -15,7 +15,7 @@ export function view(
   data: server.ListPeopleResponse,
 ): preact.ComponentChild {
   const currentAuth = auth.getAuth();
-  if (!currentAuth || currentAuth.id <= 0 || data.error != undefined) {
+  if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
     core.setRoute('/login');
     return;
@@ -141,7 +141,7 @@ const PersonCard = ({ person }: PersonCardProps) => {
   };
 
   return (
-    <div className="person-card">
+    <a href={`/profile/${person.id}`} className="person-card clickable">
       <div className="person-avatar">
         {getGenderIcon(person.gender)}
       </div>
@@ -151,6 +151,6 @@ const PersonCard = ({ person }: PersonCardProps) => {
           {getTypeLabel(person.type)} • Age {person.age}
         </p>
       </div>
-    </div>
+    </a>
   );
 };

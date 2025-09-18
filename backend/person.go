@@ -13,6 +13,7 @@ import (
 func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddPerson)
 	vbeam.RegisterProc(app, ListPeople)
+	vbeam.RegisterProc(app, GetPerson)
 }
 
 type GenderType int
@@ -38,16 +39,16 @@ type AddPersonRequest struct {
 	Birthdate  string `json:"birthdate"`  // YYYY-MM-DD format
 }
 
-type AddPersonResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
-	Person  Person `json:"person,omitempty"`
+type GetPersonRequest struct {
+	Id     int    `json:"id"`     // 0 = Male, 1 = Female, 2 = Unknown
 }
 
 type ListPeopleResponse struct {
-	Success bool     `json:"success"`
-	Error   string   `json:"error,omitempty"`
 	People  []Person `json:"people"`
+}
+
+type GetPersonResponse struct {
+	Person  Person `json:"person,omitempty"`
 }
 
 // Database types
@@ -80,7 +81,7 @@ var PeopleBkt = vbolt.Bucket(&cfg.Info, "people", vpack.FInt, PackPerson)
 var PersonIndex = vbolt.Index(&cfg.Info, "person_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
-func GetPerson(tx *vbolt.Tx, personId int) (person Person) {
+func GetPersonById(tx *vbolt.Tx, personId int) (person Person) {
 	vbolt.Read(tx, PeopleBkt, personId, &person)
 	return
 }
@@ -141,19 +142,16 @@ func calculateAge(birthdate time.Time) int {
 }
 
 // vbeam procedures
-func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp AddPersonResponse, err error) {
+func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse, err error) {
 	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
-		resp.Success = false
-		resp.Error = "Authentication required"
+		err = ErrAuthFailure
 		return
 	}
 
 	// Validate request
 	if err = validateAddPersonRequest(req); err != nil {
-		resp.Success = false
-		resp.Error = err.Error()
 		return
 	}
 
@@ -161,15 +159,11 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp AddPersonResponse
 	vbeam.UseWriteTx(ctx)
 	person, err := AddPersonTx(ctx.Tx, req, user.FamilyId)
 	if err != nil {
-		resp.Success = false
-		resp.Error = err.Error()
 		return
 	}
 
 	vbolt.TxCommit(ctx.Tx)
 
-	// Return success response
-	resp.Success = true
 	resp.Person = person
 	return
 }
@@ -178,16 +172,23 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
-		resp.Success = false
-		resp.Error = "Authentication required"
+		err = ErrAuthFailure
 		return
 	}
 
 	// Get family members
-	people := GetFamilyPeople(ctx.Tx, user.FamilyId)
+	resp.People = GetFamilyPeople(ctx.Tx, user.FamilyId)
+	return
+}
 
-	resp.Success = true
-	resp.People = people
+func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse, err error) {
+	_, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	resp.Person = GetPersonById(ctx.Tx, req.Id)
 	return
 }
 
