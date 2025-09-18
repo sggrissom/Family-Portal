@@ -141,8 +141,7 @@ func parseMeasurementDate(req AddGrowthDataRequest, personBirthday time.Time) (t
 		if req.MeasurementDate == nil || *req.MeasurementDate == "" {
 			return time.Time{}, errors.New("Measurement date is required when input type is 'date'")
 		}
-		layout := "2006-01-02"
-		return time.Parse(layout, *req.MeasurementDate)
+		return time.Parse("2006-01-02", *req.MeasurementDate)
 	} else if req.InputType == "age" {
 		if req.AgeYears == nil || *req.AgeYears < 0 {
 			return time.Time{}, errors.New("Age years must be non-negative")

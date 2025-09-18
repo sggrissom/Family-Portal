@@ -110,6 +110,9 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
             <p className="profile-details">
               {getTypeLabel(person.type)} • Age {calculateAge(person.birthday)}
             </p>
+            <p className="profile-birthday">
+              Birthday: {new Date(person.birthday).toLocaleDateString()}
+            </p>
           </div>
         </div>
 

@@ -102,8 +102,7 @@ func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
 
 func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, error) {
 	// Parse birthdate
-	layout := "2006-01-02"
-	parsedTime, err := time.Parse(layout, req.Birthdate)
+	parsedTime, err := time.Parse("2006-01-02", req.Birthdate)
 	if err != nil {
 		return Person{}, errors.New("Invalid birthdate format. Use YYYY-MM-DD")
 	}
