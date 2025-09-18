@@ -23,6 +23,7 @@ func MakeApplication() *vbeam.Application {
 	backend.SetupAuth(app)
 	backend.RegisterUserMethods(app)
 	backend.RegisterPersonMethods(app)
+	backend.RegisterGrowthMethods(app)
 
 	return app
 }

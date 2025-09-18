@@ -109,32 +109,52 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
     return;
   }
 
-  if (form.inputType === 'age' && (!form.ageYears || parseInt(form.ageYears) < 0)) {
+  if (form.inputType === 'age' && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
     form.error = "Please enter a valid age";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  // TODO: Here would be the actual API call to save the growth data
-  // For now, just simulate success
-  setTimeout(() => {
-    form.success = true;
+  // Prepare API request
+  const request: server.AddGrowthDataRequest = {
+    personId: parseInt(form.selectedPersonId),
+    measurementType: form.measurementType,
+    value: parseFloat(form.value),
+    unit: form.unit,
+    inputType: form.inputType,
+    measurementDate: form.inputType === 'date' ? form.measurementDate : null,
+    ageYears: form.inputType === 'age' ? parseInt(form.ageYears) : null,
+    ageMonths: form.inputType === 'age' && form.ageMonths ? parseInt(form.ageMonths) : null
+  };
+
+  try {
+    let [resp, err] = await server.AddGrowthData(request);
+
     form.loading = false;
 
-    // Reset form
-    form.value = "";
-    form.measurementDate = "";
-    form.ageYears = "";
-    form.ageMonths = "";
+    if (resp) {
+      form.success = true;
 
-    vlens.scheduleRedraw();
+      // Reset form
+      form.value = "";
+      form.measurementDate = "";
+      form.ageYears = "";
+      form.ageMonths = "";
 
-    // Redirect to profile page after success
-    setTimeout(() => {
-      core.setRoute(`/profile/${form.selectedPersonId}`);
-    }, 1500);
-  }, 1000);
+      vlens.scheduleRedraw();
+
+      // Redirect to profile page after success
+      setTimeout(() => {
+        core.setRoute(`/profile/${form.selectedPersonId}`);
+      }, 1500);
+    } else {
+      form.error = err || "Failed to save growth measurement";
+    }
+  } catch (error) {
+    form.loading = false;
+    form.error = "Network error. Please try again.";
+  }
 
   vlens.scheduleRedraw();
 }

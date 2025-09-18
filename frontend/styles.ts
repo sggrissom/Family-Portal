@@ -1866,6 +1866,71 @@ block(`
 `);
 
 block(`
+.growth-records {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+`);
+
+block(`
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+`);
+
+block(`
+.data-table th,
+.data-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+`);
+
+block(`
+.data-table th {
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+`);
+
+block(`
+.data-table td {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+`);
+
+block(`
+.data-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+`);
+
+block(`
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+`);
+
+block(`
+.table-actions {
+  padding: 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+`);
+
+block(`
 .photos-gallery {
   min-height: 300px;
   display: flex;

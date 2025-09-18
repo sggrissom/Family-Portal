@@ -48,7 +48,8 @@ type ListPeopleResponse struct {
 }
 
 type GetPersonResponse struct {
-	Person  Person `json:"person,omitempty"`
+	Person     Person      `json:"person,omitempty"`
+	GrowthData []GrowthData `json:"growthData"`
 }
 
 // Database types
@@ -182,13 +183,27 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 }
 
 func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse, err error) {
-	_, authErr := GetAuthUser(ctx)
+	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
+	// Get person data
 	resp.Person = GetPersonById(ctx.Tx, req.Id)
+
+	// Validate person belongs to user's family
+	if resp.Person.Id == 0 || resp.Person.FamilyId != user.FamilyId {
+		err = errors.New("Person not found or not in your family")
+		return
+	}
+
+	// Calculate age
+	resp.Person.Age = calculateAge(resp.Person.Birthday)
+
+	// Get growth data for person
+	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
+
 	return
 }
 

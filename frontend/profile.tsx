@@ -19,10 +19,12 @@ export async function fetch(route: string, prefix: string) {
   return server.GetPerson({ id: personId });
 }
 
+type ProfileData = server.GetPersonResponse | { person: null; growthData: server.GrowthData[] };
+
 export function view(
   route: string,
   prefix: string,
-  data: server.GetPersonResponse,
+  data: ProfileData,
 ): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
@@ -51,7 +53,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="profile-container">
-        <ProfilePage person={data.person} />
+        <ProfilePage person={data.person} growthData={data.growthData} />
       </main>
       <Footer />
     </div>
@@ -60,6 +62,7 @@ export function view(
 
 interface ProfilePageProps {
   person: server.Person;
+  growthData: server.GrowthData[];
 }
 
 function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos') {
@@ -67,7 +70,7 @@ function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos'
   vlens.scheduleRedraw();
 }
 
-const ProfilePage = ({ person }: ProfilePageProps) => {
+const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
   const state = useProfileState();
 
   const getGenderIcon = (gender: number) => {
@@ -148,7 +151,7 @@ const ProfilePage = ({ person }: ProfilePageProps) => {
       {/* Tab Content */}
       <div className="profile-content">
         {state.activeTab === 'timeline' && <TimelineTab person={person} />}
-        {state.activeTab === 'growth' && <GrowthTab person={person} />}
+        {state.activeTab === 'growth' && <GrowthTab person={person} growthData={growthData} />}
         {state.activeTab === 'photos' && <PhotosTab person={person} />}
       </div>
     </div>
@@ -169,7 +172,20 @@ const TimelineTab = ({ person }: { person: server.Person }) => {
   );
 };
 
-const GrowthTab = ({ person }: { person: server.Person }) => {
+const GrowthTab = ({ person, growthData }: { person: server.Person; growthData: server.GrowthData[] }) => {
+  const getMeasurementTypeLabel = (type: server.MeasurementType) => {
+    return type === server.Height ? 'Height' : 'Weight';
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  // Sort growth data by measurement date (newest first)
+  const sortedGrowthData = (growthData || []).slice().sort((a, b) =>
+    new Date(b.measurementDate).getTime() - new Date(a.measurementDate).getTime()
+  );
+
   return (
     <div className="growth-tab">
       <h2>Growth Tracking for {person.name}</h2>
@@ -183,10 +199,38 @@ const GrowthTab = ({ person }: { person: server.Person }) => {
 
         <div className="growth-table">
           <h3>Growth Records</h3>
-          <div className="empty-state">
-            <p>No growth records yet.</p>
-            <button className="btn btn-primary">Add First Measurement</button>
-          </div>
+          {sortedGrowthData.length === 0 ? (
+            <div className="empty-state">
+              <p>No growth records yet.</p>
+              <a href="/add-growth" className="btn btn-primary">Add First Measurement</a>
+            </div>
+          ) : (
+            <div className="growth-records">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th>Date</th>
+                    <th>Added</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedGrowthData.map(record => (
+                    <tr key={record.id}>
+                      <td>{getMeasurementTypeLabel(record.measurementType)}</td>
+                      <td>{record.value} {record.unit}</td>
+                      <td>{formatDate(record.measurementDate)}</td>
+                      <td>{formatDate(record.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="table-actions">
+                <a href="/add-growth" className="btn btn-primary">Add New Measurement</a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
