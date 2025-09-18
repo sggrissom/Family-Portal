@@ -20,11 +20,11 @@ type AddGrowthForm = {
   success: boolean;
 }
 
-const useAddGrowthForm = vlens.declareHook((): AddGrowthForm => ({
-  selectedPersonId: "",
+const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm => ({
+  selectedPersonId: personId || "",
   measurementType: "height",
   value: "",
-  unit: "cm",
+  unit: "in",
   inputType: "date",
   measurementDate: "",
   ageYears: "",
@@ -68,7 +68,11 @@ export function view(
     );
   }
 
-  const form = useAddGrowthForm();
+  // Extract person ID from URL if present (e.g., /add-growth/123)
+  const urlParts = route.split('/');
+  const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
+
+  const form = useAddGrowthForm(personIdFromUrl);
 
   return (
     <div>
@@ -161,7 +165,7 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
 
 function onMeasurementTypeChange(form: AddGrowthForm, newType: string) {
   form.measurementType = newType;
-  form.unit = newType === 'height' ? 'cm' : 'kg';
+  form.unit = newType === 'height' ? 'in' : 'lbs';
   vlens.scheduleRedraw();
 }
 
@@ -183,8 +187,8 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
   const getUnitOptions = () => {
     if (form.measurementType === 'height') {
       return [
-        { value: 'cm', label: 'cm' },
-        { value: 'in', label: 'inches' }
+        { value: 'in', label: 'inches' },
+        { value: 'cm', label: 'cm' }
       ];
     } else {
       return [

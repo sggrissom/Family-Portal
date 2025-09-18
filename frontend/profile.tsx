@@ -138,7 +138,7 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
           <button className="btn btn-primary">
             📝 Add Milestone
           </button>
-          <a href="/add-growth" className="btn btn-primary">
+          <a href={`/add-growth/${person.id}`} className="btn btn-primary">
             📏 Add Growth
           </a>
           <button className="btn btn-primary">
@@ -220,7 +220,7 @@ const GrowthTab = ({ person, growthData }: { person: server.Person; growthData: 
           {sortedGrowthData.length === 0 ? (
             <div className="empty-state">
               <p>No growth records yet.</p>
-              <a href="/add-growth" className="btn btn-primary">Add First Measurement</a>
+              <a href={`/add-growth/${person.id}`} className="btn btn-primary">Add First Measurement</a>
             </div>
           ) : (
             <div className="growth-records">
@@ -245,7 +245,7 @@ const GrowthTab = ({ person, growthData }: { person: server.Person; growthData: 
                 </tbody>
               </table>
               <div className="table-actions">
-                <a href="/add-growth" className="btn btn-primary">Add New Measurement</a>
+                <a href={`/add-growth/${person.id}`} className="btn btn-primary">Add New Measurement</a>
               </div>
             </div>
           )}
