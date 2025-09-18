@@ -1,10 +1,18 @@
 import * as preact from "preact";
-import { useState } from "preact/hooks";
+import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "./authCache";
 import * as core from "vlens/core";
 import * as server from "./server";
 import { Header, Footer } from "./layout";
+
+type ProfileState = {
+  activeTab: 'timeline' | 'growth' | 'photos';
+}
+
+const useProfileState = vlens.declareHook((): ProfileState => ({
+  activeTab: 'timeline'
+}));
 
 export async function fetch(route: string, prefix: string) {
   const personId = parseInt(route.split('/')[2]);
@@ -54,8 +62,13 @@ interface ProfilePageProps {
   person: server.Person;
 }
 
+function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos') {
+  state.activeTab = tab;
+  vlens.scheduleRedraw();
+}
+
 const ProfilePage = ({ person }: ProfilePageProps) => {
-  const [activeTab, setActiveTab] = useState<'timeline' | 'growth' | 'photos'>('timeline');
+  const state = useProfileState();
 
   const getGenderIcon = (gender: number) => {
     switch (gender) {
@@ -101,9 +114,9 @@ const ProfilePage = ({ person }: ProfilePageProps) => {
           <button className="btn btn-primary">
             📝 Add Milestone
           </button>
-          <button className="btn btn-primary">
+          <a href="/add-growth" className="btn btn-primary">
             📏 Add Growth
-          </button>
+          </a>
           <button className="btn btn-primary">
             📸 Add Photo
           </button>
@@ -113,20 +126,20 @@ const ProfilePage = ({ person }: ProfilePageProps) => {
       {/* Navigation Tabs */}
       <div className="profile-tabs">
         <button
-          className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
-          onClick={() => setActiveTab('timeline')}
+          className={`tab ${state.activeTab === 'timeline' ? 'active' : ''}`}
+          onClick={() => setActiveTab(state, 'timeline')}
         >
           📰 Timeline
         </button>
         <button
-          className={`tab ${activeTab === 'growth' ? 'active' : ''}`}
-          onClick={() => setActiveTab('growth')}
+          className={`tab ${state.activeTab === 'growth' ? 'active' : ''}`}
+          onClick={() => setActiveTab(state, 'growth')}
         >
           📊 Growth
         </button>
         <button
-          className={`tab ${activeTab === 'photos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('photos')}
+          className={`tab ${state.activeTab === 'photos' ? 'active' : ''}`}
+          onClick={() => setActiveTab(state, 'photos')}
         >
           🖼️ Photos
         </button>
@@ -134,9 +147,9 @@ const ProfilePage = ({ person }: ProfilePageProps) => {
 
       {/* Tab Content */}
       <div className="profile-content">
-        {activeTab === 'timeline' && <TimelineTab person={person} />}
-        {activeTab === 'growth' && <GrowthTab person={person} />}
-        {activeTab === 'photos' && <PhotosTab person={person} />}
+        {state.activeTab === 'timeline' && <TimelineTab person={person} />}
+        {state.activeTab === 'growth' && <GrowthTab person={person} />}
+        {state.activeTab === 'photos' && <PhotosTab person={person} />}
       </div>
     </div>
   );

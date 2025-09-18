@@ -92,6 +92,13 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
       {/* Quick Actions */}
       <div className="dashboard-grid">
         <div className="dashboard-card">
+          <div className="card-icon">📏</div>
+          <h3>Growth Tracking</h3>
+          <p>Track height and weight measurements</p>
+          <a href="/add-growth" className="btn btn-primary">Add Measurement</a>
+        </div>
+
+        <div className="dashboard-card">
           <div className="card-icon">📸</div>
           <h3>Photo Albums</h3>
           <p>Share and organize family photos</p>
@@ -103,13 +110,6 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           <h3>Family Calendar</h3>
           <p>Keep track of events and schedules</p>
           <button className="btn btn-primary">View Calendar</button>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">💬</div>
-          <h3>Messages</h3>
-          <p>Chat with family members</p>
-          <button className="btn btn-primary">Open Chat</button>
         </div>
 
         <div className="dashboard-card">
