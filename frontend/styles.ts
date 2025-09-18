@@ -1976,3 +1976,86 @@ block(`
   }
 }
 `);
+
+// Custom Error Page Styles
+block(`
+.error-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 20px;
+}
+`);
+
+block(`
+.error-page {
+  text-align: center;
+  max-width: 500px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 60px 40px;
+}
+`);
+
+block(`
+.error-page h1 {
+  font-size: 2.2rem;
+  margin: 0 0 20px;
+  color: var(--text);
+}
+`);
+
+block(`
+.error-message {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin: 0 0 30px;
+  line-height: 1.5;
+}
+`);
+
+block(`
+.error-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+`);
+
+block(`
+.auth-failure-redirect {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+`);
+
+// Mobile responsive styles for error pages
+block(`
+@media (max-width: 480px) {
+  .error-page {
+    padding: 40px 24px;
+  }
+
+  .error-page h1 {
+    font-size: 1.8rem;
+  }
+
+  .error-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .error-actions .btn {
+    width: 100%;
+  }
+}
+`);
