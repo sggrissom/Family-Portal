@@ -87,7 +87,13 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
 
   const calculateAge = (birthday: string) => {
     if (!birthday) return person.age || 0;
-    const birth = new Date(birthday);
+    // Parse birthday as local date to avoid timezone issues
+    const dateParts = birthday.split('T')[0].split('-');
+    const birthYear = parseInt(dateParts[0]);
+    const birthMonth = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const birthDay = parseInt(dateParts[2]);
+    const birth = new Date(birthYear, birthMonth, birthDay);
+
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
@@ -111,7 +117,7 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
               {getTypeLabel(person.type)} • Age {calculateAge(person.birthday)}
             </p>
             <p className="profile-birthday">
-              Birthday: {new Date(person.birthday).toLocaleDateString()}
+              Birthday: {formatDate(person.birthday)}
             </p>
           </div>
         </div>
@@ -181,6 +187,15 @@ const GrowthTab = ({ person, growthData }: { person: server.Person; growthData: 
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    // For date-only strings, parse as local date to avoid timezone issues
+    if (dateString.includes('T') && dateString.endsWith('Z')) {
+      const dateParts = dateString.split('T')[0].split('-');
+      const year = parseInt(dateParts[0]);
+      const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+      const day = parseInt(dateParts[2]);
+      return new Date(year, month, day).toLocaleDateString();
+    }
     return new Date(dateString).toLocaleDateString();
   };
 
