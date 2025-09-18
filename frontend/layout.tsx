@@ -52,11 +52,6 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
           className={vlens.refGet(menuRef) ? "nav-links" : "nav-links hidden"}
           id="navLinks"
         >
-          <li>
-            <a href="/" className={isHome ? "active" : ""}>
-              Home
-            </a>
-          </li>
           {isAuthenticated ? (
             <>
               <li className="user-info-container">
@@ -65,6 +60,15 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
                   <span className="user-name">{currentAuth.name}</span>
                 </div>
               </li>
+            </>
+          ) : ""}
+          <li>
+            <a href="/" className={isHome ? "active" : ""}>
+              Home
+            </a>
+          </li>
+          {isAuthenticated ? (
+            <>
               <li>
                 <button
                   onClick={logoutClicked}

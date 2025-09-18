@@ -21,6 +21,18 @@ export async function fetch(route: string, prefix: string) {
 
 type ProfileData = server.GetPersonResponse | { person: null; growthData: server.GrowthData[] };
 
+const formatDate = (dateString: string) => {
+  if (!dateString) return '';
+  if (dateString.includes('T') && dateString.endsWith('Z')) {
+    const dateParts = dateString.split('T')[0].split('-');
+    const year = parseInt(dateParts[0]);
+    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const day = parseInt(dateParts[2]);
+    return new Date(year, month, day).toLocaleDateString();
+  }
+  return new Date(dateString).toLocaleDateString();
+};
+
 export function view(
   route: string,
   prefix: string,
@@ -186,18 +198,6 @@ const GrowthTab = ({ person, growthData }: { person: server.Person; growthData: 
     return type === server.Height ? 'Height' : 'Weight';
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    // For date-only strings, parse as local date to avoid timezone issues
-    if (dateString.includes('T') && dateString.endsWith('Z')) {
-      const dateParts = dateString.split('T')[0].split('-');
-      const year = parseInt(dateParts[0]);
-      const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-      const day = parseInt(dateParts[2]);
-      return new Date(year, month, day).toLocaleDateString();
-    }
-    return new Date(dateString).toLocaleDateString();
-  };
 
   // Sort growth data by measurement date (newest first)
   const sortedGrowthData = (growthData || []).slice().sort((a, b) =>
