@@ -113,6 +113,13 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
         </div>
 
         <div className="dashboard-card">
+          <div className="card-icon">📥</div>
+          <h3>Import Data</h3>
+          <p>Import people and measurements from backup</p>
+          <a href="/import" className="btn btn-secondary">Import Data</a>
+        </div>
+
+        <div className="dashboard-card">
           <div className="card-icon">⚙️</div>
           <h3>Settings</h3>
           <p>Manage your family portal</p>

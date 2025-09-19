@@ -78,6 +78,22 @@ export interface AddGrowthDataResponse {
     growthData: GrowthData
 }
 
+export interface ImportDataRequest {
+    jsonData: string
+    filterFamilyIds: number[]
+    filterPersonIds: number[]
+    previewOnly: boolean
+}
+
+export interface ImportDataResponse {
+    importedPeople: number
+    importedMeasurements: number
+    errors: string[]
+    personIdMapping: Record<number, number>
+    availableFamilyIds: number[]
+    availablePeople: ImportPerson[]
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -97,6 +113,17 @@ export interface GrowthData {
     unit: string
     measurementDate: string
     createdAt: string
+}
+
+export interface ImportPerson {
+    Id: number
+    FamilyId: number
+    Type: number
+    Gender: number
+    Name: string
+    Birthday: string
+    Age: string
+    ImageId: number
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
@@ -121,5 +148,9 @@ export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<Ge
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {
     return await rpc.call<AddGrowthDataResponse>('AddGrowthData', JSON.stringify(data));
+}
+
+export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
+    return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
 }
 
