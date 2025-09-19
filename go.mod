@@ -1,8 +1,6 @@
 module family
 
-go 1.23.0
-
-toolchain go1.23.11
+go 1.24.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -10,13 +8,16 @@ require (
 	go.hasen.dev/vbolt v0.2.3
 	go.hasen.dev/vpack v0.2.0
 	golang.org/x/crypto v0.34.0
+	golang.org/x/oauth2 v0.31.0
 )
 
 require (
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/evanw/esbuild v0.24.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/otiai10/copy v1.14.0 // indirect

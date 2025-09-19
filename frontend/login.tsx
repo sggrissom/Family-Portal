@@ -3,7 +3,9 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "./authCache";
-import { Header, Footer } from "./layout"
+import * as server from "./server";
+import { Header, Footer } from "./layout";
+import { ensureNoAuthInFetch } from "./authHelpers";
 
 type Data = {};
 
@@ -24,6 +26,10 @@ const useLoginForm = vlens.declareHook((): LoginForm => ({
 }))
 
 export async function fetch(route: string, prefix: string) {
+  if (!await ensureNoAuthInFetch()) {
+    return rpc.ok<Data>({});
+  }
+
   return rpc.ok<Data>({});
 }
 
@@ -116,7 +122,11 @@ const LoginPage = ({ form }: LoginPageProps) => (
       )}
 
       <div className="auth-methods">
-        <button className="btn btn-google" disabled={form.loading}>
+        <button
+          className="btn btn-google"
+          disabled={form.loading}
+          onClick={() => window.location.href = '/api/login/google'}
+        >
           <GoogleIcon />
           Continue with Google
         </button>

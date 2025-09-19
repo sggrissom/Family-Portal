@@ -5,6 +5,7 @@ import * as auth from "./authCache";
 import * as core from "vlens/core";
 import * as server from "./server";
 import { Header, Footer } from "./layout";
+import { requireAuthInView } from "./authHelpers";
 
 type AddGrowthForm = {
   selectedPersonId: string;
@@ -44,10 +45,8 @@ export function view(
   prefix: string,
   data: server.ListPeopleResponse,
 ): preact.ComponentChild {
-  const currentAuth = auth.getAuth();
-  if (!currentAuth || currentAuth.id <= 0) {
-    auth.clearAuth();
-    core.setRoute('/login');
+  const currentAuth = requireAuthInView();
+  if (!currentAuth) {
     return;
   }
 

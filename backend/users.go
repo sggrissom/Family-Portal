@@ -157,6 +157,7 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 
 	// Save user data
 	vbolt.Write(tx, UsersBkt, user.Id, &user)
+	// Store password hash (can be empty for OAuth users)
 	vbolt.Write(tx, PasswdBkt, user.Id, &hash)
 	vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
 
@@ -250,14 +251,15 @@ func validateCreateAccountRequest(req CreateAccountRequest) error {
 	if req.Email == "" {
 		return errors.New("Email is required")
 	}
-	if req.Password == "" {
-		return errors.New("Password is required")
-	}
-	if len(req.Password) < 8 {
-		return errors.New("Password must be at least 8 characters")
-	}
-	if req.Password != req.ConfirmPassword {
-		return errors.New("Passwords do not match")
+
+	// Allow empty passwords for OAuth users
+	if req.Password != "" {
+		if len(req.Password) < 8 {
+			return errors.New("Password must be at least 8 characters")
+		}
+		if req.Password != req.ConfirmPassword {
+			return errors.New("Passwords do not match")
+		}
 	}
 	return nil
 }

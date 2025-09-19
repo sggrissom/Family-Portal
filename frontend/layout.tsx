@@ -110,14 +110,14 @@ export const Footer = () => (
   </footer>
 );
 
-const logoutClicked = (event: Event) => {
+const logoutClicked = async (event: Event) => {
   event.preventDefault();
   // Close mobile menu first if it's open
   const menuToggle = document.getElementById('navToggle');
   if (menuToggle && menuToggle.getAttribute('aria-expanded') === 'true') {
     menuToggle.click();
   }
-  auth.logout();
+  await auth.logout();
 };
 
 const themeToggleClicked = (themeRef: Ref) => {

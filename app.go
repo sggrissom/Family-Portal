@@ -3,7 +3,9 @@ package family
 import (
 	"family/backend"
 	"family/cfg"
+	"log"
 
+	"github.com/joho/godotenv"
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
@@ -17,6 +19,12 @@ func OpenDB(dbpath string) *vbolt.DB {
 }
 
 func MakeApplication() *vbeam.Application {
+	// Load environment variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("Warning: Error loading .env file: %v", err)
+	}
+
 	db := OpenDB(cfg.DBPath)
 	var app = vbeam.NewApplication("FamilyPortal", db)
 

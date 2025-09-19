@@ -324,7 +324,7 @@ func TestPasswordHandling(t *testing.T) {
 	}{
 		{"password123", "password123", false, "valid password"},
 		{"short", "short", true, "too short"},
-		{"", "", true, "empty password"},
+		{"", "", false, "empty password (OAuth users)"},
 		{"validpass", "different", true, "passwords don't match"},
 		{"12345678", "12345678", false, "minimum length exactly"},
 		{"1234567", "1234567", true, "below minimum length"},

@@ -2,11 +2,17 @@ import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as auth from "./authCache";
 import * as core from "vlens/core";
-import { Header, Footer } from "./layout"
+import * as server from "./server";
+import { Header, Footer } from "./layout";
+import { ensureNoAuthInFetch } from "./authHelpers";
 
 type Data = {};
 
 export async function fetch(route: string, prefix: string) {
+  if (!await ensureNoAuthInFetch()) {
+    return rpc.ok<Data>({});
+  }
+
   return rpc.ok<Data>({});
 }
 

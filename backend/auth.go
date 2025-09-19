@@ -40,9 +40,20 @@ func SetupAuth(app *vbeam.Application) {
 	}
 	jwtKey = []byte(jwtSecret)
 
-	// Register essential auth API endpoints only
+	// Register essential auth API endpoints
 	app.HandleFunc("/api/login", loginHandler)
 	app.HandleFunc("/api/logout", logoutHandler)
+
+	// Register Google OAuth endpoints
+	app.HandleFunc("/api/login/google", googleLoginHandler)
+	app.HandleFunc("/api/google/callback", googleCallbackHandler)
+
+	// Setup Google OAuth configuration
+	err := SetupGoogleOAuth()
+	if err != nil {
+		log.Printf("Google OAuth setup failed: %v", err)
+		log.Println("Google login will not be available. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable.")
+	}
 
 	appDb = app.DB
 }

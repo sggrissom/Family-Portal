@@ -28,7 +28,18 @@ export function clearAuth() {
   localStorage.removeItem("auth-cache");
 }
 
-export function logout() {
+export async function logout() {
+  // Call backend to clear JWT cookie
+  try {
+    await fetch('/api/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (error) {
+    // Continue with logout even if backend call fails
+    console.warn('Failed to logout from server:', error);
+  }
+
   clearAuth();
   // Clear any auth headers for future requests
   if (typeof window !== 'undefined') {
