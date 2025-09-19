@@ -3,6 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
+	"fmt"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -60,7 +61,7 @@ type Person struct {
 	Type     PersonType `json:"type"`
 	Gender   GenderType `json:"gender"`
 	Birthday time.Time  `json:"birthday"`
-	Age      int        `json:"age"`
+	Age      string     `json:"age"`
 }
 
 // Packing function for vbolt serialization
@@ -128,17 +129,47 @@ func updatePersonIndex(tx *vbolt.Tx, person Person) {
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, person.FamilyId)
 }
 
-func calculateAge(birthdate time.Time) int {
-	now := time.Now()
-	age := now.Year() - birthdate.Year()
+func calculateAgeAt(birthdate, referenceDate time.Time) string {
+	years := referenceDate.Year() - birthdate.Year()
+	months := int(referenceDate.Month()) - int(birthdate.Month())
+	days := referenceDate.Day() - birthdate.Day()
 
-	// Adjust if birthday hasn't occurred this year
-	if now.Month() < birthdate.Month() ||
-		(now.Month() == birthdate.Month() && now.Day() < birthdate.Day()) {
-		age--
+	// Adjust for birthday not yet occurred this year
+	if months < 0 || (months == 0 && days < 0) {
+		years--
+		months += 12
 	}
 
-	return age
+	// Adjust months if day hasn't occurred this month
+	if days < 0 {
+		months--
+		if months < 0 {
+			years--
+			months += 12
+		}
+	}
+
+	// For under 1 year
+	if years == 0 {
+		totalMonths := months
+		if totalMonths <= 0 {
+			return "< 1 month"
+		}
+		if totalMonths == 1 {
+			return "1 month"
+		}
+		return fmt.Sprintf("%d months", totalMonths)
+	}
+
+	if years == 1 {
+		return "1 year"
+	}
+	return fmt.Sprintf("%d years", years)
+}
+
+// wrapper for current time
+func calculateAge(birthdate time.Time) string {
+	return calculateAgeAt(birthdate, time.Now())
 }
 
 // vbeam procedures

@@ -101,7 +101,7 @@ export interface Person {
     type: PersonType
     gender: GenderType
     birthday: string
-    age: number
+    age: string
 }
 
 export interface GrowthData {

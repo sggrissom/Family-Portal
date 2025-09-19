@@ -100,23 +100,6 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
     return type === 0 ? "Parent" : "Child";
   };
 
-  const calculateAge = (birthday: string) => {
-    if (!birthday) return person.age || 0;
-    // Parse birthday as local date to avoid timezone issues
-    const dateParts = birthday.split('T')[0].split('-');
-    const birthYear = parseInt(dateParts[0]);
-    const birthMonth = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-    const birthDay = parseInt(dateParts[2]);
-    const birth = new Date(birthYear, birthMonth, birthDay);
-
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
-  };
 
   return (
     <div className="profile-page">
@@ -129,7 +112,7 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
           <div className="profile-info">
             <h1>{person.name}</h1>
             <p className="profile-details">
-              {getTypeLabel(person.type)} • Age {calculateAge(person.birthday)}
+              {getTypeLabel(person.type)} • Age {person.age}
             </p>
             <p className="profile-birthday">
               Birthday: {formatDate(person.birthday)}
