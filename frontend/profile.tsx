@@ -22,7 +22,7 @@ export async function fetch(route: string, prefix: string) {
   return server.GetPerson({ id: personId });
 }
 
-type ProfileData = server.GetPersonResponse | { person: null; growthData: server.GrowthData[] };
+type ProfileData = server.GetPersonResponse | { person: null; growthData: server.GrowthData[]; milestones: server.Milestone[] };
 
 const formatDate = (dateString: string) => {
   if (!dateString) return '';
@@ -68,7 +68,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="profile-container">
-        <ProfilePage person={data.person} growthData={data.growthData} />
+        <ProfilePage person={data.person} growthData={data.growthData} milestones={data.milestones} />
       </main>
       <Footer />
     </div>
@@ -78,6 +78,7 @@ export function view(
 interface ProfilePageProps {
   person: server.Person;
   growthData: server.GrowthData[];
+  milestones: server.Milestone[];
 }
 
 function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos') {
@@ -85,7 +86,7 @@ function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos'
   vlens.scheduleRedraw();
 }
 
-const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
+const ProfilePage = ({ person, growthData, milestones }: ProfilePageProps) => {
   const state = useProfileState();
 
   const getGenderIcon = (gender: number) => {
@@ -157,7 +158,7 @@ const ProfilePage = ({ person, growthData }: ProfilePageProps) => {
 
       {/* Tab Content */}
       <div className="profile-content">
-        {state.activeTab === 'timeline' && <TimelineTab person={person} />}
+        {state.activeTab === 'timeline' && <TimelineTab person={person} milestones={milestones} />}
         {state.activeTab === 'growth' && <GrowthTab person={person} growthData={growthData} />}
         {state.activeTab === 'photos' && <PhotosTab person={person} />}
       </div>

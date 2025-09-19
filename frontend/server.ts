@@ -53,6 +53,7 @@ export interface AddPersonRequest {
 export interface GetPersonResponse {
     person: Person
     growthData: GrowthData[]
+    milestones: Milestone[]
 }
 
 export interface ListPeopleResponse {
@@ -121,6 +122,14 @@ export interface AddMilestoneRequest {
 
 export interface AddMilestoneResponse {
     milestone: Milestone
+}
+
+export interface GetPersonMilestonesRequest {
+    personId: number
+}
+
+export interface GetPersonMilestonesResponse {
+    milestones: Milestone[]
 }
 
 export interface ImportDataRequest {
@@ -219,6 +228,10 @@ export async function DeleteGrowthData(data: DeleteGrowthDataRequest): Promise<r
 
 export async function AddMilestone(data: AddMilestoneRequest): Promise<rpc.Response<AddMilestoneResponse>> {
     return await rpc.call<AddMilestoneResponse>('AddMilestone', JSON.stringify(data));
+}
+
+export async function GetPersonMilestones(data: GetPersonMilestonesRequest): Promise<rpc.Response<GetPersonMilestonesResponse>> {
+    return await rpc.call<GetPersonMilestonesResponse>('GetPersonMilestones', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

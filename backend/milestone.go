@@ -13,6 +13,7 @@ import (
 
 func RegisterMilestoneMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddMilestone)
+	vbeam.RegisterProc(app, GetPersonMilestones)
 }
 
 // Request/Response types
@@ -28,6 +29,14 @@ type AddMilestoneRequest struct {
 
 type AddMilestoneResponse struct {
 	Milestone Milestone `json:"milestone"`
+}
+
+type GetPersonMilestonesRequest struct {
+	PersonId int `json:"personId"`
+}
+
+type GetPersonMilestonesResponse struct {
+	Milestones []Milestone `json:"milestones"`
 }
 
 // Database types
@@ -67,6 +76,15 @@ var MilestoneByFamilyIndex = vbolt.Index(&cfg.Info, "milestones_by_family", vpac
 // Database helper functions
 func GetMilestoneById(tx *vbolt.Tx, milestoneId int) (milestone Milestone) {
 	vbolt.Read(tx, MilestoneBkt, milestoneId, &milestone)
+	return
+}
+
+func GetPersonMilestonesTx(tx *vbolt.Tx, personId int) (milestones []Milestone) {
+	var milestoneIds []int
+	vbolt.ReadTermTargets(tx, MilestoneByPersonIndex, personId, &milestoneIds, vbolt.Window{})
+	if len(milestoneIds) > 0 {
+		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
+	}
 	return
 }
 
@@ -183,5 +201,25 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Milestone = milestone
+	return
+}
+
+func GetPersonMilestones(ctx *vbeam.Context, req GetPersonMilestonesRequest) (resp GetPersonMilestonesResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate that the person belongs to the user's family
+	person := GetPersonById(ctx.Tx, req.PersonId)
+	if person.Id == 0 || person.FamilyId != user.FamilyId {
+		err = errors.New("Person not found or not in your family")
+		return
+	}
+
+	// Get milestones for this person
+	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.PersonId)
 	return
 }

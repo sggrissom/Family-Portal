@@ -51,6 +51,7 @@ type ListPeopleResponse struct {
 type GetPersonResponse struct {
 	Person     Person      `json:"person,omitempty"`
 	GrowthData []GrowthData `json:"growthData"`
+	Milestones []Milestone `json:"milestones"`
 }
 
 // Database types
@@ -233,6 +234,9 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 
 	// Get growth data for person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
+
+	// Get milestones for person
+	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
 
 	return
 }
