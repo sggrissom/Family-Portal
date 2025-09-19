@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as server from "../server";
-import { GrowthChart } from "../chart";
+import { GrowthChart } from "../components/chart/chart";
 
 interface GrowthTabProps {
   person: server.Person;

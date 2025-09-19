@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as server from "./server";
+import * as server from "../../server";
+import "./chart.styles";
 
 export interface GrowthChartProps {
   growthData: server.GrowthData[];
