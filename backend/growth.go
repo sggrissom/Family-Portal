@@ -12,6 +12,9 @@ import (
 
 func RegisterGrowthMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddGrowthData)
+	vbeam.RegisterProc(app, GetGrowthData)
+	vbeam.RegisterProc(app, UpdateGrowthData)
+	vbeam.RegisterProc(app, DeleteGrowthData)
 }
 
 type MeasurementType int
@@ -34,6 +37,37 @@ type AddGrowthDataRequest struct {
 }
 
 type AddGrowthDataResponse struct {
+	GrowthData GrowthData `json:"growthData"`
+}
+
+type UpdateGrowthDataRequest struct {
+	Id              int     `json:"id"`
+	MeasurementType string  `json:"measurementType"` // "height" or "weight"
+	Value           float64 `json:"value"`
+	Unit            string  `json:"unit"` // cm, in, kg, lbs
+	InputType       string  `json:"inputType"` // "today", "date" or "age"
+	MeasurementDate *string `json:"measurementDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
+	AgeYears        *int    `json:"ageYears,omitempty"` // Age in years (if inputType is "age")
+	AgeMonths       *int    `json:"ageMonths,omitempty"` // Additional months (if inputType is "age")
+}
+
+type UpdateGrowthDataResponse struct {
+	GrowthData GrowthData `json:"growthData"`
+}
+
+type DeleteGrowthDataRequest struct {
+	Id int `json:"id"`
+}
+
+type DeleteGrowthDataResponse struct {
+	Success bool `json:"success"`
+}
+
+type GetGrowthDataRequest struct {
+	Id int `json:"id"`
+}
+
+type GetGrowthDataResponse struct {
 	GrowthData GrowthData `json:"growthData"`
 }
 
@@ -89,6 +123,81 @@ func GetPersonGrowthDataTx(tx *vbolt.Tx, personId int) (growthData []GrowthData)
 	return
 }
 
+func GetGrowthDataByIdAndFamily(tx *vbolt.Tx, growthDataId int, familyId int) (GrowthData, error) {
+	growthData := GetGrowthDataById(tx, growthDataId)
+	if growthData.Id == 0 {
+		return growthData, errors.New("Growth data not found")
+	}
+	if growthData.FamilyId != familyId {
+		return growthData, errors.New("Access denied: growth data belongs to another family")
+	}
+	return growthData, nil
+}
+
+func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int) (GrowthData, error) {
+	var err error
+
+	// Get existing growth data and validate ownership
+	growthData, err := GetGrowthDataByIdAndFamily(tx, req.Id, familyId)
+	if err != nil {
+		return growthData, err
+	}
+
+	// Get person for date calculation if needed
+	person := GetPersonById(tx, growthData.PersonId)
+	if person.Id == 0 {
+		return growthData, errors.New("Person not found")
+	}
+
+	// Parse measurement date
+	growthData.MeasurementDate, err = parseMeasurementDate(AddGrowthDataRequest{
+		InputType:       req.InputType,
+		MeasurementDate: req.MeasurementDate,
+		AgeYears:        req.AgeYears,
+		AgeMonths:       req.AgeMonths,
+	}, person.Birthday)
+	if err != nil {
+		return growthData, err
+	}
+
+	// Convert string measurement type to enum
+	var measurementType MeasurementType
+	if req.MeasurementType == "height" {
+		measurementType = Height
+	} else if req.MeasurementType == "weight" {
+		measurementType = Weight
+	} else {
+		return growthData, errors.New("Invalid measurement type")
+	}
+
+	// Update the growth data fields
+	growthData.MeasurementType = measurementType
+	growthData.Value = req.Value
+	growthData.Unit = req.Unit
+
+	// Save updated record
+	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
+
+	return growthData, nil
+}
+
+func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
+	// Get existing growth data and validate ownership
+	growthData, err := GetGrowthDataByIdAndFamily(tx, growthDataId, familyId)
+	if err != nil {
+		return err
+	}
+
+	// Remove from indices
+	vbolt.SetTargetSingleTerm(tx, GrowthDataByPersonIndex, growthData.Id, -1)
+	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, -1)
+
+	// Delete the record
+	vbolt.Delete(tx, GrowthDataBkt, growthData.Id)
+
+	return nil
+}
+
 func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (GrowthData, error) {
 	var growthData GrowthData
 	var err error
@@ -137,7 +246,10 @@ func updateGrowthDataIndices(tx *vbolt.Tx, growthData GrowthData) {
 }
 
 func parseMeasurementDate(req AddGrowthDataRequest, personBirthday time.Time) (time.Time, error) {
-	if req.InputType == "date" {
+	if req.InputType == "today" {
+		// Use current date for "today" input type
+		return time.Now(), nil
+	} else if req.InputType == "date" {
 		if req.MeasurementDate == nil || *req.MeasurementDate == "" {
 			return time.Time{}, errors.New("Measurement date is required when input type is 'date'")
 		}
@@ -158,7 +270,7 @@ func parseMeasurementDate(req AddGrowthDataRequest, personBirthday time.Time) (t
 		targetDate := personBirthday.AddDate(*req.AgeYears, ageMonths, 0)
 		return targetDate, nil
 	} else {
-		return time.Time{}, errors.New("Input type must be 'date' or 'age'")
+		return time.Time{}, errors.New("Input type must be 'today', 'date' or 'age'")
 	}
 }
 
@@ -189,6 +301,113 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 	return
 }
 
+func GetGrowthData(ctx *vbeam.Context, req GetGrowthDataRequest) (resp GetGrowthDataResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.Id <= 0 {
+		err = errors.New("Growth data ID is required")
+		return
+	}
+
+	// Get growth data from database
+	growthData, err := GetGrowthDataByIdAndFamily(ctx.Tx, req.Id, user.FamilyId)
+	if err != nil {
+		return
+	}
+
+	resp.GrowthData = growthData
+	return
+}
+
+func UpdateGrowthData(ctx *vbeam.Context, req UpdateGrowthDataRequest) (resp UpdateGrowthDataResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if err = validateUpdateGrowthDataRequest(req); err != nil {
+		return
+	}
+
+	// Update growth data in database
+	vbeam.UseWriteTx(ctx)
+	growthData, err := UpdateGrowthDataTx(ctx.Tx, req, user.FamilyId)
+	if err != nil {
+		return
+	}
+
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.GrowthData = growthData
+	return
+}
+
+func DeleteGrowthData(ctx *vbeam.Context, req DeleteGrowthDataRequest) (resp DeleteGrowthDataResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.Id <= 0 {
+		err = errors.New("Growth data ID is required")
+		return
+	}
+
+	// Delete growth data from database
+	vbeam.UseWriteTx(ctx)
+	err = DeleteGrowthDataTx(ctx.Tx, req.Id, user.FamilyId)
+	if err != nil {
+		return
+	}
+
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Success = true
+	return
+}
+
+func validateUpdateGrowthDataRequest(req UpdateGrowthDataRequest) error {
+	if req.Id <= 0 {
+		return errors.New("Growth data ID is required")
+	}
+	if req.MeasurementType != "height" && req.MeasurementType != "weight" {
+		return errors.New("Measurement type must be 'height' or 'weight'")
+	}
+	if req.Value <= 0 {
+		return errors.New("Measurement value must be positive")
+	}
+	if req.Unit == "" {
+		return errors.New("Unit is required")
+	}
+	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
+		return errors.New("Input type must be 'today', 'date' or 'age'")
+	}
+
+	// Validate units based on measurement type
+	if req.MeasurementType == "height" {
+		if req.Unit != "cm" && req.Unit != "in" {
+			return errors.New("Height unit must be 'cm' or 'in'")
+		}
+	} else if req.MeasurementType == "weight" {
+		if req.Unit != "kg" && req.Unit != "lbs" {
+			return errors.New("Weight unit must be 'kg' or 'lbs'")
+		}
+	}
+
+	return nil
+}
 
 func validateAddGrowthDataRequest(req AddGrowthDataRequest) error {
 	if req.PersonId <= 0 {
@@ -203,8 +422,8 @@ func validateAddGrowthDataRequest(req AddGrowthDataRequest) error {
 	if req.Unit == "" {
 		return errors.New("Unit is required")
 	}
-	if req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'date' or 'age'")
+	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
+		return errors.New("Input type must be 'today', 'date' or 'age'")
 	}
 
 	// Validate units based on measurement type

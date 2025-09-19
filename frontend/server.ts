@@ -78,6 +78,37 @@ export interface AddGrowthDataResponse {
     growthData: GrowthData
 }
 
+export interface GetGrowthDataRequest {
+    id: number
+}
+
+export interface GetGrowthDataResponse {
+    growthData: GrowthData
+}
+
+export interface UpdateGrowthDataRequest {
+    id: number
+    measurementType: string
+    value: number
+    unit: string
+    inputType: string
+    measurementDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+}
+
+export interface UpdateGrowthDataResponse {
+    growthData: GrowthData
+}
+
+export interface DeleteGrowthDataRequest {
+    id: number
+}
+
+export interface DeleteGrowthDataResponse {
+    success: boolean
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -148,6 +179,18 @@ export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<Ge
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {
     return await rpc.call<AddGrowthDataResponse>('AddGrowthData', JSON.stringify(data));
+}
+
+export async function GetGrowthData(data: GetGrowthDataRequest): Promise<rpc.Response<GetGrowthDataResponse>> {
+    return await rpc.call<GetGrowthDataResponse>('GetGrowthData', JSON.stringify(data));
+}
+
+export async function UpdateGrowthData(data: UpdateGrowthDataRequest): Promise<rpc.Response<UpdateGrowthDataResponse>> {
+    return await rpc.call<UpdateGrowthDataResponse>('UpdateGrowthData', JSON.stringify(data));
+}
+
+export async function DeleteGrowthData(data: DeleteGrowthDataRequest): Promise<rpc.Response<DeleteGrowthDataResponse>> {
+    return await rpc.call<DeleteGrowthDataResponse>('DeleteGrowthData', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

@@ -19,6 +19,26 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
+const handleDeleteGrowthData = async (id: number, type: server.MeasurementType, value: number, unit: string) => {
+  const typeLabel = type === server.Height ? 'Height' : 'Weight';
+  const confirmed = confirm(`Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${value} ${unit}?`);
+
+  if (confirmed) {
+    try {
+      let [resp, err] = await server.DeleteGrowthData({ id });
+
+      if (resp && resp.success) {
+        // Refresh the page to update the growth data
+        window.location.reload();
+      } else {
+        alert(err || "Failed to delete growth measurement");
+      }
+    } catch (error) {
+      alert("Network error. Please try again.");
+    }
+  }
+};
+
 export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
   const getMeasurementTypeLabel = (type: server.MeasurementType) => {
     return type === server.Height ? 'Height' : 'Weight';
@@ -54,6 +74,7 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                     <th>Value</th>
                     <th>Date</th>
                     <th>Added</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -63,6 +84,20 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                       <td>{record.value} {record.unit}</td>
                       <td>{formatDate(record.measurementDate)}</td>
                       <td>{formatDate(record.createdAt)}</td>
+                      <td>
+                        <div className="table-actions">
+                          <a href={`/edit-growth/${record.id}`} className="btn-action btn-edit" title="Edit">
+                            ✏️
+                          </a>
+                          <button
+                            className="btn-action btn-delete"
+                            title="Delete"
+                            onClick={() => handleDeleteGrowthData(record.id, record.measurementType, record.value, record.unit)}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

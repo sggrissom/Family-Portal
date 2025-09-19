@@ -45,6 +45,7 @@ async function main() {
     vlens.routeHandler("/dashboard", () => import("@app/dashboard")),
     vlens.routeHandler("/add-person", () => import("@app/add-person")),
     vlens.routeHandler("/add-growth", () => import("@app/add-growth")),
+    vlens.routeHandler("/edit-growth", () => import("@app/edit-growth")),
     vlens.routeHandler("/add-milestone", () => import("@app/add-milestone")),
     vlens.routeHandler("/import", () => import("@app/import")),
     vlens.routeHandler("/", () => import("@app/home")),

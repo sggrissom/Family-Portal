@@ -8,7 +8,7 @@ import { Header, Footer } from "./layout";
 import { requireAuthInView } from "./authHelpers";
 import "./growth-styles";
 
-type AddGrowthForm = {
+type EditGrowthForm = {
   selectedPersonId: string;
   measurementType: string; // 'height' | 'weight'
   value: string;
@@ -21,13 +21,13 @@ type AddGrowthForm = {
   loading: boolean;
 }
 
-const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm => ({
-  selectedPersonId: personId || "",
-  measurementType: "height",
-  value: "",
-  unit: "in",
-  inputType: "today",
-  measurementDate: "",
+const useEditGrowthForm = vlens.declareHook((growthData?: server.GrowthData): EditGrowthForm => ({
+  selectedPersonId: growthData?.personId?.toString() || "",
+  measurementType: growthData?.measurementType === server.Height ? "height" : "weight",
+  value: growthData?.value?.toString() || "",
+  unit: growthData?.unit || "in",
+  inputType: "date", // Default to date since we have the original date
+  measurementDate: growthData?.measurementDate ? growthData.measurementDate.split('T')[0] : "",
   ageYears: "",
   ageMonths: "",
   error: "",
@@ -35,30 +35,37 @@ const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm =>
 }));
 
 export async function fetch(route: string, prefix: string) {
-  // Fetch people list to populate the person selector
-  return server.ListPeople({});
+  // Extract growth record ID from URL (e.g., /edit-growth/123)
+  const urlParts = route.split('/');
+  const growthId = urlParts.length > 2 ? parseInt(urlParts[2]) : null;
+
+  if (!growthId) {
+    throw new Error("Growth record ID is required");
+  }
+
+  // For now, just fetch the growth data - we'll get people list separately
+  return server.GetGrowthData({ id: growthId });
 }
 
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse,
+  data: server.GetGrowthDataResponse,
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
   }
 
-  if (!data.people || data.people.length === 0) {
+  if (!data.growthData) {
     return (
       <div>
         <Header isHome={false} />
         <main id="app" className="add-growth-container">
           <div className="error-page">
-            <h1>No Family Members</h1>
-            <p>Please add family members before tracking growth data</p>
-            <a href="/add-person" className="btn btn-primary">Add Family Member</a>
-            <a href="/dashboard" className="btn btn-secondary">Back to Dashboard</a>
+            <h1>Growth Record Not Found</h1>
+            <p>The growth record you're trying to edit could not be found</p>
+            <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
           </div>
         </main>
         <Footer />
@@ -66,36 +73,25 @@ export function view(
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-growth/123)
-  const urlParts = route.split('/');
-  const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
-
-  const form = useAddGrowthForm(personIdFromUrl);
+  const form = useEditGrowthForm(data.growthData);
 
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="add-growth-container">
-        <AddGrowthPage form={form} people={data.people} />
+        <EditGrowthPage form={form} growthData={data.growthData} />
       </main>
       <Footer />
     </div>
   );
 }
 
-async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], event: Event) {
+async function onSubmitGrowth(form: EditGrowthForm, growthData: server.GrowthData, event: Event) {
   event.preventDefault();
   form.loading = true;
   form.error = "";
 
   // Validation
-  if (!form.selectedPersonId) {
-    form.error = "Please select a family member";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
   if (!form.value || parseFloat(form.value) <= 0) {
     form.error = "Please enter a valid measurement value";
     form.loading = false;
@@ -118,8 +114,8 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   }
 
   // Prepare API request
-  const request: server.AddGrowthDataRequest = {
-    personId: parseInt(form.selectedPersonId),
+  const request: server.UpdateGrowthDataRequest = {
+    id: growthData.id,
     measurementType: form.measurementType,
     value: parseFloat(form.value),
     unit: form.unit,
@@ -130,14 +126,14 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   };
 
   try {
-    let [resp, err] = await server.AddGrowthData(request);
+    let [resp, err] = await server.UpdateGrowthData(request);
 
     if (resp) {
       // Redirect immediately to profile page
       core.setRoute(`/profile/${form.selectedPersonId}`);
     } else {
       form.loading = false;
-      form.error = err || "Failed to save growth measurement";
+      form.error = err || "Failed to update growth measurement";
       vlens.scheduleRedraw();
     }
   } catch (error) {
@@ -147,27 +143,23 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   }
 }
 
-function onMeasurementTypeChange(form: AddGrowthForm, newType: string) {
+function onMeasurementTypeChange(form: EditGrowthForm, newType: string) {
   form.measurementType = newType;
   form.unit = newType === 'height' ? 'in' : 'lbs';
   vlens.scheduleRedraw();
 }
 
-function onInputTypeChange(form: AddGrowthForm, newType: string) {
+function onInputTypeChange(form: EditGrowthForm, newType: string) {
   form.inputType = newType;
   vlens.scheduleRedraw();
 }
 
-interface AddGrowthPageProps {
-  form: AddGrowthForm;
-  people: server.Person[];
+interface EditGrowthPageProps {
+  form: EditGrowthForm;
+  growthData: server.GrowthData;
 }
 
-const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
-  // Filter to only show children for growth tracking
-  const children = people.filter(p => p.type === server.Child);
-  const parents = people.filter(p => p.type === server.Parent);
-
+const EditGrowthPage = ({ form, growthData }: EditGrowthPageProps) => {
   const getUnitOptions = () => {
     if (form.measurementType === 'height') {
       return [
@@ -181,44 +173,19 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
     }
   };
 
-  const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
-
   return (
     <div className="add-growth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>Add Growth Measurement</h1>
-          <p>Track height or weight progress for your family</p>
+          <h1>Edit Growth Measurement</h1>
+          <p>Update this growth measurement record</p>
         </div>
 
         {form.error && (
           <div className="error-message">{form.error}</div>
         )}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitGrowth, form, people)}>
-          {/* Person Selection */}
-          <div className="form-group">
-            <label htmlFor="person">Family Member</label>
-            <select
-              id="person"
-              {...vlens.attrsBindInput(vlens.ref(form, "selectedPersonId"))}
-              required
-              disabled={form.loading}
-            >
-              <option value="">Select a family member</option>
-              {children.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} (Age {person.age})
-                </option>
-              ))}
-              {parents.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} (Parent)
-                </option>
-              ))}
-            </select>
-          </div>
-
+        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitGrowth, form, growthData)}>
           {/* Measurement Type */}
           <div className="form-group">
             <label>Measurement Type</label>
@@ -368,22 +335,22 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
 
           {/* Submit Button */}
           <div className="form-actions">
-            <a href="/dashboard" className="btn btn-secondary">Cancel</a>
+            <a href={`/profile/${form.selectedPersonId}`} className="btn btn-secondary">Cancel</a>
             <button
               type="submit"
               className="btn btn-primary auth-submit"
               disabled={form.loading}
             >
-              {form.loading ? 'Saving...' : 'Save Measurement'}
+              {form.loading ? 'Saving...' : 'Update Measurement'}
             </button>
           </div>
         </form>
 
-        {selectedPerson && form.value && (
+        {form.value && (
           <div className="measurement-preview">
             <h3>Preview</h3>
             <p>
-              <strong>{selectedPerson.name}</strong> - {form.measurementType}: {form.value} {form.unit}
+              Updated {form.measurementType}: {form.value} {form.unit}
               {form.inputType === 'today' && (
                 <span> today</span>
               )}
