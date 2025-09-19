@@ -12,7 +12,7 @@ export const TimelineTab = ({ person }: TimelineTabProps) => {
       <div className="timeline-content">
         <div className="empty-state">
           <p>No timeline entries yet.</p>
-          <button className="btn btn-primary">Add First Milestone</button>
+          <a href={`/add-milestone/${person.id}`} className="btn btn-primary">Add First Milestone</a>
         </div>
       </div>
     </div>
