@@ -38,5 +38,8 @@ jobs:
           echo '<!DOCTYPE html><html><body>CI Build</body></html>' > release/dist/index.html
           echo 'console.log("CI build");' > release/dist/main.js
 
+      - name: Run tests
+        run: make test
+
       - name: Build Go binary only
         run: make build-go

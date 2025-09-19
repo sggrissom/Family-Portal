@@ -48,7 +48,7 @@ deploy: build stop_service copy_files start_service
 	@echo "✅ Deployment complete."
 
 test:
-	go test ./backend/
+	go test ./backend/ -v
 
 local:
 	go run family/local
