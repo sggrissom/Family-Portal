@@ -32,6 +32,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterUserMethods(app)
 	backend.RegisterPersonMethods(app)
 	backend.RegisterGrowthMethods(app)
+	backend.RegisterMilestoneMethods(app)
 	backend.RegisterImportMethods(app)
 
 	return app

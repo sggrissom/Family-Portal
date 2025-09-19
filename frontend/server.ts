@@ -109,6 +109,20 @@ export interface DeleteGrowthDataResponse {
     success: boolean
 }
 
+export interface AddMilestoneRequest {
+    personId: number
+    description: string
+    category: string
+    inputType: string
+    milestoneDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+}
+
+export interface AddMilestoneResponse {
+    milestone: Milestone
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -143,6 +157,16 @@ export interface GrowthData {
     value: number
     unit: string
     measurementDate: string
+    createdAt: string
+}
+
+export interface Milestone {
+    id: number
+    personId: number
+    familyId: number
+    description: string
+    category: string
+    milestoneDate: string
     createdAt: string
 }
 
@@ -191,6 +215,10 @@ export async function UpdateGrowthData(data: UpdateGrowthDataRequest): Promise<r
 
 export async function DeleteGrowthData(data: DeleteGrowthDataRequest): Promise<rpc.Response<DeleteGrowthDataResponse>> {
     return await rpc.call<DeleteGrowthDataResponse>('DeleteGrowthData', JSON.stringify(data));
+}
+
+export async function AddMilestone(data: AddMilestoneRequest): Promise<rpc.Response<AddMilestoneResponse>> {
+    return await rpc.call<AddMilestoneResponse>('AddMilestone', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

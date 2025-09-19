@@ -115,17 +115,33 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
     return;
   }
 
-  // TODO: Replace with actual API call when backend is implemented
-  // For now, just simulate success
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Prepare the request data
+    const requestData: any = {
+      personId: parseInt(form.selectedPersonId),
+      description: form.description.trim(),
+      category: form.category,
+      inputType: form.inputType
+    };
 
-    // Redirect immediately to profile page
+    // Add date/age specific fields
+    if (form.inputType === 'date') {
+      requestData.milestoneDate = form.milestoneDate;
+    } else if (form.inputType === 'age') {
+      requestData.ageYears = parseInt(form.ageYears);
+      if (form.ageMonths) {
+        requestData.ageMonths = parseInt(form.ageMonths);
+      }
+    }
+
+    // Call the backend API
+    const response = await server.AddMilestone(requestData);
+
+    // Redirect to profile page on success
     core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
-    form.error = "Network error. Please try again.";
+    form.error = error instanceof Error ? error.message : "Failed to save milestone. Please try again.";
     vlens.scheduleRedraw();
   }
 }
