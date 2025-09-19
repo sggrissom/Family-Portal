@@ -12,26 +12,24 @@ type AddMilestoneForm = {
   selectedPersonId: string;
   description: string;
   category: string;
-  inputType: string; // 'date' | 'age'
+  inputType: string; // 'today' | 'date' | 'age'
   milestoneDate: string;
   ageYears: string;
   ageMonths: string;
   error: string;
   loading: boolean;
-  success: boolean;
 }
 
 const useAddMilestoneForm = vlens.declareHook((personId?: string): AddMilestoneForm => ({
   selectedPersonId: personId || "",
   description: "",
   category: "development",
-  inputType: "date",
+  inputType: "today",
   milestoneDate: "",
   ageYears: "",
   ageMonths: "",
   error: "",
-  loading: false,
-  success: false
+  loading: false
 }));
 
 export async function fetch(route: string, prefix: string) {
@@ -87,7 +85,6 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
   event.preventDefault();
   form.loading = true;
   form.error = "";
-  form.success = false;
 
   // Validation
   if (!form.selectedPersonId) {
@@ -124,21 +121,8 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    form.loading = false;
-    form.success = true;
-
-    // Reset form
-    form.description = "";
-    form.milestoneDate = "";
-    form.ageYears = "";
-    form.ageMonths = "";
-
-    vlens.scheduleRedraw();
-
-    // Redirect to profile page after success
-    setTimeout(() => {
-      core.setRoute(`/profile/${form.selectedPersonId}`);
-    }, 1500);
+    // Redirect immediately to profile page
+    core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
     form.error = "Network error. Please try again.";
@@ -179,12 +163,6 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
           <h1>Add Milestone</h1>
           <p>Capture special moments and developmental milestones</p>
         </div>
-
-        {form.success && (
-          <div className="success-message">
-            Milestone saved successfully!
-          </div>
-        )}
 
         {form.error && (
           <div className="error-message">{form.error}</div>
@@ -250,6 +228,17 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
           <div className="form-group">
             <label>When did this happen?</label>
             <div className="radio-group">
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="inputType"
+                  value="today"
+                  checked={form.inputType === 'today'}
+                  onChange={() => onInputTypeChange(form, 'today')}
+                  disabled={form.loading}
+                />
+                <span>Today</span>
+              </label>
               <label className="radio-option">
                 <input
                   type="radio"
@@ -339,6 +328,9 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
             <h3>Preview</h3>
             <p>
               <strong>{selectedPerson.name}</strong> - {form.description}
+              {form.inputType === 'today' && (
+                <span> today</span>
+              )}
               {form.inputType === 'date' && form.milestoneDate && (
                 <span> on {new Date(form.milestoneDate).toLocaleDateString()}</span>
               )}

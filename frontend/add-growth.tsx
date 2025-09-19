@@ -12,13 +12,12 @@ type AddGrowthForm = {
   measurementType: string; // 'height' | 'weight'
   value: string;
   unit: string; // cm, in, kg, lbs
-  inputType: string; // 'date' | 'age'
+  inputType: string; // 'today' | 'date' | 'age'
   measurementDate: string;
   ageYears: string;
   ageMonths: string;
   error: string;
   loading: boolean;
-  success: boolean;
 }
 
 const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm => ({
@@ -26,13 +25,12 @@ const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm =>
   measurementType: "height",
   value: "",
   unit: "in",
-  inputType: "date",
+  inputType: "today",
   measurementDate: "",
   ageYears: "",
   ageMonths: "",
   error: "",
-  loading: false,
-  success: false
+  loading: false
 }));
 
 export async function fetch(route: string, prefix: string) {
@@ -88,7 +86,6 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   event.preventDefault();
   form.loading = true;
   form.error = "";
-  form.success = false;
 
   // Validation
   if (!form.selectedPersonId) {
@@ -134,32 +131,19 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   try {
     let [resp, err] = await server.AddGrowthData(request);
 
-    form.loading = false;
-
     if (resp) {
-      form.success = true;
-
-      // Reset form
-      form.value = "";
-      form.measurementDate = "";
-      form.ageYears = "";
-      form.ageMonths = "";
-
-      vlens.scheduleRedraw();
-
-      // Redirect to profile page after success
-      setTimeout(() => {
-        core.setRoute(`/profile/${form.selectedPersonId}`);
-      }, 1500);
+      // Redirect immediately to profile page
+      core.setRoute(`/profile/${form.selectedPersonId}`);
     } else {
+      form.loading = false;
       form.error = err || "Failed to save growth measurement";
+      vlens.scheduleRedraw();
     }
   } catch (error) {
     form.loading = false;
     form.error = "Network error. Please try again.";
+    vlens.scheduleRedraw();
   }
-
-  vlens.scheduleRedraw();
 }
 
 function onMeasurementTypeChange(form: AddGrowthForm, newType: string) {
@@ -205,12 +189,6 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
           <h1>Add Growth Measurement</h1>
           <p>Track height or weight progress for your family</p>
         </div>
-
-        {form.success && (
-          <div className="success-message">
-            {form.measurementType} measurement saved successfully!
-          </div>
-        )}
 
         {form.error && (
           <div className="error-message">{form.error}</div>
@@ -309,6 +287,17 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
                 <input
                   type="radio"
                   name="inputType"
+                  value="today"
+                  checked={form.inputType === 'today'}
+                  onChange={() => onInputTypeChange(form, 'today')}
+                  disabled={form.loading}
+                />
+                <span>Today</span>
+              </label>
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="inputType"
                   value="date"
                   checked={form.inputType === 'date'}
                   onChange={() => onInputTypeChange(form, 'date')}
@@ -394,6 +383,9 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
             <h3>Preview</h3>
             <p>
               <strong>{selectedPerson.name}</strong> - {form.measurementType}: {form.value} {form.unit}
+              {form.inputType === 'today' && (
+                <span> today</span>
+              )}
               {form.inputType === 'date' && form.measurementDate && (
                 <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
               )}
