@@ -132,6 +132,36 @@ export interface GetPersonMilestonesResponse {
     milestones: Milestone[]
 }
 
+export interface GetMilestoneRequest {
+    id: number
+}
+
+export interface GetMilestoneResponse {
+    milestone: Milestone
+}
+
+export interface UpdateMilestoneRequest {
+    id: number
+    description: string
+    category: string
+    inputType: string
+    milestoneDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+}
+
+export interface UpdateMilestoneResponse {
+    milestone: Milestone
+}
+
+export interface DeleteMilestoneRequest {
+    id: number
+}
+
+export interface DeleteMilestoneResponse {
+    success: boolean
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -232,6 +262,18 @@ export async function AddMilestone(data: AddMilestoneRequest): Promise<rpc.Respo
 
 export async function GetPersonMilestones(data: GetPersonMilestonesRequest): Promise<rpc.Response<GetPersonMilestonesResponse>> {
     return await rpc.call<GetPersonMilestonesResponse>('GetPersonMilestones', JSON.stringify(data));
+}
+
+export async function GetMilestone(data: GetMilestoneRequest): Promise<rpc.Response<GetMilestoneResponse>> {
+    return await rpc.call<GetMilestoneResponse>('GetMilestone', JSON.stringify(data));
+}
+
+export async function UpdateMilestone(data: UpdateMilestoneRequest): Promise<rpc.Response<UpdateMilestoneResponse>> {
+    return await rpc.call<UpdateMilestoneResponse>('UpdateMilestone', JSON.stringify(data));
+}
+
+export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc.Response<DeleteMilestoneResponse>> {
+    return await rpc.call<DeleteMilestoneResponse>('DeleteMilestone', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

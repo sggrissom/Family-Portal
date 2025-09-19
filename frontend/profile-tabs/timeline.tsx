@@ -19,6 +19,25 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
+const handleDeleteMilestone = async (id: number, description: string) => {
+  const confirmed = confirm(`Are you sure you want to delete this milestone: "${description}"?`);
+
+  if (confirmed) {
+    try {
+      let [resp, err] = await server.DeleteMilestone({ id });
+
+      if (resp && resp.success) {
+        // Refresh the page to update the milestone data
+        window.location.reload();
+      } else {
+        alert(err || "Failed to delete milestone");
+      }
+    } catch (error) {
+      alert("Network error. Please try again.");
+    }
+  }
+};
+
 const getCategoryIcon = (category: string) => {
   switch (category) {
     case "development": return "🌱";
@@ -82,6 +101,18 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
                 <div className="milestone-description">
                   {milestone.description}
                 </div>
+              </div>
+              <div className="milestone-actions">
+                <a href={`/edit-milestone/${milestone.id}`} className="btn-action btn-edit" title="Edit">
+                  ✏️
+                </a>
+                <button
+                  className="btn-action btn-delete"
+                  title="Delete"
+                  onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
+                >
+                  🗑️
+                </button>
               </div>
             </div>
           ))}
