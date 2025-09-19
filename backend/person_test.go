@@ -1,3 +1,5 @@
+// Package backend_test provides unit tests for person-related functionality
+// Tests: age calculation functions and edge cases
 package backend
 
 import (

@@ -1,3 +1,5 @@
+// Package backend_test provides unit tests for user and family management
+// Tests: account creation, family management, password handling, user retrieval
 package backend
 
 import (
