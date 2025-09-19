@@ -3,8 +3,13 @@
 package backend
 
 import (
+	"family/cfg"
+	"os"
 	"testing"
 	"time"
+
+	"go.hasen.dev/vbolt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestCalculateAge(t *testing.T) {
@@ -180,4 +185,127 @@ func TestCalculateAgeCurrentTime(t *testing.T) {
 	if age != expected {
 		t.Errorf("calculateAge for someone born 1 year and 1 day ago should be %q, got %q", expected, age)
 	}
+}
+
+func TestGetPersonWithMilestones(t *testing.T) {
+	testDBPath := "test_person_milestones.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	var testUser User
+	var testPerson Person
+
+	// Setup: Create test user and person
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		// Create user
+		userReq := CreateAccountRequest{
+			Name:            "Test User",
+			Email:           "test@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
+		testUser = AddUserTx(tx, userReq, hash)
+
+		// Create person
+		personReq := AddPersonRequest{
+			Name:       "Test Child",
+			PersonType: 1, // Child
+			Gender:     0, // Male
+			Birthdate:  "2020-06-15",
+		}
+		var err error
+		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to create test person: %v", err)
+		}
+
+		// Add some test milestones
+		milestoneReq1 := AddMilestoneRequest{
+			PersonId:    testPerson.Id,
+			Description: "First words",
+			Category:    "development",
+			InputType:   "age",
+			AgeYears:    intPtr(1),
+			AgeMonths:   intPtr(3),
+		}
+		_, err = AddMilestoneTx(tx, milestoneReq1, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to add test milestone 1: %v", err)
+		}
+
+		milestoneReq2 := AddMilestoneRequest{
+			PersonId:    testPerson.Id,
+			Description: "Started walking",
+			Category:    "development",
+			InputType:   "age",
+			AgeYears:    intPtr(1),
+			AgeMonths:   intPtr(6),
+		}
+		_, err = AddMilestoneTx(tx, milestoneReq2, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to add test milestone 2: %v", err)
+		}
+
+		// Add some test growth data
+		growthReq := AddGrowthDataRequest{
+			PersonId:        testPerson.Id,
+			MeasurementType: "height",
+			Value:           85.0,
+			Unit:            "cm",
+			InputType:       "date",
+			MeasurementDate: stringPtr("2021-06-15"),
+		}
+		_, err = AddGrowthDataTx(tx, growthReq, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to add test growth data: %v", err)
+		}
+
+		vbolt.TxCommit(tx)
+	})
+
+	// Test GetPersonById with transaction - simulating what GetPerson procedure does
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		// Get the person
+		person := GetPersonById(tx, testPerson.Id)
+		if person.Id == 0 {
+			t.Fatal("Failed to retrieve person")
+		}
+
+		// Get growth data
+		growthData := GetPersonGrowthDataTx(tx, testPerson.Id)
+		if len(growthData) == 0 {
+			t.Error("Expected at least one growth data record")
+		}
+
+		// Get milestones
+		milestones := GetPersonMilestonesTx(tx, testPerson.Id)
+		if len(milestones) != 2 {
+			t.Errorf("Expected 2 milestones, got %d", len(milestones))
+		}
+
+		// Verify milestone content
+		for _, milestone := range milestones {
+			if milestone.PersonId != testPerson.Id {
+				t.Errorf("Expected milestone PersonId %d, got %d", testPerson.Id, milestone.PersonId)
+			}
+			if milestone.FamilyId != testUser.FamilyId {
+				t.Errorf("Expected milestone FamilyId %d, got %d", testUser.FamilyId, milestone.FamilyId)
+			}
+			if milestone.Category != "development" {
+				t.Errorf("Expected milestone category 'development', got %s", milestone.Category)
+			}
+			if milestone.Description == "" {
+				t.Error("Expected milestone description to not be empty")
+			}
+			if milestone.CreatedAt.IsZero() {
+				t.Error("Expected milestone CreatedAt to be set")
+			}
+		}
+
+		// Verify that only milestones for this person are returned
+		// (this is implicitly tested by the PersonId check above, but worth noting)
+	})
 }
