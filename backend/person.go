@@ -15,6 +15,7 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddPerson)
 	vbeam.RegisterProc(app, ListPeople)
 	vbeam.RegisterProc(app, GetPerson)
+	vbeam.RegisterProc(app, SetProfilePhoto)
 }
 
 type GenderType int
@@ -44,6 +45,15 @@ type GetPersonRequest struct {
 	Id     int    `json:"id"`     // 0 = Male, 1 = Female, 2 = Unknown
 }
 
+type SetProfilePhotoRequest struct {
+	PersonId int `json:"personId"`
+	PhotoId  int `json:"photoId"`
+}
+
+type SetProfilePhotoResponse struct {
+	Person Person `json:"person"`
+}
+
 type ListPeopleResponse struct {
 	People  []Person `json:"people"`
 }
@@ -57,24 +67,28 @@ type GetPersonResponse struct {
 
 // Database types
 type Person struct {
-	Id       int        `json:"id"`
-	FamilyId int        `json:"familyId"`
-	Name     string     `json:"name"`
-	Type     PersonType `json:"type"`
-	Gender   GenderType `json:"gender"`
-	Birthday time.Time  `json:"birthday"`
-	Age      string     `json:"age"`
+	Id             int        `json:"id"`
+	FamilyId       int        `json:"familyId"`
+	Name           string     `json:"name"`
+	Type           PersonType `json:"type"`
+	Gender         GenderType `json:"gender"`
+	Birthday       time.Time  `json:"birthday"`
+	Age            string     `json:"age"`
+	ProfilePhotoId int        `json:"profilePhotoId"`
 }
 
 // Packing function for vbolt serialization
 func PackPerson(self *Person, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	var version = vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
 	vpack.IntEnum(&self.Type, buf)
 	vpack.IntEnum(&self.Gender, buf)
 	vpack.Time(&self.Birthday, buf)
+	if version >= 2 {
+		vpack.Int(&self.ProfilePhotoId, buf)
+	}
 }
 
 // Buckets for vbolt database storage
@@ -119,6 +133,7 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
 	person.Age = calculateAge(parsedTime)
+	person.ProfilePhotoId = 0
 
 	vbolt.Write(tx, PeopleBkt, person.Id, &person)
 
@@ -259,4 +274,50 @@ func validateAddPersonRequest(req AddPersonRequest) error {
 		return errors.New("Birthdate is required")
 	}
 	return nil
+}
+
+func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetProfilePhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.PersonId <= 0 {
+		err = errors.New("Invalid person ID")
+		return
+	}
+	if req.PhotoId <= 0 {
+		err = errors.New("Invalid photo ID")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get and validate person
+	person := GetPersonById(ctx.Tx, req.PersonId)
+	if person.Id == 0 || person.FamilyId != user.FamilyId {
+		err = errors.New("Person not found or access denied")
+		return
+	}
+
+	// Get and validate photo
+	photo := GetImageById(ctx.Tx, req.PhotoId)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId || photo.PersonId != req.PersonId {
+		err = errors.New("Photo not found, access denied, or not associated with this person")
+		return
+	}
+
+	// Update person's profile photo
+	person.ProfilePhotoId = req.PhotoId
+	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+
+	vbolt.TxCommit(ctx.Tx)
+
+	// Calculate age for response
+	person.Age = calculateAge(person.Birthday)
+	resp.Person = person
+	return
 }

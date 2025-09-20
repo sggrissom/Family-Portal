@@ -71,6 +71,15 @@ export interface GetPersonRequest {
     id: number
 }
 
+export interface SetProfilePhotoRequest {
+    personId: number
+    photoId: number
+}
+
+export interface SetProfilePhotoResponse {
+    person: Person
+}
+
 export interface AddGrowthDataRequest {
     personId: number
     measurementType: string
@@ -175,6 +184,7 @@ export interface GetPhotoRequest {
 
 export interface GetPhotoResponse {
     image: Image
+    person: Person
 }
 
 export interface UpdatePhotoRequest {
@@ -223,6 +233,7 @@ export interface Person {
     gender: GenderType
     birthday: string
     age: string
+    profilePhotoId: number
 }
 
 export interface GrowthData {
@@ -297,6 +308,10 @@ export async function ListPeople(data: Empty): Promise<rpc.Response<ListPeopleRe
 
 export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<GetPersonResponse>> {
     return await rpc.call<GetPersonResponse>('GetPerson', JSON.stringify(data));
+}
+
+export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc.Response<SetProfilePhotoResponse>> {
+    return await rpc.call<SetProfilePhotoResponse>('SetProfilePhoto', JSON.stringify(data));
 }
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {

@@ -11,7 +11,7 @@ export async function fetch(route: string, prefix: string) {
   return server.GetPhoto({ id: photoId });
 }
 
-type ViewPhotoData = server.GetPhotoResponse | { image: null };
+type ViewPhotoData = { image: server.Image | null; person: server.Person | null };
 
 const formatPhotoDate = (dateString: string) => {
   if (!dateString) return '';
@@ -37,7 +37,7 @@ export function view(
     return;
   }
 
-  if (!data.image) {
+  if (!data.image || !data.person) {
     return (
       <div>
         <Header isHome={false} />
@@ -57,7 +57,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="view-photo-container">
-        <ViewPhotoPage photo={data.image} />
+        <ViewPhotoPage photo={data.image} person={data.person} />
       </main>
       <Footer />
     </div>
@@ -66,6 +66,7 @@ export function view(
 
 interface ViewPhotoPageProps {
   photo: server.Image;
+  person: server.Person;
 }
 
 async function handleDeletePhoto(photo: server.Image) {
@@ -91,7 +92,32 @@ async function handleDeletePhoto(photo: server.Image) {
   }
 }
 
-const ViewPhotoPage = ({ photo }: ViewPhotoPageProps) => {
+async function handleSetProfilePhoto(photo: server.Image) {
+  try {
+    const [resp, err] = await server.SetProfilePhoto({
+      personId: photo.personId,
+      photoId: photo.id
+    });
+
+    if (err) {
+      alert(err || "Failed to set profile photo");
+      return;
+    }
+
+    if (resp && resp.person) {
+      alert("Profile photo set successfully");
+      // Refresh the page to show updated data
+      core.setRoute(`/view-photo/${photo.id}`);
+    } else {
+      alert("Failed to set profile photo");
+    }
+  } catch (error) {
+    alert("Failed to set profile photo");
+  }
+}
+
+const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
+  const isProfilePhoto = person.profilePhotoId === photo.id;
   return (
     <div className="view-photo-page">
       {/* Header with navigation */}
@@ -134,6 +160,18 @@ const ViewPhotoPage = ({ photo }: ViewPhotoPageProps) => {
           <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
             ✏️ Edit
           </a>
+          {isProfilePhoto ? (
+            <button className="btn btn-success" disabled>
+              ✓ Profile Photo
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={() => handleSetProfilePhoto(photo)}
+            >
+              👤 Set as Profile Photo
+            </button>
+          )}
           <button
             className="btn btn-danger"
             onClick={() => handleDeletePhoto(photo)}

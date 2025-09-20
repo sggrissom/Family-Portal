@@ -1733,6 +1733,25 @@ block(`
 `);
 
 block(`
+.profile-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+`);
+
+block(`
+.profile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+`);
+
+block(`
 .profile-info h1 {
   font-size: 2.2rem;
   margin: 0 0 8px;

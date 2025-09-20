@@ -109,7 +109,15 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
       <div className="profile-header">
         <div className="profile-header-main">
           <div className="profile-avatar">
-            {getGenderIcon(person.gender)}
+            {person.profilePhotoId ? (
+              <img
+                src={`/api/photo/${person.profilePhotoId}/thumb`}
+                alt={`${person.name}'s profile photo`}
+                className="profile-photo"
+              />
+            ) : (
+              <span className="profile-icon">{getGenderIcon(person.gender)}</span>
+            )}
           </div>
           <div className="profile-info">
             <h1>{person.name}</h1>

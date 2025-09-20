@@ -44,13 +44,20 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
           <div className={`photos-gallery has-photos`}>
             {photos.map((photo) => (
               <div key={photo.id} className="photo-card">
-                <img
-                  src={`/api/photo/${photo.id}/thumb`}
-                  alt={photo.title}
-                  className="photo-image"
-                  loading="lazy"
-                  onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
-                />
+                <div className="photo-image-container">
+                  <img
+                    src={`/api/photo/${photo.id}/thumb`}
+                    alt={photo.title}
+                    className="photo-image"
+                    loading="lazy"
+                    onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                  />
+                  {person.profilePhotoId === photo.id && (
+                    <div className="profile-photo-badge">
+                      👤 Profile
+                    </div>
+                  )}
+                </div>
                 <div className="photo-info">
                   <h3 className="photo-title">{photo.title}</h3>
                   <div className="photo-date">

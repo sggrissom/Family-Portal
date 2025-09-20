@@ -42,14 +42,38 @@ block(`
 `);
 
 block(`
-.photo-image {
+.photo-image-container {
+  position: relative;
   width: 100%;
   height: 200px;
+}
+`);
+
+block(`
+.photo-image {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
   background: var(--color-border);
   cursor: pointer;
   transition: opacity 0.2s ease;
+}
+`);
+
+block(`
+.profile-photo-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--primary-accent);
+  color: var(--button-text);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 1;
 }
 `);
 
@@ -124,7 +148,7 @@ block(`
     gap: 16px;
   }
 
-  .photo-image {
+  .photo-image-container {
     height: 150px;
   }
 
@@ -151,7 +175,7 @@ block(`
     gap: 12px;
   }
 
-  .photo-image {
+  .photo-image-container {
     height: 120px;
   }
 

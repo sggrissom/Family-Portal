@@ -57,7 +57,8 @@ type GetPhotoRequest struct {
 }
 
 type GetPhotoResponse struct {
-	Image Image `json:"image"`
+	Image  Image  `json:"image"`
+	Person Person `json:"person"`
 }
 
 type UpdatePhotoRequest struct {
@@ -672,7 +673,18 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 		return
 	}
 
+	// Get the person who owns this photo
+	person := GetPersonById(ctx.Tx, photo.PersonId)
+	if person.Id == 0 {
+		err = errors.New("Associated person not found")
+		return
+	}
+
+	// Calculate age for response
+	person.Age = calculateAge(person.Birthday)
+
 	resp.Image = photo
+	resp.Person = person
 	return
 }
 
