@@ -13,7 +13,7 @@ export const PhotosTab = ({ person }: PhotosTabProps) => {
         <div className="photos-gallery">
           <div className="empty-state">
             <p>No photos yet.</p>
-            <button className="btn btn-primary">Add First Photo</button>
+            <a href={`/add-photo/${person.id}`} className="btn btn-primary">Add First Photo</a>
           </div>
         </div>
       </div>

@@ -128,9 +128,9 @@ const ProfilePage = ({ person, growthData, milestones }: ProfilePageProps) => {
           <a href={`/add-growth/${person.id}`} className="btn btn-primary">
             📏 Measure Now
           </a>
-          <button className="btn btn-primary">
+          <a href={`/add-photo/${person.id}`} className="btn btn-primary">
             📸 Add Photo
-          </button>
+          </a>
         </div>
       </div>
 
