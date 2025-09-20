@@ -169,6 +169,36 @@ export interface DeleteMilestoneResponse {
     success: boolean
 }
 
+export interface GetPhotoRequest {
+    id: number
+}
+
+export interface GetPhotoResponse {
+    image: Image
+}
+
+export interface UpdatePhotoRequest {
+    id: number
+    title: string
+    description: string
+    inputType: string
+    photoDate: string
+    ageYears: number | null
+    ageMonths: number | null
+}
+
+export interface UpdatePhotoResponse {
+    image: Image
+}
+
+export interface DeletePhotoRequest {
+    id: number
+}
+
+export interface DeletePhotoResponse {
+    success: boolean
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -303,6 +333,18 @@ export async function UpdateMilestone(data: UpdateMilestoneRequest): Promise<rpc
 
 export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc.Response<DeleteMilestoneResponse>> {
     return await rpc.call<DeleteMilestoneResponse>('DeleteMilestone', JSON.stringify(data));
+}
+
+export async function GetPhoto(data: GetPhotoRequest): Promise<rpc.Response<GetPhotoResponse>> {
+    return await rpc.call<GetPhotoResponse>('GetPhoto', JSON.stringify(data));
+}
+
+export async function UpdatePhoto(data: UpdatePhotoRequest): Promise<rpc.Response<UpdatePhotoResponse>> {
+    return await rpc.call<UpdatePhotoResponse>('UpdatePhoto', JSON.stringify(data));
+}
+
+export async function DeletePhoto(data: DeletePhotoRequest): Promise<rpc.Response<DeletePhotoResponse>> {
+    return await rpc.call<DeletePhotoResponse>('DeletePhoto', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

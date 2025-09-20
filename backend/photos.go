@@ -32,6 +32,9 @@ import (
 func RegisterPhotoMethods(app *vbeam.Application) {
 	app.HandleFunc("/api/upload-photo", uploadPhotoHandler)
 	app.HandleFunc("/api/photo/", servePhotoHandler)
+	vbeam.RegisterProc(app, GetPhoto)
+	vbeam.RegisterProc(app, UpdatePhoto)
+	vbeam.RegisterProc(app, DeletePhoto)
 }
 
 // Request/Response types
@@ -47,6 +50,36 @@ type AddPhotoRequest struct {
 
 type AddPhotoResponse struct {
 	Image Image `json:"image"`
+}
+
+type GetPhotoRequest struct {
+	Id int `json:"id"`
+}
+
+type GetPhotoResponse struct {
+	Image Image `json:"image"`
+}
+
+type UpdatePhotoRequest struct {
+	Id          int    `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	InputType   string `json:"inputType"`
+	PhotoDate   string `json:"photoDate,omitempty"`
+	AgeYears    *int   `json:"ageYears,omitempty"`
+	AgeMonths   *int   `json:"ageMonths,omitempty"`
+}
+
+type UpdatePhotoResponse struct {
+	Image Image `json:"image"`
+}
+
+type DeletePhotoRequest struct {
+	Id int `json:"id"`
+}
+
+type DeletePhotoResponse struct {
+	Success bool `json:"success"`
 }
 
 // Database types
@@ -617,4 +650,177 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Serve the file
 	http.ServeFile(w, r, fullPath)
+}
+
+// vbeam procedures for photo operations
+
+// GetPhoto retrieves a photo by ID with family access control
+func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Get photo from database
+	photo := GetImageById(ctx.Tx, req.Id)
+
+	// Check if photo exists and user has access (same family)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	resp.Image = photo
+	return
+}
+
+// UpdatePhoto updates photo metadata (title, description, date)
+func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if err = validateUpdatePhotoRequest(req); err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get existing photo
+	photo := GetImageById(ctx.Tx, req.Id)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	// Get person for date calculation
+	person := GetPersonById(ctx.Tx, photo.PersonId)
+	if person.Id == 0 {
+		err = errors.New("Associated person not found")
+		return
+	}
+
+	// Calculate new photo date
+	calculatedPhotoDate, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, person, nil)
+	if err != nil {
+		return
+	}
+
+	// Update photo fields
+	photo.Title = strings.TrimSpace(req.Title)
+	photo.Description = strings.TrimSpace(req.Description)
+	photo.PhotoDate = calculatedPhotoDate
+
+	// Generate title if empty
+	if photo.Title == "" {
+		photo.Title = generateDefaultTitle(photo.OriginalFilename, calculatedPhotoDate)
+	}
+
+	// Save updated photo
+	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Image = photo
+	return
+}
+
+// DeletePhoto removes a photo and all associated files
+func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get photo to delete
+	photo := GetImageById(ctx.Tx, req.Id)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	// Delete photo files from disk
+	err = deletePhotoFiles(photo)
+	if err != nil {
+		// Log error but continue with database cleanup
+		fmt.Printf("Warning: Failed to delete photo files for ID %d: %v\n", photo.Id, err)
+	}
+
+	// Remove from database
+	vbolt.Delete(ctx.Tx, ImagesBkt, photo.Id)
+
+	// Remove from indexes
+	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByPersonIndex, photo.Id, -1)
+	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByFamilyIndex, photo.Id, -1)
+
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Success = true
+	return
+}
+
+// Helper function to delete all photo file variants
+func deletePhotoFiles(photo Image) error {
+	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
+	ext := filepath.Ext(basePath)
+	base := strings.TrimSuffix(basePath, ext)
+
+	// List of all file variants to delete
+	filesToDelete := []string{
+		basePath,                    // Main image
+		base + "_thumb" + ext,       // Thumbnail
+		base + "_medium" + ext,      // Medium size
+		base + "_original" + ext,    // Original backup
+	}
+
+	var lastError error
+	for _, filePath := range filesToDelete {
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			lastError = err // Keep track of last error but continue
+		}
+	}
+
+	return lastError
+}
+
+// Validation for update request
+func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
+	if req.Id <= 0 {
+		return errors.New("Invalid photo ID")
+	}
+
+	if req.InputType == "" {
+		return errors.New("Input type is required")
+	}
+
+	validInputTypes := []string{"auto", "today", "date", "age"}
+	isValid := false
+	for _, validType := range validInputTypes {
+		if req.InputType == validType {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		return errors.New("Invalid input type")
+	}
+
+	if req.InputType == "date" && req.PhotoDate == "" {
+		return errors.New("Photo date is required when input type is 'date'")
+	}
+
+	if req.InputType == "age" && req.AgeYears == nil {
+		return errors.New("Age years is required when input type is 'age'")
+	}
+
+	return nil
 }

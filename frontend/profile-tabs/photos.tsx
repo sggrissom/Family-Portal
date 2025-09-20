@@ -1,4 +1,5 @@
 import * as preact from "preact";
+import * as core from "vlens/core";
 import * as server from "../server";
 import "./photos-styles";
 
@@ -48,7 +49,7 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
                   alt={photo.title}
                   className="photo-image"
                   loading="lazy"
-                  onClick={() => window.open(`/api/photo/${photo.id}`, '_blank')}
+                  onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
                 />
                 <div className="photo-info">
                   <h3 className="photo-title">{photo.title}</h3>
