@@ -36,12 +36,20 @@ block(`
 `);
 
 block(`
+.photo-image:hover {
+  opacity: 0.9;
+}
+`);
+
+block(`
 .photo-image {
   width: 100%;
   height: 200px;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   background: var(--color-border);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
 }
 `);
 

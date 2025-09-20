@@ -44,10 +44,11 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
             {photos.map((photo) => (
               <div key={photo.id} className="photo-card">
                 <img
-                  src={`/api/photo/${photo.id}`}
+                  src={`/api/photo/${photo.id}/thumb`}
                   alt={photo.title}
                   className="photo-image"
                   loading="lazy"
+                  onClick={() => window.open(`/api/photo/${photo.id}`, '_blank')}
                 />
                 <div className="photo-info">
                   <h3 className="photo-title">{photo.title}</h3>

@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -22,6 +23,7 @@ import (
 	_ "image/png"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rwcarlsen/goexif/exif"
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 	"go.hasen.dev/vpack"
@@ -158,9 +160,44 @@ func getImageDimensions(file multipart.File) (int, int, error) {
 	return config.Width, config.Height, nil
 }
 
+// Extract date from EXIF metadata
+func extractExifDate(fileData []byte) (time.Time, error) {
+	reader := bytes.NewReader(fileData)
+
+	// Decode EXIF data
+	x, err := exif.Decode(reader)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to decode EXIF: %w", err)
+	}
+
+	// Try to get DateTime tag (when photo was taken)
+	tm, err := x.DateTime()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("no DateTime found in EXIF: %w", err)
+	}
+
+	return tm, nil
+}
+
+// Generate default title if none provided
+func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
+	if !photoDate.IsZero() {
+		return fmt.Sprintf("Photo from %s", photoDate.Format("Jan 2, 2006"))
+	}
+	// Fall back to filename without extension
+	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
+}
+
 // Calculate photo date based on input type
-func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person) (time.Time, error) {
+func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
 	switch inputType {
+	case "auto":
+		// Try to extract from EXIF first
+		if exifDate, err := extractExifDate(fileData); err == nil {
+			return exifDate, nil
+		}
+		// Fall back to today if EXIF extraction fails
+		return time.Now(), nil
 	case "today":
 		return time.Now(), nil
 	case "date":
@@ -195,8 +232,8 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form (10MB max)
-	err := r.ParseMultipartForm(10 << 20) // 10MB
+	// Parse multipart form (32MB max to account for larger images)
+	err := r.ParseMultipartForm(32 << 20) // 32MB
 	if err != nil {
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
@@ -251,10 +288,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := strings.TrimSpace(r.FormValue("title"))
-	if title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
-		return
-	}
 
 	description := strings.TrimSpace(r.FormValue("description"))
 	inputType := r.FormValue("inputType")
@@ -280,9 +313,9 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Validate file size (10MB max)
-	if fileHeader.Size > 10<<20 { // 10MB
-		http.Error(w, "File size too large. Maximum 10MB allowed", http.StatusBadRequest)
+	// Validate file size (32MB max for original upload)
+	if fileHeader.Size > 32<<20 { // 32MB
+		http.Error(w, "File size too large. Maximum 32MB allowed", http.StatusBadRequest)
 		return
 	}
 
@@ -312,12 +345,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Calculate photo date
-		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, person)
-		if err != nil {
-			// Don't commit transaction for invalid date
-			return
-		}
 
 		// Generate unique filename
 		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
@@ -334,21 +361,89 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Save file to disk
-		filePath := filepath.Join(photosDir, uniqueFilename)
-		dst, err := os.Create(filePath)
+		// Read file into memory for processing
+		file.Seek(0, 0)
+		fileData, err := io.ReadAll(file)
 		if err != nil {
-			// Don't commit transaction if file creation fails
+			// Don't commit transaction if file read fails
 			return
 		}
-		defer dst.Close()
 
-		// Reset file position and copy
-		file.Seek(0, 0)
-		_, err = io.Copy(dst, file)
+		// Calculate photo date (now that we have fileData for EXIF)
+		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, person, fileData)
 		if err != nil {
-			// Don't commit transaction if file copy fails
+			// Don't commit transaction for invalid date
 			return
+		}
+
+		// Generate title if not provided
+		if title == "" {
+			title = generateDefaultTitle(fileHeader.Filename, calculatedPhotoDate)
+		}
+
+		// Process image and create multiple sizes
+		processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(fileData, mimeType)
+		if err != nil {
+			// Fall back to saving original if processing fails
+			processedImages = map[string][]byte{
+				"large": fileData,
+			}
+			processedWidth = width
+			processedHeight = height
+		}
+
+		// Update dimensions with processed values
+		if processedWidth > 0 {
+			width = processedWidth
+		}
+		if processedHeight > 0 {
+			height = processedHeight
+		}
+
+		// Save all image variants to disk
+		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
+		extension := filepath.Ext(uniqueFilename)
+
+		// Save large/main image
+		filePath := filepath.Join(photosDir, uniqueFilename)
+		if largeData, ok := processedImages["large"]; ok {
+			dst, err := os.Create(filePath)
+			if err != nil {
+				return
+			}
+			defer dst.Close()
+			_, err = dst.Write(largeData)
+			if err != nil {
+				return
+			}
+		}
+
+		// Save medium image
+		if mediumData, ok := processedImages["medium"]; ok {
+			mediumPath := filepath.Join(photosDir, baseFilename+"_medium"+extension)
+			mediumFile, err := os.Create(mediumPath)
+			if err == nil {
+				mediumFile.Write(mediumData)
+				mediumFile.Close()
+			}
+		}
+
+		// Save thumbnail
+		if thumbData, ok := processedImages["thumb"]; ok {
+			thumbnailPath := filepath.Join(photosDir, baseFilename+"_thumb"+extension)
+			thumbFile, err := os.Create(thumbnailPath)
+			if err == nil {
+				thumbFile.Write(thumbData)
+				thumbFile.Close()
+			}
+		}
+
+		// Save original for backup (optional)
+		originalPath := filepath.Join(photosDir, baseFilename+"_original"+extension)
+		origFile, err := os.Create(originalPath)
+		if err == nil {
+			origFile.Write(fileData)
+			origFile.Close()
 		}
 
 		// Create image record
@@ -359,7 +454,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		OwnerUserId:      user.Id,
 		OriginalFilename: fileHeader.Filename,
 		MimeType:         mimeType,
-		FileSize:         int(fileHeader.Size),
+		FileSize:         len(processedImages["large"]),
 		Width:            width,
 		Height:           height,
 		FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
@@ -399,7 +494,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract image ID from URL path (e.g., /api/photo/123 -> 123)
+	// Extract image ID from URL path (e.g., /api/photo/123 -> 123, /api/photo/123/thumb -> 123 + thumb)
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/photo/"), "/")
 	if len(pathParts) == 0 || pathParts[0] == "" {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -410,6 +505,12 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
+	}
+
+	// Check for size variant (thumb, medium, large)
+	sizeVariant := ""
+	if len(pathParts) > 1 {
+		sizeVariant = pathParts[1]
 	}
 
 	// Get auth token from cookie
@@ -459,8 +560,30 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construct full file path
-	fullPath := filepath.Join(cfg.StaticDir, image.FilePath)
+	// Construct full file path based on size variant
+	basePath := filepath.Join(cfg.StaticDir, image.FilePath)
+	fullPath := basePath
+
+	// Handle size variants
+	if sizeVariant != "" {
+		ext := filepath.Ext(basePath)
+		base := strings.TrimSuffix(basePath, ext)
+
+		switch sizeVariant {
+		case "thumb":
+			fullPath = base + "_thumb" + ext
+		case "medium":
+			fullPath = base + "_medium" + ext
+		case "original":
+			fullPath = base + "_original" + ext
+		case "large":
+			// large is the default main image
+			fullPath = basePath
+		default:
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+	}
 
 	// Validate that the file path doesn't contain directory traversal
 	cleanPath := filepath.Clean(fullPath)
@@ -470,10 +593,19 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if file exists
+	// Check if file exists, fall back to main image if variant doesn't exist
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		http.Error(w, "Not found", http.StatusNotFound)
-		return
+		if sizeVariant != "" {
+			// Fall back to main image
+			fullPath = basePath
+			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+				http.Error(w, "Not found", http.StatusNotFound)
+				return
+			}
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	// Set content type based on stored mime type

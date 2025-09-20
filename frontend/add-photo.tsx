@@ -12,7 +12,7 @@ type AddPhotoForm = {
   selectedPersonId: string;
   title: string;
   description: string;
-  inputType: string; // 'today' | 'date' | 'age'
+  inputType: string; // 'auto' | 'today' | 'date' | 'age'
   photoDate: string;
   ageYears: string;
   ageMonths: string;
@@ -27,7 +27,7 @@ const useAddPhotoForm = vlens.declareHook((personId?: string): AddPhotoForm => (
   selectedPersonId: personId || "",
   title: "",
   description: "",
-  inputType: "today",
+  inputType: "auto",
   photoDate: "",
   ageYears: "",
   ageMonths: "",
@@ -107,12 +107,6 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     return;
   }
 
-  if (!form.title.trim()) {
-    form.error = "Please enter a title for the photo";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
 
   if (form.inputType === 'date' && !form.photoDate) {
     form.error = "Please select a date";
@@ -338,13 +332,12 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
 
           {/* Title */}
           <div className="form-group">
-            <label htmlFor="title">Photo Title</label>
+            <label htmlFor="title">Photo Title (Optional)</label>
             <input
               id="title"
               type="text"
               {...vlens.attrsBindInput(vlens.ref(form, "title"))}
-              placeholder="e.g., 'First day of school', 'Birthday celebration'"
-              required
+              placeholder="Leave empty to auto-generate from date or filename"
               disabled={form.loading}
             />
           </div>
@@ -365,6 +358,17 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           <div className="form-group">
             <label>When was this photo taken?</label>
             <div className="radio-group">
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="inputType"
+                  value="auto"
+                  checked={form.inputType === 'auto'}
+                  onChange={() => onInputTypeChange(form, 'auto')}
+                  disabled={form.loading}
+                />
+                <span>Auto (from photo)</span>
+              </label>
               <label className="radio-option">
                 <input
                   type="radio"

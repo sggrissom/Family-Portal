@@ -21,6 +21,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/otiai10/copy v1.14.0 // indirect
+	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd // indirect
 	go.hasen.dev/generic v0.1.2 // indirect
 	go.hasen.dev/term v0.1.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
