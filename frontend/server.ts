@@ -43,6 +43,12 @@ export interface AuthResponse {
     familyId: number
 }
 
+export interface FamilyInfoResponse {
+    id: number
+    name: string
+    inviteCode: string
+}
+
 export interface AddPersonRequest {
     name: string
     personType: number
@@ -226,6 +232,10 @@ export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Res
 
 export async function GetAuthContext(data: Empty): Promise<rpc.Response<AuthResponse>> {
     return await rpc.call<AuthResponse>('GetAuthContext', JSON.stringify(data));
+}
+
+export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInfoResponse>> {
+    return await rpc.call<FamilyInfoResponse>('GetFamilyInfo', JSON.stringify(data));
 }
 
 export async function AddPerson(data: AddPersonRequest): Promise<rpc.Response<GetPersonResponse>> {

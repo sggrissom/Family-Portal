@@ -14,6 +14,7 @@ import (
 func RegisterUserMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, CreateAccount)
 	vbeam.RegisterProc(app, GetAuthContext)
+	vbeam.RegisterProc(app, GetFamilyInfo)
 }
 
 // Request/Response types
@@ -50,6 +51,12 @@ type AuthResponse struct {
 	Email     string `json:"email"`
 	IsAdmin   bool   `json:"isAdmin"`
 	FamilyId  int    `json:"familyId,omitempty"`
+}
+
+type FamilyInfoResponse struct {
+	Id         int    `json:"id"`
+	Name       string `json:"name"`
+	InviteCode string `json:"inviteCode"`
 }
 
 // Database types
@@ -238,6 +245,31 @@ func GetAuthContext(ctx *vbeam.Context, req Empty) (resp AuthResponse, err error
 	user, authErr := GetAuthUser(ctx)
 	if authErr == nil && user.Id > 0 {
 		resp = GetAuthResponseFromUser(user)
+	}
+	return
+}
+
+func GetFamilyInfo(ctx *vbeam.Context, req Empty) (resp FamilyInfoResponse, err error) {
+	user, err := GetAuthUser(ctx)
+	if err != nil {
+		return
+	}
+
+	if user.FamilyId == 0 {
+		err = errors.New("User is not part of a family")
+		return
+	}
+
+	family := GetFamily(ctx.Tx, user.FamilyId)
+	if family.Id == 0 {
+		err = errors.New("Family not found")
+		return
+	}
+
+	resp = FamilyInfoResponse{
+		Id:         family.Id,
+		Name:       family.Name,
+		InviteCode: family.InviteCode,
 	}
 	return
 }

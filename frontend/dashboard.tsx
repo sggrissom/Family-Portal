@@ -126,7 +126,7 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           <div className="card-icon">⚙️</div>
           <h3>Settings</h3>
           <p>Manage your family portal</p>
-          <button className="btn btn-secondary">Settings</button>
+          <a href="/settings" className="btn btn-secondary">Settings</a>
         </div>
       </div>
     </div>

@@ -35,6 +35,17 @@ export function view(
   data: Data,
 ): preact.ComponentChild {
   const form = useCreateAccountForm();
+
+  // Check for family code in URL parameters and pre-fill if present
+  if (typeof window !== 'undefined' && !form.familyCode) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const codeParam = urlParams.get('code');
+    if (codeParam) {
+      form.familyCode = codeParam;
+      vlens.scheduleRedraw();
+    }
+  }
+
   return (
     <div>
       <Header isHome={false} />
@@ -94,7 +105,7 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
     <div className="auth-card">
       <div className="auth-header">
         <h1>Create Account</h1>
-        <p>Start a Family</p>
+        <p>{form.familyCode ? "Join Your Family" : "Start a Family"}</p>
       </div>
 
       {form.error && (
@@ -160,7 +171,10 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
             disabled={form.loading}
           />
           <small className="form-hint">
-            Leave blank to create a new family group
+            {form.familyCode
+              ? "You're joining an existing family with this code"
+              : "Leave blank to create a new family group"
+            }
           </small>
         </div>
 
