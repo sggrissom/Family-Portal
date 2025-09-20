@@ -60,6 +60,7 @@ export interface GetPersonResponse {
     person: Person
     growthData: GrowthData[]
     milestones: Milestone[]
+    photos: Image[]
 }
 
 export interface ListPeopleResponse {
@@ -213,6 +214,24 @@ export interface Milestone {
     category: string
     milestoneDate: string
     createdAt: string
+}
+
+export interface Image {
+    id: number
+    familyId: number
+    personId: number
+    ownerUserId: number
+    originalFilename: string
+    mimeType: string
+    fileSize: number
+    width: number
+    height: number
+    filePath: string
+    title: string
+    description: string
+    photoDate: string
+    createdAt: string
+    status: number
 }
 
 export interface ImportPerson {

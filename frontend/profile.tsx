@@ -68,7 +68,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="profile-container">
-        <ProfilePage person={data.person} growthData={data.growthData} milestones={data.milestones} />
+        <ProfilePage person={data.person} growthData={data.growthData} milestones={data.milestones} photos={data.photos} />
       </main>
       <Footer />
     </div>
@@ -79,6 +79,7 @@ interface ProfilePageProps {
   person: server.Person;
   growthData: server.GrowthData[];
   milestones: server.Milestone[];
+  photos: server.Image[];
 }
 
 function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos') {
@@ -86,7 +87,7 @@ function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos'
   vlens.scheduleRedraw();
 }
 
-const ProfilePage = ({ person, growthData, milestones }: ProfilePageProps) => {
+const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProps) => {
   const state = useProfileState();
 
   const getGenderIcon = (gender: number) => {
@@ -160,7 +161,7 @@ const ProfilePage = ({ person, growthData, milestones }: ProfilePageProps) => {
       <div className="profile-content">
         {state.activeTab === 'timeline' && <TimelineTab person={person} milestones={milestones} />}
         {state.activeTab === 'growth' && <GrowthTab person={person} growthData={growthData} />}
-        {state.activeTab === 'photos' && <PhotosTab person={person} />}
+        {state.activeTab === 'photos' && <PhotosTab person={person} photos={photos} />}
       </div>
     </div>
   );

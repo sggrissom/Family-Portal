@@ -52,6 +52,7 @@ type GetPersonResponse struct {
 	Person     Person      `json:"person,omitempty"`
 	GrowthData []GrowthData `json:"growthData"`
 	Milestones []Milestone `json:"milestones"`
+	Photos     []Image     `json:"photos"`
 }
 
 // Database types
@@ -237,6 +238,9 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 
 	// Get milestones for person
 	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
+
+	// Get photos for person
+	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
 
 	return
 }
