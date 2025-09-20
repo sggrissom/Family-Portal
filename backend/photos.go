@@ -29,6 +29,7 @@ import (
 
 func RegisterPhotoMethods(app *vbeam.Application) {
 	app.HandleFunc("/api/upload-photo", uploadPhotoHandler)
+	app.HandleFunc("/api/photo/", servePhotoHandler)
 }
 
 // Request/Response types
@@ -389,4 +390,99 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// Serve photo handler
+func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract image ID from URL path (e.g., /api/photo/123 -> 123)
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/photo/"), "/")
+	if len(pathParts) == 0 || pathParts[0] == "" {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	imageId, err := strconv.Atoi(pathParts[0])
+	if err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// Get auth token from cookie
+	cookie, err := r.Cookie("authToken")
+	if err != nil || cookie.Value == "" {
+		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
+		return
+	}
+
+	// Parse JWT token and get user
+	var user User
+	token, err := jwt.ParseWithClaims(cookie.Value, &Claims{}, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
+		return
+	}
+
+	// Get user from database
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		if claims, ok := token.Claims.(*Claims); ok {
+			userId := GetUserId(tx, claims.Username)
+			if userId != 0 {
+				user = GetUser(tx, userId)
+			}
+		}
+	})
+
+	if user.Id == 0 {
+		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
+		return
+	}
+
+	// Get image from database
+	var image Image
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		image = GetImageById(tx, imageId)
+	})
+
+	// Check if image exists and user has access
+	if image.Id == 0 || image.FamilyId != user.FamilyId || image.Status != 0 {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// Construct full file path
+	fullPath := filepath.Join(cfg.StaticDir, image.FilePath)
+
+	// Validate that the file path doesn't contain directory traversal
+	cleanPath := filepath.Clean(fullPath)
+	staticDir := filepath.Clean(cfg.StaticDir)
+	if !strings.HasPrefix(cleanPath, staticDir) {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// Set content type based on stored mime type
+	w.Header().Set("Content-Type", image.MimeType)
+
+	// Set cache headers for browser caching (24 hours)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("ETag", fmt.Sprintf("\"%d-%d\"", image.Id, image.CreatedAt.Unix()))
+
+	// Serve the file
+	http.ServeFile(w, r, fullPath)
 }
