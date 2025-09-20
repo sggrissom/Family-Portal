@@ -1843,12 +1843,14 @@ block(`
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  overflow-x: auto;
 }
 `);
 
 block(`
 .data-table {
   width: 100%;
+  min-width: 480px;
   border-collapse: collapse;
   background: transparent;
 }

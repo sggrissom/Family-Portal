@@ -187,7 +187,7 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
     <div className="add-growth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>Add Growth Measurement</h1>
+          <h1>Measure Now</h1>
           <p>Track height or weight progress for your family</p>
         </div>
 

@@ -73,7 +73,6 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                     <th>Type</th>
                     <th>Value</th>
                     <th>Date</th>
-                    <th>Added</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -83,7 +82,6 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                       <td>{getMeasurementTypeLabel(record.measurementType)}</td>
                       <td>{record.value} {record.unit}</td>
                       <td>{formatDate(record.measurementDate)}</td>
-                      <td>{formatDate(record.createdAt)}</td>
                       <td>
                         <div className="table-actions">
                           <a href={`/edit-growth/${record.id}`} className="btn-action btn-edit" title="Edit">
