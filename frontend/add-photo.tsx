@@ -129,34 +129,43 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   }
 
   try {
-    // TODO: Replace with actual API call when backend is implemented
-    // For now, simulate a successful upload
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Prepare the request data (for future implementation)
-    const requestData: any = {
-      personId: parseInt(form.selectedPersonId),
-      title: form.title.trim(),
-      description: form.description.trim(),
-      inputType: form.inputType,
-      file: form.selectedFile
-    };
+    // Prepare FormData for multipart upload
+    const formData = new FormData();
+    formData.append('personId', form.selectedPersonId);
+    formData.append('title', form.title.trim());
+    formData.append('description', form.description.trim());
+    formData.append('inputType', form.inputType);
+    formData.append('photo', form.selectedFile);
 
     // Add date/age specific fields
     if (form.inputType === 'date') {
-      requestData.photoDate = form.photoDate;
+      formData.append('photoDate', form.photoDate);
     } else if (form.inputType === 'age') {
-      requestData.ageYears = parseInt(form.ageYears);
+      formData.append('ageYears', form.ageYears);
       if (form.ageMonths) {
-        requestData.ageMonths = parseInt(form.ageMonths);
+        formData.append('ageMonths', form.ageMonths);
       }
     }
 
-    // TODO: Call the backend API
-    // const response = await server.AddPhoto(requestData);
+    // Verify authentication (auth is handled via cookies)
+    const currentAuth = auth.getAuth();
+    if (!currentAuth) {
+      throw new Error("Authentication required");
+    }
 
-    // Show success message
-    alert("Photo uploaded successfully! (This is a mock implementation - backend API not yet implemented)");
+    // Call the backend API
+    const response = await window.fetch('/api/upload-photo', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Upload failed with status ${response.status}`);
+    }
+
+    const responseData = await response.json();
 
     // Redirect to profile page on success
     core.setRoute(`/profile/${form.selectedPersonId}`);
