@@ -153,7 +153,15 @@ const PersonCard = ({ person }: PersonCardProps) => {
   return (
     <a href={`/profile/${person.id}`} className="person-card clickable">
       <div className="person-avatar">
-        {getGenderIcon(person.gender)}
+        {person.profilePhotoId ? (
+          <img
+            src={`/api/photo/${person.profilePhotoId}/thumb`}
+            alt={`${person.name}'s profile photo`}
+            className="person-photo"
+          />
+        ) : (
+          <span className="person-icon">{getGenderIcon(person.gender)}</span>
+        )}
       </div>
       <div className="person-info">
         <h4>{person.name}</h4>

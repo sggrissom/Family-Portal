@@ -1544,6 +1544,25 @@ block(`
 `);
 
 block(`
+.person-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+`);
+
+block(`
+.person-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+`);
+
+block(`
 .person-info h4 {
   font-size: 1.1rem;
   margin: 0 0 4px;
