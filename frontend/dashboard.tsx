@@ -5,6 +5,7 @@ import * as core from "vlens/core";
 import * as server from "./server";
 import { Header, Footer } from "./layout";
 import { ensureAuthInFetch, requireAuthInView } from "./authHelpers";
+import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
   if (!await ensureAuthInFetch()) {
