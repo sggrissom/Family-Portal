@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 
+	"github.com/disintegration/imaging"
 	_ "image/gif"
 )
 
@@ -28,10 +29,16 @@ var (
 
 // ProcessImage compresses and optionally resizes an image
 func ProcessImage(reader io.Reader, mimeType string, size ImageSize) ([]byte, int, int, error) {
-	// Decode the image
-	img, format, err := image.Decode(reader)
+	// Decode the image with automatic EXIF orientation correction
+	img, err := imaging.Decode(reader, imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to decode image: %w", err)
+	}
+
+	// Determine format from mime type for encoding decision
+	format := "jpeg"
+	if mimeType == "image/png" {
+		format = "png"
 	}
 
 	bounds := img.Bounds()
@@ -41,13 +48,14 @@ func ProcessImage(reader io.Reader, mimeType string, size ImageSize) ([]byte, in
 	// Calculate new dimensions if resizing is needed
 	newWidth, newHeight := calculateDimensions(width, height, size.MaxWidth, size.MaxHeight)
 
-	// If no resizing needed and format is already JPEG, just recompress
-	if width == newWidth && height == newHeight && format == "jpeg" {
-		return compressJPEG(img, size.Quality)
+	// Resize if needed using the imaging library
+	if width != newWidth || height != newHeight {
+		img = imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
+		width = newWidth
+		height = newHeight
 	}
 
-	// For now, we'll just recompress without resizing
-	// In production, you'd want to use a proper image resizing library like github.com/disintegration/imaging
+	// Compress based on format
 	if format == "png" {
 		return compressPNG(img)
 	}
@@ -108,8 +116,8 @@ func ProcessAndSaveMultipleSizes(imageData []byte, mimeType string) (map[string]
 	if err != nil {
 		// Fall back to original if processing fails
 		largeData = imageData
-		// Try to get dimensions from original
-		img, _, err := image.Decode(bytes.NewReader(imageData))
+		// Try to get dimensions from original with orientation correction
+		img, err := imaging.Decode(bytes.NewReader(imageData), imaging.AutoOrientation(true))
 		if err == nil {
 			bounds := img.Bounds()
 			width = bounds.Dx()
