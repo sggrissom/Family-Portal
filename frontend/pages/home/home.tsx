@@ -1,10 +1,11 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import * as auth from "./authCache";
+import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
-import { ensureNoAuthInFetch } from "./authHelpers";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import { ensureNoAuthInFetch } from "../../lib/authHelpers";
+import "./landing-styles";
 
 type Data = {};
 

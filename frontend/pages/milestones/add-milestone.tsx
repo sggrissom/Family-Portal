@@ -1,33 +1,31 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as auth from "./authCache";
+import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
-import { requireAuthInView } from "./authHelpers";
-import "./growth-styles";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import { requireAuthInView } from "../../lib/authHelpers";
+import "./add-milestone-styles";
 
-type AddGrowthForm = {
+type AddMilestoneForm = {
   selectedPersonId: string;
-  measurementType: string; // 'height' | 'weight'
-  value: string;
-  unit: string; // cm, in, kg, lbs
+  description: string;
+  category: string;
   inputType: string; // 'today' | 'date' | 'age'
-  measurementDate: string;
+  milestoneDate: string;
   ageYears: string;
   ageMonths: string;
   error: string;
   loading: boolean;
 }
 
-const useAddGrowthForm = vlens.declareHook((personId?: string): AddGrowthForm => ({
+const useAddMilestoneForm = vlens.declareHook((personId?: string): AddMilestoneForm => ({
   selectedPersonId: personId || "",
-  measurementType: "height",
-  value: "",
-  unit: "in",
+  description: "",
+  category: "development",
   inputType: "today",
-  measurementDate: "",
+  milestoneDate: "",
   ageYears: "",
   ageMonths: "",
   error: "",
@@ -53,10 +51,10 @@ export function view(
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="add-growth-container">
+        <main id="app" className="add-milestone-container">
           <div className="error-page">
             <h1>No Family Members</h1>
-            <p>Please add family members before tracking growth data</p>
+            <p>Please add family members before adding milestones</p>
             <a href="/add-person" className="btn btn-primary">Add Family Member</a>
             <a href="/dashboard" className="btn btn-secondary">Back to Dashboard</a>
           </div>
@@ -66,24 +64,24 @@ export function view(
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-growth/123)
+  // Extract person ID from URL if present (e.g., /add-milestone/123)
   const urlParts = route.split('/');
   const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
 
-  const form = useAddGrowthForm(personIdFromUrl);
+  const form = useAddMilestoneForm(personIdFromUrl);
 
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="add-growth-container">
-        <AddGrowthPage form={form} people={data.people} />
+      <main id="app" className="add-milestone-container">
+        <AddMilestonePage form={form} people={data.people} />
       </main>
       <Footer />
     </div>
   );
 }
 
-async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], event: Event) {
+async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[], event: Event) {
   event.preventDefault();
   form.loading = true;
   form.error = "";
@@ -96,14 +94,14 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
     return;
   }
 
-  if (!form.value || parseFloat(form.value) <= 0) {
-    form.error = "Please enter a valid measurement value";
+  if (!form.description.trim()) {
+    form.error = "Please enter a milestone description";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  if (form.inputType === 'date' && !form.measurementDate) {
+  if (form.inputType === 'date' && !form.milestoneDate) {
     form.error = "Please select a date";
     form.loading = false;
     vlens.scheduleRedraw();
@@ -117,85 +115,76 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
     return;
   }
 
-  // Prepare API request
-  const request: server.AddGrowthDataRequest = {
-    personId: parseInt(form.selectedPersonId),
-    measurementType: form.measurementType,
-    value: parseFloat(form.value),
-    unit: form.unit,
-    inputType: form.inputType,
-    measurementDate: form.inputType === 'date' ? form.measurementDate : null,
-    ageYears: form.inputType === 'age' ? parseInt(form.ageYears) : null,
-    ageMonths: form.inputType === 'age' && form.ageMonths ? parseInt(form.ageMonths) : null
-  };
-
   try {
-    let [resp, err] = await server.AddGrowthData(request);
+    // Prepare the request data
+    const requestData: any = {
+      personId: parseInt(form.selectedPersonId),
+      description: form.description.trim(),
+      category: form.category,
+      inputType: form.inputType
+    };
 
-    if (resp) {
-      // Redirect immediately to profile page
-      core.setRoute(`/profile/${form.selectedPersonId}`);
-    } else {
-      form.loading = false;
-      form.error = err || "Failed to save growth measurement";
-      vlens.scheduleRedraw();
+    // Add date/age specific fields
+    if (form.inputType === 'date') {
+      requestData.milestoneDate = form.milestoneDate;
+    } else if (form.inputType === 'age') {
+      requestData.ageYears = parseInt(form.ageYears);
+      if (form.ageMonths) {
+        requestData.ageMonths = parseInt(form.ageMonths);
+      }
     }
+
+    // Call the backend API
+    const response = await server.AddMilestone(requestData);
+
+    // Redirect to profile page on success
+    core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
-    form.error = "Network error. Please try again.";
+    form.error = error instanceof Error ? error.message : "Failed to save milestone. Please try again.";
     vlens.scheduleRedraw();
   }
 }
 
-function onMeasurementTypeChange(form: AddGrowthForm, newType: string) {
-  form.measurementType = newType;
-  form.unit = newType === 'height' ? 'in' : 'lbs';
-  vlens.scheduleRedraw();
-}
-
-function onInputTypeChange(form: AddGrowthForm, newType: string) {
+function onInputTypeChange(form: AddMilestoneForm, newType: string) {
   form.inputType = newType;
   vlens.scheduleRedraw();
 }
 
-interface AddGrowthPageProps {
-  form: AddGrowthForm;
+interface AddMilestonePageProps {
+  form: AddMilestoneForm;
   people: server.Person[];
 }
 
-const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
-  // Filter to only show children for growth tracking
+const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
+  // Filter to show all family members for milestones
   const children = people.filter(p => p.type === server.Child);
   const parents = people.filter(p => p.type === server.Parent);
 
-  const getUnitOptions = () => {
-    if (form.measurementType === 'height') {
-      return [
-        { value: 'in', label: 'inches' },
-        { value: 'cm', label: 'cm' }
-      ];
-    } else {
-      return [
-        { value: 'lbs', label: 'lbs' }
-      ];
-    }
-  };
+  const categoryOptions = [
+    { value: "development", label: "Development" },
+    { value: "behavior", label: "Behavior" },
+    { value: "health", label: "Health" },
+    { value: "achievement", label: "Achievement" },
+    { value: "first", label: "First Time" },
+    { value: "other", label: "Other" }
+  ];
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 
   return (
-    <div className="add-growth-page">
+    <div className="add-milestone-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>Measure Now</h1>
-          <p>Track height or weight progress for your family</p>
+          <h1>Add Milestone</h1>
+          <p>Capture special moments and developmental milestones</p>
         </div>
 
         {form.error && (
           <div className="error-message">{form.error}</div>
         )}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitGrowth, form, people)}>
+        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
           {/* Person Selection */}
           <div className="form-group">
             <label htmlFor="person">Family Member</label>
@@ -219,70 +208,41 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
             </select>
           </div>
 
-          {/* Measurement Type */}
+          {/* Category */}
           <div className="form-group">
-            <label>Measurement Type</label>
-            <div className="radio-group">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="measurementType"
-                  value="height"
-                  checked={form.measurementType === 'height'}
-                  onChange={() => onMeasurementTypeChange(form, 'height')}
-                  disabled={form.loading}
-                />
-                <span>Height</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="measurementType"
-                  value="weight"
-                  checked={form.measurementType === 'weight'}
-                  onChange={() => onMeasurementTypeChange(form, 'weight')}
-                  disabled={form.loading}
-                />
-                <span>Weight</span>
-              </label>
-            </div>
+            <label htmlFor="category">Category</label>
+            <select
+              id="category"
+              {...vlens.attrsBindInput(vlens.ref(form, "category"))}
+              disabled={form.loading}
+            >
+              {categoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Value and Unit */}
-          <div className="form-row">
-            <div className="form-group flex-2">
-              <label htmlFor="value">
-                {form.measurementType === 'height' ? 'Height' : 'Weight'}
-              </label>
-              <input
-                id="value"
-                type="number"
-                step="0.1"
-                {...vlens.attrsBindInput(vlens.ref(form, "value"))}
-                placeholder={form.measurementType === 'height' ? '150.5' : '45.2'}
-                required
-                disabled={form.loading}
-              />
-            </div>
-            <div className="form-group flex-1">
-              <label htmlFor="unit">Unit</label>
-              <select
-                id="unit"
-                {...vlens.attrsBindInput(vlens.ref(form, "unit"))}
-                disabled={form.loading}
-              >
-                {getUnitOptions().map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Description */}
+          <div className="form-group">
+            <label htmlFor="description">Description</label>
+            <textarea
+              id="description"
+              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+              placeholder="e.g., 'only wears ballet shoes', 'can count to 100', 'first time swinging by herself'"
+              rows={3}
+              required
+              disabled={form.loading}
+            />
+            <small className="form-hint">
+              Describe what happened, what they said, or how they're developing
+            </small>
           </div>
 
           {/* Date or Age Toggle */}
           <div className="form-group">
-            <label>When was this measured?</label>
+            <label>When did this happen?</label>
             <div className="radio-group">
               <label className="radio-option">
                 <input
@@ -323,11 +283,11 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
           {/* Date Input */}
           {form.inputType === 'date' && (
             <div className="form-group">
-              <label htmlFor="date">Measurement Date</label>
+              <label htmlFor="date">Date</label>
               <input
                 id="date"
                 type="date"
-                {...vlens.attrsBindInput(vlens.ref(form, "measurementDate"))}
+                {...vlens.attrsBindInput(vlens.ref(form, "milestoneDate"))}
                 max={new Date().toISOString().split('T')[0]}
                 required
                 disabled={form.loading}
@@ -374,21 +334,21 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
               className="btn btn-primary auth-submit"
               disabled={form.loading}
             >
-              {form.loading ? 'Saving...' : 'Save Measurement'}
+              {form.loading ? 'Saving...' : 'Save Milestone'}
             </button>
           </div>
         </form>
 
-        {selectedPerson && form.value && (
-          <div className="measurement-preview">
+        {selectedPerson && form.description && (
+          <div className="milestone-preview">
             <h3>Preview</h3>
             <p>
-              <strong>{selectedPerson.name}</strong> - {form.measurementType}: {form.value} {form.unit}
+              <strong>{selectedPerson.name}</strong> - {form.description}
               {form.inputType === 'today' && (
                 <span> today</span>
               )}
-              {form.inputType === 'date' && form.measurementDate && (
-                <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
+              {form.inputType === 'date' && form.milestoneDate && (
+                <span> on {new Date(form.milestoneDate).toLocaleDateString()}</span>
               )}
               {form.inputType === 'age' && form.ageYears && (
                 <span> at age {form.ageYears}{form.ageMonths ? `.${form.ageMonths}` : ''} years</span>

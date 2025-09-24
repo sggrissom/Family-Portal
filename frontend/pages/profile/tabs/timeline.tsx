@@ -1,6 +1,6 @@
 import * as preact from "preact";
-import * as server from "../server";
-import "../timeline-styles";
+import * as server from "../../../server";
+import "./timeline-styles";
 
 interface TimelineTabProps {
   person: server.Person;

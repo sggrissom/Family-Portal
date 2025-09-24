@@ -1,7 +1,7 @@
 import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "./authCache";
-import * as server from "./server";
+import * as server from "../server";
 
 /**
  * For protected routes' fetch methods - ensures authentication or tries to restore from cookies.

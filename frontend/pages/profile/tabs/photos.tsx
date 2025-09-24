@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as core from "vlens/core";
-import * as server from "../server";
-import "./photos-styles";
+import * as server from "../../../server";
+import "../../photos/photos-styles";
 
 interface PhotosTabProps {
   person: server.Person;

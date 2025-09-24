@@ -1,13 +1,14 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as auth from "./authCache";
+import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
-import { TimelineTab } from "./profile-tabs/timeline";
-import { GrowthTab } from "./profile-tabs/growth";
-import { PhotosTab } from "./profile-tabs/photos";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import { TimelineTab } from "./tabs/timeline";
+import { GrowthTab } from "./tabs/growth";
+import { PhotosTab } from "./tabs/photos";
+import "./profile-styles";
 
 type ProfileState = {
   activeTab: 'timeline' | 'growth' | 'photos';

@@ -1,9 +1,9 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
-import * as auth from "./authCache";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
+import * as auth from "../../lib/authCache";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
 import "./view-photo-styles";
 
 export async function fetch(route: string, prefix: string) {

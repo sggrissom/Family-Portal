@@ -2,8 +2,8 @@ import * as vlens from "vlens";
 import { setRoute, setErrorView } from "vlens/core";
 import * as preact from "preact";
 import * as server from "./server";
-import * as auth from "./authCache";
-import "./styles.ts";
+import * as auth from "./lib/authCache";
+import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
   // Handle AuthFailure by redirecting to landing page
@@ -39,21 +39,21 @@ async function main() {
   setErrorView(customErrorView);
 
   vlens.initRoutes([
-    vlens.routeHandler("/profile/", () => import("@app/profile")),
-    vlens.routeHandler("/create-account", () => import("@app/create-account")),
-    vlens.routeHandler("/login", () => import("@app/login")),
-    vlens.routeHandler("/dashboard", () => import("@app/dashboard")),
-    vlens.routeHandler("/settings", () => import("@app/settings")),
-    vlens.routeHandler("/add-person", () => import("@app/add-person")),
-    vlens.routeHandler("/add-growth", () => import("@app/add-growth")),
-    vlens.routeHandler("/edit-growth", () => import("@app/edit-growth")),
-    vlens.routeHandler("/add-milestone", () => import("@app/add-milestone")),
-    vlens.routeHandler("/edit-milestone", () => import("@app/edit-milestone")),
-    vlens.routeHandler("/add-photo", () => import("@app/add-photo")),
-    vlens.routeHandler("/view-photo", () => import("@app/view-photo")),
-    vlens.routeHandler("/edit-photo", () => import("@app/edit-photo")),
-    vlens.routeHandler("/import", () => import("@app/import")),
-    vlens.routeHandler("/", () => import("@app/home")),
+    vlens.routeHandler("/profile/", () => import("@app/pages/profile/profile")),
+    vlens.routeHandler("/create-account", () => import("@app/pages/auth/create-account")),
+    vlens.routeHandler("/login", () => import("@app/pages/auth/login")),
+    vlens.routeHandler("/dashboard", () => import("@app/pages/dashboard/dashboard")),
+    vlens.routeHandler("/settings", () => import("@app/pages/settings/settings")),
+    vlens.routeHandler("/add-person", () => import("@app/pages/people/add-person")),
+    vlens.routeHandler("/add-growth", () => import("@app/pages/growth/add-growth")),
+    vlens.routeHandler("/edit-growth", () => import("@app/pages/growth/edit-growth")),
+    vlens.routeHandler("/add-milestone", () => import("@app/pages/milestones/add-milestone")),
+    vlens.routeHandler("/edit-milestone", () => import("@app/pages/milestones/edit-milestone")),
+    vlens.routeHandler("/add-photo", () => import("@app/pages/photos/add-photo")),
+    vlens.routeHandler("/view-photo", () => import("@app/pages/photos/view-photo")),
+    vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
+    vlens.routeHandler("/import", () => import("@app/pages/settings/import")),
+    vlens.routeHandler("/", () => import("@app/pages/home/home")),
   ]);
 }
 

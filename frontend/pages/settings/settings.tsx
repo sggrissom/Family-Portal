@@ -1,8 +1,8 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
-import { ensureAuthInFetch, requireAuthInView } from "./authHelpers";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import "./settings-styles";
 
 type Data = server.FamilyInfoResponse;

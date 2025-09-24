@@ -1,11 +1,12 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as auth from "./authCache";
+import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
-import * as server from "./server";
-import { Header, Footer } from "./layout";
-import { requireAuthInView } from "./authHelpers";
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import { requireAuthInView } from "../../lib/authHelpers";
+import "./import-styles";
 
 type Data = {};
 

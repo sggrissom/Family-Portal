@@ -1,7 +1,8 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as server from "@app/server";
-import { Header, Footer } from "./layout"
+import * as server from "../../server";
+import { Header, Footer } from "../../layout";
+import "./create-account-styles";
 
 type CreateAccountForm = {
   name: string;

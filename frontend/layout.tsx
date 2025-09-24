@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as auth from "./authCache";
+import * as auth from "./lib/authCache";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
