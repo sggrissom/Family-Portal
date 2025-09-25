@@ -49,6 +49,16 @@ export interface FamilyInfoResponse {
     inviteCode: string
 }
 
+export interface JoinFamilyRequest {
+    inviteCode: string
+}
+
+export interface JoinFamilyResponse {
+    success: boolean
+    error: string
+    auth: AuthResponse
+}
+
 export interface AddPersonRequest {
     name: string
     personType: number
@@ -311,6 +321,10 @@ export async function GetAuthContext(data: Empty): Promise<rpc.Response<AuthResp
 
 export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInfoResponse>> {
     return await rpc.call<FamilyInfoResponse>('GetFamilyInfo', JSON.stringify(data));
+}
+
+export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
+    return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
 }
 
 export async function AddPerson(data: AddPersonRequest): Promise<rpc.Response<GetPersonResponse>> {

@@ -15,6 +15,7 @@ func RegisterUserMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, CreateAccount)
 	vbeam.RegisterProc(app, GetAuthContext)
 	vbeam.RegisterProc(app, GetFamilyInfo)
+	vbeam.RegisterProc(app, JoinFamily)
 }
 
 // Request/Response types
@@ -57,6 +58,16 @@ type FamilyInfoResponse struct {
 	Id         int    `json:"id"`
 	Name       string `json:"name"`
 	InviteCode string `json:"inviteCode"`
+}
+
+type JoinFamilyRequest struct {
+	InviteCode string `json:"inviteCode"`
+}
+
+type JoinFamilyResponse struct {
+	Success bool         `json:"success"`
+	Error   string       `json:"error,omitempty"`
+	Auth    AuthResponse `json:"auth,omitempty"`
 }
 
 // Database types
@@ -271,6 +282,49 @@ func GetFamilyInfo(ctx *vbeam.Context, req Empty) (resp FamilyInfoResponse, err 
 		Name:       family.Name,
 		InviteCode: family.InviteCode,
 	}
+	return
+}
+
+func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyResponse, err error) {
+	// Get authenticated user
+	user, err := GetAuthUser(ctx)
+	if err != nil {
+		resp.Success = false
+		resp.Error = "Authentication required"
+		return
+	}
+
+	// Validate invite code
+	if req.InviteCode == "" {
+		resp.Success = false
+		resp.Error = "Invite code is required"
+		return
+	}
+
+	// Find family by invite code
+	family := GetFamilyByInviteCode(ctx.Tx, req.InviteCode)
+	if family.Id == 0 {
+		resp.Success = false
+		resp.Error = "Invalid invite code"
+		return
+	}
+
+	// Check if user is already in this family
+	if user.FamilyId == family.Id {
+		resp.Success = false
+		resp.Error = "You are already a member of this family"
+		return
+	}
+
+	// Update user's family
+	vbeam.UseWriteTx(ctx)
+	user.FamilyId = family.Id
+	vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
+	vbolt.TxCommit(ctx.Tx)
+
+	// Return success response
+	resp.Success = true
+	resp.Auth = GetAuthResponseFromUser(user)
 	return
 }
 
