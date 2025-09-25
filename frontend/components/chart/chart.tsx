@@ -17,6 +17,7 @@ interface SelectedDataPoint {
   date: string;
 }
 
+
 const formatDate = (dateString: string) => {
   if (!dateString) return '';
   if (dateString.includes('T') && dateString.endsWith('Z')) {
@@ -29,14 +30,24 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
+const useSelectedPoint = vlens.declareHook((): SelectedDataPoint => ({
+  id: null,
+  value: 0,
+  unit: '',
+  type: '',
+  date: ''
+}));
+
+const useHoveredPoint = vlens.declareHook((): { id: number | null } => ({ id: null }));
+
 export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthChartProps) => {
-  const selectedPoint = vlens.declareHook((): SelectedDataPoint => ({
-    id: null,
-    value: 0,
-    unit: '',
-    type: '',
-    date: ''
-  }));
+  const selectedPoint = useSelectedPoint();
+  const hoveredPoint = useHoveredPoint();
+
+  // Make chart responsive
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const responsiveWidth = isMobile ? Math.min(window.innerWidth - 32, 400) : width;
+  const responsiveHeight = isMobile ? Math.min(300, responsiveWidth * 0.75) : height;
 
   if (!growthData || growthData.length === 0) {
     return (
@@ -55,10 +66,12 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
   const heightData = sortedData.filter(d => d.measurementType === server.Height);
   const weightData = sortedData.filter(d => d.measurementType === server.Weight);
 
-  // Chart margins
-  const margin = { top: 20, right: 80, bottom: 60, left: 60 };
-  const chartWidth = width - margin.left - margin.right;
-  const chartHeight = height - margin.top - margin.bottom;
+  // Chart margins (responsive)
+  const margin = isMobile
+    ? { top: 15, right: 40, bottom: 45, left: 45 }
+    : { top: 20, right: 80, bottom: 60, left: 60 };
+  const chartWidth = responsiveWidth - margin.left - margin.right;
+  const chartHeight = responsiveHeight - margin.top - margin.bottom;
 
   // Date range
   const dates = sortedData.map(d => new Date(d.measurementDate));
@@ -110,24 +123,44 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
   const weightPath = createPath(weightData, weightToY);
 
   const handleDataPointClick = (dataPoint: server.GrowthData, type: string) => {
-    const selected = selectedPoint();
-    if (selected.id === dataPoint.id) {
-      // Deselect if clicking the same point
-      selected.id = null;
+    if (selectedPoint.id === dataPoint.id) {
+      // Deselect if clicking the same point - reset all values
+      selectedPoint.id = null;
+      selectedPoint.value = 0;
+      selectedPoint.unit = '';
+      selectedPoint.type = '';
+      selectedPoint.date = '';
     } else {
       // Select the new point
-      selected.id = dataPoint.id;
-      selected.value = dataPoint.value;
-      selected.unit = dataPoint.unit;
-      selected.type = type;
-      selected.date = formatDate(dataPoint.measurementDate);
+      selectedPoint.id = dataPoint.id;
+      selectedPoint.value = dataPoint.value;
+      selectedPoint.unit = dataPoint.unit;
+      selectedPoint.type = type;
+      selectedPoint.date = formatDate(dataPoint.measurementDate);
     }
+
+    vlens.scheduleRedraw();
+  };
+
+  const handleDataPointHover = (dataPoint: server.GrowthData) => {
+    hoveredPoint.id = dataPoint.id;
+    vlens.scheduleRedraw();
+  };
+
+  const handleDataPointLeave = () => {
+    hoveredPoint.id = null;
     vlens.scheduleRedraw();
   };
 
   return (
-    <div className="growth-chart">
-      <svg width={width} height={height} className="growth-chart-svg">
+    <div className="growth-chart" style={{ position: 'relative' }}>
+      <svg
+        width={responsiveWidth}
+        height={responsiveHeight}
+        className="growth-chart-svg"
+        viewBox={`0 0 ${responsiveWidth} ${responsiveHeight}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
         <defs>
           <linearGradient id="heightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="var(--primary-accent)" stopOpacity="0.3" />
@@ -195,39 +228,101 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
 
           {/* Data points for height */}
           {heightData.map((d, i) => {
-            const isSelected = selectedPoint().id === d.id;
+            const isSelected = selectedPoint.id === d.id;
+            const isHovered = hoveredPoint.id === d.id;
+            const baseRadius = isMobile ? 6 : 5;
+            const selectedRadius = isMobile ? 10 : 8;
+
             return (
-              <circle
-                key={`height-${d.id}`}
-                cx={dateToX(new Date(d.measurementDate))}
-                cy={heightToY(d.value)}
-                r={isSelected ? 8 : 5}
-                fill="#3b82f6"
-                stroke="white"
-                strokeWidth={isSelected ? 3 : 2}
-                className={`data-point height-point ${isSelected ? 'selected' : ''}`}
-                onClick={() => handleDataPointClick(d, 'Height')}
-                style={{ cursor: 'pointer' }}
-              />
+              <g key={`height-group-${d.id}`}>
+                {/* Invisible larger touch target for mobile */}
+                {isMobile && (
+                  <circle
+                    cx={dateToX(new Date(d.measurementDate))}
+                    cy={heightToY(d.value)}
+                    r={22} // 44px diameter touch target
+                    fill="transparent"
+                    onClick={() => handleDataPointClick(d, 'Height')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                )}
+
+                {/* Visible data point */}
+                <circle
+                  cx={dateToX(new Date(d.measurementDate))}
+                  cy={heightToY(d.value)}
+                  r={isSelected ? selectedRadius : baseRadius}
+                  fill="#3b82f6"
+                  stroke="white"
+                  strokeWidth={isSelected ? 3 : 2}
+                  className={`data-point height-point ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
+                  onClick={() => handleDataPointClick(d, 'Height')}
+                  onMouseEnter={() => handleDataPointHover(d)}
+                  onMouseLeave={handleDataPointLeave}
+                  style={{ cursor: 'pointer', pointerEvents: isMobile ? 'none' : 'auto' }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleDataPointClick(d, 'Height');
+                    }
+                  }}
+                  onFocus={() => handleDataPointHover(d)}
+                  onBlur={handleDataPointLeave}
+                />
+              </g>
             );
           })}
 
           {/* Data points for weight */}
           {weightData.map((d, i) => {
-            const isSelected = selectedPoint().id === d.id;
+            const isSelected = selectedPoint.id === d.id;
+            const isHovered = hoveredPoint.id === d.id;
+            const baseRadius = isMobile ? 6 : 5;
+            const selectedRadius = isMobile ? 10 : 8;
+
             return (
-              <circle
-                key={`weight-${d.id}`}
-                cx={dateToX(new Date(d.measurementDate))}
-                cy={weightToY(d.value)}
-                r={isSelected ? 8 : 5}
-                fill="#ef4444"
-                stroke="white"
-                strokeWidth={isSelected ? 3 : 2}
-                className={`data-point weight-point ${isSelected ? 'selected' : ''}`}
-                onClick={() => handleDataPointClick(d, 'Weight')}
-                style={{ cursor: 'pointer' }}
-              />
+              <g key={`weight-group-${d.id}`}>
+                {/* Invisible larger touch target for mobile */}
+                {isMobile && (
+                  <circle
+                    cx={dateToX(new Date(d.measurementDate))}
+                    cy={weightToY(d.value)}
+                    r={22} // 44px diameter touch target
+                    fill="transparent"
+                    onClick={() => handleDataPointClick(d, 'Weight')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                )}
+
+                {/* Visible data point */}
+                <circle
+                  cx={dateToX(new Date(d.measurementDate))}
+                  cy={weightToY(d.value)}
+                  r={isSelected ? selectedRadius : baseRadius}
+                  fill="#ef4444"
+                  stroke="white"
+                  strokeWidth={isSelected ? 3 : 2}
+                  className={`data-point weight-point ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
+                  onClick={() => handleDataPointClick(d, 'Weight')}
+                  onMouseEnter={() => handleDataPointHover(d)}
+                  onMouseLeave={handleDataPointLeave}
+                  style={{ cursor: 'pointer', pointerEvents: isMobile ? 'none' : 'auto' }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleDataPointClick(d, 'Weight');
+                    }
+                  }}
+                  onFocus={() => handleDataPointHover(d)}
+                  onBlur={handleDataPointLeave}
+                />
+              </g>
             );
           })}
 
@@ -250,41 +345,117 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
               y2={chartHeight}
               className="axis-line"
             />
+
+            {/* X-axis labels (dates) */}
+            {(isMobile ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((ratio, i) => {
+              const date = new Date(paddedMinDate.getTime() + ratio * (paddedMaxDate.getTime() - paddedMinDate.getTime()));
+              return (
+                <text
+                  key={`x-label-${i}`}
+                  x={ratio * chartWidth}
+                  y={chartHeight + (isMobile ? 15 : 20)}
+                  textAnchor="middle"
+                  className="axis-label"
+                  fontSize={isMobile ? "8" : "10"}
+                >
+                  {isMobile
+                    ? date.toLocaleDateString(undefined, { month: 'short' })
+                    : date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+                  }
+                </text>
+              );
+            })}
+
+            {/* Y-axis labels for height (left side, blue) */}
+            {heightData.length > 0 && (isMobile ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((ratio, i) => {
+              const value = (heightMin - heightPadding) + ratio * ((heightMax + heightPadding) - (heightMin - heightPadding));
+              const displayValue = Math.round(value);
+              if (displayValue < heightMin || displayValue > heightMax) return null;
+
+              return (
+                <text
+                  key={`height-y-label-${i}`}
+                  x={isMobile ? -8 : -10}
+                  y={chartHeight - ratio * chartHeight}
+                  textAnchor="end"
+                  className="axis-label height-axis-label"
+                  fontSize={isMobile ? "8" : "10"}
+                  dy="0.35em"
+                >
+                  {displayValue}
+                </text>
+              );
+            })}
+
+            {/* Y-axis labels for weight (right side, red) */}
+            {weightData.length > 0 && (isMobile ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((ratio, i) => {
+              const value = (weightMin - weightPadding) + ratio * ((weightMax + weightPadding) - (weightMin - weightPadding));
+              const displayValue = Math.round(value);
+              if (displayValue < weightMin || displayValue > weightMax) return null;
+
+              return (
+                <text
+                  key={`weight-y-label-${i}`}
+                  x={chartWidth + (isMobile ? 8 : 10)}
+                  y={chartHeight - ratio * chartHeight}
+                  textAnchor="start"
+                  className="axis-label weight-axis-label"
+                  fontSize={isMobile ? "8" : "10"}
+                  dy="0.35em"
+                >
+                  {displayValue}
+                </text>
+              );
+            })}
           </g>
         </g>
 
         {/* Legend */}
-        <g className="legend" transform={`translate(${width - margin.right + 10}, ${margin.top + 20})`}>
-          {heightData.length > 0 && (
-            <g className="legend-item">
-              <circle cx="0" cy="0" r="5" fill="#3b82f6" stroke="white" strokeWidth="2" />
-              <text x="15" y="0" className="legend-text" dy="0.35em">Height</text>
+        {!isMobile && (
+          <g className="legend" transform={`translate(${responsiveWidth - margin.right + 10}, ${margin.top + 20})`}>
+            {heightData.length > 0 && (
+              <g className="legend-item">
+                <circle cx="0" cy="0" r="5" fill="#3b82f6" stroke="white" strokeWidth="2" />
+                <text x="15" y="0" className="legend-text" dy="0.35em">Height</text>
+              </g>
+            )}
+            {weightData.length > 0 && (
+              <g className="legend-item" transform="translate(0, 25)">
+                <circle cx="0" cy="0" r="5" fill="#ef4444" stroke="white" strokeWidth="2" />
+                <text x="15" y="0" className="legend-text" dy="0.35em">Weight</text>
+              </g>
+            )}
+          </g>
+        )}
+
+        {/* Mobile legend */}
+        {isMobile && (
+          <g className="legend-mobile" transform={`translate(${responsiveWidth / 2}, ${responsiveHeight - 10})`}>
+            <g className="legend-item" transform="translate(-40, 0)">
+              <circle cx="0" cy="0" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+              <text x="8" y="0" className="legend-text" dy="0.35em" fontSize="8">Height</text>
             </g>
-          )}
-          {weightData.length > 0 && (
-            <g className="legend-item" transform="translate(0, 25)">
-              <circle cx="0" cy="0" r="5" fill="#ef4444" stroke="white" strokeWidth="2" />
-              <text x="15" y="0" className="legend-text" dy="0.35em">Weight</text>
+            <g className="legend-item" transform="translate(10, 0)">
+              <circle cx="0" cy="0" r="4" fill="#ef4444" stroke="white" strokeWidth="1.5" />
+              <text x="8" y="0" className="legend-text" dy="0.35em" fontSize="8">Weight</text>
             </g>
-          )}
-        </g>
+          </g>
+        )}
       </svg>
 
       {/* Data Point Info Panel */}
-      {selectedPoint().id !== null && (
+      {selectedPoint.id !== null ? (
         <div className="data-point-info">
           <div className="info-header">
-            <span className="info-type">{selectedPoint().type}</span>
-            <span className="info-date">{selectedPoint().date}</span>
+            <span className="info-type">{selectedPoint.type}</span>
+            <span className="info-date">{selectedPoint.date}</span>
           </div>
           <div className="info-value">
-            {selectedPoint().value} {selectedPoint().unit}
+            {selectedPoint.value} {selectedPoint.unit}
           </div>
           <div className="info-hint">Click point again to deselect</div>
         </div>
-      )}
-
-      {selectedPoint().id === null && (
+      ) : (
         <div className="data-point-info placeholder">
           <div className="info-hint">Click on a data point to see details</div>
         </div>
