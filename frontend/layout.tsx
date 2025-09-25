@@ -60,6 +60,13 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
                   <span className="user-name">{currentAuth.name}</span>
                 </div>
               </li>
+              {currentAuth.isAdmin ? (
+                <li>
+                  <a href="/admin" className="admin-link">
+                    <span className="admin-icon">⚡</span> Admin
+                  </a>
+                </li>
+              ) : null}
             </>
           ) : ""}
           <li>

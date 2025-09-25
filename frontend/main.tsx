@@ -43,6 +43,7 @@ async function main() {
     vlens.routeHandler("/create-account", () => import("@app/pages/auth/create-account")),
     vlens.routeHandler("/login", () => import("@app/pages/auth/login")),
     vlens.routeHandler("/dashboard", () => import("@app/pages/dashboard/dashboard")),
+    vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
     vlens.routeHandler("/settings", () => import("@app/pages/settings/settings")),
     vlens.routeHandler("/add-person", () => import("@app/pages/people/add-person")),
     vlens.routeHandler("/add-growth", () => import("@app/pages/growth/add-growth")),

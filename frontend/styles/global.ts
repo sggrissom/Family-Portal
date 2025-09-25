@@ -853,6 +853,50 @@ block(`
 }
 `);
 
+block(`
+.admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 9px 15px;
+  color: #6366f1;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all var(--transition-speed) ease;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+`);
+
+block(`
+.admin-link:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #4f46e5;
+}
+`);
+
+block(`
+.admin-link .admin-icon {
+  font-size: 1rem;
+}
+`);
+
+block(`
+[data-theme="dark"] .admin-link {
+  color: #818cf8;
+  border-color: rgba(129, 140, 248, 0.3);
+}
+`);
+
+block(`
+[data-theme="dark"] .admin-link:hover {
+  background: rgba(129, 140, 248, 0.1);
+  border-color: rgba(129, 140, 248, 0.5);
+  color: #6366f1;
+}
+`);
+
 // Mobile-specific user info styling
 block(`
 @media (max-width: 640px) {
