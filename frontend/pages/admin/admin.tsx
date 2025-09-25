@@ -79,18 +79,18 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
         </div>
 
-        <div className="admin-card">
+        <a href="/admin/users" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">👥</div>
             <h3>User Management</h3>
           </div>
           <div className="card-content">
             <p>Manage user accounts, family groups, and permissions.</p>
-            <div className="card-placeholder">
-              Coming Soon
+            <div className="card-action">
+              View All Users →
             </div>
           </div>
-        </div>
+        </a>
 
         <div className="admin-card">
           <div className="card-header">

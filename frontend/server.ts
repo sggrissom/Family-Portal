@@ -225,6 +225,10 @@ export interface ImportDataResponse {
     availablePeople: ImportPerson[]
 }
 
+export interface ListAllUsersResponse {
+    users: AdminUserInfo[]
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -284,6 +288,17 @@ export interface ImportPerson {
     Birthday: string
     Age: string
     ImageId: number
+}
+
+export interface AdminUserInfo {
+    id: number
+    name: string
+    email: string
+    creation: string
+    lastLogin: string
+    familyId: number
+    familyName: string
+    isAdmin: boolean
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
@@ -364,5 +379,9 @@ export async function DeletePhoto(data: DeletePhotoRequest): Promise<rpc.Respons
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
     return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
+}
+
+export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {
+    return await rpc.call<ListAllUsersResponse>('ListAllUsers', JSON.stringify(data));
 }
 

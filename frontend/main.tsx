@@ -43,7 +43,6 @@ async function main() {
     vlens.routeHandler("/create-account", () => import("@app/pages/auth/create-account")),
     vlens.routeHandler("/login", () => import("@app/pages/auth/login")),
     vlens.routeHandler("/dashboard", () => import("@app/pages/dashboard/dashboard")),
-    vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
     vlens.routeHandler("/settings", () => import("@app/pages/settings/settings")),
     vlens.routeHandler("/add-person", () => import("@app/pages/people/add-person")),
     vlens.routeHandler("/add-growth", () => import("@app/pages/growth/add-growth")),
@@ -54,6 +53,8 @@ async function main() {
     vlens.routeHandler("/view-photo", () => import("@app/pages/photos/view-photo")),
     vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
     vlens.routeHandler("/import", () => import("@app/pages/settings/import")),
+    vlens.routeHandler("/admin/users", () => import("@app/pages/admin/users")),
+    vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
     vlens.routeHandler("/", () => import("@app/pages/home/home")),
   ]);
 }
