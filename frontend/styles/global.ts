@@ -20,6 +20,8 @@ block(`
   --hover-bg: rgba(255, 255, 255, 0.1);
   --active-bg: rgba(255, 255, 255, 0.1);
   --active-text: #fff;
+  --height-color: #3b82f6;
+  --weight-color: #ef4444;
 }
 `);
 

@@ -1,4 +1,5 @@
 import * as preact from "preact";
+import { JSX } from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import "./chart.styles";
@@ -9,41 +10,36 @@ export interface GrowthChartProps {
   height?: number;
 }
 
+type Kind = "Height" | "Weight";
+
 interface SelectedDataPoint {
-  id: number | null;
+  key: { id: number; kind: Kind } | null;
   value: number;
   unit: string;
-  type: string;
+  type: Kind | "";
   date: string;
 }
 
+const formatDate = (s: string) => new Date(s).toLocaleDateString();
 
-const formatDate = (dateString: string) => {
-  if (!dateString) return '';
-  if (dateString.includes('T') && dateString.endsWith('Z')) {
-    const dateParts = dateString.split('T')[0].split('-');
-    const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-    const day = parseInt(dateParts[2]);
-    return new Date(year, month, day).toLocaleDateString();
-  }
-  return new Date(dateString).toLocaleDateString();
-};
+const useSelectedPoint = vlens.declareHook(
+  (): SelectedDataPoint => ({
+    key: null,
+    value: 0,
+    unit: "",
+    type: "",
+    date: "",
+  })
+);
 
-const useSelectedPoint = vlens.declareHook((): SelectedDataPoint => ({
-  id: null,
-  value: 0,
-  unit: '',
-  type: '',
-  date: ''
-}));
-
-const useHoveredPoint = vlens.declareHook((): { id: number | null } => ({ id: null }));
+const useHoveredPoint = vlens.declareHook(
+  (): { key: { id: number; kind: Kind } | null } => ({ key: null })
+);
 
 interface ZoomState {
-  scale: number;
-  translateX: number;
-  translateY: number;
+  scale: number;           // content units (centered scaling)
+  translateX: number;      // content units
+  translateY: number;      // content units
   isDragging: boolean;
 }
 
@@ -52,220 +48,72 @@ interface TouchState {
   initialDistance: number;
   initialScale: number;
   initialTranslate: { x: number; y: number };
-  focalPoint: { x: number; y: number };
+  focalPoint: { x: number; y: number };           // in inner-plot SVG coords
   initialFocalPoint: { x: number; y: number };
   touchStartTime: number;
   touchStartPosition: { x: number; y: number };
   hasMoved: boolean;
 }
 
-const useZoomState = vlens.declareHook((): ZoomState => ({
-  scale: 1,
-  translateX: 0,
-  translateY: 0,
-  isDragging: false
-}));
+const useZoomState = vlens.declareHook(
+  (): ZoomState => ({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isDragging: false,
+  })
+);
 
-const useTouchState = vlens.declareHook((): TouchState => ({
-  touches: [],
-  initialDistance: 0,
-  initialScale: 1,
-  initialTranslate: { x: 0, y: 0 },
-  focalPoint: { x: 0, y: 0 },
-  initialFocalPoint: { x: 0, y: 0 },
-  touchStartTime: 0,
-  touchStartPosition: { x: 0, y: 0 },
-  hasMoved: false
-}));
+const useTouchState = vlens.declareHook(
+  (): TouchState => ({
+    touches: [],
+    initialDistance: 0,
+    initialScale: 1,
+    initialTranslate: { x: 0, y: 0 },
+    focalPoint: { x: 0, y: 0 },
+    initialFocalPoint: { x: 0, y: 0 },
+    touchStartTime: 0,
+    touchStartPosition: { x: 0, y: 0 },
+    hasMoved: false,
+  })
+);
+
+// -------------------- Helpers --------------------
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/** Generate ~5 nice ticks between [min, max] (inclusive-ish). */
+function niceTicks(min: number, max: number, targetCount = 5): number[] {
+  if (!isFinite(min) || !isFinite(max)) return [];
+  if (min === max) return [min];
+
+  const span = max - min;
+  const step0 = span / Math.max(1, targetCount);
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const norm = step0 / mag;
+  const step =
+    norm >= 7.5 ? 10 * mag :
+    norm >= 3.5 ? 5 * mag :
+    norm >= 1.5 ? 2 * mag : 1 * mag;
+
+  const start = Math.ceil(min / step) * step;
+  const ticks: number[] = [];
+  for (let v = start; v <= max + 1e-9; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return ticks;
+}
 
 export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthChartProps) => {
-  const selectedPoint = useSelectedPoint();
-  const hoveredPoint = useHoveredPoint();
-  const zoomState = useZoomState();
-  const touchState = useTouchState();
+  const selected = useSelectedPoint();
+  const hovered = useHoveredPoint();
+  const zoom = useZoomState();
+  const touch = useTouchState();
 
-  // Utility functions for touch/zoom handling
-  const getDistance = (touch1: Touch, touch2: Touch): number => {
-    const dx = touch1.clientX - touch2.clientX;
-    const dy = touch1.clientY - touch2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  const getTouchCenter = (touch1: Touch, touch2: Touch) => ({
-    x: (touch1.clientX + touch2.clientX) / 2,
-    y: (touch1.clientY + touch2.clientY) / 2
-  });
-
-  const constrainZoom = (scale: number): number => {
-    return Math.max(1, Math.min(8, scale));
-  };
-
-  const constrainTranslate = (translateX: number, translateY: number, scale: number) => {
-    // With centered scaling, constraints are symmetric around content center
-    // Calculate how far we can pan based on scaled content extending beyond viewport
-    const maxX = (innerChartWidth * (scale - 1)) / 2;
-    const maxY = (innerChartHeight * (scale - 1)) / 2;
-
-    return {
-      x: Math.max(-maxX, Math.min(maxX, translateX)),
-      y: Math.max(-maxY, Math.min(maxY, translateY))
-    };
-  };
-
-  const screenToSVG = (screenX: number, screenY: number, svgElement: SVGSVGElement) => {
-    const rect = svgElement.getBoundingClientRect();
-    const scaleX = chartWidth / rect.width;
-    const scaleY = chartHeight / rect.height;
-    return {
-      x: (screenX - rect.left) * scaleX,
-      y: (screenY - rect.top) * scaleY
-    };
-  };
-
-  // Calculate dynamic point radius based on zoom level
-  const getPointRadius = (isSelected: boolean) => {
-    const baseRadius = isSelected ? 8 : 6;
-    // Scale down points when zoomed in to reduce clustering
-    const scaleFactor = Math.max(0.5, Math.min(1, 1 / Math.sqrt(zoomState.scale)));
-    return Math.max(3, baseRadius * scaleFactor);
-  };
-
-  const getStrokeWidth = (isSelected: boolean) => {
-    const baseStroke = isSelected ? 3 : 2;
-    const scaleFactor = Math.max(0.5, Math.min(1, 1 / Math.sqrt(zoomState.scale)));
-    return Math.max(1, baseStroke * scaleFactor);
-  };
-
-  // Touch event handlers
-  const handleTouchStart = (e: TouchEvent) => {
-    const touches = Array.from(e.touches);
-
-    if (touches.length === 2) {
-      // Pinch gesture starting - prevent default to stop browser zoom
-      e.preventDefault();
-      touchState.touches = touches;
-      touchState.initialDistance = getDistance(touches[0], touches[1]);
-      touchState.initialScale = zoomState.scale;
-      touchState.initialTranslate = { x: zoomState.translateX, y: zoomState.translateY };
-
-      // Calculate and store initial focal point
-      const svgElement = e.currentTarget as SVGSVGElement;
-      const screenCenter = getTouchCenter(touches[0], touches[1]);
-      const svgCenter = screenToSVG(screenCenter.x, screenCenter.y, svgElement);
-      touchState.focalPoint = svgCenter;
-      touchState.initialFocalPoint = svgCenter;
-    } else if (touches.length === 1 && zoomState.scale > 1) {
-      // Single touch when zoomed - track for potential pan but don't prevent clicks yet
-      touchState.touches = touches;
-      touchState.initialTranslate = { x: zoomState.translateX, y: zoomState.translateY };
-      touchState.touchStartTime = Date.now();
-      touchState.touchStartPosition = { x: touches[0].clientX, y: touches[0].clientY };
-      touchState.hasMoved = false;
-      // Don't set isDragging = true yet, wait for movement
-    } else if (touches.length === 1) {
-      // Single touch on non-zoomed chart - still track for consistency
-      touchState.touchStartTime = Date.now();
-      touchState.touchStartPosition = { x: touches[0].clientX, y: touches[0].clientY };
-      touchState.hasMoved = false;
-    }
-
-    vlens.scheduleRedraw();
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    const touches = Array.from(e.touches);
-    const DRAG_THRESHOLD = 8; // pixels
-
-    if (touches.length === 2 && touchState.touches.length === 2) {
-      // Pinch zoom - prevent default to stop browser zoom
-      e.preventDefault();
-
-      const currentDistance = getDistance(touches[0], touches[1]);
-      const scaleChange = currentDistance / touchState.initialDistance;
-      const newScale = constrainZoom(touchState.initialScale * scaleChange);
-
-      // Calculate focal point offset to anchor zoom
-      const scaleDelta = newScale - touchState.initialScale;
-
-      // Calculate focal point relative to scale center (where scaling actually happens)
-      const relativeFocalX = touchState.initialFocalPoint.x - innerChartWidth / 2;
-      const relativeFocalY = touchState.initialFocalPoint.y - innerChartHeight / 2;
-
-      // Calculate how much the focal point moves due to centered scaling
-      const focalOffsetX = relativeFocalX * scaleDelta;
-      const focalOffsetY = relativeFocalY * scaleDelta;
-
-      zoomState.scale = newScale;
-      zoomState.translateX = touchState.initialTranslate.x - focalOffsetX;
-      zoomState.translateY = touchState.initialTranslate.y - focalOffsetY;
-
-      vlens.scheduleRedraw();
-    } else if (touches.length === 1 && touchState.touches.length === 1 && zoomState.scale > 1) {
-      // Single touch when zoomed - check for drag threshold
-      const deltaX = touches[0].clientX - touchState.touchStartPosition.x;
-      const deltaY = touches[0].clientY - touchState.touchStartPosition.y;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-      if (!touchState.hasMoved && distance > DRAG_THRESHOLD) {
-        // Movement exceeded threshold - start panning
-        touchState.hasMoved = true;
-        zoomState.isDragging = true;
-        e.preventDefault(); // Now prevent default to stop scrolling
-      }
-
-      if (zoomState.isDragging) {
-        // Continue panning
-        e.preventDefault();
-
-        const panDeltaX = touches[0].clientX - touchState.touches[0].clientX;
-        const panDeltaY = touches[0].clientY - touchState.touches[0].clientY;
-
-        const newTranslateX = touchState.initialTranslate.x + panDeltaX;
-        const newTranslateY = touchState.initialTranslate.y + panDeltaY;
-
-        const constrained = constrainTranslate(newTranslateX, newTranslateY, zoomState.scale);
-        zoomState.translateX = constrained.x;
-        zoomState.translateY = constrained.y;
-
-        vlens.scheduleRedraw();
-      }
-    }
-    // For taps or single touch on non-zoomed chart: don't prevent default to allow clicks
-  };
-
-  const handleTouchEnd = (e: TouchEvent) => {
-    const wasDragging = zoomState.isDragging;
-    const hadMultipleFingers = touchState.touches.length > 1;
-    const touchDuration = Date.now() - touchState.touchStartTime;
-    const wasTap = !touchState.hasMoved && touchDuration < 300; // Quick tap under 300ms
-
-    // Only prevent default if we were actually zooming or panning (not for taps)
-    if ((wasDragging || hadMultipleFingers) && !wasTap) {
-      e.preventDefault();
-    }
-
-    // Reset all touch state
-    zoomState.isDragging = false;
-    touchState.touches = [];
-    touchState.initialDistance = 0;
-    touchState.hasMoved = false;
-    touchState.touchStartTime = 0;
-    touchState.touchStartPosition = { x: 0, y: 0 };
-
-    vlens.scheduleRedraw();
-  };
-
-  const resetZoom = () => {
-    zoomState.scale = 1;
-    zoomState.translateX = 0;
-    zoomState.translateY = 0;
-    zoomState.isDragging = false;
-    vlens.scheduleRedraw();
-  };
-
-  // Use fixed dimensions for stable zoom behavior
+  // ---- Layout ----
   const chartWidth = width;
   const chartHeight = height;
+  const margin = { top: 20, right: 80, bottom: 60, left: 60 };
+  const innerW = chartWidth - margin.left - margin.right;
+  const innerH = chartHeight - margin.top - margin.bottom;
 
   if (!growthData || growthData.length === 0) {
     return (
@@ -275,112 +123,301 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
     );
   }
 
-  // Sort data by date for proper line connections
-  const sortedData = growthData.slice().sort((a, b) =>
-    new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime()
-  );
+  // ---- Data prep (once per props change) ----
+  const sortedData = growthData
+    .slice()
+    .sort((a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime());
 
-  // Separate height and weight data
-  const heightData = sortedData.filter(d => d.measurementType === server.Height);
-  const weightData = sortedData.filter(d => d.measurementType === server.Weight);
+  const heightData = sortedData.filter((d) => d.measurementType === server.Height);
+  const weightData = sortedData.filter((d) => d.measurementType === server.Weight);
 
-  // Chart margins
-  const margin = { top: 20, right: 80, bottom: 60, left: 60 };
-  const innerChartWidth = chartWidth - margin.left - margin.right;
-  const innerChartHeight = chartHeight - margin.top - margin.bottom;
+  // Dates
+  const dateTimes = sortedData.map((d) => new Date(d.measurementDate).getTime());
+  const minTs = Math.min(...dateTimes);
+  const maxTs = Math.max(...dateTimes);
+  const rawDR = Math.max(1, maxTs - minTs); // avoid 0
+  const MIN_DATE_PAD_MS = 24 * 60 * 60 * 1000; // 1 day minimum pad
+  const paddedMinTs = minTs - Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
+  const paddedMaxTs = maxTs + Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
+  const dateDen = Math.max(1, paddedMaxTs - paddedMinTs);
 
-  // Date range
-  const dates = sortedData.map(d => new Date(d.measurementDate));
-  const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  // Values
+  const hv = heightData.map((d) => d.value);
+  const wv = weightData.map((d) => d.value);
+  const hMin = hv.length ? Math.min(...hv) : 0;
+  const hMax = hv.length ? Math.max(...hv) : 100;
+  const wMin = wv.length ? Math.min(...wv) : 0;
+  const wMax = wv.length ? Math.max(...wv) : 50;
 
-  // Add some padding to the date range
-  const dateRange = maxDate.getTime() - minDate.getTime();
-  const paddedMinDate = new Date(minDate.getTime() - dateRange * 0.05);
-  const paddedMaxDate = new Date(maxDate.getTime() + dateRange * 0.05);
+  const hSpan = Math.max(1, hMax - hMin);
+  const wSpan = Math.max(1, wMax - wMin);
+  const hPad = Math.max(hSpan * 0.1, 1);
+  const wPad = Math.max(wSpan * 0.1, 1);
+  const hLo = hMin - hPad, hHi = hMax + hPad;
+  const wLo = wMin - wPad, wHi = wMax + wPad;
+  const hDen = Math.max(1e-9, hHi - hLo);
+  const wDen = Math.max(1e-9, wHi - wLo);
 
-  // Value ranges for each measurement type
-  const heightValues = heightData.map(d => d.value);
-  const weightValues = weightData.map(d => d.value);
+  // Scales (inner plot coords)
+  const dateToX = (t: number) => ((t - paddedMinTs) / dateDen) * innerW;
+  const heightToY = (v: number) => innerH - ((v - hLo) / hDen) * innerH;
+  const weightToY = (v: number) => innerH - ((v - wLo) / wDen) * innerH;
 
-  const heightMin = heightValues.length > 0 ? Math.min(...heightValues) : 0;
-  const heightMax = heightValues.length > 0 ? Math.max(...heightValues) : 100;
-  const weightMin = weightValues.length > 0 ? Math.min(...weightValues) : 0;
-  const weightMax = weightValues.length > 0 ? Math.max(...weightValues) : 50;
-
-  // Add padding to value ranges
-  const heightPadding = (heightMax - heightMin) * 0.1;
-  const weightPadding = (weightMax - weightMin) * 0.1;
-
-  // Scaling functions
-  const dateToX = (date: Date) =>
-    ((date.getTime() - paddedMinDate.getTime()) / (paddedMaxDate.getTime() - paddedMinDate.getTime())) * innerChartWidth;
-
-  const heightToY = (value: number) =>
-    innerChartHeight - ((value - (heightMin - heightPadding)) / ((heightMax + heightPadding) - (heightMin - heightPadding))) * innerChartHeight;
-
-  const weightToY = (value: number) =>
-    innerChartHeight - ((value - (weightMin - weightPadding)) / ((weightMax + weightPadding) - (weightMin - weightPadding))) * innerChartHeight;
-
-  // Generate path strings
+  // Paths
   const createPath = (data: server.GrowthData[], yScale: (value: number) => number) => {
-    if (data.length === 0) return '';
-
-    const pathCommands = data.map((d, i) => {
-      const x = dateToX(new Date(d.measurementDate));
+    if (data.length === 0) return "";
+    let s = "";
+    for (let i = 0; i < data.length; i++) {
+      const d = data[i];
+      const x = dateToX(new Date(d.measurementDate).getTime());
       const y = yScale(d.value);
-      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-    });
-
-    return pathCommands.join(' ');
+      s += (i === 0 ? "M" : " L") + ` ${x} ${y}`;
+    }
+    return s;
   };
-
   const heightPath = createPath(heightData, heightToY);
   const weightPath = createPath(weightData, weightToY);
 
-  const handleDataPointClick = (dataPoint: server.GrowthData, type: string) => {
-    if (selectedPoint.id === dataPoint.id) {
-      // Deselect if clicking the same point - reset all values
-      selectedPoint.id = null;
-      selectedPoint.value = 0;
-      selectedPoint.unit = '';
-      selectedPoint.type = '';
-      selectedPoint.date = '';
-    } else {
-      // Select the new point
-      selectedPoint.id = dataPoint.id;
-      selectedPoint.value = dataPoint.value;
-      selectedPoint.unit = dataPoint.unit;
-      selectedPoint.type = type;
-      selectedPoint.date = formatDate(dataPoint.measurementDate);
+  // ---- Zoom / Pan helpers ----
+
+  const constrainZoom = (scale: number) => clamp(scale, 1, 8);
+
+  // Note: translateX/Y are in content (inner plot) units, with centered scaling:
+  // translate(center) -> scale -> translate(-center) -> translate(pan)
+  const constrainTranslate = (tx: number, ty: number, scale: number) => {
+    const maxX = (innerW * (scale - 1)) / 2;
+    const maxY = (innerH * (scale - 1)) / 2;
+    return {
+      x: clamp(tx, -maxX, maxX),
+      y: clamp(ty, -maxY, maxY),
+    };
+  };
+
+  const screenToInnerSVG = (clientX: number, clientY: number, svgEl: SVGSVGElement) => {
+    const rect = svgEl.getBoundingClientRect();
+    // Map to viewBox space (0..chartWidth/Height)
+    const sx = ((clientX - rect.left) / rect.width) * chartWidth;
+    const sy = ((clientY - rect.top) / rect.height) * chartHeight;
+    // Then to inner plot (account for margins)
+    return { x: clamp(sx - margin.left, 0, innerW), y: clamp(sy - margin.top, 0, innerH) };
+  };
+
+  const getPointRadius = (isSelected: boolean) => {
+    const base = isSelected ? 8 : 6;
+    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.5, 1);
+    return Math.max(3, base * scaleFactor);
+  };
+
+  const getStrokeWidth = (isSelected: boolean) => {
+    const base = isSelected ? 3 : 2;
+    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.5, 1);
+    return Math.max(1, base * scaleFactor);
+  };
+
+  // ---- Touch handlers (mobile) ----
+
+  const handleTouchStart = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
+    const touches = Array.from(e.touches);
+
+    if (touches.length === 2) {
+      e.preventDefault();
+      touch.touches = touches;
+      touch.initialDistance = distance(touches[0], touches[1]);
+      touch.initialScale = zoom.scale;
+      touch.initialTranslate = { x: zoom.translateX, y: zoom.translateY };
+
+      const center = touchCenter(touches[0], touches[1]);
+      const svgCenter = screenToInnerSVG(center.x, center.y, e.currentTarget);
+      touch.focalPoint = svgCenter;
+      touch.initialFocalPoint = svgCenter;
+    } else if (touches.length === 1 && zoom.scale > 1) {
+      touch.touches = touches;
+      touch.initialTranslate = { x: zoom.translateX, y: zoom.translateY };
+      touch.touchStartTime = Date.now();
+      touch.touchStartPosition = { x: touches[0].clientX, y: touches[0].clientY };
+      touch.hasMoved = false;
+    } else if (touches.length === 1) {
+      touch.touchStartTime = Date.now();
+      touch.touchStartPosition = { x: touches[0].clientX, y: touches[0].clientY };
+      touch.hasMoved = false;
+    }
+    vlens.scheduleRedraw();
+  };
+
+  const handleTouchMove = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
+    const touches = Array.from(e.touches);
+    const DRAG_THRESHOLD = 8;
+
+    if (touches.length === 2 && touch.touches.length === 2) {
+      e.preventDefault();
+      const currDist = distance(touches[0], touches[1]);
+      const scaleChange = currDist / touch.initialDistance;
+      const newScale = constrainZoom(touch.initialScale * scaleChange);
+
+      // Centered scale focal anchoring
+      const delta = newScale - touch.initialScale;
+      const relFx = touch.initialFocalPoint.x - innerW / 2;
+      const relFy = touch.initialFocalPoint.y - innerH / 2;
+
+      zoom.scale = newScale;
+      zoom.translateX = touch.initialTranslate.x - relFx * delta;
+      zoom.translateY = touch.initialTranslate.y - relFy * delta;
+
+      // Clamp pan
+      const c = constrainTranslate(zoom.translateX, zoom.translateY, zoom.scale);
+      zoom.translateX = c.x;
+      zoom.translateY = c.y;
+
+      vlens.scheduleRedraw();
+    } else if (touches.length === 1 && touch.touches.length === 1 && zoom.scale > 1) {
+      const dx = touches[0].clientX - touch.touchStartPosition.x;
+      const dy = touches[0].clientY - touch.touchStartPosition.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (!touch.hasMoved && dist > DRAG_THRESHOLD) {
+        touch.hasMoved = true;
+        zoom.isDragging = true;
+        e.preventDefault();
+      }
+
+      if (zoom.isDragging) {
+        e.preventDefault();
+        const panDX = touches[0].clientX - touch.touches[0].clientX;
+        const panDY = touches[0].clientY - touch.touches[0].clientY;
+
+        const tx = touch.initialTranslate.x + panDX;
+        const ty = touch.initialTranslate.y + panDY;
+        const c = constrainTranslate(tx, ty, zoom.scale);
+        zoom.translateX = c.x;
+        zoom.translateY = c.y;
+
+        vlens.scheduleRedraw();
+      }
+    }
+    // taps fall through (no preventDefault) so clicks still work
+  };
+
+  const handleTouchEnd = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
+    const wasDragging = zoom.isDragging;
+    const hadMulti = touch.touches.length > 1;
+    const dur = Date.now() - touch.touchStartTime;
+    const wasTap = !touch.hasMoved && dur < 300;
+
+    if ((wasDragging || hadMulti) && !wasTap) e.preventDefault();
+
+    zoom.isDragging = false;
+    touch.touches = [];
+    touch.initialDistance = 0;
+    touch.hasMoved = false;
+    touch.touchStartTime = 0;
+    touch.touchStartPosition = { x: 0, y: 0 };
+
+    vlens.scheduleRedraw();
+  };
+
+  const handleTouchCancel = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
+    zoom.isDragging = false;
+    touch.touches = [];
+    touch.initialDistance = 0;
+    touch.hasMoved = false;
+    touch.touchStartTime = 0;
+    touch.touchStartPosition = { x: 0, y: 0 };
+    vlens.scheduleRedraw();
+  };
+
+  // ---- Wheel zoom (desktop) ----
+  const handleWheel = (e: JSX.TargetedWheelEvent<SVGSVGElement>) => {
+    if (!e.ctrlKey && !e.metaKey) {
+      // Treat regular wheel as page scroll unless already zoomed; if zoomed, pan vertically a bit
+      if (zoom.scale > 1) {
+        e.preventDefault();
+        const ty = zoom.translateY - e.deltaY; // natural pan
+        const c = constrainTranslate(zoom.translateX, ty, zoom.scale);
+        zoom.translateX = c.x;
+        zoom.translateY = c.y;
+        vlens.scheduleRedraw();
+      }
+      return;
     }
 
+    // Ctrl/Cmd + wheel = zoom (common UX on web maps)
+    e.preventDefault();
+    const svg = e.currentTarget;
+    const innerPt = screenToInnerSVG(e.clientX, e.clientY, svg);
+
+    const zoomFactor = Math.exp(-e.deltaY * 0.0015); // smooth
+    const newScale = constrainZoom(zoom.scale * zoomFactor);
+    const delta = newScale - zoom.scale;
+
+    const relFx = innerPt.x - innerW / 2;
+    const relFy = innerPt.y - innerH / 2;
+
+    zoom.scale = newScale;
+    zoom.translateX = zoom.translateX - relFx * delta;
+    zoom.translateY = zoom.translateY - relFy * delta;
+
+    const c = constrainTranslate(zoom.translateX, zoom.translateY, zoom.scale);
+    zoom.translateX = c.x;
+    zoom.translateY = c.y;
+
     vlens.scheduleRedraw();
   };
 
-  const handleDataPointHover = (dataPoint: server.GrowthData) => {
-    hoveredPoint.id = dataPoint.id;
+  const resetZoom = () => {
+    zoom.scale = 1;
+    zoom.translateX = 0;
+    zoom.translateY = 0;
+    zoom.isDragging = false;
     vlens.scheduleRedraw();
   };
 
-  const handleDataPointLeave = () => {
-    hoveredPoint.id = null;
+  // ---- Interactions on points ----
+
+  const selectPoint = (d: server.GrowthData, kind: Kind) => {
+    const key = { id: d.id as number, kind };
+    if (selected.key && selected.key.id === key.id && selected.key.kind === key.kind) {
+      selected.key = null;
+      selected.value = 0;
+      selected.unit = "";
+      selected.type = "";
+      selected.date = "";
+    } else {
+      selected.key = key;
+      selected.value = d.value;
+      selected.unit = d.unit;
+      selected.type = kind;
+      selected.date = formatDate(d.measurementDate);
+    }
     vlens.scheduleRedraw();
   };
+
+  const hoverPoint = (d: server.GrowthData, kind: Kind) => {
+    hovered.key = { id: d.id as number, kind };
+    vlens.scheduleRedraw();
+  };
+
+  const clearHover = () => {
+    hovered.key = null;
+    vlens.scheduleRedraw();
+  };
+
+  // ---- Colors via CSS vars with sensible fallbacks ----
+  const heightColor = "var(--height-color, #3b82f6)";
+  const weightColor = "var(--weight-color, #ef4444)";
+
+  // ---- Ticks ----
+  const xRatios = [0, 0.25, 0.5, 0.75, 1];
+  const hTicks = heightData.length ? niceTicks(hLo, hHi, 5).filter((v) => v >= hMin && v <= hMax) : [];
+  const wTicks = weightData.length ? niceTicks(wLo, wHi, 5).filter((v) => v >= wMin && v <= wMax) : [];
 
   return (
     <div className="growth-chart">
-      {/* Zoom Controls */}
-      {zoomState.scale > 1 && (
+      {zoom.scale > 1 && (
         <div className="zoom-controls">
-          <button
-            className="btn-zoom-reset"
-            onClick={resetZoom}
-            aria-label="Reset zoom"
-          >
-            Reset Zoom (1x)
+          <button className="btn-zoom-reset" onClick={resetZoom} aria-label="Reset zoom">
+            Reset Zoom (1×)
           </button>
-          <span className="zoom-level">{zoomState.scale.toFixed(1)}x</span>
+          <span className="zoom-level">{zoom.scale.toFixed(1)}×</span>
         </div>
       )}
 
@@ -391,264 +428,256 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        style={{ touchAction: 'none' }}
+        onTouchCancel={handleTouchCancel}
+        onWheel={handleWheel}
+        // Disable default pan/zoom gestures inside the SVG; we handle them.
+        style={{ touchAction: "none" }}
+        role="img"
+        aria-label="Growth chart of height and weight over time"
       >
         <defs>
+          <clipPath id="plotArea">
+            <rect x="0" y="0" width={innerW} height={innerH} />
+          </clipPath>
+
           <linearGradient id="heightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="var(--primary-accent)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="var(--primary-accent)" stopOpacity="0.1" />
+            <stop offset="0%" stopColor={heightColor} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={heightColor} stopOpacity="0.1" />
           </linearGradient>
           <linearGradient id="weightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.1" />
+            <stop offset="0%" stopColor={weightColor} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={weightColor} stopOpacity="0.1" />
           </linearGradient>
         </defs>
 
-        {/* Margin group - applied first, outside of scaling */}
-        <g transform={`translate(${margin.left}, ${margin.top})`}>
-          {/* Zoom/pan group - scales from center of content area */}
+        {/* Outer margin group */}
+        <g transform={`translate(${margin.left}, ${margin.top})`} clipPath="url(#plotArea)">
+          {/* Centered scale then pan in content units */}
           <g
             transform={`
-              translate(${innerChartWidth / 2}, ${innerChartHeight / 2})
-              scale(${zoomState.scale})
-              translate(${-innerChartWidth / 2}, ${-innerChartHeight / 2})
-              translate(${zoomState.translateX}, ${zoomState.translateY})
+              translate(${innerW / 2}, ${innerH / 2})
+              scale(${zoom.scale})
+              translate(${-innerW / 2}, ${-innerH / 2})
+              translate(${zoom.translateX}, ${zoom.translateY})
             `}
           >
-          {/* Grid lines */}
-          <g className="grid">
-            {/* Vertical grid lines (dates) */}
-            {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
-              <line
-                key={`vgrid-${ratio}`}
-                x1={ratio * innerChartWidth}
-                y1={0}
-                x2={ratio * innerChartWidth}
-                y2={innerChartHeight}
-                className="grid-line"
-              />
-            ))}
-
-            {/* Horizontal grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
-              <line
-                key={`hgrid-${ratio}`}
-                x1={0}
-                y1={ratio * innerChartHeight}
-                x2={innerChartWidth}
-                y2={ratio * innerChartHeight}
-                className="grid-line"
-              />
-            ))}
-          </g>
-
-          {/* Height line */}
-          {heightData.length > 0 && (
-            <g className="height-line">
-              <path
-                d={heightPath}
-                fill="none"
-                stroke="#3b82f6"
-                strokeWidth="3"
-                className="chart-line"
-              />
+            {/* Grid */}
+            <g className="grid">
+              {/* Vertical grid lines */}
+              {xRatios.map((r) => (
+                <line
+                  key={`vgrid-${r}`}
+                  x1={r * innerW}
+                  y1={0}
+                  x2={r * innerW}
+                  y2={innerH}
+                  className="grid-line"
+                />
+              ))}
+              {/* Horizontal grid lines (use 5 steps) */}
+              {[0, 0.25, 0.5, 0.75, 1].map((r) => (
+                <line
+                  key={`hgrid-${r}`}
+                  x1={0}
+                  y1={r * innerH}
+                  x2={innerW}
+                  y2={r * innerH}
+                  className="grid-line"
+                />
+              ))}
             </g>
-          )}
 
-          {/* Weight line */}
-          {weightData.length > 0 && (
-            <g className="weight-line">
-              <path
-                d={weightPath}
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="3"
-                className="chart-line"
-              />
+            {/* Height line */}
+            {heightData.length > 0 && (
+              <g className="height-line">
+                <path d={heightPath} fill="none" stroke={heightColor} strokeWidth={3} className="chart-line" />
+              </g>
+            )}
+
+            {/* Weight line */}
+            {weightData.length > 0 && (
+              <g className="weight-line">
+                <path d={weightPath} fill="none" stroke={weightColor} strokeWidth={3} className="chart-line" />
+              </g>
+            )}
+
+            {/* Data points: Height */}
+            {heightData.map((d) => {
+              const key = { id: d.id as number, kind: "Height" as const };
+              const isSelected = !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
+              const isHovered = !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
+              return (
+                <circle
+                  key={`h-${d.id}`}
+                  cx={dateToX(new Date(d.measurementDate).getTime())}
+                  cy={heightToY(d.value)}
+                  r={getPointRadius(isSelected)}
+                  fill={heightColor}
+                  stroke="white"
+                  strokeWidth={getStrokeWidth(isSelected)}
+                  className={`data-point height-point ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""}`}
+                  onClick={() => selectPoint(d, "Height")}
+                  onMouseEnter={() => hoverPoint(d, "Height")}
+                  onMouseLeave={clearHover}
+                  style={{ cursor: "pointer" }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectPoint(d, "Height");
+                    }
+                  }}
+                  onFocus={() => hoverPoint(d, "Height")}
+                  onBlur={clearHover}
+                />
+              );
+            })}
+
+            {/* Data points: Weight */}
+            {weightData.map((d) => {
+              const key = { id: d.id as number, kind: "Weight" as const };
+              const isSelected = !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
+              const isHovered = !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
+              return (
+                <circle
+                  key={`w-${d.id}`}
+                  cx={dateToX(new Date(d.measurementDate).getTime())}
+                  cy={weightToY(d.value)}
+                  r={getPointRadius(isSelected)}
+                  fill={weightColor}
+                  stroke="white"
+                  strokeWidth={getStrokeWidth(isSelected)}
+                  className={`data-point weight-point ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""}`}
+                  onClick={() => selectPoint(d, "Weight")}
+                  onMouseEnter={() => hoverPoint(d, "Weight")}
+                  onMouseLeave={clearHover}
+                  style={{ cursor: "pointer" }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectPoint(d, "Weight");
+                    }
+                  }}
+                  onFocus={() => hoverPoint(d, "Weight")}
+                  onBlur={clearHover}
+                />
+              );
+            })}
+
+            {/* Axes */}
+            <g className="axes">
+              {/* X-axis */}
+              <line x1={0} y1={innerH} x2={innerW} y2={innerH} className="axis-line" />
+              {/* Y-axis */}
+              <line x1={0} y1={0} x2={0} y2={innerH} className="axis-line" />
+
+              {/* X-axis labels (dates at fixed ratios) */}
+              {xRatios.map((ratio, i) => {
+                const t = paddedMinTs + ratio * (paddedMaxTs - paddedMinTs);
+                const date = new Date(t);
+                return (
+                  <text
+                    key={`xlab-${i}`}
+                    x={ratio * innerW}
+                    y={innerH + 20}
+                    textAnchor="middle"
+                    className="axis-label"
+                    fontSize="10"
+                  >
+                    {date.toLocaleDateString(undefined, { month: "short", year: "2-digit" })}
+                  </text>
+                );
+              })}
+
+              {/* Y-axis labels for height (left, blue) */}
+              {heightData.length > 0 &&
+                hTicks.map((v, i) => (
+                  <text
+                    key={`hlab-${i}`}
+                    x={-10}
+                    y={heightToY(v)}
+                    textAnchor="end"
+                    className="axis-label height-axis-label"
+                    fontSize="10"
+                    dy="0.35em"
+                  >
+                    {Math.round(v)}
+                  </text>
+                ))}
+
+              {/* Y-axis labels for weight (right, red) */}
+              {weightData.length > 0 &&
+                wTicks.map((v, i) => (
+                  <text
+                    key={`wlab-${i}`}
+                    x={innerW + 10}
+                    y={weightToY(v)}
+                    textAnchor="start"
+                    className="axis-label weight-axis-label"
+                    fontSize="10"
+                    dy="0.35em"
+                  >
+                    {Math.round(v)}
+                  </text>
+                ))}
             </g>
-          )}
-
-          {/* Data points for height */}
-          {heightData.map((d, i) => {
-            const isSelected = selectedPoint.id === d.id;
-            const isHovered = hoveredPoint.id === d.id;
-            return (
-              <circle
-                key={`height-${d.id}`}
-                cx={dateToX(new Date(d.measurementDate))}
-                cy={heightToY(d.value)}
-                r={getPointRadius(isSelected)}
-                fill="#3b82f6"
-                stroke="white"
-                strokeWidth={getStrokeWidth(isSelected)}
-                className={`data-point height-point ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
-                onClick={() => handleDataPointClick(d, 'Height')}
-                onMouseEnter={() => handleDataPointHover(d)}
-                onMouseLeave={handleDataPointLeave}
-                style={{ cursor: 'pointer' }}
-                tabIndex={0}
-                role="button"
-                aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleDataPointClick(d, 'Height');
-                  }
-                }}
-                onFocus={() => handleDataPointHover(d)}
-                onBlur={handleDataPointLeave}
-              />
-            );
-          })}
-
-          {/* Data points for weight */}
-          {weightData.map((d, i) => {
-            const isSelected = selectedPoint.id === d.id;
-            const isHovered = hoveredPoint.id === d.id;
-            return (
-              <circle
-                key={`weight-${d.id}`}
-                cx={dateToX(new Date(d.measurementDate))}
-                cy={weightToY(d.value)}
-                r={getPointRadius(isSelected)}
-                fill="#ef4444"
-                stroke="white"
-                strokeWidth={getStrokeWidth(isSelected)}
-                className={`data-point weight-point ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
-                onClick={() => handleDataPointClick(d, 'Weight')}
-                onMouseEnter={() => handleDataPointHover(d)}
-                onMouseLeave={handleDataPointLeave}
-                style={{ cursor: 'pointer' }}
-                tabIndex={0}
-                role="button"
-                aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleDataPointClick(d, 'Weight');
-                  }
-                }}
-                onFocus={() => handleDataPointHover(d)}
-                onBlur={handleDataPointLeave}
-              />
-            );
-          })}
-
-          {/* Axes */}
-          <g className="axes">
-            {/* X-axis */}
-            <line
-              x1={0}
-              y1={innerChartHeight}
-              x2={innerChartWidth}
-              y2={innerChartHeight}
-              className="axis-line"
-            />
-
-            {/* Y-axis */}
-            <line
-              x1={0}
-              y1={0}
-              x2={0}
-              y2={innerChartHeight}
-              className="axis-line"
-            />
-
-            {/* X-axis labels (dates) */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-              const date = new Date(paddedMinDate.getTime() + ratio * (paddedMaxDate.getTime() - paddedMinDate.getTime()));
-              return (
-                <text
-                  key={`x-label-${i}`}
-                  x={ratio * innerChartWidth}
-                  y={innerChartHeight + 20}
-                  textAnchor="middle"
-                  className="axis-label"
-                  fontSize="10"
-                >
-                  {date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
-                </text>
-              );
-            })}
-
-            {/* Y-axis labels for height (left side, blue) */}
-            {heightData.length > 0 && [0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-              const value = (heightMin - heightPadding) + ratio * ((heightMax + heightPadding) - (heightMin - heightPadding));
-              const displayValue = Math.round(value);
-              if (displayValue < heightMin || displayValue > heightMax) return null;
-
-              return (
-                <text
-                  key={`height-y-label-${i}`}
-                  x={-10}
-                  y={innerChartHeight - ratio * innerChartHeight}
-                  textAnchor="end"
-                  className="axis-label height-axis-label"
-                  fontSize="10"
-                  dy="0.35em"
-                >
-                  {displayValue}
-                </text>
-              );
-            })}
-
-            {/* Y-axis labels for weight (right side, red) */}
-            {weightData.length > 0 && [0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-              const value = (weightMin - weightPadding) + ratio * ((weightMax + weightPadding) - (weightMin - weightPadding));
-              const displayValue = Math.round(value);
-              if (displayValue < weightMin || displayValue > weightMax) return null;
-
-              return (
-                <text
-                  key={`weight-y-label-${i}`}
-                  x={innerChartWidth + 10}
-                  y={innerChartHeight - ratio * innerChartHeight}
-                  textAnchor="start"
-                  className="axis-label weight-axis-label"
-                  fontSize="10"
-                  dy="0.35em"
-                >
-                  {displayValue}
-                </text>
-              );
-            })}
-          </g>
           </g>
         </g>
 
-        {/* Legend - outside of scaling/margin groups */}
+        {/* Legend (outside clip & zoom) */}
         <g className="legend" transform={`translate(${chartWidth - margin.right + 10}, ${margin.top + 20})`}>
           {heightData.length > 0 && (
             <g className="legend-item">
-              <circle cx="0" cy="0" r="5" fill="#3b82f6" stroke="white" strokeWidth="2" />
-              <text x="15" y="0" className="legend-text" dy="0.35em">Height</text>
+              <circle cx="0" cy="0" r="5" fill={heightColor} stroke="white" strokeWidth={2} />
+              <text x="15" y="0" className="legend-text" dy="0.35em">
+                Height
+              </text>
             </g>
           )}
           {weightData.length > 0 && (
             <g className="legend-item" transform="translate(0, 25)">
-              <circle cx="0" cy="0" r="5" fill="#ef4444" stroke="white" strokeWidth="2" />
-              <text x="15" y="0" className="legend-text" dy="0.35em">Weight</text>
+              <circle cx="0" cy="0" r="5" fill={weightColor} stroke="white" strokeWidth={2} />
+              <text x="15" y="0" className="legend-text" dy="0.35em">
+                Weight
+              </text>
             </g>
           )}
         </g>
       </svg>
 
       {/* Data Point Info Panel */}
-      {selectedPoint.id !== null ? (
+      {selected.key ? (
         <div className="data-point-info">
           <div className="info-header">
-            <span className="info-type">{selectedPoint.type}</span>
-            <span className="info-date">{selectedPoint.date}</span>
+            <span className="info-type">{selected.type}</span>
+            <span className="info-date">{selected.date}</span>
           </div>
           <div className="info-value">
-            {selectedPoint.value} {selectedPoint.unit}
+            {selected.value} {selected.unit}
           </div>
         </div>
       ) : (
         <div className="data-point-info placeholder">
-          <div className="info-hint">Click on a data point to see details</div>
+          <div className="info-hint">Tap or click a data point to see details</div>
         </div>
       )}
     </div>
   );
 };
+
+// -------------------- local fns --------------------
+
+function distance(a: Touch, b: Touch) {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function touchCenter(a: Touch, b: Touch) {
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
