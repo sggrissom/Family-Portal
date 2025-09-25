@@ -500,3 +500,217 @@ block(`
   }
 }
 `);
+
+// Photo Management Styles
+block(`
+.photo-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+`);
+
+block(`
+.stat-card {
+  background: var(--admin-surface-elevated);
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  transition: transform 0.2s;
+}
+`);
+
+block(`
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+`);
+
+block(`
+.stat-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.8;
+}
+`);
+
+block(`
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--admin-accent);
+  margin-bottom: 0.25rem;
+}
+`);
+
+block(`
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+`);
+
+block(`
+.reprocess-card {
+  border-left: 4px solid var(--admin-accent);
+  background: linear-gradient(135deg, var(--admin-surface-elevated) 0%, var(--admin-surface) 100%);
+}
+`);
+
+block(`
+.reprocess-progress {
+  margin-top: 1rem;
+}
+`);
+
+block(`
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--admin-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+`);
+
+block(`
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--admin-accent), var(--admin-success));
+  transition: width 0.3s ease;
+}
+`);
+
+block(`
+.progress-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+}
+`);
+
+block(`
+.reprocess-actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+`);
+
+block(`
+.last-reprocess {
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+}
+`);
+
+block(`
+.error-card {
+  border-left: 4px solid var(--admin-danger);
+  background: rgba(220, 38, 38, 0.05);
+}
+`);
+
+block(`
+.error-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+`);
+
+block(`
+.error-list li {
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-family: monospace;
+}
+`);
+
+block(`
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+`);
+
+block(`
+.info-card {
+  background: var(--admin-surface-elevated);
+  border: 1px solid var(--admin-border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+`);
+
+block(`
+.info-card h4 {
+  margin: 0 0 1rem 0;
+  color: var(--admin-accent);
+  font-size: 1.125rem;
+}
+`);
+
+block(`
+.info-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+`);
+
+block(`
+.info-card li {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+`);
+
+block(`
+.admin-btn-primary {
+  background: var(--admin-accent);
+  color: var(--admin-text-on-accent);
+  border: 1px solid var(--admin-accent);
+}
+`);
+
+block(`
+.admin-btn-primary:hover:not(:disabled) {
+  background: var(--admin-accent-hover);
+  border-color: var(--admin-accent-hover);
+}
+`);
+
+// Additional responsive styles for photo management
+block(`
+@media (max-width: 768px) {
+  .photo-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .stat-card {
+    padding: 1rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+`);

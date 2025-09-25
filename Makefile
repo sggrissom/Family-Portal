@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy stop_service start_service copy_files test local
+.PHONY: all build deploy stop_service start_service copy_files test local typecheck
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -49,6 +49,10 @@ deploy: build stop_service copy_files start_service
 
 test:
 	go test ./backend/ -v
+
+typecheck:
+	@echo "Checking TypeScript types..."
+	npx tsc --noEmit
 
 local:
 	go run family/local

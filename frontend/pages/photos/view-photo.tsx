@@ -4,6 +4,7 @@ import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
+import { FullImage } from "../../components/ResponsiveImage";
 import "./view-photo-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -129,8 +130,8 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
 
       {/* Main photo display */}
       <div className="photo-display">
-        <img
-          src={`/api/photo/${photo.id}`}
+        <FullImage
+          photoId={photo.id}
           alt={photo.title}
           className="photo-main-image"
         />

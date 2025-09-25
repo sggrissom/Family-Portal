@@ -239,6 +239,25 @@ export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
 
+export interface GetPhotoStatsRequest {
+}
+
+export interface GetPhotoStatsResponse {
+    totalPhotos: number
+    processedPhotos: number
+    pendingPhotos: number
+}
+
+export interface ReprocessAllPhotosRequest {
+}
+
+export interface ReprocessAllPhotosResponse {
+    processed: number
+    failed: number
+    errors: string[]
+    totalTime: string
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -397,5 +416,13 @@ export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {
     return await rpc.call<ListAllUsersResponse>('ListAllUsers', JSON.stringify(data));
+}
+
+export async function GetPhotoStats(data: GetPhotoStatsRequest): Promise<rpc.Response<GetPhotoStatsResponse>> {
+    return await rpc.call<GetPhotoStatsResponse>('GetPhotoStats', JSON.stringify(data));
+}
+
+export async function ReprocessAllPhotos(data: ReprocessAllPhotosRequest): Promise<rpc.Response<ReprocessAllPhotosResponse>> {
+    return await rpc.call<ReprocessAllPhotosResponse>('ReprocessAllPhotos', JSON.stringify(data));
 }
 

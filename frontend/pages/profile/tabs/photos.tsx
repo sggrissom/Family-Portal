@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as core from "vlens/core";
 import * as server from "../../../server";
+import { ThumbnailImage } from "../../../components/ResponsiveImage";
 import "../../photos/photos-styles";
 
 interface PhotosTabProps {
@@ -42,14 +43,15 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
       <div className="photos-content">
         {hasPhotos ? (
           <div className={`photos-gallery has-photos`}>
-            {photos.map((photo) => (
+            {photos.map((photo, index) => (
               <div key={photo.id} className="photo-card">
                 <div className="photo-image-container">
-                  <img
-                    src={`/api/photo/${photo.id}/thumb`}
+                  <ThumbnailImage
+                    photoId={photo.id}
                     alt={photo.title}
                     className="photo-image"
-                    loading="lazy"
+                    loading={index < 6 ? "eager" : "lazy"}
+                    fetchpriority={index < 3 ? "high" : "auto"}
                     onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
                   />
                   {person.profilePhotoId === photo.id && (

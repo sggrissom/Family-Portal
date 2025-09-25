@@ -54,6 +54,7 @@ async function main() {
     vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
     vlens.routeHandler("/import", () => import("@app/pages/settings/import")),
     vlens.routeHandler("/admin/users", () => import("@app/pages/admin/users")),
+    vlens.routeHandler("/admin/photos", () => import("@app/pages/admin/photos")),
     vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
     vlens.routeHandler("/", () => import("@app/pages/home/home")),
   ]);

@@ -5,6 +5,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ProfileImage } from "../../components/ResponsiveImage";
 import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -72,8 +73,8 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               <div className="people-group">
                 <h3>Parents</h3>
                 <div className="people-list">
-                  {parents.map(person => (
-                    <PersonCard key={person.id} person={person} />
+                  {parents.map((person, index) => (
+                    <PersonCard key={person.id} person={person} index={index} />
                   ))}
                 </div>
               </div>
@@ -83,8 +84,8 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               <div className="people-group">
                 <h3>Children</h3>
                 <div className="people-list">
-                  {children.map(person => (
-                    <PersonCard key={person.id} person={person} />
+                  {children.map((person, index) => (
+                    <PersonCard key={person.id} person={person} index={index + parents.length} />
                   ))}
                 </div>
               </div>
@@ -136,9 +137,10 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
 
 interface PersonCardProps {
   person: server.Person;
+  index?: number;
 }
 
-const PersonCard = ({ person }: PersonCardProps) => {
+const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
   const getGenderIcon = (gender: number) => {
     switch (gender) {
       case 0: return "👨"; // Male
@@ -155,10 +157,12 @@ const PersonCard = ({ person }: PersonCardProps) => {
     <a href={`/profile/${person.id}`} className="person-card clickable">
       <div className="person-avatar">
         {person.profilePhotoId ? (
-          <img
-            src={`/api/photo/${person.profilePhotoId}/thumb`}
+          <ProfileImage
+            photoId={person.profilePhotoId}
             alt={`${person.name}'s profile photo`}
             className="person-photo"
+            loading={index < 3 ? "eager" : "lazy"}
+            fetchpriority={index < 3 ? "high" : "auto"}
           />
         ) : (
           <span className="person-icon">{getGenderIcon(person.gender)}</span>

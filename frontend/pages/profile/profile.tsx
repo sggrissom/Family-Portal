@@ -8,6 +8,7 @@ import { Header, Footer } from "../../layout";
 import { TimelineTab } from "./tabs/timeline";
 import { GrowthTab } from "./tabs/growth";
 import { PhotosTab } from "./tabs/photos";
+import { ProfileImage } from "../../components/ResponsiveImage";
 import "./profile-styles";
 
 type ProfileState = {
@@ -111,10 +112,12 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
         <div className="profile-header-main">
           <div className="profile-avatar">
             {person.profilePhotoId ? (
-              <img
-                src={`/api/photo/${person.profilePhotoId}/thumb`}
+              <ProfileImage
+                photoId={person.profilePhotoId}
                 alt={`${person.name}'s profile photo`}
                 className="profile-photo"
+                loading="eager"
+                fetchpriority="high"
               />
             ) : (
               <span className="profile-icon">{getGenderIcon(person.gender)}</span>

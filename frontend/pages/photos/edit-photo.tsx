@@ -4,6 +4,7 @@ import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
+import { ThumbnailImage } from "../../components/ResponsiveImage";
 import "./edit-photo-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -183,8 +184,8 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
 
         {/* Photo preview */}
         <div className="photo-preview">
-          <img
-            src={`/api/photo/${photo.id}/thumb`}
+          <ThumbnailImage
+            photoId={photo.id}
             alt={photo.title}
             className="preview-image"
           />

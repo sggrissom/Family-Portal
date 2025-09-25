@@ -436,48 +436,58 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Save all image variants to disk
 		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
-		extension := filepath.Ext(uniqueFilename)
 
-		// Save large/main image
-		filePath := filepath.Join(photosDir, uniqueFilename)
-		if largeData, ok := processedImages["large"]; ok {
-			dst, err := os.Create(filePath)
-			if err != nil {
-				return
+		// Save each size and format variant
+		for key, data := range processedImages {
+			// Extract size and format from key (e.g., "thumb_webp" -> "thumb", "webp")
+			parts := strings.Split(key, "_")
+			if len(parts) != 2 {
+				continue
 			}
-			defer dst.Close()
-			_, err = dst.Write(largeData)
-			if err != nil {
-				return
-			}
-		}
+			sizeName, format := parts[0], parts[1]
 
-		// Save medium image
-		if mediumData, ok := processedImages["medium"]; ok {
-			mediumPath := filepath.Join(photosDir, baseFilename+"_medium"+extension)
-			mediumFile, err := os.Create(mediumPath)
-			if err == nil {
-				mediumFile.Write(mediumData)
-				mediumFile.Close()
+			// Determine file extension
+			var ext string
+			switch format {
+			case "webp":
+				ext = ".webp"
+			case "avif":
+				ext = ".avif"
+			case "png":
+				ext = ".png"
+			default:
+				ext = ".jpg"
 			}
-		}
 
-		// Save thumbnail
-		if thumbData, ok := processedImages["thumb"]; ok {
-			thumbnailPath := filepath.Join(photosDir, baseFilename+"_thumb"+extension)
-			thumbFile, err := os.Create(thumbnailPath)
-			if err == nil {
-				thumbFile.Write(thumbData)
-				thumbFile.Close()
+			// Construct filename
+			var fileName string
+			if sizeName == "large" {
+				fileName = baseFilename + ext // Main image without size suffix
+			} else {
+				fileName = baseFilename + "_" + sizeName + ext
+			}
+
+			// Write file
+			filePath := filepath.Join(photosDir, fileName)
+			if file, err := os.Create(filePath); err == nil {
+				file.Write(data)
+				file.Close()
 			}
 		}
 
 		// Save original for backup (optional)
-		originalPath := filepath.Join(photosDir, baseFilename+"_original"+extension)
-		origFile, err := os.Create(originalPath)
-		if err == nil {
+		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
+		if origFile, err := os.Create(originalPath); err == nil {
 			origFile.Write(fileData)
 			origFile.Close()
+		}
+
+		// Calculate file size from the primary large variant (prefer JPEG for compatibility)
+		primarySize := len(fileData) // fallback to original size
+		if largeJpeg, ok := processedImages["large_jpeg"]; ok {
+			primarySize = len(largeJpeg)
+		} else if largeWebp, ok := processedImages["large_webp"]; ok {
+			primarySize = len(largeWebp)
 		}
 
 		// Create image record
@@ -488,7 +498,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		OwnerUserId:      user.Id,
 		OriginalFilename: fileHeader.Filename,
 		MimeType:         mimeType,
-		FileSize:         len(processedImages["large"]),
+		FileSize:         primarySize,
 		Width:            width,
 		Height:           height,
 		FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
@@ -594,28 +604,63 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construct full file path based on size variant
+	// Determine optimal format based on browser support
+	acceptHeader := r.Header.Get("Accept")
+	optimalFormat := GetOptimalImageFormat(acceptHeader)
+
+	// Validate size variant
+	validSizes := map[string]bool{
+		"small": true, "thumb": true, "medium": true,
+		"large": true, "xlarge": true, "xxlarge": true, "original": true,
+	}
+
+	if sizeVariant != "" && !validSizes[sizeVariant] {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// Default to large if no size specified
+	if sizeVariant == "" {
+		sizeVariant = "large"
+	}
+
+	// Construct file path based on size and optimal format
 	basePath := filepath.Join(cfg.StaticDir, image.FilePath)
-	fullPath := basePath
+	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
-	// Handle size variants
-	if sizeVariant != "" {
-		ext := filepath.Ext(basePath)
-		base := strings.TrimSuffix(basePath, ext)
+	var fullPath string
+	var contentType string
 
-		switch sizeVariant {
-		case "thumb":
-			fullPath = base + "_thumb" + ext
-		case "medium":
-			fullPath = base + "_medium" + ext
-		case "original":
-			fullPath = base + "_original" + ext
-		case "large":
-			// large is the default main image
-			fullPath = basePath
-		default:
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
+	// Handle original size (serve as-is)
+	if sizeVariant == "original" {
+		fullPath = baseFilename + "_original" + filepath.Ext(basePath)
+		contentType = image.MimeType
+	} else {
+		// Try to find the best format variant
+		for _, format := range []string{optimalFormat, "webp", "jpeg"} {
+			var ext string
+			switch format {
+			case "webp":
+				ext = ".webp"
+				contentType = "image/webp"
+			case "avif":
+				ext = ".avif"
+				contentType = "image/avif"
+			default:
+				ext = ".jpg"
+				contentType = "image/jpeg"
+			}
+
+			if sizeVariant == "large" {
+				fullPath = baseFilename + ext
+			} else {
+				fullPath = baseFilename + "_" + sizeVariant + ext
+			}
+
+			// Check if this variant exists
+			if _, err := os.Stat(fullPath); err == nil {
+				break
+			}
 		}
 	}
 
@@ -627,14 +672,24 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if file exists, fall back to main image if variant doesn't exist
+	// Check if file exists, fall back to JPEG large if variant doesn't exist
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		if sizeVariant != "" {
-			// Fall back to main image
-			fullPath = basePath
-			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-				http.Error(w, "Not found", http.StatusNotFound)
-				return
+		if sizeVariant != "original" {
+			// Fall back to JPEG large image
+			fallbackPath := baseFilename + ".jpg"
+			if _, err := os.Stat(fallbackPath); err == nil {
+				fullPath = fallbackPath
+				contentType = "image/jpeg"
+			} else {
+				// Ultimate fallback to original file
+				originalPath := baseFilename + "_original" + filepath.Ext(basePath)
+				if _, err := os.Stat(originalPath); err == nil {
+					fullPath = originalPath
+					contentType = image.MimeType
+				} else {
+					http.Error(w, "Not found", http.StatusNotFound)
+					return
+				}
 			}
 		} else {
 			http.Error(w, "Not found", http.StatusNotFound)
@@ -642,12 +697,15 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set content type based on stored mime type
-	w.Header().Set("Content-Type", image.MimeType)
+	// Set content type based on determined optimal format
+	w.Header().Set("Content-Type", contentType)
 
-	// Set cache headers for browser caching (24 hours)
-	w.Header().Set("Cache-Control", "private, max-age=86400")
-	w.Header().Set("ETag", fmt.Sprintf("\"%d-%d\"", image.Id, image.CreatedAt.Unix()))
+	// Enhanced cache headers for better performance (1 year for images with versioning)
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix()))
+
+	// Add Vary header for content negotiation
+	w.Header().Set("Vary", "Accept")
 
 	// Serve the file
 	http.ServeFile(w, r, fullPath)
@@ -783,16 +841,30 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 // Helper function to delete all photo file variants
 func deletePhotoFiles(photo Image) error {
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	ext := filepath.Ext(basePath)
-	base := strings.TrimSuffix(basePath, ext)
+	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
-	// List of all file variants to delete
-	filesToDelete := []string{
-		basePath,                    // Main image
-		base + "_thumb" + ext,       // Thumbnail
-		base + "_medium" + ext,      // Medium size
-		base + "_original" + ext,    // Original backup
+	// All size variants
+	sizes := []string{"small", "thumb", "medium", "large", "xlarge", "xxlarge"}
+	// All formats
+	formats := []string{"jpg", "webp", "avif", "png"}
+
+	var filesToDelete []string
+
+	// Add all size/format combinations
+	for _, size := range sizes {
+		for _, format := range formats {
+			var fileName string
+			if size == "large" {
+				fileName = base + "." + format
+			} else {
+				fileName = base + "_" + size + "." + format
+			}
+			filesToDelete = append(filesToDelete, fileName)
+		}
 	}
+
+	// Add original backup file
+	filesToDelete = append(filesToDelete, base+"_original"+filepath.Ext(basePath))
 
 	var lastError error
 	for _, filePath := range filesToDelete {

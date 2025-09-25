@@ -92,6 +92,19 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
         </a>
 
+        <a href="/admin/photos" className="admin-card admin-card-link">
+          <div className="card-header">
+            <div className="card-icon">🖼️</div>
+            <h3>Photo Management</h3>
+          </div>
+          <div className="card-content">
+            <p>Reprocess photos with modern formats and optimized sizes.</p>
+            <div className="card-action">
+              Manage Photos →
+            </div>
+          </div>
+        </a>
+
         <div className="admin-card">
           <div className="card-header">
             <div className="card-icon">🛠️</div>
