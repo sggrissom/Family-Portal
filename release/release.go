@@ -9,6 +9,7 @@ import (
 	"os"
 
 	family "family"
+	"family/backend"
 	"family/cfg"
 )
 
@@ -27,12 +28,16 @@ func main() {
 		log.Fatalf("failed to sub‐fs: %v", err)
 	}
 
+	// Create the application with frontend assets
 	app := family.MakeApplication()
 	app.Frontend = distFS
 	app.StaticData = os.DirFS(cfg.StaticDir)
 
+	// Wrap with security headers
+	secureApp := backend.NewSecurityWrapper(app)
+
 	addr := fmt.Sprintf(":%d", Port)
 	log.Printf("listening on %s\n", addr)
-	var appServer = &http.Server{Addr: addr, Handler: app}
+	var appServer = &http.Server{Addr: addr, Handler: secureApp}
 	appServer.ListenAndServe()
 }

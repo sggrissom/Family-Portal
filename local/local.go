@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	family "family"
+	"family/backend"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbeam/esbuilder"
@@ -26,8 +27,11 @@ func StartLocalServer() {
 	app.StaticData = os.DirFS(cfg.StaticDir)
 	vbeam.GenerateTSBindings(app, "frontend/server.ts")
 
+	// Wrap with security headers
+	secureApp := backend.NewSecurityWrapper(app)
+
 	var addr = fmt.Sprintf(":%d", Port)
-	var appServer = &http.Server{Addr: addr, Handler: app}
+	var appServer = &http.Server{Addr: addr, Handler: secureApp}
 	appServer.ListenAndServe()
 }
 
@@ -38,6 +42,7 @@ var FEOpts = esbuilder.FEBuildOptions{
 	},
 	EntryHTML: []string{"index.html"},
 	CopyItems: []string{
+		"images",
 	},
 	Outdir: FEDist,
 	Define: map[string]string{

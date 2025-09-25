@@ -4,6 +4,7 @@ import (
 	"family/backend"
 	"family/cfg"
 	"log"
+	"net/http"
 
 	"github.com/joho/godotenv"
 	"go.hasen.dev/vbeam"
@@ -36,7 +37,13 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterImportMethods(app)
 	backend.RegisterAdminMethods(app)
+	backend.RegisterSEOHandlers(app)
 
 	return app
+}
+
+func MakeSecureApplication() http.Handler {
+	app := MakeApplication()
+	return backend.NewSecurityWrapper(app)
 }
 
