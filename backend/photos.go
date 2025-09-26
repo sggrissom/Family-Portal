@@ -23,7 +23,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/rwcarlsen/goexif/exif"
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -31,8 +30,8 @@ import (
 )
 
 func RegisterPhotoMethods(app *vbeam.Application) {
-	app.HandleFunc("/api/upload-photo", uploadPhotoHandler)
-	app.HandleFunc("/api/photo/", servePhotoHandler)
+	app.HandleFunc("/api/upload-photo", AuthMiddleware(uploadPhotoHandler))
+	app.HandleFunc("/api/photo/", AuthMiddleware(servePhotoHandler))
 	vbeam.RegisterProc(app, GetPhoto)
 	vbeam.RegisterProc(app, UpdatePhoto)
 	vbeam.RegisterProc(app, DeletePhoto)
@@ -277,57 +276,36 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse multipart form (32MB max to account for larger images)
-	err := r.ParseMultipartForm(32 << 20) // 32MB
+	// Validate file size limit (50MB max)
+	const maxFileSize = 50 << 20 // 50MB
+	if r.ContentLength > maxFileSize {
+		RespondFileTooLargeError(w, r, "50MB")
+		return
+	}
+
+	err := r.ParseMultipartForm(32 << 20) // 32MB in memory, rest on disk
 	if err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		RespondValidationError(w, r, "Failed to parse form", err.Error())
 		return
 	}
 
-	// Get auth token from cookie
-	cookie, err := r.Cookie("authToken")
-	if err != nil || cookie.Value == "" {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
-		return
-	}
-
-	// Parse JWT token and get user
-	var user User
-	token, err := jwt.ParseWithClaims(cookie.Value, &Claims{}, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return jwtKey, nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
-		return
-	}
-
-	// Get user from database
-	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-		if claims, ok := token.Claims.(*Claims); ok {
-			userId := GetUserId(tx, claims.Username)
-			if userId != 0 {
-				user = GetUser(tx, userId)
-			}
-		}
-	})
-
-	if user.Id == 0 {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
+	// Get authenticated user from request context
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		RespondAuthError(w, r, "Authentication required")
 		return
 	}
 
 	// Parse form data
 	personIdStr := r.FormValue("personId")
 	if personIdStr == "" {
-		http.Error(w, "Person ID is required", http.StatusBadRequest)
+		RespondValidationError(w, r, "Person ID is required")
 		return
 	}
 
 	personId, err := strconv.Atoi(personIdStr)
 	if err != nil {
-		http.Error(w, "Invalid person ID", http.StatusBadRequest)
+		RespondValidationError(w, r, "Invalid person ID", err.Error())
 		return
 	}
 
@@ -352,28 +330,28 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the uploaded file
 	file, fileHeader, err := r.FormFile("photo")
 	if err != nil {
-		http.Error(w, "Photo file is required", http.StatusBadRequest)
+		RespondValidationError(w, r, "Photo file is required", err.Error())
 		return
 	}
 	defer file.Close()
 
 	// Validate file size (32MB max for original upload)
 	if fileHeader.Size > 32<<20 { // 32MB
-		http.Error(w, "File size too large. Maximum 32MB allowed", http.StatusBadRequest)
+		RespondFileTooLargeError(w, r, "32MB")
 		return
 	}
 
 	// Validate file type
 	mimeType := fileHeader.Header.Get("Content-Type")
 	if !isValidImageType(mimeType) {
-		http.Error(w, "Invalid file type. Only JPEG, PNG, and GIF images are allowed", http.StatusBadRequest)
+		RespondInvalidFileTypeError(w, r, "JPEG, PNG, GIF")
 		return
 	}
 
 	// Get image dimensions
 	width, height, err := getImageDimensions(file)
 	if err != nil {
-		http.Error(w, "Failed to read image dimensions", http.StatusBadRequest)
+		RespondValidationError(w, r, "Failed to read image dimensions", err.Error())
 		return
 	}
 
@@ -528,38 +506,10 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		sizeVariant = pathParts[1]
 	}
 
-	// Get auth token from cookie
-	cookie, err := r.Cookie("authToken")
-	if err != nil || cookie.Value == "" {
-		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
-		return
-	}
-
-	// Parse JWT token and get user
-	var user User
-	token, err := jwt.ParseWithClaims(cookie.Value, &Claims{}, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return jwtKey, nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
-		return
-	}
-
-	// Get user from database
-	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-		if claims, ok := token.Claims.(*Claims); ok {
-			userId := GetUserId(tx, claims.Username)
-			if userId != 0 {
-				user = GetUser(tx, userId)
-			}
-		}
-	})
-
-	if user.Id == 0 {
-		http.Error(w, "Not found", http.StatusNotFound) // Return 404 to avoid leaking photo existence
+	// Get authenticated user from request context
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		RespondNotFoundError(w, r, "Not found") // Return 404 to avoid leaking photo existence
 		return
 	}
 

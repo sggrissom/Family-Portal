@@ -31,6 +31,11 @@ func SetupAuth(app *vbeam.Application) {
 	// Get JWT secret from environment, generate one if not set
 	jwtSecret := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecret == "" {
+		// Check if this is production (could be detected by other env vars)
+		if os.Getenv("ENVIRONMENT") == "production" || os.Getenv("PROD") == "true" {
+			log.Fatal("JWT_SECRET_KEY must be set in production environment")
+		}
+
 		token, err := generateToken(32)
 		if err != nil {
 			log.Fatal("error generating JWT secret")
@@ -38,6 +43,12 @@ func SetupAuth(app *vbeam.Application) {
 		jwtSecret = token
 		log.Println("Generated JWT secret. Set JWT_SECRET_KEY environment variable for production.")
 	}
+
+	// Validate JWT secret strength
+	if len(jwtSecret) < 16 {
+		log.Fatal("JWT secret must be at least 16 characters long")
+	}
+
 	jwtKey = []byte(jwtSecret)
 
 	// Register essential auth API endpoints
