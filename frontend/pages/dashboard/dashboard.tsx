@@ -6,6 +6,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ProfileImage } from "../../components/ResponsiveImage";
+import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -141,6 +142,7 @@ interface PersonCardProps {
 }
 
 const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
+  const photoStatus = usePhotoStatus();
   const getGenderIcon = (gender: number) => {
     switch (gender) {
       case 0: return "👨"; // Male
@@ -163,6 +165,7 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
             className="person-photo"
             loading={index < 3 ? "eager" : "lazy"}
             fetchpriority={index < 3 ? "high" : "auto"}
+            status={photoStatus.getStatus(person.profilePhotoId)}
           />
         ) : (
           <span className="person-icon">{getGenderIcon(person.gender)}</span>

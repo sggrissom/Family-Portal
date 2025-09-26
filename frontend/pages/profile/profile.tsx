@@ -9,6 +9,7 @@ import { TimelineTab } from "./tabs/timeline";
 import { GrowthTab } from "./tabs/growth";
 import { PhotosTab } from "./tabs/photos";
 import { ProfileImage } from "../../components/ResponsiveImage";
+import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./profile-styles";
 
 type ProfileState = {
@@ -91,6 +92,7 @@ function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos'
 
 const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProps) => {
   const state = useProfileState();
+  const photoStatus = usePhotoStatus();
 
   const getGenderIcon = (gender: number) => {
     switch (gender) {
@@ -118,6 +120,7 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
                 className="profile-photo"
                 loading="eager"
                 fetchpriority="high"
+                status={photoStatus.getStatus(person.profilePhotoId)}
               />
             ) : (
               <span className="profile-icon">{getGenderIcon(person.gender)}</span>

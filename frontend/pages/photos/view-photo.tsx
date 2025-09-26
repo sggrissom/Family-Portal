@@ -5,6 +5,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { FullImage } from "../../components/ResponsiveImage";
+import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -118,6 +119,7 @@ async function handleSetProfilePhoto(photo: server.Image) {
 }
 
 const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
+  const photoStatus = usePhotoStatus();
   const isProfilePhoto = person.profilePhotoId === photo.id;
   return (
     <div className="view-photo-page">
@@ -134,6 +136,7 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
           photoId={photo.id}
           alt={photo.title}
           className="photo-main-image"
+          status={photoStatus.getStatus(photo.id)}
         />
       </div>
 

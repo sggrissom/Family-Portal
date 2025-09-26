@@ -1,4 +1,5 @@
 import * as preact from "preact";
+import "./responsive-image-styles";
 
 interface ResponsiveImageProps {
   photoId: number;
@@ -10,6 +11,7 @@ interface ResponsiveImageProps {
   onClick?: () => void;
   width?: number;
   height?: number;
+  status?: number; // 0 = active, 1 = processing, 2 = failed
 }
 
 export const ResponsiveImage = ({
@@ -22,6 +24,7 @@ export const ResponsiveImage = ({
   onClick,
   width,
   height,
+  status = 0,
 }: ResponsiveImageProps) => {
   // Define responsive breakpoints and corresponding image sizes
   const imageSizes = [
@@ -41,7 +44,11 @@ export const ResponsiveImage = ({
   // Default src (fallback)
   const src = `/api/photo/${photoId}/medium`;
 
-  return (
+  // Add processing wrapper class if needed
+  const wrapperClass = status === 1 ? "processing-image-wrapper" : undefined;
+  const imageClass = status === 1 ? `${className || ""} processing-image`.trim() : className;
+
+  const imageElement = (
     <picture>
       {/* Modern formats with srcset */}
       <source
@@ -59,7 +66,7 @@ export const ResponsiveImage = ({
       <img
         src={src}
         alt={alt}
-        className={className}
+        className={imageClass}
         loading={loading}
         fetchpriority={fetchpriority}
         onClick={onClick}
@@ -70,6 +77,21 @@ export const ResponsiveImage = ({
       />
     </picture>
   );
+
+  // Wrap with processing indicator if needed
+  if (status === 1) {
+    return (
+      <div className={wrapperClass}>
+        {imageElement}
+        <div className="processing-overlay">
+          <div className="processing-spinner"></div>
+          <div className="processing-text">Processing...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return imageElement;
 };
 
 interface ThumbnailImageProps {
@@ -79,6 +101,7 @@ interface ThumbnailImageProps {
   loading?: "lazy" | "eager";
   fetchpriority?: "high" | "low" | "auto";
   onClick?: () => void;
+  status?: number;
 }
 
 export const ThumbnailImage = ({
@@ -88,6 +111,7 @@ export const ThumbnailImage = ({
   loading = "lazy",
   fetchpriority = "auto",
   onClick,
+  status,
 }: ThumbnailImageProps) => {
   return (
     <ResponsiveImage
@@ -97,6 +121,7 @@ export const ThumbnailImage = ({
       loading={loading}
       fetchpriority={fetchpriority}
       onClick={onClick}
+      status={status}
       sizes="(max-width: 480px) 150px, (max-width: 768px) 200px, 300px"
       width={300}
       height={300}
@@ -110,6 +135,7 @@ interface ProfileImageProps {
   className?: string;
   loading?: "lazy" | "eager";
   fetchpriority?: "high" | "low" | "auto";
+  status?: number;
 }
 
 export const ProfileImage = ({
@@ -118,6 +144,7 @@ export const ProfileImage = ({
   className,
   loading = "lazy",
   fetchpriority = "auto",
+  status,
 }: ProfileImageProps) => {
   return (
     <ResponsiveImage
@@ -126,6 +153,7 @@ export const ProfileImage = ({
       className={className}
       loading={loading}
       fetchpriority={fetchpriority}
+      status={status}
       sizes="(max-width: 480px) 80px, (max-width: 768px) 120px, 150px"
       width={150}
       height={150}
@@ -139,6 +167,7 @@ interface FullImageProps {
   className?: string;
   loading?: "lazy" | "eager";
   fetchpriority?: "high" | "low" | "auto";
+  status?: number;
 }
 
 export const FullImage = ({
@@ -147,6 +176,7 @@ export const FullImage = ({
   className,
   loading = "eager",
   fetchpriority = "high", // Default to high priority for full images
+  status,
 }: FullImageProps) => {
   return (
     <ResponsiveImage
@@ -155,6 +185,7 @@ export const FullImage = ({
       className={className}
       loading={loading}
       fetchpriority={fetchpriority}
+      status={status}
       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
     />
   );

@@ -6,6 +6,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./add-photo-styles";
 
 type AddPhotoForm = {
@@ -160,6 +161,12 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     }
 
     const responseData = await response.json();
+
+    // Start monitoring the uploaded photo for processing status
+    if (responseData.image && responseData.image.status === 1) {
+      const photoStatus = usePhotoStatus();
+      photoStatus.startMonitoring(responseData.image.id, responseData.image.status);
+    }
 
     // Redirect to profile page on success
     core.setRoute(`/profile/${form.selectedPersonId}`);

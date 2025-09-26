@@ -39,6 +39,9 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterAdminMethods(app)
 	backend.RegisterSEOHandlers(app)
 
+	// Initialize background photo processing worker
+	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
+
 	return app
 }
 

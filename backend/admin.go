@@ -17,6 +17,7 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListAllUsers)
 	vbeam.RegisterProc(app, GetPhotoStats)
 	vbeam.RegisterProc(app, ReprocessAllPhotos)
+	vbeam.RegisterProc(app, GetPhotoProcessingStats)
 }
 
 type AdminUserInfo struct {
@@ -99,6 +100,8 @@ type ReprocessAllPhotosResponse struct {
 	Errors       []string `json:"errors"`
 	TotalTime    string   `json:"totalTime"`
 }
+
+
 
 // Get photo statistics for admin dashboard
 func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoStatsResponse, err error) {
@@ -309,3 +312,24 @@ func cleanupOldVariants(baseFilename string) {
 		os.Remove(variant) // Ignore errors - files may not exist
 	}
 }
+
+// GetPhotoProcessingStats returns statistics about photo processing queue
+func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStats, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Check if user is admin (ID == 1)
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+
+	// Get processing statistics from photo worker
+	resp = GetProcessingStats()
+	return
+}
+

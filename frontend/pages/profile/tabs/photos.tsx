@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as core from "vlens/core";
 import * as server from "../../../server";
 import { ThumbnailImage } from "../../../components/ResponsiveImage";
+import { usePhotoStatus, Status } from "../../../hooks/usePhotoStatus";
 import "../../photos/photos-styles";
 
 interface PhotosTabProps {
@@ -21,6 +22,20 @@ const formatPhotoDate = (dateString: string) => {
 
 export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
   const hasPhotos = photos && photos.length > 0;
+  const photoStatus = usePhotoStatus();
+
+  // Initialize monitoring for processing photos (only when we first discover them)
+  if (hasPhotos) {
+    photos.forEach(photo => {
+      const currentStatus = photoStatus.getStatus(photo.id);
+
+      // Only start monitoring if we haven't seen this photo before (Unknown status)
+      // AND the server says it's processing
+      if (currentStatus === Status.Unknown && photo.status === 1 && !photoStatus.isMonitoring(photo.id)) {
+        photoStatus.startMonitoring(photo.id, photo.status);
+      }
+    });
+  }
 
   return (
     <div className="photos-tab">
@@ -53,6 +68,7 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
                     loading={index < 6 ? "eager" : "lazy"}
                     fetchpriority={index < 3 ? "high" : "auto"}
                     onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                    status={photoStatus.getStatus(photo.id)}
                   />
                   {person.profilePhotoId === photo.id && (
                     <div className="profile-photo-badge">

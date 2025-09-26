@@ -219,6 +219,14 @@ export interface DeletePhotoResponse {
     success: boolean
 }
 
+export interface GetPhotoStatusRequest {
+    id: number
+}
+
+export interface GetPhotoStatusResponse {
+    status: number
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -256,6 +264,11 @@ export interface ReprocessAllPhotosResponse {
     failed: number
     errors: string[]
     totalTime: string
+}
+
+export interface ProcessingStats {
+    queueLength: number
+    isRunning: boolean
 }
 
 export interface Person {
@@ -410,6 +423,10 @@ export async function DeletePhoto(data: DeletePhotoRequest): Promise<rpc.Respons
     return await rpc.call<DeletePhotoResponse>('DeletePhoto', JSON.stringify(data));
 }
 
+export async function GetPhotoStatus(data: GetPhotoStatusRequest): Promise<rpc.Response<GetPhotoStatusResponse>> {
+    return await rpc.call<GetPhotoStatusResponse>('GetPhotoStatus', JSON.stringify(data));
+}
+
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
     return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
 }
@@ -424,5 +441,9 @@ export async function GetPhotoStats(data: GetPhotoStatsRequest): Promise<rpc.Res
 
 export async function ReprocessAllPhotos(data: ReprocessAllPhotosRequest): Promise<rpc.Response<ReprocessAllPhotosResponse>> {
     return await rpc.call<ReprocessAllPhotosResponse>('ReprocessAllPhotos', JSON.stringify(data));
+}
+
+export async function GetPhotoProcessingStats(data: Empty): Promise<rpc.Response<ProcessingStats>> {
+    return await rpc.call<ProcessingStats>('GetPhotoProcessingStats', JSON.stringify(data));
 }
 

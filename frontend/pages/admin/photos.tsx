@@ -13,6 +13,7 @@ type PhotoManagementState = {
   reprocessTotal: number;
   reprocessErrors: string[];
   lastReprocessTime: string | null;
+  processingStats: server.ProcessingStats | null;
 };
 
 const usePhotoManagementState = vlens.declareHook((): PhotoManagementState => ({
@@ -21,6 +22,7 @@ const usePhotoManagementState = vlens.declareHook((): PhotoManagementState => ({
   reprocessTotal: 0,
   reprocessErrors: [],
   lastReprocessTime: null,
+  processingStats: null,
 }));
 
 export async function fetch(route: string, prefix: string) {
@@ -79,6 +81,26 @@ interface PhotoManagementPageProps {
 
 const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
   const state = usePhotoManagementState();
+
+
+  const loadProcessingStats = async () => {
+    try {
+      const [result, error] = await server.GetPhotoProcessingStats({});
+      if (result && !error) {
+        state.processingStats = result;
+        vlens.scheduleRedraw();
+      }
+    } catch (err) {
+      console.warn("Failed to load processing stats:", err);
+    }
+  };
+
+
+  // Load stats initially and set up periodic refresh
+  if (!state.processingStats) {
+    loadProcessingStats();
+    setInterval(loadProcessingStats, 3000); // Poll every 3 seconds
+  }
 
   const startReprocessing = async () => {
     const confirmed = confirm(
@@ -165,6 +187,21 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
             <div className="stat-label">Optimization complete</div>
           </div>
         </div>
+
+        {state.processingStats && (
+          <div className="stat-card">
+            <div className="stat-icon">
+              {state.processingStats.isRunning ? '🔄' : '⏸️'}
+            </div>
+            <div className="stat-content">
+              <h3>Processing Queue</h3>
+              <div className="stat-value">{state.processingStats.queueLength}</div>
+              <div className="stat-label">
+                {state.processingStats.isRunning ? 'Photos in queue' : 'Worker stopped'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {needsReprocessing && (
@@ -229,6 +266,7 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
         </div>
       )}
+
 
       <div className="admin-section">
         <h2>Photo Processing Information</h2>

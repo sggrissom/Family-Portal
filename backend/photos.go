@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -35,6 +36,7 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetPhoto)
 	vbeam.RegisterProc(app, UpdatePhoto)
 	vbeam.RegisterProc(app, DeletePhoto)
+	vbeam.RegisterProc(app, GetPhotoStatus)
 }
 
 // Request/Response types
@@ -81,6 +83,14 @@ type DeletePhotoRequest struct {
 
 type DeletePhotoResponse struct {
 	Success bool `json:"success"`
+}
+
+type GetPhotoStatusRequest struct {
+	Id int `json:"id"`
+}
+
+type GetPhotoStatusResponse struct {
+	Status int `json:"status"` // 0 = active, 1 = processing, 2 = failed
 }
 
 // Database types
@@ -415,79 +425,15 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			title = generateDefaultTitle(fileHeader.Filename, calculatedPhotoDate)
 		}
 
-		// Process image and create multiple sizes
-		processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(fileData, mimeType)
-		if err != nil {
-			// Fall back to saving original if processing fails
-			processedImages = map[string][]byte{
-				"large": fileData,
-			}
-			processedWidth = width
-			processedHeight = height
-		}
-
-		// Update dimensions with processed values
-		if processedWidth > 0 {
-			width = processedWidth
-		}
-		if processedHeight > 0 {
-			height = processedHeight
-		}
-
-		// Save all image variants to disk
+		// Save original file for background processing
 		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
-
-		// Save each size and format variant
-		for key, data := range processedImages {
-			// Extract size and format from key (e.g., "thumb_webp" -> "thumb", "webp")
-			parts := strings.Split(key, "_")
-			if len(parts) != 2 {
-				continue
-			}
-			sizeName, format := parts[0], parts[1]
-
-			// Determine file extension
-			var ext string
-			switch format {
-			case "webp":
-				ext = ".webp"
-			case "avif":
-				ext = ".avif"
-			case "png":
-				ext = ".png"
-			default:
-				ext = ".jpg"
-			}
-
-			// Construct filename
-			var fileName string
-			if sizeName == "large" {
-				fileName = baseFilename + ext // Main image without size suffix
-			} else {
-				fileName = baseFilename + "_" + sizeName + ext
-			}
-
-			// Write file
-			filePath := filepath.Join(photosDir, fileName)
-			if file, err := os.Create(filePath); err == nil {
-				file.Write(data)
-				file.Close()
-			}
-		}
-
-		// Save original for backup (optional)
 		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
-		if origFile, err := os.Create(originalPath); err == nil {
+		if origFile, err := os.Create(originalPath); err != nil {
+			// Don't commit transaction if file save fails
+			return
+		} else {
 			origFile.Write(fileData)
 			origFile.Close()
-		}
-
-		// Calculate file size from the primary large variant (prefer JPEG for compatibility)
-		primarySize := len(fileData) // fallback to original size
-		if largeJpeg, ok := processedImages["large_jpeg"]; ok {
-			primarySize = len(largeJpeg)
-		} else if largeWebp, ok := processedImages["large_webp"]; ok {
-			primarySize = len(largeWebp)
 		}
 
 		// Create image record
@@ -498,7 +444,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		OwnerUserId:      user.Id,
 		OriginalFilename: fileHeader.Filename,
 		MimeType:         mimeType,
-		FileSize:         primarySize,
+		FileSize:         int(fileHeader.Size), // Original file size for now
 		Width:            width,
 		Height:           height,
 		FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
@@ -506,7 +452,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		Description:      description,
 		PhotoDate:        calculatedPhotoDate,
 		CreatedAt:        time.Now(),
-		Status:           0, // Active
+		Status:           1, // Processing
 	}
 
 		// Save to database
@@ -520,6 +466,31 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if image.Id == 0 {
 		http.Error(w, "Failed to upload photo", http.StatusInternalServerError)
 		return
+	}
+
+	// Queue photo for background processing
+	// Reset file reader to get file data for processing
+	file.Seek(0, 0)
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		log.Printf("Failed to read file for processing queue: %v", err)
+		// Don't fail the upload, just log the error
+	} else {
+		// Create processing job
+		job := PhotoProcessingJob{
+			ImageId:        image.Id,
+			FilePath:       image.FilePath,
+			FileData:       fileData,
+			MimeType:       mimeType,
+			OriginalWidth:  width,
+			OriginalHeight: height,
+		}
+
+		// Queue the job for processing
+		if err := QueuePhotoProcessing(job); err != nil {
+			log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
+			// Could set status to failed here, but let's keep it as processing for now
+		}
 	}
 
 	// Return success response
@@ -599,7 +570,19 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Check if image exists and user has access
-	if image.Id == 0 || image.FamilyId != user.FamilyId || image.Status != 0 {
+	if image.Id == 0 || image.FamilyId != user.FamilyId {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// If photo is still processing, serve placeholder
+	if image.Status == 1 {
+		serveProcessingPlaceholder(w, r)
+		return
+	}
+
+	// If photo failed processing, serve error placeholder or 404
+	if image.Status == 2 {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -702,7 +685,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Enhanced cache headers for better performance (1 year for images with versioning)
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix()))
+	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix(), image.Status))
 
 	// Add Vary header for content negotiation
 	w.Header().Set("Vary", "Accept")
@@ -907,4 +890,48 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	}
 
 	return nil
+}
+
+// serveProcessingPlaceholder serves a placeholder image for photos still being processed
+func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
+	// Generate a simple SVG placeholder
+	svgContent := `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+		<rect width="100%" height="100%" fill="#f0f0f0"/>
+		<circle cx="200" cy="120" r="30" fill="#d0d0d0">
+			<animateTransform attributeName="transform" attributeType="XML" type="rotate"
+				from="0 200 120" to="360 200 120" dur="1s" repeatCount="indefinite"/>
+		</circle>
+		<text x="200" y="180" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#666">
+			Processing image...
+		</text>
+	</svg>`
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	w.Write([]byte(svgContent))
+}
+
+// GetPhotoStatus returns the processing status of a photo
+func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhotoStatusResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Get photo from database
+	photo := GetImageById(ctx.Tx, req.Id)
+
+	// Check if photo exists and user has access (same family)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = ErrAuthFailure
+		return
+	}
+
+	resp.Status = photo.Status
+	return
 }
