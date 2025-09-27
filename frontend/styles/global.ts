@@ -786,9 +786,6 @@ block(`
 }
 `);
 
-
-
-
 // Header authentication styles
 block(`
 .user-info-container {
@@ -920,6 +917,3 @@ block(`
   }
 }
 `);
-
-
-

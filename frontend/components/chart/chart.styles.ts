@@ -28,7 +28,6 @@ block(`
 }
 `);
 
-
 block(`
 .grid-line {
   stroke: var(--border);

@@ -11,8 +11,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/gen2brain/avif"
-	_ "image/gif"
 	_ "golang.org/x/image/webp"
+	_ "image/gif"
 )
 
 // ImageSize represents different image size variants

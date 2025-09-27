@@ -9,16 +9,16 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
 export async function fetch(route: string, prefix: string) {
-  const photoId = parseInt(route.split('/')[2]);
+  const photoId = parseInt(route.split("/")[2]);
   return server.GetPhoto({ id: photoId });
 }
 
 type ViewPhotoData = { image: server.Image | null; person: server.Person | null };
 
 const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return '';
-  if (dateString.includes('T') && dateString.endsWith('Z')) {
-    const dateParts = dateString.split('T')[0].split('-');
+  if (!dateString) return "";
+  if (dateString.includes("T") && dateString.endsWith("Z")) {
+    const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
     const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
     const day = parseInt(dateParts[2]);
@@ -27,15 +27,11 @@ const formatPhotoDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
-export function view(
-  route: string,
-  prefix: string,
-  data: ViewPhotoData,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: ViewPhotoData): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute('/login');
+    core.setRoute("/login");
     return;
   }
 
@@ -47,7 +43,9 @@ export function view(
           <div className="error-page">
             <h1>Error</h1>
             <p>Photo not found or access denied</p>
-            <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -72,7 +70,9 @@ interface ViewPhotoPageProps {
 }
 
 async function handleDeletePhoto(photo: server.Image) {
-  const confirmed = confirm(`Are you sure you want to delete "${photo.title}"? This action cannot be undone.`);
+  const confirmed = confirm(
+    `Are you sure you want to delete "${photo.title}"? This action cannot be undone.`
+  );
   if (!confirmed) return;
 
   try {
@@ -98,7 +98,7 @@ async function handleSetProfilePhoto(photo: server.Image) {
   try {
     const [resp, err] = await server.SetProfilePhoto({
       personId: photo.personId,
-      photoId: photo.id
+      photoId: photo.id,
     });
 
     if (err) {
@@ -144,14 +144,8 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
       <div className="photo-info-panel">
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
-          <div className="view-photo-date">
-            📅 {formatPhotoDate(photo.photoDate)}
-          </div>
-          {photo.description && (
-            <div className="view-photo-description">
-              {photo.description}
-            </div>
-          )}
+          <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
+          {photo.description && <div className="view-photo-description">{photo.description}</div>}
           <div className="photo-details">
             <small>
               Uploaded: {formatPhotoDate(photo.createdAt)} • {photo.originalFilename}
@@ -169,17 +163,11 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
               ✓ Profile Photo
             </button>
           ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSetProfilePhoto(photo)}
-            >
+            <button className="btn btn-primary" onClick={() => handleSetProfilePhoto(photo)}>
               👤 Set as Profile Photo
             </button>
           )}
-          <button
-            className="btn btn-danger"
-            onClick={() => handleDeletePhoto(photo)}
-          >
+          <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo)}>
             🗑️ Delete
           </button>
         </div>

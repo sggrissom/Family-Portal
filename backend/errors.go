@@ -13,14 +13,14 @@ import (
 type ErrorCode string
 
 const (
-	ErrCodeAuth         ErrorCode = "AUTH_ERROR"
-	ErrCodeValidation   ErrorCode = "VALIDATION_ERROR"
-	ErrCodeNotFound     ErrorCode = "NOT_FOUND"
-	ErrCodeForbidden    ErrorCode = "FORBIDDEN"
-	ErrCodeInternal     ErrorCode = "INTERNAL_ERROR"
-	ErrCodeBadRequest   ErrorCode = "BAD_REQUEST"
-	ErrCodeTooLarge     ErrorCode = "FILE_TOO_LARGE"
-	ErrCodeInvalidType  ErrorCode = "INVALID_FILE_TYPE"
+	ErrCodeAuth        ErrorCode = "AUTH_ERROR"
+	ErrCodeValidation  ErrorCode = "VALIDATION_ERROR"
+	ErrCodeNotFound    ErrorCode = "NOT_FOUND"
+	ErrCodeForbidden   ErrorCode = "FORBIDDEN"
+	ErrCodeInternal    ErrorCode = "INTERNAL_ERROR"
+	ErrCodeBadRequest  ErrorCode = "BAD_REQUEST"
+	ErrCodeTooLarge    ErrorCode = "FILE_TOO_LARGE"
+	ErrCodeInvalidType ErrorCode = "INVALID_FILE_TYPE"
 )
 
 // AppError represents a structured application error
@@ -57,7 +57,6 @@ func NewAppError(code ErrorCode, message string, details ...string) *AppError {
 
 	return err
 }
-
 
 // RespondWithError sends a standardized error response
 func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, statusCode int) {

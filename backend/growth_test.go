@@ -36,10 +36,10 @@ func TestAddGrowthData(t *testing.T) {
 
 		// Create person
 		personReq := AddPersonRequest{
-			Name:      "Test Child",
+			Name:       "Test Child",
 			PersonType: 1, // Child
-			Gender:    0, // Male
-			Birthdate: "2020-06-15",
+			Gender:     0, // Male
+			Birthdate:  "2020-06-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
@@ -68,22 +68,22 @@ func TestAddGrowthData(t *testing.T) {
 			MeasurementDate: stringPtr("2023-06-15"),
 		},
 		{
-			PersonId:    testPerson.Id,
+			PersonId:        testPerson.Id,
 			MeasurementType: "height",
-			Value:       36.5,
-			Unit:        "in",
-			InputType:   "age",
-			AgeYears:    intPtr(3),
-			AgeMonths:   intPtr(0),
+			Value:           36.5,
+			Unit:            "in",
+			InputType:       "age",
+			AgeYears:        intPtr(3),
+			AgeMonths:       intPtr(0),
 		},
 		{
-			PersonId:    testPerson.Id,
+			PersonId:        testPerson.Id,
 			MeasurementType: "weight",
-			Value:       55.7,
-			Unit:        "lbs",
-			InputType:   "age",
-			AgeYears:    intPtr(2),
-			AgeMonths:   intPtr(6),
+			Value:           55.7,
+			Unit:            "lbs",
+			InputType:       "age",
+			AgeYears:        intPtr(2),
+			AgeMonths:       intPtr(6),
 		},
 	}
 
@@ -116,7 +116,7 @@ func TestAddGrowthData(t *testing.T) {
 
 	// Test invalid growth data requests - database level checks
 	databaseInvalidRequests := []struct {
-		request AddGrowthDataRequest
+		request     AddGrowthDataRequest
 		description string
 	}{
 		{
@@ -224,7 +224,7 @@ func TestParseMeasurementDate(t *testing.T) {
 				InputType:       "date",
 				MeasurementDate: stringPtr("2023-06-15"),
 			},
-			expected: time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
+			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
 			shouldError: false,
 		},
 		{
@@ -234,7 +234,7 @@ func TestParseMeasurementDate(t *testing.T) {
 				AgeYears:  intPtr(3),
 				AgeMonths: intPtr(0),
 			},
-			expected: time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
+			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
 			shouldError: false,
 		},
 		{
@@ -244,7 +244,7 @@ func TestParseMeasurementDate(t *testing.T) {
 				AgeYears:  intPtr(2),
 				AgeMonths: intPtr(6),
 			},
-			expected: time.Date(2022, 12, 15, 0, 0, 0, 0, time.UTC),
+			expected:    time.Date(2022, 12, 15, 0, 0, 0, 0, time.UTC),
 			shouldError: false,
 		},
 		{
@@ -495,10 +495,10 @@ func TestMultipleGrowthMeasurements(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:      "Test Child",
+			Name:       "Test Child",
 			PersonType: 1,
-			Gender:    0,
-			Birthdate: "2020-01-01",
+			Gender:     0,
+			Birthdate:  "2020-01-01",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)

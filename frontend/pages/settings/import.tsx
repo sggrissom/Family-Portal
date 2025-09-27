@@ -21,30 +21,28 @@ type ImportForm = {
   showFilters: boolean;
   selectedFamilyIds: number[];
   selectedPersonIds: number[];
-}
+};
 
-const useImportForm = vlens.declareHook((): ImportForm => ({
-  jsonData: "",
-  file: null,
-  error: "",
-  loading: false,
-  success: false,
-  result: null,
-  previewData: null,
-  showFilters: false,
-  selectedFamilyIds: [],
-  selectedPersonIds: []
-}))
+const useImportForm = vlens.declareHook(
+  (): ImportForm => ({
+    jsonData: "",
+    file: null,
+    error: "",
+    loading: false,
+    success: false,
+    result: null,
+    previewData: null,
+    showFilters: false,
+    selectedFamilyIds: [],
+    selectedPersonIds: [],
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return null;
@@ -78,9 +76,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
       // Read file content
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = e => {
         const result = e.target?.result;
-        if (typeof result === 'string') {
+        if (typeof result === "string") {
           form.jsonData = result;
           vlens.scheduleRedraw();
         }
@@ -123,7 +121,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         jsonData: form.jsonData,
         filterFamilyIds: [],
         filterPersonIds: [],
-        previewOnly: true
+        previewOnly: true,
       });
 
       form.loading = false;
@@ -162,7 +160,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         jsonData: form.jsonData,
         filterFamilyIds: form.selectedFamilyIds,
         filterPersonIds: form.selectedPersonIds,
-        previewOnly: false
+        previewOnly: false,
       });
 
       form.loading = false;
@@ -237,8 +235,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
           </div>
 
           <div className="success-actions">
-            <a href="/dashboard" className="btn btn-primary">Go to Dashboard</a>
-            <button onClick={clearForm} className="btn btn-secondary">Import More Data</button>
+            <a href="/dashboard" className="btn btn-primary">
+              Go to Dashboard
+            </a>
+            <button onClick={clearForm} className="btn btn-secondary">
+              Import More Data
+            </button>
           </div>
         </div>
       ) : (
@@ -275,11 +277,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
               />
             </div>
 
-            {form.error && (
-              <div className="error-message">
-                {form.error}
-              </div>
-            )}
+            {form.error && <div className="error-message">{form.error}</div>}
 
             <div className="form-actions">
               <button
@@ -292,24 +290,20 @@ const ImportPage = ({ form }: ImportPageProps) => {
               </button>
               <button
                 type="submit"
-                disabled={form.loading || !form.jsonData.trim() || (!form.showFilters && !form.previewData)}
+                disabled={
+                  form.loading || !form.jsonData.trim() || (!form.showFilters && !form.previewData)
+                }
                 className="btn btn-primary"
               >
                 {form.loading ? "Importing..." : "Import Data"}
               </button>
-              <button
-                type="button"
-                onClick={clearForm}
-                className="btn btn-secondary"
-              >
+              <button type="button" onClick={clearForm} className="btn btn-secondary">
                 Clear
               </button>
             </div>
           </form>
 
-          {form.showFilters && form.previewData && (
-            <FilteringInterface form={form} />
-          )}
+          {form.showFilters && form.previewData && <FilteringInterface form={form} />}
 
           <div className="import-help">
             <h3>📋 Import Instructions</h3>
@@ -353,7 +347,8 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
   };
 
   const selectAllFromFamily = (familyId: number) => {
-    const peopleInFamily = form.previewData?.availablePeople?.filter(p => p.FamilyId === familyId) || [];
+    const peopleInFamily =
+      form.previewData?.availablePeople?.filter(p => p.FamilyId === familyId) || [];
     for (const person of peopleInFamily) {
       if (!form.selectedPersonIds.includes(person.Id)) {
         form.selectedPersonIds.push(person.Id);
@@ -381,7 +376,8 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
 
       {form.previewData?.availableFamilyIds?.map(familyId => {
         const counts = getPersonCountsInFamily(familyId);
-        const familyPeople = form.previewData?.availablePeople?.filter(p => p.FamilyId === familyId) || [];
+        const familyPeople =
+          form.previewData?.availablePeople?.filter(p => p.FamilyId === familyId) || [];
 
         return (
           <div key={familyId} className="family-group">
@@ -422,7 +418,11 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
                         <span className="person-meta">
                           {new Date(person.Birthday).getFullYear()} •
                           {person.Type === 0 ? "Parent" : "Child"} •
-                          {person.Gender === 0 ? "Male" : person.Gender === 1 ? "Female" : "Unknown"}
+                          {person.Gender === 0
+                            ? "Male"
+                            : person.Gender === 1
+                              ? "Female"
+                              : "Unknown"}
                         </span>
                         <span className="person-measurements">
                           Heights: {measurements.heights}, Weights: {measurements.weights}
@@ -439,10 +439,13 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
 
       <div className="filter-summary">
         <p>
-          <strong>Selected:</strong> {form.selectedPersonIds.length} people from {form.selectedFamilyIds.length} families
+          <strong>Selected:</strong> {form.selectedPersonIds.length} people from{" "}
+          {form.selectedFamilyIds.length} families
         </p>
         {form.selectedPersonIds.length === 0 && (
-          <p className="warning">⚠️ No people selected. Please select at least one person to import.</p>
+          <p className="warning">
+            ⚠️ No people selected. Please select at least one person to import.
+          </p>
         )}
       </div>
     </div>

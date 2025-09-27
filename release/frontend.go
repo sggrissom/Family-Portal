@@ -1,3 +1,6 @@
+//go:build frontend
+// +build frontend
+
 package main
 
 import (
@@ -41,7 +44,7 @@ func main() {
 	}
 
 	fmt.Printf(" Built into release/dist in %s (started at %s)\n",
-	report.Duration.Truncate(time.Millisecond),
-	report.Time.Format("15:04:05"),
-)
+		report.Duration.Truncate(time.Millisecond),
+		report.Time.Format("15:04:05"),
+	)
 }

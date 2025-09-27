@@ -10,17 +10,17 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureAuthInFetch()) {
+  if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.ListPeopleResponse>({ people: [] });
   }
 
-  return server.ListPeople({})
+  return server.ListPeople({});
 }
 
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse,
+  data: server.ListPeopleResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -60,13 +60,17 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
       <div className="family-section">
         <div className="section-header">
           <h2>Family Members</h2>
-          <a href="/add-person" className="btn btn-primary">Add Family Member</a>
+          <a href="/add-person" className="btn btn-primary">
+            Add Family Member
+          </a>
         </div>
 
         {people.length === 0 ? (
           <div className="empty-state">
             <p>No family members added yet.</p>
-            <a href="/add-person" className="btn btn-primary">Add Your First Family Member</a>
+            <a href="/add-person" className="btn btn-primary">
+              Add Your First Family Member
+            </a>
           </div>
         ) : (
           <div className="people-grid">
@@ -101,7 +105,9 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           <div className="card-icon">📏</div>
           <h3>Growth Tracking</h3>
           <p>Track height and weight measurements</p>
-          <a href="/add-growth" className="btn btn-primary">Add Measurement</a>
+          <a href="/add-growth" className="btn btn-primary">
+            Add Measurement
+          </a>
         </div>
 
         <div className="dashboard-card">
@@ -122,14 +128,18 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           <div className="card-icon">📥</div>
           <h3>Import Data</h3>
           <p>Import people and measurements from backup</p>
-          <a href="/import" className="btn btn-secondary">Import Data</a>
+          <a href="/import" className="btn btn-secondary">
+            Import Data
+          </a>
         </div>
 
         <div className="dashboard-card">
           <div className="card-icon">⚙️</div>
           <h3>Settings</h3>
           <p>Manage your family portal</p>
-          <a href="/settings" className="btn btn-secondary">Settings</a>
+          <a href="/settings" className="btn btn-secondary">
+            Settings
+          </a>
         </div>
       </div>
     </div>
@@ -145,9 +155,12 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
   const photoStatus = usePhotoStatus();
   const getGenderIcon = (gender: number) => {
     switch (gender) {
-      case 0: return "👨"; // Male
-      case 1: return "👩"; // Female
-      default: return "👤"; // Unknown
+      case 0:
+        return "👨"; // Male
+      case 1:
+        return "👩"; // Female
+      default:
+        return "👤"; // Unknown
     }
   };
 

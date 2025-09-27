@@ -13,24 +13,28 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./profile-styles";
 
 type ProfileState = {
-  activeTab: 'timeline' | 'growth' | 'photos';
-}
+  activeTab: "timeline" | "growth" | "photos";
+};
 
-const useProfileState = vlens.declareHook((): ProfileState => ({
-  activeTab: 'timeline'
-}));
+const useProfileState = vlens.declareHook(
+  (): ProfileState => ({
+    activeTab: "timeline",
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
-  const personId = parseInt(route.split('/')[2]);
+  const personId = parseInt(route.split("/")[2]);
   return server.GetPerson({ id: personId });
 }
 
-type ProfileData = server.GetPersonResponse | { person: null; growthData: server.GrowthData[]; milestones: server.Milestone[] };
+type ProfileData =
+  | server.GetPersonResponse
+  | { person: null; growthData: server.GrowthData[]; milestones: server.Milestone[] };
 
 const formatDate = (dateString: string) => {
-  if (!dateString) return '';
-  if (dateString.includes('T') && dateString.endsWith('Z')) {
-    const dateParts = dateString.split('T')[0].split('-');
+  if (!dateString) return "";
+  if (dateString.includes("T") && dateString.endsWith("Z")) {
+    const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
     const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
     const day = parseInt(dateParts[2]);
@@ -39,15 +43,11 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
-export function view(
-  route: string,
-  prefix: string,
-  data: ProfileData,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: ProfileData): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute('/login');
+    core.setRoute("/login");
     return;
   }
 
@@ -59,7 +59,9 @@ export function view(
           <div className="error-page">
             <h1>Error</h1>
             <p>Failed to load person data</p>
-            <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -71,7 +73,12 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="profile-container">
-        <ProfilePage person={data.person} growthData={data.growthData} milestones={data.milestones} photos={data.photos} />
+        <ProfilePage
+          person={data.person}
+          growthData={data.growthData}
+          milestones={data.milestones}
+          photos={data.photos}
+        />
       </main>
       <Footer />
     </div>
@@ -85,7 +92,7 @@ interface ProfilePageProps {
   photos: server.Image[];
 }
 
-function setActiveTab(state: ProfileState, tab: 'timeline' | 'growth' | 'photos') {
+function setActiveTab(state: ProfileState, tab: "timeline" | "growth" | "photos") {
   state.activeTab = tab;
   vlens.scheduleRedraw();
 }
@@ -96,16 +103,18 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
 
   const getGenderIcon = (gender: number) => {
     switch (gender) {
-      case 0: return "👨";
-      case 1: return "👩";
-      default: return "👤";
+      case 0:
+        return "👨";
+      case 1:
+        return "👩";
+      default:
+        return "👤";
     }
   };
 
   const getTypeLabel = (type: number) => {
     return type === 0 ? "Parent" : "Child";
   };
-
 
   return (
     <div className="profile-page">
@@ -131,9 +140,7 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
             <p className="profile-details">
               {getTypeLabel(person.type)} • Age {person.age}
             </p>
-            <p className="profile-birthday">
-              Birthday: {formatDate(person.birthday)}
-            </p>
+            <p className="profile-birthday">Birthday: {formatDate(person.birthday)}</p>
           </div>
         </div>
 
@@ -153,20 +160,20 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
       {/* Navigation Tabs */}
       <div className="profile-tabs">
         <button
-          className={`tab ${state.activeTab === 'timeline' ? 'active' : ''}`}
-          onClick={() => setActiveTab(state, 'timeline')}
+          className={`tab ${state.activeTab === "timeline" ? "active" : ""}`}
+          onClick={() => setActiveTab(state, "timeline")}
         >
           📰 Timeline
         </button>
         <button
-          className={`tab ${state.activeTab === 'growth' ? 'active' : ''}`}
-          onClick={() => setActiveTab(state, 'growth')}
+          className={`tab ${state.activeTab === "growth" ? "active" : ""}`}
+          onClick={() => setActiveTab(state, "growth")}
         >
           📊 Growth
         </button>
         <button
-          className={`tab ${state.activeTab === 'photos' ? 'active' : ''}`}
-          onClick={() => setActiveTab(state, 'photos')}
+          className={`tab ${state.activeTab === "photos" ? "active" : ""}`}
+          onClick={() => setActiveTab(state, "photos")}
         >
           🖼️ Photos
         </button>
@@ -174,9 +181,9 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
 
       {/* Tab Content */}
       <div className="profile-content">
-        {state.activeTab === 'timeline' && <TimelineTab person={person} milestones={milestones} />}
-        {state.activeTab === 'growth' && <GrowthTab person={person} growthData={growthData} />}
-        {state.activeTab === 'photos' && <PhotosTab person={person} photos={photos} />}
+        {state.activeTab === "timeline" && <TimelineTab person={person} milestones={milestones} />}
+        {state.activeTab === "growth" && <GrowthTab person={person} growthData={growthData} />}
+        {state.activeTab === "photos" && <PhotosTab person={person} photos={photos} />}
       </div>
     </div>
   );

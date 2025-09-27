@@ -47,11 +47,11 @@ type LoginResponse struct {
 }
 
 type AuthResponse struct {
-	Id        int    `json:"id"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	IsAdmin   bool   `json:"isAdmin"`
-	FamilyId  int    `json:"familyId,omitempty"`
+	Id       int    `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	IsAdmin  bool   `json:"isAdmin"`
+	FamilyId int    `json:"familyId,omitempty"`
 }
 
 type FamilyInfoResponse struct {
@@ -81,11 +81,11 @@ type User struct {
 }
 
 type Family struct {
-	Id           int       `json:"id"`
-	Name         string    `json:"name"`
-	InviteCode   string    `json:"inviteCode"`
-	Creation     time.Time `json:"creation"`
-	CreatedBy    int       `json:"createdBy"`
+	Id         int       `json:"id"`
+	Name       string    `json:"name"`
+	InviteCode string    `json:"inviteCode"`
+	Creation   time.Time `json:"creation"`
+	CreatedBy  int       `json:"createdBy"`
 }
 
 // Packing functions for vbolt serialization

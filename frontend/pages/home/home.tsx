@@ -10,22 +10,18 @@ import "./landing-styles";
 type Data = {};
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureNoAuthInFetch()) {
+  if (!(await ensureNoAuthInFetch())) {
     return rpc.ok<Data>({});
   }
 
   return rpc.ok<Data>({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   // Redirect authenticated users to dashboard
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
-    core.setRoute('/dashboard');
+    core.setRoute("/dashboard");
     return null;
   }
 
@@ -112,4 +108,3 @@ const LandingPage = () => (
     </section>
   </div>
 );
-

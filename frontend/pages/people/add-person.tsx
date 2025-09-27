@@ -18,27 +18,25 @@ type AddPersonForm = {
   error: string;
   loading: boolean;
   success: boolean;
-}
+};
 
-const useAddPersonForm = vlens.declareHook((): AddPersonForm => ({
-  name: "",
-  personType: 0,
-  gender: 0,
-  birthdate: "",
-  error: "",
-  loading: false,
-  success: false
-}))
+const useAddPersonForm = vlens.declareHook(
+  (): AddPersonForm => ({
+    name: "",
+    personType: 0,
+    gender: 0,
+    birthdate: "",
+    error: "",
+    loading: false,
+    success: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return null;
@@ -68,7 +66,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       name: form.name,
       personType: form.personType,
       gender: form.gender,
-      birthdate: form.birthdate
+      birthdate: form.birthdate,
     });
 
     form.loading = false;
@@ -81,7 +79,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.gender = 0;
       form.birthdate = "";
 
-      core.setRoute('/dashboard');
+      core.setRoute("/dashboard");
     } else {
       form.error = err || "Failed to add family member";
     }
@@ -111,9 +109,7 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
         </div>
       )}
 
-      {form.error && (
-        <div className="error-message">{form.error}</div>
-      )}
+      {form.error && <div className="error-message">{form.error}</div>}
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onAddPersonClicked, form)}>
         <div className="form-group">

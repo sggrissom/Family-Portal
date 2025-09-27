@@ -11,12 +11,12 @@ interface PhotosTabProps {
 }
 
 const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return '';
+  if (!dateString) return "";
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString();
   } catch {
-    return '';
+    return "";
   }
 };
 
@@ -31,7 +31,11 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
 
       // Only start monitoring if we haven't seen this photo before (Unknown status)
       // AND the server says it's processing
-      if (currentStatus === Status.Unknown && photo.status === 1 && !photoStatus.isMonitoring(photo.id)) {
+      if (
+        currentStatus === Status.Unknown &&
+        photo.status === 1 &&
+        !photoStatus.isMonitoring(photo.id)
+      ) {
         photoStatus.startMonitoring(photo.id, photo.status);
       }
     });
@@ -44,7 +48,7 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
           <h2>Photos of {person.name}</h2>
           {hasPhotos && (
             <div className="photos-count">
-              {photos.length} photo{photos.length !== 1 ? 's' : ''}
+              {photos.length} photo{photos.length !== 1 ? "s" : ""}
             </div>
           )}
         </div>
@@ -71,20 +75,14 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
                     status={photoStatus.getStatus(photo.id)}
                   />
                   {person.profilePhotoId === photo.id && (
-                    <div className="profile-photo-badge">
-                      👤 Profile
-                    </div>
+                    <div className="profile-photo-badge">👤 Profile</div>
                   )}
                 </div>
                 <div className="photo-info">
                   <h3 className="photo-title">{photo.title}</h3>
-                  <div className="photo-date">
-                    {formatPhotoDate(photo.photoDate)}
-                  </div>
+                  <div className="photo-date">{formatPhotoDate(photo.photoDate)}</div>
                   {photo.description && (
-                    <div className="photo-description">
-                      {photo.description}
-                    </div>
+                    <div className="photo-description">{photo.description}</div>
                   )}
                 </div>
               </div>
@@ -94,7 +92,9 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
           <div className="photos-gallery">
             <div className="empty-state">
               <p>No photos yet.</p>
-              <a href={`/add-photo/${person.id}`} className="btn btn-primary">Add First Photo</a>
+              <a href={`/add-photo/${person.id}`} className="btn btn-primary">
+                Add First Photo
+              </a>
             </div>
           </div>
         )}

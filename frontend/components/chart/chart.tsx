@@ -32,14 +32,14 @@ const useSelectedPoint = vlens.declareHook(
   })
 );
 
-const useHoveredPoint = vlens.declareHook(
-  (): { key: { id: number; kind: Kind } | null } => ({ key: null })
-);
+const useHoveredPoint = vlens.declareHook((): { key: { id: number; kind: Kind } | null } => ({
+  key: null,
+}));
 
 interface ZoomState {
-  scale: number;           // content units (centered scaling)
-  translateX: number;      // content units
-  translateY: number;      // content units
+  scale: number; // content units (centered scaling)
+  translateX: number; // content units
+  translateY: number; // content units
   isDragging: boolean;
 }
 
@@ -48,7 +48,7 @@ interface TouchState {
   initialDistance: number;
   initialScale: number;
   initialTranslate: { x: number; y: number };
-  focalPoint: { x: number; y: number };           // in inner-plot SVG coords
+  focalPoint: { x: number; y: number }; // in inner-plot SVG coords
   initialFocalPoint: { x: number; y: number };
   touchStartTime: number;
   touchStartPosition: { x: number; y: number };
@@ -91,10 +91,7 @@ function niceTicks(min: number, max: number, targetCount = 5): number[] {
   const step0 = span / Math.max(1, targetCount);
   const mag = Math.pow(10, Math.floor(Math.log10(step0)));
   const norm = step0 / mag;
-  const step =
-    norm >= 7.5 ? 10 * mag :
-    norm >= 3.5 ? 5 * mag :
-    norm >= 1.5 ? 2 * mag : 1 * mag;
+  const step = norm >= 7.5 ? 10 * mag : norm >= 3.5 ? 5 * mag : norm >= 1.5 ? 2 * mag : 1 * mag;
 
   const start = Math.ceil(min / step) * step;
   const ticks: number[] = [];
@@ -128,11 +125,11 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
     .slice()
     .sort((a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime());
 
-  const heightData = sortedData.filter((d) => d.measurementType === server.Height);
-  const weightData = sortedData.filter((d) => d.measurementType === server.Weight);
+  const heightData = sortedData.filter(d => d.measurementType === server.Height);
+  const weightData = sortedData.filter(d => d.measurementType === server.Weight);
 
   // Dates
-  const dateTimes = sortedData.map((d) => new Date(d.measurementDate).getTime());
+  const dateTimes = sortedData.map(d => new Date(d.measurementDate).getTime());
   const minTs = Math.min(...dateTimes);
   const maxTs = Math.max(...dateTimes);
   const rawDR = Math.max(1, maxTs - minTs); // avoid 0
@@ -142,8 +139,8 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
   const dateDen = Math.max(1, paddedMaxTs - paddedMinTs);
 
   // Values
-  const hv = heightData.map((d) => d.value);
-  const wv = weightData.map((d) => d.value);
+  const hv = heightData.map(d => d.value);
+  const wv = weightData.map(d => d.value);
   const hMin = hv.length ? Math.min(...hv) : 0;
   const hMax = hv.length ? Math.max(...hv) : 100;
   const wMin = wv.length ? Math.min(...wv) : 0;
@@ -153,8 +150,10 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
   const wSpan = Math.max(1, wMax - wMin);
   const hPad = Math.max(hSpan * 0.1, 1);
   const wPad = Math.max(wSpan * 0.1, 1);
-  const hLo = hMin - hPad, hHi = hMax + hPad;
-  const wLo = wMin - wPad, wHi = wMax + wPad;
+  const hLo = hMin - hPad,
+    hHi = hMax + hPad;
+  const wLo = wMin - wPad,
+    wHi = wMax + wPad;
   const hDen = Math.max(1e-9, hHi - hLo);
   const wDen = Math.max(1e-9, wHi - wLo);
 
@@ -407,8 +406,12 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
 
   // ---- Ticks ----
   const xRatios = [0, 0.25, 0.5, 0.75, 1];
-  const hTicks = heightData.length ? niceTicks(hLo, hHi, 5).filter((v) => v >= hMin && v <= hMax) : [];
-  const wTicks = weightData.length ? niceTicks(wLo, wHi, 5).filter((v) => v >= wMin && v <= wMax) : [];
+  const hTicks = heightData.length
+    ? niceTicks(hLo, hHi, 5).filter(v => v >= hMin && v <= hMax)
+    : [];
+  const wTicks = weightData.length
+    ? niceTicks(wLo, wHi, 5).filter(v => v >= wMin && v <= wMax)
+    : [];
 
   return (
     <div className="growth-chart">
@@ -431,7 +434,6 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
         onTouchCancel={handleTouchCancel}
         onWheel={handleWheel}
         // Disable default pan/zoom gestures inside the SVG; we handle them.
-        style={{ touchAction: "none" }}
         role="img"
         aria-label="Growth chart of height and weight over time"
       >
@@ -464,7 +466,7 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
             {/* Grid */}
             <g className="grid">
               {/* Vertical grid lines */}
-              {xRatios.map((r) => (
+              {xRatios.map(r => (
                 <line
                   key={`vgrid-${r}`}
                   x1={r * innerW}
@@ -475,7 +477,7 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                 />
               ))}
               {/* Horizontal grid lines (use 5 steps) */}
-              {[0, 0.25, 0.5, 0.75, 1].map((r) => (
+              {[0, 0.25, 0.5, 0.75, 1].map(r => (
                 <line
                   key={`hgrid-${r}`}
                   x1={0}
@@ -490,22 +492,36 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
             {/* Height line */}
             {heightData.length > 0 && (
               <g className="height-line">
-                <path d={heightPath} fill="none" stroke={heightColor} strokeWidth={3} className="chart-line" />
+                <path
+                  d={heightPath}
+                  fill="none"
+                  stroke={heightColor}
+                  strokeWidth={3}
+                  className="chart-line"
+                />
               </g>
             )}
 
             {/* Weight line */}
             {weightData.length > 0 && (
               <g className="weight-line">
-                <path d={weightPath} fill="none" stroke={weightColor} strokeWidth={3} className="chart-line" />
+                <path
+                  d={weightPath}
+                  fill="none"
+                  stroke={weightColor}
+                  strokeWidth={3}
+                  className="chart-line"
+                />
               </g>
             )}
 
             {/* Data points: Height */}
-            {heightData.map((d) => {
+            {heightData.map(d => {
               const key = { id: d.id as number, kind: "Height" as const };
-              const isSelected = !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
-              const isHovered = !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
+              const isSelected =
+                !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
+              const isHovered =
+                !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
               return (
                 <circle
                   key={`h-${d.id}`}
@@ -519,11 +535,10 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   onClick={() => selectPoint(d, "Height")}
                   onMouseEnter={() => hoverPoint(d, "Height")}
                   onMouseLeave={clearHover}
-                  style={{ cursor: "pointer" }}
                   tabIndex={0}
                   role="button"
                   aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       selectPoint(d, "Height");
@@ -536,10 +551,12 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
             })}
 
             {/* Data points: Weight */}
-            {weightData.map((d) => {
+            {weightData.map(d => {
               const key = { id: d.id as number, kind: "Weight" as const };
-              const isSelected = !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
-              const isHovered = !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
+              const isSelected =
+                !!selected.key && selected.key.id === key.id && selected.key.kind === key.kind;
+              const isHovered =
+                !!hovered.key && hovered.key.id === key.id && hovered.key.kind === key.kind;
               return (
                 <circle
                   key={`w-${d.id}`}
@@ -553,11 +570,10 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   onClick={() => selectPoint(d, "Weight")}
                   onMouseEnter={() => hoverPoint(d, "Weight")}
                   onMouseLeave={clearHover}
-                  style={{ cursor: "pointer" }}
                   tabIndex={0}
                   role="button"
                   aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       selectPoint(d, "Weight");
@@ -630,7 +646,10 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
         </g>
 
         {/* Legend (outside clip & zoom) */}
-        <g className="legend" transform={`translate(${chartWidth - margin.right + 10}, ${margin.top + 20})`}>
+        <g
+          className="legend"
+          transform={`translate(${chartWidth - margin.right + 10}, ${margin.top + 20})`}
+        >
           {heightData.length > 0 && (
             <g className="legend-item">
               <circle cx="0" cy="0" r="5" fill={heightColor} stroke="white" strokeWidth={2} />

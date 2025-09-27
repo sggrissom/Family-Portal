@@ -19,12 +19,12 @@ export async function ensureAuthInFetch(): Promise<boolean> {
         return true;
       } else {
         // No valid auth context, redirect to login
-        core.setRoute('/login');
+        core.setRoute("/login");
         return false;
       }
     } catch (error) {
       // Failed to get auth context, redirect to login
-      core.setRoute('/login');
+      core.setRoute("/login");
       return false;
     }
   }
@@ -40,7 +40,7 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
     // Already authenticated, redirect to dashboard
-    core.setRoute('/dashboard');
+    core.setRoute("/dashboard");
     return false;
   }
 
@@ -51,7 +51,7 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
     if (authResponse) {
       // We have valid auth on server, cache it locally and redirect
       auth.setAuth(authResponse);
-      core.setRoute('/dashboard');
+      core.setRoute("/dashboard");
       return false;
     }
   } catch (error) {
@@ -69,7 +69,7 @@ export function requireAuthInView(): auth.AuthCache | null {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute('/login');
+    core.setRoute("/login");
     return null;
   }
   return currentAuth;

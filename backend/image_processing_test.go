@@ -31,55 +31,55 @@ func createTestImageWithSize(width, height int) []byte {
 
 func TestCalculateDimensions(t *testing.T) {
 	testCases := []struct {
-		name             string
-		width, height    int
-		maxWidth, maxHeight int
+		name                          string
+		width, height                 int
+		maxWidth, maxHeight           int
 		expectedWidth, expectedHeight int
 	}{
 		{
-			name: "No resize needed",
+			name:  "No resize needed",
 			width: 100, height: 80,
 			maxWidth: 200, maxHeight: 200,
 			expectedWidth: 100, expectedHeight: 80,
 		},
 		{
-			name: "Resize by width",
+			name:  "Resize by width",
 			width: 800, height: 600,
 			maxWidth: 400, maxHeight: 600,
 			expectedWidth: 400, expectedHeight: 300,
 		},
 		{
-			name: "Resize by height",
+			name:  "Resize by height",
 			width: 600, height: 800,
 			maxWidth: 600, maxHeight: 400,
 			expectedWidth: 300, expectedHeight: 400,
 		},
 		{
-			name: "Square image resize",
+			name:  "Square image resize",
 			width: 1000, height: 1000,
 			maxWidth: 500, maxHeight: 500,
 			expectedWidth: 500, expectedHeight: 500,
 		},
 		{
-			name: "Portrait aspect ratio",
+			name:  "Portrait aspect ratio",
 			width: 400, height: 600,
 			maxWidth: 200, maxHeight: 200,
 			expectedWidth: 133, expectedHeight: 200, // Aspect ratio preserved
 		},
 		{
-			name: "Landscape aspect ratio",
+			name:  "Landscape aspect ratio",
 			width: 600, height: 400,
 			maxWidth: 200, maxHeight: 200,
 			expectedWidth: 200, expectedHeight: 133,
 		},
 		{
-			name: "Very wide image",
+			name:  "Very wide image",
 			width: 1200, height: 300,
 			maxWidth: 400, maxHeight: 400,
 			expectedWidth: 400, expectedHeight: 100,
 		},
 		{
-			name: "Very tall image",
+			name:  "Very tall image",
 			width: 300, height: 1200,
 			maxWidth: 400, maxHeight: 400,
 			expectedWidth: 100, expectedHeight: 400,

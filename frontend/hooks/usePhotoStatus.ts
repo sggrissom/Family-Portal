@@ -1,5 +1,6 @@
 import * as vlens from "vlens";
 import * as server from "../server";
+import { logWarn } from "../lib/logger";
 
 /** Processing status contract:
  *  0 = Done/Ready, 1 = Processing, 2 = Failed/Error (kept from your code)
@@ -107,7 +108,7 @@ async function pollPhotoStatuses() {
   try {
     // Batch parallel requests (still per-id API, but not serialized)
     const results = await Promise.all(
-      due.map(async (photoId) => {
+      due.map(async photoId => {
         const startedAt = Date.now();
         try {
           const [response, error] = await server.GetPhotoStatus({ id: photoId });
@@ -167,8 +168,8 @@ async function pollPhotoStatuses() {
       vlens.scheduleRedraw();
     }
   } catch (e) {
-    // Catastrophic failure—don’t spam logs; keep interval alive for next tick
-    console.warn("pollPhotoStatuses: batch error", e);
+    // Catastrophic failure—don't spam logs; keep interval alive for next tick
+    logWarn("photo", "pollPhotoStatuses: batch error", e);
   }
 }
 
@@ -248,4 +249,3 @@ export const usePhotoStatus = () => {
     },
   };
 };
-

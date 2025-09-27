@@ -29,11 +29,11 @@ type AddGrowthDataRequest struct {
 	PersonId        int     `json:"personId"`
 	MeasurementType string  `json:"measurementType"` // "height" or "weight"
 	Value           float64 `json:"value"`
-	Unit            string  `json:"unit"` // cm, in, kg, lbs
-	InputType       string  `json:"inputType"` // "date" or "age"
+	Unit            string  `json:"unit"`                      // cm, in, kg, lbs
+	InputType       string  `json:"inputType"`                 // "date" or "age"
 	MeasurementDate *string `json:"measurementDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
-	AgeYears        *int    `json:"ageYears,omitempty"` // Age in years (if inputType is "age")
-	AgeMonths       *int    `json:"ageMonths,omitempty"` // Additional months (if inputType is "age")
+	AgeYears        *int    `json:"ageYears,omitempty"`        // Age in years (if inputType is "age")
+	AgeMonths       *int    `json:"ageMonths,omitempty"`       // Additional months (if inputType is "age")
 }
 
 type AddGrowthDataResponse struct {
@@ -44,11 +44,11 @@ type UpdateGrowthDataRequest struct {
 	Id              int     `json:"id"`
 	MeasurementType string  `json:"measurementType"` // "height" or "weight"
 	Value           float64 `json:"value"`
-	Unit            string  `json:"unit"` // cm, in, kg, lbs
-	InputType       string  `json:"inputType"` // "today", "date" or "age"
+	Unit            string  `json:"unit"`                      // cm, in, kg, lbs
+	InputType       string  `json:"inputType"`                 // "today", "date" or "age"
 	MeasurementDate *string `json:"measurementDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
-	AgeYears        *int    `json:"ageYears,omitempty"` // Age in years (if inputType is "age")
-	AgeMonths       *int    `json:"ageMonths,omitempty"` // Additional months (if inputType is "age")
+	AgeYears        *int    `json:"ageYears,omitempty"`        // Age in years (if inputType is "age")
+	AgeMonths       *int    `json:"ageMonths,omitempty"`       // Additional months (if inputType is "age")
 }
 
 type UpdateGrowthDataResponse struct {
@@ -71,17 +71,16 @@ type GetGrowthDataResponse struct {
 	GrowthData GrowthData `json:"growthData"`
 }
 
-
 // Database types
 type GrowthData struct {
-	Id              int               `json:"id"`
-	PersonId        int               `json:"personId"`
-	FamilyId        int               `json:"familyId"`
-	MeasurementType MeasurementType   `json:"measurementType"`
-	Value           float64           `json:"value"`
-	Unit            string            `json:"unit"`
-	MeasurementDate time.Time         `json:"measurementDate"`
-	CreatedAt       time.Time         `json:"createdAt"`
+	Id              int             `json:"id"`
+	PersonId        int             `json:"personId"`
+	FamilyId        int             `json:"familyId"`
+	MeasurementType MeasurementType `json:"measurementType"`
+	Value           float64         `json:"value"`
+	Unit            string          `json:"unit"`
+	MeasurementDate time.Time       `json:"measurementDate"`
+	CreatedAt       time.Time       `json:"createdAt"`
 }
 
 // Packing function for vbolt serialization

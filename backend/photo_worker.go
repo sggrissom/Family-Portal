@@ -14,10 +14,10 @@ import (
 
 // PhotoProcessingJob represents a photo that needs to be processed
 type PhotoProcessingJob struct {
-	ImageId    int
-	FilePath   string
-	FileData   []byte
-	MimeType   string
+	ImageId        int
+	FilePath       string
+	FileData       []byte
+	MimeType       string
 	OriginalWidth  int
 	OriginalHeight int
 }
@@ -326,4 +326,3 @@ func StopPhotoWorker() {
 		globalPhotoWorker.Stop()
 	}
 }
-

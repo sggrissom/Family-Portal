@@ -61,4 +61,3 @@ func MakeSecureApplication() http.Handler {
 	app := MakeApplication()
 	return backend.NewSecurityWrapper(app)
 }
-

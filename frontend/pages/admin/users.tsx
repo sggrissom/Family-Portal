@@ -7,7 +7,7 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import "./admin-styles";
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureAuthInFetch()) {
+  if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.ListAllUsersResponse>({ users: [] });
   }
 
@@ -17,7 +17,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(
   route: string,
   prefix: string,
-  data: server.ListAllUsersResponse,
+  data: server.ListAllUsersResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -33,7 +33,9 @@ export function view(
           <div className="error-page">
             <h1>Access Denied</h1>
             <p>You do not have permission to access this page.</p>
-            <a href="/admin" className="btn btn-primary">Return to Admin Dashboard</a>
+            <a href="/admin" className="btn btn-primary">
+              Return to Admin Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -62,7 +64,11 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return (
+      date.toLocaleDateString() +
+      " " +
+      date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
   };
 
   return (
@@ -104,7 +110,7 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
               </thead>
               <tbody>
                 {users.map(u => (
-                  <tr key={u.id} className={u.isAdmin ? 'admin-row' : ''}>
+                  <tr key={u.id} className={u.isAdmin ? "admin-row" : ""}>
                     <td className="user-id">{u.id}</td>
                     <td className="user-table-name">{u.name}</td>
                     <td className="user-email">{u.email}</td>
@@ -117,7 +123,7 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                     </td>
                     <td className="user-created">{formatDate(u.creation)}</td>
                     <td className="user-login">
-                      {u.lastLogin ? formatDate(u.lastLogin) : 'Never'}
+                      {u.lastLogin ? formatDate(u.lastLogin) : "Never"}
                     </td>
                     <td className="user-role">
                       {u.isAdmin ? (

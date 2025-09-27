@@ -7,7 +7,7 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import "./analytics-styles";
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureAuthInFetch()) {
+  if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.AnalyticsOverviewResponse>({
       totalUsers: 0,
       totalFamilies: 0,
@@ -18,7 +18,7 @@ export async function fetch(route: string, prefix: string) {
       newUsers7d: 0,
       newUsers30d: 0,
       recentActivity: [],
-      systemHealth: { photosProcessing: 0, photosFailed: 0 }
+      systemHealth: { photosProcessing: 0, photosFailed: 0 },
     });
   }
 
@@ -30,7 +30,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(
   route: string,
   prefix: string,
-  data: server.AnalyticsOverviewResponse,
+  data: server.AnalyticsOverviewResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -46,7 +46,9 @@ export function view(
           <div className="error-page">
             <h1>Access Denied</h1>
             <p>You do not have permission to access this page.</p>
-            <a href="/dashboard" className="btn btn-primary">Return to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Return to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -82,7 +84,7 @@ const useAnalyticsState = vlens.declareHook((): AnalyticsState => {
   return {
     selectedTimeRange: "30d",
     selectedView: "overview",
-    loading: {}
+    loading: {},
   };
 });
 
@@ -106,25 +108,37 @@ const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
         <div className="view-selector">
           <button
             className={`view-btn ${vlens.refGet(selectedView) === "overview" ? "active" : ""}`}
-            onClick={() => { vlens.refSet(selectedView, "overview"); vlens.scheduleRedraw(); }}
+            onClick={() => {
+              vlens.refSet(selectedView, "overview");
+              vlens.scheduleRedraw();
+            }}
           >
             Overview
           </button>
           <button
             className={`view-btn ${vlens.refGet(selectedView) === "users" ? "active" : ""}`}
-            onClick={() => { vlens.refSet(selectedView, "users"); vlens.scheduleRedraw(); }}
+            onClick={() => {
+              vlens.refSet(selectedView, "users");
+              vlens.scheduleRedraw();
+            }}
           >
             Users
           </button>
           <button
             className={`view-btn ${vlens.refGet(selectedView) === "content" ? "active" : ""}`}
-            onClick={() => { vlens.refSet(selectedView, "content"); vlens.scheduleRedraw(); }}
+            onClick={() => {
+              vlens.refSet(selectedView, "content");
+              vlens.scheduleRedraw();
+            }}
           >
             Content
           </button>
           <button
             className={`view-btn ${vlens.refGet(selectedView) === "system" ? "active" : ""}`}
-            onClick={() => { vlens.refSet(selectedView, "system"); vlens.scheduleRedraw(); }}
+            onClick={() => {
+              vlens.refSet(selectedView, "system");
+              vlens.scheduleRedraw();
+            }}
           >
             System
           </button>
@@ -175,9 +189,7 @@ const OverviewView = ({ data }: { data: server.AnalyticsOverviewResponse }) => {
         <div className="metric-card">
           <div className="metric-value">{data.activeUsers7d}</div>
           <div className="metric-label">Active Users (7d)</div>
-          <div className="metric-change">
-            {data.activeUsers30d} active this month
-          </div>
+          <div className="metric-change">{data.activeUsers30d} active this month</div>
         </div>
 
         <div className="metric-card">
@@ -329,7 +341,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
 
 const SystemView = ({ data }: { data: server.SystemAnalyticsResponse }) => {
   const formatFileSize = (bytes: number) => {
-    const units = ['B', 'KB', 'MB', 'GB'];
+    const units = ["B", "KB", "MB", "GB"];
     let size = bytes;
     let unitIndex = 0;
 
@@ -547,9 +559,14 @@ const SimplePieChart = ({ data }: { data: server.DistributionPoint[] }) => {
         const percentage = total > 0 ? (item.value / total) * 100 : 0;
         return (
           <div key={index} className="pie-item">
-            <div className="pie-color" style={{ backgroundColor: `hsl(${index * 60}, 60%, 60%)` }} />
+            <div
+              className="pie-color"
+              style={{ backgroundColor: `hsl(${index * 60}, 60%, 60%)` }}
+            />
             <span className="pie-label">{item.label}</span>
-            <span className="pie-value">{item.value} ({percentage.toFixed(1)}%)</span>
+            <span className="pie-value">
+              {item.value} ({percentage.toFixed(1)}%)
+            </span>
           </div>
         );
       })}
@@ -561,11 +578,14 @@ const SimplePieChart = ({ data }: { data: server.DistributionPoint[] }) => {
 const UsersViewPlaceholder = () => {
   return (
     <div className="analytics-content">
-      <div className="chart-placeholder" style={{ minHeight: "400px", fontSize: "1.2rem" }}>
+      <div className="chart-placeholder large">
         <div>
           <h3>User Analytics</h3>
           <p>Loading user analytics data...</p>
-          <p>This section will show registration trends, user retention, and family engagement metrics.</p>
+          <p>
+            This section will show registration trends, user retention, and family engagement
+            metrics.
+          </p>
         </div>
       </div>
     </div>
@@ -575,11 +595,13 @@ const UsersViewPlaceholder = () => {
 const ContentViewPlaceholder = () => {
   return (
     <div className="analytics-content">
-      <div className="chart-placeholder" style={{ minHeight: "400px", fontSize: "1.2rem" }}>
+      <div className="chart-placeholder large">
         <div>
           <h3>Content Analytics</h3>
           <p>Loading content analytics data...</p>
-          <p>This section will show photo upload trends, milestone tracking, and content patterns.</p>
+          <p>
+            This section will show photo upload trends, milestone tracking, and content patterns.
+          </p>
         </div>
       </div>
     </div>
@@ -589,7 +611,7 @@ const ContentViewPlaceholder = () => {
 const SystemViewPlaceholder = () => {
   return (
     <div className="analytics-content">
-      <div className="chart-placeholder" style={{ minHeight: "400px", fontSize: "1.2rem" }}>
+      <div className="chart-placeholder large">
         <div>
           <h3>System Analytics</h3>
           <p>Loading system analytics data...</p>

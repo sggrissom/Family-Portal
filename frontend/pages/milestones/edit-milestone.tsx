@@ -18,23 +18,25 @@ type EditMilestoneForm = {
   ageMonths: string;
   error: string;
   loading: boolean;
-}
+};
 
-const useEditMilestoneForm = vlens.declareHook((milestone?: server.Milestone): EditMilestoneForm => ({
-  selectedPersonId: milestone?.personId?.toString() || "",
-  description: milestone?.description || "",
-  category: milestone?.category || "development",
-  inputType: "date", // Default to date since we have the original date
-  milestoneDate: milestone?.milestoneDate ? milestone.milestoneDate.split('T')[0] : "",
-  ageYears: "",
-  ageMonths: "",
-  error: "",
-  loading: false
-}));
+const useEditMilestoneForm = vlens.declareHook(
+  (milestone?: server.Milestone): EditMilestoneForm => ({
+    selectedPersonId: milestone?.personId?.toString() || "",
+    description: milestone?.description || "",
+    category: milestone?.category || "development",
+    inputType: "date", // Default to date since we have the original date
+    milestoneDate: milestone?.milestoneDate ? milestone.milestoneDate.split("T")[0] : "",
+    ageYears: "",
+    ageMonths: "",
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   // Extract milestone ID from URL (e.g., /edit-milestone/123)
-  const urlParts = route.split('/');
+  const urlParts = route.split("/");
   const milestoneId = urlParts.length > 2 ? parseInt(urlParts[2]) : null;
 
   if (!milestoneId) {
@@ -48,7 +50,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(
   route: string,
   prefix: string,
-  data: server.GetMilestoneResponse,
+  data: server.GetMilestoneResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -63,7 +65,9 @@ export function view(
           <div className="error-page">
             <h1>Milestone Not Found</h1>
             <p>The milestone you're trying to edit could not be found</p>
-            <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -84,7 +88,11 @@ export function view(
   );
 }
 
-async function onSubmitMilestone(form: EditMilestoneForm, milestone: server.Milestone, event: Event) {
+async function onSubmitMilestone(
+  form: EditMilestoneForm,
+  milestone: server.Milestone,
+  event: Event
+) {
   event.preventDefault();
   form.loading = true;
   form.error = "";
@@ -97,14 +105,14 @@ async function onSubmitMilestone(form: EditMilestoneForm, milestone: server.Mile
     return;
   }
 
-  if (form.inputType === 'date' && !form.milestoneDate) {
+  if (form.inputType === "date" && !form.milestoneDate) {
     form.error = "Please select a date";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  if (form.inputType === 'age' && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
+  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
     form.error = "Please enter a valid age";
     form.loading = false;
     vlens.scheduleRedraw();
@@ -117,9 +125,9 @@ async function onSubmitMilestone(form: EditMilestoneForm, milestone: server.Mile
     description: form.description.trim(),
     category: form.category,
     inputType: form.inputType,
-    milestoneDate: form.inputType === 'date' ? form.milestoneDate : null,
-    ageYears: form.inputType === 'age' ? parseInt(form.ageYears) : null,
-    ageMonths: form.inputType === 'age' && form.ageMonths ? parseInt(form.ageMonths) : null
+    milestoneDate: form.inputType === "date" ? form.milestoneDate : null,
+    ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
+    ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
   };
 
   try {
@@ -157,12 +165,12 @@ interface EditMilestonePageProps {
 
 const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
   const getCategoryOptions = () => [
-    { value: 'development', label: 'Development', icon: '🌱' },
-    { value: 'behavior', label: 'Behavior', icon: '😊' },
-    { value: 'health', label: 'Health', icon: '🏥' },
-    { value: 'achievement', label: 'Achievement', icon: '🏆' },
-    { value: 'first', label: 'First Time', icon: '⭐' },
-    { value: 'other', label: 'Other', icon: '📝' }
+    { value: "development", label: "Development", icon: "🌱" },
+    { value: "behavior", label: "Behavior", icon: "😊" },
+    { value: "health", label: "Health", icon: "🏥" },
+    { value: "achievement", label: "Achievement", icon: "🏆" },
+    { value: "first", label: "First Time", icon: "⭐" },
+    { value: "other", label: "Other", icon: "📝" },
   ];
 
   return (
@@ -173,11 +181,12 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
           <p>Update this milestone record</p>
         </div>
 
-        {form.error && (
-          <div className="error-message">{form.error}</div>
-        )}
+        {form.error && <div className="error-message">{form.error}</div>}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, milestone)}>
+        <form
+          className="auth-form"
+          onSubmit={vlens.cachePartial(onSubmitMilestone, form, milestone)}
+        >
           {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description</label>
@@ -223,8 +232,8 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="today"
-                  checked={form.inputType === 'today'}
-                  onChange={() => onInputTypeChange(form, 'today')}
+                  checked={form.inputType === "today"}
+                  onChange={() => onInputTypeChange(form, "today")}
                   disabled={form.loading}
                 />
                 <span>Today</span>
@@ -234,8 +243,8 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="date"
-                  checked={form.inputType === 'date'}
-                  onChange={() => onInputTypeChange(form, 'date')}
+                  checked={form.inputType === "date"}
+                  onChange={() => onInputTypeChange(form, "date")}
                   disabled={form.loading}
                 />
                 <span>Specific Date</span>
@@ -245,8 +254,8 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="age"
-                  checked={form.inputType === 'age'}
-                  onChange={() => onInputTypeChange(form, 'age')}
+                  checked={form.inputType === "age"}
+                  onChange={() => onInputTypeChange(form, "age")}
                   disabled={form.loading}
                 />
                 <span>At Age</span>
@@ -255,14 +264,14 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
           </div>
 
           {/* Date Input */}
-          {form.inputType === 'date' && (
+          {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Milestone Date</label>
               <input
                 id="date"
                 type="date"
                 {...vlens.attrsBindInput(vlens.ref(form, "milestoneDate"))}
-                max={new Date().toISOString().split('T')[0]}
+                max={new Date().toISOString().split("T")[0]}
                 required
                 disabled={form.loading}
               />
@@ -270,7 +279,7 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
           )}
 
           {/* Age Input */}
-          {form.inputType === 'age' && (
+          {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
                 <label htmlFor="ageYears">Age (Years)</label>
@@ -302,13 +311,11 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
 
           {/* Submit Button */}
           <div className="form-actions">
-            <a href={`/profile/${form.selectedPersonId}`} className="btn btn-secondary">Cancel</a>
-            <button
-              type="submit"
-              className="btn btn-primary auth-submit"
-              disabled={form.loading}
-            >
-              {form.loading ? 'Saving...' : 'Update Milestone'}
+            <a href={`/profile/${form.selectedPersonId}`} className="btn btn-secondary">
+              Cancel
+            </a>
+            <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
+              {form.loading ? "Saving..." : "Update Milestone"}
             </button>
           </div>
         </form>
@@ -317,15 +324,18 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
           <div className="milestone-preview">
             <h3>Preview</h3>
             <p>
-              <strong>{form.category.charAt(0).toUpperCase() + form.category.slice(1)}:</strong> {form.description}
-              {form.inputType === 'today' && (
-                <span> (today)</span>
-              )}
-              {form.inputType === 'date' && form.milestoneDate && (
+              <strong>{form.category.charAt(0).toUpperCase() + form.category.slice(1)}:</strong>{" "}
+              {form.description}
+              {form.inputType === "today" && <span> (today)</span>}
+              {form.inputType === "date" && form.milestoneDate && (
                 <span> ({new Date(form.milestoneDate).toLocaleDateString()})</span>
               )}
-              {form.inputType === 'age' && form.ageYears && (
-                <span> (at age {form.ageYears}{form.ageMonths ? `.${form.ageMonths}` : ''} years)</span>
+              {form.inputType === "age" && form.ageYears && (
+                <span>
+                  {" "}
+                  (at age {form.ageYears}
+                  {form.ageMonths ? `.${form.ageMonths}` : ""} years)
+                </span>
               )}
             </p>
           </div>

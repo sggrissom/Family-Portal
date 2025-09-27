@@ -1,0 +1,23 @@
+# Build outputs
+build/
+.serve/
+dist/
+release/dist/
+
+# Generated files
+frontend/server.ts
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Database files
+*.db
+
+# Static uploads
+static/
+
+# Environment files
+.env*

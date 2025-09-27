@@ -103,11 +103,11 @@ func TestGenerateAuthJwt(t *testing.T) {
 
 	// Create a test user
 	user := User{
-		Id:       1,
-		Name:     "Test User",
-		Email:    "test@example.com",
-		FamilyId: 1,
-		Creation: time.Now(),
+		Id:        1,
+		Name:      "Test User",
+		Email:     "test@example.com",
+		FamilyId:  1,
+		Creation:  time.Now(),
 		LastLogin: time.Now(),
 	}
 

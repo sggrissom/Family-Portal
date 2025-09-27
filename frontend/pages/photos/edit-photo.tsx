@@ -8,7 +8,7 @@ import { ThumbnailImage } from "../../components/ResponsiveImage";
 import "./edit-photo-styles";
 
 export async function fetch(route: string, prefix: string) {
-  const photoId = parseInt(route.split('/')[2]);
+  const photoId = parseInt(route.split("/")[2]);
   return server.GetPhoto({ id: photoId });
 }
 
@@ -23,7 +23,7 @@ type EditPhotoForm = {
   ageMonths: string;
   loading: boolean;
   error: string;
-}
+};
 
 const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm => {
   if (!photo) {
@@ -35,12 +35,12 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
       ageYears: "",
       ageMonths: "",
       loading: false,
-      error: ""
+      error: "",
     };
   }
 
   // Convert photo date to form format
-  const photoDate = photo.photoDate ? new Date(photo.photoDate).toISOString().split('T')[0] : "";
+  const photoDate = photo.photoDate ? new Date(photo.photoDate).toISOString().split("T")[0] : "";
 
   return {
     title: photo.title || "",
@@ -50,7 +50,7 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     ageYears: "",
     ageMonths: "",
     loading: false,
-    error: ""
+    error: "",
   };
 });
 
@@ -60,15 +60,11 @@ function onInputTypeChange(form: EditPhotoForm, inputType: string) {
   vlens.scheduleRedraw();
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: EditPhotoData,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: EditPhotoData): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute('/login');
+    core.setRoute("/login");
     return;
   }
 
@@ -80,7 +76,9 @@ export function view(
           <div className="error-page">
             <h1>Error</h1>
             <p>Photo not found or access denied</p>
-            <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -107,14 +105,14 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
   form.error = "";
 
   // Validation
-  if (form.inputType === 'date' && !form.photoDate) {
+  if (form.inputType === "date" && !form.photoDate) {
     form.error = "Please select a date";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  if (form.inputType === 'age' && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
+  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
     form.error = "Please enter a valid age";
     form.loading = false;
     vlens.scheduleRedraw();
@@ -162,9 +160,9 @@ interface EditPhotoPageProps {
 }
 
 const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return '';
-  if (dateString.includes('T') && dateString.endsWith('Z')) {
-    const dateParts = dateString.split('T')[0].split('-');
+  if (!dateString) return "";
+  if (dateString.includes("T") && dateString.endsWith("Z")) {
+    const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
     const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
     const day = parseInt(dateParts[2]);
@@ -184,20 +182,18 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
 
         {/* Photo preview */}
         <div className="photo-preview">
-          <ThumbnailImage
-            photoId={photo.id}
-            alt={photo.title}
-            className="preview-image"
-          />
+          <ThumbnailImage photoId={photo.id} alt={photo.title} className="preview-image" />
           <div className="photo-info">
-            <div><strong>Current Date:</strong> {formatPhotoDate(photo.photoDate)}</div>
-            <div><strong>Uploaded:</strong> {formatPhotoDate(photo.createdAt)}</div>
+            <div>
+              <strong>Current Date:</strong> {formatPhotoDate(photo.photoDate)}
+            </div>
+            <div>
+              <strong>Uploaded:</strong> {formatPhotoDate(photo.createdAt)}
+            </div>
           </div>
         </div>
 
-        {form.error && (
-          <div className="error-message">{form.error}</div>
-        )}
+        {form.error && <div className="error-message">{form.error}</div>}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitEdit, form, photo)}>
           {/* Title */}
@@ -233,8 +229,8 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="auto"
-                  checked={form.inputType === 'auto'}
-                  onChange={() => onInputTypeChange(form, 'auto')}
+                  checked={form.inputType === "auto"}
+                  onChange={() => onInputTypeChange(form, "auto")}
                   disabled={form.loading}
                 />
                 <span>Auto (from photo)</span>
@@ -244,8 +240,8 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="today"
-                  checked={form.inputType === 'today'}
-                  onChange={() => onInputTypeChange(form, 'today')}
+                  checked={form.inputType === "today"}
+                  onChange={() => onInputTypeChange(form, "today")}
                   disabled={form.loading}
                 />
                 <span>Today</span>
@@ -255,8 +251,8 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="date"
-                  checked={form.inputType === 'date'}
-                  onChange={() => onInputTypeChange(form, 'date')}
+                  checked={form.inputType === "date"}
+                  onChange={() => onInputTypeChange(form, "date")}
                   disabled={form.loading}
                 />
                 <span>Specific Date</span>
@@ -266,8 +262,8 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="age"
-                  checked={form.inputType === 'age'}
-                  onChange={() => onInputTypeChange(form, 'age')}
+                  checked={form.inputType === "age"}
+                  onChange={() => onInputTypeChange(form, "age")}
                   disabled={form.loading}
                 />
                 <span>At Age</span>
@@ -276,14 +272,14 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
           </div>
 
           {/* Date Input */}
-          {form.inputType === 'date' && (
+          {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
               <input
                 id="date"
                 type="date"
                 {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                max={new Date().toISOString().split('T')[0]}
+                max={new Date().toISOString().split("T")[0]}
                 required
                 disabled={form.loading}
               />
@@ -291,7 +287,7 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
           )}
 
           {/* Age Input */}
-          {form.inputType === 'age' && (
+          {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
                 <label htmlFor="ageYears">Age (Years)</label>

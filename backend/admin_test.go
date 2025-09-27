@@ -411,8 +411,8 @@ func TestGetLogContentSecurity(t *testing.T) {
 			vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 				ctx.Tx = tx
 				// Generate JWT token for admin user
-			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
-			ctx.Token = adminToken
+				adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
+				ctx.Token = adminToken
 
 				req := GetLogContentRequest{
 					Filename: filename,
@@ -470,8 +470,8 @@ func TestGetLogContentSecurity(t *testing.T) {
 			vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 				ctx.Tx = tx
 				// Generate JWT token for admin user
-			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
-			ctx.Token = adminToken
+				adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
+				ctx.Token = adminToken
 
 				req := GetLogContentRequest{
 					Filename: filename,

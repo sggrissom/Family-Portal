@@ -16,32 +16,30 @@ type LoginForm = {
   remember: boolean;
   error: string;
   loading: boolean;
-}
+};
 
-const useLoginForm = vlens.declareHook((): LoginForm => ({
-  email: "",
-  password: "",
-  remember: false,
-  error: "",
-  loading: false
-}))
+const useLoginForm = vlens.declareHook(
+  (): LoginForm => ({
+    email: "",
+    password: "",
+    remember: false,
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureNoAuthInFetch()) {
+  if (!(await ensureNoAuthInFetch())) {
     return rpc.ok<Data>({});
   }
 
   return rpc.ok<Data>({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
-    core.setRoute('/dashboard');
+    core.setRoute("/dashboard");
   }
 
   const form = useLoginForm();
@@ -64,15 +62,15 @@ async function onLoginClicked(form: LoginForm, event: Event) {
 
   const nativeFetch = window.fetch.bind(window);
   try {
-    const res = await nativeFetch('/api/login', {
-      method: 'POST',
+    const res = await nativeFetch("/api/login", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         email: form.email,
-        password: form.password
-      })
+        password: form.password,
+      }),
     });
 
     const result = await res.json();
@@ -80,11 +78,11 @@ async function onLoginClicked(form: LoginForm, event: Event) {
 
     if (result.success) {
       // Set auth token for future RPC calls
-      rpc.setAuthHeaders({'x-auth-token': result.token});
+      rpc.setAuthHeaders({ "x-auth-token": result.token });
       // Cache auth data
       auth.setAuth(result.auth);
       // Redirect to dashboard
-      core.setRoute('/dashboard');
+      core.setRoute("/dashboard");
     } else {
       form.error = result.error || "Login failed";
     }
@@ -98,9 +96,9 @@ async function onLoginClicked(form: LoginForm, event: Event) {
   // Scroll to error if there is one
   if (form.error) {
     setTimeout(() => {
-      const errorElement = document.querySelector('.error-message');
+      const errorElement = document.querySelector(".error-message");
       if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 100);
   }
@@ -118,15 +116,13 @@ const LoginPage = ({ form }: LoginPageProps) => (
         <p>Sign in to your family portal</p>
       </div>
 
-      {form.error && (
-        <div className="error-message">{form.error}</div>
-      )}
+      {form.error && <div className="error-message">{form.error}</div>}
 
       <div className="auth-methods">
         <button
           className="btn btn-google"
           disabled={form.loading}
-          onClick={() => window.location.href = '/api/login/google'}
+          onClick={() => (window.location.href = "/api/login/google")}
         >
           <GoogleIcon />
           Continue with Google
@@ -188,7 +184,9 @@ const LoginPage = ({ form }: LoginPageProps) => (
       <div className="auth-footer">
         <p>
           Don't have an account?
-          <a href="/create-account" className="auth-link">Create account</a>
+          <a href="/create-account" className="auth-link">
+            Create account
+          </a>
         </p>
       </div>
     </div>
@@ -215,4 +213,3 @@ const GoogleIcon = () => (
     />
   </svg>
 );
-

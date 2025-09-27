@@ -38,7 +38,7 @@ export const ResponsiveImage = ({
 
   // Generate srcset for different sizes
   const srcset = imageSizes
-    .map((img) => `/api/photo/${photoId}/${img.size} ${img.width}w`)
+    .map(img => `/api/photo/${photoId}/${img.size} ${img.width}w`)
     .join(", ");
 
   // Default src (fallback)
@@ -51,16 +51,8 @@ export const ResponsiveImage = ({
   const imageElement = (
     <picture>
       {/* Modern formats with srcset */}
-      <source
-        srcSet={srcset}
-        sizes={sizes}
-        type="image/avif"
-      />
-      <source
-        srcSet={srcset}
-        sizes={sizes}
-        type="image/webp"
-      />
+      <source srcSet={srcset} sizes={sizes} type="image/avif" />
+      <source srcSet={srcset} sizes={sizes} type="image/webp" />
 
       {/* Fallback img element */}
       <img

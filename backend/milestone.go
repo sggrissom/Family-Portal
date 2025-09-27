@@ -21,13 +21,13 @@ func RegisterMilestoneMethods(app *vbeam.Application) {
 
 // Request/Response types
 type AddMilestoneRequest struct {
-	PersonId        int     `json:"personId"`
-	Description     string  `json:"description"`
-	Category        string  `json:"category"`        // "development", "behavior", "health", "achievement", "first", "other"
-	InputType       string  `json:"inputType"`       // "today", "date" or "age"
-	MilestoneDate   *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
-	AgeYears        *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
-	AgeMonths       *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
+	PersonId      int     `json:"personId"`
+	Description   string  `json:"description"`
+	Category      string  `json:"category"`                // "development", "behavior", "health", "achievement", "first", "other"
+	InputType     string  `json:"inputType"`               // "today", "date" or "age"
+	MilestoneDate *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
+	AgeYears      *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
+	AgeMonths     *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
 }
 
 type AddMilestoneResponse struct {
@@ -43,13 +43,13 @@ type GetPersonMilestonesResponse struct {
 }
 
 type UpdateMilestoneRequest struct {
-	Id              int     `json:"id"`
-	Description     string  `json:"description"`
-	Category        string  `json:"category"`        // "development", "behavior", "health", "achievement", "first", "other"
-	InputType       string  `json:"inputType"`       // "today", "date" or "age"
-	MilestoneDate   *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
-	AgeYears        *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
-	AgeMonths       *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
+	Id            int     `json:"id"`
+	Description   string  `json:"description"`
+	Category      string  `json:"category"`                // "development", "behavior", "health", "achievement", "first", "other"
+	InputType     string  `json:"inputType"`               // "today", "date" or "age"
+	MilestoneDate *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
+	AgeYears      *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
+	AgeMonths     *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
 }
 
 type UpdateMilestoneResponse struct {
@@ -223,15 +223,15 @@ type MilestoneDateRequest interface {
 	GetAgeMonths() *int
 }
 
-func (req AddMilestoneRequest) GetInputType() string { return req.InputType }
+func (req AddMilestoneRequest) GetInputType() string      { return req.InputType }
 func (req AddMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req AddMilestoneRequest) GetAgeYears() *int { return req.AgeYears }
-func (req AddMilestoneRequest) GetAgeMonths() *int { return req.AgeMonths }
+func (req AddMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
+func (req AddMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
 
-func (req UpdateMilestoneRequest) GetInputType() string { return req.InputType }
+func (req UpdateMilestoneRequest) GetInputType() string      { return req.InputType }
 func (req UpdateMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req UpdateMilestoneRequest) GetAgeYears() *int { return req.AgeYears }
-func (req UpdateMilestoneRequest) GetAgeMonths() *int { return req.AgeMonths }
+func (req UpdateMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
+func (req UpdateMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
 
 func parseMilestoneDate(req MilestoneDateRequest, personBirthday time.Time) (time.Time, error) {
 	if req.GetInputType() == "today" {

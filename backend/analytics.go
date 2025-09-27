@@ -43,11 +43,11 @@ type SystemHealthSummary struct {
 
 // User Analytics
 type UserAnalyticsResponse struct {
-	RegistrationTrends    []DataPoint       `json:"registrationTrends"`
-	LoginActivityTrends   []DataPoint       `json:"loginActivityTrends"`
+	RegistrationTrends     []DataPoint         `json:"registrationTrends"`
+	LoginActivityTrends    []DataPoint         `json:"loginActivityTrends"`
 	FamilySizeDistribution []DistributionPoint `json:"familySizeDistribution"`
-	UserRetention         RetentionMetrics  `json:"userRetention"`
-	TopActiveFamilies     []FamilyActivity  `json:"topActiveFamilies"`
+	UserRetention          RetentionMetrics    `json:"userRetention"`
+	TopActiveFamilies      []FamilyActivity    `json:"topActiveFamilies"`
 }
 
 type DataPoint struct {
@@ -61,50 +61,50 @@ type DistributionPoint struct {
 }
 
 type RetentionMetrics struct {
-	Day1    float64 `json:"day1"`
-	Day7    float64 `json:"day7"`
-	Day30   float64 `json:"day30"`
-	Day90   float64 `json:"day90"`
+	Day1  float64 `json:"day1"`
+	Day7  float64 `json:"day7"`
+	Day30 float64 `json:"day30"`
+	Day90 float64 `json:"day90"`
 }
 
 type FamilyActivity struct {
-	FamilyName  string `json:"familyName"`
-	TotalPhotos int    `json:"totalPhotos"`
-	TotalMilestones int `json:"totalMilestones"`
-	LastActive  string `json:"lastActive"`
-	Score       int    `json:"score"`
+	FamilyName      string `json:"familyName"`
+	TotalPhotos     int    `json:"totalPhotos"`
+	TotalMilestones int    `json:"totalMilestones"`
+	LastActive      string `json:"lastActive"`
+	Score           int    `json:"score"`
 }
 
 // Content Analytics
 type ContentAnalyticsResponse struct {
-	PhotoUploadTrends      []DataPoint         `json:"photoUploadTrends"`
-	MilestonesByCategory   []DistributionPoint `json:"milestonesByCategory"`
-	ContentPerFamily       []FamilyContentStats `json:"contentPerFamily"`
-	PhotoFormats           []DistributionPoint `json:"photoFormats"`
-	AveragePhotosPerChild  float64             `json:"averagePhotosPerChild"`
-	AverageMilestonesPerChild float64         `json:"averageMilestonesPerChild"`
+	PhotoUploadTrends         []DataPoint          `json:"photoUploadTrends"`
+	MilestonesByCategory      []DistributionPoint  `json:"milestonesByCategory"`
+	ContentPerFamily          []FamilyContentStats `json:"contentPerFamily"`
+	PhotoFormats              []DistributionPoint  `json:"photoFormats"`
+	AveragePhotosPerChild     float64              `json:"averagePhotosPerChild"`
+	AverageMilestonesPerChild float64              `json:"averageMilestonesPerChild"`
 }
 
 type FamilyContentStats struct {
-	FamilyName  string `json:"familyName"`
-	Photos      int    `json:"photos"`
-	Milestones  int    `json:"milestones"`
-	Children    int    `json:"children"`
+	FamilyName         string  `json:"familyName"`
+	Photos             int     `json:"photos"`
+	Milestones         int     `json:"milestones"`
+	Children           int     `json:"children"`
 	PhotosPerChild     float64 `json:"photosPerChild"`
 	MilestonesPerChild float64 `json:"milestonesPerChild"`
 }
 
 // System Analytics
 type SystemAnalyticsResponse struct {
-	StorageUsage        StorageMetrics     `json:"storageUsage"`
-	ProcessingMetrics   ProcessingMetrics  `json:"processingMetrics"`
-	ErrorAnalysis       ErrorAnalysis      `json:"errorAnalysis"`
-	APIRequestTrends    []DataPoint        `json:"apiRequestTrends"`
+	StorageUsage      StorageMetrics    `json:"storageUsage"`
+	ProcessingMetrics ProcessingMetrics `json:"processingMetrics"`
+	ErrorAnalysis     ErrorAnalysis     `json:"errorAnalysis"`
+	APIRequestTrends  []DataPoint       `json:"apiRequestTrends"`
 }
 
 type StorageMetrics struct {
-	TotalSize       int64   `json:"totalSize"`
-	AverageFileSize int64   `json:"averageFileSize"`
+	TotalSize       int64       `json:"totalSize"`
+	AverageFileSize int64       `json:"averageFileSize"`
 	GrowthTrend     []DataPoint `json:"growthTrend"`
 }
 
@@ -551,10 +551,13 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		averageSize = totalSize / int64(len(photos))
 	}
 
+	// Calculate storage growth trend (last 30 days)
+	growthTrend := calculateStorageGrowthTrend(photos)
+
 	resp.StorageUsage = StorageMetrics{
 		TotalSize:       totalSize,
 		AverageFileSize: averageSize,
-		GrowthTrend:     []DataPoint{}, // TODO: Implement storage growth tracking
+		GrowthTrend:     growthTrend,
 	}
 
 	// Processing metrics
@@ -573,9 +576,12 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		successRate = float64(len(photos)-failedCount) / float64(len(photos)) * 100
 	}
 
+	// Calculate estimated average processing time based on file size and status
+	avgProcessTime := calculateAverageProcessingTime(photos)
+
 	resp.ProcessingMetrics = ProcessingMetrics{
 		SuccessRate:        successRate,
-		AverageProcessTime: 0, // TODO: Track processing times
+		AverageProcessTime: avgProcessTime,
 		QueueLength:        processingCount,
 	}
 
@@ -609,4 +615,83 @@ func formatFamilySize(size int) string {
 	default:
 		return "6+ members"
 	}
+}
+
+// calculateStorageGrowthTrend calculates daily storage usage over the last 30 days
+func calculateStorageGrowthTrend(photos []Image) []DataPoint {
+	now := time.Now()
+	dailyStorage := make(map[string]int64)
+
+	// Initialize all days to 0
+	for i := 0; i < 30; i++ {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		dailyStorage[date] = 0
+	}
+
+	// Accumulate storage for each day (cumulative)
+	// Sort photos by creation date first
+	for i := 29; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		currentDate := now.AddDate(0, 0, -i)
+
+		var cumulativeSize int64
+		for _, photo := range photos {
+			// If photo was created on or before this date, include its size
+			if photo.CreatedAt.Before(currentDate) || photo.CreatedAt.Format("2006-01-02") == date {
+				cumulativeSize += int64(photo.FileSize)
+			}
+		}
+		dailyStorage[date] = cumulativeSize
+	}
+
+	// Convert to DataPoint slice
+	var trend []DataPoint
+	for i := 29; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		// Convert bytes to MB for readability
+		sizeMB := dailyStorage[date] / (1024 * 1024)
+		trend = append(trend, DataPoint{
+			Date:  date,
+			Value: int(sizeMB),
+		})
+	}
+
+	return trend
+}
+
+// calculateAverageProcessingTime estimates processing time based on historical data
+func calculateAverageProcessingTime(photos []Image) float64 {
+	if len(photos) == 0 {
+		return 0
+	}
+
+	// Simplified estimation: base processing time on file size
+	// Larger files generally take longer to process
+	totalEstimatedTime := 0.0
+	processedPhotos := 0
+
+	for _, photo := range photos {
+		// Only consider photos that have been processed (status 0 = done)
+		if photo.Status == 0 {
+			// Estimate processing time based on file size
+			// Base time: 0.5 seconds + (file size in MB * 0.1 seconds per MB)
+			fileSizeMB := float64(photo.FileSize) / (1024 * 1024)
+			estimatedTime := 0.5 + (fileSizeMB * 0.1)
+
+			// Add complexity factor based on image dimensions
+			if photo.Width > 0 && photo.Height > 0 {
+				megapixels := float64(photo.Width*photo.Height) / 1000000
+				estimatedTime += megapixels * 0.05 // 0.05 seconds per megapixel
+			}
+
+			totalEstimatedTime += estimatedTime
+			processedPhotos++
+		}
+	}
+
+	if processedPhotos == 0 {
+		return 0
+	}
+
+	return totalEstimatedTime / float64(processedPhotos)
 }

@@ -10,9 +10,7 @@ type HeaderData = {
 
 const useHeader = vlens.declareHook((): HeaderData => {
   const stored = localStorage.getItem("theme") as HeaderData["theme"] | null;
-  const defaultTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  const defaultTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
   const themeValue: HeaderData["theme"] = stored ?? defaultTheme;
 
@@ -48,10 +46,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
         >
           Menu
         </button>
-        <ul
-          className={vlens.refGet(menuRef) ? "nav-links" : "nav-links hidden"}
-          id="navLinks"
-        >
+        <ul className={vlens.refGet(menuRef) ? "nav-links" : "nav-links hidden"} id="navLinks">
           {isAuthenticated ? (
             <>
               <li className="user-info-container">
@@ -68,7 +63,9 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
                 </li>
               ) : null}
             </>
-          ) : ""}
+          ) : (
+            ""
+          )}
           <li>
             <a href="/" className={isHome ? "active" : ""}>
               Home
@@ -77,10 +74,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
           {isAuthenticated ? (
             <>
               <li>
-                <button
-                  onClick={logoutClicked}
-                  className="logout-button"
-                >
+                <button onClick={logoutClicked} className="logout-button">
                   Logout
                 </button>
               </li>
@@ -120,8 +114,8 @@ export const Footer = () => (
 const logoutClicked = async (event: Event) => {
   event.preventDefault();
   // Close mobile menu first if it's open
-  const menuToggle = document.getElementById('navToggle');
-  if (menuToggle && menuToggle.getAttribute('aria-expanded') === 'true') {
+  const menuToggle = document.getElementById("navToggle");
+  if (menuToggle && menuToggle.getAttribute("aria-expanded") === "true") {
     menuToggle.click();
   }
   await auth.logout();

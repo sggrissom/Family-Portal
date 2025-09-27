@@ -294,6 +294,13 @@ block(`
 `);
 
 block(`
+.chart-placeholder.large {
+  min-height: 400px;
+  font-size: 1.2rem;
+}
+`);
+
+block(`
 .simple-line-chart {
   position: relative;
   height: 200px;

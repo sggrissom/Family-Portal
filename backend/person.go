@@ -42,7 +42,7 @@ type AddPersonRequest struct {
 }
 
 type GetPersonRequest struct {
-	Id     int    `json:"id"`     // 0 = Male, 1 = Female, 2 = Unknown
+	Id int `json:"id"` // 0 = Male, 1 = Female, 2 = Unknown
 }
 
 type SetProfilePhotoRequest struct {
@@ -55,14 +55,14 @@ type SetProfilePhotoResponse struct {
 }
 
 type ListPeopleResponse struct {
-	People  []Person `json:"people"`
+	People []Person `json:"people"`
 }
 
 type GetPersonResponse struct {
-	Person     Person      `json:"person,omitempty"`
+	Person     Person       `json:"person,omitempty"`
 	GrowthData []GrowthData `json:"growthData"`
-	Milestones []Milestone `json:"milestones"`
-	Photos     []Image     `json:"photos"`
+	Milestones []Milestone  `json:"milestones"`
+	Photos     []Image      `json:"photos"`
 }
 
 // Database types

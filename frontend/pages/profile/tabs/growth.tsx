@@ -8,9 +8,9 @@ interface GrowthTabProps {
 }
 
 const formatDate = (dateString: string) => {
-  if (!dateString) return '';
-  if (dateString.includes('T') && dateString.endsWith('Z')) {
-    const dateParts = dateString.split('T')[0].split('-');
+  if (!dateString) return "";
+  if (dateString.includes("T") && dateString.endsWith("Z")) {
+    const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
     const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
     const day = parseInt(dateParts[2]);
@@ -19,9 +19,16 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
-const handleDeleteGrowthData = async (id: number, type: server.MeasurementType, value: number, unit: string) => {
-  const typeLabel = type === server.Height ? 'Height' : 'Weight';
-  const confirmed = confirm(`Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${value} ${unit}?`);
+const handleDeleteGrowthData = async (
+  id: number,
+  type: server.MeasurementType,
+  value: number,
+  unit: string
+) => {
+  const typeLabel = type === server.Height ? "Height" : "Weight";
+  const confirmed = confirm(
+    `Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${value} ${unit}?`
+  );
 
   if (confirmed) {
     try {
@@ -41,13 +48,13 @@ const handleDeleteGrowthData = async (id: number, type: server.MeasurementType, 
 
 export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
   const getMeasurementTypeLabel = (type: server.MeasurementType) => {
-    return type === server.Height ? 'Height' : 'Weight';
+    return type === server.Height ? "Height" : "Weight";
   };
 
   // Sort growth data by measurement date (newest first) for table
-  const sortedGrowthData = (growthData || []).slice().sort((a, b) =>
-    new Date(b.measurementDate).getTime() - new Date(a.measurementDate).getTime()
-  );
+  const sortedGrowthData = (growthData || [])
+    .slice()
+    .sort((a, b) => new Date(b.measurementDate).getTime() - new Date(a.measurementDate).getTime());
 
   return (
     <div className="growth-tab">
@@ -63,7 +70,9 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
           {sortedGrowthData.length === 0 ? (
             <div className="empty-state">
               <p>No growth records yet.</p>
-              <a href={`/add-growth/${person.id}`} className="btn btn-primary">Add First Measurement</a>
+              <a href={`/add-growth/${person.id}`} className="btn btn-primary">
+                Add First Measurement
+              </a>
             </div>
           ) : (
             <div className="growth-records">
@@ -80,17 +89,30 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                   {sortedGrowthData.map(record => (
                     <tr key={record.id}>
                       <td>{getMeasurementTypeLabel(record.measurementType)}</td>
-                      <td>{record.value} {record.unit}</td>
+                      <td>
+                        {record.value} {record.unit}
+                      </td>
                       <td>{formatDate(record.measurementDate)}</td>
                       <td>
                         <div className="table-actions">
-                          <a href={`/edit-growth/${record.id}`} className="btn-action btn-edit" title="Edit">
+                          <a
+                            href={`/edit-growth/${record.id}`}
+                            className="btn-action btn-edit"
+                            title="Edit"
+                          >
                             ✏️
                           </a>
                           <button
                             className="btn-action btn-delete"
                             title="Delete"
-                            onClick={() => handleDeleteGrowthData(record.id, record.measurementType, record.value, record.unit)}
+                            onClick={() =>
+                              handleDeleteGrowthData(
+                                record.id,
+                                record.measurementType,
+                                record.value,
+                                record.unit
+                              )
+                            }
                           >
                             🗑️
                           </button>
@@ -101,7 +123,9 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                 </tbody>
               </table>
               <div className="table-actions">
-                <a href={`/add-growth/${person.id}`} className="btn btn-primary">Add New Measurement</a>
+                <a href={`/add-growth/${person.id}`} className="btn btn-primary">
+                  Add New Measurement
+                </a>
               </div>
             </div>
           )}

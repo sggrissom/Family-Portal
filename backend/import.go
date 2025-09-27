@@ -46,30 +46,30 @@ type ImportWeight struct {
 }
 
 type ImportDataStructure struct {
-	People        []ImportPerson `json:"people"`
-	Heights       []ImportHeight `json:"heights"`
-	Weights       []ImportWeight `json:"weights"`
-	ExportDate    time.Time      `json:"export_date"`
-	TotalHeights  int            `json:"total_heights"`
-	TotalWeights  int            `json:"total_weights"`
-	TotalPeople   int            `json:"total_people"`
+	People       []ImportPerson `json:"people"`
+	Heights      []ImportHeight `json:"heights"`
+	Weights      []ImportWeight `json:"weights"`
+	ExportDate   time.Time      `json:"export_date"`
+	TotalHeights int            `json:"total_heights"`
+	TotalWeights int            `json:"total_weights"`
+	TotalPeople  int            `json:"total_people"`
 }
 
 // Request/Response types
 type ImportDataRequest struct {
-	JsonData         string `json:"jsonData"`
-	FilterFamilyIds  []int  `json:"filterFamilyIds,omitempty"`  // Only import people from these family IDs
-	FilterPersonIds  []int  `json:"filterPersonIds,omitempty"` // Only import these specific person IDs
-	PreviewOnly      bool   `json:"previewOnly,omitempty"`      // If true, just return available data without importing
+	JsonData        string `json:"jsonData"`
+	FilterFamilyIds []int  `json:"filterFamilyIds,omitempty"` // Only import people from these family IDs
+	FilterPersonIds []int  `json:"filterPersonIds,omitempty"` // Only import these specific person IDs
+	PreviewOnly     bool   `json:"previewOnly,omitempty"`     // If true, just return available data without importing
 }
 
 type ImportDataResponse struct {
-	ImportedPeople        int             `json:"importedPeople"`
-	ImportedMeasurements  int             `json:"importedMeasurements"`
-	Errors               []string         `json:"errors,omitempty"`
-	PersonIdMapping      map[int]int      `json:"personIdMapping,omitempty"`
-	AvailableFamilyIds   []int            `json:"availableFamilyIds,omitempty"`
-	AvailablePeople      []ImportPerson   `json:"availablePeople,omitempty"`
+	ImportedPeople       int            `json:"importedPeople"`
+	ImportedMeasurements int            `json:"importedMeasurements"`
+	Errors               []string       `json:"errors,omitempty"`
+	PersonIdMapping      map[int]int    `json:"personIdMapping,omitempty"`
+	AvailableFamilyIds   []int          `json:"availableFamilyIds,omitempty"`
+	AvailablePeople      []ImportPerson `json:"availablePeople,omitempty"`
 }
 
 // vbeam procedure

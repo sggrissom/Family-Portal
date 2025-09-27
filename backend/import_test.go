@@ -95,7 +95,6 @@ func TestImportPeople(t *testing.T) {
 				continue
 			}
 
-
 			// Verify person details
 			if person.Name != importPerson.Name {
 				t.Errorf("Expected name %s, got %s", importPerson.Name, person.Name)
@@ -289,9 +288,9 @@ func TestImportMeasurements(t *testing.T) {
 
 func TestImportDataValidation(t *testing.T) {
 	tests := []struct {
-		name        string
-		importData  ImportDataStructure
-		shouldError bool
+		name          string
+		importData    ImportDataStructure
+		shouldError   bool
 		errorContains string
 	}{
 		{
@@ -312,7 +311,7 @@ func TestImportDataValidation(t *testing.T) {
 			importData: ImportDataStructure{
 				People: []ImportPerson{},
 			},
-			shouldError: true,
+			shouldError:   true,
 			errorContains: "No people found",
 		},
 		{
@@ -326,7 +325,7 @@ func TestImportDataValidation(t *testing.T) {
 					},
 				},
 			},
-			shouldError: true,
+			shouldError:   true,
 			errorContains: "has no name",
 		},
 		{
@@ -340,7 +339,7 @@ func TestImportDataValidation(t *testing.T) {
 					},
 				},
 			},
-			shouldError: true,
+			shouldError:   true,
 			errorContains: "invalid birthday",
 		},
 	}

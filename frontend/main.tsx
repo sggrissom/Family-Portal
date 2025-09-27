@@ -17,7 +17,7 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
     }, 0);
 
     return preact.h("div", { className: "auth-failure-redirect" }, [
-      preact.h("p", {}, "Redirecting to login...")
+      preact.h("p", {}, "Redirecting to login..."),
     ]);
   }
 
@@ -28,9 +28,9 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
       preact.h("p", { className: "error-message" }, error),
       preact.h("div", { className: "error-actions" }, [
         preact.h("a", { href: "/", className: "btn btn-primary" }, "Go Home"),
-        preact.h("a", { href: "/dashboard", className: "btn btn-secondary" }, "Dashboard")
-      ])
-    ])
+        preact.h("a", { href: "/dashboard", className: "btn btn-secondary" }, "Dashboard"),
+      ]),
+    ]),
   ]);
 }
 

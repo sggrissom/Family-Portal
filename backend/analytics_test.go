@@ -139,10 +139,10 @@ func TestGetAnalyticsOverview(t *testing.T) {
 		// Create test users with different activity patterns
 		testUsers := []User{
 			// Admin user already created above
-			{Id: 2, Email: "active@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, -1), LastLogin: now.AddDate(0, 0, -1)}, // Active within 7d
-			{Id: 3, Email: "recent@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, 1), LastLogin: weekAgo.AddDate(0, 0, 1)}, // New within 7d
+			{Id: 2, Email: "active@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, -1), LastLogin: now.AddDate(0, 0, -1)},      // Active within 7d
+			{Id: 3, Email: "recent@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, 1), LastLogin: weekAgo.AddDate(0, 0, 1)},    // New within 7d
 			{Id: 4, Email: "monthly@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, 1), LastLogin: monthAgo.AddDate(0, 0, 5)}, // Active within 30d
-			{Id: 5, Email: "old@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, -10), LastLogin: monthAgo.AddDate(0, 0, -5)}, // Older activity
+			{Id: 5, Email: "old@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, -10), LastLogin: monthAgo.AddDate(0, 0, -5)},  // Older activity
 		}
 		for _, user := range testUsers {
 			if user.Id != 1 { // Don't overwrite admin user
@@ -154,7 +154,7 @@ func TestGetAnalyticsOverview(t *testing.T) {
 		photos := []Image{
 			{Id: 1, FamilyId: 1, PersonId: 1, CreatedAt: now.AddDate(0, 0, -1), Status: 0},
 			{Id: 2, FamilyId: 1, PersonId: 1, CreatedAt: now.AddDate(0, 0, -2), Status: 0},
-			{Id: 3, FamilyId: 2, PersonId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1}, // Processing
+			{Id: 3, FamilyId: 2, PersonId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1},   // Processing
 			{Id: 4, FamilyId: 2, PersonId: 2, CreatedAt: monthAgo.AddDate(0, 0, -10), Status: 2}, // Failed
 		}
 		for _, photo := range photos {

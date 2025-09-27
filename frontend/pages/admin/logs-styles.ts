@@ -1,4 +1,4 @@
-import { block } from "vlens/css"
+import { block } from "vlens/css";
 
 // Logs page container
 block(`
@@ -7,7 +7,7 @@ block(`
   margin: 0 auto;
   padding: 2rem 1rem;
 }
-`)
+`);
 
 // Header section
 block(`
@@ -19,7 +19,7 @@ block(`
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
 }
-`)
+`);
 
 block(`
 .logs-header h1 {
@@ -27,7 +27,7 @@ block(`
   color: var(--admin-accent);
   font-size: 2rem;
 }
-`)
+`);
 
 block(`
 .back-link {
@@ -36,21 +36,21 @@ block(`
   font-weight: 500;
   transition: color 0.2s ease;
 }
-`)
+`);
 
 block(`
 .back-link:hover {
   color: var(--primary-accent);
   text-decoration: underline;
 }
-`)
+`);
 
 // Statistics section
 block(`
 .logs-stats {
   margin-bottom: 2rem;
 }
-`)
+`);
 
 block(`
 .stats-grid {
@@ -58,7 +58,7 @@ block(`
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1rem;
 }
-`)
+`);
 
 block(`
 .stat-card {
@@ -68,7 +68,7 @@ block(`
   padding: 1rem;
   text-align: center;
 }
-`)
+`);
 
 block(`
 .stat-number {
@@ -77,7 +77,7 @@ block(`
   color: var(--admin-accent);
   margin-bottom: 0.25rem;
 }
-`)
+`);
 
 block(`
 .stat-label {
@@ -86,7 +86,7 @@ block(`
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-`)
+`);
 
 // Controls section
 block(`
@@ -97,7 +97,7 @@ block(`
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
-`)
+`);
 
 block(`
 .logs-filters {
@@ -106,7 +106,7 @@ block(`
   gap: 1rem;
   margin-bottom: 1rem;
 }
-`)
+`);
 
 block(`
 .filter-group {
@@ -114,7 +114,7 @@ block(`
   flex-direction: column;
   gap: 0.5rem;
 }
-`)
+`);
 
 block(`
 .filter-group label {
@@ -122,7 +122,7 @@ block(`
   color: var(--text);
   font-size: 0.875rem;
 }
-`)
+`);
 
 block(`
 .filter-group select {
@@ -133,7 +133,7 @@ block(`
   color: var(--text);
   font-size: 0.875rem;
 }
-`)
+`);
 
 block(`
 .filter-group select:focus {
@@ -141,7 +141,7 @@ block(`
   border-color: var(--admin-accent);
   box-shadow: 0 0 0 2px var(--admin-accent)20;
 }
-`)
+`);
 
 // Pagination
 block(`
@@ -153,21 +153,21 @@ block(`
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
-`)
+`);
 
 block(`
 .pagination-info {
   font-size: 0.875rem;
   color: var(--muted);
 }
-`)
+`);
 
 block(`
 .pagination-controls {
   display: flex;
   gap: 0.5rem;
 }
-`)
+`);
 
 block(`
 .pagination-btn {
@@ -180,21 +180,21 @@ block(`
   font-size: 0.875rem;
   transition: all 0.2s ease;
 }
-`)
+`);
 
 block(`
 .pagination-btn:hover:not(:disabled) {
   background: var(--hover-bg);
   border-color: var(--admin-accent);
 }
-`)
+`);
 
 block(`
 .pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-`)
+`);
 
 // Log content table
 block(`
@@ -204,13 +204,13 @@ block(`
   border-radius: 8px;
   overflow: hidden;
 }
-`)
+`);
 
 block(`
 .logs-table {
   width: 100%;
 }
-`)
+`);
 
 block(`
 .table-header {
@@ -226,7 +226,7 @@ block(`
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-`)
+`);
 
 block(`
 .table-row {
@@ -238,19 +238,19 @@ block(`
   font-size: 0.875rem;
   align-items: start;
 }
-`)
+`);
 
 block(`
 .table-row:last-child {
   border-bottom: none;
 }
-`)
+`);
 
 block(`
 .table-row:hover {
   background: var(--hover-bg);
 }
-`)
+`);
 
 // Column specific styles
 block(`
@@ -259,21 +259,21 @@ block(`
   font-size: 0.8rem;
   color: var(--muted);
 }
-`)
+`);
 
 block(`
 .col-message {
   line-height: 1.4;
   word-break: break-word;
 }
-`)
+`);
 
 block(`
 .col-user {
   font-size: 0.8rem;
   color: var(--muted);
 }
-`)
+`);
 
 // Log badges
 block(`
@@ -286,42 +286,42 @@ block(`
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-`)
+`);
 
 block(`
 .log-badge-error {
   background: #fee2e2;
   color: #dc2626;
 }
-`)
+`);
 
 block(`
 .log-badge-warn {
   background: #fef3c7;
   color: #d97706;
 }
-`)
+`);
 
 block(`
 .log-badge-info {
   background: #dbeafe;
   color: #2563eb;
 }
-`)
+`);
 
 block(`
 .log-badge-debug {
   background: #f3e8ff;
   color: #7c3aed;
 }
-`)
+`);
 
 block(`
 .log-badge-default {
   background: var(--hover-bg);
   color: var(--text);
 }
-`)
+`);
 
 // Category badges
 block(`
@@ -334,49 +334,49 @@ block(`
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-`)
+`);
 
 block(`
 .log-category-auth {
   background: #fef3c7;
   color: #92400e;
 }
-`)
+`);
 
 block(`
 .log-category-photo {
   background: #ecfdf5;
   color: #065f46;
 }
-`)
+`);
 
 block(`
 .log-category-admin {
   background: #f3e8ff;
   color: #6b21a8;
 }
-`)
+`);
 
 block(`
 .log-category-api {
   background: #dbeafe;
   color: #1e40af;
 }
-`)
+`);
 
 block(`
 .log-category-worker {
   background: #fff7ed;
   color: #9a3412;
 }
-`)
+`);
 
 block(`
 .log-category-system {
   background: #f1f5f9;
   color: #475569;
 }
-`)
+`);
 
 // Log data display
 block(`
@@ -387,7 +387,7 @@ block(`
   border-radius: 4px;
   border-left: 3px solid var(--admin-accent);
 }
-`)
+`);
 
 block(`
 .log-data pre {
@@ -398,7 +398,7 @@ block(`
   white-space: pre-wrap;
   word-break: break-all;
 }
-`)
+`);
 
 // State messages
 block(`
@@ -409,7 +409,7 @@ block(`
   padding: 2rem;
   color: var(--muted);
 }
-`)
+`);
 
 block(`
 .error-message {
@@ -419,27 +419,27 @@ block(`
   border-radius: 8px;
   margin-bottom: 1rem;
 }
-`)
+`);
 
 block(`
 .error-icon {
   margin-right: 0.5rem;
 }
-`)
+`);
 
 block(`
 .loading-spinner {
   margin-right: 0.5rem;
   animation: spin 1s linear infinite;
 }
-`)
+`);
 
 block(`
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-`)
+`);
 
 // Dark mode support
 block(`
@@ -447,77 +447,77 @@ block(`
   background: var(--admin-surface);
   border-color: var(--admin-border);
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-badge-error {
   background: #7f1d1d;
   color: #fca5a5;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-badge-warn {
   background: #78350f;
   color: #fbbf24;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-badge-info {
   background: #1e3a8a;
   color: #93c5fd;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-badge-debug {
   background: #581c87;
   color: #c4b5fd;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-auth {
   background: #78350f;
   color: #fbbf24;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-photo {
   background: #064e3b;
   color: #6ee7b7;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-admin {
   background: #581c87;
   color: #c4b5fd;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-api {
   background: #1e3a8a;
   color: #93c5fd;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-worker {
   background: #7c2d12;
   color: #fdba74;
 }
-`)
+`);
 
 block(`
 [data-theme="dark"] .log-category-system {
   background: #334155;
   color: #cbd5e1;
 }
-`)
+`);
 
 // Mobile responsive design
 block(`
@@ -588,7 +588,7 @@ block(`
     font-size: 0.8rem;
   }
 }
-`)
+`);
 
 block(`
 @media (max-width: 480px) {
@@ -609,4 +609,4 @@ block(`
   .pagination-controls {
     justify-content: center;
   }
-}`)
+}`);

@@ -1,3 +1,6 @@
+//go:build release || !frontend
+// +build release !frontend
+
 package main
 
 import (

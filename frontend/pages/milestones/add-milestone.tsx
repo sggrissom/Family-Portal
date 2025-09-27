@@ -18,19 +18,21 @@ type AddMilestoneForm = {
   ageMonths: string;
   error: string;
   loading: boolean;
-}
+};
 
-const useAddMilestoneForm = vlens.declareHook((personId?: string): AddMilestoneForm => ({
-  selectedPersonId: personId || "",
-  description: "",
-  category: "development",
-  inputType: "today",
-  milestoneDate: "",
-  ageYears: "",
-  ageMonths: "",
-  error: "",
-  loading: false
-}));
+const useAddMilestoneForm = vlens.declareHook(
+  (personId?: string): AddMilestoneForm => ({
+    selectedPersonId: personId || "",
+    description: "",
+    category: "development",
+    inputType: "today",
+    milestoneDate: "",
+    ageYears: "",
+    ageMonths: "",
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   // Fetch people list to populate the person selector
@@ -40,7 +42,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse,
+  data: server.ListPeopleResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -55,8 +57,12 @@ export function view(
           <div className="error-page">
             <h1>No Family Members</h1>
             <p>Please add family members before adding milestones</p>
-            <a href="/add-person" className="btn btn-primary">Add Family Member</a>
-            <a href="/dashboard" className="btn btn-secondary">Back to Dashboard</a>
+            <a href="/add-person" className="btn btn-primary">
+              Add Family Member
+            </a>
+            <a href="/dashboard" className="btn btn-secondary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -65,7 +71,7 @@ export function view(
   }
 
   // Extract person ID from URL if present (e.g., /add-milestone/123)
-  const urlParts = route.split('/');
+  const urlParts = route.split("/");
   const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
 
   const form = useAddMilestoneForm(personIdFromUrl);
@@ -101,14 +107,14 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
     return;
   }
 
-  if (form.inputType === 'date' && !form.milestoneDate) {
+  if (form.inputType === "date" && !form.milestoneDate) {
     form.error = "Please select a date";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  if (form.inputType === 'age' && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
+  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
     form.error = "Please enter a valid age";
     form.loading = false;
     vlens.scheduleRedraw();
@@ -121,13 +127,13 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
       personId: parseInt(form.selectedPersonId),
       description: form.description.trim(),
       category: form.category,
-      inputType: form.inputType
+      inputType: form.inputType,
     };
 
     // Add date/age specific fields
-    if (form.inputType === 'date') {
+    if (form.inputType === "date") {
       requestData.milestoneDate = form.milestoneDate;
-    } else if (form.inputType === 'age') {
+    } else if (form.inputType === "age") {
       requestData.ageYears = parseInt(form.ageYears);
       if (form.ageMonths) {
         requestData.ageMonths = parseInt(form.ageMonths);
@@ -141,7 +147,8 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
     core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
-    form.error = error instanceof Error ? error.message : "Failed to save milestone. Please try again.";
+    form.error =
+      error instanceof Error ? error.message : "Failed to save milestone. Please try again.";
     vlens.scheduleRedraw();
   }
 }
@@ -167,7 +174,7 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
     { value: "health", label: "Health" },
     { value: "achievement", label: "Achievement" },
     { value: "first", label: "First Time" },
-    { value: "other", label: "Other" }
+    { value: "other", label: "Other" },
   ];
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
@@ -180,9 +187,7 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
           <p>Capture special moments and developmental milestones</p>
         </div>
 
-        {form.error && (
-          <div className="error-message">{form.error}</div>
-        )}
+        {form.error && <div className="error-message">{form.error}</div>}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
           {/* Person Selection */}
@@ -249,8 +254,8 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="today"
-                  checked={form.inputType === 'today'}
-                  onChange={() => onInputTypeChange(form, 'today')}
+                  checked={form.inputType === "today"}
+                  onChange={() => onInputTypeChange(form, "today")}
                   disabled={form.loading}
                 />
                 <span>Today</span>
@@ -260,8 +265,8 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="date"
-                  checked={form.inputType === 'date'}
-                  onChange={() => onInputTypeChange(form, 'date')}
+                  checked={form.inputType === "date"}
+                  onChange={() => onInputTypeChange(form, "date")}
                   disabled={form.loading}
                 />
                 <span>Specific Date</span>
@@ -271,8 +276,8 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
                   type="radio"
                   name="inputType"
                   value="age"
-                  checked={form.inputType === 'age'}
-                  onChange={() => onInputTypeChange(form, 'age')}
+                  checked={form.inputType === "age"}
+                  onChange={() => onInputTypeChange(form, "age")}
                   disabled={form.loading}
                 />
                 <span>At Age</span>
@@ -281,14 +286,14 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
           </div>
 
           {/* Date Input */}
-          {form.inputType === 'date' && (
+          {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
               <input
                 id="date"
                 type="date"
                 {...vlens.attrsBindInput(vlens.ref(form, "milestoneDate"))}
-                max={new Date().toISOString().split('T')[0]}
+                max={new Date().toISOString().split("T")[0]}
                 required
                 disabled={form.loading}
               />
@@ -296,7 +301,7 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
           )}
 
           {/* Age Input */}
-          {form.inputType === 'age' && (
+          {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
                 <label htmlFor="ageYears">Age (Years)</label>
@@ -328,13 +333,11 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
 
           {/* Submit Button */}
           <div className="form-actions">
-            <a href="/dashboard" className="btn btn-secondary">Cancel</a>
-            <button
-              type="submit"
-              className="btn btn-primary auth-submit"
-              disabled={form.loading}
-            >
-              {form.loading ? 'Saving...' : 'Save Milestone'}
+            <a href="/dashboard" className="btn btn-secondary">
+              Cancel
+            </a>
+            <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
+              {form.loading ? "Saving..." : "Save Milestone"}
             </button>
           </div>
         </form>
@@ -344,14 +347,16 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
             <h3>Preview</h3>
             <p>
               <strong>{selectedPerson.name}</strong> - {form.description}
-              {form.inputType === 'today' && (
-                <span> today</span>
-              )}
-              {form.inputType === 'date' && form.milestoneDate && (
+              {form.inputType === "today" && <span> today</span>}
+              {form.inputType === "date" && form.milestoneDate && (
                 <span> on {new Date(form.milestoneDate).toLocaleDateString()}</span>
               )}
-              {form.inputType === 'age' && form.ageYears && (
-                <span> at age {form.ageYears}{form.ageMonths ? `.${form.ageMonths}` : ''} years</span>
+              {form.inputType === "age" && form.ageYears && (
+                <span>
+                  {" "}
+                  at age {form.ageYears}
+                  {form.ageMonths ? `.${form.ageMonths}` : ""} years
+                </span>
               )}
             </p>
           </div>

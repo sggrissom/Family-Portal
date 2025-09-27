@@ -12,35 +12,33 @@ type CreateAccountForm = {
   familyCode: string;
   error: string;
   loading: boolean;
-}
+};
 
-type Data = {}
+type Data = {};
 
-const useCreateAccountForm = vlens.declareHook((): CreateAccountForm => ({
-  name: "",
-  email: "",
-  password: "",
-  confirmPassword: "",
-  familyCode: "",
-  error: "",
-  loading: false
-}))
+const useCreateAccountForm = vlens.declareHook(
+  (): CreateAccountForm => ({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    familyCode: "",
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return vlens.rpcOk({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const form = useCreateAccountForm();
 
   // Check for family code in URL parameters and pre-fill if present
-  if (typeof window !== 'undefined' && !form.familyCode) {
+  if (typeof window !== "undefined" && !form.familyCode) {
     const urlParams = new URLSearchParams(window.location.search);
-    const codeParam = urlParams.get('code');
+    const codeParam = urlParams.get("code");
     if (codeParam) {
       form.familyCode = codeParam;
       vlens.scheduleRedraw();
@@ -89,9 +87,9 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
   // Scroll to error message if there's an error
   if (form.error) {
     setTimeout(() => {
-      const errorElement = document.querySelector('.error-message');
+      const errorElement = document.querySelector(".error-message");
       if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 100);
   }
@@ -109,9 +107,7 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
         <p>{form.familyCode ? "Join Your Family" : "Start a Family"}</p>
       </div>
 
-      {form.error && (
-        <div className="error-message">{form.error}</div>
-      )}
+      {form.error && <div className="error-message">{form.error}</div>}
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onCreateAccountClicked, form)}>
         <div className="form-group">
@@ -174,8 +170,7 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
           <small className="form-hint">
             {form.familyCode
               ? "You're joining an existing family with this code"
-              : "Leave blank to create a new family group"
-            }
+              : "Leave blank to create a new family group"}
           </small>
         </div>
 
@@ -191,10 +186,11 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
       <div className="auth-footer">
         <p>
           Already have an account?
-          <a href="/login" className="auth-link">Sign in</a>
+          <a href="/login" className="auth-link">
+            Sign in
+          </a>
         </p>
       </div>
     </div>
   </div>
 );
-

@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy stop_service start_service copy_files test local typecheck
+.PHONY: all build deploy stop_service start_service copy_files test local typecheck lint format setup-hooks check
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ CGO_ENABLED  := 0
 
 build-frontend:
 	@echo "Building frontend..."
-	go run release/frontend.go
+	go run -tags frontend release/frontend.go
 
 build-go:
 	@echo "Building $(BINARY_NAME)..."
@@ -56,3 +56,27 @@ typecheck:
 
 local:
 	go run family/local
+
+# ── code quality ───────────────────────────────────────────────────────────────
+
+lint:
+	@echo "Running Go linters..."
+	go vet -tags release ./...
+	go fmt ./...
+	@echo "Running TypeScript linter..."
+	npx prettier --check "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
+
+format:
+	@echo "Formatting Go code..."
+	go fmt ./...
+	@echo "Formatting TypeScript code..."
+	npx prettier --write "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
+
+setup-hooks:
+	@echo "Setting up pre-commit hooks..."
+	@command -v pre-commit >/dev/null 2>&1 || { echo "Installing pre-commit..."; pip install pre-commit; }
+	pre-commit install
+	@echo "Pre-commit hooks installed. Run 'make check' to validate."
+
+check: test typecheck lint
+	@echo "✅ All quality checks passed!"

@@ -22,22 +22,24 @@ type AddPhotoForm = {
   error: string;
   loading: boolean;
   dragActive: boolean;
-}
+};
 
-const useAddPhotoForm = vlens.declareHook((personId?: string): AddPhotoForm => ({
-  selectedPersonId: personId || "",
-  title: "",
-  description: "",
-  inputType: "auto",
-  photoDate: "",
-  ageYears: "",
-  ageMonths: "",
-  selectedFile: null,
-  previewUrl: "",
-  error: "",
-  loading: false,
-  dragActive: false
-}));
+const useAddPhotoForm = vlens.declareHook(
+  (personId?: string): AddPhotoForm => ({
+    selectedPersonId: personId || "",
+    title: "",
+    description: "",
+    inputType: "auto",
+    photoDate: "",
+    ageYears: "",
+    ageMonths: "",
+    selectedFile: null,
+    previewUrl: "",
+    error: "",
+    loading: false,
+    dragActive: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   // Fetch people list to populate the person selector
@@ -47,7 +49,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse,
+  data: server.ListPeopleResponse
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
@@ -62,8 +64,12 @@ export function view(
           <div className="error-page">
             <h1>No Family Members</h1>
             <p>Please add family members before adding photos</p>
-            <a href="/add-person" className="btn btn-primary">Add Family Member</a>
-            <a href="/dashboard" className="btn btn-secondary">Back to Dashboard</a>
+            <a href="/add-person" className="btn btn-primary">
+              Add Family Member
+            </a>
+            <a href="/dashboard" className="btn btn-secondary">
+              Back to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -72,7 +78,7 @@ export function view(
   }
 
   // Extract person ID from URL if present (e.g., /add-photo/123)
-  const urlParts = route.split('/');
+  const urlParts = route.split("/");
   const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
 
   const form = useAddPhotoForm(personIdFromUrl);
@@ -108,15 +114,14 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     return;
   }
 
-
-  if (form.inputType === 'date' && !form.photoDate) {
+  if (form.inputType === "date" && !form.photoDate) {
     form.error = "Please select a date";
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
 
-  if (form.inputType === 'age' && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
+  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
     form.error = "Please enter a valid age";
     form.loading = false;
     vlens.scheduleRedraw();
@@ -126,19 +131,19 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   try {
     // Prepare FormData for multipart upload
     const formData = new FormData();
-    formData.append('personId', form.selectedPersonId);
-    formData.append('title', form.title.trim());
-    formData.append('description', form.description.trim());
-    formData.append('inputType', form.inputType);
-    formData.append('photo', form.selectedFile);
+    formData.append("personId", form.selectedPersonId);
+    formData.append("title", form.title.trim());
+    formData.append("description", form.description.trim());
+    formData.append("inputType", form.inputType);
+    formData.append("photo", form.selectedFile);
 
     // Add date/age specific fields
-    if (form.inputType === 'date') {
-      formData.append('photoDate', form.photoDate);
-    } else if (form.inputType === 'age') {
-      formData.append('ageYears', form.ageYears);
+    if (form.inputType === "date") {
+      formData.append("photoDate", form.photoDate);
+    } else if (form.inputType === "age") {
+      formData.append("ageYears", form.ageYears);
       if (form.ageMonths) {
-        formData.append('ageMonths', form.ageMonths);
+        formData.append("ageMonths", form.ageMonths);
       }
     }
 
@@ -149,10 +154,10 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     }
 
     // Call the backend API
-    const response = await window.fetch('/api/upload-photo', {
-      method: 'POST',
-      credentials: 'include',
-      body: formData
+    const response = await window.fetch("/api/upload-photo", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
     });
 
     if (!response.ok) {
@@ -172,7 +177,8 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
-    form.error = error instanceof Error ? error.message : "Failed to upload photo. Please try again.";
+    form.error =
+      error instanceof Error ? error.message : "Failed to upload photo. Please try again.";
     vlens.scheduleRedraw();
   }
 }
@@ -193,7 +199,7 @@ function onFileSelect(form: AddPhotoForm, event: Event) {
 
 function handleFileSelection(form: AddPhotoForm, file: File) {
   // Validate file type
-  if (!file.type.startsWith('image/')) {
+  if (!file.type.startsWith("image/")) {
     form.error = "Please select a valid image file";
     vlens.scheduleRedraw();
     return;
@@ -211,7 +217,7 @@ function handleFileSelection(form: AddPhotoForm, file: File) {
 
   // Create preview URL
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = e => {
     form.previewUrl = e.target?.result as string;
     vlens.scheduleRedraw();
   };
@@ -269,9 +275,7 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           <p>Upload and share precious moments with your family</p>
         </div>
 
-        {form.error && (
-          <div className="error-message">{form.error}</div>
-        )}
+        {form.error && <div className="error-message">{form.error}</div>}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
           {/* Person Selection */}
@@ -301,7 +305,7 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           <div className="form-group">
             <label>Photo</label>
             <div
-              className={`file-upload-area ${form.dragActive ? 'drag-active' : ''} ${form.selectedFile ? 'has-file' : ''}`}
+              className={`file-upload-area ${form.dragActive ? "drag-active" : ""} ${form.selectedFile ? "has-file" : ""}`}
               onDragOver={vlens.cachePartial(onDragOver, form)}
               onDragLeave={vlens.cachePartial(onDragLeave, form)}
               onDrop={vlens.cachePartial(onDrop, form)}
@@ -309,7 +313,12 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
               {!form.selectedFile ? (
                 <div className="upload-prompt">
                   <div className="upload-icon">📸</div>
-                  <p>Drag and drop a photo here, or <label htmlFor="photo-input" className="upload-link">browse</label></p>
+                  <p>
+                    Drag and drop a photo here, or{" "}
+                    <label htmlFor="photo-input" className="upload-link">
+                      browse
+                    </label>
+                  </p>
                   <small>Supports JPG, PNG, GIF up to 10MB</small>
                 </div>
               ) : (
@@ -319,8 +328,14 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   )}
                   <div className="file-info">
                     <p className="file-name">{form.selectedFile.name}</p>
-                    <p className="file-size">{(form.selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                    <button type="button" onClick={() => removeSelectedFile(form)} className="remove-file">
+                    <p className="file-size">
+                      {(form.selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => removeSelectedFile(form)}
+                      className="remove-file"
+                    >
                       Remove
                     </button>
                   </div>
@@ -332,7 +347,7 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                 accept="image/*"
                 onChange={vlens.cachePartial(onFileSelect, form)}
                 disabled={form.loading}
-                style={{ display: 'none' }}
+                style={{ display: "none" }}
               />
             </div>
           </div>
@@ -370,8 +385,8 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="auto"
-                  checked={form.inputType === 'auto'}
-                  onChange={() => onInputTypeChange(form, 'auto')}
+                  checked={form.inputType === "auto"}
+                  onChange={() => onInputTypeChange(form, "auto")}
                   disabled={form.loading}
                 />
                 <span>Auto (from photo)</span>
@@ -381,8 +396,8 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="today"
-                  checked={form.inputType === 'today'}
-                  onChange={() => onInputTypeChange(form, 'today')}
+                  checked={form.inputType === "today"}
+                  onChange={() => onInputTypeChange(form, "today")}
                   disabled={form.loading}
                 />
                 <span>Today</span>
@@ -392,8 +407,8 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="date"
-                  checked={form.inputType === 'date'}
-                  onChange={() => onInputTypeChange(form, 'date')}
+                  checked={form.inputType === "date"}
+                  onChange={() => onInputTypeChange(form, "date")}
                   disabled={form.loading}
                 />
                 <span>Specific Date</span>
@@ -403,8 +418,8 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   type="radio"
                   name="inputType"
                   value="age"
-                  checked={form.inputType === 'age'}
-                  onChange={() => onInputTypeChange(form, 'age')}
+                  checked={form.inputType === "age"}
+                  onChange={() => onInputTypeChange(form, "age")}
                   disabled={form.loading}
                 />
                 <span>At Age</span>
@@ -413,14 +428,14 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           </div>
 
           {/* Date Input */}
-          {form.inputType === 'date' && (
+          {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
               <input
                 id="date"
                 type="date"
                 {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                max={new Date().toISOString().split('T')[0]}
+                max={new Date().toISOString().split("T")[0]}
                 required
                 disabled={form.loading}
               />
@@ -428,7 +443,7 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           )}
 
           {/* Age Input */}
-          {form.inputType === 'age' && (
+          {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
                 <label htmlFor="ageYears">Age (Years)</label>
@@ -460,13 +475,15 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
 
           {/* Submit Button */}
           <div className="form-actions">
-            <a href="/dashboard" className="btn btn-secondary">Cancel</a>
+            <a href="/dashboard" className="btn btn-secondary">
+              Cancel
+            </a>
             <button
               type="submit"
               className="btn btn-primary auth-submit"
               disabled={form.loading || !form.selectedFile}
             >
-              {form.loading ? 'Uploading...' : 'Upload Photo'}
+              {form.loading ? "Uploading..." : "Upload Photo"}
             </button>
           </div>
         </form>
@@ -476,14 +493,16 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
             <h3>Preview</h3>
             <p>
               <strong>{form.title}</strong> - {selectedPerson.name}
-              {form.inputType === 'today' && (
-                <span> (today)</span>
-              )}
-              {form.inputType === 'date' && form.photoDate && (
+              {form.inputType === "today" && <span> (today)</span>}
+              {form.inputType === "date" && form.photoDate && (
                 <span> ({new Date(form.photoDate).toLocaleDateString()})</span>
               )}
-              {form.inputType === 'age' && form.ageYears && (
-                <span> (age {form.ageYears}{form.ageMonths ? `.${form.ageMonths}` : ''} years)</span>
+              {form.inputType === "age" && form.ageYears && (
+                <span>
+                  {" "}
+                  (age {form.ageYears}
+                  {form.ageMonths ? `.${form.ageMonths}` : ""} years)
+                </span>
               )}
             </p>
             {form.description && <p className="preview-description">{form.description}</p>}

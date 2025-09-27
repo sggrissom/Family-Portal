@@ -11,11 +11,7 @@ export async function fetch(route: string, prefix: string) {
   return rpc.ok<{}>({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: {},
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: {}): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -30,7 +26,9 @@ export function view(
           <div className="error-page">
             <h1>Access Denied</h1>
             <p>You do not have permission to access this page.</p>
-            <a href="/dashboard" className="btn btn-primary">Return to Dashboard</a>
+            <a href="/dashboard" className="btn btn-primary">
+              Return to Dashboard
+            </a>
           </div>
         </main>
         <Footer />
@@ -73,9 +71,7 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>View site usage statistics, user activity, and performance metrics.</p>
-            <div className="card-action">
-              View Analytics Dashboard →
-            </div>
+            <div className="card-action">View Analytics Dashboard →</div>
           </div>
         </a>
 
@@ -86,9 +82,7 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>Manage user accounts, family groups, and permissions.</p>
-            <div className="card-action">
-              View All Users →
-            </div>
+            <div className="card-action">View All Users →</div>
           </div>
         </a>
 
@@ -99,9 +93,7 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>Reprocess photos with modern formats and optimized sizes.</p>
-            <div className="card-action">
-              Manage Photos →
-            </div>
+            <div className="card-action">Manage Photos →</div>
           </div>
         </a>
 
@@ -112,9 +104,7 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>Configure system-wide settings and maintenance options.</p>
-            <div className="card-placeholder">
-              Coming Soon
-            </div>
+            <div className="card-placeholder">Coming Soon</div>
           </div>
         </div>
 
@@ -125,9 +115,7 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>Review application logs and system events.</p>
-            <div className="card-action">
-              View System Logs →
-            </div>
+            <div className="card-action">View System Logs →</div>
           </div>
         </a>
       </div>

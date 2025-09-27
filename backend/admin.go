@@ -108,13 +108,11 @@ type GetPhotoStatsResponse struct {
 type ReprocessAllPhotosRequest struct{}
 
 type ReprocessAllPhotosResponse struct {
-	Processed    int      `json:"processed"`
-	Failed       int      `json:"failed"`
-	Errors       []string `json:"errors"`
-	TotalTime    string   `json:"totalTime"`
+	Processed int      `json:"processed"`
+	Failed    int      `json:"failed"`
+	Errors    []string `json:"errors"`
+	TotalTime string   `json:"totalTime"`
 }
-
-
 
 // Get photo statistics for admin dashboard
 func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoStatsResponse, err error) {
@@ -401,12 +399,12 @@ func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
 }
 
 type LogStats struct {
-	TotalFiles int                     `json:"totalFiles"`
-	TotalSize  int64                   `json:"totalSize"`
-	ByLevel    map[string]int          `json:"byLevel"`
-	ByCategory map[string]int          `json:"byCategory"`
-	Recent     []PublicLogEntry        `json:"recent"`     // Last 10 entries
-	Errors     []PublicLogEntry        `json:"errors"`     // Recent errors
+	TotalFiles int              `json:"totalFiles"`
+	TotalSize  int64            `json:"totalSize"`
+	ByLevel    map[string]int   `json:"byLevel"`
+	ByCategory map[string]int   `json:"byCategory"`
+	Recent     []PublicLogEntry `json:"recent"` // Last 10 entries
+	Errors     []PublicLogEntry `json:"errors"` // Recent errors
 }
 
 type GetLogStatsResponse struct {
@@ -764,4 +762,3 @@ func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
 
 	return entries
 }
-

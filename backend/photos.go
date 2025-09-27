@@ -372,7 +372,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-
 		// Generate unique filename
 		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
 		if err != nil {
@@ -421,22 +420,22 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Create image record
 		image = Image{
-		Id:               vbolt.NextIntId(tx, ImagesBkt),
-		FamilyId:         user.FamilyId,
-		PersonId:         personId,
-		OwnerUserId:      user.Id,
-		OriginalFilename: fileHeader.Filename,
-		MimeType:         mimeType,
-		FileSize:         int(fileHeader.Size), // Original file size for now
-		Width:            width,
-		Height:           height,
-		FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
-		Title:            title,
-		Description:      description,
-		PhotoDate:        calculatedPhotoDate,
-		CreatedAt:        time.Now(),
-		Status:           1, // Processing
-	}
+			Id:               vbolt.NextIntId(tx, ImagesBkt),
+			FamilyId:         user.FamilyId,
+			PersonId:         personId,
+			OwnerUserId:      user.Id,
+			OriginalFilename: fileHeader.Filename,
+			MimeType:         mimeType,
+			FileSize:         int(fileHeader.Size), // Original file size for now
+			Width:            width,
+			Height:           height,
+			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
+			Title:            title,
+			Description:      description,
+			PhotoDate:        calculatedPhotoDate,
+			CreatedAt:        time.Now(),
+			Status:           1, // Processing
+		}
 
 		// Save to database
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
@@ -478,12 +477,12 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Log successful photo upload
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{
-		"userId":    user.Id,
-		"photoId":   image.Id,
-		"personId":  personId,
-		"fileSize":  fileHeader.Size,
-		"mimeType":  mimeType,
-		"filename":  fileHeader.Filename,
+		"userId":   user.Id,
+		"photoId":  image.Id,
+		"personId": personId,
+		"fileSize": fileHeader.Size,
+		"mimeType": mimeType,
+		"filename": fileHeader.Filename,
 	})
 
 	// Return success response

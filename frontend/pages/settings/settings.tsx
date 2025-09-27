@@ -3,6 +3,7 @@ import * as vlens from "vlens";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { logError } from "../../lib/logger";
 import "./settings-styles";
 
 type Data = server.FamilyInfoResponse;
@@ -12,28 +13,26 @@ type JoinFamilyForm = {
   error: string;
   loading: boolean;
   success: boolean;
-}
+};
 
-const useJoinFamilyForm = vlens.declareHook((): JoinFamilyForm => ({
-  inviteCode: "",
-  error: "",
-  loading: false,
-  success: false
-}))
+const useJoinFamilyForm = vlens.declareHook(
+  (): JoinFamilyForm => ({
+    inviteCode: "",
+    error: "",
+    loading: false,
+    success: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
-  if (!await ensureAuthInFetch()) {
+  if (!(await ensureAuthInFetch())) {
     return vlens.rpcOk({ id: 0, name: "", inviteCode: "" });
   }
 
   return server.GetFamilyInfo({});
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: Data,
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -62,20 +61,20 @@ async function copyInviteLink(inviteCode: string) {
     await navigator.clipboard.writeText(inviteLink);
 
     // Show temporary success message
-    const button = document.querySelector('.copy-button') as HTMLButtonElement;
+    const button = document.querySelector(".copy-button") as HTMLButtonElement;
     if (button) {
       const originalText = button.textContent;
       button.textContent = "Copied!";
-      button.classList.add('copied');
+      button.classList.add("copied");
       setTimeout(() => {
         button.textContent = originalText;
-        button.classList.remove('copied');
+        button.classList.remove("copied");
       }, 2000);
     }
   } catch (err) {
     // Fallback for browsers that don't support clipboard API
-    console.error('Failed to copy: ', err);
-    alert('Failed to copy link to clipboard');
+    logError("ui", "Failed to copy to clipboard", err);
+    alert("Failed to copy link to clipboard");
   }
 }
 
@@ -107,7 +106,7 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
 }
 
 const SettingsPage = ({ data }: SettingsPageProps) => {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const inviteLink = `${baseUrl}/create-account?code=${data.inviteCode}`;
   const joinForm = useJoinFamilyForm();
 
@@ -128,14 +127,10 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             </p>
 
             {joinForm.success && (
-              <div className="success-message">
-                Successfully joined family! Reloading page...
-              </div>
+              <div className="success-message">Successfully joined family! Reloading page...</div>
             )}
 
-            {joinForm.error && (
-              <div className="error-message">{joinForm.error}</div>
-            )}
+            {joinForm.error && <div className="error-message">{joinForm.error}</div>}
 
             <form onSubmit={vlens.cachePartial(onJoinFamilyClicked, joinForm)}>
               <div className="form-group">
@@ -193,12 +188,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="form-group">
                 <label>Invite Link</label>
                 <div className="invite-link-display">
-                  <input
-                    type="text"
-                    value={inviteLink}
-                    readOnly
-                    className="invite-link-input"
-                  />
+                  <input type="text" value={inviteLink} readOnly className="invite-link-input" />
                   <button
                     type="button"
                     className="btn btn-primary copy-button"
@@ -213,9 +203,17 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                 <h4>How to invite family members:</h4>
                 <ol>
                   <li>Click "Copy Link" above to copy the invite link</li>
-                  <li>Share the link with your family member via text, email, or any messaging app</li>
-                  <li>When they click the link, it will take them to the account creation page with your family code pre-filled</li>
-                  <li>They just need to fill out their information and they'll automatically join your family</li>
+                  <li>
+                    Share the link with your family member via text, email, or any messaging app
+                  </li>
+                  <li>
+                    When they click the link, it will take them to the account creation page with
+                    your family code pre-filled
+                  </li>
+                  <li>
+                    They just need to fill out their information and they'll automatically join your
+                    family
+                  </li>
                 </ol>
               </div>
             </div>

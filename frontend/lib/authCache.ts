@@ -1,3 +1,5 @@
+import { logWarn } from "./logger";
+
 export interface AuthCache {
   id: number;
   name: string;
@@ -31,19 +33,19 @@ export function clearAuth() {
 export async function logout() {
   // Call backend to clear JWT cookie
   try {
-    await fetch('/api/logout', {
-      method: 'POST',
-      credentials: 'include'
+    await fetch("/api/logout", {
+      method: "POST",
+      credentials: "include",
     });
   } catch (error) {
     // Continue with logout even if backend call fails
-    console.warn('Failed to logout from server:', error);
+    logWarn("auth", "Failed to logout from server", error);
   }
 
   clearAuth();
   // Clear any auth headers for future requests
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     // Redirect to home page after logout
-    window.location.href = '/';
+    window.location.href = "/";
   }
 }

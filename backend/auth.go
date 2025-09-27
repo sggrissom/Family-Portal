@@ -69,7 +69,6 @@ func SetupAuth(app *vbeam.Application) {
 	appDb = app.DB
 }
 
-
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		vbeam.RespondError(w, errors.New("login call must be POST"))
@@ -158,7 +157,6 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
-
 func generateToken(n int) (string, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
@@ -199,7 +197,6 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 
 	return
 }
-
 
 func GetAuthUser(ctx *vbeam.Context) (user User, err error) {
 	if len(ctx.Token) == 0 {
