@@ -26,8 +26,10 @@ func MakeApplication() *vbeam.Application {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
 
-	// Initialize rotating file logger
-	vbeam.InitRotatingLogger("family_portal")
+	// Initialize rotating file logger only in production
+	if cfg.IsRelease {
+		vbeam.InitRotatingLogger("family_portal")
+	}
 
 	// Log application startup
 	backend.LogInfo(backend.LogCategorySystem, "Family Portal application starting", map[string]interface{}{

@@ -92,7 +92,7 @@ block(`
 `);
 
 block(`
-.photo-title {
+.view-photo-title {
   font-size: 2rem;
   font-weight: 700;
   color: var(--color-text-emphasis);
@@ -102,7 +102,7 @@ block(`
 `);
 
 block(`
-.photo-date {
+.view-photo-date {
   font-size: 1.1rem;
   color: var(--color-text-muted);
   display: flex;
@@ -112,7 +112,7 @@ block(`
 `);
 
 block(`
-.photo-description {
+.view-photo-description {
   font-size: 1rem;
   color: var(--color-text);
   line-height: 1.6;
@@ -224,7 +224,7 @@ block(`
     padding: 1.5rem;
   }
 
-  .photo-title {
+  .view-photo-title {
     font-size: 1.5rem;
   }
 

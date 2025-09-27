@@ -143,12 +143,12 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
       {/* Photo information */}
       <div className="photo-info-panel">
         <div className="photo-metadata">
-          <h1 className="photo-title">{photo.title}</h1>
-          <div className="photo-date">
+          <h1 className="view-photo-title">{photo.title}</h1>
+          <div className="view-photo-date">
             📅 {formatPhotoDate(photo.photoDate)}
           </div>
           {photo.description && (
-            <div className="photo-description">
+            <div className="view-photo-description">
               {photo.description}
             </div>
           )}

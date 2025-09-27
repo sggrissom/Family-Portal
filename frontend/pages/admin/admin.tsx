@@ -118,20 +118,18 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
         </div>
 
-        <div className="admin-card">
+        <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">📋</div>
             <h3>System Logs</h3>
           </div>
           <div className="card-content">
             <p>Review application logs and system events.</p>
-            <div className="card-actions">
-              <a href="/admin/logs" className="admin-btn admin-btn-primary">
-                View Logs
-              </a>
+            <div className="card-action">
+              View System Logs →
             </div>
           </div>
-        </div>
+        </a>
       </div>
 
       <div className="admin-section">
