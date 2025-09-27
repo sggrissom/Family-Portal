@@ -293,6 +293,43 @@ export interface GetLogStatsResponse {
     stats: LogStats
 }
 
+export interface AnalyticsOverviewResponse {
+    totalUsers: number
+    totalFamilies: number
+    totalPhotos: number
+    totalMilestones: number
+    activeUsers7d: number
+    activeUsers30d: number
+    newUsers7d: number
+    newUsers30d: number
+    recentActivity: ActivitySummary[]
+    systemHealth: SystemHealthSummary
+}
+
+export interface UserAnalyticsResponse {
+    registrationTrends: DataPoint[]
+    loginActivityTrends: DataPoint[]
+    familySizeDistribution: DistributionPoint[]
+    userRetention: RetentionMetrics
+    topActiveFamilies: FamilyActivity[]
+}
+
+export interface ContentAnalyticsResponse {
+    photoUploadTrends: DataPoint[]
+    milestonesByCategory: DistributionPoint[]
+    contentPerFamily: FamilyContentStats[]
+    photoFormats: DistributionPoint[]
+    averagePhotosPerChild: number
+    averageMilestonesPerChild: number
+}
+
+export interface SystemAnalyticsResponse {
+    storageUsage: StorageMetrics
+    processingMetrics: ProcessingMetrics
+    errorAnalysis: ErrorAnalysis
+    apiRequestTrends: DataPoint[]
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -391,6 +428,71 @@ export interface LogStats {
     byCategory: Record<string, number>
     recent: PublicLogEntry[]
     errors: PublicLogEntry[]
+}
+
+export interface ActivitySummary {
+    date: string
+    photos: number
+    milestones: number
+    logins: number
+}
+
+export interface SystemHealthSummary {
+    photosProcessing: number
+    photosFailed: number
+}
+
+export interface DataPoint {
+    date: string
+    value: number
+}
+
+export interface DistributionPoint {
+    label: string
+    value: number
+}
+
+export interface RetentionMetrics {
+    day1: number
+    day7: number
+    day30: number
+    day90: number
+}
+
+export interface FamilyActivity {
+    familyName: string
+    totalPhotos: number
+    totalMilestones: number
+    lastActive: string
+    score: number
+}
+
+export interface FamilyContentStats {
+    familyName: string
+    photos: number
+    milestones: number
+    children: number
+    photosPerChild: number
+    milestonesPerChild: number
+}
+
+export interface StorageMetrics {
+    totalSize: number
+    averageFileSize: number
+    growthTrend: DataPoint[]
+}
+
+export interface ProcessingMetrics {
+    successRate: number
+    averageProcessTime: number
+    queueLength: number
+}
+
+export interface ErrorAnalysis {
+    totalErrors: number
+    errorsByCategory: DistributionPoint[]
+    errorsByLevel: DistributionPoint[]
+    recentErrors: string[]
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
@@ -507,5 +609,21 @@ export async function GetLogContent(data: GetLogContentRequest): Promise<rpc.Res
 
 export async function GetLogStats(data: Empty): Promise<rpc.Response<GetLogStatsResponse>> {
     return await rpc.call<GetLogStatsResponse>('GetLogStats', JSON.stringify(data));
+}
+
+export async function GetAnalyticsOverview(data: Empty): Promise<rpc.Response<AnalyticsOverviewResponse>> {
+    return await rpc.call<AnalyticsOverviewResponse>('GetAnalyticsOverview', JSON.stringify(data));
+}
+
+export async function GetUserAnalytics(data: Empty): Promise<rpc.Response<UserAnalyticsResponse>> {
+    return await rpc.call<UserAnalyticsResponse>('GetUserAnalytics', JSON.stringify(data));
+}
+
+export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<ContentAnalyticsResponse>> {
+    return await rpc.call<ContentAnalyticsResponse>('GetContentAnalytics', JSON.stringify(data));
+}
+
+export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
+    return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
 }
 

@@ -66,18 +66,18 @@ const AdminPage = ({ user }: AdminPageProps) => {
       </div>
 
       <div className="admin-grid">
-        <div className="admin-card">
+        <a href="/admin/analytics" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">📊</div>
             <h3>Site Analytics</h3>
           </div>
           <div className="card-content">
             <p>View site usage statistics, user activity, and performance metrics.</p>
-            <div className="card-placeholder">
-              Coming Soon
+            <div className="card-action">
+              View Analytics Dashboard →
             </div>
           </div>
-        </div>
+        </a>
 
         <a href="/admin/users" className="admin-card admin-card-link">
           <div className="card-header">

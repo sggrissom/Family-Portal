@@ -25,6 +25,7 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetLogFiles)
 	vbeam.RegisterProc(app, GetLogContent)
 	vbeam.RegisterProc(app, GetLogStats)
+	RegisterAnalyticsMethods(app)
 }
 
 type AdminUserInfo struct {
