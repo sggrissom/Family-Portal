@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"family/cfg"
 	"net/http"
 	"time"
 
@@ -33,7 +34,7 @@ Allow: /
 # Since this is a private family portal, we disallow indexing of sensitive areas
 # but allow the home page for potential public information
 
-Sitemap: /sitemap.xml
+Sitemap: ` + cfg.SiteURL + `/sitemap.xml
 
 # Crawl delay to be respectful of server resources
 Crawl-delay: 10`
@@ -48,19 +49,19 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 	sitemapContent := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>/</loc>
+    <loc>` + cfg.SiteURL + `/</loc>
     <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>/login</loc>
+    <loc>` + cfg.SiteURL + `/login</loc>
     <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>/create-account</loc>
+    <loc>` + cfg.SiteURL + `/create-account</loc>
     <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>

@@ -594,6 +594,8 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 // Helper functions
 func formatFamilySize(size int) string {
 	switch size {
+	case 0:
+		return "0 members"
 	case 1:
 		return "1 member"
 	case 2:

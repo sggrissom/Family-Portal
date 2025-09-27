@@ -201,6 +201,10 @@ func GetImageMimeType(format string) string {
 		return "image/avif"
 	case "png":
 		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "jpeg", "jpg":
+		return "image/jpeg"
 	default:
 		return "image/jpeg"
 	}
