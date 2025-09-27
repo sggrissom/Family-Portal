@@ -97,27 +97,47 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if user.Id == 0 {
+		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with unknown email", map[string]interface{}{
+			"email": credentials.Email,
+		})
 		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
 		return
 	}
 
 	err := bcrypt.CompareHashAndPassword(passHash, []byte(credentials.Password))
 	if err != nil {
+		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with invalid password", map[string]interface{}{
+			"userId": user.Id,
+			"email":  user.Email,
+		})
 		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
 		return
 	}
 
 	token, err := generateAuthJwt(user, w)
 	if err != nil {
+		LogErrorWithRequest(r, LogCategoryAuth, "Failed to generate JWT token", map[string]interface{}{
+			"userId": user.Id,
+			"error":  err.Error(),
+		})
 		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Failed to generate token"})
 		return
 	}
+
+	// Log successful login
+	LogInfoWithRequest(r, LogCategoryAuth, "User login successful", map[string]interface{}{
+		"userId": user.Id,
+		"email":  user.Email,
+	})
 
 	resp := GetAuthResponseFromUser(user)
 	json.NewEncoder(w).Encode(LoginResponse{Success: true, Token: token, Auth: resp})
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Try to get user info before clearing the cookie
+	user, _ := AuthenticateRequest(r)
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "authToken",
 		Value:    "",
@@ -125,6 +145,15 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
 	})
+
+	// Log logout event
+	if user.Id != 0 {
+		LogInfoWithRequest(r, LogCategoryAuth, "User logout", map[string]interface{}{
+			"userId": user.Id,
+			"email":  user.Email,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }

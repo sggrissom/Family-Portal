@@ -296,6 +296,11 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log photo upload start
+	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload started", map[string]interface{}{
+		"userId": user.Id,
+	})
+
 	// Parse form data
 	personIdStr := r.FormValue("personId")
 	if personIdStr == "" {
@@ -470,6 +475,16 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			// Could set status to failed here, but let's keep it as processing for now
 		}
 	}
+
+	// Log successful photo upload
+	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{
+		"userId":    user.Id,
+		"photoId":   image.Id,
+		"personId":  personId,
+		"fileSize":  fileHeader.Size,
+		"mimeType":  mimeType,
+		"filename":  fileHeader.Filename,
+	})
 
 	// Return success response
 	response := AddPhotoResponse{

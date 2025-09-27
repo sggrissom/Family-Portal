@@ -125,8 +125,10 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
           <div className="card-content">
             <p>Review application logs and system events.</p>
-            <div className="card-placeholder">
-              Coming Soon
+            <div className="card-actions">
+              <a href="/admin/logs" className="admin-btn admin-btn-primary">
+                View Logs
+              </a>
             </div>
           </div>
         </div>

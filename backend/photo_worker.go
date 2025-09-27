@@ -35,11 +35,11 @@ var globalPhotoWorker *PhotoWorker
 // InitializePhotoWorker starts the background photo processing worker
 func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
 	if globalPhotoWorker != nil {
-		log.Printf("Photo worker already initialized, skipping")
+		LogInfo(LogCategoryWorker, "Photo worker already initialized, skipping")
 		return // Already initialized
 	}
 
-	log.Printf("Initializing photo processing worker with queue size %d", queueSize)
+	LogInfo(LogCategoryWorker, "Initializing photo processing worker", map[string]interface{}{"queueSize": queueSize})
 	globalPhotoWorker = &PhotoWorker{
 		jobQueue:    make(chan PhotoProcessingJob, queueSize),
 		stopChannel: make(chan bool),
@@ -47,9 +47,9 @@ func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
 		db:          db,
 	}
 
-	log.Printf("Photo worker initialized with database reference")
+	LogInfo(LogCategoryWorker, "Photo worker initialized with database reference")
 	globalPhotoWorker.Start()
-	log.Printf("Photo processing worker started")
+	LogInfo(LogCategoryWorker, "Photo processing worker started")
 }
 
 // QueuePhotoProcessing adds a photo to the processing queue
@@ -77,7 +77,7 @@ func (pw *PhotoWorker) Start() {
 
 	pw.isRunning = true
 	go pw.processJobs()
-	log.Println("Photo processing worker started")
+	LogInfo(LogCategoryWorker, "Photo processing worker started")
 }
 
 // Stop gracefully shuts down the worker
@@ -88,7 +88,7 @@ func (pw *PhotoWorker) Stop() {
 
 	pw.stopChannel <- true
 	pw.isRunning = false
-	log.Println("Photo processing worker stopped")
+	LogInfo(LogCategoryWorker, "Photo processing worker stopped")
 }
 
 // GetQueueLength returns the current number of jobs in the queue
@@ -106,7 +106,7 @@ func (pw *PhotoWorker) processJobs() {
 		case job := <-pw.jobQueue:
 			pw.processPhotoJob(job)
 		case <-pw.stopChannel:
-			log.Println("Photo worker received stop signal")
+			LogInfo(LogCategoryWorker, "Photo worker received stop signal")
 			return
 		}
 	}

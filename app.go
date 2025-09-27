@@ -26,6 +26,16 @@ func MakeApplication() *vbeam.Application {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
 
+	// Initialize rotating file logger
+	vbeam.InitRotatingLogger("family_portal")
+
+	// Log application startup
+	backend.LogInfo(backend.LogCategorySystem, "Family Portal application starting", map[string]interface{}{
+		"version":   "1.0.0",
+		"dbPath":    cfg.DBPath,
+		"staticDir": cfg.StaticDir,
+	})
+
 	db := OpenDB(cfg.DBPath)
 	var app = vbeam.NewApplication("FamilyPortal", db)
 

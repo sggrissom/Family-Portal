@@ -271,6 +271,28 @@ export interface ProcessingStats {
     isRunning: boolean
 }
 
+export interface GetLogFilesResponse {
+    files: LogFileInfo[]
+}
+
+export interface GetLogContentRequest {
+    filename: string
+    level: string
+    category: string
+    limit: number
+    offset: number
+}
+
+export interface GetLogContentResponse {
+    entries: PublicLogEntry[]
+    totalLines: number
+    hasMore: boolean
+}
+
+export interface GetLogStatsResponse {
+    stats: LogStats
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -341,6 +363,34 @@ export interface AdminUserInfo {
     familyId: number
     familyName: string
     isAdmin: boolean
+}
+
+export interface LogFileInfo {
+    name: string
+    size: number
+    modTime: string
+    isToday: boolean
+    sizeString: string
+}
+
+export interface PublicLogEntry {
+    timestamp: string
+    level: string
+    category: string
+    message: string
+    data: any
+    userId: number | null
+    ip: string
+    userAgent: string
+}
+
+export interface LogStats {
+    totalFiles: number
+    totalSize: number
+    byLevel: Record<string, number>
+    byCategory: Record<string, number>
+    recent: PublicLogEntry[]
+    errors: PublicLogEntry[]
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
@@ -445,5 +495,17 @@ export async function ReprocessAllPhotos(data: ReprocessAllPhotosRequest): Promi
 
 export async function GetPhotoProcessingStats(data: Empty): Promise<rpc.Response<ProcessingStats>> {
     return await rpc.call<ProcessingStats>('GetPhotoProcessingStats', JSON.stringify(data));
+}
+
+export async function GetLogFiles(data: Empty): Promise<rpc.Response<GetLogFilesResponse>> {
+    return await rpc.call<GetLogFilesResponse>('GetLogFiles', JSON.stringify(data));
+}
+
+export async function GetLogContent(data: GetLogContentRequest): Promise<rpc.Response<GetLogContentResponse>> {
+    return await rpc.call<GetLogContentResponse>('GetLogContent', JSON.stringify(data));
+}
+
+export async function GetLogStats(data: Empty): Promise<rpc.Response<GetLogStatsResponse>> {
+    return await rpc.call<GetLogStatsResponse>('GetLogStats', JSON.stringify(data));
 }
 

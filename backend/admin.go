@@ -1,11 +1,15 @@
 package backend
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"family/cfg"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +22,9 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetPhotoStats)
 	vbeam.RegisterProc(app, ReprocessAllPhotos)
 	vbeam.RegisterProc(app, GetPhotoProcessingStats)
+	vbeam.RegisterProc(app, GetLogFiles)
+	vbeam.RegisterProc(app, GetLogContent)
+	vbeam.RegisterProc(app, GetLogStats)
 }
 
 type AdminUserInfo struct {
@@ -49,6 +56,11 @@ func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err
 		err = errors.New("Unauthorized: Admin access required")
 		return
 	}
+
+	// Log admin action
+	LogInfo(LogCategoryAdmin, "Admin accessed user list", map[string]interface{}{
+		"adminUserId": user.Id,
+	})
 
 	// Get all users using IterateAll
 	var users []User
@@ -331,5 +343,424 @@ func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStat
 	// Get processing statistics from photo worker
 	resp = GetProcessingStats()
 	return
+}
+
+// Log-related types and structures
+
+type LogFileInfo struct {
+	Name       string    `json:"name"`
+	Size       int64     `json:"size"`
+	ModTime    time.Time `json:"modTime"`
+	IsToday    bool      `json:"isToday"`
+	SizeString string    `json:"sizeString"`
+}
+
+type GetLogFilesResponse struct {
+	Files []LogFileInfo `json:"files"`
+}
+
+type GetLogContentRequest struct {
+	Filename string `json:"filename"`
+	Level    string `json:"level,omitempty"`    // Filter by log level
+	Category string `json:"category,omitempty"` // Filter by category
+	Limit    int    `json:"limit,omitempty"`    // Limit number of entries (default 1000)
+	Offset   int    `json:"offset,omitempty"`   // Skip entries (for pagination)
+}
+
+type GetLogContentResponse struct {
+	Entries    []PublicLogEntry `json:"entries"`
+	TotalLines int              `json:"totalLines"`
+	HasMore    bool             `json:"hasMore"`
+}
+
+// Public log entry for API responses
+type PublicLogEntry struct {
+	Timestamp string      `json:"timestamp"`
+	Level     string      `json:"level"`
+	Category  string      `json:"category"`
+	Message   string      `json:"message"`
+	Data      interface{} `json:"data,omitempty"`
+	UserID    *int        `json:"userId,omitempty"`
+	IP        string      `json:"ip,omitempty"`
+	UserAgent string      `json:"userAgent,omitempty"`
+}
+
+// convertToPublicLogEntry converts internal logEntry to public API format
+func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
+	return PublicLogEntry{
+		Timestamp: entry.Timestamp.Format(time.RFC3339),
+		Level:     string(entry.Level),
+		Category:  string(entry.Category),
+		Message:   entry.Message,
+		Data:      entry.Data,
+		UserID:    entry.UserID,
+		IP:        entry.IP,
+		UserAgent: entry.UserAgent,
+	}
+}
+
+type LogStats struct {
+	TotalFiles int                     `json:"totalFiles"`
+	TotalSize  int64                   `json:"totalSize"`
+	ByLevel    map[string]int          `json:"byLevel"`
+	ByCategory map[string]int          `json:"byCategory"`
+	Recent     []PublicLogEntry        `json:"recent"`     // Last 10 entries
+	Errors     []PublicLogEntry        `json:"errors"`     // Recent errors
+}
+
+type GetLogStatsResponse struct {
+	Stats LogStats `json:"stats"`
+}
+
+// GetLogFiles returns list of available log files
+func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err error) {
+	// Check admin authentication
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+
+	// Get log files from logs directory
+	logDir := "logs"
+	files, err := os.ReadDir(logDir)
+	if err != nil {
+		// If logs directory doesn't exist, return empty list
+		if os.IsNotExist(err) {
+			resp.Files = []LogFileInfo{}
+			err = nil
+			return
+		}
+		return
+	}
+
+	today := time.Now().Format("2006-01-02")
+	var logFiles []LogFileInfo
+
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".log") {
+			continue
+		}
+
+		info, err := file.Info()
+		if err != nil {
+			continue
+		}
+
+		// Check if this is today's log file
+		// Could be family_portal-YYYY-MM-DD.log or family_portal.log (current day)
+		isToday := strings.Contains(file.Name(), today) ||
+			(file.Name() == "family_portal.log" && info.ModTime().Format("2006-01-02") == today)
+
+		logFile := LogFileInfo{
+			Name:       file.Name(),
+			Size:       info.Size(),
+			ModTime:    info.ModTime(),
+			IsToday:    isToday,
+			SizeString: formatFileSize(info.Size()),
+		}
+
+		logFiles = append(logFiles, logFile)
+	}
+
+	// Sort by modification time (newest first)
+	sort.Slice(logFiles, func(i, j int) bool {
+		return logFiles[i].ModTime.After(logFiles[j].ModTime)
+	})
+
+	resp.Files = logFiles
+	return
+}
+
+// Helper functions for parsing non-JSON log lines
+var ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripAnsiCodes removes ANSI escape sequences from a string
+func stripAnsiCodes(input string) string {
+	return ansiEscapeRegex.ReplaceAllString(input, "")
+}
+
+// parseLogTimestamp attempts to parse a timestamp from a plain text log line
+func parseLogTimestamp(line string) (time.Time, string) {
+	// Try to match the Go log format: 2025/09/26 15:53:22
+	timestampRegex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(.*)`)
+	matches := timestampRegex.FindStringSubmatch(line)
+
+	if len(matches) == 3 {
+		if timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1]); err == nil {
+			return timestamp, matches[2] // Return timestamp and remaining message
+		}
+	}
+
+	// If no timestamp found, return current time and original line
+	return time.Now(), line
+}
+
+// categorizeLogMessage attempts to categorize a plain text log message
+func categorizeLogMessage(message string) logCategory {
+	message = strings.ToUpper(message)
+
+	if strings.Contains(message, "PHOTO") || strings.Contains(message, "IMAGE") {
+		return logCategoryPhoto
+	}
+	if strings.Contains(message, "AUTH") || strings.Contains(message, "LOGIN") {
+		return logCategoryAuth
+	}
+	if strings.Contains(message, "ADMIN") {
+		return logCategoryAdmin
+	}
+	if strings.Contains(message, "API") || strings.Contains(message, "RPC") || strings.Contains(message, "GET") || strings.Contains(message, "POST") {
+		return logCategoryAPI
+	}
+	if strings.Contains(message, "WORKER") || strings.Contains(message, "PROCESSING") || strings.Contains(message, "QUEUE") {
+		return logCategoryWorker
+	}
+
+	return logCategorySystem
+}
+
+// GetLogContent returns filtered log content from a specific file
+func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogContentResponse, err error) {
+	// Check admin authentication
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+
+	// Validate filename (security check)
+	if strings.Contains(req.Filename, "..") || strings.Contains(req.Filename, "/") {
+		err = errors.New("Invalid filename")
+		return
+	}
+
+	// Set default limit
+	if req.Limit <= 0 {
+		req.Limit = 1000
+	}
+
+	// Read log file
+	logPath := filepath.Join("logs", req.Filename)
+	file, err := os.Open(logPath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	var publicEntries []PublicLogEntry
+	scanner := bufio.NewScanner(file)
+	totalLines := 0
+	skipped := 0
+
+	for scanner.Scan() {
+		totalLines++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		// Skip lines for pagination
+		if skipped < req.Offset {
+			skipped++
+			continue
+		}
+
+		// Stop if we've reached our limit
+		if len(publicEntries) >= req.Limit {
+			break
+		}
+
+		// Try to parse as JSON log entry
+		var entry logEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			// If not JSON, parse as plain text log
+			cleanLine := stripAnsiCodes(line)
+			timestamp, message := parseLogTimestamp(cleanLine)
+			category := categorizeLogMessage(message)
+
+			entry = logEntry{
+				Timestamp: timestamp,
+				Level:     logLevelInfo,
+				Category:  category,
+				Message:   message,
+			}
+		}
+
+		// Apply filters
+		if req.Level != "" && string(entry.Level) != req.Level {
+			continue
+		}
+		if req.Category != "" && string(entry.Category) != req.Category {
+			continue
+		}
+
+		publicEntries = append(publicEntries, convertToPublicLogEntry(entry))
+	}
+
+	if err := scanner.Err(); err != nil {
+		return resp, err
+	}
+
+	resp.Entries = publicEntries
+	resp.TotalLines = totalLines
+	resp.HasMore = totalLines > (req.Offset + len(publicEntries))
+
+	return
+}
+
+// GetLogStats returns summary statistics about logs
+func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err error) {
+	// Check admin authentication
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+
+	stats := LogStats{
+		ByLevel:    make(map[string]int),
+		ByCategory: make(map[string]int),
+		Recent:     []PublicLogEntry{},
+		Errors:     []PublicLogEntry{},
+	}
+
+	// Get log files
+	logDir := "logs"
+	files, err := os.ReadDir(logDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			resp.Stats = stats
+			err = nil
+			return
+		}
+		return
+	}
+
+	var totalSize int64
+	var allRecentEntries []logEntry
+
+	// Process each log file
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".log") {
+			continue
+		}
+
+		info, err := file.Info()
+		if err != nil {
+			continue
+		}
+
+		stats.TotalFiles++
+		totalSize += info.Size()
+
+		// Read recent entries from the file (last few lines)
+		entries := readRecentLogEntries(filepath.Join(logDir, file.Name()), 50)
+		allRecentEntries = append(allRecentEntries, entries...)
+
+		// Count levels and categories
+		for _, entry := range entries {
+			stats.ByLevel[string(entry.Level)]++
+			stats.ByCategory[string(entry.Category)]++
+
+			// Collect errors
+			if entry.Level == logLevelError && len(stats.Errors) < 10 {
+				stats.Errors = append(stats.Errors, convertToPublicLogEntry(entry))
+			}
+		}
+	}
+
+	stats.TotalSize = totalSize
+
+	// Sort all recent entries by timestamp and take the most recent
+	sort.Slice(allRecentEntries, func(i, j int) bool {
+		return allRecentEntries[i].Timestamp.After(allRecentEntries[j].Timestamp)
+	})
+
+	// Convert to public format
+	var publicRecentEntries []PublicLogEntry
+	for _, entry := range allRecentEntries {
+		publicRecentEntries = append(publicRecentEntries, convertToPublicLogEntry(entry))
+	}
+
+	if len(publicRecentEntries) > 10 {
+		stats.Recent = publicRecentEntries[:10]
+	} else {
+		stats.Recent = publicRecentEntries
+	}
+
+	resp.Stats = stats
+	return
+}
+
+// Helper function to format file sizes
+func formatFileSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// Helper function to read recent log entries from a file
+func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return []logEntry{}
+	}
+	defer file.Close()
+
+	var entries []logEntry
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var entry logEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			// If not JSON, parse as plain text log
+			cleanLine := stripAnsiCodes(line)
+			timestamp, message := parseLogTimestamp(cleanLine)
+			category := categorizeLogMessage(message)
+
+			entry = logEntry{
+				Timestamp: timestamp,
+				Level:     logLevelInfo,
+				Category:  category,
+				Message:   message,
+			}
+		}
+
+		entries = append(entries, entry)
+
+		// Keep only the most recent entries (simple sliding window)
+		if len(entries) > maxEntries {
+			entries = entries[1:]
+		}
+	}
+
+	return entries
 }
 

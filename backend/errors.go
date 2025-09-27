@@ -58,31 +58,6 @@ func NewAppError(code ErrorCode, message string, details ...string) *AppError {
 	return err
 }
 
-// LogError logs an error with context information
-func LogError(err error, r *http.Request, extra ...interface{}) {
-	// Get caller info
-	_, file, line, ok := runtime.Caller(1)
-	caller := "unknown"
-	if ok {
-		caller = fmt.Sprintf("%s:%d", file, line)
-	}
-
-	// Build log message
-	logMsg := fmt.Sprintf("[ERROR] %s - %v", caller, err)
-
-	if r != nil {
-		logMsg += fmt.Sprintf(" | Method: %s, Path: %s", r.Method, r.URL.Path)
-		if r.Header.Get("User-Agent") != "" {
-			logMsg += fmt.Sprintf(" | UA: %s", r.Header.Get("User-Agent"))
-		}
-	}
-
-	if len(extra) > 0 {
-		logMsg += fmt.Sprintf(" | Extra: %+v", extra)
-	}
-
-	log.Println(logMsg)
-}
 
 // RespondWithError sends a standardized error response
 func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, statusCode int) {
@@ -91,8 +66,26 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 		err.RequestPath = r.URL.Path
 	}
 
-	// Log the error
-	LogError(err, r)
+	// Log the error with context
+	_, file, line, ok := runtime.Caller(1)
+	caller := "unknown"
+	if ok {
+		caller = fmt.Sprintf("%s:%d", file, line)
+	}
+
+	data := map[string]interface{}{
+		"caller": caller,
+		"error":  err.Error(),
+		"code":   err.Code,
+	}
+
+	if r != nil {
+		data["method"] = r.Method
+		data["path"] = r.URL.Path
+		LogErrorWithRequest(r, LogCategorySystem, err.Error(), data)
+	} else {
+		LogErrorSimple(LogCategorySystem, err.Error(), data)
+	}
 
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json")

@@ -55,6 +55,7 @@ async function main() {
     vlens.routeHandler("/import", () => import("@app/pages/settings/import")),
     vlens.routeHandler("/admin/users", () => import("@app/pages/admin/users")),
     vlens.routeHandler("/admin/photos", () => import("@app/pages/admin/photos")),
+    vlens.routeHandler("/admin/logs", () => import("@app/pages/admin/logs")),
     vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
     vlens.routeHandler("/", () => import("@app/pages/home/home")),
   ]);
