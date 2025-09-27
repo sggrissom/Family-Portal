@@ -531,13 +531,17 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   fill={heightColor}
                   stroke="white"
                   strokeWidth={getStrokeWidth(isSelected)}
-                  className={`data-point height-point ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""}`}
+                  className={`data-point height-point ${isSelected ? "selected" : ""} ${
+                    isHovered ? "hovered" : ""
+                  }`}
                   onClick={() => selectPoint(d, "Height")}
                   onMouseEnter={() => hoverPoint(d, "Height")}
                   onMouseLeave={clearHover}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(
+                    d.measurementDate
+                  )}`}
                   onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -566,13 +570,17 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   fill={weightColor}
                   stroke="white"
                   strokeWidth={getStrokeWidth(isSelected)}
-                  className={`data-point weight-point ${isSelected ? "selected" : ""} ${isHovered ? "hovered" : ""}`}
+                  className={`data-point weight-point ${isSelected ? "selected" : ""} ${
+                    isHovered ? "hovered" : ""
+                  }`}
                   onClick={() => selectPoint(d, "Weight")}
                   onMouseEnter={() => hoverPoint(d, "Weight")}
                   onMouseLeave={clearHover}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(d.measurementDate)}`}
+                  aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(
+                    d.measurementDate
+                  )}`}
                   onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();

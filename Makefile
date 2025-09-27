@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy stop_service start_service copy_files test local typecheck lint format setup-hooks check
+.PHONY: all build deploy stop_service start_service copy_files test local typecheck lint format check
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -71,12 +71,6 @@ format:
 	go fmt ./...
 	@echo "Formatting TypeScript code..."
 	npx prettier --write "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
-
-setup-hooks:
-	@echo "Setting up pre-commit hooks..."
-	@command -v pre-commit >/dev/null 2>&1 || { echo "Installing pre-commit..."; pip install pre-commit; }
-	pre-commit install
-	@echo "Pre-commit hooks installed. Run 'make check' to validate."
 
 check: test typecheck lint
 	@echo "✅ All quality checks passed!"

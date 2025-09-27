@@ -3,7 +3,6 @@ module family
 go 1.24.0
 
 require (
-	github.com/chai2010/webp v1.4.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/gen2brain/avif v0.4.4
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -13,6 +12,7 @@ require (
 	go.hasen.dev/vbolt v0.2.3
 	go.hasen.dev/vpack v0.2.0
 	golang.org/x/crypto v0.34.0
+	golang.org/x/image v0.31.0
 	golang.org/x/oauth2 v0.31.0
 )
 
@@ -29,7 +29,6 @@ require (
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	go.hasen.dev/generic v0.1.2 // indirect
 	go.hasen.dev/term v0.1.0 // indirect
-	golang.org/x/image v0.31.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.33.0 // indirect

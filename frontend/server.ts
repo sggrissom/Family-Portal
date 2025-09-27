@@ -188,6 +188,31 @@ export interface DeleteMilestoneResponse {
     success: boolean
 }
 
+export interface SendMessageRequest {
+    content: string
+}
+
+export interface SendMessageResponse {
+    message: ChatMessage
+}
+
+export interface GetChatMessagesRequest {
+    limit: number | null
+    offset: number | null
+}
+
+export interface GetChatMessagesResponse {
+    messages: ChatMessage[]
+}
+
+export interface DeleteMessageRequest {
+    id: number
+}
+
+export interface DeleteMessageResponse {
+    success: boolean
+}
+
 export interface GetPhotoRequest {
     id: number
 }
@@ -380,6 +405,15 @@ export interface Image {
     status: number
 }
 
+export interface ChatMessage {
+    id: number
+    familyId: number
+    userId: number
+    userName: string
+    content: string
+    createdAt: string
+}
+
 export interface ImportPerson {
     Id: number
     FamilyId: number
@@ -563,6 +597,18 @@ export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc
     return await rpc.call<DeleteMilestoneResponse>('DeleteMilestone', JSON.stringify(data));
 }
 
+export async function SendMessage(data: SendMessageRequest): Promise<rpc.Response<SendMessageResponse>> {
+    return await rpc.call<SendMessageResponse>('SendMessage', JSON.stringify(data));
+}
+
+export async function GetChatMessages(data: GetChatMessagesRequest): Promise<rpc.Response<GetChatMessagesResponse>> {
+    return await rpc.call<GetChatMessagesResponse>('GetChatMessages', JSON.stringify(data));
+}
+
+export async function DeleteMessage(data: DeleteMessageRequest): Promise<rpc.Response<DeleteMessageResponse>> {
+    return await rpc.call<DeleteMessageResponse>('DeleteMessage', JSON.stringify(data));
+}
+
 export async function GetPhoto(data: GetPhotoRequest): Promise<rpc.Response<GetPhotoResponse>> {
     return await rpc.call<GetPhotoResponse>('GetPhoto', JSON.stringify(data));
 }
@@ -626,4 +672,3 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
 }
-

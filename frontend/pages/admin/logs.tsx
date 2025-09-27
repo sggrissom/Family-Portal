@@ -410,7 +410,9 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                 preact.h(
                   "span",
                   { className: "pagination-info" },
-                  `Page ${state.currentPage} of ${Math.ceil(state.totalLines / entriesPerPage)} (${state.totalLines} total entries)`
+                  `Page ${state.currentPage} of ${Math.ceil(state.totalLines / entriesPerPage)} (${
+                    state.totalLines
+                  } total entries)`
                 ),
                 preact.h("div", { className: "pagination-controls" }, [
                   preact.h(

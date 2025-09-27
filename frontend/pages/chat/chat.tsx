@@ -1,68 +1,13 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
+import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logInfo } from "../../lib/logger";
 import "./chat-styles";
 
-// Mock message interface for now
-interface ChatMessage {
-  id: number;
-  senderId: number;
-  senderName: string;
-  message: string;
-  timestamp: Date;
-  isCurrentUser: boolean;
-}
-
-// Mock data for development
-const mockMessages: ChatMessage[] = [
-  {
-    id: 1,
-    senderId: 2,
-    senderName: "Mom",
-    message: "Don't forget we have dinner with grandparents tonight!",
-    timestamp: new Date(Date.now() - 3600000), // 1 hour ago
-    isCurrentUser: false,
-  },
-  {
-    id: 2,
-    senderId: 1,
-    senderName: "You",
-    message: "I'll be there at 6 PM. Should I bring anything?",
-    timestamp: new Date(Date.now() - 3300000), // 55 minutes ago
-    isCurrentUser: true,
-  },
-  {
-    id: 3,
-    senderId: 3,
-    senderName: "Dad",
-    message: "Maybe some flowers for grandma? She loves those daisies from the garden center.",
-    timestamp: new Date(Date.now() - 3000000), // 50 minutes ago
-    isCurrentUser: false,
-  },
-  {
-    id: 4,
-    senderId: 1,
-    senderName: "You",
-    message: "Great idea! I'll stop by on my way over.",
-    timestamp: new Date(Date.now() - 2700000), // 45 minutes ago
-    isCurrentUser: true,
-  },
-  {
-    id: 5,
-    senderId: 4,
-    senderName: "Emma",
-    message: "Can I invite my friend Sarah? She's been wanting to meet everyone.",
-    timestamp: new Date(Date.now() - 1800000), // 30 minutes ago
-    isCurrentUser: false,
-  },
-];
-
-interface ChatData {
-  messages: ChatMessage[];
-}
+// Use ChatMessage type from server bindings
 
 type MessageForm = {
   message: string;
@@ -76,23 +21,23 @@ const useMessageForm = vlens.declareHook(
   })
 );
 
-const useChatState = vlens.declareHook(
-  (): { messages: ChatMessage[] } => ({
-    messages: mockMessages,
-  })
-);
+const useChatState = vlens.declareHook((): { messages: server.ChatMessage[] } => ({
+  messages: [],
+}));
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<ChatData>({ messages: [] });
+    return rpc.ok<server.GetChatMessagesResponse>({ messages: [] });
   }
 
-  // For now, return mock data
-  // In the future, this would call server.GetChatMessages({})
-  return rpc.ok<ChatData>({ messages: mockMessages });
+  return server.GetChatMessages({ limit: null, offset: null });
 }
 
-export function view(route: string, prefix: string, data: ChatData): preact.ComponentChild {
+export function view(
+  route: string,
+  prefix: string,
+  data: server.GetChatMessagesResponse
+): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -111,7 +56,7 @@ export function view(route: string, prefix: string, data: ChatData): preact.Comp
 
 interface ChatPageProps {
   user: any; // AuthCache type
-  data: ChatData;
+  data: server.GetChatMessagesResponse;
 }
 
 const ChatPage = ({ user, data }: ChatPageProps) => {
@@ -119,7 +64,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   const chatState = useChatState();
 
   // Initialize chat state with data from server
-  if (data.messages && chatState.messages.length === mockMessages.length) {
+  if (data.messages && chatState.messages.length === 0) {
     chatState.messages = data.messages;
   }
 
@@ -130,29 +75,28 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       return;
     }
 
-    const newMessage: ChatMessage = {
-      id: Date.now(), // Simple ID for now
-      senderId: user.id,
-      senderName: "You",
-      message: messageForm.message.trim(),
-      timestamp: new Date(),
-      isCurrentUser: true,
-    };
-
     messageForm.sending = true;
     vlens.scheduleRedraw();
 
     try {
-      // For now, just add to local state
-      // In the future, this would call server.SendMessage({})
-      chatState.messages = [...chatState.messages, newMessage];
-      messageForm.message = "";
+      // Send message to server
+      const [result, error] = await server.SendMessage({
+        content: messageForm.message.trim(),
+      });
 
-      logInfo("ui", "Message sent", { messageId: newMessage.id });
+      if (result && !error) {
+        // Add new message to local state
+        chatState.messages = [...chatState.messages, result.message];
+        messageForm.message = "";
+
+        logInfo("ui", "Message sent", { messageId: result.message.id });
+      } else {
+        console.error("Failed to send message:", error);
+      }
 
       // Scroll to bottom after sending
       setTimeout(() => {
-        const messagesContainer = document.querySelector('.chat-messages');
+        const messagesContainer = document.querySelector(".chat-messages");
         if (messagesContainer) {
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -165,7 +109,8 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     }
   };
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (createdAt: string) => {
+    const timestamp = new Date(createdAt);
     const now = new Date();
     const diff = now.getTime() - timestamp.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -180,12 +125,11 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     return timestamp.toLocaleDateString();
   };
 
-  const getAvatarIcon = (senderName: string) => {
-    // Simple avatar logic - in real app would use proper profile photos
-    if (senderName === "Mom") return "👩";
-    if (senderName === "Dad") return "👨";
-    if (senderName === "Emma") return "👧";
-    return "👤";
+  const getAvatarIcon = (userName: string) => {
+    // Simple avatar logic based on name
+    // Could be enhanced to use actual profile photos in the future
+    const firstChar = userName.charAt(0).toUpperCase();
+    return firstChar;
   };
 
   return (
@@ -197,29 +141,28 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
 
       <div className="chat-content">
         <div className="chat-messages">
-          {chatState.messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`message ${msg.isCurrentUser ? "message-own" : "message-other"}`}
-            >
-              {!msg.isCurrentUser && (
-                <div className="message-avatar">
-                  <span className="avatar-icon">{getAvatarIcon(msg.senderName)}</span>
-                </div>
-              )}
-              <div className="message-content">
-                {!msg.isCurrentUser && (
-                  <div className="message-sender">{msg.senderName}</div>
+          {chatState.messages.map(msg => {
+            const isCurrentUser = msg.userId === user.id;
+            return (
+              <div
+                key={msg.id}
+                className={`message ${isCurrentUser ? "message-own" : "message-other"}`}
+              >
+                {!isCurrentUser && (
+                  <div className="message-avatar">
+                    <span className="avatar-icon">{getAvatarIcon(msg.userName)}</span>
+                  </div>
                 )}
-                <div className="message-bubble">
-                  <p className="message-text">{msg.message}</p>
-                  <span className="message-timestamp">
-                    {formatTimestamp(msg.timestamp)}
-                  </span>
+                <div className="message-content">
+                  {!isCurrentUser && <div className="message-sender">{msg.userName}</div>}
+                  <div className="message-bubble">
+                    <p className="message-text">{msg.content}</p>
+                    <span className="message-timestamp">{formatTimestamp(msg.createdAt)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <form className="chat-input-form" onSubmit={handleSendMessage}>
@@ -228,7 +171,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
               type="text"
               placeholder="Type your message..."
               value={messageForm.message}
-              onInput={(e) => {
+              onInput={e => {
                 messageForm.message = (e.target as HTMLInputElement).value;
                 vlens.scheduleRedraw();
               }}

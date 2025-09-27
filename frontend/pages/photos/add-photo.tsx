@@ -305,7 +305,9 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           <div className="form-group">
             <label>Photo</label>
             <div
-              className={`file-upload-area ${form.dragActive ? "drag-active" : ""} ${form.selectedFile ? "has-file" : ""}`}
+              className={`file-upload-area ${form.dragActive ? "drag-active" : ""} ${
+                form.selectedFile ? "has-file" : ""
+              }`}
               onDragOver={vlens.cachePartial(onDragOver, form)}
               onDragLeave={vlens.cachePartial(onDragLeave, form)}
               onDrop={vlens.cachePartial(onDrop, form)}

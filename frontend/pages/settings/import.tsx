@@ -421,8 +421,8 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
                           {person.Gender === 0
                             ? "Male"
                             : person.Gender === 1
-                              ? "Female"
-                              : "Unknown"}
+                            ? "Female"
+                            : "Unknown"}
                         </span>
                         <span className="person-measurements">
                           Heights: {measurements.heights}, Weights: {measurements.weights}
