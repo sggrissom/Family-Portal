@@ -111,6 +111,15 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
         </div>
 
         <div className="dashboard-card">
+          <div className="card-icon">💬</div>
+          <h3>Family Chat</h3>
+          <p>Stay connected with your family</p>
+          <a href="/chat" className="btn btn-primary">
+            Open Chat
+          </a>
+        </div>
+
+        <div className="dashboard-card">
           <div className="card-icon">📸</div>
           <h3>Photo Albums</h3>
           <p>Share and organize family photos</p>
