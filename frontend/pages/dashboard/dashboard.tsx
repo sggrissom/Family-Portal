@@ -46,8 +46,6 @@ interface DashboardPageProps {
 const DashboardPage = ({ user, data }: DashboardPageProps) => {
   // Ensure people is always an array
   const people = data.people || [];
-  const parents = people.filter(p => p.type === 0);
-  const children = people.filter(p => p.type === 1);
 
   return (
     <div className="dashboard-page">
@@ -56,101 +54,73 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
         <p>Your family dashboard</p>
       </div>
 
-      {/* Family Members Section */}
-      <div className="family-section">
-        <div className="section-header">
-          <h2>Family Members</h2>
-          <a href="/add-person" className="btn btn-primary">
-            Add Family Member
-          </a>
-        </div>
-
-        {people.length === 0 ? (
-          <div className="empty-state">
-            <p>No family members added yet.</p>
-            <a href="/add-person" className="btn btn-primary">
-              Add Your First Family Member
-            </a>
+      <div className="dashboard-content">
+        {/* Main Family Members Section */}
+        <div className="family-section">
+          <div className="section-header">
+            <h2>Your Family</h2>
           </div>
-        ) : (
-          <div className="people-grid">
-            {parents.length > 0 && (
-              <div className="people-group">
-                <h3>Parents</h3>
-                <div className="people-list">
-                  {parents.map((person, index) => (
-                    <PersonCard key={person.id} person={person} index={index} />
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {children.length > 0 && (
-              <div className="people-group">
-                <h3>Children</h3>
-                <div className="people-list">
-                  {children.map((person, index) => (
-                    <PersonCard key={person.id} person={person} index={index + parents.length} />
-                  ))}
-                </div>
-              </div>
-            )}
+          {people.length === 0 ? (
+            <div className="empty-state">
+              <p>No family members added yet.</p>
+              <a href="/add-person" className="btn btn-primary">
+                Add Your First Family Member
+              </a>
+            </div>
+          ) : (
+            <div className="people-grid">
+              {people.map((person, index) => (
+                <PersonCard key={person.id} person={person} index={index} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Simple Navigation Sidebar */}
+        <div className="quick-actions">
+          <h3>Quick Actions</h3>
+          <div className="action-links">
+            <div className="action-group">
+              <h4>Family</h4>
+              <a href="/add-person" className="action-link">
+                ➕ Add Family Member
+              </a>
+            </div>
+
+            <div className="action-group">
+              <h4>Photos & Memories</h4>
+              <a href="/photos" className="action-link">
+                📸 View Photos
+              </a>
+              <a href="/add-photo" className="action-link">
+                📷 Add Photo
+              </a>
+            </div>
+
+            <div className="action-group">
+              <h4>Growth & Milestones</h4>
+              <a href="/add-growth" className="action-link">
+                📏 Track Growth
+              </a>
+              <a href="/add-milestone" className="action-link">
+                ⭐ Add Milestone
+              </a>
+            </div>
+
+            <div className="action-group">
+              <h4>More</h4>
+              <a href="/chat" className="action-link">
+                💬 Family Chat
+              </a>
+              <a href="/import" className="action-link">
+                📥 Import Data
+              </a>
+              <a href="/settings" className="action-link">
+                ⚙️ Settings
+              </a>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <div className="card-icon">📏</div>
-          <h3>Growth Tracking</h3>
-          <p>Track height and weight measurements</p>
-          <a href="/add-growth" className="btn btn-primary">
-            Add Measurement
-          </a>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">💬</div>
-          <h3>Family Chat</h3>
-          <p>Stay connected with your family</p>
-          <a href="/chat" className="btn btn-primary">
-            Open Chat
-          </a>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">📸</div>
-          <h3>Photo Albums</h3>
-          <p>Share and organize family photos</p>
-          <a href="/photos" className="btn btn-primary">
-            View Photos
-          </a>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">📅</div>
-          <h3>Family Calendar</h3>
-          <p>Keep track of events and schedules</p>
-          <button className="btn btn-primary">View Calendar</button>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">📥</div>
-          <h3>Import Data</h3>
-          <p>Import people and measurements from backup</p>
-          <a href="/import" className="btn btn-secondary">
-            Import Data
-          </a>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">⚙️</div>
-          <h3>Settings</h3>
-          <p>Manage your family portal</p>
-          <a href="/settings" className="btn btn-secondary">
-            Settings
-          </a>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { block } from "vlens/css";
 
-// Enhanced Dashboard Styles - Making People the Focus
+// People-First Dashboard Redesign - Massive Photos & Clean Navigation
 
 block(`
 .dashboard-container {
@@ -19,7 +19,7 @@ block(`
 block(`
 .dashboard-header {
   text-align: center;
-  margin-bottom: 60px;
+  margin-bottom: 50px;
 }
 `);
 
@@ -40,19 +40,23 @@ block(`
 }
 `);
 
-// ENHANCED FAMILY SECTION
+// NEW LAYOUT STRUCTURE - PEOPLE FIRST
+block(`
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+`);
+
+// FAMILY SECTION - PRIMARY FOCUS
 block(`
 .family-section {
-  margin-bottom: 100px;
-  order: 1;
 }
 `);
 
 block(`
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 40px;
 }
 `);
@@ -70,75 +74,55 @@ block(`
 }
 `);
 
+// PEOPLE GRID - SIMPLIFIED AND SPACIOUS
 block(`
 .people-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 60px;
-}
-`);
-
-block(`
-.people-group h3 {
-  font-size: 1.6rem;
-  margin: 0 0 24px;
-  color: var(--text);
-  border-bottom: 3px solid var(--accent);
-  padding-bottom: 12px;
-  display: inline-block;
-  font-weight: 600;
-}
-`);
-
-// MASSIVE IMPROVEMENT TO PERSON CARDS - LARGER AND MORE PROMINENT
-block(`
-.people-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 24px;
-  padding: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 32px;
 }
 `);
 
+// DRAMATICALLY LARGER PERSON CARDS
 block(`
 .person-card {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 32px;
   background: var(--surface);
   border: 2px solid var(--border);
-  border-radius: 20px;
-  padding: 32px;
+  border-radius: 24px;
+  padding: 36px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
-  min-height: 140px;
+  min-height: 180px;
 }
 `);
 
 block(`
 .person-card:hover {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-6px) scale(1.02);
   border-color: var(--accent);
   box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(105, 219, 124, 0.2),
-    0 0 16px rgba(105, 219, 124, 0.08);
+    0 0 20px rgba(105, 219, 124, 0.1);
 }
 `);
 
-// DRAMATICALLY LARGER PROFILE PHOTOS
+// MASSIVE PROFILE PHOTOS - 160px on desktop!
 block(`
 .person-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100px;
-  height: 100px;
+  width: 160px;
+  height: 160px;
   background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%);
   border-radius: 50%;
-  border: 4px solid var(--border);
-  font-size: 3.5rem;
+  border: 5px solid var(--border);
+  font-size: 5rem;
   flex-shrink: 0;
   transition: all 0.3s ease;
   position: relative;
@@ -149,7 +133,7 @@ block(`
 block(`
 .person-card:hover .person-avatar {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(105, 219, 124, 0.2);
+  box-shadow: 0 0 0 3px rgba(105, 219, 124, 0.2);
 }
 `);
 
@@ -171,7 +155,7 @@ block(`
 }
 `);
 
-// ENHANCED PERSON INFO WITH BETTER TYPOGRAPHY
+// ENHANCED PERSON INFO
 block(`
 .person-info {
   flex: 1;
@@ -181,8 +165,8 @@ block(`
 
 block(`
 .person-info h4 {
-  font-size: 1.5rem;
-  margin: 0 0 8px;
+  font-size: 1.8rem;
+  margin: 0 0 12px;
   color: var(--text);
   font-weight: 700;
   line-height: 1.2;
@@ -191,19 +175,20 @@ block(`
 
 block(`
 .person-details {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   color: var(--muted);
   margin: 0;
   font-weight: 500;
 }
 `);
 
-// QUICK ACTIONS - DE-EMPHASIZED BUT STILL ACCESSIBLE
+// QUICK ACTIONS - COMPACT AND UNOBTRUSIVE
 block(`
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
+.quick-actions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
   max-width: 1000px;
   margin: 0 auto;
   order: 2;
@@ -211,46 +196,63 @@ block(`
 `);
 
 block(`
-.dashboard-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-`);
-
-block(`
-.dashboard-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-`);
-
-block(`
-.dashboard-card .card-icon {
-  font-size: 2.5rem;
-  margin-bottom: 12px;
-  display: block;
-}
-`);
-
-block(`
-.dashboard-card h3 {
+.quick-actions h3 {
   font-size: 1.1rem;
-  margin: 0 0 6px;
+  margin: 0 0 16px;
   color: var(--text);
+  font-weight: 600;
+  text-align: center;
 }
 `);
 
 block(`
-.dashboard-card p {
+.action-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 20px;
+}
+`);
+
+block(`
+.action-group h4 {
+  font-size: 0.8rem;
+  margin: 0 0 6px;
   color: var(--muted);
-  margin: 0 0 16px;
-  line-height: 1.4;
-  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+`);
+
+block(`
+.action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+`);
+
+block(`
+.action-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+`);
+
+block(`
+.action-link:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+  text-decoration: none;
+  transform: translateX(2px);
 }
 `);
 
@@ -261,8 +263,9 @@ block(`
   padding: 80px 20px;
   background: var(--surface);
   border: 2px dashed var(--border);
-  border-radius: 20px;
+  border-radius: 24px;
   background-image: radial-gradient(circle at 50% 50%, rgba(105, 219, 124, 0.05) 0%, transparent 70%);
+  grid-column: 1 / -1;
 }
 `);
 
@@ -290,11 +293,73 @@ block(`
 }
 `);
 
-// RESPONSIVE DESIGN - MOBILE FIRST
+// DESKTOP LAYOUT - HORIZONTAL QUICK ACTIONS
+block(`
+@media (min-width: 1201px) {
+  .quick-actions {
+    max-width: 1200px;
+    padding: 20px 32px;
+  }
+
+  .quick-actions h3 {
+    margin: 0 0 20px;
+    font-size: 1rem;
+  }
+
+  .action-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .action-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 140px;
+  }
+
+  .action-group h4 {
+    font-size: 0.75rem;
+    text-align: center;
+    margin: 0 0 8px;
+  }
+
+  .action-link {
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    min-width: 120px;
+    text-align: center;
+  }
+}
+`);
+
+// RESPONSIVE DESIGN - MOBILE FIRST APPROACH
 block(`
 @media (max-width: 1200px) {
-  .people-list {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  .dashboard-content {
+    gap: 50px;
+  }
+
+  .people-grid {
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 24px;
+  }
+
+  .person-avatar {
+    width: 140px;
+    height: 140px;
+    font-size: 4.5rem;
+  }
+
+  .action-links {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 20px;
   }
 }
 `);
@@ -317,68 +382,44 @@ block(`
     font-size: 1.1rem;
   }
 
-  .family-section {
-    margin-bottom: 50px;
-  }
-
-  .section-header {
-    flex-direction: column;
-    gap: 20px;
-    align-items: stretch;
-    margin-bottom: 30px;
-  }
-
   .section-header h2 {
     font-size: 1.8rem;
-    text-align: center;
   }
 
   .people-grid {
-    gap: 30px;
-  }
-
-  .people-group h3 {
-    font-size: 1.4rem;
-    margin-bottom: 20px;
-  }
-
-  .people-list {
     grid-template-columns: 1fr;
     gap: 20px;
   }
 
   .person-card {
-    padding: 24px;
-    gap: 20px;
-    min-height: 120px;
+    padding: 28px;
+    gap: 24px;
+    min-height: 140px;
   }
 
   .person-avatar {
-    width: 80px;
-    height: 80px;
-    font-size: 3rem;
+    width: 120px;
+    height: 120px;
+    font-size: 4rem;
+    border-width: 4px;
   }
 
   .person-info h4 {
-    font-size: 1.3rem;
+    font-size: 1.5rem;
   }
 
   .person-details {
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
 
-  .dashboard-card {
+  .quick-actions {
     padding: 20px;
   }
 
-  .dashboard-card .card-icon {
-    font-size: 2rem;
-    margin-bottom: 10px;
+  .action-links {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
   }
 
   .empty-state {
@@ -403,22 +444,24 @@ block(`
   }
 
   .person-card {
-    padding: 20px;
-    gap: 16px;
+    padding: 24px;
+    gap: 20px;
+    min-height: 120px;
   }
 
   .person-avatar {
-    width: 70px;
-    height: 70px;
-    font-size: 2.5rem;
+    width: 100px;
+    height: 100px;
+    font-size: 3.5rem;
   }
 
   .person-info h4 {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
   }
 
   .person-details {
-    font-size: 0.95rem;
+    font-size: 1rem;
   }
+
 }
 `);
