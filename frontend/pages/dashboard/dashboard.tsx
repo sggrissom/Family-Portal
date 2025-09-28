@@ -123,7 +123,9 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           <div className="card-icon">📸</div>
           <h3>Photo Albums</h3>
           <p>Share and organize family photos</p>
-          <button className="btn btn-primary">View Photos</button>
+          <a href="/photos" className="btn btn-primary">
+            View Photos
+          </a>
         </div>
 
         <div className="dashboard-card">

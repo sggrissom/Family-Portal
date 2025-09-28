@@ -36,6 +36,7 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdatePhoto)
 	vbeam.RegisterProc(app, DeletePhoto)
 	vbeam.RegisterProc(app, GetPhotoStatus)
+	vbeam.RegisterProc(app, ListFamilyPhotos)
 }
 
 // Request/Response types
@@ -90,6 +91,19 @@ type GetPhotoStatusRequest struct {
 
 type GetPhotoStatusResponse struct {
 	Status int `json:"status"` // 0 = active, 1 = processing, 2 = failed
+}
+
+type ListFamilyPhotosRequest struct {
+	// No parameters needed - uses family from auth
+}
+
+type PhotoWithPerson struct {
+	Image  Image  `json:"image"`
+	Person Person `json:"person"`
+}
+
+type ListFamilyPhotosResponse struct {
+	Photos []PhotoWithPerson `json:"photos"`
 }
 
 // Database types
@@ -897,5 +911,45 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 	}
 
 	resp.Status = photo.Status
+	return
+}
+
+func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp ListFamilyPhotosResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Get all family photos
+	images := GetFamilyImages(ctx.Tx, user.FamilyId)
+
+	// Filter out failed photos and create PhotoWithPerson structs
+	resp.Photos = make([]PhotoWithPerson, 0, len(images))
+
+	for _, image := range images {
+		// Skip failed photos (status=2)
+		if image.Status == 2 {
+			continue
+		}
+
+		// Get the person associated with this photo
+		person := GetPersonById(ctx.Tx, image.PersonId)
+		if person.Id == 0 {
+			// Skip photos with missing person data
+			continue
+		}
+
+		// Calculate age for display
+		person.Age = calculateAge(person.Birthday)
+
+		// Add to response
+		resp.Photos = append(resp.Photos, PhotoWithPerson{
+			Image:  image,
+			Person: person,
+		})
+	}
+
 	return
 }

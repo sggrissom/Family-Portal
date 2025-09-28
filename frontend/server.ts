@@ -253,6 +253,13 @@ export interface GetPhotoStatusResponse {
     status: number
 }
 
+export interface ListFamilyPhotosRequest {
+}
+
+export interface ListFamilyPhotosResponse {
+    photos: PhotoWithPerson[]
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -414,6 +421,11 @@ export interface ChatMessage {
     content: string
     createdAt: string
     clientMessageId: string
+}
+
+export interface PhotoWithPerson {
+    image: Image
+    person: Person
 }
 
 export interface ImportPerson {
@@ -625,6 +637,10 @@ export async function DeletePhoto(data: DeletePhotoRequest): Promise<rpc.Respons
 
 export async function GetPhotoStatus(data: GetPhotoStatusRequest): Promise<rpc.Response<GetPhotoStatusResponse>> {
     return await rpc.call<GetPhotoStatusResponse>('GetPhotoStatus', JSON.stringify(data));
+}
+
+export async function ListFamilyPhotos(data: ListFamilyPhotosRequest): Promise<rpc.Response<ListFamilyPhotosResponse>> {
+    return await rpc.call<ListFamilyPhotosResponse>('ListFamilyPhotos', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

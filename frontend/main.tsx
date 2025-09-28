@@ -50,6 +50,7 @@ async function main() {
     vlens.routeHandler("/edit-growth", () => import("@app/pages/growth/edit-growth")),
     vlens.routeHandler("/add-milestone", () => import("@app/pages/milestones/add-milestone")),
     vlens.routeHandler("/edit-milestone", () => import("@app/pages/milestones/edit-milestone")),
+    vlens.routeHandler("/photos", () => import("@app/pages/photos/family-photos")),
     vlens.routeHandler("/add-photo", () => import("@app/pages/photos/add-photo")),
     vlens.routeHandler("/view-photo", () => import("@app/pages/photos/view-photo")),
     vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
