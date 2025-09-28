@@ -305,8 +305,23 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 
 	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId || photo.PersonId != req.PersonId {
-		err = errors.New("Photo not found, access denied, or not associated with this person")
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	// Check if person is associated with this photo
+	photoPeople := GetPhotoPeople(ctx.Tx, req.PhotoId)
+	personInPhoto := false
+	for _, photoPerson := range photoPeople {
+		if photoPerson.Id == req.PersonId {
+			personInPhoto = true
+			break
+		}
+	}
+
+	if !personInPhoto {
+		err = errors.New("Person is not associated with this photo")
 		return
 	}
 

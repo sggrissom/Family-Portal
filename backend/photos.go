@@ -37,11 +37,13 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, DeletePhoto)
 	vbeam.RegisterProc(app, GetPhotoStatus)
 	vbeam.RegisterProc(app, ListFamilyPhotos)
+	vbeam.RegisterProc(app, AddPeopleToPhoto)
+	vbeam.RegisterProc(app, RemovePersonFromPhotoProc)
 }
 
 // Request/Response types
 type AddPhotoRequest struct {
-	PersonId    int    `json:"personId"`
+	PersonIds   []int  `json:"personIds"` // Array of person IDs to tag in the photo
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	InputType   string `json:"inputType"` // 'today' | 'date' | 'age'
@@ -59,8 +61,8 @@ type GetPhotoRequest struct {
 }
 
 type GetPhotoResponse struct {
-	Image  Image  `json:"image"`
-	Person Person `json:"person"`
+	Image  Image    `json:"image"`
+	People []Person `json:"people"`
 }
 
 type UpdatePhotoRequest struct {
@@ -97,20 +99,38 @@ type ListFamilyPhotosRequest struct {
 	// No parameters needed - uses family from auth
 }
 
-type PhotoWithPerson struct {
-	Image  Image  `json:"image"`
-	Person Person `json:"person"`
+type PhotoWithPeople struct {
+	Image  Image    `json:"image"`
+	People []Person `json:"people"`
 }
 
 type ListFamilyPhotosResponse struct {
-	Photos []PhotoWithPerson `json:"photos"`
+	Photos []PhotoWithPeople `json:"photos"`
+}
+
+type AddPeopleToPhotoRequest struct {
+	PhotoId   int   `json:"photoId"`
+	PersonIds []int `json:"personIds"`
+}
+
+type AddPeopleToPhotoResponse struct {
+	Success bool     `json:"success"`
+	People  []Person `json:"people"`
+}
+
+type RemovePersonFromPhotoRequest struct {
+	PhotoId  int `json:"photoId"`
+	PersonId int `json:"personId"`
+}
+
+type RemovePersonFromPhotoResponse struct {
+	Success bool `json:"success"`
 }
 
 // Database types
 type Image struct {
 	Id               int       `json:"id"`
 	FamilyId         int       `json:"familyId"`
-	PersonId         int       `json:"personId"`
 	OwnerUserId      int       `json:"ownerUserId"`
 	OriginalFilename string    `json:"originalFilename"`
 	MimeType         string    `json:"mimeType"`
@@ -125,12 +145,20 @@ type Image struct {
 	Status           int       `json:"status"` // 0 = active, 1 = processing, 2 = hidden
 }
 
+// PhotoPerson represents the many-to-many relationship between photos and people
+type PhotoPerson struct {
+	Id        int       `json:"id"`
+	PhotoId   int       `json:"photoId"`
+	PersonId  int       `json:"personId"`
+	FamilyId  int       `json:"familyId"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // Packing function for vbolt serialization
 func PackImage(self *Image, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
-	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
 	vpack.String(&self.OriginalFilename, buf)
 	vpack.String(&self.MimeType, buf)
@@ -145,14 +173,31 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	vpack.Int(&self.Status, buf)
 }
 
+// Packing function for PhotoPerson
+func PackPhotoPerson(self *PhotoPerson, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.PhotoId, buf)
+	vpack.Int(&self.PersonId, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Time(&self.CreatedAt, buf)
+}
+
 // Buckets for vbolt database storage
 var ImagesBkt = vbolt.Bucket(&cfg.Info, "images", vpack.FInt, PackImage)
-
-// ImageByPersonIndex: term = person_id, target = image_id
-var ImageByPersonIndex = vbolt.Index(&cfg.Info, "image_by_person", vpack.FInt, vpack.FInt)
+var PhotoPersonBkt = vbolt.Bucket(&cfg.Info, "photo_person", vpack.FInt, PackPhotoPerson)
 
 // ImageByFamilyIndex: term = family_id, target = image_id
 var ImageByFamilyIndex = vbolt.Index(&cfg.Info, "image_by_family", vpack.FInt, vpack.FInt)
+
+// PhotoPersonByPhotoIndex: term = photo_id, target = photo_person_id
+var PhotoPersonByPhotoIndex = vbolt.Index(&cfg.Info, "photo_person_by_photo", vpack.FInt, vpack.FInt)
+
+// PhotoPersonByPersonIndex: term = person_id, target = photo_person_id
+var PhotoPersonByPersonIndex = vbolt.Index(&cfg.Info, "photo_person_by_person", vpack.FInt, vpack.FInt)
+
+// PhotoPersonByFamilyIndex: term = family_id, target = photo_person_id
+var PhotoPersonByFamilyIndex = vbolt.Index(&cfg.Info, "photo_person_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
 func GetImageById(tx *vbolt.Tx, imageId int) (image Image) {
@@ -160,18 +205,94 @@ func GetImageById(tx *vbolt.Tx, imageId int) (image Image) {
 	return
 }
 
-func GetPersonImages(tx *vbolt.Tx, personId int) (images []Image) {
-	var imageIds []int
-	vbolt.ReadTermTargets(tx, ImageByPersonIndex, personId, &imageIds, vbolt.Window{})
-	vbolt.ReadSlice(tx, ImagesBkt, imageIds, &images)
+func GetPhotoPersonById(tx *vbolt.Tx, photoPersonId int) (photoPerson PhotoPerson) {
+	vbolt.Read(tx, PhotoPersonBkt, photoPersonId, &photoPerson)
 	return
 }
 
+// Get all PhotoPerson records for a specific photo
+func GetPhotoPersonsByPhoto(tx *vbolt.Tx, photoId int) (photoPersons []PhotoPerson) {
+	var photoPersonIds []int
+	vbolt.ReadTermTargets(tx, PhotoPersonByPhotoIndex, photoId, &photoPersonIds, vbolt.Window{})
+	vbolt.ReadSlice(tx, PhotoPersonBkt, photoPersonIds, &photoPersons)
+	return
+}
+
+// Get all PhotoPerson records for a specific person
+func GetPhotoPersonsByPerson(tx *vbolt.Tx, personId int) (photoPersons []PhotoPerson) {
+	var photoPersonIds []int
+	vbolt.ReadTermTargets(tx, PhotoPersonByPersonIndex, personId, &photoPersonIds, vbolt.Window{})
+	vbolt.ReadSlice(tx, PhotoPersonBkt, photoPersonIds, &photoPersons)
+	return
+}
+
+// Get all people associated with a photo
+func GetPhotoPeople(tx *vbolt.Tx, photoId int) (people []Person) {
+	photoPersons := GetPhotoPersonsByPhoto(tx, photoId)
+	people = make([]Person, 0, len(photoPersons))
+
+	for _, photoPerson := range photoPersons {
+		person := GetPersonById(tx, photoPerson.PersonId)
+		if person.Id != 0 {
+			people = append(people, person)
+		}
+	}
+	return
+}
+
+// Get all images for a specific person
+func GetPersonImages(tx *vbolt.Tx, personId int) (images []Image) {
+	photoPersons := GetPhotoPersonsByPerson(tx, personId)
+	images = make([]Image, 0, len(photoPersons))
+
+	for _, photoPerson := range photoPersons {
+		image := GetImageById(tx, photoPerson.PhotoId)
+		if image.Id != 0 {
+			images = append(images, image)
+		}
+	}
+	return
+}
+
+// Get all images for a family
 func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	var imageIds []int
 	vbolt.ReadTermTargets(tx, ImageByFamilyIndex, familyId, &imageIds, vbolt.Window{})
 	vbolt.ReadSlice(tx, ImagesBkt, imageIds, &images)
 	return
+}
+
+// Add a person to a photo
+func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (photoPersonId int) {
+	photoPerson := PhotoPerson{
+		Id:        vbolt.NextIntId(tx, PhotoPersonBkt),
+		PhotoId:   photoId,
+		PersonId:  personId,
+		FamilyId:  familyId,
+		CreatedAt: time.Now(),
+	}
+
+	vbolt.Write(tx, PhotoPersonBkt, photoPerson.Id, &photoPerson)
+	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, photoId)
+	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, personId)
+	vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, familyId)
+
+	return photoPerson.Id
+}
+
+// Remove a person from a photo
+func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
+	photoPersons := GetPhotoPersonsByPhoto(tx, photoId)
+
+	for _, photoPerson := range photoPersons {
+		if photoPerson.PersonId == personId {
+			vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
+			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
+			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
+			vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+			break
+		}
+	}
 }
 
 // Generate unique filename
@@ -315,17 +436,16 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		"userId": user.Id,
 	})
 
-	// Parse form data
-	personIdStr := r.FormValue("personId")
-	if personIdStr == "" {
-		RespondValidationError(w, r, "Person ID is required")
-		return
-	}
+	// Parse form data for person IDs (can be multiple)
+	personIdsStr := r.FormValue("personIds")
+	var personIds []int
 
-	personId, err := strconv.Atoi(personIdStr)
-	if err != nil {
-		RespondValidationError(w, r, "Invalid person ID", err.Error())
-		return
+	if personIdsStr != "" {
+		// Parse JSON array of person IDs
+		if err := json.Unmarshal([]byte(personIdsStr), &personIds); err != nil {
+			RespondValidationError(w, r, "Invalid person IDs format", err.Error())
+			return
+		}
 	}
 
 	title := strings.TrimSpace(r.FormValue("title"))
@@ -375,15 +495,21 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Database operations
-	var person Person
 	var image Image
+	var validPersons []Person
 
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		// Validate person exists and belongs to user's family
-		person = GetPersonById(tx, personId)
-		if person.Id == 0 || person.FamilyId != user.FamilyId {
-			// Don't commit transaction for invalid person
-			return
+		// Validate all person IDs exist and belong to user's family
+		if len(personIds) > 0 {
+			validPersons = make([]Person, 0, len(personIds))
+			for _, personId := range personIds {
+				person := GetPersonById(tx, personId)
+				if person.Id == 0 || person.FamilyId != user.FamilyId {
+					// Don't commit transaction for invalid person
+					return
+				}
+				validPersons = append(validPersons, person)
+			}
 		}
 
 		// Generate unique filename
@@ -410,7 +536,12 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Calculate photo date (now that we have fileData for EXIF)
-		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, person, fileData)
+		// Use first person for age-based calculation, or empty person for non-age calculations
+		var referencePerson Person
+		if len(validPersons) > 0 {
+			referencePerson = validPersons[0]
+		}
+		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
 		if err != nil {
 			// Don't commit transaction for invalid date
 			return
@@ -436,7 +567,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		image = Image{
 			Id:               vbolt.NextIntId(tx, ImagesBkt),
 			FamilyId:         user.FamilyId,
-			PersonId:         personId,
 			OwnerUserId:      user.Id,
 			OriginalFilename: fileHeader.Filename,
 			MimeType:         mimeType,
@@ -451,10 +581,15 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			Status:           1, // Processing
 		}
 
-		// Save to database
+		// Save image to database
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
-		vbolt.SetTargetSingleTerm(tx, ImageByPersonIndex, image.Id, personId)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, user.FamilyId)
+
+		// Create PhotoPerson relationships for each tagged person
+		for _, person := range validPersons {
+			AddPersonToPhoto(tx, image.Id, person.Id, user.FamilyId)
+		}
+
 		vbolt.TxCommit(tx)
 	})
 
@@ -491,12 +626,13 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Log successful photo upload
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{
-		"userId":   user.Id,
-		"photoId":  image.Id,
-		"personId": personId,
-		"fileSize": fileHeader.Size,
-		"mimeType": mimeType,
-		"filename": fileHeader.Filename,
+		"userId":      user.Id,
+		"photoId":     image.Id,
+		"personIds":   personIds,
+		"peopleCount": len(personIds),
+		"fileSize":    fileHeader.Size,
+		"mimeType":    mimeType,
+		"filename":    fileHeader.Filename,
 	})
 
 	// Return success response
@@ -692,18 +828,16 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 		return
 	}
 
-	// Get the person who owns this photo
-	person := GetPersonById(ctx.Tx, photo.PersonId)
-	if person.Id == 0 {
-		err = errors.New("Associated person not found")
-		return
+	// Get all people associated with this photo
+	people := GetPhotoPeople(ctx.Tx, photo.Id)
+
+	// Calculate age for all people
+	for i := range people {
+		people[i].Age = calculateAge(people[i].Birthday)
 	}
 
-	// Calculate age for response
-	person.Age = calculateAge(person.Birthday)
-
 	resp.Image = photo
-	resp.Person = person
+	resp.People = people
 	return
 }
 
@@ -730,15 +864,15 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		return
 	}
 
-	// Get person for date calculation
-	person := GetPersonById(ctx.Tx, photo.PersonId)
-	if person.Id == 0 {
-		err = errors.New("Associated person not found")
-		return
+	// Get people for date calculation (use first person if available)
+	people := GetPhotoPeople(ctx.Tx, photo.Id)
+	var referencePerson Person
+	if len(people) > 0 {
+		referencePerson = people[0]
 	}
 
 	// Calculate new photo date
-	calculatedPhotoDate, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, person, nil)
+	calculatedPhotoDate, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
 	if err != nil {
 		return
 	}
@@ -786,11 +920,19 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 		fmt.Printf("Warning: Failed to delete photo files for ID %d: %v\n", photo.Id, err)
 	}
 
+	// Remove PhotoPerson relationships
+	photoPersons := GetPhotoPersonsByPhoto(ctx.Tx, photo.Id)
+	for _, photoPerson := range photoPersons {
+		vbolt.Delete(ctx.Tx, PhotoPersonBkt, photoPerson.Id)
+		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
+		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
+		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+	}
+
 	// Remove from database
 	vbolt.Delete(ctx.Tx, ImagesBkt, photo.Id)
 
 	// Remove from indexes
-	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByPersonIndex, photo.Id, -1)
 	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByFamilyIndex, photo.Id, -1)
 
 	vbolt.TxCommit(ctx.Tx)
@@ -925,8 +1067,8 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	// Get all family photos
 	images := GetFamilyImages(ctx.Tx, user.FamilyId)
 
-	// Filter out failed photos and create PhotoWithPerson structs
-	resp.Photos = make([]PhotoWithPerson, 0, len(images))
+	// Filter out failed photos and create PhotoWithPeople structs
+	resp.Photos = make([]PhotoWithPeople, 0, len(images))
 
 	for _, image := range images {
 		// Skip failed photos (status=2)
@@ -934,22 +1076,128 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 			continue
 		}
 
-		// Get the person associated with this photo
-		person := GetPersonById(ctx.Tx, image.PersonId)
-		if person.Id == 0 {
-			// Skip photos with missing person data
-			continue
+		// Get all people associated with this photo
+		people := GetPhotoPeople(ctx.Tx, image.Id)
+
+		// Calculate age for all people
+		for i := range people {
+			people[i].Age = calculateAge(people[i].Birthday)
 		}
 
-		// Calculate age for display
-		person.Age = calculateAge(person.Birthday)
-
-		// Add to response
-		resp.Photos = append(resp.Photos, PhotoWithPerson{
+		// Add to response (photos without people are still included)
+		resp.Photos = append(resp.Photos, PhotoWithPeople{
 			Image:  image,
-			Person: person,
+			People: people,
 		})
 	}
 
+	return
+}
+
+// AddPeopleToPhoto adds multiple people to an existing photo
+func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp AddPeopleToPhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.PhotoId <= 0 {
+		err = errors.New("Invalid photo ID")
+		return
+	}
+
+	if len(req.PersonIds) == 0 {
+		err = errors.New("At least one person ID is required")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get and validate photo
+	photo := GetImageById(ctx.Tx, req.PhotoId)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	// Get currently associated people to avoid duplicates
+	existingPeople := GetPhotoPeople(ctx.Tx, req.PhotoId)
+	existingPersonIds := make(map[int]bool)
+	for _, person := range existingPeople {
+		existingPersonIds[person.Id] = true
+	}
+
+	// Add new people
+	var addedPeople []Person
+	for _, personId := range req.PersonIds {
+		// Skip if already associated
+		if existingPersonIds[personId] {
+			continue
+		}
+
+		// Validate person belongs to user's family
+		person := GetPersonById(ctx.Tx, personId)
+		if person.Id == 0 || person.FamilyId != user.FamilyId {
+			continue // Skip invalid person but don't fail the whole operation
+		}
+
+		// Add the association
+		AddPersonToPhoto(ctx.Tx, req.PhotoId, personId, user.FamilyId)
+		person.Age = calculateAge(person.Birthday)
+		addedPeople = append(addedPeople, person)
+	}
+
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Success = true
+	resp.People = addedPeople
+	return
+}
+
+// RemovePersonFromPhotoProc removes a person from a photo
+func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequest) (resp RemovePersonFromPhotoResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.PhotoId <= 0 {
+		err = errors.New("Invalid photo ID")
+		return
+	}
+
+	if req.PersonId <= 0 {
+		err = errors.New("Invalid person ID")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get and validate photo
+	photo := GetImageById(ctx.Tx, req.PhotoId)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	// Validate person belongs to user's family
+	person := GetPersonById(ctx.Tx, req.PersonId)
+	if person.Id == 0 || person.FamilyId != user.FamilyId {
+		err = errors.New("Person not found or access denied")
+		return
+	}
+
+	// Remove the association
+	RemovePersonFromPhoto(ctx.Tx, req.PhotoId, req.PersonId)
+
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Success = true
 	return
 }

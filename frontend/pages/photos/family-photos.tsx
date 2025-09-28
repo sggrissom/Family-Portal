@@ -60,8 +60,8 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
 
   // Initialize monitoring for processing photos
   if (hasPhotos) {
-    photos.forEach(photoWithPerson => {
-      const photo = photoWithPerson.image;
+    photos.forEach(photoWithPeople => {
+      const photo = photoWithPeople.image;
       const currentStatus = photoStatus.getStatus(photo.id);
 
       // Only start monitoring if we haven't seen this photo before (Unknown status)
@@ -101,30 +101,44 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
       <div className="photos-content">
         {hasPhotos ? (
           <div className="photos-gallery has-photos">
-            {photos.map((photoWithPerson, index) => (
-              <div key={photoWithPerson.image.id} className="photo-card">
+            {photos.map((photoWithPeople, index) => (
+              <div key={photoWithPeople.image.id} className="photo-card">
                 <div className="photo-image-container">
                   <ThumbnailImage
-                    photoId={photoWithPerson.image.id}
-                    alt={photoWithPerson.image.title}
+                    photoId={photoWithPeople.image.id}
+                    alt={photoWithPeople.image.title}
                     className="photo-image"
                     loading={index < 6 ? "eager" : "lazy"}
                     fetchpriority={index < 3 ? "high" : "auto"}
-                    onClick={() => core.setRoute(`/view-photo/${photoWithPerson.image.id}`)}
-                    status={photoStatus.getStatus(photoWithPerson.image.id)}
+                    onClick={() => core.setRoute(`/view-photo/${photoWithPeople.image.id}`)}
+                    status={photoStatus.getStatus(photoWithPeople.image.id)}
                   />
-                  {photoWithPerson.person.profilePhotoId === photoWithPerson.image.id && (
-                    <div className="profile-photo-badge">👤 Profile</div>
+                  {/* Show profile photo badge if any person has this as their profile photo */}
+                  {photoWithPeople.people.some(
+                    person => person.profilePhotoId === photoWithPeople.image.id
+                  ) && <div className="profile-photo-badge">👤 Profile</div>}
+                  {/* Show person badges for all tagged people */}
+                  {photoWithPeople.people.length > 0 ? (
+                    <div className="people-badges">
+                      {photoWithPeople.people.map(person => (
+                        <div key={person.id} className="person-badge">
+                          {person.name}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="people-badges">
+                      <div className="person-badge family-badge">Family Photo</div>
+                    </div>
                   )}
-                  <div className="person-badge">{photoWithPerson.person.name}</div>
                 </div>
                 <div className="photo-info">
-                  <h3 className="photo-title">{photoWithPerson.image.title}</h3>
+                  <h3 className="photo-title">{photoWithPeople.image.title}</h3>
                   <div className="photo-date">
-                    {formatPhotoDate(photoWithPerson.image.photoDate)}
+                    {formatPhotoDate(photoWithPeople.image.photoDate)}
                   </div>
-                  {photoWithPerson.image.description && (
-                    <div className="photo-description">{photoWithPerson.image.description}</div>
+                  {photoWithPeople.image.description && (
+                    <div className="photo-description">{photoWithPeople.image.description}</div>
                   )}
                 </div>
               </div>

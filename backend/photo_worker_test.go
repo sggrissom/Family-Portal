@@ -317,7 +317,6 @@ func TestUpdatePhotoStatus(t *testing.T) {
 	testImage := Image{
 		Id:       1,
 		FamilyId: 1,
-		PersonId: 1,
 		Status:   0, // Initially active
 	}
 
@@ -381,7 +380,6 @@ func TestUpdatePhotoComplete(t *testing.T) {
 	testImage := Image{
 		Id:       1,
 		FamilyId: 1,
-		PersonId: 1,
 		Status:   1, // Processing
 		Width:    0,
 		Height:   0,

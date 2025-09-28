@@ -10,7 +10,7 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./add-photo-styles";
 
 type AddPhotoForm = {
-  selectedPersonId: string;
+  selectedPersonIds: string[]; // Array of person IDs
   title: string;
   description: string;
   inputType: string; // 'auto' | 'today' | 'date' | 'age'
@@ -26,7 +26,7 @@ type AddPhotoForm = {
 
 const useAddPhotoForm = vlens.declareHook(
   (personId?: string): AddPhotoForm => ({
-    selectedPersonId: personId || "",
+    selectedPersonIds: personId ? [personId] : [],
     title: "",
     description: "",
     inputType: "auto",
@@ -99,13 +99,8 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   form.loading = true;
   form.error = "";
 
-  // Validation
-  if (!form.selectedPersonId) {
-    form.error = "Please select a family member";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
+  // Validation (photos without people are allowed)
+  // No validation needed for selectedPersonIds - empty array is valid for family photos
 
   if (!form.selectedFile) {
     form.error = "Please select a photo to upload";
@@ -131,7 +126,11 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   try {
     // Prepare FormData for multipart upload
     const formData = new FormData();
-    formData.append("personId", form.selectedPersonId);
+
+    // Convert selectedPersonIds to integers and send as JSON
+    const personIds = form.selectedPersonIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+    formData.append("personIds", JSON.stringify(personIds));
+
     formData.append("title", form.title.trim());
     formData.append("description", form.description.trim());
     formData.append("inputType", form.inputType);
@@ -173,8 +172,14 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
       photoStatus.startMonitoring(responseData.image.id, responseData.image.status);
     }
 
-    // Redirect to profile page on success
-    core.setRoute(`/profile/${form.selectedPersonId}`);
+    // Redirect after successful upload
+    if (form.selectedPersonIds.length === 1) {
+      // If only one person selected, go to their profile
+      core.setRoute(`/profile/${form.selectedPersonIds[0]}`);
+    } else {
+      // Otherwise go to family photos page
+      core.setRoute("/photos");
+    }
   } catch (error) {
     form.loading = false;
     form.error =
@@ -185,6 +190,20 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
 
 function onInputTypeChange(form: AddPhotoForm, newType: string) {
   form.inputType = newType;
+  vlens.scheduleRedraw();
+}
+
+function onPersonToggle(form: AddPhotoForm, personId: string) {
+  const index = form.selectedPersonIds.indexOf(personId);
+
+  if (index === -1) {
+    // Add person
+    form.selectedPersonIds.push(personId);
+  } else {
+    // Remove person
+    form.selectedPersonIds.splice(index, 1);
+  }
+
   vlens.scheduleRedraw();
 }
 
@@ -265,7 +284,7 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
   const children = people.filter(p => p.type === server.Child);
   const parents = people.filter(p => p.type === server.Parent);
 
-  const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
+  const selectedPersonIds = new Set(form.selectedPersonIds.map(id => parseInt(id)));
 
   return (
     <div className="add-photo-page">
@@ -280,25 +299,51 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
           {/* Person Selection */}
           <div className="form-group">
-            <label htmlFor="person">Family Member</label>
-            <select
-              id="person"
-              {...vlens.attrsBindInput(vlens.ref(form, "selectedPersonId"))}
-              required
-              disabled={form.loading}
-            >
-              <option value="">Select a family member</option>
-              {children.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} (Age {person.age})
-                </option>
-              ))}
-              {parents.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} (Parent)
-                </option>
-              ))}
-            </select>
+            <label>Who's in this photo? (Optional)</label>
+            <p className="field-hint">
+              Select family members who appear in this photo. Leave unchecked for general family
+              photos.
+            </p>
+
+            {children.length > 0 && (
+              <div className="person-group">
+                <h4>Children</h4>
+                <div className="checkbox-group">
+                  {children.map(person => (
+                    <label key={person.id} className="checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedPersonIds.has(person.id)}
+                        onChange={() => onPersonToggle(form, person.id.toString())}
+                        disabled={form.loading}
+                      />
+                      <span>
+                        {person.name} (Age {person.age})
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {parents.length > 0 && (
+              <div className="person-group">
+                <h4>Parents</h4>
+                <div className="checkbox-group">
+                  {parents.map(person => (
+                    <label key={person.id} className="checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedPersonIds.has(person.id)}
+                        onChange={() => onPersonToggle(form, person.id.toString())}
+                        disabled={form.loading}
+                      />
+                      <span>{person.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* File Upload */}
@@ -422,9 +467,11 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
                   value="age"
                   checked={form.inputType === "age"}
                   onChange={() => onInputTypeChange(form, "age")}
-                  disabled={form.loading}
+                  disabled={form.loading || form.selectedPersonIds.length === 0}
                 />
-                <span>At Age</span>
+                <span>
+                  At Age {form.selectedPersonIds.length === 0 && "(requires person selection)"}
+                </span>
               </label>
             </div>
           </div>
@@ -490,11 +537,24 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
           </div>
         </form>
 
-        {selectedPerson && form.title && form.selectedFile && (
+        {form.title && form.selectedFile && (
           <div className="photo-preview">
             <h3>Preview</h3>
             <p>
-              <strong>{form.title}</strong> - {selectedPerson.name}
+              <strong>{form.title}</strong>
+              {form.selectedPersonIds.length > 0 && (
+                <span>
+                  {" "}
+                  -{" "}
+                  {form.selectedPersonIds
+                    .map(id => {
+                      const person = people.find(p => p.id === parseInt(id));
+                      return person?.name;
+                    })
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              )}
               {form.inputType === "today" && <span> (today)</span>}
               {form.inputType === "date" && form.photoDate && (
                 <span> ({new Date(form.photoDate).toLocaleDateString()})</span>

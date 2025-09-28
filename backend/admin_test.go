@@ -175,10 +175,10 @@ func TestGetPhotoStats(t *testing.T) {
 
 		// Create test images with different statuses
 		testImages := []Image{
-			{Id: 1, Status: 0, FamilyId: 1, PersonId: 1}, // Active
-			{Id: 2, Status: 1, FamilyId: 1, PersonId: 1}, // Processing
-			{Id: 3, Status: 0, FamilyId: 1, PersonId: 2}, // Active
-			{Id: 4, Status: 2, FamilyId: 1, PersonId: 2}, // Failed/Hidden
+			{Id: 1, Status: 0, FamilyId: 1}, // Active
+			{Id: 2, Status: 1, FamilyId: 1}, // Processing
+			{Id: 3, Status: 0, FamilyId: 1}, // Active
+			{Id: 4, Status: 2, FamilyId: 1}, // Failed/Hidden
 		}
 
 		for _, img := range testImages {

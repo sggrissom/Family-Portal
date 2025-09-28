@@ -13,7 +13,7 @@ export async function fetch(route: string, prefix: string) {
   return server.GetPhoto({ id: photoId });
 }
 
-type ViewPhotoData = { image: server.Image | null; person: server.Person | null };
+type ViewPhotoData = { image: server.Image | null; people: server.Person[] | null };
 
 const formatPhotoDate = (dateString: string) => {
   if (!dateString) return "";
@@ -35,7 +35,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     return;
   }
 
-  if (!data.image || !data.person) {
+  if (!data.image) {
     return (
       <div>
         <Header isHome={false} />
@@ -57,7 +57,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     <div>
       <Header isHome={false} />
       <main id="app" className="view-photo-container">
-        <ViewPhotoPage photo={data.image} person={data.person} />
+        <ViewPhotoPage photo={data.image} people={data.people || []} />
       </main>
       <Footer />
     </div>
@@ -66,7 +66,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
 
 interface ViewPhotoPageProps {
   photo: server.Image;
-  person: server.Person;
+  people: server.Person[];
 }
 
 async function handleDeletePhoto(photo: server.Image) {
@@ -84,8 +84,8 @@ async function handleDeletePhoto(photo: server.Image) {
 
     if (resp && resp.success) {
       alert("Photo deleted successfully");
-      // Navigate back to the person's profile
-      core.setRoute(`/profile/${photo.personId}`);
+      // Navigate back to family photos page
+      core.setRoute("/photos");
     } else {
       alert("Failed to delete photo");
     }
@@ -94,10 +94,10 @@ async function handleDeletePhoto(photo: server.Image) {
   }
 }
 
-async function handleSetProfilePhoto(photo: server.Image) {
+async function handleSetProfilePhoto(photo: server.Image, personId: number) {
   try {
     const [resp, err] = await server.SetProfilePhoto({
-      personId: photo.personId,
+      personId: personId,
       photoId: photo.id,
     });
 
@@ -118,15 +118,15 @@ async function handleSetProfilePhoto(photo: server.Image) {
   }
 }
 
-const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
+const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
-  const isProfilePhoto = person.profilePhotoId === photo.id;
+  const profilePhotoPeople = people.filter(person => person.profilePhotoId === photo.id);
   return (
     <div className="view-photo-page">
       {/* Header with navigation */}
       <div className="photo-header">
-        <a href={`/profile/${photo.personId}`} className="back-link">
-          ← Back to Profile
+        <a href="/photos" className="back-link">
+          ← Back to Photos
         </a>
       </div>
 
@@ -146,6 +146,33 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
           <h1 className="view-photo-title">{photo.title}</h1>
           <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
           {photo.description && <div className="view-photo-description">{photo.description}</div>}
+
+          {/* People in the photo */}
+          <div className="photo-people">
+            {people.length > 0 ? (
+              <div>
+                <h3>People in this photo:</h3>
+                <div className="people-list">
+                  {people.map(person => (
+                    <div key={person.id} className="person-tag">
+                      <a href={`/profile/${person.id}`} className="person-link">
+                        {person.name}
+                      </a>
+                      {person.profilePhotoId === photo.id && (
+                        <span className="profile-badge">Profile Photo</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h3>Family Photo</h3>
+                <p>No specific people tagged</p>
+              </div>
+            )}
+          </div>
+
           <div className="photo-details">
             <small>
               Uploaded: {formatPhotoDate(photo.createdAt)} • {photo.originalFilename}
@@ -158,15 +185,30 @@ const ViewPhotoPage = ({ photo, person }: ViewPhotoPageProps) => {
           <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
             ✏️ Edit
           </a>
-          {isProfilePhoto ? (
-            <button className="btn btn-success" disabled>
-              ✓ Profile Photo
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={() => handleSetProfilePhoto(photo)}>
-              👤 Set as Profile Photo
-            </button>
+
+          {/* Profile photo buttons for each person */}
+          {people.length > 0 && (
+            <div className="profile-photo-actions">
+              <h4>Set as Profile Photo:</h4>
+              {people.map(person => (
+                <div key={person.id} className="profile-action">
+                  {person.profilePhotoId === photo.id ? (
+                    <button className="btn btn-success btn-sm" disabled>
+                      ✓ {person.name}'s Profile
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={() => handleSetProfilePhoto(photo, person.id)}
+                    >
+                      👤 {person.name}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
+
           <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo)}>
             🗑️ Delete
           </button>

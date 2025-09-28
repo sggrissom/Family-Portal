@@ -152,10 +152,10 @@ func TestGetAnalyticsOverview(t *testing.T) {
 
 		// Create test photos
 		photos := []Image{
-			{Id: 1, FamilyId: 1, PersonId: 1, CreatedAt: now.AddDate(0, 0, -1), Status: 0},
-			{Id: 2, FamilyId: 1, PersonId: 1, CreatedAt: now.AddDate(0, 0, -2), Status: 0},
-			{Id: 3, FamilyId: 2, PersonId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1},   // Processing
-			{Id: 4, FamilyId: 2, PersonId: 2, CreatedAt: monthAgo.AddDate(0, 0, -10), Status: 2}, // Failed
+			{Id: 1, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -1), Status: 0},
+			{Id: 2, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -2), Status: 0},
+			{Id: 3, FamilyId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1},   // Processing
+			{Id: 4, FamilyId: 2, CreatedAt: monthAgo.AddDate(0, 0, -10), Status: 2}, // Failed
 		}
 		for _, photo := range photos {
 			vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
@@ -402,10 +402,10 @@ func TestGetContentAnalytics(t *testing.T) {
 
 		// Create photos with different formats
 		photos := []Image{
-			{Id: 1, FamilyId: 1, PersonId: 1, MimeType: "image/jpeg", CreatedAt: time.Now().AddDate(0, 0, -1)},
-			{Id: 2, FamilyId: 1, PersonId: 1, MimeType: "image/png", CreatedAt: time.Now().AddDate(0, 0, -2)},
-			{Id: 3, FamilyId: 1, PersonId: 2, MimeType: "image/jpeg", CreatedAt: time.Now().AddDate(0, 0, -3)},
-			{Id: 4, FamilyId: 2, PersonId: 3, MimeType: "image/gif", CreatedAt: time.Now().AddDate(0, 0, -4)},
+			{Id: 1, FamilyId: 1, MimeType: "image/jpeg", CreatedAt: time.Now().AddDate(0, 0, -1)},
+			{Id: 2, FamilyId: 1, MimeType: "image/png", CreatedAt: time.Now().AddDate(0, 0, -2)},
+			{Id: 3, FamilyId: 1, MimeType: "image/jpeg", CreatedAt: time.Now().AddDate(0, 0, -3)},
+			{Id: 4, FamilyId: 2, MimeType: "image/gif", CreatedAt: time.Now().AddDate(0, 0, -4)},
 		}
 		for _, photo := range photos {
 			vbolt.Write(tx, ImagesBkt, photo.Id, &photo)

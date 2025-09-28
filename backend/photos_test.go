@@ -69,7 +69,6 @@ func TestPackImage(t *testing.T) {
 	testImage := Image{
 		Id:               123,
 		FamilyId:         1,
-		PersonId:         456,
 		OwnerUserId:      789,
 		OriginalFilename: "test.jpg",
 		MimeType:         "image/jpeg",
@@ -109,7 +108,6 @@ func TestGetImageById(t *testing.T) {
 	testImage := Image{
 		Id:               1,
 		FamilyId:         1,
-		PersonId:         1,
 		OwnerUserId:      1,
 		OriginalFilename: "test.jpg",
 		MimeType:         "image/jpeg",
@@ -156,18 +154,26 @@ func TestGetPersonImages(t *testing.T) {
 	defer db.Close()
 
 	personId := 123
+	otherPersonId := 456
+	familyId := 1
 	images := []Image{
-		{Id: 1, PersonId: personId, FamilyId: 1, Title: "Image 1"},
-		{Id: 2, PersonId: personId, FamilyId: 1, Title: "Image 2"},
-		{Id: 3, PersonId: 456, FamilyId: 1, Title: "Other Person"},
+		{Id: 1, FamilyId: familyId, Title: "Image 1"},
+		{Id: 2, FamilyId: familyId, Title: "Image 2"},
+		{Id: 3, FamilyId: familyId, Title: "Other Person Image"},
 	}
 
-	// Store images and create index
+	// Store images and create PhotoPerson relationships
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for _, img := range images {
 			vbolt.Write(tx, ImagesBkt, img.Id, &img)
-			vbolt.SetTargetSingleTerm(tx, ImageByPersonIndex, img.Id, img.PersonId)
+			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, img.Id, img.FamilyId)
 		}
+
+		// Associate first two images with personId, third with otherPersonId
+		AddPersonToPhoto(tx, 1, personId, familyId)
+		AddPersonToPhoto(tx, 2, personId, familyId)
+		AddPersonToPhoto(tx, 3, otherPersonId, familyId)
+
 		vbolt.TxCommit(tx)
 	})
 
@@ -179,10 +185,11 @@ func TestGetPersonImages(t *testing.T) {
 			t.Errorf("Expected 2 images for person %d, got %d", personId, len(retrieved))
 		}
 
-		// Check that both images belong to the correct person
+		// Check that both images are associated with the correct person via PhotoPerson
+		expectedImageIds := map[int]bool{1: true, 2: true}
 		for _, img := range retrieved {
-			if img.PersonId != personId {
-				t.Errorf("Expected PersonId %d, got %d", personId, img.PersonId)
+			if !expectedImageIds[img.Id] {
+				t.Errorf("Unexpected image ID %d for person %d", img.Id, personId)
 			}
 		}
 	})
@@ -205,9 +212,9 @@ func TestGetFamilyImages(t *testing.T) {
 
 	familyId := 1
 	images := []Image{
-		{Id: 1, FamilyId: familyId, PersonId: 1, Title: "Family Image 1"},
-		{Id: 2, FamilyId: familyId, PersonId: 2, Title: "Family Image 2"},
-		{Id: 3, FamilyId: 2, PersonId: 3, Title: "Other Family"},
+		{Id: 1, FamilyId: familyId, Title: "Family Image 1"},
+		{Id: 2, FamilyId: familyId, Title: "Family Image 2"},
+		{Id: 3, FamilyId: 2, Title: "Other Family"},
 	}
 
 	// Store images and create index

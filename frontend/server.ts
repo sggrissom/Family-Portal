@@ -220,7 +220,7 @@ export interface GetPhotoRequest {
 
 export interface GetPhotoResponse {
     image: Image
-    person: Person
+    people: Person[]
 }
 
 export interface UpdatePhotoRequest {
@@ -257,7 +257,26 @@ export interface ListFamilyPhotosRequest {
 }
 
 export interface ListFamilyPhotosResponse {
-    photos: PhotoWithPerson[]
+    photos: PhotoWithPeople[]
+}
+
+export interface AddPeopleToPhotoRequest {
+    photoId: number
+    personIds: number[]
+}
+
+export interface AddPeopleToPhotoResponse {
+    success: boolean
+    people: Person[]
+}
+
+export interface RemovePersonFromPhotoRequest {
+    photoId: number
+    personId: number
+}
+
+export interface RemovePersonFromPhotoResponse {
+    success: boolean
 }
 
 export interface ImportDataRequest {
@@ -398,7 +417,6 @@ export interface Milestone {
 export interface Image {
     id: number
     familyId: number
-    personId: number
     ownerUserId: number
     originalFilename: string
     mimeType: string
@@ -423,9 +441,9 @@ export interface ChatMessage {
     clientMessageId: string
 }
 
-export interface PhotoWithPerson {
+export interface PhotoWithPeople {
     image: Image
-    person: Person
+    people: Person[]
 }
 
 export interface ImportPerson {
@@ -641,6 +659,14 @@ export async function GetPhotoStatus(data: GetPhotoStatusRequest): Promise<rpc.R
 
 export async function ListFamilyPhotos(data: ListFamilyPhotosRequest): Promise<rpc.Response<ListFamilyPhotosResponse>> {
     return await rpc.call<ListFamilyPhotosResponse>('ListFamilyPhotos', JSON.stringify(data));
+}
+
+export async function AddPeopleToPhoto(data: AddPeopleToPhotoRequest): Promise<rpc.Response<AddPeopleToPhotoResponse>> {
+    return await rpc.call<AddPeopleToPhotoResponse>('AddPeopleToPhoto', JSON.stringify(data));
+}
+
+export async function RemovePersonFromPhotoProc(data: RemovePersonFromPhotoRequest): Promise<rpc.Response<RemovePersonFromPhotoResponse>> {
+    return await rpc.call<RemovePersonFromPhotoResponse>('RemovePersonFromPhotoProc', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
