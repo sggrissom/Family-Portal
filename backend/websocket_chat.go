@@ -52,12 +52,14 @@ func getAllowedOrigins() []string {
 	return allowedOrigins
 }
 
-// WebSocket accept options with CORS support
-var acceptOptions = &websocket.AcceptOptions{
-	// Enable compression
-	CompressionMode: websocket.CompressionNoContextTakeover,
-	// CORS origin check - dynamically set based on environment
-	OriginPatterns: getAllowedOrigins(),
+// createAcceptOptions creates WebSocket accept options with current environment settings
+func createAcceptOptions() *websocket.AcceptOptions {
+	return &websocket.AcceptOptions{
+		// Enable compression
+		CompressionMode: websocket.CompressionNoContextTakeover,
+		// CORS origin check - dynamically set based on environment
+		OriginPatterns: getAllowedOrigins(),
+	}
 }
 
 // WebSocket message types
@@ -483,7 +485,7 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 		}
 
 		// Accept the WebSocket connection
-		conn, err := websocket.Accept(w, r, acceptOptions)
+		conn, err := websocket.Accept(w, r, createAcceptOptions())
 		if err != nil {
 			LogErrorWithRequest(r, LogCategoryAPI, "WebSocket accept failed", map[string]interface{}{
 				"error": err.Error(),

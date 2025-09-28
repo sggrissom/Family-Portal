@@ -33,12 +33,13 @@ func isWebSocketRequest(r *http.Request) bool {
 
 // ServeHTTP implements http.Handler and adds security headers to all responses
 func (sw *SecurityWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Add security headers to all responses (WebSocket routes now bypass this wrapper)
-	if isWebSocketRequest(r) {
+	// Handle WebSocket requests for /ws/chat before adding any headers
+	if isWebSocketRequest(r) && r.URL.Path == "/ws/chat" {
 		HandleWebSocketChat(sw.app)(w, r)
 		return
 	}
 
+	// Add security headers to non-WebSocket responses
 	addSecurityHeaders(w)
 	sw.app.ServeHTTP(w, r)
 }

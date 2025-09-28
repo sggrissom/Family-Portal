@@ -23,8 +23,8 @@ func RegisterChatMethods(app *vbeam.Application) {
 
 // Request/Response types
 type SendMessageRequest struct {
-	Content         string  `json:"content"`
-	ClientMessageId *string `json:"clientMessageId"`
+	Content         string `json:"content"`
+	ClientMessageId string `json:"clientMessageId"`
 }
 
 type SendMessageResponse struct {
@@ -56,7 +56,7 @@ type ChatMessage struct {
 	UserName        string    `json:"userName"`
 	Content         string    `json:"content"`
 	CreatedAt       time.Time `json:"createdAt"`
-	ClientMessageId *string   `json:"clientMessageId"`
+	ClientMessageId string    `json:"clientMessageId"`
 }
 
 // Packing function for vbolt serialization
@@ -68,7 +68,7 @@ func PackChatMessage(self *ChatMessage, buf *vpack.Buffer) {
 	vpack.String(&self.UserName, buf)
 	vpack.String(&self.Content, buf)
 	vpack.Time(&self.CreatedAt, buf)
-	vpack.String(self.ClientMessageId, buf)
+	vpack.String(&self.ClientMessageId, buf)
 }
 
 // Buckets for vbolt database storage
