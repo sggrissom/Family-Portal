@@ -191,24 +191,12 @@ func (h *ChatHub) run() {
 	for {
 		select {
 		case client := <-h.register:
-			LogInfo(LogCategoryAPI, "Processing register request", map[string]interface{}{
-				"userId":   client.userId,
-				"familyId": client.familyId,
-			})
 			h.registerClient(client)
 
 		case client := <-h.unregister:
-			LogInfo(LogCategoryAPI, "Processing unregister request", map[string]interface{}{
-				"userId":   client.userId,
-				"familyId": client.familyId,
-			})
 			h.unregisterClient(client)
 
 		case message := <-h.broadcast:
-			LogInfo(LogCategoryAPI, "Processing broadcast request", map[string]interface{}{
-				"familyId":    message.FamilyId,
-				"messageType": message.Message.Type,
-			})
 			h.broadcastToFamily(message.FamilyId, message.Message)
 		}
 	}
@@ -234,8 +222,6 @@ func (h *ChatHub) registerClient(client *Client) {
 
 	// Add the new client
 	h.families[client.familyId][client] = true
-	familyClients := len(h.families[client.familyId])
-	totalFamilies := len(h.families)
 
 	// Set flag to broadcast online status outside the lock
 	shouldBroadcastOnline = !hasOtherConnections
@@ -243,13 +229,8 @@ func (h *ChatHub) registerClient(client *Client) {
 	h.mu.Unlock()
 
 	LogInfo(LogCategoryAPI, "WebSocket client registered", map[string]interface{}{
-		"userId":              client.userId,
-		"familyId":            client.familyId,
-		"userName":            client.userName,
-		"familyClients":       familyClients,
-		"totalFamilies":       totalFamilies,
-		"hasOtherConnections": hasOtherConnections,
-		"willBroadcastOnline": shouldBroadcastOnline,
+		"userId":   client.userId,
+		"familyId": client.familyId,
 	})
 
 	// Notify family that user came online (only if this is their first connection)
@@ -284,7 +265,6 @@ func (h *ChatHub) unregisterClient(client *Client) {
 			LogInfo(LogCategoryAPI, "WebSocket client unregistered", map[string]interface{}{
 				"userId":   client.userId,
 				"familyId": client.familyId,
-				"userName": client.userName,
 			})
 
 			// Check if user has any other connections
@@ -346,12 +326,6 @@ func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 		return
 	}
 
-	LogInfo(LogCategoryAPI, "Broadcasting message to family clients", map[string]interface{}{
-		"familyId":    familyId,
-		"messageType": message.Type,
-		"clientCount": len(clientList),
-	})
-
 	// Track failed clients for cleanup
 	var failedClients []*Client
 
@@ -375,12 +349,6 @@ func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 		h.cleanupFailedClients(familyId, failedClients)
 	}
 
-	LogInfo(LogCategoryAPI, "Message broadcast completed", map[string]interface{}{
-		"familyId":      familyId,
-		"messageType":   message.Type,
-		"sentTo":        len(clientList) - len(failedClients),
-		"failedClients": len(failedClients),
-	})
 }
 
 // cleanupFailedClients removes clients that failed to receive messages
@@ -440,10 +408,6 @@ func (h *ChatHub) BroadcastNewMessage(familyId int, message ChatMessage) {
 
 	select {
 	case h.broadcast <- BroadcastMessage{FamilyId: familyId, Message: wsMessage}:
-		LogInfo(LogCategoryAPI, "Message queued for broadcast", map[string]interface{}{
-			"familyId":  familyId,
-			"messageId": message.Id,
-		})
 	default:
 		LogWarn(LogCategoryAPI, "WebSocket broadcast channel full", map[string]interface{}{
 			"familyId":    familyId,
@@ -507,11 +471,6 @@ func (h *ChatHub) heartbeatChecker() {
 // WebSocket connection handler
 func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		LogInfo(LogCategoryAPI, "WebSocket connection attempt", map[string]interface{}{
-			"path":   r.URL.Path,
-			"origin": r.Header.Get("Origin"),
-			"host":   r.Host,
-		})
 
 		// Authenticate before upgrade
 		user, err := authenticateWebSocketRequest(r, app)
@@ -532,12 +491,6 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			})
 			return
 		}
-
-		LogInfo(LogCategoryAPI, "WebSocket connection successful", map[string]interface{}{
-			"userId":   user.Id,
-			"userName": user.Name,
-			"familyId": user.FamilyId,
-		})
 
 		// Create context for this connection
 		ctx, cancel := context.WithCancel(context.Background())
@@ -576,13 +529,6 @@ func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User
 		}
 	}
 
-	LogInfo(LogCategoryAPI, "WebSocket authentication attempt", map[string]interface{}{
-		"cookies":   cookies,
-		"userAgent": r.UserAgent(),
-		"origin":    r.Header.Get("Origin"),
-		"host":      r.Host,
-	})
-
 	// Use existing authentication logic - relies on authToken cookie sent with request
 	user, err := AuthenticateRequest(r)
 	if err != nil {
@@ -591,12 +537,6 @@ func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User
 		})
 		return User{}, err
 	}
-
-	LogInfo(LogCategoryAPI, "WebSocket authentication successful", map[string]interface{}{
-		"userId":   user.Id,
-		"userName": user.Name,
-		"familyId": user.FamilyId,
-	})
 
 	return user, nil
 }

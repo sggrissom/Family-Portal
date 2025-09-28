@@ -264,11 +264,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
         chatState.messages = chatState.messages.map(msg =>
           msg.id === optimisticMessage.id ? result.message : msg
         );
-
-        logInfo("ui", "Message sent successfully", {
-          messageId: result.message.id,
-          clientMessageId,
-        });
       } else {
         // Remove optimistic message on error
         chatState.messages = chatState.messages.filter(msg => msg.id !== optimisticMessage.id);
@@ -311,7 +306,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
           chatState.sentClientMessageIds.delete(messageToDelete.clientMessageId);
         }
         vlens.scheduleRedraw();
-        logInfo("ui", "Message deleted successfully", { messageId });
       } else {
         console.error("Failed to delete message:", error);
       }

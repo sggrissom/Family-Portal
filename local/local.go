@@ -43,6 +43,7 @@ var FEOpts = esbuilder.FEBuildOptions{
 	EntryHTML: []string{"index.html"},
 	CopyItems: []string{
 		"images",
+		"manifest.json",
 	},
 	Outdir: FEDist,
 	Define: map[string]string{

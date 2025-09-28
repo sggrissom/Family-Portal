@@ -146,7 +146,6 @@ export function connectWebSocket(
 
     // Connection opened
     socket.onopen = () => {
-      logInfo("ui", "WebSocket connected");
       setConnectionState(state, "connected");
       state.reconnectAttempts = 0;
       state.reconnectDelay = 1000; // Reset delay
@@ -179,11 +178,12 @@ export function connectWebSocket(
 
     // Connection closed
     socket.onclose = event => {
-      logInfo("ui", "WebSocket connection closed", {
-        code: event.code,
-        reason: event.reason,
-        wasClean: event.wasClean,
-      });
+      // Only log if not a normal close
+      if (event.code !== 1000) {
+        logInfo("ui", "WebSocket connection closed", {
+          code: event.code,
+        });
+      }
 
       cleanup(state);
 
@@ -264,7 +264,6 @@ export function sendWebSocketMessage(state: WebSocketState, type: string, payloa
       };
 
       state.socket.send(JSON.stringify(wsMessage));
-      logInfo("ui", "WebSocket message sent", { type, messageId: message.id });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logError("ui", "Failed to send WebSocket message", { error: errorMessage });
@@ -304,8 +303,6 @@ function setConnectionState(state: WebSocketState, newState: ConnectionState): v
     if (state.eventHandlers.onConnectionStateChange) {
       state.eventHandlers.onConnectionStateChange(newState);
     }
-
-    logInfo("ui", "WebSocket connection state changed", { state: newState });
   }
 }
 
@@ -387,7 +384,6 @@ function attemptReconnect(state: WebSocketState): void {
 
   logInfo("ui", "WebSocket reconnecting", {
     attempt: state.reconnectAttempts,
-    delay,
   });
 
   const timeoutId = window.setTimeout(() => {
@@ -470,10 +466,6 @@ function queueMessage(state: WebSocketState, message: QueuedMessage): void {
   }
 
   state.messageQueue.push(message);
-  logInfo("ui", "WebSocket message queued", {
-    messageId: message.id,
-    queueSize: state.messageQueue.length,
-  });
 }
 
 function processMessageQueue(state: WebSocketState): void {
@@ -493,7 +485,6 @@ function processMessageQueue(state: WebSocketState): void {
       };
 
       state.socket.send(JSON.stringify(wsMessage));
-      logInfo("ui", "Queued WebSocket message sent", { messageId: message.id });
     } catch (error) {
       logError("ui", "Failed to send queued message", {
         messageId: message.id,
