@@ -91,7 +91,7 @@ body {
 `);
 
 block(`
-img {
+img:not(.photo-image) {
   max-width: 100%;
   height: auto;
   display: block;

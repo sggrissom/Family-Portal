@@ -59,12 +59,23 @@ block(`
 }
 `);
 
-// Person Badge on Photos
+// People Badges Container
 block(`
-.person-badge {
+.people-badges {
   position: absolute;
   bottom: 8px;
   left: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  z-index: 1;
+}
+`);
+
+// Person Badge on Photos
+block(`
+.person-badge {
   background: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 4px 8px;
@@ -72,11 +83,11 @@ block(`
   font-size: 11px;
   font-weight: 600;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  z-index: 1;
-  max-width: calc(100% - 24px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
 }
 `);
 

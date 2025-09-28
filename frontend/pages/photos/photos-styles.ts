@@ -58,6 +58,8 @@ block(`
   background: var(--color-border);
   cursor: pointer;
   transition: opacity 0.2s ease;
+  /* Ensure height is maintained during loading */
+  min-height: 100%;
 }
 `);
 
