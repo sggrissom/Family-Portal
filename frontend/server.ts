@@ -190,6 +190,7 @@ export interface DeleteMilestoneResponse {
 
 export interface SendMessageRequest {
     content: string
+    clientMessageId: string | null
 }
 
 export interface SendMessageResponse {
@@ -412,6 +413,7 @@ export interface ChatMessage {
     userName: string
     content: string
     createdAt: string
+    clientMessageId: string | null
 }
 
 export interface ImportPerson {

@@ -30,7 +30,42 @@ block(`
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+`);
+
+block(`
+.chat-header-content {
   text-align: center;
+  flex: 1;
+}
+`);
+
+block(`
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.connection-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+`);
+
+block(`
+.connection-text {
+  font-weight: 500;
+  white-space: nowrap;
 }
 `);
 
@@ -216,6 +251,16 @@ block(`
 `);
 
 block(`
+.message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+`);
+
+block(`
 .message-timestamp {
   font-size: 0.75rem;
   color: var(--muted);
@@ -224,8 +269,43 @@ block(`
 `);
 
 block(`
+.message-status {
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.7;
+  font-style: italic;
+}
+`);
+
+block(`
 .message-own .message-timestamp {
   color: rgba(255, 255, 255, 0.8);
+}
+`);
+
+block(`
+.message-own .message-status {
+  color: rgba(255, 255, 255, 0.7);
+}
+`);
+
+block(`
+.message-pending {
+  opacity: 0.7;
+}
+`);
+
+block(`
+.message-pending .message-bubble {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+}
+`);
+
+block(`
+.message-pending.message-own .message-bubble {
+  background: rgba(105, 219, 124, 0.3);
+  border: 1px dashed var(--primary-accent);
 }
 `);
 
@@ -452,5 +532,42 @@ block(`
 block(`
 [data-theme="dark"] .chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
+}
+`);
+
+// Delete Message Button
+block(`
+.delete-message-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0;
+  margin-left: 8px;
+}
+`);
+
+block(`
+.message-footer:hover .delete-message-btn,
+.delete-message-btn:focus {
+  opacity: 1;
+}
+`);
+
+block(`
+.delete-message-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+`);
+
+block(`
+.delete-message-btn:active {
+  transform: scale(0.95);
 }
 `);

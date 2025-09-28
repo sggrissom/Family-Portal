@@ -12,6 +12,10 @@ import (
 )
 
 func RegisterChatMethods(app *vbeam.Application) {
+	// Initialize chat hub for WebSocket functionality
+	InitializeChatHub()
+
+	// Register REST API procedures
 	vbeam.RegisterProc(app, SendMessage)
 	vbeam.RegisterProc(app, GetChatMessages)
 	vbeam.RegisterProc(app, DeleteMessage)
@@ -19,7 +23,8 @@ func RegisterChatMethods(app *vbeam.Application) {
 
 // Request/Response types
 type SendMessageRequest struct {
-	Content string `json:"content"`
+	Content         string  `json:"content"`
+	ClientMessageId *string `json:"clientMessageId"`
 }
 
 type SendMessageResponse struct {
@@ -45,12 +50,13 @@ type DeleteMessageResponse struct {
 
 // Database types
 type ChatMessage struct {
-	Id        int       `json:"id"`
-	FamilyId  int       `json:"familyId"`
-	UserId    int       `json:"userId"`
-	UserName  string    `json:"userName"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"createdAt"`
+	Id              int       `json:"id"`
+	FamilyId        int       `json:"familyId"`
+	UserId          int       `json:"userId"`
+	UserName        string    `json:"userName"`
+	Content         string    `json:"content"`
+	CreatedAt       time.Time `json:"createdAt"`
+	ClientMessageId *string   `json:"clientMessageId"`
 }
 
 // Packing function for vbolt serialization
@@ -62,6 +68,7 @@ func PackChatMessage(self *ChatMessage, buf *vpack.Buffer) {
 	vpack.String(&self.UserName, buf)
 	vpack.String(&self.Content, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	vpack.String(self.ClientMessageId, buf)
 }
 
 // Buckets for vbolt database storage
@@ -111,6 +118,7 @@ func AddChatMessageTx(tx *vbolt.Tx, req SendMessageRequest, familyId int, userId
 	message.UserName = userName
 	message.Content = strings.TrimSpace(req.Content)
 	message.CreatedAt = time.Now()
+	message.ClientMessageId = req.ClientMessageId
 
 	vbolt.Write(tx, ChatMessagesBkt, message.Id, &message)
 
@@ -180,6 +188,11 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 	}
 
 	vbolt.TxCommit(ctx.Tx)
+
+	// Broadcast the new message to websocket clients
+	if hub := GetChatHub(); hub != nil {
+		hub.BroadcastNewMessage(user.FamilyId, message)
+	}
 
 	// Log the message sending
 	LogInfo(LogCategoryAPI, "Chat message sent", map[string]interface{}{
@@ -254,6 +267,11 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 	}
 
 	vbolt.TxCommit(ctx.Tx)
+
+	// Broadcast the message deletion to websocket clients
+	if hub := GetChatHub(); hub != nil {
+		hub.BroadcastDeleteMessage(user.FamilyId, req.Id, user.Id)
+	}
 
 	// Log the message deletion
 	LogInfo(LogCategoryAPI, "Chat message deleted", map[string]interface{}{
