@@ -74,6 +74,27 @@ block(`
 }
 `);
 
+// PEOPLE GROUPS - ORGANIZED BY FAMILY STRUCTURE
+block(`
+.people-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+}
+`);
+
+block(`
+.people-group h3 {
+  font-size: 1.6rem;
+  margin: 0 0 24px;
+  color: var(--text);
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 12px;
+  display: inline-block;
+  font-weight: 600;
+}
+`);
+
 // PEOPLE GRID - SIMPLIFIED AND SPACIOUS
 block(`
 .people-grid {
@@ -346,6 +367,15 @@ block(`
     gap: 50px;
   }
 
+  .people-groups {
+    gap: 40px;
+  }
+
+  .people-group h3 {
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+  }
+
   .people-grid {
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 24px;
@@ -384,6 +414,15 @@ block(`
 
   .section-header h2 {
     font-size: 1.8rem;
+  }
+
+  .people-groups {
+    gap: 30px;
+  }
+
+  .people-group h3 {
+    font-size: 1.3rem;
+    margin-bottom: 16px;
   }
 
   .people-grid {
@@ -441,6 +480,11 @@ block(`
 
   .section-header h2 {
     font-size: 1.6rem;
+  }
+
+  .people-group h3 {
+    font-size: 1.2rem;
+    margin-bottom: 14px;
   }
 
   .person-card {

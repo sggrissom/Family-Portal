@@ -46,6 +46,8 @@ interface DashboardPageProps {
 const DashboardPage = ({ user, data }: DashboardPageProps) => {
   // Ensure people is always an array
   const people = data.people || [];
+  const parents = people.filter(p => p.type === 0);
+  const children = people.filter(p => p.type === 1);
 
   return (
     <div className="dashboard-page">
@@ -69,10 +71,28 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               </a>
             </div>
           ) : (
-            <div className="people-grid">
-              {people.map((person, index) => (
-                <PersonCard key={person.id} person={person} index={index} />
-              ))}
+            <div className="people-groups">
+              {parents.length > 0 && (
+                <div className="people-group">
+                  <h3>Parents</h3>
+                  <div className="people-grid">
+                    {parents.map((person, index) => (
+                      <PersonCard key={person.id} person={person} index={index} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {children.length > 0 && (
+                <div className="people-group">
+                  <h3>Children</h3>
+                  <div className="people-grid">
+                    {children.map((person, index) => (
+                      <PersonCard key={person.id} person={person} index={index + parents.length} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
