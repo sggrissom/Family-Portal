@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"strings"
 	"testing"
 )
@@ -112,19 +113,11 @@ func TestCalculateDimensions(t *testing.T) {
 				}
 			}
 
-			if abs(originalRatio-newRatio) > tolerance {
+			if math.Abs(originalRatio-newRatio) > tolerance {
 				t.Errorf("Aspect ratio not preserved: original %f, new %f", originalRatio, newRatio)
 			}
 		})
 	}
-}
-
-// Helper function for absolute value
-func abs(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 func TestProcessImage(t *testing.T) {

@@ -21,6 +21,9 @@ type ImportForm = {
   showFilters: boolean;
   selectedFamilyIds: number[];
   selectedPersonIds: number[];
+  mergeStrategy: string;
+  importMilestones: boolean;
+  dryRun: boolean;
 };
 
 const useImportForm = vlens.declareHook(
@@ -35,6 +38,9 @@ const useImportForm = vlens.declareHook(
     showFilters: false,
     selectedFamilyIds: [],
     selectedPersonIds: [],
+    mergeStrategy: "create_all",
+    importMilestones: true,
+    dryRun: false,
   })
 );
 
@@ -122,6 +128,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
         filterFamilyIds: [],
         filterPersonIds: [],
         previewOnly: true,
+        mergeStrategy: form.mergeStrategy,
+        importMilestones: form.importMilestones,
+        dryRun: false,
       });
 
       form.loading = false;
@@ -161,6 +170,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
         filterFamilyIds: form.selectedFamilyIds,
         filterPersonIds: form.selectedPersonIds,
         previewOnly: false,
+        mergeStrategy: form.mergeStrategy,
+        importMilestones: form.importMilestones,
+        dryRun: form.dryRun,
       });
 
       form.loading = false;
@@ -192,6 +204,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.showFilters = false;
     form.selectedFamilyIds = [];
     form.selectedPersonIds = [];
+    form.mergeStrategy = "create_all";
+    form.importMilestones = true;
+    form.dryRun = false;
     // Clear file input by resetting the form
     const fileInput = document.getElementById("json-file") as HTMLInputElement;
     if (fileInput) {
@@ -216,15 +231,56 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 <span className="stat-number">{form.result.importedPeople}</span>
                 <span className="stat-label">People Imported</span>
               </div>
+              {form.result.mergedPeople > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.mergedPeople}</span>
+                  <span className="stat-label">People Merged</span>
+                </div>
+              )}
+              {form.result.skippedPeople > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.skippedPeople}</span>
+                  <span className="stat-label">People Skipped</span>
+                </div>
+              )}
               <div className="stat">
                 <span className="stat-number">{form.result.importedMeasurements}</span>
                 <span className="stat-label">Measurements Imported</span>
               </div>
+              {form.result.skippedMeasurements > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.skippedMeasurements}</span>
+                  <span className="stat-label">Measurements Skipped</span>
+                </div>
+              )}
+              {form.result.importedMilestones > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.importedMilestones}</span>
+                  <span className="stat-label">Milestones Imported</span>
+                </div>
+              )}
+              {form.result.skippedMilestones > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.skippedMilestones}</span>
+                  <span className="stat-label">Milestones Skipped</span>
+                </div>
+              )}
             </div>
 
-            {form.result.errors && form.result.errors.length > 0 && (
+            {form.result.warnings && form.result.warnings.length > 0 && (
               <div className="import-warnings">
                 <h3>⚠️ Warnings:</h3>
+                <ul>
+                  {form.result.warnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {form.result.errors && form.result.errors.length > 0 && (
+              <div className="import-errors">
+                <h3>❌ Errors:</h3>
                 <ul>
                   {form.result.errors.map((error, index) => (
                     <li key={index}>{error}</li>
@@ -278,6 +334,92 @@ const ImportPage = ({ form }: ImportPageProps) => {
             </div>
 
             {form.error && <div className="error-message">{form.error}</div>}
+
+            <div className="form-section">
+              <h3>Import Options</h3>
+
+              <div className="import-options">
+                <div className="option-group">
+                  <label className="option-label">
+                    <strong>Merge Strategy</strong>
+                  </label>
+                  <div className="radio-group">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        value="create_all"
+                        checked={form.mergeStrategy === "create_all"}
+                        onChange={e => {
+                          form.mergeStrategy = (e.target as HTMLInputElement).value;
+                          vlens.scheduleRedraw();
+                        }}
+                      />
+                      <span>Create All</span>
+                      <small>Create new records for everyone (may create duplicates)</small>
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        value="merge_people"
+                        checked={form.mergeStrategy === "merge_people"}
+                        onChange={e => {
+                          form.mergeStrategy = (e.target as HTMLInputElement).value;
+                          vlens.scheduleRedraw();
+                        }}
+                      />
+                      <span>Merge People</span>
+                      <small>Merge with existing people when name & birthday match</small>
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        value="skip_duplicates"
+                        checked={form.mergeStrategy === "skip_duplicates"}
+                        onChange={e => {
+                          form.mergeStrategy = (e.target as HTMLInputElement).value;
+                          vlens.scheduleRedraw();
+                        }}
+                      />
+                      <span>Skip Duplicates</span>
+                      <small>Skip people who already exist (name & birthday match)</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="option-group">
+                  <label className="checkbox-option">
+                    <input
+                      type="checkbox"
+                      checked={form.importMilestones}
+                      onChange={e => {
+                        form.importMilestones = (e.target as HTMLInputElement).checked;
+                        vlens.scheduleRedraw();
+                      }}
+                    />
+                    <span>Import Milestones</span>
+                    <small>Include milestone data in the import</small>
+                  </label>
+                </div>
+
+                <div className="option-group">
+                  <label className="checkbox-option">
+                    <input
+                      type="checkbox"
+                      checked={form.dryRun}
+                      onChange={e => {
+                        form.dryRun = (e.target as HTMLInputElement).checked;
+                        vlens.scheduleRedraw();
+                      }}
+                    />
+                    <span>Dry Run</span>
+                    <small>Preview changes without saving to database</small>
+                  </label>
+                </div>
+              </div>
+            </div>
 
             <div className="form-actions">
               <button

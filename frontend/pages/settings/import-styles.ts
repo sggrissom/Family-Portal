@@ -509,3 +509,168 @@ block(`
   }
 }
 `);
+
+// Import Options Styles
+block(`
+.import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+`);
+
+block(`
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+`);
+
+block(`
+.option-label {
+  color: var(--text);
+  font-size: 1rem;
+  margin: 0;
+}
+`);
+
+block(`
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: 16px;
+}
+`);
+
+block(`
+.radio-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+`);
+
+block(`
+.radio-option:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.radio-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  margin-right: 8px;
+}
+`);
+
+block(`
+.radio-option span {
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+}
+`);
+
+block(`
+.radio-option small {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: 24px;
+  line-height: 1.3;
+}
+`);
+
+block(`
+.checkbox-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+`);
+
+block(`
+.checkbox-option:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.checkbox-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  margin-right: 8px;
+}
+`);
+
+block(`
+.checkbox-option span {
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+}
+`);
+
+block(`
+.checkbox-option small {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: 24px;
+  line-height: 1.3;
+}
+`);
+
+// Error styles (in addition to warnings)
+block(`
+.import-errors {
+  background: var(--bg);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 24px 0;
+  text-align: left;
+}
+`);
+
+block(`
+.import-errors h3 {
+  margin: 0 0 12px;
+  color: #ef4444;
+  font-size: 1.1rem;
+}
+`);
+
+block(`
+.import-errors ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+}
+`);
+
+block(`
+.import-errors li {
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+`);

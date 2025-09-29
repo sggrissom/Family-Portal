@@ -284,15 +284,25 @@ export interface ImportDataRequest {
     filterFamilyIds: number[]
     filterPersonIds: number[]
     previewOnly: boolean
+    mergeStrategy: string
+    importMilestones: boolean
+    dryRun: boolean
 }
 
 export interface ImportDataResponse {
     importedPeople: number
+    mergedPeople: number
+    skippedPeople: number
     importedMeasurements: number
+    skippedMeasurements: number
+    importedMilestones: number
+    skippedMilestones: number
     errors: string[]
+    warnings: string[]
     personIdMapping: Record<number, number>
     availableFamilyIds: number[]
     availablePeople: ImportPerson[]
+    matchedPeople: PersonMatch[]
 }
 
 export interface ExportDataRequest {
@@ -462,6 +472,13 @@ export interface ImportPerson {
     Birthday: string
     Age: string
     ImageId: number
+}
+
+export interface PersonMatch {
+    importPerson: ImportPerson
+    existingPerson: Person | null
+    matchType: string
+    confidence: number
 }
 
 export interface AdminUserInfo {
