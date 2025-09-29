@@ -16,6 +16,7 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListPeople)
 	vbeam.RegisterProc(app, GetPerson)
 	vbeam.RegisterProc(app, SetProfilePhoto)
+	vbeam.RegisterProc(app, MergePeople)
 }
 
 type GenderType int
@@ -52,6 +53,19 @@ type SetProfilePhotoRequest struct {
 
 type SetProfilePhotoResponse struct {
 	Person Person `json:"person"`
+}
+
+type MergePeopleRequest struct {
+	SourcePersonId int `json:"sourcePersonId"` // Person to merge from (will be deleted)
+	TargetPersonId int `json:"targetPersonId"` // Person to merge into (will keep)
+}
+
+type MergePeopleResponse struct {
+	Success           bool   `json:"success"`
+	TargetPerson      Person `json:"targetPerson"`
+	MergedGrowthCount int    `json:"mergedGrowthCount"`
+	MergedMilestones  int    `json:"mergedMilestones"`
+	MergedPhotos      int    `json:"mergedPhotos"`
 }
 
 type ListPeopleResponse struct {
@@ -334,5 +348,112 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 	// Calculate age for response
 	person.Age = calculateAge(person.Birthday)
 	resp.Person = person
+	return
+}
+
+func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if req.SourcePersonId <= 0 || req.TargetPersonId <= 0 {
+		err = errors.New("Both source and target person IDs are required")
+		return
+	}
+
+	if req.SourcePersonId == req.TargetPersonId {
+		err = errors.New("Cannot merge a person with themselves")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	// Get and validate both people
+	sourcePerson := GetPersonById(ctx.Tx, req.SourcePersonId)
+	if sourcePerson.Id == 0 || sourcePerson.FamilyId != user.FamilyId {
+		err = errors.New("Source person not found or not in your family")
+		return
+	}
+
+	targetPerson := GetPersonById(ctx.Tx, req.TargetPersonId)
+	if targetPerson.Id == 0 || targetPerson.FamilyId != user.FamilyId {
+		err = errors.New("Target person not found or not in your family")
+		return
+	}
+
+	// Merge growth data
+	growthData := GetPersonGrowthDataTx(ctx.Tx, req.SourcePersonId)
+	for _, gd := range growthData {
+		gd.PersonId = req.TargetPersonId
+		vbolt.Write(ctx.Tx, GrowthDataBkt, gd.Id, &gd)
+		vbolt.SetTargetSingleTerm(ctx.Tx, GrowthDataByPersonIndex, gd.Id, req.TargetPersonId)
+	}
+	resp.MergedGrowthCount = len(growthData)
+
+	// Merge milestones
+	milestones := GetPersonMilestonesTx(ctx.Tx, req.SourcePersonId)
+	for _, milestone := range milestones {
+		milestone.PersonId = req.TargetPersonId
+		vbolt.Write(ctx.Tx, MilestoneBkt, milestone.Id, &milestone)
+		vbolt.SetTargetSingleTerm(ctx.Tx, MilestoneByPersonIndex, milestone.Id, req.TargetPersonId)
+	}
+	resp.MergedMilestones = len(milestones)
+
+	// Merge photo associations
+	photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.SourcePersonId)
+	mergedPhotoCount := 0
+	for _, photoPerson := range photoPersons {
+		// Check if target person is already associated with this photo
+		existingPhotoPersons := GetPhotoPersonsByPhoto(ctx.Tx, photoPerson.PhotoId)
+		alreadyAssociated := false
+		for _, existing := range existingPhotoPersons {
+			if existing.PersonId == req.TargetPersonId {
+				alreadyAssociated = true
+				break
+			}
+		}
+
+		if alreadyAssociated {
+			// Delete the duplicate association
+			vbolt.Delete(ctx.Tx, PhotoPersonBkt, photoPerson.Id)
+			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
+			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
+			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+		} else {
+			// Update to target person
+			photoPerson.PersonId = req.TargetPersonId
+			vbolt.Write(ctx.Tx, PhotoPersonBkt, photoPerson.Id, &photoPerson)
+			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, req.TargetPersonId)
+			mergedPhotoCount++
+		}
+	}
+	resp.MergedPhotos = mergedPhotoCount
+
+	// Delete source person
+	vbolt.Delete(ctx.Tx, PeopleBkt, req.SourcePersonId)
+	vbolt.SetTargetSingleTerm(ctx.Tx, PersonIndex, req.SourcePersonId, -1)
+
+	vbolt.TxCommit(ctx.Tx)
+
+	// Prepare response
+	resp.Success = true
+	targetPerson.Age = calculateAge(targetPerson.Birthday)
+	resp.TargetPerson = targetPerson
+
+	// Log the merge operation
+	LogInfo("DATA", "People merged", map[string]any{
+		"userId":           user.Id,
+		"familyId":         user.FamilyId,
+		"sourcePersonId":   req.SourcePersonId,
+		"targetPersonId":   req.TargetPersonId,
+		"mergedGrowth":     resp.MergedGrowthCount,
+		"mergedMilestones": resp.MergedMilestones,
+		"mergedPhotos":     resp.MergedPhotos,
+	})
+
 	return
 }

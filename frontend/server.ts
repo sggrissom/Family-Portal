@@ -90,6 +90,19 @@ export interface SetProfilePhotoResponse {
     person: Person
 }
 
+export interface MergePeopleRequest {
+    sourcePersonId: number
+    targetPersonId: number
+}
+
+export interface MergePeopleResponse {
+    success: boolean
+    targetPerson: Person
+    mergedGrowthCount: number
+    mergedMilestones: number
+    mergedPhotos: number
+}
+
 export interface AddGrowthDataRequest {
     personId: number
     measurementType: string
@@ -671,6 +684,10 @@ export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<Ge
 
 export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc.Response<SetProfilePhotoResponse>> {
     return await rpc.call<SetProfilePhotoResponse>('SetProfilePhoto', JSON.stringify(data));
+}
+
+export async function MergePeople(data: MergePeopleRequest): Promise<rpc.Response<MergePeopleResponse>> {
+    return await rpc.call<MergePeopleResponse>('MergePeople', JSON.stringify(data));
 }
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {
