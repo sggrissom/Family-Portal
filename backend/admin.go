@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -359,11 +360,14 @@ type GetLogFilesResponse struct {
 }
 
 type GetLogContentRequest struct {
-	Filename string `json:"filename"`
-	Level    string `json:"level,omitempty"`    // Filter by log level
-	Category string `json:"category,omitempty"` // Filter by category
-	Limit    int    `json:"limit,omitempty"`    // Limit number of entries (default 1000)
-	Offset   int    `json:"offset,omitempty"`   // Skip entries (for pagination)
+	Filename    string `json:"filename"`
+	Level       string `json:"level,omitempty"`       // Filter by log level
+	Category    string `json:"category,omitempty"`    // Filter by category
+	Limit       int    `json:"limit,omitempty"`       // Limit number of entries (default 1000)
+	Offset      int    `json:"offset,omitempty"`      // Skip entries (for pagination)
+	MinDuration *int   `json:"minDuration,omitempty"` // Minimum duration in microseconds
+	SortBy      string `json:"sortBy,omitempty"`      // Sort by: "time" or "duration"
+	SortDesc    *bool  `json:"sortDesc,omitempty"`    // Sort descending (default: false)
 }
 
 type GetLogContentResponse struct {
@@ -382,19 +386,30 @@ type PublicLogEntry struct {
 	UserID    *int        `json:"userId,omitempty"`
 	IP        string      `json:"ip,omitempty"`
 	UserAgent string      `json:"userAgent,omitempty"`
+	// HTTP timing fields for performance analysis
+	Duration        *int   `json:"duration,omitempty"`        // Total duration in microseconds
+	HandlerDuration *int   `json:"handlerDuration,omitempty"` // Handler duration in microseconds
+	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
+	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
+	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
 }
 
 // convertToPublicLogEntry converts internal logEntry to public API format
 func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
 	return PublicLogEntry{
-		Timestamp: entry.Timestamp.Format(time.RFC3339),
-		Level:     string(entry.Level),
-		Category:  string(entry.Category),
-		Message:   entry.Message,
-		Data:      entry.Data,
-		UserID:    entry.UserID,
-		IP:        entry.IP,
-		UserAgent: entry.UserAgent,
+		Timestamp:       entry.Timestamp.Format(time.RFC3339),
+		Level:           string(entry.Level),
+		Category:        string(entry.Category),
+		Message:         entry.Message,
+		Data:            entry.Data,
+		UserID:          entry.UserID,
+		IP:              entry.IP,
+		UserAgent:       entry.UserAgent,
+		Duration:        entry.Duration,
+		HandlerDuration: entry.HandlerDuration,
+		HTTPMethod:      entry.HTTPMethod,
+		HTTPPath:        entry.HTTPPath,
+		HTTPStatus:      entry.HTTPStatus,
 	}
 }
 
@@ -405,6 +420,29 @@ type LogStats struct {
 	ByCategory map[string]int   `json:"byCategory"`
 	Recent     []PublicLogEntry `json:"recent"` // Last 10 entries
 	Errors     []PublicLogEntry `json:"errors"` // Recent errors
+	// Performance statistics
+	PerformanceStats PerformanceStats `json:"performanceStats"`
+}
+
+type PerformanceStats struct {
+	TotalRequests    int                      `json:"totalRequests"`
+	AverageResponse  int                      `json:"averageResponse"`  // In microseconds
+	MedianResponse   int                      `json:"medianResponse"`   // In microseconds
+	P90Response      int                      `json:"p90Response"`      // In microseconds
+	P95Response      int                      `json:"p95Response"`      // In microseconds
+	P99Response      int                      `json:"p99Response"`      // In microseconds
+	SlowestEndpoints []EndpointStats          `json:"slowestEndpoints"` // Top 10 slowest
+	EndpointStats    map[string]EndpointStats `json:"endpointStats"`    // Stats by endpoint
+}
+
+type EndpointStats struct {
+	Path            string  `json:"path"`
+	Method          string  `json:"method"`
+	Count           int     `json:"count"`
+	AverageResponse int     `json:"averageResponse"` // In microseconds
+	MinResponse     int     `json:"minResponse"`     // In microseconds
+	MaxResponse     int     `json:"maxResponse"`     // In microseconds
+	ErrorRate       float64 `json:"errorRate"`       // Percentage
 }
 
 type GetLogStatsResponse struct {
@@ -484,6 +522,19 @@ func stripAnsiCodes(input string) string {
 	return ansiEscapeRegex.ReplaceAllString(input, "")
 }
 
+// extractJSONFromLogLine attempts to extract JSON from a timestamp-prefixed log line
+func extractJSONFromLogLine(line string) (string, bool) {
+	// Check if line contains JSON (starts with timestamp, then has JSON)
+	if idx := strings.Index(line, "{"); idx != -1 {
+		jsonPart := line[idx:]
+		// Verify this looks like JSON by checking if it ends with }
+		if strings.HasSuffix(strings.TrimSpace(jsonPart), "}") {
+			return jsonPart, true
+		}
+	}
+	return line, false
+}
+
 // parseLogTimestamp attempts to parse a timestamp from a plain text log line
 func parseLogTimestamp(line string) (time.Time, string) {
 	// Try to match the Go log format: 2025/09/26 15:53:22
@@ -498,6 +549,38 @@ func parseLogTimestamp(line string) (time.Time, string) {
 
 	// If no timestamp found, return current time and original line
 	return time.Now(), line
+}
+
+// detectLogLevel attempts to detect log level from plain text log message
+func detectLogLevel(message string) logLevel {
+	upperMessage := strings.ToUpper(message)
+
+	// Check for error indicators
+	errorKeywords := []string{"ERROR", "FATAL", "PANIC", "FAILED", "FAILURE", "EXCEPTION", "CRITICAL"}
+	for _, keyword := range errorKeywords {
+		if strings.Contains(upperMessage, keyword) {
+			return logLevelError
+		}
+	}
+
+	// Check for warning indicators
+	warnKeywords := []string{"WARN", "WARNING", "DEPRECATED"}
+	for _, keyword := range warnKeywords {
+		if strings.Contains(upperMessage, keyword) {
+			return logLevelWarn
+		}
+	}
+
+	// Check for debug indicators
+	debugKeywords := []string{"DEBUG", "TRACE", "VERBOSE"}
+	for _, keyword := range debugKeywords {
+		if strings.Contains(upperMessage, keyword) {
+			return logLevelDebug
+		}
+	}
+
+	// Default to info
+	return logLevelInfo
 }
 
 // categorizeLogMessage attempts to categorize a plain text log message
@@ -521,6 +604,62 @@ func categorizeLogMessage(message string) logCategory {
 	}
 
 	return logCategorySystem
+}
+
+// parseTimingLogLine attempts to parse HTTP timing log entries
+// Format: "2025/09/27 17:31:28 200 POST /rpc/SendMessage ⎯⎯⎯ 12759µs [12602µs]"
+func parseTimingLogLine(line string) (*logEntry, bool) {
+	// Clean ANSI codes first
+	cleanLine := stripAnsiCodes(line)
+
+	// Pattern to match timing logs: timestamp, status, method, path, duration, optional handler duration
+	timingRegex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(\d+)\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^\s⎯]+).*?(\d+)µs(?:\s+\[(\d+)µs\])?`)
+	matches := timingRegex.FindStringSubmatch(cleanLine)
+
+	if len(matches) < 6 {
+		return nil, false
+	}
+
+	// Parse timestamp
+	timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1])
+	if err != nil {
+		return nil, false
+	}
+
+	// Parse status code
+	status, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return nil, false
+	}
+
+	// Parse duration
+	duration, err := strconv.Atoi(matches[5])
+	if err != nil {
+		return nil, false
+	}
+
+	// Parse handler duration if present
+	var handlerDuration *int
+	if len(matches) > 6 && matches[6] != "" {
+		if hd, err := strconv.Atoi(matches[6]); err == nil {
+			handlerDuration = &hd
+		}
+	}
+
+	// Build log entry
+	entry := &logEntry{
+		Timestamp:       timestamp,
+		Level:           logLevelInfo,   // HTTP timing logs are info level
+		Category:        logCategoryAPI, // HTTP requests are API category
+		Message:         fmt.Sprintf("%s %s %s", matches[3], matches[4], matches[2]),
+		Duration:        &duration,
+		HandlerDuration: handlerDuration,
+		HTTPMethod:      matches[3],
+		HTTPPath:        matches[4],
+		HTTPStatus:      &status,
+	}
+
+	return entry, true
 }
 
 // GetLogContent returns filtered log content from a specific file
@@ -556,42 +695,47 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 	}
 	defer file.Close()
 
-	var publicEntries []PublicLogEntry
+	// First pass: parse all entries and apply filters to get total count
+	var allFilteredEntries []logEntry
 	scanner := bufio.NewScanner(file)
-	totalLines := 0
-	skipped := 0
 
 	for scanner.Scan() {
-		totalLines++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
 
-		// Skip lines for pagination
-		if skipped < req.Offset {
-			skipped++
-			continue
-		}
-
-		// Stop if we've reached our limit
-		if len(publicEntries) >= req.Limit {
-			break
-		}
-
 		// Try to parse as JSON log entry
 		var entry logEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			// If not JSON, parse as plain text log
-			cleanLine := stripAnsiCodes(line)
-			timestamp, message := parseLogTimestamp(cleanLine)
-			category := categorizeLogMessage(message)
+		jsonPart, hasJSON := extractJSONFromLogLine(line)
 
-			entry = logEntry{
-				Timestamp: timestamp,
-				Level:     logLevelInfo,
-				Category:  category,
-				Message:   message,
+		if hasJSON {
+			// Try parsing the extracted JSON
+			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
+				// JSON parsing succeeded, use the parsed entry
+			} else {
+				// JSON extraction found brackets but parsing failed, treat as plain text
+				hasJSON = false
+			}
+		}
+
+		if !hasJSON {
+			// Try to parse as timing log first
+			if timingEntry, isTiming := parseTimingLogLine(line); isTiming {
+				entry = *timingEntry
+			} else {
+				// If not timing log, parse as plain text log
+				cleanLine := stripAnsiCodes(line)
+				timestamp, message := parseLogTimestamp(cleanLine)
+				category := categorizeLogMessage(message)
+				level := detectLogLevel(message)
+
+				entry = logEntry{
+					Timestamp: timestamp,
+					Level:     level,
+					Category:  category,
+					Message:   message,
+				}
 			}
 		}
 
@@ -602,17 +746,69 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		if req.Category != "" && string(entry.Category) != req.Category {
 			continue
 		}
+		if req.MinDuration != nil && (entry.Duration == nil || *entry.Duration < *req.MinDuration) {
+			continue
+		}
 
-		publicEntries = append(publicEntries, convertToPublicLogEntry(entry))
+		allFilteredEntries = append(allFilteredEntries, entry)
 	}
 
 	if err := scanner.Err(); err != nil {
 		return resp, err
 	}
 
+	// Sort entries if requested
+	if req.SortBy == "duration" {
+		sort.Slice(allFilteredEntries, func(i, j int) bool {
+			// Handle nil durations - put entries without duration at the end
+			if allFilteredEntries[i].Duration == nil && allFilteredEntries[j].Duration == nil {
+				return false // Equal, keep original order
+			}
+			if allFilteredEntries[i].Duration == nil {
+				return false // i goes after j
+			}
+			if allFilteredEntries[j].Duration == nil {
+				return true // i goes before j
+			}
+
+			// Both have durations, compare them
+			if req.SortDesc != nil && *req.SortDesc {
+				return *allFilteredEntries[i].Duration > *allFilteredEntries[j].Duration // Descending
+			}
+			return *allFilteredEntries[i].Duration < *allFilteredEntries[j].Duration // Ascending
+		})
+	} else if req.SortBy == "time" && req.SortDesc != nil && *req.SortDesc {
+		// Sort by time descending (most recent first)
+		sort.Slice(allFilteredEntries, func(i, j int) bool {
+			return allFilteredEntries[i].Timestamp.After(allFilteredEntries[j].Timestamp)
+		})
+	}
+	// Default is chronological order (ascending by time), no sorting needed
+
+	// Calculate pagination based on filtered results
+	totalFilteredLines := len(allFilteredEntries)
+	startIdx := req.Offset
+	endIdx := req.Offset + req.Limit
+
+	// Ensure we don't go beyond available entries
+	if startIdx > totalFilteredLines {
+		startIdx = totalFilteredLines
+	}
+	if endIdx > totalFilteredLines {
+		endIdx = totalFilteredLines
+	}
+
+	// Extract the requested page
+	var publicEntries []PublicLogEntry
+	if startIdx < totalFilteredLines {
+		for i := startIdx; i < endIdx; i++ {
+			publicEntries = append(publicEntries, convertToPublicLogEntry(allFilteredEntries[i]))
+		}
+	}
+
 	resp.Entries = publicEntries
-	resp.TotalLines = totalLines
-	resp.HasMore = totalLines > (req.Offset + len(publicEntries))
+	resp.TotalLines = totalFilteredLines
+	resp.HasMore = endIdx < totalFilteredLines
 
 	return
 }
@@ -636,6 +832,10 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 		ByCategory: make(map[string]int),
 		Recent:     []PublicLogEntry{},
 		Errors:     []PublicLogEntry{},
+		PerformanceStats: PerformanceStats{
+			EndpointStats:    make(map[string]EndpointStats),
+			SlowestEndpoints: []EndpointStats{},
+		},
 	}
 
 	// Get log files
@@ -685,6 +885,9 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 
 	stats.TotalSize = totalSize
 
+	// Calculate performance statistics
+	calculatePerformanceStats(&stats.PerformanceStats, allRecentEntries)
+
 	// Sort all recent entries by timestamp and take the most recent
 	sort.Slice(allRecentEntries, func(i, j int) bool {
 		return allRecentEntries[i].Timestamp.After(allRecentEntries[j].Timestamp)
@@ -704,6 +907,137 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 
 	resp.Stats = stats
 	return
+}
+
+// calculatePerformanceStats computes performance metrics from log entries
+func calculatePerformanceStats(perfStats *PerformanceStats, entries []logEntry) {
+	var durations []int
+	endpointData := make(map[string][]endpointRequest)
+
+	// Collect timing data from entries
+	for _, entry := range entries {
+		if entry.Duration != nil && *entry.Duration > 0 {
+			durations = append(durations, *entry.Duration)
+			perfStats.TotalRequests++
+
+			// Group by endpoint if we have HTTP method and path
+			if entry.HTTPMethod != "" && entry.HTTPPath != "" {
+				key := entry.HTTPMethod + " " + entry.HTTPPath
+				endpointData[key] = append(endpointData[key], endpointRequest{
+					Duration:   *entry.Duration,
+					StatusCode: entry.HTTPStatus,
+				})
+			}
+		}
+	}
+
+	if len(durations) == 0 {
+		return
+	}
+
+	// Sort durations for percentile calculations
+	sort.Ints(durations)
+
+	// Calculate overall statistics
+	perfStats.AverageResponse = calculateAverage(durations)
+	perfStats.MedianResponse = calculatePercentile(durations, 50)
+	perfStats.P90Response = calculatePercentile(durations, 90)
+	perfStats.P95Response = calculatePercentile(durations, 95)
+	perfStats.P99Response = calculatePercentile(durations, 99)
+
+	// Calculate endpoint statistics
+	var slowestEndpoints []EndpointStats
+	for endpoint, requests := range endpointData {
+		stats := calculateEndpointStats(endpoint, requests)
+		perfStats.EndpointStats[endpoint] = stats
+		slowestEndpoints = append(slowestEndpoints, stats)
+	}
+
+	// Sort endpoints by average response time and take top 10
+	sort.Slice(slowestEndpoints, func(i, j int) bool {
+		return slowestEndpoints[i].AverageResponse > slowestEndpoints[j].AverageResponse
+	})
+
+	if len(slowestEndpoints) > 10 {
+		perfStats.SlowestEndpoints = slowestEndpoints[:10]
+	} else {
+		perfStats.SlowestEndpoints = slowestEndpoints
+	}
+}
+
+// Helper struct for endpoint request data
+type endpointRequest struct {
+	Duration   int
+	StatusCode *int
+}
+
+// calculateEndpointStats computes statistics for a specific endpoint
+func calculateEndpointStats(endpoint string, requests []endpointRequest) EndpointStats {
+	parts := strings.SplitN(endpoint, " ", 2)
+	method := parts[0]
+	path := ""
+	if len(parts) > 1 {
+		path = parts[1]
+	}
+
+	durations := make([]int, len(requests))
+	errors := 0
+
+	for i, req := range requests {
+		durations[i] = req.Duration
+		if req.StatusCode != nil && *req.StatusCode >= 400 {
+			errors++
+		}
+	}
+
+	sort.Ints(durations)
+
+	return EndpointStats{
+		Path:            path,
+		Method:          method,
+		Count:           len(requests),
+		AverageResponse: calculateAverage(durations),
+		MinResponse:     durations[0],
+		MaxResponse:     durations[len(durations)-1],
+		ErrorRate:       float64(errors) / float64(len(requests)) * 100,
+	}
+}
+
+// calculateAverage computes the average of a slice of integers
+func calculateAverage(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / len(values)
+}
+
+// calculatePercentile computes the nth percentile of a sorted slice
+func calculatePercentile(sortedValues []int, percentile int) int {
+	if len(sortedValues) == 0 {
+		return 0
+	}
+	if percentile <= 0 {
+		return sortedValues[0]
+	}
+	if percentile >= 100 {
+		return sortedValues[len(sortedValues)-1]
+	}
+
+	index := float64(percentile) / 100.0 * float64(len(sortedValues)-1)
+	lower := int(index)
+	upper := lower + 1
+
+	if upper >= len(sortedValues) {
+		return sortedValues[lower]
+	}
+
+	// Linear interpolation
+	weight := index - float64(lower)
+	return int(float64(sortedValues[lower])*(1-weight) + float64(sortedValues[upper])*weight)
 }
 
 // Helper function to format file sizes
@@ -738,15 +1072,28 @@ func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
 		}
 
 		var entry logEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			// If not JSON, parse as plain text log
+		jsonPart, hasJSON := extractJSONFromLogLine(line)
+
+		if hasJSON {
+			// Try parsing the extracted JSON
+			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
+				// JSON parsing succeeded, use the parsed entry
+			} else {
+				// JSON extraction found brackets but parsing failed, treat as plain text
+				hasJSON = false
+			}
+		}
+
+		if !hasJSON {
+			// If no JSON found or JSON parsing failed, parse as plain text log
 			cleanLine := stripAnsiCodes(line)
 			timestamp, message := parseLogTimestamp(cleanLine)
 			category := categorizeLogMessage(message)
+			level := detectLogLevel(message)
 
 			entry = logEntry{
 				Timestamp: timestamp,
-				Level:     logLevelInfo,
+				Level:     level,
 				Category:  category,
 				Message:   message,
 			}

@@ -71,6 +71,9 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
           category: "",
           limit: entriesPerPage,
           offset: 0,
+          minDuration: null,
+          sortBy: "time",
+          sortDesc: null,
         });
         if (!contentErr && contentResult) {
           initialEntries = contentResult.entries || [];
@@ -112,6 +115,10 @@ interface LogsPageState {
   currentPage: number;
   totalLines: number;
   hasMore: boolean;
+  // Performance filter fields
+  minDurationFilter: string; // In milliseconds for user input
+  sortBy: string; // "time" or "duration"
+  sortDesc: boolean; // Sort descending
 }
 
 // Component state hook for logs page
@@ -126,6 +133,9 @@ const logsPageHook = vlens.declareHook(
     currentPage: 1,
     totalLines: 0,
     hasMore: false,
+    minDurationFilter: "",
+    sortBy: "time",
+    sortDesc: false,
   })
 );
 
@@ -133,7 +143,10 @@ async function loadLogContent(
   filename: string,
   levelFilter: string,
   categoryFilter: string,
-  currentPage: number
+  currentPage: number,
+  minDurationFilter?: string,
+  sortBy?: string,
+  sortDesc?: boolean
 ) {
   const state = logsPageHook();
   if (!filename) return;
@@ -142,12 +155,21 @@ async function loadLogContent(
   vlens.scheduleRedraw();
 
   try {
+    // Convert milliseconds to microseconds for backend
+    const minDurationMicros =
+      minDurationFilter && minDurationFilter.trim()
+        ? parseInt(minDurationFilter) * 1000
+        : undefined;
+
     const [result, err] = await server.GetLogContent({
       filename: filename,
       level: levelFilter || "",
       category: categoryFilter || "",
       limit: entriesPerPage,
       offset: (currentPage - 1) * entriesPerPage,
+      minDuration: minDurationMicros || null,
+      sortBy: sortBy || "time",
+      sortDesc: sortDesc !== undefined ? sortDesc : null,
     });
 
     if (!err && result) {
@@ -173,21 +195,58 @@ function handleFileChange(filename: string) {
   state.currentFile = filename;
   state.currentPage = 1;
   state.logEntries = [];
-  loadLogContent(filename, state.levelFilter, state.categoryFilter, 1);
+  state.totalLines = 0;
+  state.hasMore = false;
+  loadLogContent(
+    filename,
+    state.levelFilter,
+    state.categoryFilter,
+    1,
+    state.minDurationFilter,
+    state.sortBy,
+    state.sortDesc
+  );
   vlens.scheduleRedraw();
 }
 
 function handleFilterChange() {
   const state = logsPageHook();
   state.currentPage = 1;
-  loadLogContent(state.currentFile, state.levelFilter, state.categoryFilter, 1);
+  state.totalLines = 0;
+  state.hasMore = false;
+  loadLogContent(
+    state.currentFile,
+    state.levelFilter,
+    state.categoryFilter,
+    1,
+    state.minDurationFilter,
+    state.sortBy,
+    state.sortDesc
+  );
   vlens.scheduleRedraw();
 }
 
 function handlePageChange(newPage: number) {
   const state = logsPageHook();
+
+  // Calculate total pages
+  const totalPages = Math.ceil(state.totalLines / entriesPerPage);
+
+  // Validate new page number
+  if (newPage < 1 || (totalPages > 0 && newPage > totalPages)) {
+    return; // Don't change if invalid
+  }
+
   state.currentPage = newPage;
-  loadLogContent(state.currentFile, state.levelFilter, state.categoryFilter, newPage);
+  loadLogContent(
+    state.currentFile,
+    state.levelFilter,
+    state.categoryFilter,
+    newPage,
+    state.minDurationFilter,
+    state.sortBy,
+    state.sortDesc
+  );
   vlens.scheduleRedraw();
 }
 
@@ -198,6 +257,26 @@ function formatTimestamp(timestamp: string): string {
   } catch {
     return timestamp;
   }
+}
+
+function formatDuration(durationMicros: number | null | undefined): string {
+  if (!durationMicros) return "-";
+
+  if (durationMicros < 1000) {
+    return `${durationMicros}µs`;
+  } else if (durationMicros < 1000000) {
+    return `${(durationMicros / 1000).toFixed(2)}ms`;
+  } else {
+    return `${(durationMicros / 1000000).toFixed(2)}s`;
+  }
+}
+
+function getDurationColor(durationMicros: number | null | undefined): string {
+  if (!durationMicros) return "";
+
+  if (durationMicros >= 1000000) return "duration-slow"; // >= 1s
+  if (durationMicros >= 100000) return "duration-medium"; // >= 100ms
+  return "duration-fast"; // < 100ms
 }
 
 function getLevelBadgeClass(level: string): string {
@@ -217,6 +296,93 @@ function getLevelBadgeClass(level: string): string {
 
 function getCategoryBadgeClass(category: string): string {
   return `log-category log-category-${category.toLowerCase()}`;
+}
+
+// Performance Statistics Panel Component
+function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | undefined }) {
+  if (!stats || stats.totalRequests === 0) {
+    return preact.h("div", { className: "performance-panel" }, [
+      preact.h("h3", {}, "Performance Statistics"),
+      preact.h("p", { className: "no-data" }, "No performance data available"),
+    ]);
+  }
+
+  return preact.h("div", { className: "performance-panel" }, [
+    preact.h("h3", {}, "Performance Statistics"),
+
+    // Overall statistics
+    preact.h("div", { className: "perf-overview" }, [
+      preact.h("div", { className: "perf-stat" }, [
+        preact.h("span", { className: "perf-label" }, "Total Requests:"),
+        preact.h("span", { className: "perf-value" }, stats.totalRequests.toLocaleString()),
+      ]),
+      preact.h("div", { className: "perf-stat" }, [
+        preact.h("span", { className: "perf-label" }, "Average Response:"),
+        preact.h("span", { className: "perf-value" }, formatDuration(stats.averageResponse)),
+      ]),
+      preact.h("div", { className: "perf-stat" }, [
+        preact.h("span", { className: "perf-label" }, "Median Response:"),
+        preact.h("span", { className: "perf-value" }, formatDuration(stats.medianResponse)),
+      ]),
+    ]),
+
+    // Percentiles
+    preact.h("div", { className: "perf-percentiles" }, [
+      preact.h("h4", {}, "Response Time Percentiles"),
+      preact.h("div", { className: "percentile-grid" }, [
+        preact.h("div", { className: "percentile-item" }, [
+          preact.h("span", { className: "percentile-label" }, "P90:"),
+          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p90Response)),
+        ]),
+        preact.h("div", { className: "percentile-item" }, [
+          preact.h("span", { className: "percentile-label" }, "P95:"),
+          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p95Response)),
+        ]),
+        preact.h("div", { className: "percentile-item" }, [
+          preact.h("span", { className: "percentile-label" }, "P99:"),
+          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p99Response)),
+        ]),
+      ]),
+    ]),
+
+    // Slowest endpoints
+    stats.slowestEndpoints.length > 0
+      ? preact.h("div", { className: "slowest-endpoints" }, [
+          preact.h("h4", {}, "Slowest Endpoints"),
+          preact.h("div", { className: "endpoints-table" }, [
+            preact.h("div", { className: "endpoints-header" }, [
+              preact.h("div", { className: "col-endpoint" }, "Endpoint"),
+              preact.h("div", { className: "col-requests" }, "Requests"),
+              preact.h("div", { className: "col-avg" }, "Avg Response"),
+              preact.h("div", { className: "col-max" }, "Max Response"),
+              preact.h("div", { className: "col-error" }, "Error Rate"),
+            ]),
+            ...stats.slowestEndpoints
+              .slice(0, 5)
+              .map((endpoint, index) =>
+                preact.h("div", { key: index, className: "endpoints-row" }, [
+                  preact.h("div", { className: "col-endpoint" }, [
+                    preact.h(
+                      "span",
+                      { className: `method-badge method-${endpoint.method.toLowerCase()}` },
+                      endpoint.method
+                    ),
+                    preact.h("span", { className: "endpoint-path" }, endpoint.path),
+                  ]),
+                  preact.h("div", { className: "col-requests" }, endpoint.count.toLocaleString()),
+                  preact.h(
+                    "div",
+                    { className: "col-avg" },
+                    formatDuration(endpoint.averageResponse)
+                  ),
+                  preact.h("div", { className: "col-max" }, formatDuration(endpoint.maxResponse)),
+                  preact.h("div", { className: "col-error" }, `${endpoint.errorRate.toFixed(1)}%`),
+                ])
+              ),
+          ]),
+        ])
+      : null,
+  ]);
 }
 
 export function view(route: string, prefix: string, data: LogsPageData): preact.ComponentChild {
@@ -241,6 +407,14 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
   if (state.currentFile === "" && data.initialFile) {
     state.currentFile = data.initialFile;
     state.logEntries = data.initialEntries;
+    // Calculate initial totalLines and hasMore based on loaded data
+    // Since we loaded the first page with no filters, we need to load again to get proper counts
+    if (data.initialEntries.length > 0) {
+      // Trigger a proper load to get accurate pagination info
+      setTimeout(() => {
+        loadLogContent(data.initialFile, "", "", 1, "", "time", false);
+      }, 0);
+    }
   }
 
   const fileSelectOptions = [
@@ -276,6 +450,39 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
           { className: "col-category" },
           preact.h("span", { className: getCategoryBadgeClass(entry.category) }, entry.category)
         ),
+        preact.h("div", { className: "col-duration" }, [
+          entry.duration
+            ? preact.h(
+                "span",
+                { className: `duration-badge ${getDurationColor(entry.duration)}` },
+                formatDuration(entry.duration)
+              )
+            : "-",
+          entry.handlerDuration && entry.duration && entry.handlerDuration !== entry.duration
+            ? preact.h(
+                "div",
+                { className: "handler-duration" },
+                `(${formatDuration(entry.handlerDuration)})`
+              )
+            : null,
+        ]),
+        preact.h("div", { className: "col-method" }, [
+          entry.httpMethod
+            ? preact.h(
+                "span",
+                { className: `method-badge method-${entry.httpMethod.toLowerCase()}` },
+                entry.httpMethod
+              )
+            : "-",
+          entry.httpPath ? preact.h("div", { className: "http-path" }, entry.httpPath) : null,
+          entry.httpStatus
+            ? preact.h(
+                "span",
+                { className: `status-badge status-${Math.floor(entry.httpStatus / 100)}xx` },
+                entry.httpStatus
+              )
+            : null,
+        ]),
         preact.h("div", { className: "col-message" }, [
           entry.message,
           entry.data
@@ -343,6 +550,9 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             )
           : null,
 
+        // Performance Statistics Panel
+        data.stats ? preact.h(PerformanceStatsPanel, { stats: data.stats.performanceStats }) : null,
+
         // Controls
         preact.h("div", { className: "logs-controls" }, [
           preact.h("div", { className: "logs-filters" }, [
@@ -402,39 +612,100 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                 ]
               ),
             ]),
+
+            // Performance filters
+            preact.h("div", { className: "filter-group performance-filters" }, [
+              preact.h("label", { htmlFor: "duration-filter" }, "Min Duration (ms):"),
+              preact.h("input", {
+                id: "duration-filter",
+                type: "number",
+                placeholder: "e.g. 100",
+                value: state.minDurationFilter,
+                onChange: (e: any) => {
+                  state.minDurationFilter = e.currentTarget.value;
+                  handleFilterChange();
+                },
+              }),
+            ]),
+            preact.h("div", { className: "filter-group" }, [
+              preact.h("label", { htmlFor: "sort-filter" }, "Sort By:"),
+              preact.h(
+                "select",
+                {
+                  id: "sort-filter",
+                  value: state.sortBy,
+                  onChange: (e: any) => {
+                    state.sortBy = e.currentTarget.value;
+                    handleFilterChange();
+                  },
+                },
+                [
+                  preact.h("option", { value: "time" }, "Time"),
+                  preact.h("option", { value: "duration" }, "Duration"),
+                ]
+              ),
+            ]),
+            preact.h("div", { className: "filter-group" }, [
+              preact.h("label", { htmlFor: "sort-order" }, "Order:"),
+              preact.h(
+                "select",
+                {
+                  id: "sort-order",
+                  value: state.sortDesc ? "desc" : "asc",
+                  onChange: (e: any) => {
+                    state.sortDesc = e.currentTarget.value === "desc";
+                    handleFilterChange();
+                  },
+                },
+                [
+                  preact.h("option", { value: "asc" }, "Ascending"),
+                  preact.h("option", { value: "desc" }, "Descending"),
+                ]
+              ),
+            ]),
           ]),
 
           // Pagination
           state.currentFile
-            ? preact.h("div", { className: "logs-pagination" }, [
-                preact.h(
-                  "span",
-                  { className: "pagination-info" },
-                  `Page ${state.currentPage} of ${Math.ceil(state.totalLines / entriesPerPage)} (${
-                    state.totalLines
-                  } total entries)`
-                ),
-                preact.h("div", { className: "pagination-controls" }, [
-                  preact.h(
-                    "button",
-                    {
-                      onClick: () => handlePageChange(state.currentPage - 1),
-                      disabled: state.currentPage <= 1,
-                      className: "pagination-btn",
-                    },
-                    "Previous"
-                  ),
-                  preact.h(
-                    "button",
-                    {
-                      onClick: () => handlePageChange(state.currentPage + 1),
-                      disabled: !state.hasMore,
-                      className: "pagination-btn",
-                    },
-                    "Next"
-                  ),
-                ]),
-              ])
+            ? (() => {
+                const totalPages =
+                  state.totalLines > 0 ? Math.ceil(state.totalLines / entriesPerPage) : 0;
+                const showPagination = totalPages > 1 || state.totalLines > entriesPerPage;
+
+                return showPagination
+                  ? preact.h("div", { className: "logs-pagination" }, [
+                      preact.h(
+                        "span",
+                        { className: "pagination-info" },
+                        totalPages > 0
+                          ? `Page ${state.currentPage} of ${totalPages} (${state.totalLines} total entries)`
+                          : `${state.totalLines} total entries`
+                      ),
+                      totalPages > 1
+                        ? preact.h("div", { className: "pagination-controls" }, [
+                            preact.h(
+                              "button",
+                              {
+                                onClick: () => handlePageChange(state.currentPage - 1),
+                                disabled: state.currentPage <= 1,
+                                className: "pagination-btn",
+                              },
+                              "Previous"
+                            ),
+                            preact.h(
+                              "button",
+                              {
+                                onClick: () => handlePageChange(state.currentPage + 1),
+                                disabled: state.currentPage >= totalPages,
+                                className: "pagination-btn",
+                              },
+                              "Next"
+                            ),
+                          ])
+                        : null,
+                    ])
+                  : null;
+              })()
             : null,
         ]),
 
@@ -456,6 +727,8 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   preact.h("div", { className: "col-timestamp" }, "Timestamp"),
                   preact.h("div", { className: "col-level" }, "Level"),
                   preact.h("div", { className: "col-category" }, "Category"),
+                  preact.h("div", { className: "col-duration" }, "Duration"),
+                  preact.h("div", { className: "col-method" }, "Method"),
                   preact.h("div", { className: "col-message" }, "Message"),
                   preact.h("div", { className: "col-user" }, "User"),
                 ]),

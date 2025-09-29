@@ -2,6 +2,7 @@ package backend
 
 import (
 	"family/cfg"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -333,6 +334,185 @@ func TestParseLogTimestamp(t *testing.T) {
 				t.Errorf("For input '%s', expected recent timestamp, got %v", tc.input, timestamp)
 			}
 		}
+	}
+}
+
+func TestParseTimingLogLine(t *testing.T) {
+	testCases := []struct {
+		name             string
+		line             string
+		expectedOK       bool
+		expectedMethod   string
+		expectedPath     string
+		expectedStatus   int
+		expectedDuration int
+		expectedHandler  *int
+	}{
+		{
+			name:             "POST with handler time",
+			line:             `2025/09/27 17:31:28                      200 POST /rpc/SendMessage [90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m 12759µs [12602µs]`,
+			expectedOK:       true,
+			expectedMethod:   "POST",
+			expectedPath:     "/rpc/SendMessage",
+			expectedStatus:   200,
+			expectedDuration: 12759,
+			expectedHandler:  intPtr(12602),
+		},
+		{
+			name:             "GET without handler time",
+			line:             `2025/09/27 14:42:31                      404 GET  /manifest.json [90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m[90;2m⎯[0m 101µs`,
+			expectedOK:       true,
+			expectedMethod:   "GET",
+			expectedPath:     "/manifest.json",
+			expectedStatus:   404,
+			expectedDuration: 101,
+			expectedHandler:  nil,
+		},
+		{
+			name:             "Simple format without decorations",
+			line:             `2025/09/27 14:42:31                      404 GET  /.well-known/appspecific/com.chrome.devtools.json  53µs`,
+			expectedOK:       true,
+			expectedMethod:   "GET",
+			expectedPath:     "/.well-known/appspecific/com.chrome.devtools.json",
+			expectedStatus:   404,
+			expectedDuration: 53,
+			expectedHandler:  nil,
+		},
+		{
+			name:       "Not a timing log",
+			line:       `2025/09/27 19:17:56 {"timestamp":"2025-09-27T19:17:56.37230023-05:00","level":"INFO","category":"API","message":"Broadcasting message"}`,
+			expectedOK: false,
+		},
+		{
+			name:       "Plain text log",
+			line:       `2025/09/27 19:17:56 This is just a plain log message`,
+			expectedOK: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, ok := parseTimingLogLine(tc.line)
+			if ok != tc.expectedOK {
+				t.Errorf("Expected ok=%v, got %v", tc.expectedOK, ok)
+				return
+			}
+
+			if !tc.expectedOK {
+				return // No need to check result if we expect failure
+			}
+
+			if result.HTTPMethod != tc.expectedMethod {
+				t.Errorf("Expected method %q, got %q", tc.expectedMethod, result.HTTPMethod)
+			}
+			if result.HTTPPath != tc.expectedPath {
+				t.Errorf("Expected path %q, got %q", tc.expectedPath, result.HTTPPath)
+			}
+			if result.HTTPStatus == nil || *result.HTTPStatus != tc.expectedStatus {
+				t.Errorf("Expected status %d, got %v", tc.expectedStatus, result.HTTPStatus)
+			}
+			if result.Duration == nil || *result.Duration != tc.expectedDuration {
+				t.Errorf("Expected duration %d, got %v", tc.expectedDuration, result.Duration)
+			}
+			if tc.expectedHandler == nil && result.HandlerDuration != nil {
+				t.Errorf("Expected no handler duration, got %v", result.HandlerDuration)
+			}
+			if tc.expectedHandler != nil && (result.HandlerDuration == nil || *result.HandlerDuration != *tc.expectedHandler) {
+				t.Errorf("Expected handler duration %v, got %v", tc.expectedHandler, result.HandlerDuration)
+			}
+		})
+	}
+}
+
+func TestExtractJSONFromLogLine(t *testing.T) {
+	testCases := []struct {
+		name         string
+		line         string
+		expectedJSON string
+		expectedOK   bool
+	}{
+		{
+			name:         "Timestamp prefixed JSON",
+			line:         `2025/09/27 18:13:59 {"timestamp":"2025-09-27T18:13:59.567951173-05:00","level":"INFO","message":"test"}`,
+			expectedJSON: `{"timestamp":"2025-09-27T18:13:59.567951173-05:00","level":"INFO","message":"test"}`,
+			expectedOK:   true,
+		},
+		{
+			name:         "Pure JSON",
+			line:         `{"level":"ERROR","message":"error message"}`,
+			expectedJSON: `{"level":"ERROR","message":"error message"}`,
+			expectedOK:   true,
+		},
+		{
+			name:         "Plain text log",
+			line:         `2025/09/27 18:13:59 Simple log message`,
+			expectedJSON: `2025/09/27 18:13:59 Simple log message`,
+			expectedOK:   false,
+		},
+		{
+			name:         "JSON with failedClients",
+			line:         `2025/09/27 18:13:59 {"timestamp":"2025-09-27T18:13:59.567951173-05:00","level":"INFO","category":"API","message":"Message broadcast completed","data":{"failedClients":0,"familyId":1}}`,
+			expectedJSON: `{"timestamp":"2025-09-27T18:13:59.567951173-05:00","level":"INFO","category":"API","message":"Message broadcast completed","data":{"failedClients":0,"familyId":1}}`,
+			expectedOK:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, ok := extractJSONFromLogLine(tc.line)
+			if ok != tc.expectedOK {
+				t.Errorf("Expected ok=%v, got %v", tc.expectedOK, ok)
+			}
+			if result != tc.expectedJSON {
+				t.Errorf("Expected JSON %q, got %q", tc.expectedJSON, result)
+			}
+		})
+	}
+}
+
+func TestDetectLogLevel(t *testing.T) {
+	testCases := []struct {
+		message  string
+		expected logLevel
+	}{
+		// Error level detection
+		{"ERROR: Database connection failed", logLevelError},
+		{"FATAL error occurred", logLevelError},
+		{"System PANIC: Out of memory", logLevelError},
+		{"Upload FAILED due to size", logLevelError},
+		{"FAILURE to connect to service", logLevelError},
+		{"Uncaught EXCEPTION in handler", logLevelError},
+		{"CRITICAL system malfunction", logLevelError},
+		{"error processing image", logLevelError},
+		{"failed to save file", logLevelError},
+
+		// Warning level detection
+		{"WARN: Low disk space", logLevelWarn},
+		{"WARNING: Connection timeout", logLevelWarn},
+		{"DEPRECATED function usage", logLevelWarn},
+		{"warning about invalid input", logLevelWarn},
+
+		// Debug level detection
+		{"DEBUG: Processing request", logLevelDebug},
+		{"TRACE execution path", logLevelDebug},
+		{"VERBOSE logging enabled", logLevelDebug},
+		{"debug information logged", logLevelDebug},
+
+		// Info level (default)
+		{"User logged in successfully", logLevelInfo},
+		{"Photo uploaded", logLevelInfo},
+		{"Processing completed", logLevelInfo},
+		{"Regular log message", logLevelInfo},
+		{"", logLevelInfo}, // Empty message defaults to info
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("Message: %q", tc.message), func(t *testing.T) {
+			result := detectLogLevel(tc.message)
+			if result != tc.expected {
+				t.Errorf("Expected %s, got %s for message: %q", tc.expected, result, tc.message)
+			}
+		})
 	}
 }
 

@@ -39,6 +39,12 @@ type logEntry struct {
 	UserID    *int        `json:"userId,omitempty"`
 	IP        string      `json:"ip,omitempty"`
 	UserAgent string      `json:"userAgent,omitempty"`
+	// HTTP timing fields for performance analysis
+	Duration        *int   `json:"duration,omitempty"`        // Total duration in microseconds
+	HandlerDuration *int   `json:"handlerDuration,omitempty"` // Handler duration in microseconds
+	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
+	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
+	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
 }
 
 // logStructured writes a structured log entry

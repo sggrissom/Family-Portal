@@ -350,6 +350,9 @@ export interface GetLogContentRequest {
     category: string
     limit: number
     offset: number
+    minDuration: number | null
+    sortBy: string
+    sortDesc: boolean | null
 }
 
 export interface GetLogContentResponse {
@@ -509,6 +512,11 @@ export interface PublicLogEntry {
     userId: number | null
     ip: string
     userAgent: string
+    duration: number | null
+    handlerDuration: number | null
+    httpMethod: string
+    httpPath: string
+    httpStatus: number | null
 }
 
 export interface LogStats {
@@ -518,6 +526,7 @@ export interface LogStats {
     byCategory: Record<string, number>
     recent: PublicLogEntry[]
     errors: PublicLogEntry[]
+    performanceStats: PerformanceStats
 }
 
 export interface ActivitySummary {
@@ -583,6 +592,27 @@ export interface ErrorAnalysis {
     errorsByCategory: DistributionPoint[]
     errorsByLevel: DistributionPoint[]
     recentErrors: string[]
+}
+
+export interface PerformanceStats {
+    totalRequests: number
+    averageResponse: number
+    medianResponse: number
+    p90Response: number
+    p95Response: number
+    p99Response: number
+    slowestEndpoints: EndpointStats[]
+    endpointStats: Record<string, EndpointStats>
+}
+
+export interface EndpointStats {
+    path: string
+    method: string
+    count: number
+    averageResponse: number
+    minResponse: number
+    maxResponse: number
+    errorRate: number
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
