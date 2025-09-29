@@ -49,6 +49,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterImportMethods(app)
+	backend.RegisterExportMethods(app)
 	backend.RegisterAdminMethods(app)
 	backend.RegisterSEOHandlers(app)
 

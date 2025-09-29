@@ -295,6 +295,13 @@ export interface ImportDataResponse {
     availablePeople: ImportPerson[]
 }
 
+export interface ExportDataRequest {
+}
+
+export interface ExportDataResponse {
+    jsonData: string
+}
+
 export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
@@ -671,6 +678,10 @@ export async function RemovePersonFromPhotoProc(data: RemovePersonFromPhotoReque
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
     return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
+}
+
+export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
+    return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

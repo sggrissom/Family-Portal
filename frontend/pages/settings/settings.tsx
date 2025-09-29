@@ -15,11 +15,25 @@ type JoinFamilyForm = {
   success: boolean;
 };
 
+type ExportForm = {
+  loading: boolean;
+  error: string;
+  success: boolean;
+};
+
 const useJoinFamilyForm = vlens.declareHook(
   (): JoinFamilyForm => ({
     inviteCode: "",
     error: "",
     loading: false,
+    success: false,
+  })
+);
+
+const useExportForm = vlens.declareHook(
+  (): ExportForm => ({
+    loading: false,
+    error: "",
     success: false,
   })
 );
@@ -105,10 +119,58 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
   vlens.scheduleRedraw();
 }
 
+async function onExportDataClicked(form: ExportForm, event: Event) {
+  event.preventDefault();
+  form.loading = true;
+  form.error = "";
+  form.success = false;
+
+  try {
+    let [resp, err] = await server.ExportData({});
+
+    form.loading = false;
+
+    if (resp && resp.jsonData) {
+      // Create downloadable file
+      const timestamp = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
+      const filename = `family-data-${timestamp}.json`;
+
+      const blob = new Blob([resp.jsonData], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      // Create download link and trigger download
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      form.success = true;
+      form.error = "";
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        form.success = false;
+        vlens.scheduleRedraw();
+      }, 3000);
+    } else {
+      form.error = err || "Failed to export data";
+    }
+  } catch (error) {
+    form.loading = false;
+    form.error = "Failed to export data";
+    logError("ui", "Export failed", error);
+  }
+  vlens.scheduleRedraw();
+}
+
 const SettingsPage = ({ data }: SettingsPageProps) => {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const inviteLink = `${baseUrl}/create-account?code=${data.inviteCode}`;
   const joinForm = useJoinFamilyForm();
+  const exportForm = useExportForm();
 
   return (
     <div className="settings-page">
@@ -164,6 +226,49 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="form-group">
                 <label>Family Name</label>
                 <div className="readonly-field">{data.name}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Data Management - only show if user is in a family */}
+        {data.id > 0 && (
+          <div className="settings-section">
+            <h2>Data Management</h2>
+            <div className="settings-card">
+              <p className="section-description">
+                Export or import your family's data for backup or migration purposes.
+              </p>
+
+              <div className="data-management-actions">
+                <div className="data-action">
+                  <h4>Export Data</h4>
+                  <p>Download your family's data including people, milestones, and measurements.</p>
+
+                  {exportForm.success && (
+                    <div className="success-message">Data exported successfully!</div>
+                  )}
+
+                  {exportForm.error && <div className="error-message">{exportForm.error}</div>}
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={vlens.cachePartial(onExportDataClicked, exportForm)}
+                    disabled={exportForm.loading}
+                  >
+                    {exportForm.loading ? "Exporting..." : "📥 Export Data"}
+                  </button>
+                </div>
+
+                <div className="data-action">
+                  <h4>Import Data</h4>
+                  <p>Upload data from a previous export or another family portal.</p>
+
+                  <a href="/import" className="btn btn-secondary">
+                    📤 Import Data
+                  </a>
+                </div>
               </div>
             </div>
           </div>

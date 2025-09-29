@@ -133,8 +133,8 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               <a href="/chat" className="action-link">
                 💬 Family Chat
               </a>
-              <a href="/import" className="action-link">
-                📥 Import Data
+              <a href="/settings" className="action-link">
+                📥📤 Import/Export Data
               </a>
               <a href="/settings" className="action-link">
                 ⚙️ Settings
