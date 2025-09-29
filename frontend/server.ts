@@ -312,6 +312,32 @@ export interface ExportDataResponse {
     jsonData: string
 }
 
+export interface ProcessAIImportRequest {
+    personId: number
+    unstructuredText: string
+    generateFile: boolean
+}
+
+export interface ProcessAIImportResponse {
+    success: boolean
+    generatedJSON: string
+    filePath: string
+    processingTime: number
+    tokensUsed: number
+    modelUsed: string
+    providerUsed: string
+    error: string
+    validationWarnings: string[]
+}
+
+export interface ListAIModelsRequest {
+}
+
+export interface ListAIModelsResponse {
+    models: string[]
+    error: string
+}
+
 export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
@@ -729,6 +755,14 @@ export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<
 
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
+}
+
+export async function ProcessAIImport(data: ProcessAIImportRequest): Promise<rpc.Response<ProcessAIImportResponse>> {
+    return await rpc.call<ProcessAIImportResponse>('ProcessAIImport', JSON.stringify(data));
+}
+
+export async function ListAIModels(data: ListAIModelsRequest): Promise<rpc.Response<ListAIModelsResponse>> {
+    return await rpc.call<ListAIModelsResponse>('ListAIModels', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

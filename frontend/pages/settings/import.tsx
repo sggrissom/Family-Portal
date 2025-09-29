@@ -2,7 +2,6 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
-import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -24,6 +23,12 @@ type ImportForm = {
   mergeStrategy: string;
   importMilestones: boolean;
   dryRun: boolean;
+  // AI Import fields
+  activeTab: "json" | "ai";
+  selectedPersonId: number | null;
+  peopleList: server.Person[];
+  unstructuredText: string;
+  aiProcessing: boolean;
 };
 
 const useImportForm = vlens.declareHook(
@@ -41,6 +46,12 @@ const useImportForm = vlens.declareHook(
     mergeStrategy: "create_all",
     importMilestones: true,
     dryRun: false,
+    // AI Import fields
+    activeTab: "json",
+    selectedPersonId: null,
+    peopleList: [],
+    unstructuredText: "",
+    aiProcessing: false,
   })
 );
 
@@ -100,6 +111,39 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.file = null;
     form.error = "";
     vlens.scheduleRedraw();
+  };
+
+  const handleJSONPaste = (event: ClipboardEvent) => {
+    // Explicitly handle paste events for JSON textarea
+    const clipboardData = event.clipboardData;
+    if (clipboardData) {
+      const pastedText = clipboardData.getData("text");
+      if (pastedText) {
+        setTimeout(() => {
+          const target = event.target as HTMLTextAreaElement;
+          form.jsonData = target.value;
+          form.file = null;
+          form.error = "";
+          vlens.scheduleRedraw();
+        }, 0);
+      }
+    }
+  };
+
+  const loadPeopleList = async () => {
+    if (form.peopleList.length > 0) {
+      return; // Already loaded
+    }
+
+    try {
+      const [resp, err] = await server.ListPeople({});
+      if (resp && resp.people) {
+        form.peopleList = resp.people;
+        vlens.scheduleRedraw();
+      }
+    } catch (error) {
+      console.error("Failed to load people list:", error);
+    }
   };
 
   const handlePreview = async () => {
@@ -194,6 +238,82 @@ const ImportPage = ({ form }: ImportPageProps) => {
     }
   };
 
+  const handleAITextChange = (event: Event) => {
+    const target = event.target as HTMLTextAreaElement;
+    form.unstructuredText = target.value;
+    form.error = "";
+    vlens.scheduleRedraw();
+  };
+
+  const handleAIPaste = (event: ClipboardEvent) => {
+    // Explicitly handle paste events
+    const clipboardData = event.clipboardData;
+    if (clipboardData) {
+      const pastedText = clipboardData.getData("text");
+      if (pastedText) {
+        // Let the default paste happen, then update via onInput
+        setTimeout(() => {
+          const target = event.target as HTMLTextAreaElement;
+          form.unstructuredText = target.value;
+          form.error = "";
+          vlens.scheduleRedraw();
+        }, 0);
+      }
+    }
+  };
+
+  const handleAIProcess = async () => {
+    if (!form.selectedPersonId) {
+      form.error = "Please select a person for AI import";
+      vlens.scheduleRedraw();
+      return;
+    }
+
+    if (!form.unstructuredText.trim()) {
+      form.error = "Please provide text for AI processing";
+      vlens.scheduleRedraw();
+      return;
+    }
+
+    form.aiProcessing = true;
+    form.error = "";
+    vlens.scheduleRedraw();
+
+    try {
+      const [resp, err] = await server.ProcessAIImport({
+        personId: form.selectedPersonId,
+        unstructuredText: form.unstructuredText,
+        generateFile: false,
+      });
+
+      form.aiProcessing = false;
+
+      if (resp && resp.success) {
+        // Set the generated JSON in the main form
+        form.jsonData = resp.generatedJSON;
+
+        // Switch to JSON tab to show result
+        form.activeTab = "json";
+
+        // Show any validation warnings
+        if (resp.validationWarnings && resp.validationWarnings.length > 0) {
+          form.error =
+            "AI processing succeeded with warnings: " + resp.validationWarnings.join(", ");
+        }
+
+        vlens.scheduleRedraw();
+      } else {
+        form.error = resp?.error || err || "AI processing failed";
+        vlens.scheduleRedraw();
+      }
+    } catch (error) {
+      form.error =
+        error instanceof Error ? error.message : "An error occurred during AI processing";
+      form.aiProcessing = false;
+      vlens.scheduleRedraw();
+    }
+  };
+
   const clearForm = () => {
     form.jsonData = "";
     form.file = null;
@@ -207,6 +327,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.mergeStrategy = "create_all";
     form.importMilestones = true;
     form.dryRun = false;
+    // AI fields
+    form.selectedPersonId = null;
+    form.unstructuredText = "";
+    form.aiProcessing = false;
     // Clear file input by resetting the form
     const fileInput = document.getElementById("json-file") as HTMLInputElement;
     if (fileInput) {
@@ -301,162 +425,259 @@ const ImportPage = ({ form }: ImportPageProps) => {
         </div>
       ) : (
         <div className="import-form-container">
-          <form onSubmit={handleSubmit} className="import-form">
-            <div className="form-section">
-              <h3>Upload JSON File</h3>
-              <div className="file-input-container">
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileSelect}
-                  className="file-input"
-                  id="json-file"
-                />
-                <label htmlFor="json-file" className="file-input-label">
-                  {form.file ? form.file.name : "Choose JSON file..."}
-                </label>
-              </div>
-            </div>
+          <div className="import-tabs">
+            <button
+              className={`tab-button ${form.activeTab === "json" ? "active" : ""}`}
+              onClick={() => {
+                form.activeTab = "json";
+                vlens.scheduleRedraw();
+              }}
+            >
+              JSON Import
+            </button>
+            <button
+              className={`tab-button ${form.activeTab === "ai" ? "active" : ""}`}
+              onClick={() => {
+                form.activeTab = "ai";
+                vlens.scheduleRedraw();
+              }}
+            >
+              AI Import
+            </button>
+          </div>
 
-            <div className="form-divider">
-              <span>OR</span>
-            </div>
-
-            <div className="form-section">
-              <h3>Paste JSON Data</h3>
-              <textarea
-                value={form.jsonData}
-                onChange={handleTextareaChange}
-                placeholder="Paste your JSON export data here..."
-                className="json-textarea"
-                rows={10}
-              />
-            </div>
-
-            {form.error && <div className="error-message">{form.error}</div>}
-
-            <div className="form-section">
-              <h3>Import Options</h3>
-
-              <div className="import-options">
-                <div className="option-group">
-                  <label className="option-label">
-                    <strong>Merge Strategy</strong>
+          {form.activeTab === "json" ? (
+            <form onSubmit={handleSubmit} className="import-form">
+              <div className="form-section">
+                <h3>Upload JSON File</h3>
+                <div className="file-input-container">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileSelect}
+                    className="file-input"
+                    id="json-file"
+                  />
+                  <label htmlFor="json-file" className="file-input-label">
+                    {form.file ? form.file.name : "Choose JSON file..."}
                   </label>
-                  <div className="radio-group">
-                    <label className="radio-option">
-                      <input
-                        type="radio"
-                        name="mergeStrategy"
-                        value="create_all"
-                        checked={form.mergeStrategy === "create_all"}
-                        onChange={e => {
-                          form.mergeStrategy = (e.target as HTMLInputElement).value;
-                          vlens.scheduleRedraw();
-                        }}
-                      />
-                      <span>Create All</span>
-                      <small>Create new records for everyone (may create duplicates)</small>
+                </div>
+              </div>
+
+              <div className="form-divider">
+                <span>OR</span>
+              </div>
+
+              <div className="form-section">
+                <h3>Paste JSON Data</h3>
+                <textarea
+                  value={form.jsonData}
+                  onInput={handleTextareaChange}
+                  onPaste={handleJSONPaste}
+                  placeholder="Paste your JSON export data here..."
+                  className="json-textarea"
+                  rows={10}
+                />
+              </div>
+
+              {form.error && <div className="error-message">{form.error}</div>}
+
+              <div className="form-section">
+                <h3>Import Options</h3>
+
+                <div className="import-options">
+                  <div className="option-group">
+                    <label className="option-label">
+                      <strong>Merge Strategy</strong>
                     </label>
-                    <label className="radio-option">
+                    <div className="radio-group">
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="mergeStrategy"
+                          value="create_all"
+                          checked={form.mergeStrategy === "create_all"}
+                          onChange={e => {
+                            form.mergeStrategy = (e.target as HTMLInputElement).value;
+                            vlens.scheduleRedraw();
+                          }}
+                        />
+                        <span>Create All</span>
+                        <small>Create new records for everyone (may create duplicates)</small>
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="mergeStrategy"
+                          value="merge_people"
+                          checked={form.mergeStrategy === "merge_people"}
+                          onChange={e => {
+                            form.mergeStrategy = (e.target as HTMLInputElement).value;
+                            vlens.scheduleRedraw();
+                          }}
+                        />
+                        <span>Merge People</span>
+                        <small>Merge with existing people when name & birthday match</small>
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="mergeStrategy"
+                          value="skip_duplicates"
+                          checked={form.mergeStrategy === "skip_duplicates"}
+                          onChange={e => {
+                            form.mergeStrategy = (e.target as HTMLInputElement).value;
+                            vlens.scheduleRedraw();
+                          }}
+                        />
+                        <span>Skip Duplicates</span>
+                        <small>Skip people who already exist (name & birthday match)</small>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="option-group">
+                    <label className="checkbox-option">
                       <input
-                        type="radio"
-                        name="mergeStrategy"
-                        value="merge_people"
-                        checked={form.mergeStrategy === "merge_people"}
+                        type="checkbox"
+                        checked={form.importMilestones}
                         onChange={e => {
-                          form.mergeStrategy = (e.target as HTMLInputElement).value;
+                          form.importMilestones = (e.target as HTMLInputElement).checked;
                           vlens.scheduleRedraw();
                         }}
                       />
-                      <span>Merge People</span>
-                      <small>Merge with existing people when name & birthday match</small>
+                      <span>Import Milestones</span>
+                      <small>Include milestone data in the import</small>
                     </label>
-                    <label className="radio-option">
+                  </div>
+
+                  <div className="option-group">
+                    <label className="checkbox-option">
                       <input
-                        type="radio"
-                        name="mergeStrategy"
-                        value="skip_duplicates"
-                        checked={form.mergeStrategy === "skip_duplicates"}
+                        type="checkbox"
+                        checked={form.dryRun}
                         onChange={e => {
-                          form.mergeStrategy = (e.target as HTMLInputElement).value;
+                          form.dryRun = (e.target as HTMLInputElement).checked;
                           vlens.scheduleRedraw();
                         }}
                       />
-                      <span>Skip Duplicates</span>
-                      <small>Skip people who already exist (name & birthday match)</small>
+                      <span>Dry Run</span>
+                      <small>Preview changes without saving to database</small>
                     </label>
                   </div>
                 </div>
+              </div>
 
-                <div className="option-group">
-                  <label className="checkbox-option">
-                    <input
-                      type="checkbox"
-                      checked={form.importMilestones}
-                      onChange={e => {
-                        form.importMilestones = (e.target as HTMLInputElement).checked;
-                        vlens.scheduleRedraw();
-                      }}
-                    />
-                    <span>Import Milestones</span>
-                    <small>Include milestone data in the import</small>
-                  </label>
-                </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={form.loading || !form.jsonData.trim()}
+                  className="btn btn-secondary"
+                >
+                  {form.loading ? "Loading..." : "Preview Data"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    form.loading ||
+                    !form.jsonData.trim() ||
+                    (!form.showFilters && !form.previewData)
+                  }
+                  className="btn btn-primary"
+                >
+                  {form.loading ? "Importing..." : "Import Data"}
+                </button>
+                <button type="button" onClick={clearForm} className="btn btn-secondary">
+                  Clear
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="ai-import-form">
+              <div className="form-section">
+                <h3>Select Person</h3>
+                <p className="section-description">
+                  Choose which person this data is for. The AI will extract heights, weights, and
+                  milestones for this person only.
+                </p>
+                <select
+                  value={form.selectedPersonId || ""}
+                  onChange={e => {
+                    const value = (e.target as HTMLSelectElement).value;
+                    form.selectedPersonId = value ? parseInt(value, 10) : null;
+                    vlens.scheduleRedraw();
+                  }}
+                  onFocus={loadPeopleList}
+                  className="person-selector"
+                >
+                  <option value="">-- Select a person --</option>
+                  {form.peopleList.map(person => (
+                    <option key={person.id} value={person.id}>
+                      {person.name} ({person.age})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="option-group">
-                  <label className="checkbox-option">
-                    <input
-                      type="checkbox"
-                      checked={form.dryRun}
-                      onChange={e => {
-                        form.dryRun = (e.target as HTMLInputElement).checked;
-                        vlens.scheduleRedraw();
-                      }}
-                    />
-                    <span>Dry Run</span>
-                    <small>Preview changes without saving to database</small>
-                  </label>
-                </div>
+              <div className="form-section">
+                <h3>Paste Unstructured Text</h3>
+                <p className="section-description">
+                  Paste information about heights, weights, or milestones for the selected person.
+                </p>
+                <textarea
+                  value={form.unstructuredText}
+                  onInput={handleAITextChange}
+                  onPaste={handleAIPaste}
+                  placeholder="Paste information about the selected person. For example:&#10;&#10;Last checkup showed he was 4 feet 2 inches tall and weighed 52 pounds. Started kindergarten in September 2020. Had his 8th birthday party last month..."
+                  className="unstructured-textarea"
+                  rows={12}
+                />
+              </div>
+
+              {form.error && <div className="error-message">{form.error}</div>}
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={handleAIProcess}
+                  disabled={form.aiProcessing || !form.unstructuredText.trim()}
+                  className="btn btn-primary"
+                >
+                  {form.aiProcessing ? "Processing with AI..." : "Process with AI"}
+                </button>
+                <button type="button" onClick={clearForm} className="btn btn-secondary">
+                  Clear
+                </button>
+              </div>
+
+              <div className="ai-help">
+                <h3>🤖 AI Import Instructions</h3>
+                <ul>
+                  <li>Paste any unstructured text containing family information</li>
+                  <li>The AI will extract people, measurements, and milestones</li>
+                  <li>Review the generated JSON before importing</li>
+                  <li>Supported formats: stories, lists, medical records, etc.</li>
+                  <li>Make sure your chosen AI provider is configured with API keys</li>
+                </ul>
               </div>
             </div>
-
-            <div className="form-actions">
-              <button
-                type="button"
-                onClick={handlePreview}
-                disabled={form.loading || !form.jsonData.trim()}
-                className="btn btn-secondary"
-              >
-                {form.loading ? "Loading..." : "Preview Data"}
-              </button>
-              <button
-                type="submit"
-                disabled={
-                  form.loading || !form.jsonData.trim() || (!form.showFilters && !form.previewData)
-                }
-                className="btn btn-primary"
-              >
-                {form.loading ? "Importing..." : "Import Data"}
-              </button>
-              <button type="button" onClick={clearForm} className="btn btn-secondary">
-                Clear
-              </button>
-            </div>
-          </form>
+          )}
 
           {form.showFilters && form.previewData && <FilteringInterface form={form} />}
 
-          <div className="import-help">
-            <h3>📋 Import Instructions</h3>
-            <ul>
-              <li>Upload a JSON file exported from a previous version</li>
-              <li>Or paste the JSON data directly into the text area</li>
-              <li>The import will create new entries in your family portal</li>
-              <li>Existing data will not be affected</li>
-              <li>People and their measurements will be imported together</li>
-            </ul>
-          </div>
+          {form.activeTab === "json" && (
+            <div className="import-help">
+              <h3>📋 Import Instructions</h3>
+              <ul>
+                <li>Upload a JSON file exported from a previous version</li>
+                <li>Or paste the JSON data directly into the text area</li>
+                <li>The import will create new entries in your family portal</li>
+                <li>Existing data will not be affected</li>
+                <li>People and their measurements will be imported together</li>
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

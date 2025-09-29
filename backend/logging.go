@@ -27,6 +27,7 @@ const (
 	logCategoryAPI    logCategory = "API"
 	logCategoryWorker logCategory = "WORKER"
 	logCategorySystem logCategory = "SYSTEM"
+	logCategoryImport logCategory = "IMPORT"
 )
 
 // logEntry represents a structured log entry (internal type)
