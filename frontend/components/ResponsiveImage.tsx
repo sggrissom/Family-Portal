@@ -146,9 +146,9 @@ export const ProfileImage = ({
       loading={loading}
       fetchpriority={fetchpriority}
       status={status}
-      sizes="(max-width: 480px) 80px, (max-width: 768px) 120px, 150px"
-      width={150}
-      height={150}
+      sizes="(max-width: 480px) 300px, (max-width: 768px) 600px, 900px"
+      width={600}
+      height={600}
     />
   );
 };

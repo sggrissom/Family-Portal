@@ -280,15 +280,6 @@ block(`
 `);
 
 block(`
-.photos-gallery {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-`);
-
-block(`
 .profile-content .empty-state {
   background: var(--bg);
   border: 1px dashed var(--border);
