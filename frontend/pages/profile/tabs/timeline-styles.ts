@@ -1,6 +1,58 @@
 import { block } from "vlens/css";
 
 block(`
+.age-filter {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+`);
+
+block(`
+.filter-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+}
+`);
+
+block(`
+.filter-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.filter-btn.active {
+  background: var(--primary-accent);
+  color: white;
+  border-color: var(--primary-accent);
+}
+`);
+
+block(`
+.filter-info {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-style: italic;
+}
+`);
+
+block(`
 .milestone-list {
   display: flex;
   flex-direction: column;
@@ -104,6 +156,20 @@ block(`
 
 block(`
 @media (max-width: 600px) {
+  .age-filter {
+    padding: 0.75rem;
+    gap: 0.4rem;
+  }
+
+  .filter-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  .filter-info {
+    font-size: 0.85rem;
+  }
+
   .milestone-item {
     gap: 0.75rem;
     padding: 0.75rem;
