@@ -76,9 +76,22 @@ block(`
 `);
 
 block(`
+.milestone-age {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  background: var(--accent-bg);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+`);
+
+block(`
 .milestone-description {
   color: var(--text);
   line-height: 1.4;
+  white-space: pre-wrap;
 }
 `);
 
@@ -114,6 +127,11 @@ block(`
 
   .milestone-date {
     font-size: 0.8rem;
+  }
+
+  .milestone-age {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
   }
 }
 `);

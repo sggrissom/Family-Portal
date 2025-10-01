@@ -1,23 +1,12 @@
 import * as preact from "preact";
 import * as server from "../../../server";
+import { calculateAge, formatDate } from "../../../lib/dateUtils";
 import "./timeline-styles";
 
 interface TimelineTabProps {
   person: server.Person;
   milestones: server.Milestone[];
 }
-
-const formatDate = (dateString: string) => {
-  if (!dateString) return "";
-  if (dateString.includes("T") && dateString.endsWith("Z")) {
-    const dateParts = dateString.split("T")[0].split("-");
-    const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-    const day = parseInt(dateParts[2]);
-    return new Date(year, month, day).toLocaleDateString();
-  }
-  return new Date(dateString).toLocaleDateString();
-};
 
 const handleDeleteMilestone = async (id: number, description: string) => {
   const confirmed = confirm(`Are you sure you want to delete this milestone: "${description}"?`);
@@ -104,34 +93,40 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
       <h2>Timeline for {person.name}</h2>
       <div className="timeline-content">
         <div className="milestone-list">
-          {sortedMilestones.map(milestone => (
-            <div key={milestone.id} className="milestone-item">
-              <div className="milestone-icon">{getCategoryIcon(milestone.category)}</div>
-              <div className="milestone-content">
-                <div className="milestone-header">
-                  <span className="milestone-category">{getCategoryLabel(milestone.category)}</span>
-                  <span className="milestone-date">{formatDate(milestone.milestoneDate)}</span>
+          {sortedMilestones.map(milestone => {
+            const age = calculateAge(person.birthday, milestone.milestoneDate);
+            return (
+              <div key={milestone.id} className="milestone-item">
+                <div className="milestone-icon">{getCategoryIcon(milestone.category)}</div>
+                <div className="milestone-content">
+                  <div className="milestone-header">
+                    <span className="milestone-category">
+                      {getCategoryLabel(milestone.category)}
+                    </span>
+                    {age && <span className="milestone-age">{age}</span>}
+                    <span className="milestone-date">{formatDate(milestone.milestoneDate)}</span>
+                  </div>
+                  <div className="milestone-description">{milestone.description}</div>
                 </div>
-                <div className="milestone-description">{milestone.description}</div>
+                <div className="milestone-actions">
+                  <a
+                    href={`/edit-milestone/${milestone.id}`}
+                    className="btn-action btn-edit"
+                    title="Edit"
+                  >
+                    ✏️
+                  </a>
+                  <button
+                    className="btn-action btn-delete"
+                    title="Delete"
+                    onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
-              <div className="milestone-actions">
-                <a
-                  href={`/edit-milestone/${milestone.id}`}
-                  className="btn-action btn-edit"
-                  title="Edit"
-                >
-                  ✏️
-                </a>
-                <button
-                  className="btn-action btn-delete"
-                  title="Delete"
-                  onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="timeline-actions">
           <a href={`/add-milestone/${person.id}`} className="btn btn-primary">
