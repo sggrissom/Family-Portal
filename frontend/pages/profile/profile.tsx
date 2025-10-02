@@ -5,20 +5,30 @@ import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { TimelineTab } from "./tabs/timeline";
-import { GrowthTab } from "./tabs/growth";
-import { PhotosTab } from "./tabs/photos";
+import { UnifiedTimeline } from "./tabs/unified-timeline";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./profile-styles";
 
 type ProfileState = {
-  activeTab: "timeline" | "growth" | "photos";
+  visibleTypes: {
+    milestones: boolean;
+    measurements: boolean;
+    photos: boolean;
+  };
+  selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
+  sortOrder: "newest" | "oldest";
 };
 
 const useProfileState = vlens.declareHook(
   (): ProfileState => ({
-    activeTab: "timeline",
+    visibleTypes: {
+      milestones: true,
+      measurements: true,
+      photos: true,
+    },
+    selectedAgeFilter: "all",
+    sortOrder: "newest",
   })
 );
 
@@ -92,8 +102,18 @@ interface ProfilePageProps {
   photos: server.Image[];
 }
 
-function setActiveTab(state: ProfileState, tab: "timeline" | "growth" | "photos") {
-  state.activeTab = tab;
+function toggleType(state: ProfileState, type: "milestones" | "measurements" | "photos") {
+  state.visibleTypes[type] = !state.visibleTypes[type];
+  vlens.scheduleRedraw();
+}
+
+function setAgeFilter(state: ProfileState, filter: string) {
+  state.selectedAgeFilter = filter;
+  vlens.scheduleRedraw();
+}
+
+function setSortOrder(state: ProfileState, order: "newest" | "oldest") {
+  state.sortOrder = order;
   vlens.scheduleRedraw();
 }
 
@@ -157,33 +177,62 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="profile-tabs">
-        <button
-          className={`tab ${state.activeTab === "timeline" ? "active" : ""}`}
-          onClick={() => setActiveTab(state, "timeline")}
-        >
-          📰 Timeline
-        </button>
-        <button
-          className={`tab ${state.activeTab === "growth" ? "active" : ""}`}
-          onClick={() => setActiveTab(state, "growth")}
-        >
-          📊 Growth
-        </button>
-        <button
-          className={`tab ${state.activeTab === "photos" ? "active" : ""}`}
-          onClick={() => setActiveTab(state, "photos")}
-        >
-          🖼️ Photos
-        </button>
+      {/* Type Filter Controls */}
+      <div className="profile-filters">
+        <div className="filter-section">
+          <label className="filter-label">Show:</label>
+          <div className="type-filters">
+            <button
+              className={`filter-toggle ${state.visibleTypes.milestones ? "active" : ""}`}
+              onClick={() => toggleType(state, "milestones")}
+            >
+              {state.visibleTypes.milestones ? "✓" : ""} Milestones
+            </button>
+            <button
+              className={`filter-toggle ${state.visibleTypes.measurements ? "active" : ""}`}
+              onClick={() => toggleType(state, "measurements")}
+            >
+              {state.visibleTypes.measurements ? "✓" : ""} Measurements
+            </button>
+            <button
+              className={`filter-toggle ${state.visibleTypes.photos ? "active" : ""}`}
+              onClick={() => toggleType(state, "photos")}
+            >
+              {state.visibleTypes.photos ? "✓" : ""} Photos
+            </button>
+          </div>
+        </div>
+        <div className="filter-section sort-section">
+          <label className="filter-label">Sort:</label>
+          <div className="sort-controls">
+            <button
+              className={`filter-toggle ${state.sortOrder === "newest" ? "active" : ""}`}
+              onClick={() => setSortOrder(state, "newest")}
+            >
+              Newest First
+            </button>
+            <button
+              className={`filter-toggle ${state.sortOrder === "oldest" ? "active" : ""}`}
+              onClick={() => setSortOrder(state, "oldest")}
+            >
+              Oldest First
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Unified Timeline Content */}
       <div className="profile-content">
-        {state.activeTab === "timeline" && <TimelineTab person={person} milestones={milestones} />}
-        {state.activeTab === "growth" && <GrowthTab person={person} growthData={growthData} />}
-        {state.activeTab === "photos" && <PhotosTab person={person} photos={photos} />}
+        <UnifiedTimeline
+          person={person}
+          milestones={milestones}
+          growthData={growthData}
+          photos={photos}
+          visibleTypes={state.visibleTypes}
+          selectedAgeFilter={state.selectedAgeFilter}
+          sortOrder={state.sortOrder}
+          onAgeFilterChange={filter => setAgeFilter(state, filter)}
+        />
       </div>
     </div>
   );
