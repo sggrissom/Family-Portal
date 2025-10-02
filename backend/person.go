@@ -15,6 +15,7 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddPerson)
 	vbeam.RegisterProc(app, ListPeople)
 	vbeam.RegisterProc(app, GetPerson)
+	vbeam.RegisterProc(app, ComparePeople)
 	vbeam.RegisterProc(app, SetProfilePhoto)
 	vbeam.RegisterProc(app, MergePeople)
 }
@@ -77,6 +78,21 @@ type GetPersonResponse struct {
 	GrowthData []GrowthData `json:"growthData"`
 	Milestones []Milestone  `json:"milestones"`
 	Photos     []Image      `json:"photos"`
+}
+
+type ComparePeopleRequest struct {
+	PersonIds []int `json:"personIds"`
+}
+
+type PersonComparisonData struct {
+	Person     Person       `json:"person"`
+	GrowthData []GrowthData `json:"growthData"`
+	Milestones []Milestone  `json:"milestones"`
+	Photos     []Image      `json:"photos"`
+}
+
+type ComparePeopleResponse struct {
+	People []PersonComparisonData `json:"people"`
 }
 
 // Database types
@@ -270,6 +286,54 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 
 	// Get photos for person
 	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
+
+	return
+}
+
+func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePeopleResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate request
+	if len(req.PersonIds) == 0 {
+		err = errors.New("At least one person ID is required")
+		return
+	}
+
+	if len(req.PersonIds) > 5 {
+		err = errors.New("Cannot compare more than 5 people at once")
+		return
+	}
+
+	// Fetch data for each person
+	resp.People = make([]PersonComparisonData, 0, len(req.PersonIds))
+
+	for _, personId := range req.PersonIds {
+		// Get person data
+		person := GetPersonById(ctx.Tx, personId)
+
+		// Validate person exists and belongs to user's family
+		if person.Id == 0 || person.FamilyId != user.FamilyId {
+			err = fmt.Errorf("Person ID %d not found or not in your family", personId)
+			return
+		}
+
+		// Calculate age
+		person.Age = calculateAge(person.Birthday)
+
+		// Build comparison data
+		comparisonData := PersonComparisonData{
+			Person:     person,
+			GrowthData: GetPersonGrowthDataTx(ctx.Tx, personId),
+			Milestones: GetPersonMilestonesTx(ctx.Tx, personId),
+			Photos:     GetPersonImages(ctx.Tx, personId),
+		}
+
+		resp.People = append(resp.People, comparisonData)
+	}
 
 	return
 }

@@ -81,6 +81,14 @@ export interface GetPersonRequest {
     id: number
 }
 
+export interface ComparePeopleRequest {
+    personIds: number[]
+}
+
+export interface ComparePeopleResponse {
+    people: PersonComparisonData[]
+}
+
 export interface SetProfilePhotoRequest {
     personId: number
     photoId: number
@@ -490,6 +498,13 @@ export interface Image {
     status: number
 }
 
+export interface PersonComparisonData {
+    person: Person
+    growthData: GrowthData[]
+    milestones: Milestone[]
+    photos: Image[]
+}
+
 export interface ChatMessage {
     id: number
     familyId: number
@@ -680,6 +695,10 @@ export async function ListPeople(data: Empty): Promise<rpc.Response<ListPeopleRe
 
 export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<GetPersonResponse>> {
     return await rpc.call<GetPersonResponse>('GetPerson', JSON.stringify(data));
+}
+
+export async function ComparePeople(data: ComparePeopleRequest): Promise<rpc.Response<ComparePeopleResponse>> {
+    return await rpc.call<ComparePeopleResponse>('ComparePeople', JSON.stringify(data));
 }
 
 export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc.Response<SetProfilePhotoResponse>> {
