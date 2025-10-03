@@ -18,6 +18,7 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ComparePeople)
 	vbeam.RegisterProc(app, SetProfilePhoto)
 	vbeam.RegisterProc(app, MergePeople)
+	vbeam.RegisterProc(app, GetFamilyTimeline)
 }
 
 type GenderType int
@@ -93,6 +94,21 @@ type PersonComparisonData struct {
 
 type ComparePeopleResponse struct {
 	People []PersonComparisonData `json:"people"`
+}
+
+type GetFamilyTimelineRequest struct {
+	// No parameters needed - uses family from auth
+}
+
+type FamilyTimelineItem struct {
+	Person     Person       `json:"person"`
+	GrowthData []GrowthData `json:"growthData"`
+	Milestones []Milestone  `json:"milestones"`
+	Photos     []Image      `json:"photos"`
+}
+
+type GetFamilyTimelineResponse struct {
+	People []FamilyTimelineItem `json:"people"`
 }
 
 // Database types
@@ -518,6 +534,33 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 		"mergedMilestones": resp.MergedMilestones,
 		"mergedPhotos":     resp.MergedPhotos,
 	})
+
+	return
+}
+
+func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Get all family members
+	people := GetFamilyPeople(ctx.Tx, user.FamilyId)
+
+	// Build timeline data for each person
+	resp.People = make([]FamilyTimelineItem, 0, len(people))
+
+	for _, person := range people {
+		timelineItem := FamilyTimelineItem{
+			Person:     person,
+			GrowthData: GetPersonGrowthDataTx(ctx.Tx, person.Id),
+			Milestones: GetPersonMilestonesTx(ctx.Tx, person.Id),
+			Photos:     GetPersonImages(ctx.Tx, person.Id),
+		}
+
+		resp.People = append(resp.People, timelineItem)
+	}
 
 	return
 }

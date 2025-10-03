@@ -111,6 +111,13 @@ export interface MergePeopleResponse {
     mergedPhotos: number
 }
 
+export interface GetFamilyTimelineRequest {
+}
+
+export interface GetFamilyTimelineResponse {
+    people: FamilyTimelineItem[]
+}
+
 export interface AddGrowthDataRequest {
     personId: number
     measurementType: string
@@ -505,6 +512,13 @@ export interface PersonComparisonData {
     photos: Image[]
 }
 
+export interface FamilyTimelineItem {
+    person: Person
+    growthData: GrowthData[]
+    milestones: Milestone[]
+    photos: Image[]
+}
+
 export interface ChatMessage {
     id: number
     familyId: number
@@ -707,6 +721,10 @@ export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc
 
 export async function MergePeople(data: MergePeopleRequest): Promise<rpc.Response<MergePeopleResponse>> {
     return await rpc.call<MergePeopleResponse>('MergePeople', JSON.stringify(data));
+}
+
+export async function GetFamilyTimeline(data: GetFamilyTimelineRequest): Promise<rpc.Response<GetFamilyTimelineResponse>> {
+    return await rpc.call<GetFamilyTimelineResponse>('GetFamilyTimeline', JSON.stringify(data));
 }
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {

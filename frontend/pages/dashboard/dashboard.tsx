@@ -106,6 +106,9 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               <a href="/add-person" className="action-link">
                 ➕ Add Family Member
               </a>
+              <a href="/family-timeline" className="action-link">
+                📅 Family Timeline
+              </a>
               <a href="/compare" className="action-link">
                 📊 Compare People
               </a>
