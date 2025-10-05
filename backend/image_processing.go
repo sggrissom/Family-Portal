@@ -138,8 +138,8 @@ func compressAVIF(img image.Image, quality int) ([]byte, int, int, error) {
 func ProcessAndSaveMultipleSizes(imageData []byte, mimeType string) (map[string][]byte, int, int, error) {
 	results := make(map[string][]byte)
 
-	// All sizes to generate
-	sizes := []ImageSize{SmallSize, ThumbnailSize, MediumSize, LargeSize, XLargeSize, XXLargeSize}
+	// All sizes to generate (small and xxlarge removed for performance/storage optimization)
+	sizes := []ImageSize{ThumbnailSize, MediumSize, LargeSize, XLargeSize}
 	// All formats to generate (prioritize most efficient formats first)
 	formats := []string{"jpeg", "webp", "avif"}
 

@@ -28,12 +28,10 @@ export const ResponsiveImage = ({
 }: ResponsiveImageProps) => {
   // Define responsive breakpoints and corresponding image sizes
   const imageSizes = [
-    { size: "small", width: 150 },
     { size: "thumb", width: 300 },
     { size: "medium", width: 600 },
     { size: "large", width: 900 },
     { size: "xlarge", width: 1200 },
-    { size: "xxlarge", width: 1800 },
   ];
 
   // Generate srcset for different sizes

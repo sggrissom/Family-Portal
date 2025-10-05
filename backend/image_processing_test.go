@@ -239,12 +239,12 @@ func TestProcessAndSaveMultipleSizes(t *testing.T) {
 			t.Error("Expected multiple results")
 		}
 
-		// Check for specific combinations
+		// Check for specific combinations (4 sizes × 3 formats = 12 variants)
 		expectedCombinations := []string{
-			"small_jpeg", "small_webp", "small_avif",
 			"thumb_jpeg", "thumb_webp", "thumb_avif",
 			"medium_jpeg", "medium_webp", "medium_avif",
 			"large_jpeg", "large_webp", "large_avif",
+			"xlarge_jpeg", "xlarge_webp", "xlarge_avif",
 		}
 
 		foundCombinations := 0
@@ -254,8 +254,9 @@ func TestProcessAndSaveMultipleSizes(t *testing.T) {
 			}
 		}
 
-		if foundCombinations == 0 {
-			t.Error("Expected at least some size/format combinations to be generated")
+		// Should generate all 12 combinations
+		if foundCombinations != 12 {
+			t.Errorf("Expected 12 size/format combinations, got %d", foundCombinations)
 		}
 
 		// Verify all results are non-empty
@@ -365,9 +366,11 @@ func TestGetImageMimeType(t *testing.T) {
 
 func TestImageSizeDefinitions(t *testing.T) {
 	// Test that all predefined image sizes have valid values
+	// Note: SmallSize and XXLargeSize still exist for backward compatibility
+	// but are not actively generated for new uploads
 	sizes := []ImageSize{
-		SmallSize, ThumbnailSize, MediumSize,
-		LargeSize, XLargeSize, XXLargeSize,
+		ThumbnailSize, MediumSize,
+		LargeSize, XLargeSize,
 	}
 
 	for _, size := range sizes {
@@ -389,9 +392,6 @@ func TestImageSizeDefinitions(t *testing.T) {
 
 	// Test that sizes are in ascending order
 	t.Run("Sizes in ascending order", func(t *testing.T) {
-		if SmallSize.MaxWidth >= ThumbnailSize.MaxWidth {
-			t.Error("Small size should be smaller than thumbnail")
-		}
 		if ThumbnailSize.MaxWidth >= MediumSize.MaxWidth {
 			t.Error("Thumbnail size should be smaller than medium")
 		}
@@ -401,18 +401,15 @@ func TestImageSizeDefinitions(t *testing.T) {
 		if LargeSize.MaxWidth >= XLargeSize.MaxWidth {
 			t.Error("Large size should be smaller than xlarge")
 		}
-		if XLargeSize.MaxWidth >= XXLargeSize.MaxWidth {
-			t.Error("XLarge size should be smaller than xxlarge")
-		}
 	})
 
 	// Test that quality generally increases with size
 	t.Run("Quality increases with size", func(t *testing.T) {
-		if SmallSize.Quality > LargeSize.Quality {
-			t.Error("Small size quality should not exceed large size quality")
+		if ThumbnailSize.Quality > LargeSize.Quality {
+			t.Error("Thumbnail size quality should not exceed large size quality")
 		}
-		if ThumbnailSize.Quality > XLargeSize.Quality {
-			t.Error("Thumbnail quality should not exceed xlarge quality")
+		if MediumSize.Quality > XLargeSize.Quality {
+			t.Error("Medium quality should not exceed xlarge quality")
 		}
 	})
 }
