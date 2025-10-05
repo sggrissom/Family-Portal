@@ -8,6 +8,7 @@ import { Header, Footer } from "../../layout";
 import { UnifiedTimeline } from "./tabs/unified-timeline";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
+import { getIdFromRoute } from "../../lib/routeHelpers";
 import "./profile-styles";
 
 type ProfileState = {
@@ -33,7 +34,7 @@ const useProfileState = vlens.declareHook(
 );
 
 export async function fetch(route: string, prefix: string) {
-  const personId = parseInt(route.split("/")[2]);
+  const personId = getIdFromRoute(route) || 0;
   return server.GetPerson({ id: personId });
 }
 

@@ -8,8 +8,10 @@ import { FullImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
+import { getIdFromRoute } from "../../lib/routeHelpers";
+
 export async function fetch(route: string, prefix: string) {
-  const photoId = parseInt(route.split("/")[2]);
+  const photoId = getIdFromRoute(route) || 0;
   return server.GetPhoto({ id: photoId });
 }
 

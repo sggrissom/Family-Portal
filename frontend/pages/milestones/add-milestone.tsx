@@ -7,6 +7,8 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
+import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
+import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import "./add-milestone-styles";
 
 type AddMilestoneForm = {
@@ -52,28 +54,16 @@ export function view(
 
   if (!data.people || data.people.length === 0) {
     return (
-      <div>
-        <Header isHome={false} />
-        <main id="app" className="add-milestone-container">
-          <div className="error-page">
-            <h1>No Family Members</h1>
-            <p>Please add family members before adding milestones</p>
-            <a href="/add-person" className="btn btn-primary">
-              Add Family Member
-            </a>
-            <a href="/dashboard" className="btn btn-secondary">
-              Back to Dashboard
-            </a>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <NoFamilyMembersPage
+        message="Please add family members before adding milestones"
+        containerClass="add-milestone-container"
+      />
     );
   }
 
   // Extract person ID from URL if present (e.g., /add-milestone/123)
-  const urlParts = route.split("/");
-  const personIdFromUrl = urlParts.length > 2 ? urlParts[2] : undefined;
+  const personId = getIdFromRoute(route);
+  const personIdFromUrl = personId ? personId.toString() : undefined;
 
   const form = useAddMilestoneForm(personIdFromUrl);
 
@@ -166,8 +156,7 @@ interface AddMilestonePageProps {
 
 const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
   // Filter to show all family members for milestones
-  const children = people.filter(p => p.type === server.Child);
-  const parents = people.filter(p => p.type === server.Parent);
+  const { children, parents } = splitPeopleByType(people);
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 

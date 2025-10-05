@@ -7,6 +7,8 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
+import { getIdFromRoute } from "../../lib/routeHelpers";
+import { ErrorPage } from "../../components/ErrorPage";
 import "./add-milestone-styles";
 
 type EditMilestoneForm = {
@@ -37,8 +39,7 @@ const useEditMilestoneForm = vlens.declareHook(
 
 export async function fetch(route: string, prefix: string) {
   // Extract milestone ID from URL (e.g., /edit-milestone/123)
-  const urlParts = route.split("/");
-  const milestoneId = urlParts.length > 2 ? parseInt(urlParts[2]) : null;
+  const milestoneId = getIdFromRoute(route);
 
   if (!milestoneId) {
     throw new Error("Milestone ID is required");
@@ -60,19 +61,11 @@ export function view(
 
   if (!data.milestone) {
     return (
-      <div>
-        <Header isHome={false} />
-        <main id="app" className="add-milestone-container">
-          <div className="error-page">
-            <h1>Milestone Not Found</h1>
-            <p>The milestone you're trying to edit could not be found</p>
-            <a href="/dashboard" className="btn btn-primary">
-              Back to Dashboard
-            </a>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <ErrorPage
+        title="Milestone Not Found"
+        message="The milestone you're trying to edit could not be found"
+        containerClass="add-milestone-container"
+      />
     );
   }
 

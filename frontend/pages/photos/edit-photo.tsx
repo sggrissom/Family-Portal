@@ -7,8 +7,10 @@ import { Header, Footer } from "../../layout";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import "./edit-photo-styles";
 
+import { getIdFromRoute } from "../../lib/routeHelpers";
+
 export async function fetch(route: string, prefix: string) {
-  const photoId = parseInt(route.split("/")[2]);
+  const photoId = getIdFromRoute(route) || 0;
   return server.GetPhoto({ id: photoId });
 }
 
