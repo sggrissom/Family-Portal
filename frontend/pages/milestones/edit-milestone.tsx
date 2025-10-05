@@ -6,6 +6,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import "./add-milestone-styles";
 
 type EditMilestoneForm = {
@@ -164,15 +165,6 @@ interface EditMilestonePageProps {
 }
 
 const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
-  const getCategoryOptions = () => [
-    { value: "development", label: "Development", icon: "🌱" },
-    { value: "behavior", label: "Behavior", icon: "😊" },
-    { value: "health", label: "Health", icon: "🏥" },
-    { value: "achievement", label: "Achievement", icon: "🏆" },
-    { value: "first", label: "First Time", icon: "⭐" },
-    { value: "other", label: "Other", icon: "📝" },
-  ];
-
   return (
     <div className="add-milestone-page">
       <div className="auth-card">
@@ -204,7 +196,7 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
           <div className="form-group">
             <label>Category</label>
             <div className="category-grid">
-              {getCategoryOptions().map(option => (
+              {MILESTONE_CATEGORIES.map(option => (
                 <label key={option.value} className="category-option">
                   <input
                     type="radio"

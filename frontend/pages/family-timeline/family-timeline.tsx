@@ -7,6 +7,11 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { calculateAge, formatDate } from "../../lib/dateUtils";
+import {
+  getCategoryIcon,
+  getCategoryLabel,
+  getMeasurementTypeLabel,
+} from "../../lib/milestoneHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import "./family-timeline-styles";
@@ -55,48 +60,6 @@ interface TimelineItem {
   age: string;
   data: server.Milestone | server.GrowthData | server.Image;
 }
-
-const getCategoryIcon = (category: string) => {
-  switch (category) {
-    case "development":
-      return "🌱";
-    case "behavior":
-      return "😊";
-    case "health":
-      return "🏥";
-    case "achievement":
-      return "🏆";
-    case "first":
-      return "⭐";
-    case "other":
-      return "📝";
-    default:
-      return "📝";
-  }
-};
-
-const getCategoryLabel = (category: string) => {
-  switch (category) {
-    case "development":
-      return "Development";
-    case "behavior":
-      return "Behavior";
-    case "health":
-      return "Health";
-    case "achievement":
-      return "Achievement";
-    case "first":
-      return "First Time";
-    case "other":
-      return "Other";
-    default:
-      return "Other";
-  }
-};
-
-const getMeasurementTypeLabel = (type: server.MeasurementType) => {
-  return type === server.Height ? "Height" : "Weight";
-};
 
 type FamilyTimelineState = {
   selectedPerson: string;

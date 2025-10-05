@@ -5,6 +5,12 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { calculateAge, formatDate } from "../../lib/dateUtils";
+import {
+  getCategoryIcon,
+  getCategoryLabel,
+  getMeasurementTypeLabel,
+} from "../../lib/milestoneHelpers";
+import { getAgeInYears } from "../../lib/timelineHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./compare-styles";
@@ -38,22 +44,6 @@ export async function fetch(route: string, prefix: string) {
 
 type CompareData = server.ListPeopleResponse;
 
-// Helper function to extract numeric age in years from an age string
-const getAgeInYears = (ageString: string): number => {
-  if (!ageString || ageString === "Newborn") return 0;
-
-  const yearMatch = ageString.match(/(\d+)\s+years?/);
-  if (yearMatch) {
-    return parseInt(yearMatch[1]);
-  }
-
-  if (ageString.includes("month")) {
-    return 0;
-  }
-
-  return 0;
-};
-
 const togglePersonSelection = (
   state: CompareState,
   loadState: ComparisonLoadState,
@@ -81,48 +71,6 @@ const setAgeFilter = (state: CompareState, filter: string) => {
 const toggleType = (state: CompareState, type: "milestones" | "measurements" | "photos") => {
   state.visibleTypes[type] = !state.visibleTypes[type];
   vlens.scheduleRedraw();
-};
-
-const getCategoryIcon = (category: string) => {
-  switch (category) {
-    case "development":
-      return "🌱";
-    case "behavior":
-      return "😊";
-    case "health":
-      return "🏥";
-    case "achievement":
-      return "🏆";
-    case "first":
-      return "⭐";
-    case "other":
-      return "📝";
-    default:
-      return "📝";
-  }
-};
-
-const getCategoryLabel = (category: string) => {
-  switch (category) {
-    case "development":
-      return "Development";
-    case "behavior":
-      return "Behavior";
-    case "health":
-      return "Health";
-    case "achievement":
-      return "Achievement";
-    case "first":
-      return "First Time";
-    case "other":
-      return "Other";
-    default:
-      return "Other";
-  }
-};
-
-const getMeasurementTypeLabel = (type: server.MeasurementType) => {
-  return type === server.Height ? "Height" : "Weight";
 };
 
 export function view(route: string, prefix: string, data: CompareData): preact.ComponentChild {

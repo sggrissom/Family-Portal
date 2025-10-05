@@ -6,6 +6,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import "./add-milestone-styles";
 
 type AddMilestoneForm = {
@@ -168,15 +169,6 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
   const children = people.filter(p => p.type === server.Child);
   const parents = people.filter(p => p.type === server.Parent);
 
-  const categoryOptions = [
-    { value: "development", label: "Development" },
-    { value: "behavior", label: "Behavior" },
-    { value: "health", label: "Health" },
-    { value: "achievement", label: "Achievement" },
-    { value: "first", label: "First Time" },
-    { value: "other", label: "Other" },
-  ];
-
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 
   return (
@@ -221,7 +213,7 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
               {...vlens.attrsBindInput(vlens.ref(form, "category"))}
               disabled={form.loading}
             >
-              {categoryOptions.map(option => (
+              {MILESTONE_CATEGORIES.map(option => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

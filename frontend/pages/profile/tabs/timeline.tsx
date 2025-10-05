@@ -2,6 +2,8 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../../server";
 import { calculateAge, formatDate } from "../../../lib/dateUtils";
+import { getCategoryIcon, getCategoryLabel } from "../../../lib/milestoneHelpers";
+import { getAgeInYears, handleDeleteMilestone } from "../../../lib/timelineHelpers";
 import "./timeline-styles";
 
 interface TimelineTabProps {
@@ -18,81 +20,6 @@ const useTimelineState = vlens.declareHook(
     selectedAgeFilter: "all",
   })
 );
-
-// Helper function to extract numeric age in years from an age string
-const getAgeInYears = (ageString: string): number => {
-  if (!ageString || ageString === "Newborn") return 0;
-
-  // Extract year number from strings like "2 years 3 months" or "1 year"
-  const yearMatch = ageString.match(/(\d+)\s+years?/);
-  if (yearMatch) {
-    return parseInt(yearMatch[1]);
-  }
-
-  // If it's only months (e.g., "5 months"), return 0
-  if (ageString.includes("month")) {
-    return 0;
-  }
-
-  return 0;
-};
-
-const handleDeleteMilestone = async (id: number, description: string) => {
-  const confirmed = confirm(`Are you sure you want to delete this milestone: "${description}"?`);
-
-  if (confirmed) {
-    try {
-      let [resp, err] = await server.DeleteMilestone({ id });
-
-      if (resp && resp.success) {
-        // Refresh the page to update the milestone data
-        window.location.reload();
-      } else {
-        alert(err || "Failed to delete milestone");
-      }
-    } catch (error) {
-      alert("Network error. Please try again.");
-    }
-  }
-};
-
-const getCategoryIcon = (category: string) => {
-  switch (category) {
-    case "development":
-      return "🌱";
-    case "behavior":
-      return "😊";
-    case "health":
-      return "🏥";
-    case "achievement":
-      return "🏆";
-    case "first":
-      return "⭐";
-    case "other":
-      return "📝";
-    default:
-      return "📝";
-  }
-};
-
-const getCategoryLabel = (category: string) => {
-  switch (category) {
-    case "development":
-      return "Development";
-    case "behavior":
-      return "Behavior";
-    case "health":
-      return "Health";
-    case "achievement":
-      return "Achievement";
-    case "first":
-      return "First Time";
-    case "other":
-      return "Other";
-    default:
-      return "Other";
-  }
-};
 
 const setAgeFilter = (state: TimelineState, filter: string) => {
   state.selectedAgeFilter = filter;
