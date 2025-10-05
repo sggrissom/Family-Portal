@@ -18,6 +18,7 @@ func RegisterMilestoneMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetMilestone)
 	vbeam.RegisterProc(app, UpdateMilestone)
 	vbeam.RegisterProc(app, DeleteMilestone)
+	vbeam.RegisterProc(app, SearchMilestones)
 }
 
 // Request/Response types
@@ -71,6 +72,16 @@ type GetMilestoneRequest struct {
 
 type GetMilestoneResponse struct {
 	Milestone Milestone `json:"milestone"`
+}
+
+type SearchMilestonesRequest struct {
+	Query string `json:"query"`
+	Limit *int   `json:"limit,omitempty"` // Optional, defaults to 50
+}
+
+type SearchMilestonesResponse struct {
+	Milestones []Milestone `json:"milestones"`
+	Query      string      `json:"query"`
 }
 
 // Database types
@@ -135,6 +146,60 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 		return milestone, errors.New("Access denied: milestone belongs to another family")
 	}
 	return milestone, nil
+}
+
+func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) (milestones []Milestone) {
+	// Parse query into search terms
+	words := strings.Fields(strings.ToLower(query))
+	terms := make([]string, 0, len(words))
+
+	for _, word := range words {
+		// Remove common punctuation and filter short words
+		word = strings.Trim(word, ".,!?;:()[]{}\"'")
+		if len(word) >= 3 {
+			terms = append(terms, word)
+		}
+	}
+
+	if len(terms) == 0 {
+		return []Milestone{}
+	}
+
+	// Collect unique milestone IDs from all search terms (OR search)
+	milestoneIdMap := make(map[int]bool)
+
+	for _, term := range terms {
+		var ids []int
+		vbolt.ReadTermTargets(tx, MilestoneSearchIndex, term, &ids, vbolt.Window{Limit: limit * 2})
+		for _, id := range ids {
+			milestoneIdMap[id] = true
+		}
+	}
+
+	// Convert map to slice
+	var milestoneIds []int
+	for id := range milestoneIdMap {
+		milestoneIds = append(milestoneIds, id)
+	}
+
+	// Read all milestones
+	var allMilestones []Milestone
+	if len(milestoneIds) > 0 {
+		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &allMilestones)
+	}
+
+	// Filter by family ID and apply limit
+	milestones = make([]Milestone, 0, limit)
+	for _, milestone := range allMilestones {
+		if milestone.FamilyId == familyId {
+			milestones = append(milestones, milestone)
+			if len(milestones) >= limit {
+				break
+			}
+		}
+	}
+
+	return
 }
 
 func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
@@ -470,5 +535,38 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Success = true
+	return
+}
+
+func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp SearchMilestonesResponse, err error) {
+	// Get authenticated user
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	// Validate query
+	query := strings.TrimSpace(req.Query)
+	if query == "" {
+		err = errors.New("Search query is required")
+		return
+	}
+
+	// Set default limit
+	limit := 50
+	if req.Limit != nil && *req.Limit > 0 {
+		limit = *req.Limit
+		// Cap at 100 results
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	// Search milestones
+	milestones := SearchMilestonesTx(ctx.Tx, query, user.FamilyId, limit)
+
+	resp.Milestones = milestones
+	resp.Query = query
 	return
 }

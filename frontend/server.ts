@@ -216,6 +216,16 @@ export interface DeleteMilestoneResponse {
     success: boolean
 }
 
+export interface SearchMilestonesRequest {
+    query: string
+    limit: number | null
+}
+
+export interface SearchMilestonesResponse {
+    milestones: Milestone[]
+    query: string
+}
+
 export interface SendMessageRequest {
     content: string
     clientMessageId: string
@@ -761,6 +771,10 @@ export async function UpdateMilestone(data: UpdateMilestoneRequest): Promise<rpc
 
 export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc.Response<DeleteMilestoneResponse>> {
     return await rpc.call<DeleteMilestoneResponse>('DeleteMilestone', JSON.stringify(data));
+}
+
+export async function SearchMilestones(data: SearchMilestonesRequest): Promise<rpc.Response<SearchMilestonesResponse>> {
+    return await rpc.call<SearchMilestonesResponse>('SearchMilestones', JSON.stringify(data));
 }
 
 export async function SendMessage(data: SendMessageRequest): Promise<rpc.Response<SendMessageResponse>> {

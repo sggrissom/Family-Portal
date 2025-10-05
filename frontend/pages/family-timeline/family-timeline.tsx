@@ -65,6 +65,9 @@ type FamilyTimelineState = {
   selectedPerson: string;
   selectedType: "all" | "milestones" | "measurements" | "photos";
   sortOrder: "newest" | "oldest";
+  searchQuery: string;
+  searchResults: server.Milestone[] | null;
+  isSearching: boolean;
 };
 
 const useFamilyTimelineState = vlens.declareHook(
@@ -72,6 +75,9 @@ const useFamilyTimelineState = vlens.declareHook(
     selectedPerson: "all",
     selectedType: "all",
     sortOrder: "newest",
+    searchQuery: "",
+    searchResults: null,
+    isSearching: false,
   })
 );
 
@@ -80,6 +86,39 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   const state = useFamilyTimelineState();
 
   const people = data.people || [];
+
+  // Search handler
+  const handleSearch = async () => {
+    const query = state.searchQuery.trim();
+    if (!query) {
+      return;
+    }
+
+    state.isSearching = true;
+    vlens.scheduleRedraw();
+
+    try {
+      const [result, error] = await server.SearchMilestones({ query, limit: 50 });
+      if (result && !error) {
+        state.searchResults = result.milestones;
+      } else {
+        console.error("Search failed:", error);
+        state.searchResults = [];
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      state.searchResults = [];
+    } finally {
+      state.isSearching = false;
+      vlens.scheduleRedraw();
+    }
+  };
+
+  const clearSearch = () => {
+    state.searchQuery = "";
+    state.searchResults = null;
+    vlens.scheduleRedraw();
+  };
 
   // Build combined timeline from all people
   const allTimelineItems: TimelineItem[] = [];
@@ -184,6 +223,36 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
       {hasAnyData ? (
         <>
+          <div className="search-container">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search milestones..."
+              value={state.searchQuery}
+              onInput={e => {
+                state.searchQuery = e.currentTarget.value;
+                vlens.scheduleRedraw();
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+            />
+            <button
+              className="btn btn-primary search-btn"
+              onClick={handleSearch}
+              disabled={state.isSearching || !state.searchQuery.trim()}
+            >
+              {state.isSearching ? "Searching..." : "Search"}
+            </button>
+            {state.searchResults !== null && (
+              <button className="btn btn-secondary" onClick={clearSearch}>
+                Clear Search
+              </button>
+            )}
+          </div>
+
           <div className="timeline-filters">
             <div className="filter-group">
               <label>Person:</label>
@@ -234,36 +303,84 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             </div>
           </div>
 
-          {hasFilteredData ? (
-            <div className="timeline-stats">
-              Showing {sortedItems.length} of {allTimelineItems.length} entries
-            </div>
-          ) : null}
+          {state.searchResults !== null ? (
+            <>
+              <div className="timeline-stats">
+                Found {state.searchResults.length} milestone(s) for "{state.searchQuery}"
+              </div>
+              {state.searchResults.length > 0 ? (
+                <div className="search-results">
+                  {state.searchResults.map(milestone => {
+                    const person = people.find(p => p.person.id === milestone.personId);
+                    const personName = person?.person.name || "Unknown";
+                    const age = person
+                      ? calculateAge(person.person.birthday, milestone.milestoneDate)
+                      : "";
 
-          {hasFilteredData ? (
-            <div className="timeline-items">
-              {sortedItems.map(item => (
-                <TimelineItemComponent
-                  key={`${item.type}-${item.id}`}
-                  item={item}
-                  photoStatus={photoStatus}
-                />
-              ))}
-            </div>
+                    return (
+                      <div key={milestone.id} className="timeline-item milestone-item">
+                        <div className="timeline-item-header">
+                          <div className="timeline-item-icon">
+                            {getCategoryIcon(milestone.category)}
+                          </div>
+                          <div className="timeline-item-meta">
+                            <div className="timeline-item-person">{personName}</div>
+                            <div className="timeline-item-age">{age}</div>
+                          </div>
+                          <div className="timeline-item-date">
+                            {formatDate(milestone.milestoneDate)}
+                          </div>
+                        </div>
+                        <div className="timeline-item-content">
+                          <div className="milestone-category">
+                            {getCategoryLabel(milestone.category)}
+                          </div>
+                          <div className="milestone-description">{milestone.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>No milestones found for "{state.searchQuery}"</p>
+                </div>
+              )}
+            </>
           ) : (
-            <div className="empty-state">
-              <p>No entries match your filters.</p>
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  state.selectedPerson = "all";
-                  state.selectedType = "all";
-                  vlens.scheduleRedraw();
-                }}
-              >
-                Clear Filters
-              </button>
-            </div>
+            <>
+              {hasFilteredData ? (
+                <div className="timeline-stats">
+                  Showing {sortedItems.length} of {allTimelineItems.length} entries
+                </div>
+              ) : null}
+
+              {hasFilteredData ? (
+                <div className="timeline-items">
+                  {sortedItems.map(item => (
+                    <TimelineItemComponent
+                      key={`${item.type}-${item.id}`}
+                      item={item}
+                      photoStatus={photoStatus}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>No entries match your filters.</p>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      state.selectedPerson = "all";
+                      state.selectedType = "all";
+                      vlens.scheduleRedraw();
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       ) : (
