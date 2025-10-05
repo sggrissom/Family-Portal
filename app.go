@@ -16,6 +16,20 @@ var Info vbolt.Info
 func OpenDB(dbpath string) *vbolt.DB {
 	dbConnection := vbolt.Open(dbpath)
 	vbolt.InitBuckets(dbConnection, &cfg.Info)
+
+	// Migration: Populate search index for existing milestones
+	vbolt.ApplyDBProcess(dbConnection, "2025-1004-populate-milestone-search", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			// Iterate all existing milestones
+			vbolt.IterateAll(tx, backend.MilestoneBkt, func(key int, milestone backend.Milestone) bool {
+				// Populate search index for each milestone
+				backend.UpdateMilestoneSearchIndex(tx, milestone)
+				return true // Continue iteration
+			})
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 

@@ -3,6 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
+	"fmt"
 	"strings"
 	"time"
 
@@ -106,6 +107,10 @@ var MilestoneByPersonIndex = vbolt.Index(&cfg.Info, "milestones_by_person", vpac
 // This allows efficient lookup of milestones by family
 var MilestoneByFamilyIndex = vbolt.Index(&cfg.Info, "milestones_by_family", vpack.FInt, vpack.FInt)
 
+// MilestoneSearchIndex: term = search_term (word/category/date), priority = milestone_date, target = milestone_id
+// This allows text search across milestone descriptions, categories, dates, and person associations
+var MilestoneSearchIndex = vbolt.IndexExt(&cfg.Info, "milestones_search", vpack.StringZ, vpack.UnixTimeKey, vpack.FInt)
+
 // Database helper functions
 func GetMilestoneById(tx *vbolt.Tx, milestoneId int) (milestone Milestone) {
 	vbolt.Read(tx, MilestoneBkt, milestoneId, &milestone)
@@ -130,6 +135,33 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 		return milestone, errors.New("Access denied: milestone belongs to another family")
 	}
 	return milestone, nil
+}
+
+func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
+	terms := make([]string, 0, 10)
+
+	// Extract words from description (minimum 3 characters)
+	words := strings.Fields(strings.ToLower(milestone.Description))
+	for _, word := range words {
+		// Remove common punctuation and filter short words
+		word = strings.Trim(word, ".,!?;:()[]{}\"'")
+		if len(word) >= 3 {
+			terms = append(terms, word)
+		}
+	}
+
+	// Add category term
+	terms = append(terms, fmt.Sprintf("cat:%s", milestone.Category))
+
+	// Add year and month terms
+	terms = append(terms, fmt.Sprintf("y:%d", milestone.MilestoneDate.Year()))
+	terms = append(terms, fmt.Sprintf("m:%s", milestone.MilestoneDate.Format("2006.01")))
+
+	// Add person term for filtering by person
+	terms = append(terms, fmt.Sprintf("p:%d", milestone.PersonId))
+
+	// Update the search index with all terms, using milestone date as priority for sorting
+	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, terms, milestone.MilestoneDate)
 }
 
 func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milestone, error) {
@@ -166,6 +198,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 func updateMilestoneIndices(tx *vbolt.Tx, milestone Milestone) {
 	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, milestone.PersonId)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
+	UpdateMilestoneSearchIndex(tx, milestone)
 }
 
 func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (Milestone, error) {
@@ -196,6 +229,9 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	// Save updated record
 	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
 
+	// Update search index (description, category, or date may have changed)
+	UpdateMilestoneSearchIndex(tx, milestone)
+
 	return milestone, nil
 }
 
@@ -209,6 +245,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	// Remove from indices
 	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, -1)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, -1)
+	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, []string{}, time.Time{})
 
 	// Delete the record
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
