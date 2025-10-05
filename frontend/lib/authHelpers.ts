@@ -2,6 +2,34 @@ import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "./authCache";
 import * as server from "../server";
+import { logInfo, logWarn } from "./logger";
+
+/**
+ * Attempts to refresh the authentication token using the refresh token cookie.
+ * Returns the new auth context if successful, null otherwise.
+ */
+async function tryRefreshAuth(): Promise<auth.AuthCache | null> {
+  try {
+    const response = await fetch("/api/refresh", {
+      method: "POST",
+      credentials: "include",
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.auth) {
+        logInfo("auth", "Token refresh successful", { userId: data.auth.id });
+        return data.auth;
+      }
+    }
+
+    logWarn("auth", "Token refresh failed", { status: response.status });
+    return null;
+  } catch (error) {
+    logWarn("auth", "Token refresh error", error);
+    return null;
+  }
+}
 
 /**
  * For protected routes' fetch methods - ensures authentication or tries to restore from cookies.
@@ -18,12 +46,26 @@ export async function ensureAuthInFetch(): Promise<boolean> {
         auth.setAuth(authResponse);
         return true;
       } else {
-        // No valid auth context, redirect to login
+        // No valid auth context, try to refresh
+        const refreshedAuth = await tryRefreshAuth();
+        if (refreshedAuth) {
+          auth.setAuth(refreshedAuth);
+          return true;
+        }
+
+        // Refresh failed, redirect to login
         core.setRoute("/login");
         return false;
       }
     } catch (error) {
-      // Failed to get auth context, redirect to login
+      // Failed to get auth context, try to refresh
+      const refreshedAuth = await tryRefreshAuth();
+      if (refreshedAuth) {
+        auth.setAuth(refreshedAuth);
+        return true;
+      }
+
+      // Refresh failed, redirect to login
       core.setRoute("/login");
       return false;
     }
@@ -55,7 +97,13 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    // No server auth either, continue to public page
+    // No JWT auth, try refresh token
+    const refreshedAuth = await tryRefreshAuth();
+    if (refreshedAuth) {
+      auth.setAuth(refreshedAuth);
+      core.setRoute("/dashboard");
+      return false;
+    }
   }
 
   return true;
