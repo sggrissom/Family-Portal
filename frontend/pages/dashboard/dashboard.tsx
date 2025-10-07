@@ -132,6 +132,9 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               <a href="/add-milestone" className="action-link">
                 ⭐ Add Milestone
               </a>
+              <a href="/family-chart" className="action-link">
+                📈 Family Growth Chart
+              </a>
             </div>
 
             <div className="action-group">

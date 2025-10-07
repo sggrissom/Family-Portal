@@ -136,10 +136,35 @@ export const MultiPersonChart = ({
     );
   }
 
-  // Collect all growth data across all people
-  const allGrowthData = peopleData.flatMap(pd => pd.growthData);
+  // Helper function to calculate age in months
+  const calculateAgeInMonths = (birthDate: string, measurementDate: string): number => {
+    const birth = new Date(birthDate);
+    const measurement = new Date(measurementDate);
 
-  if (allGrowthData.length === 0) {
+    const years = measurement.getFullYear() - birth.getFullYear();
+    const months = measurement.getMonth() - birth.getMonth();
+    const days = measurement.getDate() - birth.getDate();
+
+    let totalMonths = years * 12 + months;
+
+    // If the day hasn't been reached yet in the current month, subtract one month
+    if (days < 0) {
+      totalMonths--;
+    }
+
+    return Math.max(0, totalMonths);
+  };
+
+  // Collect all growth data across all people with age calculations
+  const allGrowthDataWithAge = peopleData.flatMap(pd =>
+    pd.growthData.map(gd => ({
+      ...gd,
+      ageInMonths: calculateAgeInMonths(pd.person.birthday, gd.measurementDate),
+      person: pd.person,
+    }))
+  );
+
+  if (allGrowthDataWithAge.length === 0) {
     return (
       <div className="chart-placeholder">
         <p>📈 No growth data available for selected people</p>
@@ -147,22 +172,19 @@ export const MultiPersonChart = ({
     );
   }
 
-  const sortedData = allGrowthData
-    .slice()
-    .sort((a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime());
+  const sortedData = allGrowthDataWithAge.slice().sort((a, b) => a.ageInMonths - b.ageInMonths);
 
   const heightData = sortedData.filter(d => d.measurementType === server.Height && showHeight);
   const weightData = sortedData.filter(d => d.measurementType === server.Weight && showWeight);
 
-  // Dates
-  const dateTimes = sortedData.map(d => new Date(d.measurementDate).getTime());
-  const minTs = Math.min(...dateTimes);
-  const maxTs = Math.max(...dateTimes);
-  const rawDR = Math.max(1, maxTs - minTs);
-  const MIN_DATE_PAD_MS = 24 * 60 * 60 * 1000;
-  const paddedMinTs = minTs - Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
-  const paddedMaxTs = maxTs + Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
-  const dateDen = Math.max(1, paddedMaxTs - paddedMinTs);
+  // Age range (in months)
+  const ageValues = sortedData.map(d => d.ageInMonths);
+  const minAge = Math.min(...ageValues);
+  const maxAge = Math.max(...ageValues);
+  const ageRange = Math.max(1, maxAge - minAge);
+  const paddedMinAge = Math.max(0, minAge - ageRange * 0.05);
+  const paddedMaxAge = maxAge + ageRange * 0.05;
+  const ageDen = Math.max(1, paddedMaxAge - paddedMinAge);
 
   // Values
   const hv = heightData.map(d => d.value);
@@ -184,27 +206,23 @@ export const MultiPersonChart = ({
   const wDen = Math.max(1e-9, wHi - wLo);
 
   // Scales
-  const dateToX = (t: number) => ((t - paddedMinTs) / dateDen) * innerW;
+  const ageToX = (ageMonths: number) => ((ageMonths - paddedMinAge) / ageDen) * innerW;
   const heightToY = (v: number) => innerH - ((v - hLo) / hDen) * innerH;
   const weightToY = (v: number) => innerH - ((v - wLo) / wDen) * innerH;
 
   // Create paths for each person
   const createPath = (
-    data: server.GrowthData[],
+    data: typeof sortedData,
     yScale: (value: number) => number,
     personId: number
   ) => {
     const personData = data.filter(d => d.personId === personId);
     if (personData.length === 0) return "";
-    const sorted = personData
-      .slice()
-      .sort(
-        (a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime()
-      );
+    const sorted = personData.slice().sort((a, b) => a.ageInMonths - b.ageInMonths);
     let s = "";
     for (let i = 0; i < sorted.length; i++) {
       const d = sorted[i];
-      const x = dateToX(new Date(d.measurementDate).getTime());
+      const x = ageToX(d.ageInMonths);
       const y = yScale(d.value);
       s += (i === 0 ? "M" : " L") + ` ${x} ${y}`;
     }
@@ -393,7 +411,11 @@ export const MultiPersonChart = ({
   };
 
   // Point interactions
-  const selectPoint = (d: server.GrowthData, kind: Kind, personData: PersonGrowthData) => {
+  const selectPoint = (
+    d: (typeof sortedData)[number],
+    kind: Kind,
+    personData: PersonGrowthData
+  ) => {
     const key = { id: d.id as number, kind, personId: d.personId };
     if (
       selected.key &&
@@ -413,14 +435,14 @@ export const MultiPersonChart = ({
       selected.value = d.value;
       selected.unit = d.unit;
       selected.type = kind;
-      selected.date = formatDate(d.measurementDate);
+      selected.date = `${formatAge(d.ageInMonths)} (${formatDate(d.measurementDate)})`;
       selected.personName = personData.person.name;
       selected.color = personData.color;
     }
     vlens.scheduleRedraw();
   };
 
-  const hoverPoint = (d: server.GrowthData, kind: Kind) => {
+  const hoverPoint = (d: (typeof sortedData)[number], kind: Kind) => {
     hovered.key = { id: d.id as number, kind, personId: d.personId };
     vlens.scheduleRedraw();
   };
@@ -439,6 +461,18 @@ export const MultiPersonChart = ({
     weightData.length && showWeight
       ? niceTicks(wLo, wHi, 5).filter(v => v >= wMin && v <= wMax)
       : [];
+
+  // Format age for display
+  const formatAge = (months: number): string => {
+    if (months < 12) {
+      return `${Math.round(months)}m`;
+    } else if (months < 24) {
+      return `${Math.floor(months / 12)}y ${months % 12}m`;
+    } else {
+      const years = Math.floor(months / 12);
+      return `${years}y`;
+    }
+  };
 
   return (
     <div className="growth-chart">
@@ -564,7 +598,7 @@ export const MultiPersonChart = ({
                     return (
                       <circle
                         key={`h-${d.id}`}
-                        cx={dateToX(new Date(d.measurementDate).getTime())}
+                        cx={ageToX(d.ageInMonths)}
                         cy={heightToY(d.value)}
                         r={getPointRadius(isSelected)}
                         fill={personData.color}
@@ -578,9 +612,7 @@ export const MultiPersonChart = ({
                         onMouseLeave={clearHover}
                         tabIndex={0}
                         role="button"
-                        aria-label={`${personData.person.name} height: ${d.value} ${d.unit} on ${formatDate(
-                          d.measurementDate
-                        )}`}
+                        aria-label={`${personData.person.name} height: ${d.value} ${d.unit} at age ${formatAge(d.ageInMonths)}`}
                         onKeyDown={e => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -613,7 +645,7 @@ export const MultiPersonChart = ({
                     return (
                       <circle
                         key={`w-${d.id}`}
-                        cx={dateToX(new Date(d.measurementDate).getTime())}
+                        cx={ageToX(d.ageInMonths)}
                         cy={weightToY(d.value)}
                         r={getPointRadius(isSelected)}
                         fill={personData.color}
@@ -627,9 +659,7 @@ export const MultiPersonChart = ({
                         onMouseLeave={clearHover}
                         tabIndex={0}
                         role="button"
-                        aria-label={`${personData.person.name} weight: ${d.value} ${d.unit} on ${formatDate(
-                          d.measurementDate
-                        )}`}
+                        aria-label={`${personData.person.name} weight: ${d.value} ${d.unit} at age ${formatAge(d.ageInMonths)}`}
                         onKeyDown={e => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -652,8 +682,7 @@ export const MultiPersonChart = ({
 
               {/* X-axis labels */}
               {xRatios.map((ratio, i) => {
-                const t = paddedMinTs + ratio * (paddedMaxTs - paddedMinTs);
-                const date = new Date(t);
+                const ageMonths = paddedMinAge + ratio * (paddedMaxAge - paddedMinAge);
                 return (
                   <text
                     key={`xlab-${i}`}
@@ -663,7 +692,7 @@ export const MultiPersonChart = ({
                     className="axis-label"
                     fontSize="10"
                   >
-                    {date.toLocaleDateString(undefined, { month: "short", year: "2-digit" })}
+                    {formatAge(ageMonths)}
                   </text>
                 );
               })}
