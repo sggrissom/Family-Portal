@@ -550,8 +550,8 @@ export const MultiPersonChart = ({
                       fill="none"
                       stroke={personData.color}
                       strokeWidth={3}
-                      className="chart-line"
-                      opacity={0.7}
+                      className="chart-line-solid"
+                      opacity={0.9}
                     />
                   )}
 
@@ -561,10 +561,10 @@ export const MultiPersonChart = ({
                       d={createPath(weightData, weightToY, personData.person.id)}
                       fill="none"
                       stroke={personData.color}
-                      strokeWidth={3}
-                      strokeDasharray="5,5"
-                      className="chart-line"
-                      opacity={0.7}
+                      stroke-width="3"
+                      stroke-dasharray="10,5"
+                      className="chart-line-dashed"
+                      opacity={0.9}
                     />
                   )}
                 </g>
@@ -765,8 +765,8 @@ export const MultiPersonChart = ({
                 x2="5"
                 y2="0"
                 stroke="var(--text)"
-                strokeWidth="2"
-                strokeDasharray="3,3"
+                stroke-width="2"
+                stroke-dasharray="10,5"
               />
               <text x="15" y="0" className="legend-text" dy="0.35em" fontSize="10">
                 Weight (dashed)

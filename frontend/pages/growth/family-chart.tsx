@@ -36,12 +36,13 @@ const useChartDataLoad = vlens.declareHook(
 );
 
 // Color palette for different people (works in both light and dark themes)
+// Optimized for maximum visual distinction
 const PERSON_COLORS = [
   "#3b82f6", // blue
-  "#10b981", // green
-  "#8b5cf6", // purple
-  "#f59e0b", // orange
-  "#ec4899", // pink
+  "#10b981", // emerald green
+  "#a855f7", // vibrant purple
+  "#f59e0b", // amber orange
+  "#f43f5e", // rose red
 ];
 
 export async function fetch(route: string, prefix: string) {

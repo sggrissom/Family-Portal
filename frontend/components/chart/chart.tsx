@@ -497,7 +497,7 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   fill="none"
                   stroke={heightColor}
                   strokeWidth={3}
-                  className="chart-line"
+                  className="chart-line-solid"
                 />
               </g>
             )}
@@ -509,8 +509,9 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
                   d={weightPath}
                   fill="none"
                   stroke={weightColor}
-                  strokeWidth={3}
-                  className="chart-line"
+                  stroke-width="3"
+                  stroke-dasharray="10,5"
+                  className="chart-line-dashed"
                 />
               </g>
             )}
@@ -660,17 +661,25 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
         >
           {heightData.length > 0 && (
             <g className="legend-item">
-              <circle cx="0" cy="0" r="5" fill={heightColor} stroke="white" strokeWidth={2} />
+              <line x1="-5" y1="0" x2="5" y2="0" stroke={heightColor} stroke-width="2" />
               <text x="15" y="0" className="legend-text" dy="0.35em">
-                Height
+                Height (solid)
               </text>
             </g>
           )}
           {weightData.length > 0 && (
             <g className="legend-item" transform="translate(0, 25)">
-              <circle cx="0" cy="0" r="5" fill={weightColor} stroke="white" strokeWidth={2} />
+              <line
+                x1="-5"
+                y1="0"
+                x2="5"
+                y2="0"
+                stroke={weightColor}
+                stroke-width="2"
+                stroke-dasharray="10,5"
+              />
               <text x="15" y="0" className="legend-text" dy="0.35em">
-                Weight
+                Weight (dashed)
               </text>
             </g>
           )}

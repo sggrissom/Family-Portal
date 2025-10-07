@@ -44,9 +44,15 @@ block(`
 `);
 
 block(`
-.chart-line {
+.chart-line-solid {
   stroke-width: 3;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+`);
+
+block(`
+.chart-line-dashed {
+  stroke-width: 3;
 }
 `);
 
