@@ -152,6 +152,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
 	})
 
@@ -161,6 +163,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
 	})
 
@@ -204,6 +208,8 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24, // 24 hours
 	})
 
@@ -231,6 +237,8 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		Value:    refreshToken.Token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24 * 30, // 30 days
 	})
 

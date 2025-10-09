@@ -41,7 +41,7 @@ export async function ensureAuthInFetch(): Promise<boolean> {
   if (!currentAuth || currentAuth.id <= 0) {
     try {
       let [authResponse, err] = await server.GetAuthContext({});
-      if (authResponse) {
+      if (authResponse && authResponse.id > 0) {
         // Auth context exists on server, cache it locally
         auth.setAuth(authResponse);
         return true;
@@ -90,7 +90,7 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
   // Try to fetch auth context from server
   try {
     let [authResponse, err] = await server.GetAuthContext({});
-    if (authResponse) {
+    if (authResponse && authResponse.id > 0) {
       // We have valid auth on server, cache it locally and redirect
       auth.setAuth(authResponse);
       core.setRoute("/dashboard");
