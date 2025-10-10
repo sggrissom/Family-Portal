@@ -164,7 +164,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(0, 0),
 	})
 
@@ -189,7 +189,8 @@ func generateToken(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err error) {
+// setAuthJwtCookie generates a JWT token and sets it as a cookie
+func setAuthJwtCookie(user User, w http.ResponseWriter) (tokenString string, err error) {
 	expirationTime := time.Now().Add(24 * time.Hour) // 24 hour expiry
 	claims := &Claims{
 		Username: user.Email,
@@ -212,6 +213,14 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   60 * 60 * 24, // 24 hours
 	})
+	return
+}
+
+func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err error) {
+	tokenString, err = setAuthJwtCookie(user, w)
+	if err != nil {
+		return
+	}
 
 	// Create and set refresh token (30 days)
 	var refreshToken RefreshToken
@@ -238,7 +247,7 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   60 * 60 * 24 * 30, // 30 days
 	})
 
@@ -313,8 +322,8 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Generate new JWT
-	token, err := generateAuthJwt(user, w)
+	// Generate new JWT (uses helper function that doesn't create new refresh token)
+	token, err := setAuthJwtCookie(user, w)
 	if err != nil {
 		LogErrorWithRequest(r, LogCategoryAuth, "Failed to generate JWT during refresh", map[string]interface{}{
 			"userId": user.Id,
