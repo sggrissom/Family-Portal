@@ -94,6 +94,14 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
       core.setRoute("/dashboard");
       return false;
     }
+
+    // No valid JWT, try refresh token
+    const refreshedAuth = await tryRefreshAuth();
+    if (refreshedAuth) {
+      auth.setAuth(refreshedAuth);
+      core.setRoute("/dashboard");
+      return false;
+    }
   } catch (error) {
     // GetAuthContext failed, try refresh token
     const refreshedAuth = await tryRefreshAuth();
