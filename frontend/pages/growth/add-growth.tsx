@@ -15,6 +15,9 @@ type AddGrowthForm = {
   measurementType: string; // 'height' | 'weight'
   value: string;
   unit: string; // cm, in, kg, lbs
+  heightInputMode: string; // 'decimal' | 'feet-inches'
+  feet: string;
+  inches: string;
   inputType: string; // 'today' | 'date' | 'age'
   measurementDate: string;
   ageYears: string;
@@ -29,6 +32,9 @@ const useAddGrowthForm = vlens.declareHook(
     measurementType: "height",
     value: "",
     unit: "in",
+    heightInputMode: "decimal",
+    feet: "",
+    inches: "",
     inputType: "today",
     measurementDate: "",
     ageYears: "",
@@ -92,11 +98,30 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
     return;
   }
 
-  if (!form.value || parseFloat(form.value) <= 0) {
-    form.error = "Please enter a valid measurement value";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
+  // Calculate the actual value based on input mode
+  let actualValue: number;
+  if (
+    form.measurementType === "height" &&
+    form.unit === "in" &&
+    form.heightInputMode === "feet-inches"
+  ) {
+    const feet = parseFloat(form.feet) || 0;
+    const inches = parseFloat(form.inches) || 0;
+    if (feet <= 0 && inches <= 0) {
+      form.error = "Please enter a valid height (feet and/or inches)";
+      form.loading = false;
+      vlens.scheduleRedraw();
+      return;
+    }
+    actualValue = feet * 12 + inches;
+  } else {
+    actualValue = parseFloat(form.value);
+    if (!form.value || actualValue <= 0) {
+      form.error = "Please enter a valid measurement value";
+      form.loading = false;
+      vlens.scheduleRedraw();
+      return;
+    }
   }
 
   if (form.inputType === "date" && !form.measurementDate) {
@@ -117,7 +142,7 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
   const request: server.AddGrowthDataRequest = {
     personId: parseInt(form.selectedPersonId),
     measurementType: form.measurementType,
-    value: parseFloat(form.value),
+    value: actualValue,
     unit: form.unit,
     inputType: form.inputType,
     measurementDate: form.inputType === "date" ? form.measurementDate : null,
@@ -146,11 +171,23 @@ async function onSubmitGrowth(form: AddGrowthForm, people: server.Person[], even
 function onMeasurementTypeChange(form: AddGrowthForm, newType: string) {
   form.measurementType = newType;
   form.unit = newType === "height" ? "in" : "lbs";
+  form.heightInputMode = "decimal";
+  form.value = "";
+  form.feet = "";
+  form.inches = "";
   vlens.scheduleRedraw();
 }
 
 function onInputTypeChange(form: AddGrowthForm, newType: string) {
   form.inputType = newType;
+  vlens.scheduleRedraw();
+}
+
+function onHeightInputModeChange(form: AddGrowthForm, newMode: string) {
+  form.heightInputMode = newMode;
+  form.value = "";
+  form.feet = "";
+  form.inches = "";
   vlens.scheduleRedraw();
 }
 
@@ -239,37 +276,118 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
             </div>
           </div>
 
-          {/* Value and Unit */}
-          <div className="form-row">
-            <div className="form-group flex-2">
-              <label htmlFor="value">
-                {form.measurementType === "height" ? "Height" : "Weight"}
-              </label>
-              <input
-                id="value"
-                type="number"
-                step="0.1"
-                {...vlens.attrsBindInput(vlens.ref(form, "value"))}
-                placeholder={form.measurementType === "height" ? "150.5" : "45.2"}
-                required
-                disabled={form.loading}
-              />
+          {/* Height Input Mode Toggle (only for height in inches) */}
+          {form.measurementType === "height" && form.unit === "in" && (
+            <div className="form-group">
+              <label>Height Input Mode</label>
+              <div className="radio-group">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="heightInputMode"
+                    value="decimal"
+                    checked={form.heightInputMode === "decimal"}
+                    onChange={() => onHeightInputModeChange(form, "decimal")}
+                    disabled={form.loading}
+                  />
+                  <span>Decimal (inches)</span>
+                </label>
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="heightInputMode"
+                    value="feet-inches"
+                    checked={form.heightInputMode === "feet-inches"}
+                    onChange={() => onHeightInputModeChange(form, "feet-inches")}
+                    disabled={form.loading}
+                  />
+                  <span>Feet & Inches</span>
+                </label>
+              </div>
             </div>
-            <div className="form-group flex-1">
-              <label htmlFor="unit">Unit</label>
-              <select
-                id="unit"
-                {...vlens.attrsBindInput(vlens.ref(form, "unit"))}
-                disabled={form.loading}
-              >
-                {getUnitOptions().map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+          )}
+
+          {/* Value and Unit - Decimal Mode */}
+          {!(
+            form.measurementType === "height" &&
+            form.unit === "in" &&
+            form.heightInputMode === "feet-inches"
+          ) && (
+            <div className="form-row">
+              <div className="form-group flex-2">
+                <label htmlFor="value">
+                  {form.measurementType === "height" ? "Height" : "Weight"}
+                </label>
+                <input
+                  id="value"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*\.?[0-9]*"
+                  {...vlens.attrsBindInput(vlens.ref(form, "value"))}
+                  placeholder={form.measurementType === "height" ? "67.50" : "45.25"}
+                  required
+                  disabled={form.loading}
+                />
+              </div>
+              <div className="form-group flex-1">
+                <label htmlFor="unit">Unit</label>
+                <select
+                  id="unit"
+                  {...vlens.attrsBindInput(vlens.ref(form, "unit"))}
+                  disabled={form.loading}
+                >
+                  {getUnitOptions().map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Feet & Inches Mode */}
+          {form.measurementType === "height" &&
+            form.unit === "in" &&
+            form.heightInputMode === "feet-inches" && (
+              <div className="form-row">
+                <div className="form-group flex-2">
+                  <label htmlFor="feet">Feet</label>
+                  <input
+                    id="feet"
+                    type="number"
+                    min="0"
+                    max="8"
+                    step="1"
+                    {...vlens.attrsBindInput(vlens.ref(form, "feet"))}
+                    placeholder="5"
+                    disabled={form.loading}
+                  />
+                </div>
+                <div className="form-group flex-2">
+                  <label htmlFor="inches">Inches</label>
+                  <input
+                    id="inches"
+                    type="text"
+                    inputmode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    {...vlens.attrsBindInput(vlens.ref(form, "inches"))}
+                    placeholder="7.50"
+                    disabled={form.loading}
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label htmlFor="unit-display">Unit</label>
+                  <input
+                    id="unit-display"
+                    type="text"
+                    value="in"
+                    disabled
+                    style="background: var(--surface); opacity: 0.6;"
+                  />
+                </div>
+              </div>
+            )}
 
           {/* Date or Age Toggle */}
           <div className="form-group">
@@ -368,12 +486,32 @@ const AddGrowthPage = ({ form, people }: AddGrowthPageProps) => {
           </div>
         </form>
 
-        {selectedPerson && form.value && (
+        {selectedPerson && (form.value || form.feet || form.inches) && (
           <div className="measurement-preview">
             <h3>Preview</h3>
             <p>
-              <strong>{selectedPerson.name}</strong> - {form.measurementType}: {form.value}{" "}
-              {form.unit}
+              <strong>{selectedPerson.name}</strong> - {form.measurementType}:{" "}
+              {form.measurementType === "height" &&
+              form.unit === "in" &&
+              form.heightInputMode === "feet-inches" ? (
+                <>
+                  {form.feet || "0"} ft {form.inches || "0"} in
+                  {form.feet || form.inches ? (
+                    <span style="opacity: 0.7">
+                      {" "}
+                      (
+                      {((parseFloat(form.feet) || 0) * 12 + (parseFloat(form.inches) || 0)).toFixed(
+                        2
+                      )}{" "}
+                      in total)
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {form.value} {form.unit}
+                </>
+              )}
               {form.inputType === "today" && <span> today</span>}
               {form.inputType === "date" && form.measurementDate && (
                 <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
