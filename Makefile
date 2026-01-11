@@ -1,13 +1,11 @@
 -include .env.mk
 
-.PHONY: all build deploy stop_service start_service copy_files test local typecheck lint format check
+.PHONY: all build deploy test local typecheck lint format check
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
-NAS_USER     ?= user
-NAS_IP       ?= 192.168.1.100
-NAS_DEST     ?= /tmp/deploy
-NAS_SERVICE  ?= family_portal_service
+APP_NAME     := family
+DEPLOY_HOST  := vps
 
 # ── build settings ─────────────────────────────────────────────────────────────
 BUILD_DIR    := build
@@ -32,20 +30,8 @@ build-go:
 
 build: build-frontend build-go
 
-stop_service:
-	@echo "Stopping $(NAS_SERVICE) on NAS..."
-	ssh $(NAS_USER)@$(NAS_IP) "./stop_service.sh"
-
-copy_files:
-	@echo "Uploading binary..."
-	scp -O $(BUILD_DIR)/$(BINARY_NAME) $(NAS_USER)@$(NAS_IP):$(NAS_DEST)
-
-start_service:
-	@echo "Starting $(NAS_SERVICE) on NAS..."
-	ssh $(NAS_USER)@$(NAS_IP) "./start_service.sh"
-
-deploy: build stop_service copy_files start_service
-	@echo "✅ Deployment complete."
+deploy: build
+	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
 
 test:
 	go test ./backend/ -v

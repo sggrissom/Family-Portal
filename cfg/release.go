@@ -3,6 +3,6 @@
 package cfg
 
 const IsRelease = true
-const DBPath = "data/db.bolt"
+const DBPath = "/srv/apps/family/shared/data/db.bolt"
 const StaticDir = "static/"
 const SiteURL = "https://grissom.zone"

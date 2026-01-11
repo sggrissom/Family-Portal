@@ -35,7 +35,12 @@ func OpenDB(dbpath string) *vbolt.DB {
 
 func MakeApplication() *vbeam.Application {
 	// Load environment variables from .env file
-	err := godotenv.Load()
+	var err error
+	if cfg.IsRelease {
+		err = godotenv.Load("/srv/apps/family/shared/.env")
+	} else {
+		err = godotenv.Load()
+	}
 	if err != nil {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
@@ -67,6 +72,11 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterAIImportMethods(app)
 	backend.RegisterAdminMethods(app)
 	backend.RegisterSEOHandlers(app)
+
+	app.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 
 	// Initialize background photo processing worker
 	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
