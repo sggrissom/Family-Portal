@@ -49,8 +49,11 @@ type GetPersonRequest struct {
 }
 
 type SetProfilePhotoRequest struct {
-	PersonId int `json:"personId"`
-	PhotoId  int `json:"photoId"`
+	PersonId  int     `json:"personId"`
+	PhotoId   int     `json:"photoId"`
+	CropX     float64 `json:"cropX"`     // 0-100 (default 50 = center)
+	CropY     float64 `json:"cropY"`     // 0-100 (default 50 = center)
+	CropScale float64 `json:"cropScale"` // 1.0+ (default 1.0 = no zoom)
 }
 
 type SetProfilePhotoResponse struct {
@@ -113,19 +116,22 @@ type GetFamilyTimelineResponse struct {
 
 // Database types
 type Person struct {
-	Id             int        `json:"id"`
-	FamilyId       int        `json:"familyId"`
-	Name           string     `json:"name"`
-	Type           PersonType `json:"type"`
-	Gender         GenderType `json:"gender"`
-	Birthday       time.Time  `json:"birthday"`
-	Age            string     `json:"age"`
-	ProfilePhotoId int        `json:"profilePhotoId"`
+	Id               int        `json:"id"`
+	FamilyId         int        `json:"familyId"`
+	Name             string     `json:"name"`
+	Type             PersonType `json:"type"`
+	Gender           GenderType `json:"gender"`
+	Birthday         time.Time  `json:"birthday"`
+	Age              string     `json:"age"`
+	ProfilePhotoId   int        `json:"profilePhotoId"`
+	ProfileCropX     float64    `json:"profileCropX"`     // X offset 0-100 (default 50 = center)
+	ProfileCropY     float64    `json:"profileCropY"`     // Y offset 0-100 (default 50 = center)
+	ProfileCropScale float64    `json:"profileCropScale"` // Zoom level 1.0+ (default 1.0 = no zoom)
 }
 
 // Packing function for vbolt serialization
 func PackPerson(self *Person, buf *vpack.Buffer) {
-	var version = vpack.Version(2, buf)
+	var version = vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
@@ -134,6 +140,11 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 	vpack.Time(&self.Birthday, buf)
 	if version >= 2 {
 		vpack.Int(&self.ProfilePhotoId, buf)
+	}
+	if version >= 3 {
+		vpack.Float64(&self.ProfileCropX, buf)
+		vpack.Float64(&self.ProfileCropY, buf)
+		vpack.Float64(&self.ProfileCropScale, buf)
 	}
 }
 
@@ -419,8 +430,21 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 		return
 	}
 
-	// Update person's profile photo
+	// Update person's profile photo and crop settings
 	person.ProfilePhotoId = req.PhotoId
+	// Set default crop values if not provided (0 values mean center crop, no zoom)
+	if req.CropX == 0 && req.CropY == 0 {
+		person.ProfileCropX = 50
+		person.ProfileCropY = 50
+	} else {
+		person.ProfileCropX = req.CropX
+		person.ProfileCropY = req.CropY
+	}
+	if req.CropScale == 0 {
+		person.ProfileCropScale = 1.0
+	} else {
+		person.ProfileCropScale = req.CropScale
+	}
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
 
 	vbolt.TxCommit(ctx.Tx)

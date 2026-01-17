@@ -5,6 +5,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { FullImage } from "../../components/ResponsiveImage";
+import { CropSelector, CropValues } from "../../components/CropSelector";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
@@ -96,11 +97,20 @@ async function handleDeletePhoto(photo: server.Image) {
   }
 }
 
-async function handleSetProfilePhoto(photo: server.Image, personId: number) {
+async function handleSetProfilePhoto(
+  photo: server.Image,
+  personId: number,
+  cropX: number,
+  cropY: number,
+  cropScale: number
+) {
   try {
     const [resp, err] = await server.SetProfilePhoto({
       personId: personId,
       photoId: photo.id,
+      cropX: cropX,
+      cropY: cropY,
+      cropScale: cropScale,
     });
 
     if (err) {
@@ -120,9 +130,64 @@ async function handleSetProfilePhoto(photo: server.Image, personId: number) {
   }
 }
 
+// State for crop modal
+type CropModalState = {
+  isOpen: boolean;
+  personId: number;
+  personName: string;
+  cropX: number;
+  cropY: number;
+  cropScale: number;
+};
+
+const useCropModalState = vlens.declareHook(
+  (): CropModalState => ({
+    isOpen: false,
+    personId: 0,
+    personName: "",
+    cropX: 50,
+    cropY: 50,
+    cropScale: 1,
+  })
+);
+
+function openCropModal(state: CropModalState, person: server.Person) {
+  state.isOpen = true;
+  state.personId = person.id;
+  state.personName = person.name;
+  // Use existing crop values if this is already the profile photo
+  state.cropX = person.profileCropX || 50;
+  state.cropY = person.profileCropY || 50;
+  state.cropScale = person.profileCropScale || 1;
+  vlens.scheduleRedraw();
+}
+
+function closeCropModal(state: CropModalState) {
+  state.isOpen = false;
+  vlens.scheduleRedraw();
+}
+
+function updateCropValues(state: CropModalState, values: CropValues) {
+  state.cropX = values.cropX;
+  state.cropY = values.cropY;
+  state.cropScale = values.cropScale;
+}
+
 const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
-  const profilePhotoPeople = people.filter(person => person.profilePhotoId === photo.id);
+  const cropModalState = useCropModalState();
+
+  const handleSaveProfilePhoto = async () => {
+    await handleSetProfilePhoto(
+      photo,
+      cropModalState.personId,
+      cropModalState.cropX,
+      cropModalState.cropY,
+      cropModalState.cropScale
+    );
+    closeCropModal(cropModalState);
+  };
+
   return (
     <div className="view-photo-page">
       {/* Header with navigation */}
@@ -195,13 +260,16 @@ const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
               {people.map(person => (
                 <div key={person.id} className="profile-action">
                   {person.profilePhotoId === photo.id ? (
-                    <button className="btn btn-success btn-sm" disabled>
-                      ✓ {person.name}'s Profile
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => openCropModal(cropModalState, person)}
+                    >
+                      ✓ {person.name}'s Profile (Adjust)
                     </button>
                   ) : (
                     <button
                       className="btn btn-outline btn-sm"
-                      onClick={() => handleSetProfilePhoto(photo, person.id)}
+                      onClick={() => openCropModal(cropModalState, person)}
                     >
                       👤 {person.name}
                     </button>
@@ -216,6 +284,19 @@ const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
           </button>
         </div>
       </div>
+
+      {/* Crop selector modal */}
+      {cropModalState.isOpen && (
+        <CropSelector
+          photoId={photo.id}
+          initialCropX={cropModalState.cropX}
+          initialCropY={cropModalState.cropY}
+          initialCropScale={cropModalState.cropScale}
+          onCropChange={values => updateCropValues(cropModalState, values)}
+          onSave={handleSaveProfilePhoto}
+          onCancel={() => closeCropModal(cropModalState)}
+        />
+      )}
     </div>
   );
 };

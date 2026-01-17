@@ -62,3 +62,28 @@ block(`
   opacity: 0.6;
 }
 `);
+
+// Profile image crop container styles
+block(`
+.profile-image-crop-container {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+`);
+
+block(`
+.profile-image-inner {
+  width: 100%;
+  height: 100%;
+}
+`);
+
+block(`
+.profile-image-cropped {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+`);

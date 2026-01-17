@@ -151,6 +151,9 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
                 loading="eager"
                 fetchpriority="high"
                 status={photoStatus.getStatus(person.profilePhotoId)}
+                cropX={person.profileCropX}
+                cropY={person.profileCropY}
+                cropScale={person.profileCropScale}
               />
             ) : (
               <span className="profile-icon">{getGenderIcon(person.gender)}</span>

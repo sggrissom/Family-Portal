@@ -126,6 +126,9 @@ interface ProfileImageProps {
   loading?: "lazy" | "eager";
   fetchpriority?: "high" | "low" | "auto";
   status?: number;
+  cropX?: number; // 0-100 (default 50 = center)
+  cropY?: number; // 0-100 (default 50 = center)
+  cropScale?: number; // 1.0+ (default 1.0 = no zoom)
 }
 
 export const ProfileImage = ({
@@ -135,7 +138,39 @@ export const ProfileImage = ({
   loading = "lazy",
   fetchpriority = "auto",
   status,
+  cropX = 50,
+  cropY = 50,
+  cropScale = 1,
 }: ProfileImageProps) => {
+  // If there's cropping/zoom applied, use a container with overflow hidden
+  const hasCrop = cropScale > 1 || cropX !== 50 || cropY !== 50;
+
+  if (hasCrop) {
+    const imageStyle = {
+      transform: `scale(${cropScale})`,
+      transformOrigin: `${cropX}% ${cropY}%`,
+    };
+
+    return (
+      <div className={`profile-image-crop-container ${className || ""}`}>
+        <div className="profile-image-inner" style={imageStyle}>
+          <ResponsiveImage
+            photoId={photoId}
+            alt={alt}
+            className="profile-image-cropped"
+            loading={loading}
+            fetchpriority={fetchpriority}
+            status={status}
+            sizes="(max-width: 480px) 300px, (max-width: 768px) 600px, 900px"
+            width={600}
+            height={600}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // No cropping - use simple image
   return (
     <ResponsiveImage
       photoId={photoId}

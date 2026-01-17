@@ -92,6 +92,9 @@ export interface ComparePeopleResponse {
 export interface SetProfilePhotoRequest {
     personId: number
     photoId: number
+    cropX: number
+    cropY: number
+    cropScale: number
 }
 
 export interface SetProfilePhotoResponse {
@@ -475,6 +478,9 @@ export interface Person {
     birthday: string
     age: string
     profilePhotoId: number
+    profileCropX: number
+    profileCropY: number
+    profileCropScale: number
 }
 
 export interface GrowthData {
@@ -876,3 +882,4 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
 }
+

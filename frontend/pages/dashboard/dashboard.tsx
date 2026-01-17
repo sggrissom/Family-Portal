@@ -189,6 +189,9 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
             loading={index < 3 ? "eager" : "lazy"}
             fetchpriority={index < 3 ? "high" : "auto"}
             status={photoStatus.getStatus(person.profilePhotoId)}
+            cropX={person.profileCropX}
+            cropY={person.profileCropY}
+            cropScale={person.profileCropScale}
           />
         ) : (
           <span className="person-icon">{getGenderIcon(person.gender)}</span>
