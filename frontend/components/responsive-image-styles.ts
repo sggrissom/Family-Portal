@@ -77,6 +77,17 @@ block(`
 .profile-image-inner {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+`);
+
+block(`
+.profile-image-inner picture {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 `);
 
