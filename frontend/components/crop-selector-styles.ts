@@ -256,19 +256,6 @@ block(`
 }
 `);
 
-block(`
-.crop-selector-actions .btn-primary {
-  background: var(--color-primary);
-  color: white;
-  border: 1px solid var(--color-primary);
-}
-`);
-
-block(`
-.crop-selector-actions .btn-primary:hover {
-  opacity: 0.9;
-}
-`);
 
 // Responsive
 block(`
