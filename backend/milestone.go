@@ -128,13 +128,14 @@ func GetMilestoneById(tx *vbolt.Tx, milestoneId int) (milestone Milestone) {
 	return
 }
 
-func GetPersonMilestonesTx(tx *vbolt.Tx, personId int) (milestones []Milestone) {
+func GetPersonMilestonesTx(tx *vbolt.Tx, personId int) []Milestone {
+	milestones := []Milestone{}
 	var milestoneIds []int
 	vbolt.ReadTermTargets(tx, MilestoneByPersonIndex, personId, &milestoneIds, vbolt.Window{})
 	if len(milestoneIds) > 0 {
 		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
 	}
-	return
+	return milestones
 }
 
 func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Milestone, error) {

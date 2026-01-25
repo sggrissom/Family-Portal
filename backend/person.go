@@ -270,6 +270,9 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Person = person
+	resp.GrowthData = []GrowthData{}
+	resp.Milestones = []Milestone{}
+	resp.Photos = []Image{}
 	return
 }
 

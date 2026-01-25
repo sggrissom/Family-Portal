@@ -113,13 +113,14 @@ func GetGrowthDataById(tx *vbolt.Tx, growthDataId int) (growthData GrowthData) {
 	return
 }
 
-func GetPersonGrowthDataTx(tx *vbolt.Tx, personId int) (growthData []GrowthData) {
+func GetPersonGrowthDataTx(tx *vbolt.Tx, personId int) []GrowthData {
+	growthData := []GrowthData{}
 	var growthDataIds []int
 	vbolt.ReadTermTargets(tx, GrowthDataByPersonIndex, personId, &growthDataIds, vbolt.Window{})
 	if len(growthDataIds) > 0 {
 		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
 	}
-	return
+	return growthData
 }
 
 func GetGrowthDataByIdAndFamily(tx *vbolt.Tx, growthDataId int, familyId int) (GrowthData, error) {
