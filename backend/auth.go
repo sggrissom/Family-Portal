@@ -59,6 +59,7 @@ func SetupAuth(app *vbeam.Application) {
 	// Register Google OAuth endpoints
 	app.HandleFunc("/api/login/google", googleLoginHandler)
 	app.HandleFunc("/api/google/callback", googleCallbackHandler)
+	app.HandleFunc("/api/login/google/token", googleTokenLoginHandler)
 
 	// Setup Google OAuth configuration
 	err := SetupGoogleOAuth()
