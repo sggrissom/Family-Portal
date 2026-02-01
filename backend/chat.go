@@ -194,6 +194,9 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 		hub.BroadcastNewMessage(user.FamilyId, message)
 	}
 
+	// Queue push notifications for offline users
+	queueChatPushNotifications(ctx.Tx, user, message)
+
 	// Log the message sending
 	LogInfo(LogCategoryAPI, "Chat message sent", map[string]interface{}{
 		"messageId": message.Id,
@@ -282,4 +285,59 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 
 	resp.Success = true
 	return
+}
+
+// queueChatPushNotifications queues push notifications for offline family members
+func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) {
+	// Check if push notifications are enabled
+	if !IsPushWorkerEnabled() {
+		return
+	}
+
+	// Get all family user IDs
+	familyUserIds := GetFamilyUserIds(tx, sender.FamilyId)
+	if len(familyUserIds) == 0 {
+		return
+	}
+
+	// Get online users from the WebSocket hub
+	var onlineUserIds []int
+	if hub := GetChatHub(); hub != nil {
+		onlineUserIds = hub.GetOnlineUsers(sender.FamilyId)
+	}
+
+	// Create a set of online users for fast lookup
+	onlineSet := make(map[int]bool)
+	for _, userId := range onlineUserIds {
+		onlineSet[userId] = true
+	}
+
+	// Filter to offline users (excluding sender)
+	var offlineUserIds []int
+	for _, userId := range familyUserIds {
+		if userId != sender.Id && !onlineSet[userId] {
+			offlineUserIds = append(offlineUserIds, userId)
+		}
+	}
+
+	if len(offlineUserIds) == 0 {
+		return
+	}
+
+	// Queue push notification job
+	job := PushNotificationJob{
+		MessageId:        message.Id,
+		FamilyId:         sender.FamilyId,
+		SenderId:         sender.Id,
+		SenderName:       sender.Name,
+		Content:          message.Content,
+		RecipientUserIds: offlineUserIds,
+	}
+
+	if err := QueuePushNotification(job); err != nil {
+		LogWarn(LogCategoryAPI, "Failed to queue push notification", map[string]interface{}{
+			"messageId": message.Id,
+			"error":     err.Error(),
+		})
+	}
 }

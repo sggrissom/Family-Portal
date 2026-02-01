@@ -121,6 +121,9 @@ var EmailBkt = vbolt.Bucket(&cfg.Info, "email", vpack.StringZ, vpack.Int)
 // invite code => family id
 var InviteCodeBkt = vbolt.Bucket(&cfg.Info, "invite_codes", vpack.StringZ, vpack.Int)
 
+// UsersByFamilyIndex: term = family_id, target = user_id
+var UsersByFamilyIndex = vbolt.Index(&cfg.Info, "users_by_family", vpack.FInt, vpack.FInt)
+
 // Database helper functions
 func GetUserId(tx *vbolt.Tx, email string) (userId int) {
 	vbolt.Read(tx, EmailBkt, email, &userId)
@@ -139,6 +142,12 @@ func GetPassHash(tx *vbolt.Tx, userId int) (hash []byte) {
 
 func GetFamily(tx *vbolt.Tx, familyId int) (family Family) {
 	vbolt.Read(tx, FamiliesBkt, familyId, &family)
+	return
+}
+
+// GetFamilyUserIds returns all user IDs for a given family
+func GetFamilyUserIds(tx *vbolt.Tx, familyId int) (userIds []int) {
+	vbolt.ReadTermTargets(tx, UsersByFamilyIndex, familyId, &userIds, vbolt.Window{})
 	return
 }
 
@@ -178,6 +187,8 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 	// Store password hash (can be empty for OAuth users)
 	vbolt.Write(tx, PasswdBkt, user.Id, &hash)
 	vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
+	// Index user by family
+	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, user.FamilyId)
 
 	return user
 }
@@ -320,6 +331,8 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 	vbeam.UseWriteTx(ctx)
 	user.FamilyId = family.Id
 	vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
+	// Update family index
+	vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
 	vbolt.TxCommit(ctx.Tx)
 
 	// Return success response

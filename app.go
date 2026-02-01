@@ -72,6 +72,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterAIImportMethods(app)
 	backend.RegisterAdminMethods(app)
 	backend.RegisterSEOHandlers(app)
+	backend.RegisterPushNotificationMethods(app)
 
 	app.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -80,6 +81,9 @@ func MakeApplication() *vbeam.Application {
 
 	// Initialize background photo processing worker
 	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
+
+	// Initialize background push notification worker
+	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs
 
 	return app
 }
