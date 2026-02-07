@@ -929,6 +929,9 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
 	}
 
+	// Remove milestone-photo relationships
+	removePhotoFromMilestones(ctx.Tx, photo.Id)
+
 	// Remove from database
 	vbolt.Delete(ctx.Tx, ImagesBkt, photo.Id)
 

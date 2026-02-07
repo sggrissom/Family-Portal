@@ -208,6 +208,35 @@ const EditMilestonePage = ({ form, milestone }: EditMilestonePageProps) => {
             </div>
           </div>
 
+          {/* Photos */}
+          <div className="form-group">
+            <label htmlFor="milestonePhotos">Photos (optional)</label>
+            <div className="photo-select">
+              <label htmlFor="existingPhoto" className="photo-select-label">
+                Choose from existing photos
+              </label>
+              <select id="existingPhoto" className="photo-select-input" disabled={form.loading}>
+                <option value="">Select a photo from the library</option>
+              </select>
+              <p className="photo-upload-hint">
+                Existing photos will appear here once we connect the library.
+              </p>
+            </div>
+            <div className="photo-upload">
+              <input
+                id="milestonePhotos"
+                className="photo-upload-input"
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={form.loading}
+              />
+              <p className="photo-upload-hint">
+                Add a few photos to capture the moment. (Photo uploads will be wired up soon.)
+              </p>
+            </div>
+          </div>
+
           {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When did this happen?</label>

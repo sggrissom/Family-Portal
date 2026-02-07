@@ -30,6 +30,7 @@ type AddMilestoneRequest struct {
 	MilestoneDate *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
 	AgeYears      *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
 	AgeMonths     *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
+	PhotoIds      []int   `json:"photoIds,omitempty"`      // Optional photo IDs to associate
 }
 
 type AddMilestoneResponse struct {
@@ -52,6 +53,7 @@ type UpdateMilestoneRequest struct {
 	MilestoneDate *string `json:"milestoneDate,omitempty"` // YYYY-MM-DD format (if inputType is "date")
 	AgeYears      *int    `json:"ageYears,omitempty"`      // Age in years (if inputType is "age")
 	AgeMonths     *int    `json:"ageMonths,omitempty"`     // Additional months (if inputType is "age")
+	PhotoIds      []int   `json:"photoIds,omitempty"`      // Optional photo IDs to associate
 }
 
 type UpdateMilestoneResponse struct {
@@ -95,6 +97,15 @@ type Milestone struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// MilestonePhoto represents the relationship between milestones and photos
+type MilestonePhoto struct {
+	Id          int       `json:"id"`
+	MilestoneId int       `json:"milestoneId"`
+	PhotoId     int       `json:"photoId"`
+	FamilyId    int       `json:"familyId"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 // Packing function for vbolt serialization
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	vpack.Version(1, buf)
@@ -107,8 +118,18 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 }
 
+func PackMilestonePhoto(self *MilestonePhoto, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.MilestoneId, buf)
+	vpack.Int(&self.PhotoId, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Time(&self.CreatedAt, buf)
+}
+
 // Buckets for vbolt database storage
 var MilestoneBkt = vbolt.Bucket(&cfg.Info, "milestones", vpack.FInt, PackMilestone)
+var MilestonePhotoBkt = vbolt.Bucket(&cfg.Info, "milestone_photos", vpack.FInt, PackMilestonePhoto)
 
 // MilestoneByPersonIndex: term = person_id, target = milestone_id
 // This allows efficient lookup of milestones by person
@@ -121,6 +142,15 @@ var MilestoneByFamilyIndex = vbolt.Index(&cfg.Info, "milestones_by_family", vpac
 // MilestoneSearchIndex: term = search_term (word/category/date), priority = milestone_date, target = milestone_id
 // This allows text search across milestone descriptions, categories, dates, and person associations
 var MilestoneSearchIndex = vbolt.IndexExt(&cfg.Info, "milestones_search", vpack.StringZ, vpack.UnixTimeKey, vpack.FInt)
+
+// MilestonePhotoByMilestoneIndex: term = milestone_id, target = milestone_photo_id
+var MilestonePhotoByMilestoneIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_milestone", vpack.FInt, vpack.FInt)
+
+// MilestonePhotoByPhotoIndex: term = photo_id, target = milestone_photo_id
+var MilestonePhotoByPhotoIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_photo", vpack.FInt, vpack.FInt)
+
+// MilestonePhotoByFamilyIndex: term = family_id, target = milestone_photo_id
+var MilestonePhotoByFamilyIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
 func GetMilestoneById(tx *vbolt.Tx, milestoneId int) (milestone Milestone) {
@@ -136,6 +166,24 @@ func GetPersonMilestonesTx(tx *vbolt.Tx, personId int) []Milestone {
 		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
 	}
 	return milestones
+}
+
+func GetMilestonePhotoIds(tx *vbolt.Tx, milestoneId int) []int {
+	var milestonePhotoIds []int
+	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
+	if len(milestonePhotoIds) == 0 {
+		return []int{}
+	}
+
+	var milestonePhotos []MilestonePhoto
+	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
+
+	photoIds := make([]int, 0, len(milestonePhotos))
+	for _, milestonePhoto := range milestonePhotos {
+		photoIds = append(photoIds, milestonePhoto.PhotoId)
+	}
+
+	return photoIds
 }
 
 func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Milestone, error) {
@@ -230,6 +278,113 @@ func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
 	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, terms, milestone.MilestoneDate)
 }
 
+func normalizePhotoIds(photoIds []int) []int {
+	unique := make(map[int]struct{})
+	normalized := make([]int, 0, len(photoIds))
+
+	for _, photoId := range photoIds {
+		if photoId <= 0 {
+			continue
+		}
+		if _, exists := unique[photoId]; exists {
+			continue
+		}
+		unique[photoId] = struct{}{}
+		normalized = append(normalized, photoId)
+	}
+
+	return normalized
+}
+
+func validatePhotoAccess(tx *vbolt.Tx, photoId int, familyId int) error {
+	photo := GetImageById(tx, photoId)
+	if photo.Id == 0 || photo.FamilyId != familyId {
+		return errors.New("Photo not found or access denied")
+	}
+	return nil
+}
+
+func addPhotoToMilestone(tx *vbolt.Tx, milestoneId int, photoId int, familyId int) error {
+	if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
+		return err
+	}
+
+	existingPhotoIds := GetMilestonePhotoIds(tx, milestoneId)
+	for _, existingId := range existingPhotoIds {
+		if existingId == photoId {
+			return nil
+		}
+	}
+
+	milestonePhoto := MilestonePhoto{
+		Id:          vbolt.NextIntId(tx, MilestonePhotoBkt),
+		MilestoneId: milestoneId,
+		PhotoId:     photoId,
+		FamilyId:    familyId,
+		CreatedAt:   time.Now(),
+	}
+
+	vbolt.Write(tx, MilestonePhotoBkt, milestonePhoto.Id, &milestonePhoto)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, milestoneId)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, photoId)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, familyId)
+	return nil
+}
+
+func removePhotoFromMilestone(tx *vbolt.Tx, milestoneId int, photoId int) {
+	var milestonePhotoIds []int
+	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
+	if len(milestonePhotoIds) == 0 {
+		return
+	}
+
+	var milestonePhotos []MilestonePhoto
+	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
+	for _, milestonePhoto := range milestonePhotos {
+		if milestonePhoto.PhotoId != photoId {
+			continue
+		}
+		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
+	}
+}
+
+func removeAllMilestonePhotos(tx *vbolt.Tx, milestoneId int) {
+	var milestonePhotoIds []int
+	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
+	if len(milestonePhotoIds) == 0 {
+		return
+	}
+
+	var milestonePhotos []MilestonePhoto
+	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
+	for _, milestonePhoto := range milestonePhotos {
+		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
+	}
+}
+
+func removePhotoFromMilestones(tx *vbolt.Tx, photoId int) {
+	var milestonePhotoIds []int
+	vbolt.ReadTermTargets(tx, MilestonePhotoByPhotoIndex, photoId, &milestonePhotoIds, vbolt.Window{})
+	if len(milestonePhotoIds) == 0 {
+		return
+	}
+
+	var milestonePhotos []MilestonePhoto
+	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
+	for _, milestonePhoto := range milestonePhotos {
+		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
+	}
+}
+
 func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milestone, error) {
 	var milestone Milestone
 	var err error
@@ -257,6 +412,15 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
 
 	updateMilestoneIndices(tx, milestone)
+
+	if req.PhotoIds != nil {
+		photoIds := normalizePhotoIds(req.PhotoIds)
+		for _, photoId := range photoIds {
+			if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
+				return milestone, err
+			}
+		}
+	}
 
 	return milestone, nil
 }
@@ -298,6 +462,40 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	// Update search index (description, category, or date may have changed)
 	UpdateMilestoneSearchIndex(tx, milestone)
 
+	if req.PhotoIds != nil {
+		photoIds := normalizePhotoIds(req.PhotoIds)
+		for _, photoId := range photoIds {
+			if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
+				return milestone, err
+			}
+		}
+
+		existingPhotoIds := GetMilestonePhotoIds(tx, milestone.Id)
+		existingSet := make(map[int]struct{}, len(existingPhotoIds))
+		for _, photoId := range existingPhotoIds {
+			existingSet[photoId] = struct{}{}
+		}
+
+		desiredSet := make(map[int]struct{}, len(photoIds))
+		for _, photoId := range photoIds {
+			desiredSet[photoId] = struct{}{}
+		}
+
+		for photoId := range existingSet {
+			if _, keep := desiredSet[photoId]; !keep {
+				removePhotoFromMilestone(tx, milestone.Id, photoId)
+			}
+		}
+
+		for photoId := range desiredSet {
+			if _, exists := existingSet[photoId]; !exists {
+				if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
+					return milestone, err
+				}
+			}
+		}
+	}
+
 	return milestone, nil
 }
 
@@ -312,6 +510,8 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, -1)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, -1)
 	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, []string{}, time.Time{})
+
+	removeAllMilestonePhotos(tx, milestone.Id)
 
 	// Delete the record
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)

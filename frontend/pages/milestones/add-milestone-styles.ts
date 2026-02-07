@@ -68,6 +68,66 @@ block(`
 `);
 
 block(`
+.photo-upload {
+  padding: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-card-bg);
+}
+`);
+
+block(`
+.photo-select {
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-card-bg);
+}
+`);
+
+block(`
+.photo-select-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+`);
+
+block(`
+.photo-select-input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+`);
+
+block(`
+.photo-upload-input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+`);
+
+block(`
+.photo-upload-hint {
+  margin: 8px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+`);
+
+block(`
 @media (max-width: 580px) {
   .add-milestone-container {
     padding: 30px 16px;
@@ -79,6 +139,10 @@ block(`
   }
 
   .add-milestone-page .form-hint {
+    font-size: 13px;
+  }
+
+  .photo-upload-hint {
     font-size: 13px;
   }
 }
