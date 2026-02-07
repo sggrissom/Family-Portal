@@ -172,6 +172,120 @@ func TestAddMilestone(t *testing.T) {
 	})
 }
 
+func TestMilestonePhotoAssociations(t *testing.T) {
+	testDBPath := "test_milestone_photos.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	var testUser User
+	var testPerson Person
+
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		userReq := CreateAccountRequest{
+			Name:            "Photo User",
+			Email:           "photos@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
+		testUser = AddUserTx(tx, userReq, hash)
+
+		personReq := AddPersonRequest{
+			Name:       "Photo Child",
+			PersonType: 1,
+			Gender:     0,
+			Birthdate:  "2020-06-15",
+		}
+		var err error
+		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to create test person: %v", err)
+		}
+
+		images := []Image{
+			{Id: 1, FamilyId: testUser.FamilyId, Title: "Photo 1"},
+			{Id: 2, FamilyId: testUser.FamilyId, Title: "Photo 2"},
+			{Id: 3, FamilyId: testUser.FamilyId, Title: "Photo 3"},
+		}
+		for _, img := range images {
+			vbolt.Write(tx, ImagesBkt, img.Id, &img)
+			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, img.Id, img.FamilyId)
+		}
+
+		vbolt.TxCommit(tx)
+	})
+
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		req := AddMilestoneRequest{
+			PersonId:    testPerson.Id,
+			Description: "First photo milestone",
+			Category:    "development",
+			InputType:   "today",
+			PhotoIds:    []int{1, 2},
+		}
+		milestone, err := AddMilestoneTx(tx, req, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to add milestone with photos: %v", err)
+		}
+
+		photoIds := GetMilestonePhotoIds(tx, milestone.Id)
+		if len(photoIds) != 2 {
+			t.Fatalf("Expected 2 photo associations, got %d", len(photoIds))
+		}
+
+		contains := func(ids []int, id int) bool {
+			for _, value := range ids {
+				if value == id {
+					return true
+				}
+			}
+			return false
+		}
+
+		if !contains(photoIds, 1) || !contains(photoIds, 2) {
+			t.Fatalf("Expected photo IDs 1 and 2, got %+v", photoIds)
+		}
+
+		updateReq := UpdateMilestoneRequest{
+			Id:          milestone.Id,
+			Description: "Updated milestone",
+			Category:    "development",
+			InputType:   "today",
+			PhotoIds:    []int{2, 3},
+		}
+		_, err = UpdateMilestoneTx(tx, updateReq, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to update milestone photos: %v", err)
+		}
+
+		updatedPhotoIds := GetMilestonePhotoIds(tx, milestone.Id)
+		if len(updatedPhotoIds) != 2 || !contains(updatedPhotoIds, 2) || !contains(updatedPhotoIds, 3) {
+			t.Fatalf("Expected photo IDs 2 and 3, got %+v", updatedPhotoIds)
+		}
+
+		clearReq := UpdateMilestoneRequest{
+			Id:          milestone.Id,
+			Description: "Updated milestone",
+			Category:    "development",
+			InputType:   "today",
+			PhotoIds:    []int{},
+		}
+		_, err = UpdateMilestoneTx(tx, clearReq, testUser.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to clear milestone photos: %v", err)
+		}
+
+		clearedPhotoIds := GetMilestonePhotoIds(tx, milestone.Id)
+		if len(clearedPhotoIds) != 0 {
+			t.Fatalf("Expected 0 photo associations, got %d", len(clearedPhotoIds))
+		}
+
+		vbolt.TxCommit(tx)
+	})
+}
+
 func TestParseMilestoneDate(t *testing.T) {
 	// Test person birthday
 	birthday := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
