@@ -330,12 +330,99 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     return timestamp.toLocaleDateString();
   };
 
+  const formatDateDividerLabel = (createdAt: string) => {
+    const timestamp = new Date(createdAt);
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfTimestamp = new Date(
+      timestamp.getFullYear(),
+      timestamp.getMonth(),
+      timestamp.getDate()
+    );
+    const diffDays = Math.round(
+      (startOfToday.getTime() - startOfTimestamp.getTime()) / 86400000
+    );
+
+    if (diffDays === 0) {
+      return "Today";
+    }
+    if (diffDays === 1) {
+      return "Yesterday";
+    }
+
+    const options: Intl.DateTimeFormatOptions = {
+      month: "short",
+      day: "numeric",
+    };
+    if (timestamp.getFullYear() !== today.getFullYear()) {
+      options.year = "numeric";
+    }
+
+    return timestamp.toLocaleDateString(undefined, options);
+  };
+
   const getAvatarIcon = (userName: string) => {
     // Simple avatar logic based on name
     // Could be enhanced to use actual profile photos in the future
     const firstChar = userName.charAt(0).toUpperCase();
     return firstChar;
   };
+
+  const renderMessage = (msg: server.ChatMessage) => {
+    const isCurrentUser = msg.userId === user.id;
+    const isPending = msg.id < 0; // Negative IDs indicate pending messages
+    return (
+      <div
+        key={msg.id}
+        className={`message ${isCurrentUser ? "message-own" : "message-other"} ${
+          isPending ? "message-pending" : ""
+        }`}
+      >
+        {!isCurrentUser && (
+          <div className="message-avatar">
+            <span className="avatar-icon">{getAvatarIcon(msg.userName)}</span>
+          </div>
+        )}
+        <div className="message-content">
+          {!isCurrentUser && <div className="message-sender">{msg.userName}</div>}
+          <div className="message-bubble">
+            <p className="message-text">{msg.content}</p>
+            <div className="message-footer">
+              <span className="message-timestamp">{formatTimestamp(msg.createdAt)}</span>
+              {isPending && <span className="message-status">Sending...</span>}
+              {isCurrentUser && !isPending && (
+                <button
+                  className="delete-message-btn"
+                  onClick={() => handleDeleteMessage(msg.id)}
+                  title="Delete message"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  let lastDateKey = "";
+  const renderedMessages = chatState.messages.reduce<preact.ComponentChild[]>((acc, msg) => {
+    const messageDate = new Date(msg.createdAt);
+    const dateKey = messageDate.toDateString();
+
+    if (lastDateKey !== dateKey) {
+      lastDateKey = dateKey;
+      acc.push(
+        <div key={`date-divider-${dateKey}`} className="chat-date-divider">
+          <span>{formatDateDividerLabel(msg.createdAt)}</span>
+        </div>
+      );
+    }
+
+    acc.push(renderMessage(msg));
+    return acc;
+  }, []);
 
   return (
     <div className="chat-page">
@@ -369,43 +456,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
 
       <div className="chat-content">
         <div className="chat-messages">
-          {chatState.messages.map(msg => {
-            const isCurrentUser = msg.userId === user.id;
-            const isPending = msg.id < 0; // Negative IDs indicate pending messages
-            return (
-              <div
-                key={msg.id}
-                className={`message ${isCurrentUser ? "message-own" : "message-other"} ${
-                  isPending ? "message-pending" : ""
-                }`}
-              >
-                {!isCurrentUser && (
-                  <div className="message-avatar">
-                    <span className="avatar-icon">{getAvatarIcon(msg.userName)}</span>
-                  </div>
-                )}
-                <div className="message-content">
-                  {!isCurrentUser && <div className="message-sender">{msg.userName}</div>}
-                  <div className="message-bubble">
-                    <p className="message-text">{msg.content}</p>
-                    <div className="message-footer">
-                      <span className="message-timestamp">{formatTimestamp(msg.createdAt)}</span>
-                      {isPending && <span className="message-status">Sending...</span>}
-                      {isCurrentUser && !isPending && (
-                        <button
-                          className="delete-message-btn"
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          title="Delete message"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {renderedMessages}
         </div>
 
         <form className="chat-input-form" onSubmit={handleSendMessage}>
