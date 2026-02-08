@@ -110,6 +110,20 @@ block(`
 `);
 
 block(`
+.chat-date-divider {
+  align-self: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+`);
+
+block(`
 .chat-messages::-webkit-scrollbar {
   width: 6px;
 }
