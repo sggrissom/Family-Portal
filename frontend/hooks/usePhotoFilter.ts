@@ -11,6 +11,11 @@ export interface PhotoFilterState {
   peopleLoading: boolean;
 }
 
+interface NormalizedDateRange {
+  from: Date | null;
+  to: Date | null;
+}
+
 const createInitialState = (): PhotoFilterState => ({
   selectedPeopleIds: [],
   dateFrom: "",
@@ -103,16 +108,16 @@ export const usePhotoFilter = () => {
 
     // Filter by date range
     if (state.dateFrom || state.dateTo) {
+      const { from, to } = normalizeDateRange(state.dateFrom, state.dateTo);
+
       filtered = filtered.filter(photoWithPeople => {
         const photoDate = photoWithPeople.image.photoDate;
         if (!photoDate) return false;
 
         const date = new Date(photoDate);
-        const fromDate = state.dateFrom ? new Date(state.dateFrom) : null;
-        const toDate = state.dateTo ? new Date(state.dateTo) : null;
 
-        if (fromDate && date < fromDate) return false;
-        if (toDate && date > toDate) return false;
+        if (from && date < from) return false;
+        if (to && date > to) return false;
 
         return true;
       });
@@ -133,12 +138,14 @@ export const usePhotoFilter = () => {
     }
 
     if (state.dateFrom || state.dateTo) {
-      if (state.dateFrom && state.dateTo) {
-        parts.push(`${formatDateShort(state.dateFrom)} - ${formatDateShort(state.dateTo)}`);
-      } else if (state.dateFrom) {
-        parts.push(`from ${formatDateShort(state.dateFrom)}`);
-      } else if (state.dateTo) {
-        parts.push(`until ${formatDateShort(state.dateTo)}`);
+      const { from, to } = normalizeDateRange(state.dateFrom, state.dateTo);
+
+      if (from && to) {
+        parts.push(`${formatDateShort(from.toISOString())} - ${formatDateShort(to.toISOString())}`);
+      } else if (from) {
+        parts.push(`from ${formatDateShort(from.toISOString())}`);
+      } else if (to) {
+        parts.push(`until ${formatDateShort(to.toISOString())}`);
       }
     }
 
@@ -176,4 +183,53 @@ const formatDateShort = (dateString: string): string => {
   } catch {
     return dateString;
   }
+};
+
+const normalizeDateRange = (rawFrom: string, rawTo: string): NormalizedDateRange => {
+  const fromDate = parseDateOnly(rawFrom);
+  const toDate = parseDateOnly(rawTo);
+
+  if (!fromDate || !toDate) {
+    return {
+      from: fromDate,
+      to: toDate ? asEndOfDay(toDate) : null,
+    };
+  }
+
+  if (fromDate <= toDate) {
+    return {
+      from: fromDate,
+      to: asEndOfDay(toDate),
+    };
+  }
+
+  return {
+    from: toDate,
+    to: asEndOfDay(fromDate),
+  };
+};
+
+const parseDateOnly = (value: string): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+};
+
+const asEndOfDay = (date: Date): Date => {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
 };
