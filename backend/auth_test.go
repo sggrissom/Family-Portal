@@ -285,6 +285,17 @@ func TestLogoutHandler(t *testing.T) {
 	}
 }
 
+func TestLogoutHandlerRequiresPost(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/logout", nil)
+	recorder := httptest.NewRecorder()
+
+	logoutHandler(recorder, req)
+
+	if !strings.Contains(recorder.Body.String(), "logout call must be POST") {
+		t.Errorf("Expected error to mention POST requirement, got: %s", recorder.Body.String())
+	}
+}
+
 func TestGenerateStateString(t *testing.T) {
 	// Test that generateToken produces different results
 	token1, err1 := generateToken(32)
