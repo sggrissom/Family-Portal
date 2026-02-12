@@ -136,6 +136,11 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		vbeam.RespondError(w, errors.New("logout call must be POST"))
+		return
+	}
+
 	// Try to get user info before clearing the cookie
 	user, _ := AuthenticateRequest(r)
 
