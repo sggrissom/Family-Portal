@@ -18,13 +18,13 @@ func NewSecurityWrapper(app *vbeam.Application) *SecurityWrapper {
 }
 
 func isWebSocketRequest(r *http.Request) bool {
-	connHeader := r.Header.Get("Connection")
-	if !strings.Contains(strings.ToLower(connHeader), "upgrade") {
+	connHeader := strings.ToLower(r.Header.Get("Connection"))
+	if !strings.Contains(connHeader, "upgrade") {
 		return false
 	}
 
-	upgradeHeader := r.Header.Get("Upgrade")
-	if strings.ToLower(upgradeHeader) != "websocket" {
+	upgradeHeader := strings.TrimSpace(r.Header.Get("Upgrade"))
+	if !strings.EqualFold(upgradeHeader, "websocket") {
 		return false
 	}
 

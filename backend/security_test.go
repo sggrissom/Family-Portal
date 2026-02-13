@@ -8,6 +8,34 @@ import (
 	"go.hasen.dev/vbeam"
 )
 
+
+func TestIsWebSocketRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		conn     string
+		upgrade  string
+		expected bool
+	}{
+		{name: "standard websocket headers", conn: "Upgrade", upgrade: "websocket", expected: true},
+		{name: "case insensitive and trimmed upgrade", conn: "keep-alive, UpGrAdE", upgrade: "  WebSocket  ", expected: true},
+		{name: "missing connection upgrade token", conn: "keep-alive", upgrade: "websocket", expected: false},
+		{name: "wrong upgrade type", conn: "Upgrade", upgrade: "h2c", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/ws/chat", nil)
+			req.Header.Set("Connection", tt.conn)
+			req.Header.Set("Upgrade", tt.upgrade)
+
+			actual := isWebSocketRequest(req)
+			if actual != tt.expected {
+				t.Fatalf("expected %v, got %v", tt.expected, actual)
+			}
+		})
+	}
+}
+
 func TestNewSecurityWrapper(t *testing.T) {
 	app, cleanup := setupTestApp(t)
 	defer cleanup()
