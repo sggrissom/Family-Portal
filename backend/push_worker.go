@@ -30,8 +30,8 @@ type PushNotificationJob struct {
 
 // APNsPayload represents the Apple Push Notification payload
 type APNsPayload struct {
-	Aps  APNsAps         `json:"aps"`
-	Data APNsCustomData  `json:"data"`
+	Aps  APNsAps        `json:"aps"`
+	Data APNsCustomData `json:"data"`
 }
 
 type APNsAps struct {

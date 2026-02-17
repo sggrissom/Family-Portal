@@ -256,7 +256,6 @@ block(`
 }
 `);
 
-
 // Responsive
 block(`
 @media (max-width: 480px) {

@@ -223,13 +223,5 @@ const parseDateOnly = (value: string): Date | null => {
 };
 
 const asEndOfDay = (date: Date): Date => {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    23,
-    59,
-    59,
-    999
-  );
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 };

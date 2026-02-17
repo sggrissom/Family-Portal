@@ -8,7 +8,6 @@ import (
 	"go.hasen.dev/vbeam"
 )
 
-
 func TestIsWebSocketRequest(t *testing.T) {
 	tests := []struct {
 		name     string

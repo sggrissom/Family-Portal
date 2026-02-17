@@ -339,9 +339,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       timestamp.getMonth(),
       timestamp.getDate()
     );
-    const diffDays = Math.round(
-      (startOfToday.getTime() - startOfTimestamp.getTime()) / 86400000
-    );
+    const diffDays = Math.round((startOfToday.getTime() - startOfTimestamp.getTime()) / 86400000);
 
     if (diffDays === 0) {
       return "Today";
@@ -455,9 +453,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       </div>
 
       <div className="chat-content">
-        <div className="chat-messages">
-          {renderedMessages}
-        </div>
+        <div className="chat-messages">{renderedMessages}</div>
 
         <form className="chat-input-form" onSubmit={handleSendMessage}>
           <div className="input-container">

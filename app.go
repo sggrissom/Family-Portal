@@ -73,6 +73,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterAdminMethods(app)
 	backend.RegisterSEOHandlers(app)
 	backend.RegisterPushNotificationMethods(app)
+	backend.RegisterMobileVersionMethods(app)
 
 	app.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
