@@ -175,6 +175,7 @@ export interface AddMilestoneRequest {
     milestoneDate: string | null
     ageYears: number | null
     ageMonths: number | null
+    photoIds: number[]
 }
 
 export interface AddMilestoneResponse {
@@ -205,6 +206,7 @@ export interface UpdateMilestoneRequest {
     milestoneDate: string | null
     ageYears: number | null
     ageMonths: number | null
+    photoIds: number[]
 }
 
 export interface UpdateMilestoneResponse {
@@ -467,6 +469,25 @@ export interface SystemAnalyticsResponse {
     processingMetrics: ProcessingMetrics
     errorAnalysis: ErrorAnalysis
     apiRequestTrends: DataPoint[]
+}
+
+export interface RegisterPushDeviceRequest {
+    token: string
+    platform: string
+    environment: string
+    bundleId: string
+}
+
+export interface RegisterPushDeviceResponse {
+    success: boolean
+}
+
+export interface UnregisterPushDeviceRequest {
+    token: string
+}
+
+export interface UnregisterPushDeviceResponse {
+    success: boolean
 }
 
 export interface Person {
@@ -881,5 +902,13 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
+}
+
+export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promise<rpc.Response<RegisterPushDeviceResponse>> {
+    return await rpc.call<RegisterPushDeviceResponse>('RegisterPushDevice', JSON.stringify(data));
+}
+
+export async function UnregisterPushDevice(data: UnregisterPushDeviceRequest): Promise<rpc.Response<UnregisterPushDeviceResponse>> {
+    return await rpc.call<UnregisterPushDeviceResponse>('UnregisterPushDevice', JSON.stringify(data));
 }
 

@@ -122,6 +122,7 @@ async function onSubmitMilestone(
     milestoneDate: form.inputType === "date" ? form.milestoneDate : null,
     ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
     ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
+    photoIds: [],
   };
 
   try {
