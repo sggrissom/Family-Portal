@@ -187,15 +187,15 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 		return
 	}
 
+	// Queue push notifications for offline users
+	queueChatPushNotifications(ctx.Tx, user, message)
+
 	vbolt.TxCommit(ctx.Tx)
 
 	// Broadcast the new message to websocket clients
 	if hub := GetChatHub(); hub != nil {
 		hub.BroadcastNewMessage(user.FamilyId, message)
 	}
-
-	// Queue push notifications for offline users
-	queueChatPushNotifications(ctx.Tx, user, message)
 
 	// Log the message sending
 	LogInfo(LogCategoryAPI, "Chat message sent", map[string]interface{}{

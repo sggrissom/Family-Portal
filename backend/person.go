@@ -322,12 +322,13 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Age = calculateAge(parsedTime)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
-	vbolt.TxCommit(ctx.Tx)
 
 	resp.Person = person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
 	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
 	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
