@@ -89,6 +89,14 @@ export interface ComparePeopleResponse {
     people: PersonComparisonData[]
 }
 
+export interface UpdatePersonRequest {
+    id: number
+    name: string
+    personType: number
+    gender: number
+    birthdate: string
+}
+
 export interface SetProfilePhotoRequest {
     personId: number
     photoId: number
@@ -490,6 +498,31 @@ export interface UnregisterPushDeviceResponse {
     success: boolean
 }
 
+export interface CheckMobileVersionRequest {
+    platform: string
+    appVersion: string
+}
+
+export interface CheckMobileVersionResponse {
+    status: string
+    minimumVersion: string
+    latestVersion: string
+    updateUrl: string
+    updateMessage: string
+}
+
+export interface AdminSetMobileVersionRequest {
+    platform: string
+    minimumVersion: string
+    latestVersion: string
+    updateUrl: string
+    updateMessage: string
+}
+
+export interface AdminSetMobileVersionResponse {
+    success: boolean
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -752,6 +785,10 @@ export async function ComparePeople(data: ComparePeopleRequest): Promise<rpc.Res
     return await rpc.call<ComparePeopleResponse>('ComparePeople', JSON.stringify(data));
 }
 
+export async function UpdatePerson(data: UpdatePersonRequest): Promise<rpc.Response<GetPersonResponse>> {
+    return await rpc.call<GetPersonResponse>('UpdatePerson', JSON.stringify(data));
+}
+
 export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc.Response<SetProfilePhotoResponse>> {
     return await rpc.call<SetProfilePhotoResponse>('SetProfilePhoto', JSON.stringify(data));
 }
@@ -910,5 +947,13 @@ export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promi
 
 export async function UnregisterPushDevice(data: UnregisterPushDeviceRequest): Promise<rpc.Response<UnregisterPushDeviceResponse>> {
     return await rpc.call<UnregisterPushDeviceResponse>('UnregisterPushDevice', JSON.stringify(data));
+}
+
+export async function CheckMobileVersion(data: CheckMobileVersionRequest): Promise<rpc.Response<CheckMobileVersionResponse>> {
+    return await rpc.call<CheckMobileVersionResponse>('CheckMobileVersion', JSON.stringify(data));
+}
+
+export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {
+    return await rpc.call<AdminSetMobileVersionResponse>('AdminSetMobileVersion', JSON.stringify(data));
 }
 

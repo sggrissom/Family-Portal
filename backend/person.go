@@ -16,6 +16,7 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListPeople)
 	vbeam.RegisterProc(app, GetPerson)
 	vbeam.RegisterProc(app, ComparePeople)
+	vbeam.RegisterProc(app, UpdatePerson)
 	vbeam.RegisterProc(app, SetProfilePhoto)
 	vbeam.RegisterProc(app, MergePeople)
 	vbeam.RegisterProc(app, GetFamilyTimeline)
@@ -38,6 +39,14 @@ const (
 
 // Request/Response types
 type AddPersonRequest struct {
+	Name       string `json:"name"`
+	PersonType int    `json:"personType"` // 0 = Parent, 1 = Child
+	Gender     int    `json:"gender"`     // 0 = Male, 1 = Female, 2 = Unknown
+	Birthdate  string `json:"birthdate"`  // YYYY-MM-DD format
+}
+
+type UpdatePersonRequest struct {
+	Id         int    `json:"id"`
 	Name       string `json:"name"`
 	PersonType int    `json:"personType"` // 0 = Parent, 1 = Child
 	Gender     int    `json:"gender"`     // 0 = Male, 1 = Female, 2 = Unknown
@@ -273,6 +282,52 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 	resp.GrowthData = []GrowthData{}
 	resp.Milestones = []Milestone{}
 	resp.Photos = []Image{}
+	return
+}
+
+func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if err = validateAddPersonRequest(AddPersonRequest{
+		Name:       req.Name,
+		PersonType: req.PersonType,
+		Gender:     req.Gender,
+		Birthdate:  req.Birthdate,
+	}); err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	person := GetPersonById(ctx.Tx, req.Id)
+	if person.Id == 0 || person.FamilyId != user.FamilyId {
+		err = errors.New("Person not found or not in your family")
+		return
+	}
+
+	parsedTime, parseErr := time.Parse("2006-01-02", req.Birthdate)
+	if parseErr != nil {
+		err = errors.New("Invalid birthdate format. Use YYYY-MM-DD")
+		return
+	}
+
+	person.Name = req.Name
+	person.Type = PersonType(req.PersonType)
+	person.Gender = GenderType(req.Gender)
+	person.Birthday = parsedTime
+	person.Age = calculateAge(parsedTime)
+
+	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+	vbolt.TxCommit(ctx.Tx)
+
+	resp.Person = person
+	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
+	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
+	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
 	return
 }
 

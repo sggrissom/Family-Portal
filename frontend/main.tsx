@@ -51,6 +51,7 @@ async function main() {
     vlens.routeHandler("/chat", () => import("@app/pages/chat/chat")),
     vlens.routeHandler("/settings", () => import("@app/pages/settings/settings")),
     vlens.routeHandler("/add-person", () => import("@app/pages/people/add-person")),
+    vlens.routeHandler("/edit-person/", () => import("@app/pages/people/edit-person")),
     vlens.routeHandler("/add-growth", () => import("@app/pages/growth/add-growth")),
     vlens.routeHandler("/edit-growth", () => import("@app/pages/growth/edit-growth")),
     vlens.routeHandler("/family-chart", () => import("@app/pages/growth/family-chart")),
