@@ -492,6 +492,13 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                 preact.h("pre", {}, JSON.stringify(entry.data, null, 2))
               )
             : null,
+          entry.stackTrace
+            ? preact.h(
+                "div",
+                { className: "log-stack-trace" },
+                preact.h("pre", {}, entry.stackTrace)
+              )
+            : null,
         ]),
         preact.h("div", { className: "col-user" }, entry.userId ? `User ${entry.userId}` : "-"),
       ]

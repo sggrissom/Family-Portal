@@ -655,6 +655,7 @@ export interface PublicLogEntry {
     httpMethod: string
     httpPath: string
     httpStatus: number | null
+    stackTrace: string
 }
 
 export interface LogStats {

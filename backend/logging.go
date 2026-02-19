@@ -46,6 +46,7 @@ type logEntry struct {
 	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
 	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
 	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
+	StackTrace      string `json:"-"`                         // Populated during log file parsing only
 }
 
 // logStructured writes a structured log entry

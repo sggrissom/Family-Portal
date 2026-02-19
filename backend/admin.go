@@ -392,6 +392,7 @@ type PublicLogEntry struct {
 	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
 	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
 	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
+	StackTrace      string `json:"stackTrace,omitempty"`
 }
 
 // convertToPublicLogEntry converts internal logEntry to public API format
@@ -410,6 +411,7 @@ func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
 		HTTPMethod:      entry.HTTPMethod,
 		HTTPPath:        entry.HTTPPath,
 		HTTPStatus:      entry.HTTPStatus,
+		StackTrace:      entry.StackTrace,
 	}
 }
 
@@ -549,6 +551,12 @@ func parseLogTimestamp(line string) (time.Time, string) {
 
 	// If no timestamp found, return current time and original line
 	return time.Now(), line
+}
+
+var newLogLineRegex = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`)
+
+func isNewLogLine(line string) bool {
+	return newLogLineRegex.MatchString(line)
 }
 
 // detectLogLevel attempts to detect log level from plain text log message
@@ -699,33 +707,23 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 	var allFilteredEntries []logEntry
 	scanner := bufio.NewScanner(file)
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		// Try to parse as JSON log entry
+	parseLine := func(trimmed string) logEntry {
 		var entry logEntry
-		jsonPart, hasJSON := extractJSONFromLogLine(line)
+		jsonPart, hasJSON := extractJSONFromLogLine(trimmed)
 
 		if hasJSON {
-			// Try parsing the extracted JSON
 			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
 				// JSON parsing succeeded, use the parsed entry
 			} else {
-				// JSON extraction found brackets but parsing failed, treat as plain text
 				hasJSON = false
 			}
 		}
 
 		if !hasJSON {
-			// Try to parse as timing log first
-			if timingEntry, isTiming := parseTimingLogLine(line); isTiming {
+			if timingEntry, isTiming := parseTimingLogLine(trimmed); isTiming {
 				entry = *timingEntry
 			} else {
-				// If not timing log, parse as plain text log
-				cleanLine := stripAnsiCodes(line)
+				cleanLine := stripAnsiCodes(trimmed)
 				timestamp, message := parseLogTimestamp(cleanLine)
 				category := categorizeLogMessage(message)
 				level := detectLogLevel(message)
@@ -739,18 +737,53 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 			}
 		}
 
-		// Apply filters
+		return entry
+	}
+
+	flushEntry := func(entry logEntry) {
 		if req.Level != "" && string(entry.Level) != req.Level {
-			continue
+			return
 		}
 		if req.Category != "" && string(entry.Category) != req.Category {
-			continue
+			return
 		}
 		if req.MinDuration != nil && (entry.Duration == nil || *entry.Duration < *req.MinDuration) {
+			return
+		}
+		allFilteredEntries = append(allFilteredEntries, entry)
+	}
+
+	var hasPending bool
+	var pending logEntry
+	var stackLines []string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
 			continue
 		}
 
-		allFilteredEntries = append(allFilteredEntries, entry)
+		if isNewLogLine(trimmed) {
+			if hasPending {
+				if len(stackLines) > 0 {
+					pending.StackTrace = strings.Join(stackLines, "\n")
+				}
+				flushEntry(pending)
+			}
+			pending = parseLine(trimmed)
+			stackLines = stackLines[:0]
+			hasPending = true
+		} else if hasPending {
+			stackLines = append(stackLines, line)
+		}
+	}
+
+	if hasPending {
+		if len(stackLines) > 0 {
+			pending.StackTrace = strings.Join(stackLines, "\n")
+		}
+		flushEntry(pending)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -1065,28 +1098,20 @@ func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
 	var entries []logEntry
 	scanner := bufio.NewScanner(file)
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
+	parseLine := func(trimmed string) logEntry {
 		var entry logEntry
-		jsonPart, hasJSON := extractJSONFromLogLine(line)
+		jsonPart, hasJSON := extractJSONFromLogLine(trimmed)
 
 		if hasJSON {
-			// Try parsing the extracted JSON
 			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
 				// JSON parsing succeeded, use the parsed entry
 			} else {
-				// JSON extraction found brackets but parsing failed, treat as plain text
 				hasJSON = false
 			}
 		}
 
 		if !hasJSON {
-			// If no JSON found or JSON parsing failed, parse as plain text log
-			cleanLine := stripAnsiCodes(line)
+			cleanLine := stripAnsiCodes(trimmed)
 			timestamp, message := parseLogTimestamp(cleanLine)
 			category := categorizeLogMessage(message)
 			level := detectLogLevel(message)
@@ -1099,12 +1124,47 @@ func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
 			}
 		}
 
-		entries = append(entries, entry)
+		return entry
+	}
 
-		// Keep only the most recent entries (simple sliding window)
+	appendEntry := func(entry logEntry) {
+		entries = append(entries, entry)
 		if len(entries) > maxEntries {
 			entries = entries[1:]
 		}
+	}
+
+	var hasPending bool
+	var pending logEntry
+	var stackLines []string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		if isNewLogLine(trimmed) {
+			if hasPending {
+				if len(stackLines) > 0 {
+					pending.StackTrace = strings.Join(stackLines, "\n")
+				}
+				appendEntry(pending)
+			}
+			pending = parseLine(trimmed)
+			stackLines = stackLines[:0]
+			hasPending = true
+		} else if hasPending {
+			stackLines = append(stackLines, line)
+		}
+	}
+
+	if hasPending {
+		if len(stackLines) > 0 {
+			pending.StackTrace = strings.Join(stackLines, "\n")
+		}
+		appendEntry(pending)
 	}
 
 	return entries

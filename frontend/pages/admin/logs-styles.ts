@@ -400,6 +400,29 @@ block(`
 }
 `);
 
+// Stack trace display
+block(`
+.log-stack-trace {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--surface-secondary, rgba(0,0,0,0.15));
+  border-radius: 4px;
+  border-left: 3px solid var(--error-color, #dc2626);
+  overflow-x: auto;
+}
+`);
+
+block(`
+.log-stack-trace pre {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: pre;
+  word-break: normal;
+}
+`);
+
 // State messages
 block(`
 .loading-message,
