@@ -128,6 +128,76 @@ block(`
 `);
 
 block(`
+.milestone-photo-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-card-bg);
+  max-height: 240px;
+  overflow-y: auto;
+}
+`);
+
+block(`
+.milestone-photo-picker-empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 4px;
+  margin: 0;
+}
+`);
+
+block(`
+.milestone-photo-picker-item {
+  position: relative;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+`);
+
+block(`
+.milestone-photo-picker-item.selected {
+  border-color: var(--color-primary);
+}
+`);
+
+block(`
+.milestone-photo-picker-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+`);
+
+block(`
+.milestone-photo-picker-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+}
+`);
+
+block(`
 @media (max-width: 580px) {
   .add-milestone-container {
     padding: 30px 16px;

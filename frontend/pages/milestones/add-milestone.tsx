@@ -19,6 +19,7 @@ type AddMilestoneForm = {
   milestoneDate: string;
   ageYears: string;
   ageMonths: string;
+  photoIds: number[];
   error: string;
   loading: boolean;
 };
@@ -32,27 +33,38 @@ const useAddMilestoneForm = vlens.declareHook(
     milestoneDate: "",
     ageYears: "",
     ageMonths: "",
+    photoIds: [],
     error: "",
     loading: false,
   })
 );
 
-export async function fetch(route: string, prefix: string) {
-  // Fetch people list to populate the person selector
-  return server.ListPeople({});
+type AddMilestoneData = {
+  people: server.ListPeopleResponse;
+  photos: server.ListFamilyPhotosResponse;
+};
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddMilestoneData>> {
+  const [[people, peopleErr], [photos, photosErr]] = await Promise.all([
+    server.ListPeople({}),
+    server.ListFamilyPhotos({}),
+  ]);
+  if (peopleErr) return [null, peopleErr];
+  if (photosErr) return [null, photosErr];
+  return [{ people: people!, photos: photos! }, ""];
 }
 
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse
+  data: AddMilestoneData
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
   }
 
-  if (!data.people || data.people.length === 0) {
+  if (!data.people.people || data.people.people.length === 0) {
     return (
       <NoFamilyMembersPage
         message="Please add family members before adding milestones"
@@ -71,7 +83,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <AddMilestonePage form={form} people={data.people} />
+        <AddMilestonePage form={form} people={data.people.people} photos={data.photos.photos} />
       </main>
       <Footer />
     </div>
@@ -113,29 +125,26 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
   }
 
   try {
-    // Prepare the request data
-    const requestData: any = {
+    const requestData: server.AddMilestoneRequest = {
       personId: parseInt(form.selectedPersonId),
       description: form.description.trim(),
       category: form.category,
       inputType: form.inputType,
+      milestoneDate: form.inputType === "date" ? form.milestoneDate : null,
+      ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
+      ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
+      photoIds: form.photoIds,
     };
 
-    // Add date/age specific fields
-    if (form.inputType === "date") {
-      requestData.milestoneDate = form.milestoneDate;
-    } else if (form.inputType === "age") {
-      requestData.ageYears = parseInt(form.ageYears);
-      if (form.ageMonths) {
-        requestData.ageMonths = parseInt(form.ageMonths);
-      }
+    const [resp, err] = await server.AddMilestone(requestData);
+
+    if (resp) {
+      core.setRoute(`/profile/${form.selectedPersonId}`);
+    } else {
+      form.loading = false;
+      form.error = err || "Failed to save milestone. Please try again.";
+      vlens.scheduleRedraw();
     }
-
-    // Call the backend API
-    const response = await server.AddMilestone(requestData);
-
-    // Redirect to profile page on success
-    core.setRoute(`/profile/${form.selectedPersonId}`);
   } catch (error) {
     form.loading = false;
     form.error =
@@ -149,16 +158,32 @@ function onInputTypeChange(form: AddMilestoneForm, newType: string) {
   vlens.scheduleRedraw();
 }
 
+function onTogglePhoto(form: AddMilestoneForm, photoId: number) {
+  const idx = form.photoIds.indexOf(photoId);
+  if (idx >= 0) {
+    form.photoIds.splice(idx, 1);
+  } else {
+    form.photoIds.push(photoId);
+  }
+  vlens.scheduleRedraw();
+}
+
 interface AddMilestonePageProps {
   form: AddMilestoneForm;
   people: server.Person[];
+  photos: server.PhotoWithPeople[];
 }
 
-const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
+const AddMilestonePage = ({ form, people, photos }: AddMilestonePageProps) => {
   // Filter to show all family members for milestones
   const { children, parents } = splitPeopleByType(people);
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
+
+  const selectedPersonIdNum = parseInt(form.selectedPersonId) || 0;
+  const personPhotos = selectedPersonIdNum > 0
+    ? photos.filter(p => p.people.some(person => person.id === selectedPersonIdNum))
+    : [];
 
   return (
     <div className="add-milestone-page">
@@ -228,30 +253,34 @@ const AddMilestonePage = ({ form, people }: AddMilestonePageProps) => {
 
           {/* Photos */}
           <div className="form-group">
-            <label htmlFor="milestonePhotos">Photos (optional)</label>
-            <div className="photo-select">
-              <label htmlFor="existingPhoto" className="photo-select-label">
-                Choose from existing photos
-              </label>
-              <select id="existingPhoto" className="photo-select-input" disabled={form.loading}>
-                <option value="">Select a photo from the library</option>
-              </select>
-              <p className="photo-upload-hint">
-                Existing photos will appear here once we connect the library.
-              </p>
-            </div>
-            <div className="photo-upload">
-              <input
-                id="milestonePhotos"
-                className="photo-upload-input"
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={form.loading}
-              />
-              <p className="photo-upload-hint">
-                Add a few photos to capture the moment. (Photo uploads will be wired up soon.)
-              </p>
+            <label>Photos (optional)</label>
+            <div className="milestone-photo-picker">
+              {personPhotos.length === 0 ? (
+                <p className="milestone-photo-picker-empty">
+                  {selectedPersonIdNum > 0
+                    ? "No photos found for this person"
+                    : "Select a family member to see their photos"}
+                </p>
+              ) : (
+                personPhotos.map(p => {
+                  const isSelected = form.photoIds.includes(p.image.id);
+                  return (
+                    <div
+                      key={p.image.id}
+                      className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
+                      onClick={form.loading ? undefined : vlens.cachePartial(onTogglePhoto, form, p.image.id)}
+                    >
+                      <img
+                        src={`/api/photo/${p.image.id}/thumb`}
+                        className="milestone-photo-picker-img"
+                        alt=""
+                        loading="lazy"
+                      />
+                      {isSelected && <div className="milestone-photo-picker-check">✓</div>}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 

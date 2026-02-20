@@ -326,6 +326,9 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	resp.Person = person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
 	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
+	for i := range resp.Milestones {
+		resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
+	}
 	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
 
 	vbolt.TxCommit(ctx.Tx)
@@ -369,6 +372,9 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 
 	// Get milestones for person
 	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
+	for i := range resp.Milestones {
+		resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
+	}
 
 	// Get photos for person
 	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
@@ -411,10 +417,14 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 		person.Age = calculateAge(person.Birthday)
 
 		// Build comparison data
+		milestones := GetPersonMilestonesTx(ctx.Tx, personId)
+		for i := range milestones {
+			milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
+		}
 		comparisonData := PersonComparisonData{
 			Person:     person,
 			GrowthData: GetPersonGrowthDataTx(ctx.Tx, personId),
-			Milestones: GetPersonMilestonesTx(ctx.Tx, personId),
+			Milestones: milestones,
 			Photos:     GetPersonImages(ctx.Tx, personId),
 		}
 
@@ -635,10 +645,14 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	resp.People = make([]FamilyTimelineItem, 0, len(people))
 
 	for _, person := range people {
+		timelineMilestones := GetPersonMilestonesTx(ctx.Tx, person.Id)
+		for i := range timelineMilestones {
+			timelineMilestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, timelineMilestones[i].Id)
+		}
 		timelineItem := FamilyTimelineItem{
 			Person:     person,
 			GrowthData: GetPersonGrowthDataTx(ctx.Tx, person.Id),
-			Milestones: GetPersonMilestonesTx(ctx.Tx, person.Id),
+			Milestones: timelineMilestones,
 			Photos:     GetPersonImages(ctx.Tx, person.Id),
 		}
 
