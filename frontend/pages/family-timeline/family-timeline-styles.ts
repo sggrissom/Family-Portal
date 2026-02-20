@@ -366,6 +366,25 @@ block(`
 `);
 
 block(`
+.milestone-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+`);
+
+block(`
+.milestone-photo-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+}
+`);
+
+block(`
 .timeline-item-actions {
   display: flex;
   gap: 0.5rem;
