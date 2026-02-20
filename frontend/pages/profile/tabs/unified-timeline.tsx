@@ -208,6 +208,19 @@ export const UnifiedTimeline = ({
                         <span className="timeline-item-date">{formatDate(item.date)}</span>
                       </div>
                       <div className="timeline-item-description">{milestone.description}</div>
+                      {milestone.photoIds && milestone.photoIds.length > 0 && (
+                        <div className="milestone-photos">
+                          {milestone.photoIds.map(photoId => (
+                            <ThumbnailImage
+                              key={photoId}
+                              photoId={photoId}
+                              alt=""
+                              className="milestone-photo-thumb"
+                              onClick={() => core.setRoute(`/view-photo/${photoId}`)}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="timeline-item-actions">
                       <a

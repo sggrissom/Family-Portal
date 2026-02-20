@@ -556,6 +556,7 @@ export interface Milestone {
     category: string
     milestoneDate: string
     createdAt: string
+    photoIds: number[]
 }
 
 export interface Image {

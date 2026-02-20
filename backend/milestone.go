@@ -95,6 +95,7 @@ type Milestone struct {
 	Category      string    `json:"category"`
 	MilestoneDate time.Time `json:"milestoneDate"`
 	CreatedAt     time.Time `json:"createdAt"`
+	PhotoIds      []int     `json:"photoIds,omitempty"`
 }
 
 // MilestonePhoto represents the relationship between milestones and photos
@@ -639,6 +640,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Milestone = milestone
+	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
 	return
 }
 
@@ -658,7 +660,11 @@ func GetPersonMilestones(ctx *vbeam.Context, req GetPersonMilestonesRequest) (re
 	}
 
 	// Get milestones for this person
-	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.PersonId)
+	milestones := GetPersonMilestonesTx(ctx.Tx, req.PersonId)
+	for i := range milestones {
+		milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
+	}
+	resp.Milestones = milestones
 	return
 }
 
@@ -683,6 +689,7 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 	}
 
 	resp.Milestone = milestone
+	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
 	return
 }
 
@@ -709,6 +716,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Milestone = milestone
+	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
 	return
 }
 

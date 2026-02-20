@@ -155,6 +155,25 @@ block(`
 `);
 
 block(`
+.milestone-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+`);
+
+block(`
+.milestone-photo-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+}
+`);
+
+block(`
 @media (max-width: 600px) {
   .age-filter {
     padding: 0.75rem;
