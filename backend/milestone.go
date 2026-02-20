@@ -637,10 +637,10 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		return
 	}
 
-	vbolt.TxCommit(ctx.Tx)
-
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
@@ -713,10 +713,10 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		return
 	}
 
-	vbolt.TxCommit(ctx.Tx)
-
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
