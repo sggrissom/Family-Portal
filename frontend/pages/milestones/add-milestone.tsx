@@ -45,12 +45,15 @@ type AddMilestoneData = {
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddMilestoneData>> {
-  const [[people, peopleErr], [photos, photosErr]] = await Promise.all([
-    server.ListPeople({}),
-    server.ListFamilyPhotos({}),
-  ]);
+  const [people, peopleErr] = await server.ListPeople({});
   if (peopleErr) return [null, peopleErr];
+
+  const personId = getIdFromRoute(route);
+  const [photos, photosErr] = await server.ListFamilyPhotos({
+    personId: personId || undefined,
+  });
   if (photosErr) return [null, photosErr];
+
   return [{ people: people!, photos: photos! }, ""];
 }
 

@@ -96,7 +96,8 @@ type GetPhotoStatusResponse struct {
 }
 
 type ListFamilyPhotosRequest struct {
-	// No parameters needed - uses family from auth
+	// Optional person filter. When set, only returns photos tagged with this person.
+	PersonId int `json:"personId,omitempty"`
 }
 
 type PhotoWithPeople struct {
@@ -1067,8 +1068,29 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		return
 	}
 
-	// Get all family photos
+	// Default: all family photos
 	images := GetFamilyImages(ctx.Tx, user.FamilyId)
+
+	// Optional: only photos tagged with this person
+	if req.PersonId > 0 {
+		photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.PersonId)
+		images = make([]Image, 0, len(photoPersons))
+		seenImageIds := make(map[int]struct{}, len(photoPersons))
+
+		for _, photoPerson := range photoPersons {
+			if _, exists := seenImageIds[photoPerson.PhotoId]; exists {
+				continue
+			}
+
+			image := GetImageById(ctx.Tx, photoPerson.PhotoId)
+			if image.Id == 0 || image.FamilyId != user.FamilyId {
+				continue
+			}
+
+			seenImageIds[photoPerson.PhotoId] = struct{}{}
+			images = append(images, image)
+		}
+	}
 
 	// Filter out failed photos and create PhotoWithPeople structs
 	resp.Photos = make([]PhotoWithPeople, 0, len(images))

@@ -51,12 +51,14 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     return [null, "Milestone ID is required"];
   }
 
-  const [[milestone, milestoneErr], [photos, photosErr]] = await Promise.all([
-    server.GetMilestone({ id: milestoneId }),
-    server.ListFamilyPhotos({}),
-  ]);
+  const [milestone, milestoneErr] = await server.GetMilestone({ id: milestoneId });
   if (milestoneErr) return [null, milestoneErr];
+
+  const [photos, photosErr] = await server.ListFamilyPhotos({
+    personId: milestone?.milestone?.personId,
+  });
   if (photosErr) return [null, photosErr];
+
   return [{ milestone: milestone!, photos: photos! }, ""];
 }
 
