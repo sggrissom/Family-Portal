@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as vlens from "vlens";
 import * as server from "../../server";
@@ -49,7 +48,13 @@ interface FamilyTimelinePageProps {
   data: server.GetFamilyTimelineResponse;
 }
 
-type TimelineItemType = "milestone" | "measurement" | "photo";
+type TimelineItemType = "milestone" | "measurement" | "photo" | "birthday";
+
+interface BirthdayData {
+  personName: string;
+  age: number;
+  birthday: string;
+}
 
 interface TimelineItem {
   id: number;
@@ -58,12 +63,14 @@ interface TimelineItem {
   personId: number;
   personName: string;
   age: string;
-  data: server.Milestone | server.GrowthData | server.Image;
+  data: server.Milestone | server.GrowthData | server.Image | BirthdayData;
 }
+
+type YearGroup = { year: number; items: TimelineItem[] };
 
 type FamilyTimelineState = {
   selectedPerson: string;
-  selectedType: "all" | "milestones" | "measurements" | "photos";
+  selectedType: "all" | "milestones" | "measurements" | "photos" | "birthdays";
   sortOrder: "newest" | "oldest";
   searchQuery: string;
   searchResults: server.Milestone[] | null;
@@ -79,6 +86,72 @@ const useFamilyTimelineState = vlens.declareHook(
     searchResults: null,
     isSearching: false,
   })
+);
+
+function generateBirthdayEvents(
+  people: server.FamilyTimelineItem[],
+  minDate: Date,
+  maxDate: Date
+): TimelineItem[] {
+  const events: TimelineItem[] = [];
+  for (const personData of people) {
+    const person = personData.person;
+    if (!person.birthday) continue;
+    const birthday = new Date(person.birthday);
+    if (isNaN(birthday.getTime())) continue;
+
+    const birthYear = birthday.getFullYear();
+    const endYear = maxDate.getFullYear();
+
+    for (let year = Math.max(birthYear, minDate.getFullYear()); year <= endYear; year++) {
+      const age = year - birthYear;
+      const birthdayThisYear = new Date(year, birthday.getMonth(), birthday.getDate());
+      if (birthdayThisYear < minDate || birthdayThisYear > maxDate) continue;
+
+      const isoDate = birthdayThisYear.toISOString().split("T")[0];
+      events.push({
+        id: person.id * 10000 + age,
+        type: "birthday",
+        date: isoDate,
+        personId: person.id,
+        personName: person.name,
+        age: age === 0 ? "Born!" : `Age ${age}`,
+        data: { personName: person.name, age, birthday: person.birthday },
+      });
+    }
+  }
+  return events;
+}
+
+function groupByYear(items: TimelineItem[]): YearGroup[] {
+  const groups: YearGroup[] = [];
+  for (const item of items) {
+    const year = new Date(item.date).getFullYear();
+    const last = groups[groups.length - 1];
+    if (last && last.year === year) {
+      last.items.push(item);
+    } else {
+      groups.push({ year, items: [item] });
+    }
+  }
+  return groups;
+}
+
+const YearBanner = ({ year }: { year: number }) => (
+  <div id={`year-${year}`} className="year-banner">
+    <span className="year-banner-label">{year}</span>
+    <div className="year-banner-line" />
+  </div>
+);
+
+const YearJumpNav = ({ years }: { years: number[] }) => (
+  <div className="year-jump-nav">
+    {years.map(year => (
+      <a key={year} href={`#year-${year}`} className="year-pill">
+        {year}
+      </a>
+    ))}
+  </div>
 );
 
 const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
@@ -126,7 +199,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   for (const personData of people) {
     const person = personData.person;
 
-    // Add milestones
     if (personData.milestones) {
       personData.milestones.forEach((milestone: server.Milestone) => {
         allTimelineItems.push({
@@ -141,7 +213,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
       });
     }
 
-    // Add growth measurements
     if (personData.growthData) {
       personData.growthData.forEach((measurement: server.GrowthData) => {
         allTimelineItems.push({
@@ -156,7 +227,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
       });
     }
 
-    // Add photos
     if (personData.photos) {
       personData.photos.forEach((photo: server.Image) => {
         allTimelineItems.push({
@@ -170,6 +240,19 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
         });
       });
     }
+  }
+
+  // Generate and inject birthday events based on the data's date range
+  if (allTimelineItems.length > 0) {
+    let minDate = new Date(allTimelineItems[0].date);
+    let maxDate = new Date(allTimelineItems[0].date);
+    for (const item of allTimelineItems) {
+      const d = new Date(item.date);
+      if (d < minDate) minDate = d;
+      if (d > maxDate) maxDate = d;
+    }
+    const birthdayEvents = generateBirthdayEvents(people, minDate, maxDate);
+    allTimelineItems.push(...birthdayEvents);
   }
 
   // Initialize monitoring for processing photos
@@ -200,6 +283,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
       if (state.selectedType === "milestones") return item.type === "milestone";
       if (state.selectedType === "measurements") return item.type === "measurement";
       if (state.selectedType === "photos") return item.type === "photo";
+      if (state.selectedType === "birthdays") return item.type === "birthday";
       return true;
     });
   }
@@ -210,6 +294,10 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     const dateB = new Date(b.date).getTime();
     return state.sortOrder === "newest" ? dateB - dateA : dateA - dateB;
   });
+
+  // Group by year for timeline rendering
+  const yearGroups = groupByYear(sortedItems);
+  const availableYears = yearGroups.map(g => g.year);
 
   const hasAnyData = allTimelineItems.length > 0;
   const hasFilteredData = sortedItems.length > 0;
@@ -285,6 +373,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                 <option value="milestones">Milestones</option>
                 <option value="measurements">Measurements</option>
                 <option value="photos">Photos</option>
+                <option value="birthdays">Birthdays</option>
               </select>
             </div>
 
@@ -355,14 +444,23 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                 </div>
               ) : null}
 
+              {hasFilteredData && availableYears.length > 1 && (
+                <YearJumpNav years={availableYears} />
+              )}
+
               {hasFilteredData ? (
                 <div className="timeline-items">
-                  {sortedItems.map(item => (
-                    <TimelineItemComponent
-                      key={`${item.type}-${item.id}`}
-                      item={item}
-                      photoStatus={photoStatus}
-                    />
+                  {yearGroups.map(group => (
+                    <preact.Fragment key={group.year}>
+                      <YearBanner year={group.year} />
+                      {group.items.map(item => (
+                        <TimelineItemComponent
+                          key={`${item.type}-${item.id}`}
+                          item={item}
+                          photoStatus={photoStatus}
+                        />
+                      ))}
+                    </preact.Fragment>
                   ))}
                 </div>
               ) : (
@@ -517,6 +615,28 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
               👁️
             </a>
           </div>
+        </div>
+      );
+    }
+
+    case "birthday": {
+      const data = item.data as BirthdayData;
+      const label =
+        data.age === 0
+          ? `${item.personName} was born! 🎉`
+          : `${item.personName} turns ${data.age}! 🎂`;
+      return (
+        <div className="timeline-item birthday-item">
+          <div className="timeline-item-icon">{data.age === 0 ? "🎉" : "🎂"}</div>
+          <div className="timeline-item-content">
+            <div className="timeline-item-header">
+              <span className="timeline-item-person">{item.personName}</span>
+              <span className="timeline-item-type birthday-type">Birthday</span>
+              <span className="timeline-item-date">{formatDate(item.date)}</span>
+            </div>
+            <div className="timeline-item-description">{label}</div>
+          </div>
+          <div className="timeline-item-actions" />
         </div>
       );
     }

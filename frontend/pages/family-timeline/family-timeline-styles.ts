@@ -185,13 +185,105 @@ block(`
 }
 `);
 
+/* ── Year jump navigation (Phase 3) ── */
+
+block(`
+.year-jump-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+`);
+
+block(`
+.year-pill {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+`);
+
+block(`
+.year-pill:hover {
+  background: var(--primary-accent);
+  border-color: var(--primary-accent);
+  color: #fff;
+}
+`);
+
+/* ── Timeline spine + year groups (Phase 1) ── */
+
 block(`
 .timeline-items {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  position: relative;
+  padding-left: 2rem;
 }
 `);
+
+block(`
+.timeline-items::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+`);
+
+/* Year banner */
+
+block(`
+.year-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: -2rem;
+  margin-bottom: 0.875rem;
+}
+`);
+
+block(`
+.timeline-item + .year-banner {
+  margin-top: 2rem;
+}
+`);
+
+block(`
+.year-banner-label {
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: var(--primary-accent);
+  white-space: nowrap;
+  min-width: 5rem;
+  text-align: left;
+  line-height: 1;
+}
+`);
+
+block(`
+.year-banner-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  opacity: 0.5;
+}
+`);
+
+/* Timeline items */
 
 block(`
 .timeline-item {
@@ -203,6 +295,23 @@ block(`
   border: 1px solid var(--border);
   border-radius: 8px;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+  margin-bottom: 0.875rem;
+}
+`);
+
+block(`
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.25rem;
+  top: 1.25rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  transform: translateX(-50%);
 }
 `);
 
@@ -277,6 +386,28 @@ block(`
 .photo-type {
   background: rgba(59, 130, 246, 0.1);
   color: rgb(59, 130, 246);
+}
+`);
+
+/* Birthday item (Phase 2) */
+
+block(`
+.birthday-item {
+  background: rgba(251, 191, 36, 0.06);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+`);
+
+block(`
+.birthday-item::before {
+  background: rgb(251, 191, 36);
+}
+`);
+
+block(`
+.birthday-type {
+  background: rgba(251, 191, 36, 0.15);
+  color: rgb(180, 120, 0);
 }
 `);
 
@@ -471,9 +602,27 @@ block(`
     min-width: 100%;
   }
 
+  /* Collapse spine on mobile */
+  .timeline-items {
+    padding-left: 0;
+  }
+
+  .timeline-items::before {
+    display: none;
+  }
+
+  .timeline-item::before {
+    display: none;
+  }
+
+  .year-banner {
+    margin-left: 0;
+  }
+
   .timeline-item {
     grid-template-columns: auto 1fr;
     gap: 0.75rem;
+    margin-bottom: 0.75rem;
   }
 
   .timeline-item-actions {
