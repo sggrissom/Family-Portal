@@ -147,7 +147,15 @@ const YearBanner = ({ year }: { year: number }) => (
 const YearJumpNav = ({ years }: { years: number[] }) => (
   <div className="year-jump-nav">
     {years.map(year => (
-      <a key={year} href={`#year-${year}`} className="year-pill">
+      <a
+        key={year}
+        href={`#year-${year}`}
+        className="year-pill"
+        onClick={e => {
+          e.preventDefault();
+          document.getElementById(`year-${year}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+      >
         {year}
       </a>
     ))}
