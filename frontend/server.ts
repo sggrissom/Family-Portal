@@ -305,7 +305,7 @@ export interface GetPhotoStatusResponse {
 }
 
 export interface ListFamilyPhotosRequest {
-    personId?: number
+    personId: number
 }
 
 export interface ListFamilyPhotosResponse {

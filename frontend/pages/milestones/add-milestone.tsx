@@ -44,24 +44,23 @@ type AddMilestoneData = {
   photos: server.ListFamilyPhotosResponse;
 };
 
-export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddMilestoneData>> {
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<AddMilestoneData>> {
   const [people, peopleErr] = await server.ListPeople({});
   if (peopleErr) return [null, peopleErr];
 
   const personId = getIdFromRoute(route);
   const [photos, photosErr] = await server.ListFamilyPhotos({
-    personId: personId || undefined,
+    personId: personId || 0,
   });
   if (photosErr) return [null, photosErr];
 
   return [{ people: people!, photos: photos! }, ""];
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: AddMilestoneData
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: AddMilestoneData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -184,9 +183,10 @@ const AddMilestonePage = ({ form, people, photos }: AddMilestonePageProps) => {
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 
   const selectedPersonIdNum = parseInt(form.selectedPersonId) || 0;
-  const personPhotos = selectedPersonIdNum > 0
-    ? photos.filter(p => p.people.some(person => person.id === selectedPersonIdNum))
-    : [];
+  const personPhotos =
+    selectedPersonIdNum > 0
+      ? photos.filter(p => p.people.some(person => person.id === selectedPersonIdNum))
+      : [];
 
   return (
     <div className="add-milestone-page">
@@ -271,7 +271,11 @@ const AddMilestonePage = ({ form, people, photos }: AddMilestonePageProps) => {
                     <div
                       key={p.image.id}
                       className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
-                      onClick={form.loading ? undefined : vlens.cachePartial(onTogglePhoto, form, p.image.id)}
+                      onClick={
+                        form.loading
+                          ? undefined
+                          : vlens.cachePartial(onTogglePhoto, form, p.image.id)
+                      }
                     >
                       <img
                         src={`/api/photo/${p.image.id}/thumb`}

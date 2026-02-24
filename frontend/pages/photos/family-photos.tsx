@@ -15,7 +15,7 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.ListFamilyPhotosResponse>({ photos: [] });
   }
 
-  return server.ListFamilyPhotos({});
+  return server.ListFamilyPhotos({ personId: 0 });
 }
 
 export function view(

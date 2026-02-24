@@ -44,7 +44,10 @@ type EditMilestoneData = {
   photos: server.ListFamilyPhotosResponse;
 };
 
-export async function fetch(route: string, prefix: string): Promise<rpc.Response<EditMilestoneData>> {
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<EditMilestoneData>> {
   const milestoneId = getIdFromRoute(route);
 
   if (!milestoneId) {
@@ -55,7 +58,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   if (milestoneErr) return [null, milestoneErr];
 
   const [photos, photosErr] = await server.ListFamilyPhotos({
-    personId: milestone?.milestone?.personId,
+    personId: milestone?.milestone?.personId || 0,
   });
   if (photosErr) return [null, photosErr];
 
@@ -185,7 +188,9 @@ interface EditMilestonePageProps {
 }
 
 const EditMilestonePage = ({ form, milestone, photos }: EditMilestonePageProps) => {
-  const personPhotos = photos.filter(p => p.people.some(person => person.id === milestone.personId));
+  const personPhotos = photos.filter(p =>
+    p.people.some(person => person.id === milestone.personId)
+  );
   return (
     <div className="add-milestone-page">
       <div className="auth-card">
@@ -249,7 +254,11 @@ const EditMilestonePage = ({ form, milestone, photos }: EditMilestonePageProps) 
                     <div
                       key={p.image.id}
                       className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
-                      onClick={form.loading ? undefined : vlens.cachePartial(onTogglePhoto, form, p.image.id)}
+                      onClick={
+                        form.loading
+                          ? undefined
+                          : vlens.cachePartial(onTogglePhoto, form, p.image.id)
+                      }
                     >
                       <img
                         src={`/api/photo/${p.image.id}/thumb`}
