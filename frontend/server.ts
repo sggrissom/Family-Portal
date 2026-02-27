@@ -239,6 +239,39 @@ export interface SearchMilestonesResponse {
     query: string
 }
 
+export interface CreateTagRequest {
+    name: string
+    color: string
+}
+
+export interface CreateTagResponse {
+    tag: Tag
+}
+
+export interface UpdateTagRequest {
+    id: number
+    name: string
+    color: string
+}
+
+export interface UpdateTagResponse {
+    tag: Tag
+}
+
+export interface DeleteTagRequest {
+    id: number
+}
+
+export interface DeleteTagResponse {
+}
+
+export interface ListTagsRequest {
+}
+
+export interface ListTagsResponse {
+    tags: Tag[]
+}
+
 export interface SendMessageRequest {
     content: string
     clientMessageId: string
@@ -591,6 +624,14 @@ export interface FamilyTimelineItem {
     photos: Image[]
 }
 
+export interface Tag {
+    id: number
+    familyId: number
+    name: string
+    color: string
+    createdAt: string
+}
+
 export interface ChatMessage {
     id: number
     familyId: number
@@ -842,6 +883,22 @@ export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc
 
 export async function SearchMilestones(data: SearchMilestonesRequest): Promise<rpc.Response<SearchMilestonesResponse>> {
     return await rpc.call<SearchMilestonesResponse>('SearchMilestones', JSON.stringify(data));
+}
+
+export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
+    return await rpc.call<CreateTagResponse>('CreateTag', JSON.stringify(data));
+}
+
+export async function UpdateTag(data: UpdateTagRequest): Promise<rpc.Response<UpdateTagResponse>> {
+    return await rpc.call<UpdateTagResponse>('UpdateTag', JSON.stringify(data));
+}
+
+export async function DeleteTag(data: DeleteTagRequest): Promise<rpc.Response<DeleteTagResponse>> {
+    return await rpc.call<DeleteTagResponse>('DeleteTag', JSON.stringify(data));
+}
+
+export async function ListTags(data: ListTagsRequest): Promise<rpc.Response<ListTagsResponse>> {
+    return await rpc.call<ListTagsResponse>('ListTags', JSON.stringify(data));
 }
 
 export async function SendMessage(data: SendMessageRequest): Promise<rpc.Response<SendMessageResponse>> {
