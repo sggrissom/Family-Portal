@@ -372,6 +372,14 @@ export interface RemovePersonFromPhotoResponse {
     success: boolean
 }
 
+export interface UpdatePhotoTagsRequest {
+    photoId: number
+    tagIds: number[]
+}
+
+export interface UpdatePhotoTagsResponse {
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -617,6 +625,7 @@ export interface Image {
     photoDate: string
     createdAt: string
     status: number
+    tagIds: number[]
 }
 
 export interface PersonComparisonData {
@@ -952,6 +961,10 @@ export async function AddPeopleToPhoto(data: AddPeopleToPhotoRequest): Promise<r
 
 export async function RemovePersonFromPhotoProc(data: RemovePersonFromPhotoRequest): Promise<rpc.Response<RemovePersonFromPhotoResponse>> {
     return await rpc.call<RemovePersonFromPhotoResponse>('RemovePersonFromPhotoProc', JSON.stringify(data));
+}
+
+export async function UpdatePhotoTags(data: UpdatePhotoTagsRequest): Promise<rpc.Response<UpdatePhotoTagsResponse>> {
+    return await rpc.call<UpdatePhotoTagsResponse>('UpdatePhotoTags', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

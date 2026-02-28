@@ -39,6 +39,7 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListFamilyPhotos)
 	vbeam.RegisterProc(app, AddPeopleToPhoto)
 	vbeam.RegisterProc(app, RemovePersonFromPhotoProc)
+	vbeam.RegisterProc(app, UpdatePhotoTags)
 }
 
 // Request/Response types
@@ -144,6 +145,7 @@ type Image struct {
 	PhotoDate        time.Time `json:"photoDate"`
 	CreatedAt        time.Time `json:"createdAt"`
 	Status           int       `json:"status"` // 0 = active, 1 = processing, 2 = hidden
+	TagIds           []int     `json:"tagIds,omitempty"`
 }
 
 // PhotoPerson represents the many-to-many relationship between photos and people
@@ -184,6 +186,24 @@ func PackPhotoPerson(self *PhotoPerson, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 }
 
+// PhotoTag represents the many-to-many relationship between photos and tags
+type PhotoTag struct {
+	Id        int
+	PhotoId   int
+	TagId     int
+	FamilyId  int
+	CreatedAt time.Time
+}
+
+func PackPhotoTag(self *PhotoTag, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.PhotoId, buf)
+	vpack.Int(&self.TagId, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Time(&self.CreatedAt, buf)
+}
+
 // Buckets for vbolt database storage
 var ImagesBkt = vbolt.Bucket(&cfg.Info, "images", vpack.FInt, PackImage)
 var PhotoPersonBkt = vbolt.Bucket(&cfg.Info, "photo_person", vpack.FInt, PackPhotoPerson)
@@ -199,6 +219,11 @@ var PhotoPersonByPersonIndex = vbolt.Index(&cfg.Info, "photo_person_by_person", 
 
 // PhotoPersonByFamilyIndex: term = family_id, target = photo_person_id
 var PhotoPersonByFamilyIndex = vbolt.Index(&cfg.Info, "photo_person_by_family", vpack.FInt, vpack.FInt)
+
+var PhotoTagBkt = vbolt.Bucket(&cfg.Info, "photo_tags", vpack.FInt, PackPhotoTag)
+var PhotoTagByPhotoIndex  = vbolt.Index(&cfg.Info, "photo_tag_by_photo",  vpack.FInt, vpack.FInt)
+var PhotoTagByTagIndex    = vbolt.Index(&cfg.Info, "photo_tag_by_tag",    vpack.FInt, vpack.FInt)
+var PhotoTagByFamilyIndex = vbolt.Index(&cfg.Info, "photo_tag_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
 func GetImageById(tx *vbolt.Tx, imageId int) (image Image) {
@@ -261,6 +286,86 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	vbolt.ReadTermTargets(tx, ImageByFamilyIndex, familyId, &imageIds, vbolt.Window{})
 	vbolt.ReadSlice(tx, ImagesBkt, imageIds, &images)
 	return
+}
+
+func GetPhotoTagIds(tx *vbolt.Tx, photoId int) []int {
+	var ptIds []int
+	vbolt.ReadTermTargets(tx, PhotoTagByPhotoIndex, photoId, &ptIds, vbolt.Window{})
+	if len(ptIds) == 0 {
+		return []int{}
+	}
+	var pts []PhotoTag
+	vbolt.ReadSlice(tx, PhotoTagBkt, ptIds, &pts)
+	tagIds := make([]int, 0, len(pts))
+	for _, pt := range pts {
+		tagIds = append(tagIds, pt.TagId)
+	}
+	return tagIds
+}
+
+func addTagToPhoto(tx *vbolt.Tx, photoId int, tagId int, familyId int) {
+	pt := PhotoTag{
+		Id:        vbolt.NextIntId(tx, PhotoTagBkt),
+		PhotoId:   photoId,
+		TagId:     tagId,
+		FamilyId:  familyId,
+		CreatedAt: time.Now(),
+	}
+	vbolt.Write(tx, PhotoTagBkt, pt.Id, &pt)
+	vbolt.SetTargetSingleTerm(tx, PhotoTagByPhotoIndex, pt.Id, photoId)
+	vbolt.SetTargetSingleTerm(tx, PhotoTagByTagIndex, pt.Id, tagId)
+	vbolt.SetTargetSingleTerm(tx, PhotoTagByFamilyIndex, pt.Id, familyId)
+}
+
+func removeTagFromPhoto(tx *vbolt.Tx, photoId int, tagId int) {
+	var ptIds []int
+	vbolt.ReadTermTargets(tx, PhotoTagByPhotoIndex, photoId, &ptIds, vbolt.Window{})
+	if len(ptIds) == 0 {
+		return
+	}
+	var pts []PhotoTag
+	vbolt.ReadSlice(tx, PhotoTagBkt, ptIds, &pts)
+	for _, pt := range pts {
+		if pt.TagId == tagId {
+			vbolt.Delete(tx, PhotoTagBkt, pt.Id)
+			vbolt.SetTargetSingleTerm(tx, PhotoTagByPhotoIndex, pt.Id, -1)
+			vbolt.SetTargetSingleTerm(tx, PhotoTagByTagIndex, pt.Id, -1)
+			vbolt.SetTargetSingleTerm(tx, PhotoTagByFamilyIndex, pt.Id, -1)
+			break
+		}
+	}
+}
+
+func removeAllPhotoTags(tx *vbolt.Tx, photoId int) {
+	var ptIds []int
+	vbolt.ReadTermTargets(tx, PhotoTagByPhotoIndex, photoId, &ptIds, vbolt.Window{})
+	if len(ptIds) == 0 {
+		return
+	}
+	var pts []PhotoTag
+	vbolt.ReadSlice(tx, PhotoTagBkt, ptIds, &pts)
+	for _, pt := range pts {
+		vbolt.Delete(tx, PhotoTagBkt, pt.Id)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByPhotoIndex, pt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByTagIndex, pt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByFamilyIndex, pt.Id, -1)
+	}
+}
+
+func removePhotoTagsByTag(tx *vbolt.Tx, tagId int) {
+	var ptIds []int
+	vbolt.ReadTermTargets(tx, PhotoTagByTagIndex, tagId, &ptIds, vbolt.Window{})
+	if len(ptIds) == 0 {
+		return
+	}
+	var pts []PhotoTag
+	vbolt.ReadSlice(tx, PhotoTagBkt, ptIds, &pts)
+	for _, pt := range pts {
+		vbolt.Delete(tx, PhotoTagBkt, pt.Id)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByPhotoIndex, pt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByTagIndex, pt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoTagByFamilyIndex, pt.Id, -1)
+	}
 }
 
 // Add a person to a photo
@@ -636,7 +741,8 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		"filename":    fileHeader.Filename,
 	})
 
-	// Return success response
+	// Return success response (TagIds will be empty for new uploads)
+	image.TagIds = []int{}
 	response := AddPhotoResponse{
 		Image: image,
 	}
@@ -811,6 +917,72 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 // vbeam procedures for photo operations
 
+type UpdatePhotoTagsRequest struct {
+	PhotoId int   `json:"photoId"`
+	TagIds  []int `json:"tagIds"`
+}
+
+type UpdatePhotoTagsResponse struct{}
+
+func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp UpdatePhotoTagsResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if req.PhotoId <= 0 {
+		err = errors.New("Photo ID is required")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	photo := GetImageById(ctx.Tx, req.PhotoId)
+	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+		err = errors.New("Photo not found or access denied")
+		return
+	}
+
+	tagIds := req.TagIds
+	if tagIds == nil {
+		tagIds = []int{}
+	}
+	for _, tagId := range tagIds {
+		tag := getTagById(ctx.Tx, tagId)
+		if tag.Id == 0 || tag.FamilyId != user.FamilyId {
+			err = errors.New("Tag not found or access denied")
+			return
+		}
+	}
+
+	existingTagIds := GetPhotoTagIds(ctx.Tx, req.PhotoId)
+	existingSet := make(map[int]struct{}, len(existingTagIds))
+	for _, tagId := range existingTagIds {
+		existingSet[tagId] = struct{}{}
+	}
+
+	desiredSet := make(map[int]struct{}, len(tagIds))
+	for _, tagId := range tagIds {
+		desiredSet[tagId] = struct{}{}
+	}
+
+	for tagId := range existingSet {
+		if _, keep := desiredSet[tagId]; !keep {
+			removeTagFromPhoto(ctx.Tx, req.PhotoId, tagId)
+		}
+	}
+
+	for tagId := range desiredSet {
+		if _, exists := existingSet[tagId]; !exists {
+			addTagToPhoto(ctx.Tx, req.PhotoId, tagId, user.FamilyId)
+		}
+	}
+
+	vbolt.TxCommit(ctx.Tx)
+	return
+}
+
 // GetPhoto retrieves a photo by ID with family access control
 func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, err error) {
 	// Get authenticated user
@@ -838,6 +1010,7 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 	}
 
 	resp.Image = photo
+	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
 	resp.People = people
 	return
 }
@@ -893,6 +1066,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Image = photo
+	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
 	return
 }
 
@@ -932,6 +1106,9 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 
 	// Remove milestone-photo relationships
 	removePhotoFromMilestones(ctx.Tx, photo.Id)
+
+	// Remove photo-tag relationships
+	removeAllPhotoTags(ctx.Tx, photo.Id)
 
 	// Remove from database
 	vbolt.Delete(ctx.Tx, ImagesBkt, photo.Id)
@@ -1108,6 +1285,8 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		for i := range people {
 			people[i].Age = calculateAge(people[i].Birthday)
 		}
+
+		image.TagIds = GetPhotoTagIds(ctx.Tx, image.Id)
 
 		// Add to response (photos without people are still included)
 		resp.Photos = append(resp.Photos, PhotoWithPeople{
