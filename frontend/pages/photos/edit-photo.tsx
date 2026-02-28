@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -9,12 +10,21 @@ import "./edit-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
 
-export async function fetch(route: string, prefix: string) {
-  const photoId = getIdFromRoute(route) || 0;
-  return server.GetPhoto({ id: photoId });
-}
+type EditPhotoData = {
+  photo: server.GetPhotoResponse;
+  tags: server.Tag[];
+};
 
-type EditPhotoData = server.GetPhotoResponse | { image: null };
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<EditPhotoData>> {
+  const photoId = getIdFromRoute(route) || 0;
+  const [photo, photoErr] = await server.GetPhoto({ id: photoId });
+  if (photoErr) return [null, photoErr];
+  const [tagsResp] = await server.ListTags({});
+  return [{ photo: photo!, tags: tagsResp?.tags ?? [] }, ""];
+}
 
 type EditPhotoForm = {
   title: string;
@@ -23,6 +33,7 @@ type EditPhotoForm = {
   photoDate: string;
   ageYears: string;
   ageMonths: string;
+  tagIds: number[];
   loading: boolean;
   error: string;
 };
@@ -36,6 +47,7 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
       photoDate: "",
       ageYears: "",
       ageMonths: "",
+      tagIds: [],
       loading: false,
       error: "",
     };
@@ -51,6 +63,7 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     photoDate: photoDate,
     ageYears: "",
     ageMonths: "",
+    tagIds: photo.tagIds ?? [],
     loading: false,
     error: "",
   };
@@ -62,7 +75,18 @@ function onInputTypeChange(form: EditPhotoForm, inputType: string) {
   vlens.scheduleRedraw();
 }
 
-export function view(route: string, prefix: string, data: EditPhotoData): preact.ComponentChild {
+function onToggleTag(form: EditPhotoForm, tagId: number) {
+  const idx = form.tagIds.indexOf(tagId);
+  if (idx >= 0) form.tagIds.splice(idx, 1);
+  else form.tagIds.push(tagId);
+  vlens.scheduleRedraw();
+}
+
+export function view(
+  route: string,
+  prefix: string,
+  data: EditPhotoData
+): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
@@ -70,7 +94,7 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
     return;
   }
 
-  if (!data.image) {
+  if (!data.photo || !data.photo.image) {
     return (
       <div>
         <Header isHome={false} />
@@ -88,13 +112,13 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
     );
   }
 
-  const form = useEditPhotoForm(data.image);
+  const form = useEditPhotoForm(data.photo.image);
 
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="edit-photo-container">
-        <EditPhotoPage form={form} photo={data.image} />
+        <EditPhotoPage form={form} photo={data.photo.image} allTags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -142,6 +166,7 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
     }
 
     if (resp && resp.image) {
+      await server.UpdatePhotoTags({ photoId: photo.id, tagIds: form.tagIds });
       // Success! Navigate to view photo page
       core.setRoute(`/view-photo/${photo.id}`);
     } else {
@@ -159,6 +184,7 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
 interface EditPhotoPageProps {
   form: EditPhotoForm;
   photo: server.Image;
+  allTags: server.Tag[];
 }
 
 const formatPhotoDate = (dateString: string) => {
@@ -173,7 +199,7 @@ const formatPhotoDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
 };
 
-const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
+const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
   return (
     <div className="edit-photo-page">
       <div className="auth-card">
@@ -315,6 +341,29 @@ const EditPhotoPage = ({ form, photo }: EditPhotoPageProps) => {
                   placeholder="6"
                   disabled={form.loading}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div className="form-group">
+              <label>Tags</label>
+              <div className="tag-picker">
+                {allTags.map(tag => {
+                  const selected = form.tagIds.includes(tag.id);
+                  return (
+                    <div
+                      key={tag.id}
+                      className={`tag-pill${selected ? " selected" : ""}`}
+                      style={{ borderColor: tag.color }}
+                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
+                    >
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

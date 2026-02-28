@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -11,12 +12,29 @@ import "./view-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
 
-export async function fetch(route: string, prefix: string) {
-  const photoId = getIdFromRoute(route) || 0;
-  return server.GetPhoto({ id: photoId });
-}
+type ViewPhotoData = {
+  image: server.Image | null;
+  people: server.Person[] | null;
+  tags: server.Tag[];
+};
 
-type ViewPhotoData = { image: server.Image | null; people: server.Person[] | null };
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<ViewPhotoData>> {
+  const photoId = getIdFromRoute(route) || 0;
+  const [photoResp, photoErr] = await server.GetPhoto({ id: photoId });
+  if (photoErr) return [null, photoErr];
+  const [tagsResp] = await server.ListTags({});
+  return [
+    {
+      image: photoResp?.image ?? null,
+      people: photoResp?.people ?? null,
+      tags: tagsResp?.tags ?? [],
+    },
+    "",
+  ];
+}
 
 const formatPhotoDate = (dateString: string) => {
   if (!dateString) return "";
@@ -60,7 +78,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     <div>
       <Header isHome={false} />
       <main id="app" className="view-photo-container">
-        <ViewPhotoPage photo={data.image} people={data.people || []} />
+        <ViewPhotoPage photo={data.image} people={data.people || []} allTags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -70,6 +88,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
 interface ViewPhotoPageProps {
   photo: server.Image;
   people: server.Person[];
+  allTags: server.Tag[];
 }
 
 async function handleDeletePhoto(photo: server.Image) {
@@ -173,7 +192,7 @@ function updateCropValues(state: CropModalState, values: CropValues) {
   state.cropScale = values.cropScale;
 }
 
-const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
+const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
 
@@ -239,6 +258,25 @@ const ViewPhotoPage = ({ photo, people }: ViewPhotoPageProps) => {
               </div>
             )}
           </div>
+
+          {/* Tags */}
+          {photo.tagIds && photo.tagIds.length > 0 && (
+            <div className="photo-tags">
+              <h3>Tags</h3>
+              <div className="tag-list">
+                {photo.tagIds.map(tagId => {
+                  const tag = allTags.find(t => t.id === tagId);
+                  if (!tag) return null;
+                  return (
+                    <span key={tag.id} className="tag-pill-view" style={{ borderColor: tag.color }}>
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="photo-details">
             <small>

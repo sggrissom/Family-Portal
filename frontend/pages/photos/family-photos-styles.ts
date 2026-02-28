@@ -245,6 +245,82 @@ block(`
 }
 `);
 
+// Tag filter
+block(`
+.tags-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+`);
+
+block(`
+.tag-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.tag-filter-label:hover {
+  background: var(--hover-bg);
+  border-color: var(--primary-accent);
+}
+.tag-filter-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+`);
+
+block(`
+.tag-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+`);
+
+block(`
+.empty-state-inline {
+  padding: 0.5rem 0;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.875rem;
+}
+`);
+
+// Tag badges on photo cards
+block(`
+.tag-badges {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+`);
+
+block(`
+.tag-badge {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+`);
+
 // Responsive styles
 block(`
 @media (max-width: 768px) {

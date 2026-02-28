@@ -136,6 +136,29 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
           </div>
 
           <div className="filter-section">
+            <h3>Filter by Tags</h3>
+            <div className="tags-filter">
+              {photoFilter.tagsLoading ? (
+                <div className="loading-state">Loading tags...</div>
+              ) : photoFilter.tags.length === 0 ? (
+                <div className="empty-state-inline">No tags created yet</div>
+              ) : (
+                photoFilter.tags.map(tag => (
+                  <label key={tag.id} className="tag-filter-label">
+                    <input
+                      type="checkbox"
+                      checked={photoFilter.selectedTagIds.includes(tag.id)}
+                      onChange={() => photoFilter.toggleTag(tag.id)}
+                    />
+                    <span className="tag-color-dot" style={{ background: tag.color }} />
+                    <span>{tag.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="filter-section">
             <h3>Filter by Date</h3>
             <div className="date-filter">
               <div className="date-input-group">
@@ -208,6 +231,21 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                       </div>
                     )}
                   </div>
+                  {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
+                    <div className="tag-badges">
+                      {photoWithPeople.image.tagIds.map(tagId => {
+                        const tag = photoFilter.tags.find(t => t.id === tagId);
+                        return tag ? (
+                          <span
+                            key={tagId}
+                            className="tag-badge"
+                            style={{ background: tag.color }}
+                            title={tag.name}
+                          />
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                   <div className="photo-info">
                     <h3 className="photo-title">{photoWithPeople.image.title}</h3>
                     <div className="photo-date">

@@ -3,12 +3,16 @@ import * as server from "../server";
 
 export interface PhotoFilterState {
   selectedPeopleIds: number[];
+  selectedTagIds: number[];
   dateFrom: string;
   dateTo: string;
   isFilterPanelOpen: boolean;
   people: server.Person[];
   peopleLoaded: boolean;
   peopleLoading: boolean;
+  tags: server.Tag[];
+  tagsLoaded: boolean;
+  tagsLoading: boolean;
 }
 
 interface NormalizedDateRange {
@@ -18,12 +22,16 @@ interface NormalizedDateRange {
 
 const createInitialState = (): PhotoFilterState => ({
   selectedPeopleIds: [],
+  selectedTagIds: [],
   dateFrom: "",
   dateTo: "",
   isFilterPanelOpen: false,
   people: [],
   peopleLoaded: false,
   peopleLoading: false,
+  tags: [],
+  tagsLoaded: false,
+  tagsLoading: false,
 });
 
 const photoFilterState = vlens.declareHook((): PhotoFilterState => createInitialState());
@@ -53,8 +61,41 @@ export const usePhotoFilter = () => {
     vlens.scheduleRedraw();
   };
 
+  const toggleTag = (tagId: number) => {
+    const currentIndex = state.selectedTagIds.indexOf(tagId);
+    if (currentIndex === -1) {
+      state.selectedTagIds = [...state.selectedTagIds, tagId];
+    } else {
+      state.selectedTagIds = state.selectedTagIds.filter(id => id !== tagId);
+    }
+    vlens.scheduleRedraw();
+  };
+
+  const loadTags = async () => {
+    if (state.tagsLoaded || state.tagsLoading) {
+      return;
+    }
+
+    state.tagsLoading = true;
+    vlens.scheduleRedraw();
+
+    try {
+      const [result, error] = await server.ListTags({});
+      if (result && !error) {
+        state.tags = result.tags || [];
+        state.tagsLoaded = true;
+      }
+    } catch (error) {
+      console.error("Failed to load tags:", error);
+    } finally {
+      state.tagsLoading = false;
+      vlens.scheduleRedraw();
+    }
+  };
+
   const clearAllFilters = () => {
     state.selectedPeopleIds = [];
+    state.selectedTagIds = [];
     state.dateFrom = "";
     state.dateTo = "";
     vlens.scheduleRedraw();
@@ -85,9 +126,13 @@ export const usePhotoFilter = () => {
   const toggleFilterPanel = async () => {
     state.isFilterPanelOpen = !state.isFilterPanelOpen;
 
-    // Load people when opening the filter panel for the first time
-    if (state.isFilterPanelOpen && !state.peopleLoaded) {
-      await loadPeople();
+    if (state.isFilterPanelOpen) {
+      if (!state.peopleLoaded) {
+        await loadPeople();
+      }
+      if (!state.tagsLoaded) {
+        await loadTags();
+      }
     }
 
     vlens.scheduleRedraw();
@@ -104,6 +149,13 @@ export const usePhotoFilter = () => {
           photoWithPeople.people.some(person => person.id === selectedId)
         );
       });
+    }
+
+    // Filter by tags
+    if (state.selectedTagIds.length > 0) {
+      filtered = filtered.filter(p =>
+        state.selectedTagIds.some(tagId => p.image.tagIds?.includes(tagId))
+      );
     }
 
     // Filter by date range
@@ -127,7 +179,12 @@ export const usePhotoFilter = () => {
   };
 
   const hasActiveFilters = (): boolean => {
-    return state.selectedPeopleIds.length > 0 || !!state.dateFrom || !!state.dateTo;
+    return (
+      state.selectedPeopleIds.length > 0 ||
+      state.selectedTagIds.length > 0 ||
+      !!state.dateFrom ||
+      !!state.dateTo
+    );
   };
 
   const getFilterSummary = (): string => {
@@ -135,6 +192,10 @@ export const usePhotoFilter = () => {
 
     if (state.selectedPeopleIds.length > 0) {
       parts.push(`${state.selectedPeopleIds.length} people`);
+    }
+
+    if (state.selectedTagIds.length > 0) {
+      parts.push(`${state.selectedTagIds.length} tags`);
     }
 
     if (state.dateFrom || state.dateTo) {
@@ -154,18 +215,24 @@ export const usePhotoFilter = () => {
 
   return {
     selectedPeopleIds: state.selectedPeopleIds,
+    selectedTagIds: state.selectedTagIds,
     dateFrom: state.dateFrom,
     dateTo: state.dateTo,
     isFilterPanelOpen: state.isFilterPanelOpen,
     people: state.people,
     peopleLoaded: state.peopleLoaded,
     peopleLoading: state.peopleLoading,
+    tags: state.tags,
+    tagsLoaded: state.tagsLoaded,
+    tagsLoading: state.tagsLoading,
     togglePerson,
+    toggleTag,
     setDateFrom,
     setDateTo,
     clearAllFilters,
     toggleFilterPanel,
     loadPeople,
+    loadTags,
     filterPhotos,
     hasActiveFilters,
     getFilterSummary,

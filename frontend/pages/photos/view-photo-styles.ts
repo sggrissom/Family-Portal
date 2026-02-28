@@ -189,6 +189,28 @@ block(`
 }
 `);
 
+// Photo tags section
+block(`
+.photo-tags { margin-top: 1rem; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.tag-pill-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--surface);
+  font-size: 0.8rem;
+}
+.tag-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+`);
+
 // Error page
 block(`
 .error-page {
