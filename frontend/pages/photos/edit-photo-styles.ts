@@ -130,6 +130,9 @@ block(`
   user-select: none;
   transition: background 0.15s;
 }
+`);
+
+block(`
 .tag-pill.selected {
   background: color-mix(in srgb, var(--surface) 60%, currentColor 40%);
 }

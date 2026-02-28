@@ -19,6 +19,7 @@ type AddPhotoForm = {
   photoDate: string;
   ageYears: string;
   ageMonths: string;
+  tagIds: number[];
   selectedFile: File | null;
   previewUrl: string;
   error: string;
@@ -35,6 +36,7 @@ const useAddPhotoForm = vlens.declareHook(
     photoDate: "",
     ageYears: "",
     ageMonths: "",
+    tagIds: [],
     selectedFile: null,
     previewUrl: "",
     error: "",
@@ -43,22 +45,30 @@ const useAddPhotoForm = vlens.declareHook(
   })
 );
 
-export async function fetch(route: string, prefix: string) {
-  // Fetch people list to populate the person selector
-  return server.ListPeople({});
+type AddPhotoData = {
+  people: server.ListPeopleResponse;
+  tags: server.Tag[];
+};
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddPhotoData>> {
+  const [people, peopleErr] = await server.ListPeople({});
+  if (peopleErr) return [null, peopleErr];
+  const [tags, tagsErr] = await server.ListTags({});
+  if (tagsErr) return [null, tagsErr];
+  return [{ people: people!, tags: tags!.tags }, ""];
 }
 
 export function view(
   route: string,
   prefix: string,
-  data: server.ListPeopleResponse
+  data: AddPhotoData
 ): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
   }
 
-  if (!data.people || data.people.length === 0) {
+  if (!data.people.people || data.people.people.length === 0) {
     return (
       <NoFamilyMembersPage
         message="Please add family members before adding photos"
@@ -77,7 +87,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-photo-container">
-        <AddPhotoPage form={form} people={data.people} />
+        <AddPhotoPage form={form} people={data.people.people} tags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -162,6 +172,11 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
       photoStatus.startMonitoring(responseData.image.id, responseData.image.status);
     }
 
+    // Tag the uploaded photo
+    if (form.tagIds.length > 0 && responseData.image?.id) {
+      await server.UpdatePhotoTags({ photoId: responseData.image.id, tagIds: form.tagIds });
+    }
+
     // Redirect after successful upload
     if (form.selectedPersonIds.length === 1) {
       // If only one person selected, go to their profile
@@ -176,6 +191,13 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
       error instanceof Error ? error.message : "Failed to upload photo. Please try again.";
     vlens.scheduleRedraw();
   }
+}
+
+function onToggleTag(form: AddPhotoForm, tagId: number) {
+  const idx = form.tagIds.indexOf(tagId);
+  if (idx >= 0) form.tagIds.splice(idx, 1);
+  else form.tagIds.push(tagId);
+  vlens.scheduleRedraw();
 }
 
 function onInputTypeChange(form: AddPhotoForm, newType: string) {
@@ -267,9 +289,10 @@ function removeSelectedFile(form: AddPhotoForm) {
 interface AddPhotoPageProps {
   form: AddPhotoForm;
   people: server.Person[];
+  tags: server.Tag[];
 }
 
-const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
+const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
   // Filter to show all family members for photos
   const { children, parents } = splitPeopleByType(people);
 
@@ -411,6 +434,29 @@ const AddPhotoPage = ({ form, people }: AddPhotoPageProps) => {
               disabled={form.loading}
             />
           </div>
+
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div className="form-group">
+              <label>Tags</label>
+              <div className="tag-picker">
+                {tags.map(tag => {
+                  const selected = form.tagIds.includes(tag.id);
+                  return (
+                    <div
+                      key={tag.id}
+                      className={`tag-pill${selected ? " selected" : ""}`}
+                      style={{ borderColor: tag.color }}
+                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
+                    >
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Date or Age Toggle */}
           <div className="form-group">

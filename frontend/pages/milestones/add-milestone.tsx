@@ -20,6 +20,7 @@ type AddMilestoneForm = {
   ageYears: string;
   ageMonths: string;
   photoIds: number[];
+  tagIds: number[];
   error: string;
   loading: boolean;
 };
@@ -34,6 +35,7 @@ const useAddMilestoneForm = vlens.declareHook(
     ageYears: "",
     ageMonths: "",
     photoIds: [],
+    tagIds: [],
     error: "",
     loading: false,
   })
@@ -42,6 +44,7 @@ const useAddMilestoneForm = vlens.declareHook(
 type AddMilestoneData = {
   people: server.ListPeopleResponse;
   photos: server.ListFamilyPhotosResponse;
+  tags: server.Tag[];
 };
 
 export async function fetch(
@@ -57,7 +60,10 @@ export async function fetch(
   });
   if (photosErr) return [null, photosErr];
 
-  return [{ people: people!, photos: photos! }, ""];
+  const [tags, tagsErr] = await server.ListTags({});
+  if (tagsErr) return [null, tagsErr];
+
+  return [{ people: people!, photos: photos!, tags: tags!.tags }, ""];
 }
 
 export function view(route: string, prefix: string, data: AddMilestoneData): preact.ComponentChild {
@@ -85,7 +91,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <AddMilestonePage form={form} people={data.people.people} photos={data.photos.photos} />
+        <AddMilestonePage form={form} people={data.people.people} photos={data.photos.photos} tags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -141,6 +147,9 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
     const [resp, err] = await server.AddMilestone(requestData);
 
     if (resp) {
+      if (form.tagIds.length > 0) {
+        await server.UpdateMilestoneTags({ milestoneId: resp.milestone.id, tagIds: form.tagIds });
+      }
       core.setRoute(`/profile/${form.selectedPersonId}`);
     } else {
       form.loading = false;
@@ -160,6 +169,13 @@ function onInputTypeChange(form: AddMilestoneForm, newType: string) {
   vlens.scheduleRedraw();
 }
 
+function onToggleTag(form: AddMilestoneForm, tagId: number) {
+  const idx = form.tagIds.indexOf(tagId);
+  if (idx >= 0) form.tagIds.splice(idx, 1);
+  else form.tagIds.push(tagId);
+  vlens.scheduleRedraw();
+}
+
 function onTogglePhoto(form: AddMilestoneForm, photoId: number) {
   const idx = form.photoIds.indexOf(photoId);
   if (idx >= 0) {
@@ -174,9 +190,10 @@ interface AddMilestonePageProps {
   form: AddMilestoneForm;
   people: server.Person[];
   photos: server.PhotoWithPeople[];
+  tags: server.Tag[];
 }
 
-const AddMilestonePage = ({ form, people, photos }: AddMilestonePageProps) => {
+const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps) => {
   // Filter to show all family members for milestones
   const { children, parents } = splitPeopleByType(people);
 
@@ -290,6 +307,29 @@ const AddMilestonePage = ({ form, people, photos }: AddMilestonePageProps) => {
               )}
             </div>
           </div>
+
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div className="form-group">
+              <label>Tags</label>
+              <div className="tag-picker">
+                {tags.map(tag => {
+                  const selected = form.tagIds.includes(tag.id);
+                  return (
+                    <div
+                      key={tag.id}
+                      className={`tag-pill${selected ? " selected" : ""}`}
+                      style={{ borderColor: tag.color }}
+                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
+                    >
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Date or Age Toggle */}
           <div className="form-group">

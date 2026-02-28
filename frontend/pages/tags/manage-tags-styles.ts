@@ -15,6 +15,8 @@ block(`
   align-items: center;
   margin-bottom: 2rem;
 }
+`);
+block(`
 .tag-create-row input[type="text"] {
   flex: 1;
 }
@@ -65,6 +67,8 @@ block(`
   gap: 0.5rem;
   flex: 1;
 }
+`);
+block(`
 .tag-edit-row input[type="text"] {
   flex: 1;
 }
@@ -80,6 +84,8 @@ block(`
   line-height: 1;
   opacity: 0.7;
 }
+`);
+block(`
 .tag-action-btn:hover {
   opacity: 1;
 }
