@@ -229,7 +229,9 @@ async function onSaveTag(state: ManageTagsState, tagId: number) {
 }
 
 async function onDeleteTag(state: ManageTagsState, tagId: number) {
-  if (!confirm("Delete this tag? It will be removed from all milestones and photos.")) return;
+  const tag = state.tags.find(t => t.id === tagId);
+  const name = tag?.name || "this tag";
+  if (!confirm(`Delete "${name}"? It will be removed from all milestones and photos.`)) return;
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();

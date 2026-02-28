@@ -376,6 +376,20 @@ export const UnifiedTimeline = ({
                           {photo.description && (
                             <div className="photo-description">{photo.description}</div>
                           )}
+                          {photo.tagIds && photo.tagIds.length > 0 && (
+                            <div className="milestone-tags">
+                              {photo.tagIds.map(tagId => {
+                                const tag = tagCache.getTag(tagId);
+                                if (!tag) return null;
+                                return (
+                                  <span key={tagId} className="milestone-tag-badge"
+                                    style={{ borderColor: tag.color, color: tag.color }}>
+                                    {tag.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
