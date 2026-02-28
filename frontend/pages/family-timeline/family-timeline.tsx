@@ -76,6 +76,7 @@ type FamilyTimelineState = {
   searchQuery: string;
   searchResults: server.Milestone[] | null;
   isSearching: boolean;
+  selectedTagIds: number[];
 };
 
 const useFamilyTimelineState = vlens.declareHook(
@@ -86,6 +87,7 @@ const useFamilyTimelineState = vlens.declareHook(
     searchQuery: "",
     searchResults: null,
     isSearching: false,
+    selectedTagIds: [],
   })
 );
 
@@ -166,6 +168,8 @@ const YearJumpNav = ({ years }: { years: number[] }) => (
 const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   const photoStatus = usePhotoStatus();
   const state = useFamilyTimelineState();
+  const tagCache = useTagCache();
+  tagCache.loadTags();
 
   const people = data.people || [];
 
@@ -297,6 +301,21 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     });
   }
 
+  // Filter by tag if selected
+  if (state.selectedTagIds.length > 0) {
+    filteredItems = filteredItems.filter(item => {
+      if (item.type === "milestone") {
+        const m = item.data as server.Milestone;
+        return state.selectedTagIds.some(id => m.tagIds?.includes(id));
+      }
+      if (item.type === "photo") {
+        const p = item.data as server.Image;
+        return state.selectedTagIds.some(id => p.tagIds?.includes(id));
+      }
+      return false;
+    });
+  }
+
   // Sort items by date
   const sortedItems = [...filteredItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
@@ -406,6 +425,30 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                 <option value="oldest">Oldest First</option>
               </select>
             </div>
+
+            {tagCache.tags.length > 0 && (
+              <div className="filter-group timeline-tag-filter">
+                <label>Tags:</label>
+                <div className="tag-filter-chips">
+                  {tagCache.tags.map(tag => (
+                    <button
+                      key={tag.id}
+                      className={`tag-filter-chip${state.selectedTagIds.includes(tag.id) ? " active" : ""}`}
+                      style={state.selectedTagIds.includes(tag.id) ? { borderColor: tag.color, color: tag.color } : {}}
+                      onClick={() => {
+                        const idx = state.selectedTagIds.indexOf(tag.id);
+                        if (idx >= 0) state.selectedTagIds.splice(idx, 1);
+                        else state.selectedTagIds.push(tag.id);
+                        vlens.scheduleRedraw();
+                      }}
+                    >
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {state.searchResults !== null ? (
@@ -487,6 +530,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                     onClick={() => {
                       state.selectedPerson = "all";
                       state.selectedType = "all";
+                      state.selectedTagIds = [];
                       vlens.scheduleRedraw();
                     }}
                   >
@@ -529,9 +573,6 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
   switch (item.type) {
     case "milestone": {
       const milestone = item.data as server.Milestone;
-      if (milestone.tagIds && milestone.tagIds.length > 0) {
-        tagCache.loadTags();
-      }
       return (
         <div className="timeline-item milestone-item">
           <div className="timeline-item-icon">{getCategoryIcon(milestone.category)}</div>

@@ -29,6 +29,8 @@ interface UnifiedTimelineProps {
   selectedAgeFilter: string;
   sortOrder: "newest" | "oldest";
   onAgeFilterChange: (filter: string) => void;
+  selectedTagIds: number[];
+  onToggleTag: (tagId: number) => void;
 }
 
 // Unified timeline item type
@@ -51,9 +53,12 @@ export const UnifiedTimeline = ({
   selectedAgeFilter,
   sortOrder,
   onAgeFilterChange,
+  selectedTagIds,
+  onToggleTag,
 }: UnifiedTimelineProps) => {
   const photoStatus = usePhotoStatus();
   const tagCache = useTagCache();
+  tagCache.loadTags();
 
   // Initialize monitoring for processing photos
   if (photos && photos.length > 0) {
@@ -119,12 +124,28 @@ export const UnifiedTimeline = ({
   });
 
   // Filter by age if selected
-  const filteredItems =
+  const ageFilteredItems =
     selectedAgeFilter === "all"
       ? sortedItems
       : sortedItems.filter(item => {
           const ageInYears = getAgeInYears(item.age);
           return ageInYears.toString() === selectedAgeFilter;
+        });
+
+  // Filter by tag if selected
+  const filteredItems =
+    selectedTagIds.length === 0
+      ? ageFilteredItems
+      : ageFilteredItems.filter(item => {
+          if (item.type === "milestone") {
+            const m = item.data as server.Milestone;
+            return selectedTagIds.some(id => m.tagIds?.includes(id));
+          }
+          if (item.type === "photo") {
+            const p = item.data as server.Image;
+            return selectedTagIds.some(id => p.tagIds?.includes(id));
+          }
+          return false;
         });
 
   // Extract unique age years for filter options
@@ -184,8 +205,25 @@ export const UnifiedTimeline = ({
         </div>
       )}
 
+      {/* Tag Filter */}
+      {tagCache.tags.length > 0 && (
+        <div className="age-filter">
+          {tagCache.tags.map(tag => (
+            <button
+              key={tag.id}
+              className={`filter-btn${selectedTagIds.includes(tag.id) ? " active" : ""}`}
+              style={selectedTagIds.includes(tag.id) ? { borderColor: tag.color, color: tag.color } : {}}
+              onClick={() => onToggleTag(tag.id)}
+            >
+              <span className="tag-color-dot" style={{ background: tag.color }} />
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Item count */}
-      {selectedAgeFilter !== "all" && hasFilteredData && (
+      {(selectedAgeFilter !== "all" || selectedTagIds.length > 0) && hasFilteredData && (
         <div className="filter-info">
           Showing {filteredItems.length} of {sortedItems.length} entries
         </div>
@@ -198,9 +236,6 @@ export const UnifiedTimeline = ({
             switch (item.type) {
               case "milestone": {
                 const milestone = item.data as server.Milestone;
-                if (milestone.tagIds && milestone.tagIds.length > 0) {
-                  tagCache.loadTags();
-                }
                 return (
                   <div key={`milestone-${item.id}`} className="timeline-item milestone-item">
                     <div className="timeline-item-icon">{getCategoryIcon(milestone.category)}</div>
@@ -364,7 +399,7 @@ export const UnifiedTimeline = ({
         </div>
       ) : (
         <div className="empty-state">
-          <p>No entries found for the selected age range.</p>
+          <p>No entries found for the selected filters.</p>
           <button className="btn btn-secondary" onClick={() => onAgeFilterChange("all")}>
             Show All Ages
           </button>

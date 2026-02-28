@@ -604,6 +604,15 @@ block(`
 `);
 
 block(`
+.tag-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+`);
+
+block(`
 .milestone-tag-badge {
   font-size: 11px;
   padding: 1px 7px;

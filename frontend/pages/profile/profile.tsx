@@ -19,6 +19,7 @@ type ProfileState = {
   };
   selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
   sortOrder: "newest" | "oldest";
+  selectedTagIds: number[];
 };
 
 const useProfileState = vlens.declareHook(
@@ -30,6 +31,7 @@ const useProfileState = vlens.declareHook(
     },
     selectedAgeFilter: "all",
     sortOrder: "newest",
+    selectedTagIds: [],
   })
 );
 
@@ -115,6 +117,13 @@ function setAgeFilter(state: ProfileState, filter: string) {
 
 function setSortOrder(state: ProfileState, order: "newest" | "oldest") {
   state.sortOrder = order;
+  vlens.scheduleRedraw();
+}
+
+function toggleTag(state: ProfileState, tagId: number) {
+  const idx = state.selectedTagIds.indexOf(tagId);
+  if (idx >= 0) state.selectedTagIds.splice(idx, 1);
+  else state.selectedTagIds.push(tagId);
   vlens.scheduleRedraw();
 }
 
@@ -239,6 +248,8 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
           selectedAgeFilter={state.selectedAgeFilter}
           sortOrder={state.sortOrder}
           onAgeFilterChange={filter => setAgeFilter(state, filter)}
+          selectedTagIds={state.selectedTagIds}
+          onToggleTag={tagId => toggleTag(state, tagId)}
         />
       </div>
     </div>

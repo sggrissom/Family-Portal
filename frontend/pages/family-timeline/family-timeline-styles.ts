@@ -525,6 +525,32 @@ block(`
 `);
 
 block(`
+.tag-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+`);
+block(`.timeline-tag-filter { align-items: flex-start; flex-wrap: wrap; }`);
+block(`.tag-filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }`);
+block(`
+.tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+`);
+block(`.tag-filter-chip.active { background: var(--surface); font-weight: 500; }`);
+
+block(`
 .milestone-tag-badge {
   font-size: 11px;
   padding: 1px 7px;
