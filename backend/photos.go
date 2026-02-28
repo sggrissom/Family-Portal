@@ -1063,10 +1063,10 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 
 	// Save updated photo
 	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
-	vbolt.TxCommit(ctx.Tx)
 
 	resp.Image = photo
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 

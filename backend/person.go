@@ -374,10 +374,14 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
 	for i := range resp.Milestones {
 		resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
+		resp.Milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Milestones[i].Id)
 	}
 
 	// Get photos for person
 	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
+	for i := range resp.Photos {
+		resp.Photos[i].TagIds = GetPhotoTagIds(ctx.Tx, resp.Photos[i].Id)
+	}
 
 	return
 }
@@ -648,12 +652,17 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		timelineMilestones := GetPersonMilestonesTx(ctx.Tx, person.Id)
 		for i := range timelineMilestones {
 			timelineMilestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, timelineMilestones[i].Id)
+			timelineMilestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, timelineMilestones[i].Id)
+		}
+		timelinePhotos := GetPersonImages(ctx.Tx, person.Id)
+		for i := range timelinePhotos {
+			timelinePhotos[i].TagIds = GetPhotoTagIds(ctx.Tx, timelinePhotos[i].Id)
 		}
 		timelineItem := FamilyTimelineItem{
 			Person:     person,
 			GrowthData: GetPersonGrowthDataTx(ctx.Tx, person.Id),
 			Milestones: timelineMilestones,
-			Photos:     GetPersonImages(ctx.Tx, person.Id),
+			Photos:     timelinePhotos,
 		}
 
 		resp.People = append(resp.People, timelineItem)

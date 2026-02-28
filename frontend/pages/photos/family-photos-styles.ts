@@ -270,10 +270,16 @@ block(`
   font-weight: 500;
   color: var(--text);
 }
+`);
+
+block(`
 .tag-filter-label:hover {
   background: var(--hover-bg);
   border-color: var(--primary-accent);
 }
+`);
+
+block(`
 .tag-filter-label input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
