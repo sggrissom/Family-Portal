@@ -314,8 +314,15 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   return (
     <div className="family-timeline-page">
       <div className="timeline-header">
-        <h1>Family Timeline</h1>
-        <p>All memories, milestones, and moments in one place</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h1>Family Timeline</h1>
+            <p>All memories, milestones, and moments in one place</p>
+          </div>
+          <a href="/manage-tags" className="btn btn-secondary" style={{ flexShrink: 0 }}>
+            Manage Tags
+          </a>
+        </div>
       </div>
 
       {hasAnyData ? (

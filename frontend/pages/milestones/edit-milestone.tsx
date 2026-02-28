@@ -20,6 +20,7 @@ type EditMilestoneForm = {
   ageYears: string;
   ageMonths: string;
   photoIds: number[];
+  tagIds: number[];
   error: string;
   loading: boolean;
 };
@@ -34,6 +35,7 @@ const useEditMilestoneForm = vlens.declareHook(
     ageYears: "",
     ageMonths: "",
     photoIds: milestone?.photoIds ?? [],
+    tagIds: milestone?.tagIds ?? [],
     error: "",
     loading: false,
   })
@@ -42,6 +44,7 @@ const useEditMilestoneForm = vlens.declareHook(
 type EditMilestoneData = {
   milestone: server.GetMilestoneResponse;
   photos: server.ListFamilyPhotosResponse;
+  tags: server.Tag[];
 };
 
 export async function fetch(
@@ -62,7 +65,9 @@ export async function fetch(
   });
   if (photosErr) return [null, photosErr];
 
-  return [{ milestone: milestone!, photos: photos! }, ""];
+  const [tagsResp] = await server.ListTags({});
+
+  return [{ milestone: milestone!, photos: photos!, tags: tagsResp?.tags ?? [] }, ""];
 }
 
 export function view(
@@ -93,7 +98,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <EditMilestonePage form={form} milestone={milestone} photos={data.photos.photos} />
+        <EditMilestonePage form={form} milestone={milestone} photos={data.photos.photos} allTags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -147,7 +152,7 @@ async function onSubmitMilestone(
     let [resp, err] = await server.UpdateMilestone(request);
 
     if (resp) {
-      // Redirect immediately to profile page
+      await server.UpdateMilestoneTags({ milestoneId: milestone.id, tagIds: form.tagIds });
       core.setRoute(`/profile/${form.selectedPersonId}`);
     } else {
       form.loading = false;
@@ -171,6 +176,13 @@ function onInputTypeChange(form: EditMilestoneForm, newType: string) {
   vlens.scheduleRedraw();
 }
 
+function onToggleTag(form: EditMilestoneForm, tagId: number) {
+  const idx = form.tagIds.indexOf(tagId);
+  if (idx >= 0) form.tagIds.splice(idx, 1);
+  else form.tagIds.push(tagId);
+  vlens.scheduleRedraw();
+}
+
 function onTogglePhoto(form: EditMilestoneForm, photoId: number) {
   const idx = form.photoIds.indexOf(photoId);
   if (idx >= 0) {
@@ -185,9 +197,10 @@ interface EditMilestonePageProps {
   form: EditMilestoneForm;
   milestone: server.Milestone;
   photos: server.PhotoWithPeople[];
+  allTags: server.Tag[];
 }
 
-const EditMilestonePage = ({ form, milestone, photos }: EditMilestonePageProps) => {
+const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePageProps) => {
   const personPhotos = photos.filter(p =>
     p.people.some(person => person.id === milestone.personId)
   );
@@ -273,6 +286,29 @@ const EditMilestonePage = ({ form, milestone, photos }: EditMilestonePageProps) 
               )}
             </div>
           </div>
+
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div className="form-group">
+              <label>Tags</label>
+              <div className="tag-picker">
+                {allTags.map(tag => {
+                  const selected = form.tagIds.includes(tag.id);
+                  return (
+                    <div
+                      key={tag.id}
+                      className={`tag-pill${selected ? " selected" : ""}`}
+                      style={{ borderColor: tag.color }}
+                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
+                    >
+                      <span className="tag-color-dot" style={{ background: tag.color }} />
+                      {tag.name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Date or Age Toggle */}
           <div className="form-group">
