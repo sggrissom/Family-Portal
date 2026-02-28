@@ -14,6 +14,7 @@ import {
 } from "../../../lib/timelineHelpers";
 import { ThumbnailImage } from "../../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../../hooks/usePhotoStatus";
+import { useTagCache } from "../../../hooks/useTagCache";
 
 interface UnifiedTimelineProps {
   person: server.Person;
@@ -52,6 +53,7 @@ export const UnifiedTimeline = ({
   onAgeFilterChange,
 }: UnifiedTimelineProps) => {
   const photoStatus = usePhotoStatus();
+  const tagCache = useTagCache();
 
   // Initialize monitoring for processing photos
   if (photos && photos.length > 0) {
@@ -196,6 +198,9 @@ export const UnifiedTimeline = ({
             switch (item.type) {
               case "milestone": {
                 const milestone = item.data as server.Milestone;
+                if (milestone.tagIds && milestone.tagIds.length > 0) {
+                  tagCache.loadTags();
+                }
                 return (
                   <div key={`milestone-${item.id}`} className="timeline-item milestone-item">
                     <div className="timeline-item-icon">{getCategoryIcon(milestone.category)}</div>
@@ -219,6 +224,23 @@ export const UnifiedTimeline = ({
                               onClick={() => core.setRoute(`/view-photo/${photoId}`)}
                             />
                           ))}
+                        </div>
+                      )}
+                      {milestone.tagIds && milestone.tagIds.length > 0 && (
+                        <div className="milestone-tags">
+                          {milestone.tagIds.map(tagId => {
+                            const tag = tagCache.getTag(tagId);
+                            if (!tag) return null;
+                            return (
+                              <span
+                                key={tagId}
+                                className="milestone-tag-badge"
+                                style={{ borderColor: tag.color, color: tag.color }}
+                              >
+                                {tag.name}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

@@ -516,6 +516,25 @@ block(`
 `);
 
 block(`
+.milestone-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+`);
+
+block(`
+.milestone-tag-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1.5px solid;
+  background: transparent;
+}
+`);
+
+block(`
 .timeline-item-actions {
   display: flex;
   gap: 0.5rem;

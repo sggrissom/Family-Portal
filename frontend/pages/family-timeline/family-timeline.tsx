@@ -13,6 +13,7 @@ import {
 } from "../../lib/milestoneHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
+import { useTagCache } from "../../hooks/useTagCache";
 import "./family-timeline-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -516,9 +517,14 @@ interface TimelineItemComponentProps {
 }
 
 const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps) => {
+  const tagCache = useTagCache();
+
   switch (item.type) {
     case "milestone": {
       const milestone = item.data as server.Milestone;
+      if (milestone.tagIds && milestone.tagIds.length > 0) {
+        tagCache.loadTags();
+      }
       return (
         <div className="timeline-item milestone-item">
           <div className="timeline-item-icon">{getCategoryIcon(milestone.category)}</div>
@@ -543,6 +549,23 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
                     onClick={() => core.setRoute(`/view-photo/${photoId}`)}
                   />
                 ))}
+              </div>
+            )}
+            {milestone.tagIds && milestone.tagIds.length > 0 && (
+              <div className="milestone-tags">
+                {milestone.tagIds.map(tagId => {
+                  const tag = tagCache.getTag(tagId);
+                  if (!tag) return null;
+                  return (
+                    <span
+                      key={tagId}
+                      className="milestone-tag-badge"
+                      style={{ borderColor: tag.color, color: tag.color }}
+                    >
+                      {tag.name}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>

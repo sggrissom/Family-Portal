@@ -190,9 +190,9 @@ block(`
 `);
 
 // Photo tags section
+block(`.photo-tags { margin-top: 1rem; }`);
+block(`.tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }`);
 block(`
-.photo-tags { margin-top: 1rem; }
-.tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 .tag-pill-view {
   display: inline-flex;
   align-items: center;
@@ -203,6 +203,8 @@ block(`
   background: var(--surface);
   font-size: 0.8rem;
 }
+`);
+block(`
 .tag-color-dot {
   width: 10px;
   height: 10px;
