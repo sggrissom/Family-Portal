@@ -239,6 +239,14 @@ export interface SearchMilestonesResponse {
     query: string
 }
 
+export interface UpdateMilestoneTagsRequest {
+    milestoneId: number
+    tagIds: number[]
+}
+
+export interface UpdateMilestoneTagsResponse {
+}
+
 export interface CreateTagRequest {
     name: string
     color: string
@@ -591,6 +599,7 @@ export interface Milestone {
     milestoneDate: string
     createdAt: string
     photoIds: number[]
+    tagIds: number[]
 }
 
 export interface Image {
@@ -883,6 +892,10 @@ export async function DeleteMilestone(data: DeleteMilestoneRequest): Promise<rpc
 
 export async function SearchMilestones(data: SearchMilestonesRequest): Promise<rpc.Response<SearchMilestonesResponse>> {
     return await rpc.call<SearchMilestonesResponse>('SearchMilestones', JSON.stringify(data));
+}
+
+export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
+    return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {

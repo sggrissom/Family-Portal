@@ -207,6 +207,7 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 		return
 	}
 
+	removeMilestoneTagsByTag(ctx.Tx, tag.Id)
 	vbolt.SetTargetSingleTerm(ctx.Tx, TagByFamilyIndex, tag.Id, -1)
 	vbolt.Delete(ctx.Tx, TagBkt, tag.Id)
 	vbolt.TxCommit(ctx.Tx)

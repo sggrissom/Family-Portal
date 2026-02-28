@@ -19,6 +19,7 @@ func RegisterMilestoneMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdateMilestone)
 	vbeam.RegisterProc(app, DeleteMilestone)
 	vbeam.RegisterProc(app, SearchMilestones)
+	vbeam.RegisterProc(app, UpdateMilestoneTags)
 }
 
 // Request/Response types
@@ -96,6 +97,7 @@ type Milestone struct {
 	MilestoneDate time.Time `json:"milestoneDate"`
 	CreatedAt     time.Time `json:"createdAt"`
 	PhotoIds      []int     `json:"photoIds,omitempty"`
+	TagIds        []int     `json:"tagIds,omitempty"`
 }
 
 // MilestonePhoto represents the relationship between milestones and photos
@@ -105,6 +107,24 @@ type MilestonePhoto struct {
 	PhotoId     int       `json:"photoId"`
 	FamilyId    int       `json:"familyId"`
 	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// MilestoneTag represents the relationship between milestones and tags
+type MilestoneTag struct {
+	Id          int
+	MilestoneId int
+	TagId       int
+	FamilyId    int
+	CreatedAt   time.Time
+}
+
+func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.MilestoneId, buf)
+	vpack.Int(&self.TagId, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Time(&self.CreatedAt, buf)
 }
 
 // Packing function for vbolt serialization
@@ -131,6 +151,7 @@ func PackMilestonePhoto(self *MilestonePhoto, buf *vpack.Buffer) {
 // Buckets for vbolt database storage
 var MilestoneBkt = vbolt.Bucket(&cfg.Info, "milestones", vpack.FInt, PackMilestone)
 var MilestonePhotoBkt = vbolt.Bucket(&cfg.Info, "milestone_photos", vpack.FInt, PackMilestonePhoto)
+var MilestoneTagBkt = vbolt.Bucket(&cfg.Info, "milestone_tags", vpack.FInt, PackMilestoneTag)
 
 // MilestoneByPersonIndex: term = person_id, target = milestone_id
 // This allows efficient lookup of milestones by person
@@ -152,6 +173,15 @@ var MilestonePhotoByPhotoIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_phot
 
 // MilestonePhotoByFamilyIndex: term = family_id, target = milestone_photo_id
 var MilestonePhotoByFamilyIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_family", vpack.FInt, vpack.FInt)
+
+// MilestoneTagByMilestoneIndex: term = milestone_id, target = milestone_tag_id
+var MilestoneTagByMilestoneIndex = vbolt.Index(&cfg.Info, "milestone_tag_by_milestone", vpack.FInt, vpack.FInt)
+
+// MilestoneTagByTagIndex: term = tag_id, target = milestone_tag_id
+var MilestoneTagByTagIndex = vbolt.Index(&cfg.Info, "milestone_tag_by_tag", vpack.FInt, vpack.FInt)
+
+// MilestoneTagByFamilyIndex: term = family_id, target = milestone_tag_id
+var MilestoneTagByFamilyIndex = vbolt.Index(&cfg.Info, "milestone_tag_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
 func GetMilestoneById(tx *vbolt.Tx, milestoneId int) (milestone Milestone) {
@@ -185,6 +215,21 @@ func GetMilestonePhotoIds(tx *vbolt.Tx, milestoneId int) []int {
 	}
 
 	return photoIds
+}
+
+func GetMilestoneTagIds(tx *vbolt.Tx, milestoneId int) []int {
+	var mtIds []int
+	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
+	if len(mtIds) == 0 {
+		return []int{}
+	}
+	var mts []MilestoneTag
+	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
+	tagIds := make([]int, 0, len(mts))
+	for _, mt := range mts {
+		tagIds = append(tagIds, mt.TagId)
+	}
+	return tagIds
 }
 
 func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Milestone, error) {
@@ -386,6 +431,71 @@ func removePhotoFromMilestones(tx *vbolt.Tx, photoId int) {
 	}
 }
 
+func addTagToMilestone(tx *vbolt.Tx, milestoneId int, tagId int, familyId int) {
+	mt := MilestoneTag{
+		Id:          vbolt.NextIntId(tx, MilestoneTagBkt),
+		MilestoneId: milestoneId,
+		TagId:       tagId,
+		FamilyId:    familyId,
+		CreatedAt:   time.Now(),
+	}
+	vbolt.Write(tx, MilestoneTagBkt, mt.Id, &mt)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, milestoneId)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, tagId)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, familyId)
+}
+
+func removeTagFromMilestone(tx *vbolt.Tx, milestoneId int, tagId int) {
+	var mtIds []int
+	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
+	if len(mtIds) == 0 {
+		return
+	}
+	var mts []MilestoneTag
+	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
+	for _, mt := range mts {
+		if mt.TagId != tagId {
+			continue
+		}
+		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
+	}
+}
+
+func removeAllMilestoneTags(tx *vbolt.Tx, milestoneId int) {
+	var mtIds []int
+	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
+	if len(mtIds) == 0 {
+		return
+	}
+	var mts []MilestoneTag
+	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
+	for _, mt := range mts {
+		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
+	}
+}
+
+func removeMilestoneTagsByTag(tx *vbolt.Tx, tagId int) {
+	var mtIds []int
+	vbolt.ReadTermTargets(tx, MilestoneTagByTagIndex, tagId, &mtIds, vbolt.Window{})
+	if len(mtIds) == 0 {
+		return
+	}
+	var mts []MilestoneTag
+	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
+	for _, mt := range mts {
+		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
+	}
+}
+
 func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milestone, error) {
 	var milestone Milestone
 	var err error
@@ -513,6 +623,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, []string{}, time.Time{})
 
 	removeAllMilestonePhotos(tx, milestone.Id)
+	removeAllMilestoneTags(tx, milestone.Id)
 
 	// Delete the record
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
@@ -639,6 +750,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 
 	vbolt.TxCommit(ctx.Tx)
 	return
@@ -663,6 +775,7 @@ func GetPersonMilestones(ctx *vbeam.Context, req GetPersonMilestonesRequest) (re
 	milestones := GetPersonMilestonesTx(ctx.Tx, req.PersonId)
 	for i := range milestones {
 		milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
+		milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, milestones[i].Id)
 	}
 	resp.Milestones = milestones
 	return
@@ -690,6 +803,7 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 	return
 }
 
@@ -715,6 +829,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 
 	vbolt.TxCommit(ctx.Tx)
 	return
@@ -744,6 +859,72 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Success = true
+	return
+}
+
+type UpdateMilestoneTagsRequest struct {
+	MilestoneId int   `json:"milestoneId"`
+	TagIds      []int `json:"tagIds"`
+}
+
+type UpdateMilestoneTagsResponse struct{}
+
+func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (resp UpdateMilestoneTagsResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if req.MilestoneId <= 0 {
+		err = errors.New("Milestone ID is required")
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+
+	_, err = GetMilestoneByIdAndFamily(ctx.Tx, req.MilestoneId, user.FamilyId)
+	if err != nil {
+		return
+	}
+
+	// Validate all tag IDs belong to this family
+	tagIds := req.TagIds
+	if tagIds == nil {
+		tagIds = []int{}
+	}
+	for _, tagId := range tagIds {
+		tag := getTagById(ctx.Tx, tagId)
+		if tag.Id == 0 || tag.FamilyId != user.FamilyId {
+			err = errors.New("Tag not found or access denied")
+			return
+		}
+	}
+
+	existingTagIds := GetMilestoneTagIds(ctx.Tx, req.MilestoneId)
+	existingSet := make(map[int]struct{}, len(existingTagIds))
+	for _, tagId := range existingTagIds {
+		existingSet[tagId] = struct{}{}
+	}
+
+	desiredSet := make(map[int]struct{}, len(tagIds))
+	for _, tagId := range tagIds {
+		desiredSet[tagId] = struct{}{}
+	}
+
+	for tagId := range existingSet {
+		if _, keep := desiredSet[tagId]; !keep {
+			removeTagFromMilestone(ctx.Tx, req.MilestoneId, tagId)
+		}
+	}
+
+	for tagId := range desiredSet {
+		if _, exists := existingSet[tagId]; !exists {
+			addTagToMilestone(ctx.Tx, req.MilestoneId, tagId, user.FamilyId)
+		}
+	}
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
