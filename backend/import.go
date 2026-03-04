@@ -52,6 +52,7 @@ type ImportDataStructure struct {
 	Heights         []ImportHeight    `json:"heights"`
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
+	Tags            []ExportTag       `json:"tags"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -78,6 +79,8 @@ type ImportDataResponse struct {
 	SkippedMeasurements  int            `json:"skippedMeasurements"`
 	ImportedMilestones   int            `json:"importedMilestones"`
 	SkippedMilestones    int            `json:"skippedMilestones"`
+	ImportedTags         int            `json:"importedTags"`
+	SkippedTags          int            `json:"skippedTags"`
 	Errors               []string       `json:"errors,omitempty"`
 	Warnings             []string       `json:"warnings,omitempty"`
 	PersonIdMapping      map[int]int    `json:"personIdMapping,omitempty"`
@@ -156,6 +159,11 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	resp.Errors = append(resp.Errors, peopleErrors...)
 	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
+	// Import tags (family-level, independent of person mapping)
+	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, user.FamilyId)
+	resp.ImportedTags = importedTags
+	resp.SkippedTags = skippedTags
+
 	// Only proceed with data import if we have people to import to
 	if len(personIdMapping) > 0 {
 		// Import measurements using the person ID mappings (filter by imported people)
@@ -168,7 +176,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		// Import milestones if requested
 		if req.ImportMilestones && len(importData.Milestones) > 0 {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
-			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, user.FamilyId)
+			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, user.FamilyId, tagNameToId)
 			resp.ImportedMilestones = importedMilestones
 			resp.SkippedMilestones = skippedMilestones
 			resp.Errors = append(resp.Errors, milestoneErrors...)
@@ -661,7 +669,7 @@ func isDuplicateMilestone(tx *vbolt.Tx, personId int, date time.Time, descriptio
 }
 
 // Import milestones with deduplication
-func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personIdMapping map[int]int, familyId int) (int, int, []string) {
+func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personIdMapping map[int]int, familyId int, tagNameToId map[string]int) (int, int, []string) {
 	var errors []string
 	importedCount := 0
 	skippedCount := 0
@@ -699,8 +707,56 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 		vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, newMilestone.Id, newMilestone.PersonId)
 		vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, newMilestone.Id, newMilestone.FamilyId)
 
+		// Apply tags
+		for _, tagName := range milestone.TagNames {
+			if tagId, ok := tagNameToId[strings.ToLower(tagName)]; ok {
+				addTagToMilestone(tx, newMilestone.Id, tagId, familyId)
+			}
+		}
+
 		importedCount++
 	}
 
 	return importedCount, skippedCount, errors
+}
+
+// importTags imports exported tags into the family, reusing existing tags by name (case-insensitive).
+// Returns a map of lowercase tag name → tag ID, plus imported and skipped counts.
+func importTags(tx *vbolt.Tx, exportedTags []ExportTag, familyId int) (map[string]int, int, int) {
+	tagNameToId := make(map[string]int, len(exportedTags))
+	importedCount := 0
+	skippedCount := 0
+
+	for _, exportTag := range exportedTags {
+		lowerName := strings.ToLower(exportTag.Name)
+
+		// Check if a tag with this name already exists
+		existingTags := getTagsByFamily(tx, familyId)
+		var existingId int
+		for _, t := range existingTags {
+			if strings.ToLower(t.Name) == lowerName {
+				existingId = t.Id
+				break
+			}
+		}
+
+		if existingId != 0 {
+			tagNameToId[lowerName] = existingId
+			skippedCount++
+		} else {
+			tag := Tag{
+				Id:        vbolt.NextIntId(tx, TagBkt),
+				FamilyId:  familyId,
+				Name:      exportTag.Name,
+				Color:     exportTag.Color,
+				CreatedAt: time.Now(),
+			}
+			vbolt.Write(tx, TagBkt, tag.Id, &tag)
+			vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, tag.Id, tag.FamilyId)
+			tagNameToId[lowerName] = tag.Id
+			importedCount++
+		}
+	}
+
+	return tagNameToId, importedCount, skippedCount
 }

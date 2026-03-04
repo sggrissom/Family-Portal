@@ -12,17 +12,26 @@ func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
 }
 
+// Export tag structure
+type ExportTag struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 // Export data types matching the import structure
 type ExportDataStructure struct {
 	People          []ImportPerson    `json:"people"`
 	Heights         []ImportHeight    `json:"heights"`
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
+	Tags            []ExportTag       `json:"tags"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
 	TotalPeople     int               `json:"total_people"`
 	TotalMilestones int               `json:"total_milestones"`
+	TotalTags       int               `json:"total_tags"`
 }
 
 // Export milestone structure
@@ -35,6 +44,7 @@ type ExportMilestone struct {
 	MilestoneDate time.Time `json:"milestoneDate"`
 	CreatedAt     time.Time `json:"createdAt"`
 	PersonName    string    `json:"personName"`
+	TagNames      []string  `json:"tagNames,omitempty"`
 }
 
 // Request/Response types
@@ -74,6 +84,15 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 // Helper function to build export data structure
 func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	var exportData ExportDataStructure
+
+	// Get all family tags and build id->name map
+	tags := getTagsByFamily(tx, familyId)
+	tagIdToName := make(map[int]string, len(tags))
+	exportTags := make([]ExportTag, len(tags))
+	for i, tag := range tags {
+		tagIdToName[tag.Id] = tag.Name
+		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
+	}
 
 	// Get all family people
 	people := GetFamilyPeople(tx, familyId)
@@ -184,6 +203,14 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			}
 		}
 
+		tagIds := GetMilestoneTagIds(tx, milestone.Id)
+		var tagNames []string
+		for _, tagId := range tagIds {
+			if name, ok := tagIdToName[tagId]; ok {
+				tagNames = append(tagNames, name)
+			}
+		}
+
 		exportMilestones[i] = ExportMilestone{
 			Id:            milestone.Id,
 			PersonId:      milestone.PersonId,
@@ -193,6 +220,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			MilestoneDate: milestone.MilestoneDate,
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,
+			TagNames:      tagNames,
 		}
 	}
 
@@ -200,11 +228,13 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.Heights = heights
 	exportData.Weights = weights
 	exportData.Milestones = exportMilestones
+	exportData.Tags = exportTags
 	exportData.ExportDate = time.Now()
 	exportData.TotalHeights = len(heights)
 	exportData.TotalWeights = len(weights)
 	exportData.TotalPeople = len(people)
 	exportData.TotalMilestones = len(milestones)
+	exportData.TotalTags = len(tags)
 
 	return exportData, nil
 }

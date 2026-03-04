@@ -389,6 +389,18 @@ const ImportPage = ({ form }: ImportPageProps) => {
                   <span className="stat-label">Milestones Skipped</span>
                 </div>
               )}
+              {form.result.importedTags > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.importedTags}</span>
+                  <span className="stat-label">Tags Imported</span>
+                </div>
+              )}
+              {form.result.skippedTags > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.skippedTags}</span>
+                  <span className="stat-label">Tags Skipped</span>
+                </div>
+              )}
             </div>
 
             {form.result.warnings && form.result.warnings.length > 0 && (
