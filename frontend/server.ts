@@ -398,6 +398,8 @@ export interface ImportDataResponse {
     skippedMeasurements: number
     importedMilestones: number
     skippedMilestones: number
+    importedTags: number
+    skippedTags: number
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
