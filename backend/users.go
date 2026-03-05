@@ -260,6 +260,10 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 	// Return success response
 	resp.Success = true
 	resp.Auth = GetAuthResponseFromUser(user)
+	tokenString, tokenErr := generateJwtTokenString(user)
+	if tokenErr == nil {
+		resp.Token = tokenString
+	}
 	return
 }
 

@@ -260,6 +260,18 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 	return
 }
 
+func generateJwtTokenString(user User) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		Username: user.Email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtKey)
+}
+
 func GetAuthUser(ctx *vbeam.Context) (user User, err error) {
 	if len(ctx.Token) == 0 {
 		return user, ErrAuthFailure

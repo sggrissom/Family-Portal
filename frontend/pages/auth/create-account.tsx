@@ -1,5 +1,8 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
+import * as rpc from "vlens/rpc";
+import * as core from "vlens/core";
+import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import "./create-account-styles";
@@ -72,13 +75,9 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
   form.loading = false;
 
   if (resp && resp.success) {
-    form.name = "";
-    form.email = "";
-    form.password = "";
-    form.confirmPassword = "";
-    form.familyCode = "";
-    form.error = "";
-    window.location.href = "/";
+    rpc.setAuthHeaders({ "x-auth-token": resp.token });
+    auth.setAuth(resp.auth);
+    core.setRoute("/dashboard");
   } else {
     form.error = resp?.error || err || "Failed to create account";
   }
