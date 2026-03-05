@@ -4,8 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"family/cfg"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -28,8 +34,8 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = "data_only"
 	}
-	if mode != "data_only" {
-		RespondValidationError(w, r, "Export mode not yet supported", mode)
+	if mode != "data_only" && mode != "with_photos" {
+		RespondValidationError(w, r, "Unsupported export mode", mode)
 		return
 	}
 
@@ -37,6 +43,14 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	var buildErr error
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		exportData, buildErr = buildExportData(tx, user.FamilyId)
+		if buildErr != nil {
+			return
+		}
+		if mode == "with_photos" {
+			photos := buildPhotoExportMetadata(tx, user.FamilyId)
+			exportData.Photos = photos
+			exportData.TotalPhotos = len(photos)
+		}
 	})
 	if buildErr != nil {
 		RespondInternalError(w, r, "Failed to build export data", buildErr.Error())
@@ -49,20 +63,88 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	f, err := zw.Create("data.json")
-	if err != nil {
-		RespondInternalError(w, r, "Failed to create ZIP entry", err.Error())
-		return
-	}
-	f.Write(jsonBytes)
-	zw.Close()
-
 	filename := fmt.Sprintf("family-export-%s.zip", time.Now().Format("2006-01-02"))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Type", "application/zip")
-	w.Write(buf.Bytes())
+
+	if mode == "data_only" {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		f, err := zw.Create("data.json")
+		if err != nil {
+			RespondInternalError(w, r, "Failed to create ZIP entry", err.Error())
+			return
+		}
+		f.Write(jsonBytes)
+		zw.Close()
+		w.Write(buf.Bytes())
+		return
+	}
+
+	// with_photos: stream directly — headers already set, errors after first write are log-only
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	dataEntry, err := zw.Create("data.json")
+	if err != nil {
+		log.Printf("[EXPORT] Failed to create data.json ZIP entry: %v", err)
+		return
+	}
+	if _, err := dataEntry.Write(jsonBytes); err != nil {
+		log.Printf("[EXPORT] Failed to write data.json: %v", err)
+		return
+	}
+
+	for _, ep := range exportData.Photos {
+		diskPath := filepath.Join(cfg.StaticDir, ep.ZipPath)
+		f, err := os.Open(diskPath)
+		if err != nil {
+			log.Printf("[EXPORT] Skipping photo %d (%s): %v", ep.Id, diskPath, err)
+			continue
+		}
+		entry, err := zw.Create(ep.ZipPath)
+		if err != nil {
+			log.Printf("[EXPORT] Failed to create ZIP entry for photo %d: %v", ep.Id, err)
+			f.Close()
+			continue
+		}
+		if _, err := io.Copy(entry, f); err != nil {
+			log.Printf("[EXPORT] Failed to write photo %d to ZIP: %v", ep.Id, err)
+			f.Close()
+			return // ZIP stream is broken; abort
+		}
+		f.Close()
+	}
+}
+
+func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
+	images := GetFamilyImages(tx, familyId)
+	result := make([]ExportPhoto, 0, len(images))
+	for _, img := range images {
+		if img.Status != 0 {
+			continue // skip processing / failed
+		}
+		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))
+		ext := filepath.Ext(img.FilePath)
+		zipPath := fmt.Sprintf("photos/%s_original%s", baseName, ext)
+
+		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
+		personIds := make([]int, 0, len(photoPersons))
+		for _, pp := range photoPersons {
+			personIds = append(personIds, pp.PersonId)
+		}
+
+		result = append(result, ExportPhoto{
+			Id:          img.Id,
+			Title:       img.Title,
+			Description: img.Description,
+			PhotoDate:   img.PhotoDate,
+			ZipPath:     zipPath,
+			PersonIds:   personIds,
+			TagIds:      GetPhotoTagIds(tx, img.Id),
+		})
+	}
+	return result
 }
 
 // Export tag structure
@@ -72,6 +154,17 @@ type ExportTag struct {
 	Color string `json:"color"`
 }
 
+// Export photo structure
+type ExportPhoto struct {
+	Id          int       `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	PhotoDate   time.Time `json:"photo_date"`
+	ZipPath     string    `json:"zip_path"`
+	PersonIds   []int     `json:"person_ids"`
+	TagIds      []int     `json:"tag_ids"`
+}
+
 // Export data types matching the import structure
 type ExportDataStructure struct {
 	People          []ImportPerson    `json:"people"`
@@ -79,12 +172,14 @@ type ExportDataStructure struct {
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
 	Tags            []ExportTag       `json:"tags"`
+	Photos          []ExportPhoto     `json:"photos,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
 	TotalPeople     int               `json:"total_people"`
 	TotalMilestones int               `json:"total_milestones"`
 	TotalTags       int               `json:"total_tags"`
+	TotalPhotos     int               `json:"total_photos,omitempty"`
 }
 
 // Export milestone structure

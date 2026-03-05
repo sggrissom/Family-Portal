@@ -7,6 +7,7 @@ import (
 	"family/cfg"
 	"math"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -432,6 +433,50 @@ func TestEmptyFamilyExport(t *testing.T) {
 			t.Error("Export date should be set even for empty export")
 		}
 	})
+}
+
+func TestExportPhotoStructure(t *testing.T) {
+	ep := ExportPhoto{
+		Id:        42,
+		Title:     "Birthday",
+		ZipPath:   "photos/abc_original.jpg",
+		PersonIds: []int{1, 2},
+		TagIds:    []int{10},
+	}
+	data, err := json.Marshal(ep)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded ExportPhoto
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.ZipPath != "photos/abc_original.jpg" {
+		t.Errorf("ZipPath mismatch: %s", decoded.ZipPath)
+	}
+	if len(decoded.PersonIds) != 2 {
+		t.Errorf("PersonIds length: %d", len(decoded.PersonIds))
+	}
+}
+
+func TestExportDataStructurePhotoOmitempty(t *testing.T) {
+	// Photos present → field appears in JSON
+	with := ExportDataStructure{
+		Photos:      []ExportPhoto{{Id: 1, ZipPath: "photos/a_original.jpg"}},
+		TotalPhotos: 1,
+		ExportDate:  time.Now(),
+	}
+	data, _ := json.Marshal(with)
+	if !strings.Contains(string(data), `"photos"`) {
+		t.Error("expected photos field in JSON")
+	}
+
+	// No photos → omitempty suppresses the field
+	without := ExportDataStructure{ExportDate: time.Now()}
+	data2, _ := json.Marshal(without)
+	if strings.Contains(string(data2), `"photos"`) {
+		t.Error("expected photos field to be absent")
+	}
 }
 
 // Test export/import compatibility
