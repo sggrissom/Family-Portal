@@ -98,7 +98,12 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <EditMilestonePage form={form} milestone={milestone} photos={data.photos.photos} allTags={data.tags} />
+        <EditMilestonePage
+          form={form}
+          milestone={milestone}
+          photos={data.photos.photos}
+          allTags={data.tags}
+        />
       </main>
       <Footer />
     </div>

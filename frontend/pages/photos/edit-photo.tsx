@@ -15,10 +15,7 @@ type EditPhotoData = {
   tags: server.Tag[];
 };
 
-export async function fetch(
-  route: string,
-  prefix: string
-): Promise<rpc.Response<EditPhotoData>> {
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<EditPhotoData>> {
   const photoId = getIdFromRoute(route) || 0;
   const [photo, photoErr] = await server.GetPhoto({ id: photoId });
   if (photoErr) return [null, photoErr];
@@ -82,11 +79,7 @@ function onToggleTag(form: EditPhotoForm, tagId: number) {
   vlens.scheduleRedraw();
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: EditPhotoData
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: EditPhotoData): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();

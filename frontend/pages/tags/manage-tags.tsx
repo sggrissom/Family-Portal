@@ -6,7 +6,10 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import "./manage-tags-styles";
 
-export async function fetch(route: string, prefix: string): Promise<rpc.Response<server.ListTagsResponse>> {
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<server.ListTagsResponse>> {
   if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.ListTagsResponse>({ tags: [] });
   }
@@ -105,10 +108,7 @@ export function view(
                   {isEditing ? (
                     <>
                       <div className="tag-edit-row">
-                        <div
-                          className="tag-color-swatch"
-                          style={{ background: state.editColor }}
-                        />
+                        <div className="tag-color-swatch" style={{ background: state.editColor }} />
                         <input
                           type="text"
                           value={state.editName}

@@ -18,10 +18,7 @@ type ViewPhotoData = {
   tags: server.Tag[];
 };
 
-export async function fetch(
-  route: string,
-  prefix: string
-): Promise<rpc.Response<ViewPhotoData>> {
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewPhotoData>> {
   const photoId = getIdFromRoute(route) || 0;
   const [photoResp, photoErr] = await server.GetPhoto({ id: photoId });
   if (photoErr) return [null, photoErr];

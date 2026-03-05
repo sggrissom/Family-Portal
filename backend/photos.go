@@ -221,8 +221,8 @@ var PhotoPersonByPersonIndex = vbolt.Index(&cfg.Info, "photo_person_by_person", 
 var PhotoPersonByFamilyIndex = vbolt.Index(&cfg.Info, "photo_person_by_family", vpack.FInt, vpack.FInt)
 
 var PhotoTagBkt = vbolt.Bucket(&cfg.Info, "photo_tags", vpack.FInt, PackPhotoTag)
-var PhotoTagByPhotoIndex  = vbolt.Index(&cfg.Info, "photo_tag_by_photo",  vpack.FInt, vpack.FInt)
-var PhotoTagByTagIndex    = vbolt.Index(&cfg.Info, "photo_tag_by_tag",    vpack.FInt, vpack.FInt)
+var PhotoTagByPhotoIndex = vbolt.Index(&cfg.Info, "photo_tag_by_photo", vpack.FInt, vpack.FInt)
+var PhotoTagByTagIndex = vbolt.Index(&cfg.Info, "photo_tag_by_tag", vpack.FInt, vpack.FInt)
 var PhotoTagByFamilyIndex = vbolt.Index(&cfg.Info, "photo_tag_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions

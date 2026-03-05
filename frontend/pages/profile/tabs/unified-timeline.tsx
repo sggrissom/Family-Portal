@@ -212,7 +212,9 @@ export const UnifiedTimeline = ({
             <button
               key={tag.id}
               className={`filter-btn${selectedTagIds.includes(tag.id) ? " active" : ""}`}
-              style={selectedTagIds.includes(tag.id) ? { borderColor: tag.color, color: tag.color } : {}}
+              style={
+                selectedTagIds.includes(tag.id) ? { borderColor: tag.color, color: tag.color } : {}
+              }
               onClick={() => onToggleTag(tag.id)}
             >
               <span className="tag-color-dot" style={{ background: tag.color }} />
@@ -382,8 +384,11 @@ export const UnifiedTimeline = ({
                                 const tag = tagCache.getTag(tagId);
                                 if (!tag) return null;
                                 return (
-                                  <span key={tagId} className="milestone-tag-badge"
-                                    style={{ borderColor: tag.color, color: tag.color }}>
+                                  <span
+                                    key={tagId}
+                                    className="milestone-tag-badge"
+                                    style={{ borderColor: tag.color, color: tag.color }}
+                                  >
                                     {tag.name}
                                   </span>
                                 );

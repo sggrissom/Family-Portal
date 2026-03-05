@@ -391,11 +391,16 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         type="radio"
                         name="exportMode"
                         checked={exportForm.exportMode === "data_only"}
-                        onChange={() => { exportForm.exportMode = "data_only"; vlens.scheduleRedraw(); }}
+                        onChange={() => {
+                          exportForm.exportMode = "data_only";
+                          vlens.scheduleRedraw();
+                        }}
                       />
                       <div className="export-mode-label">
                         <span>Data only</span>
-                        <span className="export-mode-desc">JSON file — people, heights, weights, milestones, tags</span>
+                        <span className="export-mode-desc">
+                          JSON file — people, heights, weights, milestones, tags
+                        </span>
                       </div>
                     </label>
                     <label className="export-mode-option">
@@ -403,11 +408,16 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         type="radio"
                         name="exportMode"
                         checked={exportForm.exportMode === "with_photos"}
-                        onChange={() => { exportForm.exportMode = "with_photos"; vlens.scheduleRedraw(); }}
+                        onChange={() => {
+                          exportForm.exportMode = "with_photos";
+                          vlens.scheduleRedraw();
+                        }}
                       />
                       <div className="export-mode-label">
                         <span>With photos</span>
-                        <span className="export-mode-desc">ZIP — all data + original photo files</span>
+                        <span className="export-mode-desc">
+                          ZIP — all data + original photo files
+                        </span>
                       </div>
                     </label>
                   </div>

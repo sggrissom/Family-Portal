@@ -58,11 +58,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   return [{ people: people!, tags: tags!.tags }, ""];
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: AddPhotoData
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: AddPhotoData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;

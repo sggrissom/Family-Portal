@@ -91,7 +91,12 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <AddMilestonePage form={form} people={data.people.people} photos={data.photos.photos} tags={data.tags} />
+        <AddMilestonePage
+          form={form}
+          people={data.people.people}
+          photos={data.photos.photos}
+          tags={data.tags}
+        />
       </main>
       <Footer />
     </div>

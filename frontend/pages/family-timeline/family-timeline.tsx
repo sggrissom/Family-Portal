@@ -156,7 +156,9 @@ const YearJumpNav = ({ years }: { years: number[] }) => (
         className="year-pill"
         onClick={e => {
           e.preventDefault();
-          document.getElementById(`year-${year}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document
+            .getElementById(`year-${year}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       >
         {year}
@@ -434,7 +436,11 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                     <button
                       key={tag.id}
                       className={`tag-filter-chip${state.selectedTagIds.includes(tag.id) ? " active" : ""}`}
-                      style={state.selectedTagIds.includes(tag.id) ? { borderColor: tag.color, color: tag.color } : {}}
+                      style={
+                        state.selectedTagIds.includes(tag.id)
+                          ? { borderColor: tag.color, color: tag.color }
+                          : {}
+                      }
                       onClick={() => {
                         const idx = state.selectedTagIds.indexOf(tag.id);
                         if (idx >= 0) state.selectedTagIds.splice(idx, 1);
@@ -692,8 +698,11 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
                       const tag = tagCache.getTag(tagId);
                       if (!tag) return null;
                       return (
-                        <span key={tagId} className="milestone-tag-badge"
-                          style={{ borderColor: tag.color, color: tag.color }}>
+                        <span
+                          key={tagId}
+                          className="milestone-tag-badge"
+                          style={{ borderColor: tag.color, color: tag.color }}
+                        >
                           {tag.name}
                         </span>
                       );
