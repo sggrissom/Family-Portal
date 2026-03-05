@@ -345,6 +345,57 @@ block(`
 `);
 
 block(`
+.export-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px 0;
+}
+`);
+
+block(`
+.export-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+`);
+
+block(`
+.export-mode-option:hover {
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.export-mode-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+`);
+
+block(`
+.export-mode-option .export-mode-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+`);
+
+block(`
+.export-mode-option .export-mode-desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+`);
+
+block(`
 @media (max-width: 600px) {
   .settings-container {
     padding: 1rem 0.75rem;

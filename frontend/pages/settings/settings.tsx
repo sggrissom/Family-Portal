@@ -22,6 +22,7 @@ type ExportForm = {
   loading: boolean;
   error: string;
   success: boolean;
+  exportMode: "data_only" | "with_photos";
 };
 
 type MergeForm = {
@@ -54,6 +55,7 @@ const useExportForm = vlens.declareHook(
     loading: false,
     error: "",
     success: false,
+    exportMode: "data_only",
   })
 );
 
@@ -156,51 +158,59 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
   vlens.scheduleRedraw();
 }
 
-async function onExportDataClicked(form: ExportForm, event: Event) {
-  event.preventDefault();
-  form.loading = true;
-  form.error = "";
-  form.success = false;
-
+async function onExportDataClicked(exportForm: ExportForm) {
+  exportForm.loading = true;
+  exportForm.error = "";
+  exportForm.success = false;
+  vlens.scheduleRedraw();
   try {
-    let [resp, err] = await server.ExportData({});
+    const timestamp = new Date().toISOString().split("T")[0];
 
-    form.loading = false;
-
-    if (resp && resp.jsonData) {
-      // Create downloadable file
-      const timestamp = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
-      const filename = `family-data-${timestamp}.json`;
-
+    if (exportForm.exportMode === "data_only") {
+      const [resp, err] = await server.ExportData({});
+      if (!resp || !resp.jsonData) {
+        throw new Error(err || "Failed to export data");
+      }
       const blob = new Blob([resp.jsonData], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-
-      // Create download link and trigger download
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = `family-data-${timestamp}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      form.success = true;
-      form.error = "";
-
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        form.success = false;
-        vlens.scheduleRedraw();
-      }, 3000);
     } else {
-      form.error = err || "Failed to export data";
+      const resp = await window.fetch(`/api/export-bundle?mode=with_photos`, {
+        credentials: "include",
+      });
+      if (!resp.ok) {
+        throw new Error(`Export failed: ${resp.statusText}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `family-export-${timestamp}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
-  } catch (error) {
-    form.loading = false;
-    form.error = "Failed to export data";
-    logError("ui", "Export failed", error);
+
+    exportForm.success = true;
+    vlens.scheduleRedraw();
+    setTimeout(() => {
+      exportForm.success = false;
+      vlens.scheduleRedraw();
+    }, 3000);
+  } catch (e: any) {
+    exportForm.error = e?.message ?? "Export failed";
+    logError("ui", "Export failed", e);
+  } finally {
+    exportForm.loading = false;
+    vlens.scheduleRedraw();
   }
-  vlens.scheduleRedraw();
 }
 
 async function onMergePreview(form: MergeForm, people: server.Person[], event: Event) {
@@ -375,6 +385,32 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
 
                   {exportForm.error && <div className="error-message">{exportForm.error}</div>}
 
+                  <div className="export-mode-group">
+                    <label className="export-mode-option">
+                      <input
+                        type="radio"
+                        name="exportMode"
+                        checked={exportForm.exportMode === "data_only"}
+                        onChange={() => { exportForm.exportMode = "data_only"; vlens.scheduleRedraw(); }}
+                      />
+                      <div className="export-mode-label">
+                        <span>Data only</span>
+                        <span className="export-mode-desc">JSON file — people, heights, weights, milestones, tags</span>
+                      </div>
+                    </label>
+                    <label className="export-mode-option">
+                      <input
+                        type="radio"
+                        name="exportMode"
+                        checked={exportForm.exportMode === "with_photos"}
+                        onChange={() => { exportForm.exportMode = "with_photos"; vlens.scheduleRedraw(); }}
+                      />
+                      <div className="export-mode-label">
+                        <span>With photos</span>
+                        <span className="export-mode-desc">ZIP — all data + original photo files</span>
+                      </div>
+                    </label>
+                  </div>
                   <button
                     type="button"
                     className="btn btn-primary"
