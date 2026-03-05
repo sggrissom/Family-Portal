@@ -392,8 +392,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
       {form.success && form.result ? (
         <div className="import-success">
-          <div className="success-message">
-            <h2>✅ Import Successful!</h2>
+          <h2>✅ Import Successful!</h2>
             <div className="import-stats">
               <div className="stat">
                 <span className="stat-number">{form.result.importedPeople}</span>
@@ -480,7 +479,6 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 </ul>
               </div>
             )}
-          </div>
 
           <div className="success-actions">
             <a href="/dashboard" className="btn btn-primary">

@@ -168,6 +168,7 @@ block(`
 block(`
 .import-stats {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 32px;
   margin: 24px 0;
