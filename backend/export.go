@@ -1,7 +1,11 @@
 package backend
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -10,6 +14,55 @@ import (
 
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
+	app.HandleFunc("GET /api/export-bundle", AuthMiddleware(exportBundleHandler))
+}
+
+func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		RespondAuthError(w, r, "Authentication required")
+		return
+	}
+
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = "data_only"
+	}
+	if mode != "data_only" {
+		RespondValidationError(w, r, "Export mode not yet supported", mode)
+		return
+	}
+
+	var exportData ExportDataStructure
+	var buildErr error
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		exportData, buildErr = buildExportData(tx, user.FamilyId)
+	})
+	if buildErr != nil {
+		RespondInternalError(w, r, "Failed to build export data", buildErr.Error())
+		return
+	}
+
+	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
+	if err != nil {
+		RespondInternalError(w, r, "Failed to marshal export data", err.Error())
+		return
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, err := zw.Create("data.json")
+	if err != nil {
+		RespondInternalError(w, r, "Failed to create ZIP entry", err.Error())
+		return
+	}
+	f.Write(jsonBytes)
+	zw.Close()
+
+	filename := fmt.Sprintf("family-export-%s.zip", time.Now().Format("2006-01-02"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Write(buf.Bytes())
 }
 
 // Export tag structure
