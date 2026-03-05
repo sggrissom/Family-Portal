@@ -400,6 +400,8 @@ export interface ImportDataResponse {
     skippedMilestones: number
     importedTags: number
     skippedTags: number
+    importedPhotos: number
+    skippedPhotos: number
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>

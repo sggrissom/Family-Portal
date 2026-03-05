@@ -13,6 +13,7 @@ import (
 
 func RegisterImportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ImportData)
+	app.HandleFunc("POST /api/import-bundle", AuthMiddleware(importBundleHandler))
 }
 
 // Import data types matching the JSON structure
@@ -53,6 +54,7 @@ type ImportDataStructure struct {
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
 	Tags            []ExportTag       `json:"tags"`
+	Photos          []ExportPhoto     `json:"photos,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -81,6 +83,8 @@ type ImportDataResponse struct {
 	SkippedMilestones    int            `json:"skippedMilestones"`
 	ImportedTags         int            `json:"importedTags"`
 	SkippedTags          int            `json:"skippedTags"`
+	ImportedPhotos       int            `json:"importedPhotos"`
+	SkippedPhotos        int            `json:"skippedPhotos"`
 	Errors               []string       `json:"errors,omitempty"`
 	Warnings             []string       `json:"warnings,omitempty"`
 	PersonIdMapping      map[int]int    `json:"personIdMapping,omitempty"`

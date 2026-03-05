@@ -12,6 +12,7 @@ type Data = {};
 type ImportForm = {
   jsonData: string;
   file: File | null;
+  isZip: boolean;
   error: string;
   loading: boolean;
   success: boolean;
@@ -35,6 +36,7 @@ const useImportForm = vlens.declareHook(
   (): ImportForm => ({
     jsonData: "",
     file: null,
+    isZip: false,
     error: "",
     loading: false,
     success: false,
@@ -90,8 +92,15 @@ const ImportPage = ({ form }: ImportPageProps) => {
     if (file) {
       form.file = file;
       form.error = "";
+      form.isZip = file.name.endsWith(".zip");
 
-      // Read file content
+      if (form.isZip) {
+        form.jsonData = "";
+        vlens.scheduleRedraw();
+        return;
+      }
+
+      // Read file content for JSON
       const reader = new FileReader();
       reader.onload = e => {
         const result = e.target?.result;
@@ -103,6 +112,40 @@ const ImportPage = ({ form }: ImportPageProps) => {
       reader.readAsText(file);
       vlens.scheduleRedraw();
     }
+  };
+
+  const handleBundleImport = async () => {
+    if (!form.file) return;
+
+    form.loading = true;
+    form.error = "";
+    form.success = false;
+    vlens.scheduleRedraw();
+
+    try {
+      const formData = new FormData();
+      formData.append("file", form.file);
+      const resp = await window.fetch("/api/import-bundle", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      form.loading = false;
+
+      if (resp.ok) {
+        const result = (await resp.json()) as server.ImportDataResponse;
+        form.result = result;
+        form.success = true;
+      } else {
+        const errBody = await resp.text();
+        form.error = "Import failed: " + errBody;
+      }
+    } catch (error) {
+      form.error = error instanceof Error ? error.message : "An error occurred during import";
+      form.loading = false;
+    }
+    vlens.scheduleRedraw();
   };
 
   const handleTextareaChange = (event: Event) => {
@@ -317,6 +360,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
   const clearForm = () => {
     form.jsonData = "";
     form.file = null;
+    form.isZip = false;
     form.error = "";
     form.success = false;
     form.result = null;
@@ -401,6 +445,18 @@ const ImportPage = ({ form }: ImportPageProps) => {
                   <span className="stat-label">Tags Skipped</span>
                 </div>
               )}
+              {form.result.importedPhotos > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.importedPhotos}</span>
+                  <span className="stat-label">Photos Imported</span>
+                </div>
+              )}
+              {form.result.skippedPhotos > 0 && (
+                <div className="stat">
+                  <span className="stat-number">{form.result.skippedPhotos}</span>
+                  <span className="stat-label">Photos Skipped</span>
+                </div>
+              )}
             </div>
 
             {form.result.warnings && form.result.warnings.length > 0 && (
@@ -461,20 +517,49 @@ const ImportPage = ({ form }: ImportPageProps) => {
           {form.activeTab === "json" ? (
             <form onSubmit={handleSubmit} className="import-form">
               <div className="form-section">
-                <h3>Upload JSON File</h3>
+                <h3>Upload File</h3>
                 <div className="file-input-container">
                   <input
                     type="file"
-                    accept=".json"
+                    accept=".json,.zip"
                     onChange={handleFileSelect}
                     className="file-input"
                     id="json-file"
                   />
                   <label htmlFor="json-file" className="file-input-label">
-                    {form.file ? form.file.name : "Choose JSON file..."}
+                    {form.file ? form.file.name : "Choose JSON or ZIP file..."}
                   </label>
                 </div>
               </div>
+
+              {form.isZip && form.file ? (
+                <div className="zip-import-section">
+                  <div className="zip-bundle-card">
+                    <p>
+                      <strong>ZIP bundle selected:</strong> {form.file.name}
+                    </p>
+                    <p>
+                      This bundle contains family data and photos. Click the button below to import
+                      everything.
+                    </p>
+                  </div>
+                  {form.error && <div className="error-message">{form.error}</div>}
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      onClick={handleBundleImport}
+                      disabled={form.loading}
+                      className="btn btn-primary"
+                    >
+                      {form.loading ? "Importing..." : "Import Bundle"}
+                    </button>
+                    <button type="button" onClick={clearForm} className="btn btn-secondary">
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
 
               <div className="form-divider">
                 <span>OR</span>
@@ -604,6 +689,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
                   Clear
                 </button>
               </div>
+              </>
+              )}
             </form>
           ) : (
             <div className="ai-import-form">
