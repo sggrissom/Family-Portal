@@ -140,6 +140,9 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 				var person Person
 				vbolt.Read(tx, PeopleBkt, newPersonId, &person)
 				person.ProfilePhotoId = newPhotoId
+				person.ProfileCropX = 50
+				person.ProfileCropY = 50
+				person.ProfileCropScale = 1.0
 				vbolt.Write(tx, PeopleBkt, person.Id, &person)
 			}
 		}

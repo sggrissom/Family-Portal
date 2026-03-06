@@ -143,12 +143,16 @@ export const ProfileImage = ({
   cropScale = 1,
 }: ProfileImageProps) => {
   // If there's cropping/zoom applied, use a container with overflow hidden
-  const hasCrop = cropScale > 1 || cropX !== 50 || cropY !== 50;
+  // Guard against zero values from import (Go zero values for unset crop fields)
+  const effectiveCropScale = cropScale || 1;
+  const effectiveCropX = cropX || 50;
+  const effectiveCropY = cropY || 50;
+  const hasCrop = effectiveCropScale > 1 || effectiveCropX !== 50 || effectiveCropY !== 50;
 
   if (hasCrop) {
     const imageStyle = {
-      transform: `scale(${cropScale})`,
-      transformOrigin: `${cropX}% ${cropY}%`,
+      transform: `scale(${effectiveCropScale})`,
+      transformOrigin: `${effectiveCropX}% ${effectiveCropY}%`,
     };
 
     return (
