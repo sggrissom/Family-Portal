@@ -15,6 +15,7 @@ import {
 import { ThumbnailImage } from "../../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../../hooks/usePhotoStatus";
 import { useTagCache } from "../../../hooks/useTagCache";
+import "./timeline-styles";
 
 interface UnifiedTimelineProps {
   person: server.Person;
