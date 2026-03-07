@@ -8,4 +8,4 @@ const StaticDir = "/srv/apps/family/shared/static/"
 const SiteURL = "https://grissom.zone"
 const EnableFaceTagging = true
 const FaceModelsDir = "/srv/apps/family/shared/models"
-const FaceAnalysisSocket = "/run/family/face.sock"
+const FaceAnalysisSocket = "/run/family-face/face.sock"

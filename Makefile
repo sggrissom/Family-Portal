@@ -35,13 +35,24 @@ build-face:
 	mkdir -p $(BUILD_DIR)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=1 \
 	  go build -tags faceanalysis -ldflags="-s -w" \
-	    -o $(BUILD_DIR)/family_face ./cmd/faceanalysis/
+	    -o $(BUILD_DIR)/family-face ./cmd/faceanalysis/
 
 deploy: build
 	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
 
 deploy-face: build-face
-	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family_face
+	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
+
+# Build on the server (where dlib is installed), scp back, then deploy.
+FACE_SOURCE ?= ~/Family-Portal
+deploy-face-remote:
+	@echo "Building family-face on $(DEPLOY_HOST)..."
+	ssh $(DEPLOY_HOST) "cd $(FACE_SOURCE) && \
+	  CGO_ENABLED=1 go build -tags faceanalysis -ldflags='-s -w' \
+	    -o /tmp/family-face ./cmd/faceanalysis/"
+	mkdir -p $(BUILD_DIR)
+	scp $(DEPLOY_HOST):/tmp/family-face $(BUILD_DIR)/family-face
+	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
 
 test:
 	go test ./backend/ -v

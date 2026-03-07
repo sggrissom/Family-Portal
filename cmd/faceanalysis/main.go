@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 
 	face "github.com/Kagami/go-face"
 )
@@ -72,13 +73,21 @@ func handleEmbed(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
-	socketPath := flag.String("socket", "/run/family/face.sock", "Unix socket path")
-	modelsDir := flag.String("models", "", "Path to dlib models directory")
+	socketPath := flag.String("socket", envOr("FACE_SOCKET", "/run/family/face.sock"), "Unix socket path")
+	modelsDir := flag.String("models", envOr("FACE_MODELS", ""), "Path to dlib models directory")
+	port := flag.String("port", envOr("PORT", ""), "TCP port for healthz (optional)")
 	flag.Parse()
 
 	if *modelsDir == "" {
-		log.Fatal("--models flag is required")
+		log.Fatal("--models flag or FACE_MODELS env var is required")
 	}
 
 	var err error
@@ -91,7 +100,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/recognize", handleRecognize)
 	mux.HandleFunc("/embed", handleEmbed)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
+	// Serve the RPC endpoints over Unix socket
 	listener, err := net.Listen("unix", *socketPath)
 	if err != nil {
 		log.Fatalf("Failed to listen on %s: %v", *socketPath, err)
@@ -99,7 +112,18 @@ func main() {
 	defer listener.Close()
 
 	log.Printf("family-face daemon listening on %s", *socketPath)
+
+	// Optionally also serve healthz over TCP for deploy health checks
+	if *port != "" {
+		go func() {
+			log.Printf("family-face healthz on :%s", *port)
+			if err := http.ListenAndServe(":"+*port, mux); err != nil {
+				log.Fatalf("TCP server error: %v", err)
+			}
+		}()
+	}
+
 	if err := http.Serve(listener, mux); err != nil {
-		log.Fatalf("Server error: %v", err)
+		log.Fatalf("Unix socket server error: %v", err)
 	}
 }
