@@ -13,7 +13,7 @@ BINARY_NAME  := family_site
 
 GOOS         := linux
 GOARCH       := amd64
-CGO_ENABLED  := 0
+CGO_ENABLED  := 1
 
 build-frontend:
 	@echo "Building frontend..."
@@ -30,8 +30,18 @@ build-go:
 
 build: build-frontend build-go
 
+build-face:
+	@echo "Building family-face daemon (requires dlib on build machine)..."
+	mkdir -p $(BUILD_DIR)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=1 \
+	  go build -tags faceanalysis -ldflags="-s -w" \
+	    -o $(BUILD_DIR)/family_face ./cmd/faceanalysis/
+
 deploy: build
 	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
+
+deploy-face: build-face
+	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family_face
 
 test:
 	go test ./backend/ -v
@@ -47,7 +57,7 @@ local:
 
 lint:
 	@echo "Running Go linters..."
-	go vet -tags release ./...
+	go vet -tags release $(shell go list -tags release ./... | grep -v '/cmd/')
 	go fmt ./...
 	@echo "Running TypeScript linter..."
 	npx prettier --check "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
