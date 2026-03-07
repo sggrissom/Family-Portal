@@ -118,7 +118,7 @@ func main() {
 		go func() {
 			log.Printf("family-face healthz on :%s", *port)
 			if err := http.ListenAndServe(":"+*port, mux); err != nil {
-				log.Fatalf("TCP server error: %v", err)
+				log.Printf("TCP server error: %v", err)
 			}
 		}()
 	}
