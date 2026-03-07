@@ -19,6 +19,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
+	github.com/Kagami/go-face v0.0.0-20210630145111-0c14797b4d0e // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/ebitengine/purego v0.8.3 // indirect
 	github.com/evanw/esbuild v0.24.0 // indirect

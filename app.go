@@ -84,6 +84,9 @@ func MakeApplication() *vbeam.Application {
 	// Initialize background photo processing worker
 	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
 
+	// Initialize background face analysis worker
+	backend.InitializeAnalysisWorker(app.DB)
+
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs
 

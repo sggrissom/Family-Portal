@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"encoding/binary"
 	"errors"
 	"family/cfg"
 	"fmt"
+	"math"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -136,11 +138,32 @@ type Person struct {
 	ProfileCropX     float64    `json:"profileCropX"`     // X offset 0-100 (default 50 = center)
 	ProfileCropY     float64    `json:"profileCropY"`     // Y offset 0-100 (default 50 = center)
 	ProfileCropScale float64    `json:"profileCropScale"` // Zoom level 1.0+ (default 1.0 = no zoom)
+	FaceDescriptor   []float32  `json:"-"`                // 128-dim face embedding, nil if not extracted
+}
+
+// packFloat32Slice serializes a []float32 as a byte slice using little-endian IEEE 754
+func packFloat32Slice(data *[]float32, buf *vpack.Buffer) {
+	if buf.Writing {
+		b := make([]byte, len(*data)*4)
+		for i, f := range *data {
+			binary.LittleEndian.PutUint32(b[i*4:], math.Float32bits(f))
+		}
+		vpack.ByteSlice(&b, buf)
+	} else {
+		var b []byte
+		vpack.ByteSlice(&b, buf)
+		if len(b) > 0 && len(b)%4 == 0 {
+			*data = make([]float32, len(b)/4)
+			for i := range *data {
+				(*data)[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))
+			}
+		}
+	}
 }
 
 // Packing function for vbolt serialization
 func PackPerson(self *Person, buf *vpack.Buffer) {
-	var version = vpack.Version(3, buf)
+	version := vpack.Version(4, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
@@ -154,6 +177,9 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 		vpack.Float64(&self.ProfileCropX, buf)
 		vpack.Float64(&self.ProfileCropY, buf)
 		vpack.Float64(&self.ProfileCropScale, buf)
+	}
+	if version >= 4 {
+		packFloat32Slice(&self.FaceDescriptor, buf)
 	}
 }
 
@@ -521,6 +547,9 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
 
 	vbolt.TxCommit(ctx.Tx)
+
+	// Trigger background face embedding extraction for the new profile photo
+	go TriggerPersonFaceUpdate(req.PersonId)
 
 	// Calculate age for response
 	person.Age = calculateAge(person.Birthday)

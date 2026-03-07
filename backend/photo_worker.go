@@ -15,6 +15,7 @@ import (
 // PhotoProcessingJob represents a photo that needs to be processed
 type PhotoProcessingJob struct {
 	ImageId        int
+	FamilyId       int
 	FilePath       string
 	FileData       []byte
 	MimeType       string
@@ -153,6 +154,9 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
 		return
 	}
+
+	// Queue face analysis for the processed photo
+	QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: job.ImageId, FamilyId: job.FamilyId})
 
 	processingTime := time.Since(startTime)
 	log.Printf("[PHOTO_PROCESSING] ✅ Successfully completed photo ID %d in %v", job.ImageId, processingTime)

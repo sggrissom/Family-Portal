@@ -144,22 +144,24 @@ type Image struct {
 	Description      string    `json:"description"`
 	PhotoDate        time.Time `json:"photoDate"`
 	CreatedAt        time.Time `json:"createdAt"`
-	Status           int       `json:"status"` // 0 = active, 1 = processing, 2 = hidden
+	Status           int       `json:"status"`         // 0 = active, 1 = processing, 2 = hidden
+	AnalysisStatus   int       `json:"analysisStatus"` // 0 = pending, 1 = analyzing, 2 = done, 3 = failed
 	TagIds           []int     `json:"tagIds,omitempty"`
 }
 
 // PhotoPerson represents the many-to-many relationship between photos and people
 type PhotoPerson struct {
-	Id        int       `json:"id"`
-	PhotoId   int       `json:"photoId"`
-	PersonId  int       `json:"personId"`
-	FamilyId  int       `json:"familyId"`
-	CreatedAt time.Time `json:"createdAt"`
+	Id         int       `json:"id"`
+	PhotoId    int       `json:"photoId"`
+	PersonId   int       `json:"personId"`
+	FamilyId   int       `json:"familyId"`
+	CreatedAt  time.Time `json:"createdAt"`
+	AutoTagged bool      `json:"autoTagged"` // true = set by face recognition, false = manually tagged
 }
 
 // Packing function for vbolt serialization
 func PackImage(self *Image, buf *vpack.Buffer) {
-	vpack.Version(2, buf)
+	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -174,16 +176,22 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	vpack.Time(&self.PhotoDate, buf)
 	vpack.Time(&self.CreatedAt, buf)
 	vpack.Int(&self.Status, buf)
+	if version >= 3 {
+		vpack.Int(&self.AnalysisStatus, buf)
+	}
 }
 
 // Packing function for PhotoPerson
 func PackPhotoPerson(self *PhotoPerson, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PhotoId, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.Bool(&self.AutoTagged, buf)
+	}
 }
 
 // PhotoTag represents the many-to-many relationship between photos and tags
@@ -716,6 +724,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		// Create processing job
 		job := PhotoProcessingJob{
 			ImageId:        image.Id,
+			FamilyId:       image.FamilyId,
 			FilePath:       image.FilePath,
 			FileData:       fileData,
 			MimeType:       mimeType,

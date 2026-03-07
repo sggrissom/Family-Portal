@@ -629,6 +629,7 @@ export interface Image {
     photoDate: string
     createdAt: string
     status: number
+    analysisStatus: number
     tagIds: number[]
 }
 
