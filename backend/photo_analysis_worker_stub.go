@@ -10,6 +10,17 @@ type PhotoAnalysisJob struct {
 	FamilyId int
 }
 
+// AnalysisWorkerStats holds live stats about the face analysis worker.
+type AnalysisWorkerStats struct {
+	QueueLength int  `json:"queueLength"`
+	IsRunning   bool `json:"isRunning"`
+}
+
+// GetAnalysisWorkerStats returns zeroed stats in local builds (face tagging disabled).
+func GetAnalysisWorkerStats() AnalysisWorkerStats {
+	return AnalysisWorkerStats{}
+}
+
 // InitializeAnalysisWorker is a no-op in local builds (face tagging disabled)
 func InitializeAnalysisWorker(db *vbolt.DB) {}
 

@@ -454,6 +454,12 @@ export interface GetPhotoStatsResponse {
     totalPhotos: number
     processedPhotos: number
     pendingPhotos: number
+    analysisPending: number
+    analysisAnalyzing: number
+    analysisDone: number
+    analysisFailed: number
+    autoTaggedCount: number
+    personsWithFace: number
 }
 
 export interface ReprocessAllPhotosRequest {
@@ -467,6 +473,11 @@ export interface ReprocessAllPhotosResponse {
 }
 
 export interface ProcessingStats {
+    queueLength: number
+    isRunning: boolean
+}
+
+export interface AnalysisWorkerStats {
     queueLength: number
     isRunning: boolean
 }
@@ -1002,6 +1013,10 @@ export async function ReprocessAllPhotos(data: ReprocessAllPhotosRequest): Promi
 
 export async function GetPhotoProcessingStats(data: Empty): Promise<rpc.Response<ProcessingStats>> {
     return await rpc.call<ProcessingStats>('GetPhotoProcessingStats', JSON.stringify(data));
+}
+
+export async function GetAnalysisStats(data: Empty): Promise<rpc.Response<AnalysisWorkerStats>> {
+    return await rpc.call<AnalysisWorkerStats>('GetAnalysisStats', JSON.stringify(data));
 }
 
 export async function GetLogFiles(data: Empty): Promise<rpc.Response<GetLogFilesResponse>> {

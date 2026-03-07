@@ -36,6 +36,23 @@ type photoAnalysisWorker struct {
 
 var globalAnalysisWorker *photoAnalysisWorker
 
+// AnalysisWorkerStats holds live stats about the face analysis worker.
+type AnalysisWorkerStats struct {
+	QueueLength int  `json:"queueLength"`
+	IsRunning   bool `json:"isRunning"`
+}
+
+// GetAnalysisWorkerStats returns live stats for the analysis worker.
+func GetAnalysisWorkerStats() AnalysisWorkerStats {
+	if globalAnalysisWorker == nil {
+		return AnalysisWorkerStats{}
+	}
+	return AnalysisWorkerStats{
+		QueueLength: len(globalAnalysisWorker.jobQueue),
+		IsRunning:   true,
+	}
+}
+
 // InitializeAnalysisWorker starts the background face analysis worker.
 // It is a no-op if face tagging is disabled in config or if the face daemon
 // socket is not reachable.

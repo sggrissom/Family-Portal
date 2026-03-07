@@ -15,6 +15,7 @@ type PhotoManagementState = {
   reprocessErrors: string[];
   lastReprocessTime: string | null;
   processingStats: server.ProcessingStats | null;
+  analysisStats: server.AnalysisWorkerStats | null;
 };
 
 const usePhotoManagementState = vlens.declareHook(
@@ -25,6 +26,7 @@ const usePhotoManagementState = vlens.declareHook(
     reprocessErrors: [],
     lastReprocessTime: null,
     processingStats: null,
+    analysisStats: null,
   })
 );
 
@@ -34,6 +36,12 @@ export async function fetch(route: string, prefix: string) {
       totalPhotos: 0,
       processedPhotos: 0,
       pendingPhotos: 0,
+      analysisPending: 0,
+      analysisAnalyzing: 0,
+      analysisDone: 0,
+      analysisFailed: 0,
+      autoTaggedCount: 0,
+      personsWithFace: 0,
     });
   }
 
@@ -99,10 +107,26 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     }
   };
 
+  const loadAnalysisStats = async () => {
+    try {
+      const [result, error] = await server.GetAnalysisStats({});
+      if (result && !error) {
+        state.analysisStats = result;
+        vlens.scheduleRedraw();
+      }
+    } catch (err) {
+      logWarn("admin", "Failed to load analysis stats", err);
+    }
+  };
+
   // Load stats initially and set up periodic refresh
   if (!state.processingStats) {
     loadProcessingStats();
-    setInterval(loadProcessingStats, 3000); // Poll every 3 seconds
+    loadAnalysisStats();
+    setInterval(() => {
+      loadProcessingStats();
+      loadAnalysisStats();
+    }, 3000); // Poll every 3 seconds
   }
 
   const startReprocessing = async () => {
@@ -206,6 +230,82 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="admin-section">
+        <h2>Face Analysis</h2>
+        <div className="photo-stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon">⏳</div>
+            <div className="stat-content">
+              <h3>Pending</h3>
+              <div className="stat-value">{data.analysisPending.toLocaleString()}</div>
+              <div className="stat-label">Not yet analyzed</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">🔍</div>
+            <div className="stat-content">
+              <h3>Analyzing</h3>
+              <div className="stat-value">{data.analysisAnalyzing.toLocaleString()}</div>
+              <div className="stat-label">In progress</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">✅</div>
+            <div className="stat-content">
+              <h3>Done</h3>
+              <div className="stat-value">{data.analysisDone.toLocaleString()}</div>
+              <div className="stat-label">
+                {data.totalPhotos > 0
+                  ? Math.round((data.analysisDone / data.totalPhotos) * 100) + "% complete"
+                  : "0% complete"}
+              </div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">❌</div>
+            <div className="stat-content">
+              <h3>Failed</h3>
+              <div className="stat-value">{data.analysisFailed.toLocaleString()}</div>
+              <div className="stat-label">Analysis errors</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">🏷️</div>
+            <div className="stat-content">
+              <h3>Auto-tags</h3>
+              <div className="stat-value">{data.autoTaggedCount.toLocaleString()}</div>
+              <div className="stat-label">Person appearances tagged</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">👤</div>
+            <div className="stat-content">
+              <h3>Face Models</h3>
+              <div className="stat-value">{data.personsWithFace.toLocaleString()}</div>
+              <div className="stat-label">People with face model</div>
+            </div>
+          </div>
+
+          {state.analysisStats && (
+            <div className="stat-card">
+              <div className="stat-icon">{state.analysisStats.isRunning ? "🟢" : "🔴"}</div>
+              <div className="stat-content">
+                <h3>Analysis Queue</h3>
+                <div className="stat-value">{state.analysisStats.queueLength}</div>
+                <div className="stat-label">
+                  {state.analysisStats.isRunning ? "Worker running" : "Worker stopped"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {needsReprocessing && (

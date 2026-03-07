@@ -23,6 +23,7 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetPhotoStats)
 	vbeam.RegisterProc(app, ReprocessAllPhotos)
 	vbeam.RegisterProc(app, GetPhotoProcessingStats)
+	vbeam.RegisterProc(app, GetAnalysisStats)
 	vbeam.RegisterProc(app, GetLogFiles)
 	vbeam.RegisterProc(app, GetLogContent)
 	vbeam.RegisterProc(app, GetLogStats)
@@ -104,6 +105,13 @@ type GetPhotoStatsResponse struct {
 	TotalPhotos     int `json:"totalPhotos"`
 	ProcessedPhotos int `json:"processedPhotos"`
 	PendingPhotos   int `json:"pendingPhotos"`
+	// Face analysis
+	AnalysisPending   int `json:"analysisPending"`
+	AnalysisAnalyzing int `json:"analysisAnalyzing"`
+	AnalysisDone      int `json:"analysisDone"`
+	AnalysisFailed    int `json:"analysisFailed"`
+	AutoTaggedCount   int `json:"autoTaggedCount"`
+	PersonsWithFace   int `json:"personsWithFace"`
 }
 
 type ReprocessAllPhotosRequest struct{}
@@ -139,16 +147,42 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 
 	resp.TotalPhotos = len(allPhotos)
 
-	// Count processed photos (those with modern format variants)
+	// Count processed photos (those with modern format variants) and analysis status counts
 	processedCount := 0
 	for _, photo := range allPhotos {
 		if isPhotoProcessed(photo) {
 			processedCount++
 		}
+		switch photo.AnalysisStatus {
+		case 0:
+			resp.AnalysisPending++
+		case 1:
+			resp.AnalysisAnalyzing++
+		case 2:
+			resp.AnalysisDone++
+		case 3:
+			resp.AnalysisFailed++
+		}
 	}
 
 	resp.ProcessedPhotos = processedCount
 	resp.PendingPhotos = resp.TotalPhotos - resp.ProcessedPhotos
+
+	// Count auto-tagged PhotoPerson records
+	vbolt.IterateAll(ctx.Tx, PhotoPersonBkt, func(key int, pp PhotoPerson) bool {
+		if pp.AutoTagged {
+			resp.AutoTaggedCount++
+		}
+		return true
+	})
+
+	// Count persons with a stored face descriptor
+	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, p Person) bool {
+		if len(p.FaceDescriptor) == 128 {
+			resp.PersonsWithFace++
+		}
+		return true
+	})
 
 	return
 }
@@ -342,6 +376,21 @@ func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStat
 
 	// Get processing statistics from photo worker
 	resp = GetProcessingStats()
+	return
+}
+
+// GetAnalysisStats returns live stats from the face analysis worker
+func GetAnalysisStats(ctx *vbeam.Context, req Empty) (resp AnalysisWorkerStats, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+	resp = GetAnalysisWorkerStats()
 	return
 }
 
