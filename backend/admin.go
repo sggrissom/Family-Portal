@@ -24,6 +24,7 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ReprocessAllPhotos)
 	vbeam.RegisterProc(app, GetPhotoProcessingStats)
 	vbeam.RegisterProc(app, GetAnalysisStats)
+	vbeam.RegisterProc(app, ReanalyzeAllPhotos)
 	vbeam.RegisterProc(app, GetLogFiles)
 	vbeam.RegisterProc(app, GetLogContent)
 	vbeam.RegisterProc(app, GetLogStats)
@@ -391,6 +392,56 @@ func GetAnalysisStats(ctx *vbeam.Context, req Empty) (resp AnalysisWorkerStats, 
 		return
 	}
 	resp = GetAnalysisWorkerStats()
+	return
+}
+
+type ReanalyzeAllPhotosRequest struct{}
+
+type ReanalyzeAllPhotosResponse struct {
+	Queued  int `json:"queued"`
+	Skipped int `json:"skipped"`
+}
+
+// ReanalyzeAllPhotos queues all pending/failed photos for face analysis
+func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp ReanalyzeAllPhotosResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+	if user.Id != 1 {
+		err = errors.New("Unauthorized: Admin access required")
+		return
+	}
+
+	// Collect images that need (re)analysis
+	var toQueue []Image
+	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
+		if image.AnalysisStatus == 0 || image.AnalysisStatus == 3 {
+			toQueue = append(toQueue, image)
+		} else {
+			resp.Skipped++
+		}
+		return true
+	})
+
+	// For failed photos reset status to pending so stats stay consistent
+	if len(toQueue) > 0 {
+		vbeam.UseWriteTx(ctx)
+		for _, image := range toQueue {
+			if image.AnalysisStatus == 3 {
+				image.AnalysisStatus = 0
+				vbolt.Write(ctx.Tx, ImagesBkt, image.Id, &image)
+			}
+		}
+		vbolt.TxCommit(ctx.Tx)
+	}
+
+	for _, image := range toQueue {
+		QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: image.Id, FamilyId: image.FamilyId})
+		resp.Queued++
+	}
+
 	return
 }
 

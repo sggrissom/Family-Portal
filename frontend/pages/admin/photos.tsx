@@ -16,6 +16,8 @@ type PhotoManagementState = {
   lastReprocessTime: string | null;
   processingStats: server.ProcessingStats | null;
   analysisStats: server.AnalysisWorkerStats | null;
+  isReanalyzing: boolean;
+  lastReanalysisTime: string | null;
 };
 
 const usePhotoManagementState = vlens.declareHook(
@@ -27,6 +29,8 @@ const usePhotoManagementState = vlens.declareHook(
     lastReprocessTime: null,
     processingStats: null,
     analysisStats: null,
+    isReanalyzing: false,
+    lastReanalysisTime: null,
   })
 );
 
@@ -161,6 +165,36 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     }
 
     state.isReprocessing = false;
+    vlens.scheduleRedraw();
+  };
+
+  const startReanalysis = async () => {
+    const pendingCount = data.analysisPending + data.analysisFailed;
+    const confirmed = confirm(
+      `Queue ${pendingCount} photos for face analysis? This will analyze pending/failed photos. Continue?`
+    );
+
+    if (!confirmed) return;
+
+    state.isReanalyzing = true;
+    vlens.scheduleRedraw();
+
+    try {
+      const [result, error] = await server.ReanalyzeAllPhotos({});
+
+      if (error) {
+        logWarn("admin", "Reanalysis failed", error);
+      } else if (result) {
+        state.lastReanalysisTime = new Date().toLocaleString();
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (err) {
+      logWarn("admin", "Failed to start reanalysis", err);
+    }
+
+    state.isReanalyzing = false;
     vlens.scheduleRedraw();
   };
 
@@ -307,6 +341,43 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           )}
         </div>
       </div>
+
+      {data.analysisPending + data.analysisFailed > 0 && (
+        <div className="admin-card reprocess-card">
+          <div className="card-header">
+            <div className="card-icon">🔍</div>
+            <h3>Face Reanalysis</h3>
+          </div>
+          <div className="card-content">
+            <p>
+              {data.analysisPending} pending and {data.analysisFailed} failed photos have not been
+              analyzed. Queue them for face recognition.
+            </p>
+
+            {state.isReanalyzing ? (
+              <div className="reprocess-progress">
+                <div className="progress-text">Queuing photos for analysis...</div>
+              </div>
+            ) : (
+              <div className="reprocess-actions">
+                <button
+                  className="admin-btn admin-btn-primary"
+                  onClick={startReanalysis}
+                  disabled={
+                    state.isReanalyzing ||
+                    !!(state.analysisStats && !state.analysisStats.isRunning)
+                  }
+                >
+                  Reanalyze {data.analysisPending + data.analysisFailed} Photos
+                </button>
+                {state.lastReanalysisTime && (
+                  <div className="last-reprocess">Last queued: {state.lastReanalysisTime}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {needsReprocessing && (
         <div className="admin-card reprocess-card">

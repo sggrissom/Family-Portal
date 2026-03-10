@@ -482,6 +482,14 @@ export interface AnalysisWorkerStats {
     isRunning: boolean
 }
 
+export interface ReanalyzeAllPhotosRequest {
+}
+
+export interface ReanalyzeAllPhotosResponse {
+    queued: number
+    skipped: number
+}
+
 export interface GetLogFilesResponse {
     files: LogFileInfo[]
 }
@@ -1017,6 +1025,10 @@ export async function GetPhotoProcessingStats(data: Empty): Promise<rpc.Response
 
 export async function GetAnalysisStats(data: Empty): Promise<rpc.Response<AnalysisWorkerStats>> {
     return await rpc.call<AnalysisWorkerStats>('GetAnalysisStats', JSON.stringify(data));
+}
+
+export async function ReanalyzeAllPhotos(data: ReanalyzeAllPhotosRequest): Promise<rpc.Response<ReanalyzeAllPhotosResponse>> {
+    return await rpc.call<ReanalyzeAllPhotosResponse>('ReanalyzeAllPhotos', JSON.stringify(data));
 }
 
 export async function GetLogFiles(data: Empty): Promise<rpc.Response<GetLogFilesResponse>> {
