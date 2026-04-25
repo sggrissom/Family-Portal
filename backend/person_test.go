@@ -142,6 +142,18 @@ func TestCalculateAgeEdgeCases(t *testing.T) {
 			referenceDate: time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC),
 			expected:      "< 1 month",
 		},
+		{
+			name:          "Due date in future shows gestational weeks",
+			birthdate:     time.Date(2023, 8, 16, 0, 0, 0, 0, time.UTC), // 14 weeks ahead
+			referenceDate: time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC),
+			expected:      "26 weeks",
+		},
+		{
+			name:          "Due date tomorrow is full term",
+			birthdate:     time.Date(2023, 5, 11, 0, 0, 0, 0, time.UTC),
+			referenceDate: time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC),
+			expected:      "39 weeks",
+		},
 	}
 
 	for _, tt := range tests {

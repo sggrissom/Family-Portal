@@ -239,6 +239,21 @@ func updatePersonIndex(tx *vbolt.Tx, person Person) {
 }
 
 func calculateAgeAt(birthdate, referenceDate time.Time) string {
+	if referenceDate.Before(birthdate) {
+		// Treat future birthdates as due dates and show gestational age in weeks.
+		birthdateUTC := time.Date(birthdate.Year(), birthdate.Month(), birthdate.Day(), 0, 0, 0, 0, time.UTC)
+		referenceDateUTC := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, time.UTC)
+		daysUntilDue := int(birthdateUTC.Sub(referenceDateUTC).Hours() / 24)
+		weeksPregnant := 40 - int(math.Ceil(float64(daysUntilDue)/7.0))
+		if weeksPregnant < 0 {
+			weeksPregnant = 0
+		}
+		if weeksPregnant == 1 {
+			return "1 week"
+		}
+		return fmt.Sprintf("%d weeks", weeksPregnant)
+	}
+
 	years := referenceDate.Year() - birthdate.Year()
 	months := int(referenceDate.Month()) - int(birthdate.Month())
 	days := referenceDate.Day() - birthdate.Day()
