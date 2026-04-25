@@ -10,6 +10,20 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
   const birthday = new Date(birthdayString);
   const targetDate = new Date(targetDateString);
 
+  // Treat future birthdates as due dates and show gestational weeks.
+  if (targetDate < birthday) {
+    const birthdayUtc = Date.UTC(birthday.getUTCFullYear(), birthday.getUTCMonth(), birthday.getUTCDate());
+    const targetDateUtc = Date.UTC(
+      targetDate.getUTCFullYear(),
+      targetDate.getUTCMonth(),
+      targetDate.getUTCDate()
+    );
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysUntilDue = Math.max(0, Math.floor((birthdayUtc - targetDateUtc) / msPerDay));
+    const weeksPregnant = Math.max(0, 40 - Math.ceil(daysUntilDue / 7));
+    return weeksPregnant === 1 ? "1 week" : `${weeksPregnant} weeks`;
+  }
+
   // Calculate the difference
   let years = targetDate.getFullYear() - birthday.getFullYear();
   let months = targetDate.getMonth() - birthday.getMonth();
