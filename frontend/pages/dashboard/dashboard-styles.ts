@@ -203,6 +203,15 @@ block(`
 }
 `);
 
+block(`
+.person-due-date {
+  margin: 10px 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+`);
+
 // QUICK ACTIONS - COMPACT AND UNOBTRUSIVE
 block(`
 .quick-actions {
