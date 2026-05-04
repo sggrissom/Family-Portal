@@ -150,7 +150,7 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
         </div>
 
         <div className="form-group">
-          <label htmlFor="birthdate">Birthdate</label>
+          <label htmlFor="birthdate">Birthday / Due Date</label>
           <input
             type="date"
             id="birthdate"
@@ -158,6 +158,7 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
             required
             disabled={form.loading}
           />
+          <small>Enter a future date if the baby hasn't arrived yet</small>
         </div>
 
         <div className="form-actions">

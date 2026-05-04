@@ -210,6 +210,14 @@ block(`
   font-weight: 600;
   color: var(--accent);
 }
+.person-trimester {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 `);
 
 // QUICK ACTIONS - COMPACT AND UNOBTRUSIVE
