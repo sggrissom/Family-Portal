@@ -12,7 +12,11 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
 
   // Treat future birthdates as due dates and show gestational weeks.
   if (targetDate < birthday) {
-    const birthdayUtc = Date.UTC(birthday.getUTCFullYear(), birthday.getUTCMonth(), birthday.getUTCDate());
+    const birthdayUtc = Date.UTC(
+      birthday.getUTCFullYear(),
+      birthday.getUTCMonth(),
+      birthday.getUTCDate()
+    );
     const targetDateUtc = Date.UTC(
       targetDate.getUTCFullYear(),
       targetDate.getUTCMonth(),

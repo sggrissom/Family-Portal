@@ -172,7 +172,11 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     if (isNaN(dueDate.getTime())) return null;
 
     const now = new Date();
-    const dueDateUtc = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
+    const dueDateUtc = Date.UTC(
+      dueDate.getUTCFullYear(),
+      dueDate.getUTCMonth(),
+      dueDate.getUTCDate()
+    );
     const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const msPerDay = 24 * 60 * 60 * 1000;
 
