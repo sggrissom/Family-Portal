@@ -210,6 +210,9 @@ block(`
   font-weight: 600;
   color: var(--accent);
 }
+`);
+
+block(`
 .person-trimester {
   margin: 4px 0 0;
   font-size: 0.8rem;
