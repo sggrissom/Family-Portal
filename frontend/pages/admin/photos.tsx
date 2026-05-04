@@ -363,10 +363,7 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                 <button
                   className="admin-btn admin-btn-primary"
                   onClick={startReanalysis}
-                  disabled={
-                    state.isReanalyzing ||
-                    !!(state.analysisStats && !state.analysisStats.isRunning)
-                  }
+                  disabled={state.isReanalyzing}
                 >
                   Reanalyze {data.analysisPending + data.analysisFailed} Photos
                 </button>
