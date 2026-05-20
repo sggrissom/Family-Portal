@@ -3,11 +3,18 @@ import { JSX } from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import "./chart.styles";
+import {
+  ageInMonths,
+  computePercentileLabel,
+  isValidBirthday,
+} from "../../lib/growthPercentiles";
 
 export interface GrowthChartProps {
   growthData: server.GrowthData[];
   width?: number;
   height?: number;
+  birthday?: string;
+  gender?: number; // 0=Male, 1=Female, 2=Unknown
 }
 
 type Kind = "Height" | "Weight";
@@ -99,7 +106,7 @@ function niceTicks(min: number, max: number, targetCount = 5): number[] {
   return ticks;
 }
 
-export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthChartProps) => {
+export const GrowthChart = ({ growthData, width = 600, height = 400, birthday, gender = 2 }: GrowthChartProps) => {
   const selected = useSelectedPoint();
   const hovered = useHoveredPoint();
   const zoom = useZoomState();
@@ -176,6 +183,21 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
   };
   const heightPath = createPath(heightData, heightToY);
   const weightPath = createPath(weightData, weightToY);
+
+  // ---- Percentile label for selected point ----
+
+  const birthdayMs = isValidBirthday(birthday) ? new Date(birthday).getTime() : null;
+
+  let selectedPercentileLabel: string | null = null;
+  if (selected.key && birthdayMs !== null) {
+    const allData = [...heightData, ...weightData];
+    const d = allData.find(x => x.id === selected.key!.id);
+    if (d) {
+      const ageMonths = ageInMonths(birthday!, d.measurementDate);
+      const type = d.measurementType === server.Height ? "height" : "weight";
+      selectedPercentileLabel = computePercentileLabel(d.value, d.unit, ageMonths, gender, type);
+    }
+  }
 
   // ---- Zoom / Pan helpers ----
 
@@ -696,6 +718,9 @@ export const GrowthChart = ({ growthData, width = 600, height = 400 }: GrowthCha
           <div className="info-value">
             {selected.value} {selected.unit}
           </div>
+          {selectedPercentileLabel && (
+            <div className="info-percentile">{selectedPercentileLabel}</div>
+          )}
         </div>
       ) : (
         <div className="data-point-info placeholder">

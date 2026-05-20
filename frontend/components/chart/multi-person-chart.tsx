@@ -2,6 +2,7 @@ import * as preact from "preact";
 import { JSX } from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
+import { computePercentileLabel } from "../../lib/growthPercentiles";
 import "./chart.styles";
 
 export interface PersonGrowthData {
@@ -28,6 +29,7 @@ interface SelectedDataPoint {
   date: string;
   personName: string;
   color: string;
+  percentile: string | null;
 }
 
 const formatDate = (s: string) => new Date(s).toLocaleDateString();
@@ -41,6 +43,7 @@ const useSelectedPoint = vlens.declareHook(
     date: "",
     personName: "",
     color: "",
+    percentile: null,
   })
 );
 
@@ -430,6 +433,7 @@ export const MultiPersonChart = ({
       selected.date = "";
       selected.personName = "";
       selected.color = "";
+      selected.percentile = null;
     } else {
       selected.key = key;
       selected.value = d.value;
@@ -438,6 +442,13 @@ export const MultiPersonChart = ({
       selected.date = `${formatAge(d.ageInMonths)} (${formatDate(d.measurementDate)})`;
       selected.personName = personData.person.name;
       selected.color = personData.color;
+      selected.percentile = computePercentileLabel(
+        d.value,
+        d.unit,
+        d.ageInMonths,
+        personData.person.gender,
+        kind === "Height" ? "height" : "weight"
+      );
     }
     vlens.scheduleRedraw();
   };
@@ -788,6 +799,9 @@ export const MultiPersonChart = ({
           <div className="info-value">
             {selected.value} {selected.unit}
           </div>
+          {selected.percentile && (
+            <div className="info-percentile">{selected.percentile}</div>
+          )}
         </div>
       ) : (
         <div className="data-point-info placeholder">

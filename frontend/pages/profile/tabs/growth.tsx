@@ -1,6 +1,12 @@
 import * as preact from "preact";
 import * as server from "../../../server";
 import { GrowthChart } from "../../../components/chart/chart";
+import {
+  ageInMonths,
+  computePercentileLabel,
+  formatAgeAtMeasurement,
+  isValidBirthday,
+} from "../../../lib/growthPercentiles";
 
 interface GrowthTabProps {
   person: server.Person;
@@ -56,13 +62,29 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
     .slice()
     .sort((a, b) => new Date(b.measurementDate).getTime() - new Date(a.measurementDate).getTime());
 
+  const hasBirthday = isValidBirthday(person.birthday);
+
+  const getAgeLabel = (record: server.GrowthData): string => {
+    if (!hasBirthday) return "—";
+    const months = ageInMonths(person.birthday, record.measurementDate);
+    return formatAgeAtMeasurement(months);
+  };
+
+  const getPercentile = (record: server.GrowthData): string | null => {
+    if (!hasBirthday) return null;
+    const months = ageInMonths(person.birthday, record.measurementDate);
+    if (months > 240) return null;
+    const type = record.measurementType === server.Height ? "height" : "weight";
+    return computePercentileLabel(record.value, record.unit, months, person.gender, type);
+  };
+
   return (
     <div className="growth-tab">
       <h2>Growth Tracking for {person.name}</h2>
       <div className="growth-content">
         <div className="growth-chart-container">
           <h3>Growth Chart</h3>
-          <GrowthChart growthData={growthData} />
+          <GrowthChart growthData={growthData} birthday={person.birthday} gender={person.gender} />
         </div>
 
         <div className="growth-table">
@@ -81,45 +103,60 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                   <tr>
                     <th>Type</th>
                     <th>Value</th>
+                    {hasBirthday && <th>Age</th>}
+                    {hasBirthday && <th>Percentile</th>}
                     <th>Date</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedGrowthData.map(record => (
-                    <tr key={record.id}>
-                      <td>{getMeasurementTypeLabel(record.measurementType)}</td>
-                      <td>
-                        {record.value} {record.unit}
-                      </td>
-                      <td>{formatDate(record.measurementDate)}</td>
-                      <td>
-                        <div className="table-actions">
-                          <a
-                            href={`/edit-growth/${record.id}`}
-                            className="btn-action btn-edit"
-                            title="Edit"
-                          >
-                            ✏️
-                          </a>
-                          <button
-                            className="btn-action btn-delete"
-                            title="Delete"
-                            onClick={() =>
-                              handleDeleteGrowthData(
-                                record.id,
-                                record.measurementType,
-                                record.value,
-                                record.unit
-                              )
-                            }
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {sortedGrowthData.map(record => {
+                    const pctLabel = getPercentile(record);
+                    return (
+                      <tr key={record.id}>
+                        <td>{getMeasurementTypeLabel(record.measurementType)}</td>
+                        <td>
+                          {record.value} {record.unit}
+                        </td>
+                        {hasBirthday && <td>{getAgeLabel(record)}</td>}
+                        {hasBirthday && (
+                          <td>
+                            {pctLabel ? (
+                              <span className="percentile-badge">{pctLabel}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        )}
+                        <td>{formatDate(record.measurementDate)}</td>
+                        <td>
+                          <div className="table-actions">
+                            <a
+                              href={`/edit-growth/${record.id}`}
+                              className="btn-action btn-edit"
+                              title="Edit"
+                            >
+                              ✏️
+                            </a>
+                            <button
+                              className="btn-action btn-delete"
+                              title="Delete"
+                              onClick={() =>
+                                handleDeleteGrowthData(
+                                  record.id,
+                                  record.measurementType,
+                                  record.value,
+                                  record.unit
+                                )
+                              }
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="table-actions">

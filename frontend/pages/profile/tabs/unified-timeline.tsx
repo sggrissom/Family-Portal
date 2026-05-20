@@ -15,6 +15,11 @@ import {
 import { ThumbnailImage } from "../../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../../hooks/usePhotoStatus";
 import { useTagCache } from "../../../hooks/useTagCache";
+import {
+  ageInMonths,
+  computePercentileLabel,
+  isValidBirthday,
+} from "../../../lib/growthPercentiles";
 import "./timeline-styles";
 
 interface UnifiedTimelineProps {
@@ -304,6 +309,15 @@ export const UnifiedTimeline = ({
 
               case "measurement": {
                 const measurement = item.data as server.GrowthData;
+                const pctLabel = isValidBirthday(person.birthday)
+                  ? computePercentileLabel(
+                      measurement.value,
+                      measurement.unit,
+                      ageInMonths(person.birthday, measurement.measurementDate),
+                      person.gender,
+                      measurement.measurementType === server.Height ? "height" : "weight"
+                    )
+                  : null;
                 return (
                   <div key={`measurement-${item.id}`} className="timeline-item measurement-item">
                     <div className="timeline-item-icon">📏</div>
@@ -317,6 +331,11 @@ export const UnifiedTimeline = ({
                       </div>
                       <div className="timeline-item-description measurement-value">
                         {measurement.value} {measurement.unit}
+                        {pctLabel && (
+                          <span className="percentile-badge" style={{ marginLeft: "10px" }}>
+                            {pctLabel}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="timeline-item-actions">
