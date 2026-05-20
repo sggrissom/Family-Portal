@@ -1,45 +1,90 @@
-name: Build and Test
+name: CI + Deploy
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
 
 jobs:
-  build:
+  build-test:
+    name: Build, Typecheck, and Test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.22
+          go-version: '1.24'
+          cache: true
 
-      - name: Cache Go modules
-        uses: actions/cache@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Download Go dependencies
-        run: go mod download
+      - name: Install Node dependencies
+        run: npm ci
 
-      - name: Create minimal dist for Go embed
-        run: |
-          mkdir -p release/dist
-          echo '<!DOCTYPE html><html><body>CI Build</body></html>' > release/dist/index.html
-          echo 'console.log("CI build");' > release/dist/main.js
+      - name: Build
+        run: make build
 
-      - name: Run tests
+      - name: TypeScript check
+        run: make typecheck
+
+      - name: Unit tests
         run: make test
 
-      - name: Build Go binary only
-        run: make build-go
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Start SSH agent and add deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Add VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Checkout deploy tool
+        uses: actions/checkout@v4
+        with:
+          repository: sggrissom/tiny-server-helper
+          path: .tiny-server-helper
+
+      - name: Install deploy tool
+        run: sudo cp .tiny-server-helper/bin/deploy /usr/local/bin/deploy
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: make deploy DEPLOY_HOST="$DEPLOY_USER@$DEPLOY_HOST"
