@@ -281,10 +281,19 @@ export function getPercentileRow(
   };
 }
 
-/** Given a value and a percentile row, returns the approximate percentile rank (3-97). */
-function approxPercentileRank(value: number, row: PercentileRow): number | "below" | "above" {
+/** Given a value and a percentile row, returns an approximate percentile rank. */
+function approxPercentileRank(value: number, row: PercentileRow): number | "below" {
   if (value < row.p3) return "below";
-  if (value > row.p97) return "above";
+  if (value > row.p97) {
+    const span = row.p97 - row.p85;
+    if (span < 1e-9) return 97;
+
+    // Extrapolate using the 85th-97th segment so values above the top band
+    // still get a more precise rank instead of collapsing to >97th.
+    const delta = value - row.p97;
+    const extraPercentile = (delta / span) * (97 - 85);
+    return Math.min(99.9, 97 + extraPercentile);
+  }
 
   const segments = [
     { lo: row.p3, hi: row.p15, pLo: 3, pHi: 15 },
@@ -312,7 +321,7 @@ function ordinalSuffix(n: number): string {
 }
 
 /**
- * Returns a human-readable percentile label like "~75th %ile", "<3rd %ile", or ">97th %ile".
+ * Returns a human-readable percentile label like "~75th %ile", "<3rd %ile", or "~99.2th %ile".
  * Returns null if the age is out of range (>240 months / >20 years) or birthday is not provided.
  *
  * @param value   Raw measurement value
@@ -340,7 +349,10 @@ export function computePercentileLabel(
 
   const rank = approxPercentileRank(normalized, row);
   if (rank === "below") return "<3rd %ile";
-  if (rank === "above") return ">97th %ile";
+
+  if (rank > 97) {
+    return `~${rank.toFixed(1)}th %ile`;
+  }
 
   const rounded = Math.round(rank);
   return `~${rounded}${ordinalSuffix(rounded)} %ile`;
