@@ -30,6 +30,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Validate CSS blocks
+        run: make check-css
+
       - name: Build
         run: make build
 

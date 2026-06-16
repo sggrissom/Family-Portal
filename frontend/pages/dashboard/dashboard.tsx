@@ -97,63 +97,58 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           )}
         </div>
 
-        {/* Simple Navigation Sidebar */}
-        <div className="quick-actions">
-          <h3>Quick Actions</h3>
-          <div className="action-links">
-            <div className="action-group">
-              <h4>Family</h4>
-              <a href="/add-person" className="action-link">
-                ➕ Add Family Member
-              </a>
-              <a href="/family-timeline" className="action-link">
-                📅 Family Timeline
-              </a>
-              <a href="/compare" className="action-link">
-                📊 Compare People
-              </a>
+        <section className="quick-actions" aria-labelledby="quick-actions-title">
+          <div className="quick-actions-heading">
+            <div>
+              <span className="section-kicker">Capture today</span>
+              <h2 id="quick-actions-title">What would you like to add?</h2>
             </div>
-
-            <div className="action-group">
-              <h4>Photos & Memories</h4>
-              <a href="/photos" className="action-link">
-                📸 View Photos
-              </a>
-              <a href="/add-photo" className="action-link">
-                📷 Add Photo
-              </a>
-            </div>
-
-            <div className="action-group">
-              <h4>Growth & Milestones</h4>
-              <a href="/add-growth" className="action-link">
-                📏 Track Growth
-              </a>
-              <a href="/add-milestone" className="action-link">
-                ⭐ Add Milestone
-              </a>
-              <a href="/family-chart" className="action-link">
-                📈 Family Growth Chart
-              </a>
-            </div>
-
-            <div className="action-group">
-              <h4>More</h4>
-              <a href="/chat" className="action-link">
-                💬 Family Chat
-              </a>
-              <a href="/manage-tags" className="action-link">
-                🏷 Tags
-              </a>
-              <a href="/settings" className="action-link">
-                📥📤 Import/Export Data
-              </a>
-              <a href="/settings" className="action-link">
-                ⚙️ Settings
-              </a>
-            </div>
+            <p>Your most common family updates, one tap away.</p>
           </div>
-        </div>
+          <div className="action-links">
+            <a href="/add-milestone" className="action-card action-card-featured">
+              <span className="action-icon" aria-hidden="true">
+                ⭐
+              </span>
+              <span className="action-copy">
+                <strong>Add a milestone</strong>
+                <small>Celebrate a first, achievement, or favorite memory</small>
+              </span>
+              <span className="action-arrow" aria-hidden="true">
+                →
+              </span>
+            </a>
+            <a href="/add-growth" className="action-card">
+              <span className="action-icon" aria-hidden="true">
+                📏
+              </span>
+              <span className="action-copy">
+                <strong>Record growth</strong>
+                <small>Add a new height or weight measurement</small>
+              </span>
+              <span className="action-arrow" aria-hidden="true">
+                →
+              </span>
+            </a>
+            <a href="/add-photo" className="action-card">
+              <span className="action-icon" aria-hidden="true">
+                📷
+              </span>
+              <span className="action-copy">
+                <strong>Share a photo</strong>
+                <small>Keep a new family moment in one place</small>
+              </span>
+              <span className="action-arrow" aria-hidden="true">
+                →
+              </span>
+            </a>
+          </div>
+          <div className="secondary-actions" aria-label="More family actions">
+            <a href="/add-person">＋ Add family member</a>
+            <a href="/family-timeline">View family timeline</a>
+            <a href="/compare">Compare growth</a>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -200,7 +195,11 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     if (isNaN(dueDate.getTime())) return null;
 
     const now = new Date();
-    const dueDateUtc = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
+    const dueDateUtc = Date.UTC(
+      dueDate.getUTCFullYear(),
+      dueDate.getUTCMonth(),
+      dueDate.getUTCDate()
+    );
     const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     if (dueDateUtc <= nowUtc) return null;
 

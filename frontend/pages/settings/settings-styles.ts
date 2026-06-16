@@ -436,3 +436,142 @@ block(`
   }
 }
 `);
+
+block(`
+.appearance-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: 28px;
+  align-items: center;
+}
+`);
+
+block(`
+.appearance-card h3 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+`);
+
+block(`
+.appearance-card .section-description {
+  margin: 0;
+}
+`);
+
+block(`
+.theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+`);
+
+block(`
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  color: var(--text);
+  text-align: left;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+`);
+
+block(`
+.theme-option:hover {
+  transform: translateY(-1px);
+  border-color: var(--muted);
+}
+`);
+
+block(`
+.theme-option.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+`);
+
+block(`
+.theme-option strong,
+.theme-option small {
+  display: block;
+}
+`);
+
+block(`
+.theme-option small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+`);
+
+block(`
+.theme-preview {
+  position: relative;
+  display: block;
+  height: 50px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+}
+`);
+
+block(`
+.theme-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 12px;
+  background: #10b981;
+}
+`);
+
+block(`
+.theme-preview span {
+  position: absolute;
+  top: 21px;
+  left: 9px;
+  width: 55%;
+  height: 6px;
+  border-radius: 4px;
+  background: #94a3b8;
+  box-shadow: 0 11px 0 -1px #cbd5e1;
+}
+`);
+
+block(`
+.theme-preview-light {
+  background: #fff;
+}
+`);
+
+block(`
+.theme-preview-dark {
+  background: #111827;
+  border-color: #475569;
+}
+`);
+
+block(`
+.theme-preview-dark span {
+  background: #e2e8f0;
+  box-shadow: 0 11px 0 -1px #64748b;
+}
+`);
+
+block(`
+@media (max-width: 680px) {
+  .appearance-card {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+`);

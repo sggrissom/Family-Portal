@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test local typecheck lint format check
+.PHONY: all build deploy test local typecheck lint format check check-css
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ GOOS         := linux
 GOARCH       := amd64
 CGO_ENABLED  := 1
 
-build-frontend:
+build-frontend: check-css
 	@echo "Building frontend..."
 	go run -tags frontend release/frontend.go
 
@@ -57,7 +57,7 @@ deploy-face-remote:
 test:
 	go test ./backend/ -v
 
-typecheck:
+typecheck: check-css
 	@echo "Checking TypeScript types..."
 	npx tsc --noEmit
 
@@ -66,7 +66,11 @@ local:
 
 # ── code quality ───────────────────────────────────────────────────────────────
 
-lint:
+check-css:
+	@echo "Validating CSS blocks..."
+	node scripts/check-css-blocks.mjs
+
+lint: check-css
 	@echo "Running Go linters..."
 	go vet -tags release $(shell go list -tags release ./... | grep -v '/cmd/')
 	go fmt ./...
