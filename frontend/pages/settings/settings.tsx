@@ -71,6 +71,29 @@ const useMergeForm = vlens.declareHook(
   })
 );
 
+type AppearanceSettings = {
+  theme: "light" | "dark";
+};
+
+const useAppearanceSettings = vlens.declareHook(
+  (): AppearanceSettings => ({
+    theme:
+      (localStorage.getItem("theme") as AppearanceSettings["theme"] | null) ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+  })
+);
+
+function setTheme(settings: AppearanceSettings, theme: AppearanceSettings["theme"]) {
+  const html = document.documentElement;
+  html.classList.add("theme-transition");
+  html.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+  settings.theme = theme;
+  vlens.scheduleRedraw();
+
+  window.setTimeout(() => html.classList.remove("theme-transition"), 600);
+}
+
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
     return vlens.rpcOk({ familyInfo: { id: 0, name: "", inviteCode: "" }, people: [] });
@@ -305,6 +328,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
+  const appearance = useAppearanceSettings();
 
   return (
     <div className="settings-page">
@@ -314,6 +338,49 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
       </div>
 
       <div className="settings-sections">
+        <div className="settings-section">
+          <h2>Appearance</h2>
+          <div className="settings-card appearance-card">
+            <div>
+              <h3>Color theme</h3>
+              <p className="section-description">
+                Choose the look that is most comfortable for you. This preference is saved on this
+                device.
+              </p>
+            </div>
+            <div className="theme-options" role="group" aria-label="Color theme">
+              <button
+                type="button"
+                className={appearance.theme === "light" ? "theme-option selected" : "theme-option"}
+                aria-pressed={appearance.theme === "light"}
+                onClick={() => setTheme(appearance, "light")}
+              >
+                <span className="theme-preview theme-preview-light" aria-hidden="true">
+                  <span />
+                </span>
+                <span>
+                  <strong>Light</strong>
+                  <small>Bright and clear</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={appearance.theme === "dark" ? "theme-option selected" : "theme-option"}
+                aria-pressed={appearance.theme === "dark"}
+                onClick={() => setTheme(appearance, "dark")}
+              >
+                <span className="theme-preview theme-preview-dark" aria-hidden="true">
+                  <span />
+                </span>
+                <span>
+                  <strong>Dark</strong>
+                  <small>Easy on the eyes</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Join Another Family (only show if user has a family but wants to join another) */}
         <div className="settings-section">
           <h2>Join Another Family</h2>

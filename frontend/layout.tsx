@@ -4,99 +4,127 @@ import * as auth from "./lib/authCache";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
-  theme: "light" | "dark";
   isMenuOpen: boolean;
 };
 
 const useHeader = vlens.declareHook((): HeaderData => {
-  const stored = localStorage.getItem("theme") as HeaderData["theme"] | null;
+  const stored = localStorage.getItem("theme") as "light" | "dark" | null;
   const defaultTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-
-  const themeValue: HeaderData["theme"] = stored ?? defaultTheme;
-
-  document.documentElement.setAttribute("data-theme", themeValue);
-  localStorage.setItem("theme", themeValue);
+  document.documentElement.setAttribute("data-theme", stored ?? defaultTheme);
 
   return {
-    theme: themeValue,
     isMenuOpen: false,
   };
 });
 
 export const Header = ({ isHome }: { isHome: boolean }) => {
   const headerData = useHeader();
-  const themeRef = vlens.ref(headerData, "theme");
   const menuRef = vlens.ref(headerData, "isMenuOpen");
   const currentAuth = auth.getAuth();
   const isAuthenticated = currentAuth && currentAuth.id > 0;
 
   return (
     <header className="site-header">
-      <nav className="nav" aria-label="main">
-        <a className="brand" href="/">
+      <nav className="nav" aria-label="Main navigation">
+        <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
           Family Portal
         </a>
         <button
           className={vlens.refGet(menuRef) ? "nav-toggle open" : "nav-toggle"}
           id="navToggle"
-          aria-label="Toggle navigation"
+          aria-label="Toggle menu"
           aria-expanded={vlens.refGet(menuRef) ? "true" : "false"}
           aria-controls="navLinks"
           onClick={vlens.cachePartial(menuClicked, menuRef)}
         >
-          Menu
+          <span>Menu</span>
+          <span className="nav-toggle-icon" aria-hidden="true">
+            {vlens.refGet(menuRef) ? "×" : "☰"}
+          </span>
         </button>
         <ul className={vlens.refGet(menuRef) ? "nav-links" : "nav-links hidden"} id="navLinks">
           {isAuthenticated ? (
             <>
-              <li className="user-info-container">
-                <div className="user-info">
-                  <span className="user-avatar">👤</span>
-                  <span className="user-name">{currentAuth.name}</span>
+              <li className="menu-account">
+                <span className="user-avatar" aria-hidden="true">
+                  👤
+                </span>
+                <span>
+                  <span className="menu-eyebrow">Signed in as</span>
+                  <strong className="user-name">{currentAuth.name}</strong>
+                </span>
+              </li>
+              <li className="menu-section" aria-label="Quick add">
+                <span className="menu-section-title">Quick add</span>
+                <div className="menu-action-grid">
+                  <a href="/add-milestone" className="menu-action menu-action-featured">
+                    <span className="menu-action-icon" aria-hidden="true">
+                      ⭐
+                    </span>
+                    <span>
+                      <strong>Milestone</strong>
+                      <small>Capture a special moment</small>
+                    </span>
+                  </a>
+                  <a href="/add-growth" className="menu-action">
+                    <span className="menu-action-icon" aria-hidden="true">
+                      📏
+                    </span>
+                    <span>
+                      <strong>Growth</strong>
+                      <small>Record height or weight</small>
+                    </span>
+                  </a>
+                  <a href="/add-photo" className="menu-action">
+                    <span className="menu-action-icon" aria-hidden="true">
+                      📷
+                    </span>
+                    <span>
+                      <strong>Photo</strong>
+                      <small>Save a family memory</small>
+                    </span>
+                  </a>
                 </div>
               </li>
-              {currentAuth.isAdmin ? (
-                <li>
+              <li className="menu-section" aria-label="Go to">
+                <span className="menu-section-title">Go to</span>
+                <div className="menu-destination-grid">
+                  <a href="/dashboard">🏠 Dashboard</a>
+                  <a href="/family-timeline">📅 Timeline</a>
+                  <a href="/photos">🖼️ Photos</a>
+                  <a href="/family-chart">📈 Growth chart</a>
+                  <a href="/chat">💬 Family chat</a>
+                  <a href="/settings">⚙️ Settings</a>
+                </div>
+              </li>
+              <li className="menu-footer">
+                {currentAuth.isAdmin ? (
                   <a href="/admin" className="admin-link">
-                    <span className="admin-icon">⚡</span> Admin
+                    <span aria-hidden="true">⚡</span> Admin
                   </a>
-                </li>
-              ) : null}
-            </>
-          ) : (
-            ""
-          )}
-          <li>
-            <a href="/" className={isHome ? "active" : ""}>
-              Home
-            </a>
-          </li>
-          {isAuthenticated ? (
-            <>
-              <li>
+                ) : (
+                  <span />
+                )}
                 <button onClick={logoutClicked} className="logout-button">
-                  Logout
+                  Log out
                 </button>
               </li>
             </>
           ) : (
             <>
               <li>
-                <a href="/login">Login</a>
+                <a href="/" className={isHome ? "active" : ""}>
+                  Home
+                </a>
               </li>
               <li>
-                <a href="/create-account">Sign Up</a>
+                <a href="/login">Log in</a>
+              </li>
+              <li>
+                <a href="/create-account">Sign up</a>
               </li>
             </>
           )}
-          <li>
-            <button
-              onClick={vlens.cachePartial(themeToggleClicked, themeRef)}
-              className="theme-switch"
-            >
-              {vlens.refGet(themeRef) === "dark" ? "☀️ Light" : "🌙 Dark"}
-            </button>
-          </li>
         </ul>
       </nav>
     </header>
@@ -113,7 +141,6 @@ export const Footer = () => (
 
 const logoutClicked = async (event: Event) => {
   event.preventDefault();
-  // Close mobile menu first if it's open
   const menuToggle = document.getElementById("navToggle");
   if (menuToggle && menuToggle.getAttribute("aria-expanded") === "true") {
     menuToggle.click();
@@ -121,34 +148,13 @@ const logoutClicked = async (event: Event) => {
   await auth.logout();
 };
 
-const themeToggleClicked = (themeRef: Ref) => {
-  const html = document.documentElement;
-  html.classList.add("theme-transition");
-
-  const next = vlens.refGet(themeRef) === "dark" ? "light" : "dark";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-  vlens.refSet(themeRef, next);
-  vlens.scheduleRedraw();
-
-  window.setTimeout(() => {
-    html.classList.remove("theme-transition");
-  }, 600);
-};
-
 const menuClicked = (menuRef: Ref) => {
   const handleClickOutside = (event: MouseEvent) => {
-    if (event.target instanceof HTMLElement) {
-      if (
-        event.target.tagName !== "A" &&
-        !event.target.classList.contains("nav-toggle") &&
-        !event.target.classList.contains("theme-switch") &&
-        !event.target.classList.contains("logout-button")
-      ) {
-        document.removeEventListener("mousedown", handleClickOutside);
-        vlens.refSet(menuRef, false);
-        vlens.scheduleRedraw();
-      }
+    const nav = document.querySelector(".nav");
+    if (event.target instanceof Node && nav && !nav.contains(event.target)) {
+      document.removeEventListener("mousedown", handleClickOutside);
+      vlens.refSet(menuRef, false);
+      vlens.scheduleRedraw();
     }
   };
 
