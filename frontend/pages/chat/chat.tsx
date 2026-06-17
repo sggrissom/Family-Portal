@@ -39,11 +39,13 @@ const useChatState = vlens.declareHook(
     initialized: boolean;
     sentClientMessageIds: Set<string>;
     lifecycleInitialized: boolean;
+    expandedThreadKeys: Set<string>;
   } => ({
     messages: [],
     initialized: false,
     sentClientMessageIds: new Set<string>(),
     lifecycleInitialized: false,
+    expandedThreadKeys: new Set<string>(),
   })
 );
 
@@ -330,6 +332,16 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     return timestamp.toLocaleDateString();
   };
 
+  const getDayKey = (createdAt: string) => {
+    const timestamp = new Date(createdAt);
+    return [timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate()].join("-");
+  };
+
+  const getTodayKey = () => {
+    const today = new Date();
+    return [today.getFullYear(), today.getMonth(), today.getDate()].join("-");
+  };
+
   const formatDateDividerLabel = (createdAt: string) => {
     const timestamp = new Date(createdAt);
     const today = new Date();
@@ -349,6 +361,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     }
 
     const options: Intl.DateTimeFormatOptions = {
+      weekday: "short",
       month: "short",
       day: "numeric",
     };
@@ -357,6 +370,20 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     }
 
     return timestamp.toLocaleDateString(undefined, options);
+  };
+
+  const formatThreadRange = (messages: server.ChatMessage[]) => {
+    if (messages.length === 0) {
+      return "";
+    }
+
+    const first = new Date(messages[0].createdAt);
+    const last = new Date(messages[messages.length - 1].createdAt);
+
+    return `${first.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    })} – ${last.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
   };
 
   const getAvatarIcon = (userName: string) => {
@@ -404,23 +431,72 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     );
   };
 
-  let lastDateKey = "";
-  const renderedMessages = chatState.messages.reduce<preact.ComponentChild[]>((acc, msg) => {
-    const messageDate = new Date(msg.createdAt);
-    const dateKey = messageDate.toDateString();
+  const todayKey = getTodayKey();
+  const threads = chatState.messages.reduce<
+    { key: string; label: string; messages: server.ChatMessage[] }[]
+  >((acc, msg) => {
+    const dayKey = getDayKey(msg.createdAt);
+    const currentThread = acc[acc.length - 1];
 
-    if (lastDateKey !== dateKey) {
-      lastDateKey = dateKey;
-      acc.push(
-        <div key={`date-divider-${dateKey}`} className="chat-date-divider">
-          <span>{formatDateDividerLabel(msg.createdAt)}</span>
-        </div>
-      );
+    if (!currentThread || currentThread.key !== dayKey) {
+      acc.push({
+        key: dayKey,
+        label: formatDateDividerLabel(msg.createdAt),
+        messages: [msg],
+      });
+      return acc;
     }
 
-    acc.push(renderMessage(msg));
+    currentThread.messages.push(msg);
     return acc;
   }, []);
+
+  const renderedMessages = threads.map(thread => {
+    const isCurrentDay = thread.key === todayKey;
+    const isExpanded = isCurrentDay || chatState.expandedThreadKeys.has(thread.key);
+    const threadClasses = [
+      "chat-thread",
+      isExpanded ? "chat-thread-expanded" : "chat-thread-collapsed",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return (
+      <section key={`thread-${thread.key}`} className={threadClasses}>
+        <button
+          type="button"
+          className="chat-thread-header"
+          onClick={() => {
+            if (isCurrentDay) {
+              return;
+            }
+
+            const nextExpandedKeys = new Set(chatState.expandedThreadKeys);
+            if (nextExpandedKeys.has(thread.key)) {
+              nextExpandedKeys.delete(thread.key);
+            } else {
+              nextExpandedKeys.add(thread.key);
+            }
+            chatState.expandedThreadKeys = nextExpandedKeys;
+            vlens.scheduleRedraw();
+          }}
+          aria-expanded={isExpanded}
+        >
+          <span className="chat-thread-title">{thread.label}</span>
+          <span className="chat-thread-meta">
+            {thread.messages.length} {thread.messages.length === 1 ? "message" : "messages"}
+            {thread.messages.length > 1 && ` · ${formatThreadRange(thread.messages)}`}
+          </span>
+          {!isCurrentDay && (
+            <span className="chat-thread-toggle">{isExpanded ? "Collapse" : "Open"}</span>
+          )}
+        </button>
+        {isExpanded && (
+          <div className="chat-thread-messages">{thread.messages.map(renderMessage)}</div>
+        )}
+      </section>
+    );
+  });
 
   return (
     <div className="chat-page">

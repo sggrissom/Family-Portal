@@ -104,22 +104,92 @@ block(`
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   scroll-behavior: smooth;
 }
 `);
 
 block(`
-.chat-date-divider {
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+`);
+
+block(`
+.chat-thread-header {
   align-self: center;
-  font-size: 0.75rem;
-  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(100%, 680px);
   background: var(--bg);
   border: 1px solid var(--border);
-  padding: 4px 12px;
   border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 12px;
+  transition: all 0.2s ease;
+}
+`);
+
+block(`
+.chat-thread-header:hover,
+.chat-thread-header:focus {
+  border-color: var(--primary-accent);
+  box-shadow: 0 0 0 2px rgba(105, 219, 124, 0.15);
+  outline: none;
+}
+`);
+
+block(`
+.chat-thread-title {
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.chat-thread-meta {
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.chat-thread-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.chat-thread-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+`);
+
+block(`
+.chat-thread-collapsed {
+  background: linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.08), transparent);
+  border-radius: 14px;
+  padding: 2px 0;
 }
 `);
 
@@ -419,6 +489,15 @@ block(`
 
   .chat-messages {
     padding: 16px 20px;
+    gap: 14px;
+  }
+
+  .chat-thread-header {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .chat-thread-messages {
     gap: 12px;
   }
 
@@ -487,7 +566,18 @@ block(`
 
   .chat-messages {
     padding: 12px 16px;
-    gap: 10px;
+    gap: 12px;
+  }
+
+  .chat-thread-header {
+    align-items: flex-start;
+    border-radius: 16px;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .chat-thread-toggle {
+    align-self: flex-end;
   }
 
   .message {
