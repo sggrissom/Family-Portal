@@ -5,6 +5,7 @@ block(`
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
+  overflow-x: hidden;
 }
 `);
 
@@ -178,8 +179,9 @@ block(`
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 2rem;
-  min-height: 500px;
+  padding: 1.5rem;
+  overflow-x: hidden;
+  min-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -189,6 +191,7 @@ block(`
 block(`
 .chart-wrapper {
   width: 100%;
+  min-width: 0;
 }
 `);
 
@@ -251,7 +254,7 @@ block(`
 block(`
 @media (max-width: 768px) {
   .family-chart-page {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
   .family-chart-header h1 {
@@ -269,8 +272,8 @@ block(`
   }
 
   .chart-display {
-    padding: 1rem;
-    min-height: 400px;
+    padding: 0.5rem;
+    min-height: 620px;
   }
 
   .chart-info {

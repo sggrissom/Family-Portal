@@ -127,7 +127,7 @@ export const MultiPersonChart = ({
 
   const chartWidth = width;
   const chartHeight = height;
-  const margin = { top: 20, right: 100, bottom: 60, left: 60 };
+  const margin = { top: 28, right: 118, bottom: 74, left: 70 };
   const innerW = chartWidth - margin.left - margin.right;
   const innerH = chartHeight - margin.top - margin.bottom;
 
@@ -252,15 +252,15 @@ export const MultiPersonChart = ({
   };
 
   const getPointRadius = (isSelected: boolean) => {
-    const base = isSelected ? 8 : 6;
-    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.5, 1);
-    return Math.max(3, base * scaleFactor);
+    const base = isSelected ? 11 : 8;
+    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.65, 1);
+    return Math.max(6, base * scaleFactor);
   };
 
   const getStrokeWidth = (isSelected: boolean) => {
-    const base = isSelected ? 3 : 2;
-    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.5, 1);
-    return Math.max(1, base * scaleFactor);
+    const base = isSelected ? 4 : 2.5;
+    const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.7, 1);
+    return Math.max(2, base * scaleFactor);
   };
 
   // Touch handlers
@@ -405,6 +405,71 @@ export const MultiPersonChart = ({
     vlens.scheduleRedraw();
   };
 
+  const selectNearestPoint = (clientX: number, clientY: number, svgEl: SVGSVGElement) => {
+    const rect = svgEl.getBoundingClientRect();
+    const sx = ((clientX - rect.left) / rect.width) * chartWidth;
+    const sy = ((clientY - rect.top) / rect.height) * chartHeight;
+    const plotX = sx - margin.left;
+    const plotY = sy - margin.top;
+
+    if (plotX < -16 || plotX > innerW + 16 || plotY < -16 || plotY > innerH + 16) return;
+
+    const points: Array<{
+      d: (typeof sortedData)[number];
+      kind: Kind;
+      personData: PersonGrowthData;
+      x: number;
+      y: number;
+    }> = [];
+
+    peopleData.forEach(personData => {
+      heightData
+        .filter(d => d.personId === personData.person.id)
+        .forEach(d =>
+          points.push({
+            d,
+            kind: "Height",
+            personData,
+            x: ageToX(d.ageInMonths),
+            y: heightToY(d.value),
+          })
+        );
+      weightData
+        .filter(d => d.personId === personData.person.id)
+        .forEach(d =>
+          points.push({
+            d,
+            kind: "Weight",
+            personData,
+            x: ageToX(d.ageInMonths),
+            y: weightToY(d.value),
+          })
+        );
+    });
+
+    let nearest: (typeof points)[number] | null = null;
+    let nearestDistance = Infinity;
+    for (const point of points) {
+      const transformedX = innerW / 2 + (point.x - innerW / 2) * zoom.scale + zoom.translateX;
+      const transformedY = innerH / 2 + (point.y - innerH / 2) * zoom.scale + zoom.translateY;
+      const distance = Math.hypot(plotX - transformedX, plotY - transformedY);
+      if (distance < nearestDistance) {
+        nearest = point;
+        nearestDistance = distance;
+      }
+    }
+
+    const cssPixelDistance = nearestDistance * (rect.width / chartWidth);
+    if (nearest && cssPixelDistance <= 42) {
+      selectPoint(nearest.d, nearest.kind, nearest.personData);
+    }
+  };
+
+  const handleChartClick = (e: JSX.TargetedMouseEvent<SVGSVGElement>) => {
+    if (zoom.isDragging) return;
+    selectNearestPoint(e.clientX, e.clientY, e.currentTarget);
+  };
+
   const resetZoom = () => {
     zoom.scale = 1;
     zoom.translateX = 0;
@@ -505,6 +570,7 @@ export const MultiPersonChart = ({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
         onWheel={handleWheel}
+        onClick={handleChartClick}
         role="img"
         aria-label="Multi-person growth chart comparing height and weight over time"
       >
@@ -572,7 +638,7 @@ export const MultiPersonChart = ({
                       d={createPath(weightData, weightToY, personData.person.id)}
                       fill="none"
                       stroke={personData.color}
-                      stroke-width="3"
+                      strokeWidth="3"
                       stroke-dasharray="10,5"
                       className="chart-line-dashed"
                       opacity={0.9}
@@ -618,7 +684,10 @@ export const MultiPersonChart = ({
                         className={`data-point height-point ${isSelected ? "selected" : ""} ${
                           isHovered ? "hovered" : ""
                         }`}
-                        onClick={() => selectPoint(d, "Height", personData)}
+                        onClick={e => {
+                          e.stopPropagation();
+                          selectPoint(d, "Height", personData);
+                        }}
                         onMouseEnter={() => hoverPoint(d, "Height")}
                         onMouseLeave={clearHover}
                         tabIndex={0}
@@ -665,7 +734,10 @@ export const MultiPersonChart = ({
                         className={`data-point weight-point ${isSelected ? "selected" : ""} ${
                           isHovered ? "hovered" : ""
                         }`}
-                        onClick={() => selectPoint(d, "Weight", personData)}
+                        onClick={e => {
+                          e.stopPropagation();
+                          selectPoint(d, "Weight", personData);
+                        }}
                         onMouseEnter={() => hoverPoint(d, "Weight")}
                         onMouseLeave={clearHover}
                         tabIndex={0}
@@ -776,7 +848,7 @@ export const MultiPersonChart = ({
                 x2="5"
                 y2="0"
                 stroke="var(--text)"
-                stroke-width="2"
+                strokeWidth="2"
                 stroke-dasharray="10,5"
               />
               <text x="15" y="0" className="legend-text" dy="0.35em" fontSize="10">
@@ -799,9 +871,7 @@ export const MultiPersonChart = ({
           <div className="info-value">
             {selected.value} {selected.unit}
           </div>
-          {selected.percentile && (
-            <div className="info-percentile">{selected.percentile}</div>
-          )}
+          {selected.percentile && <div className="info-percentile">{selected.percentile}</div>}
         </div>
       ) : (
         <div className="data-point-info placeholder">

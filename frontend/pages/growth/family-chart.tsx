@@ -231,8 +231,8 @@ const FamilyChartPage = ({ people }: FamilyChartPageProps) => {
             <div className="chart-wrapper">
               <MultiPersonChart
                 peopleData={chartPeopleData}
-                width={800}
-                height={500}
+                width={900}
+                height={640}
                 showHeight={state.showHeight}
                 showWeight={state.showWeight}
               />
