@@ -709,8 +709,8 @@ block(`
 // Radio Button and Checkbox Shared Styles
 block(`
 .radio-group {
-  display: flex;
-  gap: 20px;
+  display: grid;
+  gap: 10px;
   margin-top: 8px;
 }
 `);
@@ -719,24 +719,58 @@ block(`
 .radio-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
   cursor: pointer;
   font-size: 1rem;
   color: var(--text);
+  transition:
+    border-color var(--transition-speed) ease,
+    background-color var(--transition-speed) ease,
+    box-shadow var(--transition-speed) ease;
+}
+`);
+
+block(`
+.radio-option:has(input[type="radio"]:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 `);
 
 block(`
 .radio-option input[type="radio"] {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  margin: 0;
   accent-color: var(--accent);
 }
 `);
 
 block(`
 .radio-option span {
+  font-weight: 600;
   user-select: none;
+}
+`);
+
+block(`
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+`);
+
+block(`
+.form-actions .btn {
+  flex: 1;
 }
 `);
 
@@ -771,8 +805,16 @@ block(`
 block(`
 @media (max-width: 580px) {
   .radio-group {
+    gap: 8px;
+  }
+
+  .radio-option {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .form-actions {
     flex-direction: column;
-    gap: 12px;
   }
 
   .form-row {

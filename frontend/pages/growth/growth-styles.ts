@@ -65,3 +65,46 @@ block(`
   }
 }
 `);
+
+block(`
+.growth-form {
+  gap: 18px;
+}
+`);
+
+block(`
+.growth-choice-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+`);
+
+block(`
+.growth-choice-group legend {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 10px;
+  padding: 0;
+}
+`);
+
+block(`
+.growth-form .form-row {
+  align-items: start;
+}
+`);
+
+block(`
+@media (max-width: 580px) {
+  .add-growth-container {
+    padding: 24px 16px 32px;
+    align-items: flex-start;
+  }
+
+  .growth-form {
+    gap: 16px;
+  }
+}
+`);
