@@ -237,7 +237,7 @@ export const GrowthForm = ({
         {form.error && <div className="error-message">{form.error}</div>}
 
         <form
-          className="auth-form"
+          className="auth-form growth-form"
           onSubmit={vlens.cachePartial(onSubmitGrowth, mode, form, growthData?.id, onSuccess)}
         >
           {/* Person Selection - only show for add mode */}
@@ -273,9 +273,9 @@ export const GrowthForm = ({
           )}
 
           {/* Measurement Type */}
-          <div className="form-group">
-            <label>Measurement Type</label>
-            <div className="radio-group">
+          <fieldset className="form-group growth-choice-group">
+            <legend>Measurement Type</legend>
+            <div className="radio-group growth-radio-group">
               <label className="radio-option">
                 <input
                   type="radio"
@@ -299,13 +299,13 @@ export const GrowthForm = ({
                 <span>Weight</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           {/* Height Input Mode Toggle (only for height in inches) */}
           {form.measurementType === "height" && form.unit === "in" && (
-            <div className="form-group">
-              <label>Height Input Mode</label>
-              <div className="radio-group">
+            <fieldset className="form-group growth-choice-group">
+              <legend>Height Input Mode</legend>
+              <div className="radio-group growth-radio-group">
                 <label className="radio-option">
                   <input
                     type="radio"
@@ -329,7 +329,7 @@ export const GrowthForm = ({
                   <span>Feet & Inches</span>
                 </label>
               </div>
-            </div>
+            </fieldset>
           )}
 
           {/* Value and Unit - Decimal Mode */}
@@ -415,9 +415,9 @@ export const GrowthForm = ({
             )}
 
           {/* Date or Age Toggle */}
-          <div className="form-group">
-            <label>When was this measured?</label>
-            <div className="radio-group">
+          <fieldset className="form-group growth-choice-group">
+            <legend>When was this measured?</legend>
+            <div className="radio-group growth-radio-group">
               <label className="radio-option">
                 <input
                   type="radio"
@@ -452,7 +452,7 @@ export const GrowthForm = ({
                 <span>At Age</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           {/* Date Input */}
           {form.inputType === "date" && (
