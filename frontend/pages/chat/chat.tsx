@@ -105,14 +105,14 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       // Add message if not already present (supports multi-tab for same user)
       const exists = chatState.messages.some(m => m.id === message.id);
       if (!exists) {
-        chatState.messages = [...chatState.messages, message];
+        chatState.messages = [message, ...chatState.messages];
         vlens.scheduleRedraw();
 
-        // Scroll to bottom
+        // Keep the newest message visible at the top of the feed
         setTimeout(() => {
           const messagesContainer = document.querySelector(".chat-messages");
           if (messagesContainer) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            messagesContainer.scrollTop = 0;
           }
         }, 100);
       }
@@ -243,14 +243,14 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     };
 
     // Add optimistic message to UI immediately
-    chatState.messages = [...chatState.messages, optimisticMessage];
+    chatState.messages = [optimisticMessage, ...chatState.messages];
     vlens.scheduleRedraw();
 
-    // Scroll to bottom immediately
+    // Keep the optimistic newest message visible at the top immediately
     setTimeout(() => {
       const messagesContainer = document.querySelector(".chat-messages");
       if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        messagesContainer.scrollTop = 0;
       }
     }, 50);
 
@@ -377,8 +377,11 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       return "";
     }
 
-    const first = new Date(messages[0].createdAt);
-    const last = new Date(messages[messages.length - 1].createdAt);
+    const timestamps = messages
+      .map(message => new Date(message.createdAt))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const first = timestamps[0];
+    const last = timestamps[timestamps.length - 1];
 
     return `${first.toLocaleTimeString(undefined, {
       hour: "numeric",
@@ -432,7 +435,10 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   };
 
   const todayKey = getTodayKey();
-  const threads = chatState.messages.reduce<
+  const newestFirstMessages = [...chatState.messages].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const threads = newestFirstMessages.reduce<
     { key: string; label: string; messages: server.ChatMessage[] }[]
   >((acc, msg) => {
     const dayKey = getDayKey(msg.createdAt);
