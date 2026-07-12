@@ -13,6 +13,7 @@ type EditPersonForm = {
   personType: number;
   gender: number;
   birthdate: string;
+  isPregnancy: boolean;
   error: string;
   loading: boolean;
 };
@@ -23,6 +24,7 @@ const useEditPersonForm = vlens.declareHook(
     personType: 0,
     gender: 0,
     birthdate: "",
+    isPregnancy: false,
     error: "",
     loading: false,
   })
@@ -68,6 +70,7 @@ export function view(
     form.name = data.person.name;
     form.personType = data.person.type;
     form.gender = data.person.gender;
+    form.isPregnancy = data.person.isPregnancy;
     // Format birthday from ISO to YYYY-MM-DD
     if (data.person.birthday) {
       const d = new Date(data.person.birthday);
@@ -98,6 +101,7 @@ async function onUpdatePersonClicked(form: EditPersonForm, personId: number, eve
       personType: form.personType,
       gender: form.gender,
       birthdate: form.birthdate,
+      isPregnancy: form.isPregnancy,
     });
 
     form.loading = false;
@@ -112,6 +116,18 @@ async function onUpdatePersonClicked(form: EditPersonForm, personId: number, eve
     form.error = "Network error. Please try again.";
   }
 
+  vlens.scheduleRedraw();
+}
+
+
+function todayInputValue(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function onBornNowClicked(form: EditPersonForm) {
+  form.isPregnancy = false;
+  form.birthdate = todayInputValue();
   vlens.scheduleRedraw();
 }
 
@@ -171,8 +187,37 @@ const EditPersonPage = ({ form, personId }: EditPersonPageProps) => (
           </select>
         </div>
 
+        {form.isPregnancy && (
+          <div className="born-now-card">
+            <div>
+              <strong>Baby has arrived?</strong>
+              <p>Set their birthday to today, then adjust it if needed before saving.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={vlens.cachePartial(onBornNowClicked, form)}
+              disabled={form.loading}
+            >
+              Mark as born today
+            </button>
+          </div>
+        )}
+
+        <label className="checkbox-option">
+          <input
+            type="checkbox"
+            checked={form.isPregnancy}
+            onInput={event => {
+              form.isPregnancy = (event.currentTarget as HTMLInputElement).checked;
+            }}
+            disabled={form.loading}
+          />
+          <span>Baby isn’t born yet</span>
+        </label>
+
         <div className="form-group">
-          <label htmlFor="birthdate">Birthdate</label>
+          <label htmlFor="birthdate">{form.isPregnancy ? "Due Date" : "Birthdate"}</label>
           <input
             type="date"
             id="birthdate"

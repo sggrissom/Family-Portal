@@ -64,6 +64,7 @@ export interface AddPersonRequest {
     personType: number
     gender: number
     birthdate: string
+    isPregnancy: boolean
 }
 
 export interface GetPersonResponse {
@@ -95,6 +96,7 @@ export interface UpdatePersonRequest {
     personType: number
     gender: number
     birthdate: string
+    isPregnancy: boolean
 }
 
 export interface SetProfilePhotoRequest {
@@ -608,6 +610,7 @@ export interface Person {
     profileCropX: number
     profileCropY: number
     profileCropScale: number
+    isPregnancy: boolean
 }
 
 export interface GrowthData {

@@ -726,3 +726,12 @@ block(`
   }
 }
 `);
+
+block(`
+.person-born-action {
+  margin: 4px 0 0;
+  color: #2b6cb0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+`);

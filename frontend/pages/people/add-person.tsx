@@ -15,6 +15,7 @@ type AddPersonForm = {
   personType: number; // 0 = Parent, 1 = Child
   gender: number; // 0 = Male, 1 = Female, 2 = Unknown
   birthdate: string;
+  isPregnancy: boolean;
   error: string;
   loading: boolean;
   success: boolean;
@@ -26,6 +27,7 @@ const useAddPersonForm = vlens.declareHook(
     personType: 0,
     gender: 0,
     birthdate: "",
+    isPregnancy: false,
     error: "",
     loading: false,
     success: false,
@@ -67,6 +69,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       personType: form.personType,
       gender: form.gender,
       birthdate: form.birthdate,
+      isPregnancy: form.isPregnancy,
     });
 
     form.loading = false;
@@ -78,6 +81,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.personType = 0;
       form.gender = 0;
       form.birthdate = "";
+      form.isPregnancy = false;
 
       core.setRoute("/dashboard");
     } else {
@@ -149,8 +153,20 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
           </select>
         </div>
 
+        <label className="checkbox-option">
+          <input
+            type="checkbox"
+            checked={form.isPregnancy}
+            onInput={event => {
+              form.isPregnancy = (event.currentTarget as HTMLInputElement).checked;
+            }}
+            disabled={form.loading}
+          />
+          <span>Baby isn’t born yet</span>
+        </label>
+
         <div className="form-group">
-          <label htmlFor="birthdate">Birthday / Due Date</label>
+          <label htmlFor="birthdate">{form.isPregnancy ? "Due Date" : "Birthday"}</label>
           <input
             type="date"
             id="birthdate"
@@ -158,7 +174,7 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
             required
             disabled={form.loading}
           />
-          <small>Enter a future date if the baby hasn't arrived yet</small>
+          <small>{form.isPregnancy ? "This date stays a due date until you mark the baby as born." : "Use the pregnancy option for an expected baby."}</small>
         </div>
 
         <div className="form-actions">
