@@ -178,18 +178,27 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
         </div>
 
         <div className="profile-actions">
-          <a href={`/edit-person/${person.id}`} className="btn btn-secondary">
+          <a href={`/edit-person/${person.id}`} className="btn btn-secondary profile-edit-action">
             ✏️ Edit
           </a>
-          <a href={`/add-milestone/${person.id}`} className="btn btn-primary">
-            📝 Add Milestone
-          </a>
-          <a href={`/add-growth/${person.id}`} className="btn btn-primary">
-            📏 Measure Now
-          </a>
-          <a href={`/add-photo/${person.id}`} className="btn btn-primary">
-            📸 Add Photo
-          </a>
+          <details className="profile-add-menu">
+            <summary className="btn btn-primary profile-add-trigger">+ Add</summary>
+            <div
+              className="profile-add-options"
+              role="menu"
+              aria-label={`Add something for ${person.name}`}
+            >
+              <a href={`/add-milestone/${person.id}`} role="menuitem">
+                <span aria-hidden="true">📝</span> Milestone
+              </a>
+              <a href={`/add-growth/${person.id}`} role="menuitem">
+                <span aria-hidden="true">📏</span> Measurement
+              </a>
+              <a href={`/add-photo/${person.id}`} role="menuitem">
+                <span aria-hidden="true">📸</span> Photo
+              </a>
+            </div>
+          </details>
         </div>
       </div>
 
