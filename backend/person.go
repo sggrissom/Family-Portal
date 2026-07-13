@@ -41,18 +41,20 @@ const (
 
 // Request/Response types
 type AddPersonRequest struct {
-	Name       string `json:"name"`
-	PersonType int    `json:"personType"` // 0 = Parent, 1 = Child
-	Gender     int    `json:"gender"`     // 0 = Male, 1 = Female, 2 = Unknown
-	Birthdate  string `json:"birthdate"`  // YYYY-MM-DD format
+	Name        string `json:"name"`
+	PersonType  int    `json:"personType"`  // 0 = Parent, 1 = Child
+	Gender      int    `json:"gender"`      // 0 = Male, 1 = Female, 2 = Unknown
+	Birthdate   string `json:"birthdate"`   // YYYY-MM-DD format
+	IsPregnancy bool   `json:"isPregnancy"` // true when birthdate is an expected due date
 }
 
 type UpdatePersonRequest struct {
-	Id         int    `json:"id"`
-	Name       string `json:"name"`
-	PersonType int    `json:"personType"` // 0 = Parent, 1 = Child
-	Gender     int    `json:"gender"`     // 0 = Male, 1 = Female, 2 = Unknown
-	Birthdate  string `json:"birthdate"`  // YYYY-MM-DD format
+	Id          int    `json:"id"`
+	Name        string `json:"name"`
+	PersonType  int    `json:"personType"`  // 0 = Parent, 1 = Child
+	Gender      int    `json:"gender"`      // 0 = Male, 1 = Female, 2 = Unknown
+	Birthdate   string `json:"birthdate"`   // YYYY-MM-DD format
+	IsPregnancy bool   `json:"isPregnancy"` // true when birthdate is an expected due date
 }
 
 type GetPersonRequest struct {
@@ -139,6 +141,7 @@ type Person struct {
 	ProfileCropY     float64    `json:"profileCropY"`     // Y offset 0-100 (default 50 = center)
 	ProfileCropScale float64    `json:"profileCropScale"` // Zoom level 1.0+ (default 1.0 = no zoom)
 	FaceDescriptor   []float32  `json:"-"`                // 128-dim face embedding, nil if not extracted
+	IsPregnancy      bool       `json:"isPregnancy"`      // Birthday stores due date until the baby is born
 }
 
 // packFloat32Slice serializes a []float32 as a byte slice using little-endian IEEE 754
@@ -163,7 +166,7 @@ func packFloat32Slice(data *[]float32, buf *vpack.Buffer) {
 
 // Packing function for vbolt serialization
 func PackPerson(self *Person, buf *vpack.Buffer) {
-	version := vpack.Version(4, buf)
+	version := vpack.Version(5, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
@@ -180,6 +183,9 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 	}
 	if version >= 4 {
 		packFloat32Slice(&self.FaceDescriptor, buf)
+	}
+	if version >= 5 {
+		vpack.Bool(&self.IsPregnancy, buf)
 	}
 }
 
@@ -203,7 +209,7 @@ func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
 
 	// Calculate age for each person
 	for i := range people {
-		people[i].Age = calculateAge(people[i].Birthday)
+		people[i].Age = calculatePersonAge(people[i].Birthday, people[i].IsPregnancy)
 	}
 	return
 
@@ -224,7 +230,8 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 	person.Type = PersonType(req.PersonType)
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
-	person.Age = calculateAge(parsedTime)
+	person.IsPregnancy = req.IsPregnancy
+	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 	person.ProfilePhotoId = 0
 
 	vbolt.Write(tx, PeopleBkt, person.Id, &person)
@@ -296,6 +303,31 @@ func calculateAge(birthdate time.Time) string {
 	return calculateAgeAt(birthdate, time.Now())
 }
 
+func calculatePersonAgeAt(birthdate, referenceDate time.Time, isPregnancy bool) string {
+	if isPregnancy {
+		return calculateGestationalAgeAt(birthdate, referenceDate)
+	}
+	return calculateAgeAt(birthdate, referenceDate)
+}
+
+func calculatePersonAge(birthdate time.Time, isPregnancy bool) string {
+	return calculatePersonAgeAt(birthdate, time.Now(), isPregnancy)
+}
+
+func calculateGestationalAgeAt(dueDate, referenceDate time.Time) string {
+	dueDateUTC := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, time.UTC)
+	referenceDateUTC := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, time.UTC)
+	daysUntilDue := int(dueDateUTC.Sub(referenceDateUTC).Hours() / 24)
+	weeksPregnant := 40 - int(math.Ceil(float64(daysUntilDue)/7.0))
+	if weeksPregnant < 0 {
+		weeksPregnant = 0
+	}
+	if weeksPregnant == 1 {
+		return "1 week"
+	}
+	return fmt.Sprintf("%d weeks", weeksPregnant)
+}
+
 // vbeam procedures
 func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse, err error) {
 	// Get authenticated user
@@ -334,10 +366,11 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	}
 
 	if err = validateAddPersonRequest(AddPersonRequest{
-		Name:       req.Name,
-		PersonType: req.PersonType,
-		Gender:     req.Gender,
-		Birthdate:  req.Birthdate,
+		Name:        req.Name,
+		PersonType:  req.PersonType,
+		Gender:      req.Gender,
+		Birthdate:   req.Birthdate,
+		IsPregnancy: req.IsPregnancy,
 	}); err != nil {
 		return
 	}
@@ -360,7 +393,8 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Type = PersonType(req.PersonType)
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
-	person.Age = calculateAge(parsedTime)
+	person.IsPregnancy = req.IsPregnancy
+	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
 
@@ -406,7 +440,7 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	}
 
 	// Calculate age
-	resp.Person.Age = calculateAge(resp.Person.Birthday)
+	resp.Person.Age = calculatePersonAge(resp.Person.Birthday, resp.Person.IsPregnancy)
 
 	// Get growth data for person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)

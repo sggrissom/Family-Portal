@@ -162,9 +162,9 @@ interface PersonCardProps {
 const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
   const photoStatus = usePhotoStatus();
 
-  const getDueDateSummary = (birthday: string): string | null => {
+  const getDueDateSummary = (birthday: string, isPregnancy: boolean): string | null => {
     const dueDate = new Date(birthday);
-    if (isNaN(dueDate.getTime())) return null;
+    if (!isPregnancy || isNaN(dueDate.getTime())) return null;
 
     const now = new Date();
     const dueDateUtc = Date.UTC(
@@ -175,8 +175,13 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const msPerDay = 24 * 60 * 60 * 1000;
 
-    if (dueDateUtc <= nowUtc) {
-      return null;
+    if (dueDateUtc < nowUtc) {
+      const daysPastDue = Math.ceil((nowUtc - dueDateUtc) / msPerDay);
+      return `Due date passed ${daysPastDue} day${daysPastDue === 1 ? "" : "s"} ago`;
+    }
+
+    if (dueDateUtc === nowUtc) {
+      return "Due today";
     }
 
     const daysUntilDue = Math.ceil((dueDateUtc - nowUtc) / msPerDay);
@@ -190,9 +195,9 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     return `Baby due in ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}`;
   };
 
-  const getTrimester = (birthday: string): string | null => {
+  const getTrimester = (birthday: string, isPregnancy: boolean): string | null => {
     const dueDate = new Date(birthday);
-    if (isNaN(dueDate.getTime())) return null;
+    if (!isPregnancy || isNaN(dueDate.getTime())) return null;
 
     const now = new Date();
     const dueDateUtc = Date.UTC(
@@ -211,8 +216,8 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     return "3rd trimester";
   };
 
-  const dueDateSummary = getDueDateSummary(person.birthday);
-  const trimester = getTrimester(person.birthday);
+  const dueDateSummary = getDueDateSummary(person.birthday, person.isPregnancy);
+  const trimester = getTrimester(person.birthday, person.isPregnancy);
   const getGenderIcon = (gender: number) => {
     switch (gender) {
       case 0:
@@ -254,6 +259,7 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
         </p>
         {dueDateSummary && <p className="person-due-date">{dueDateSummary}</p>}
         {trimester && <p className="person-trimester">{trimester}</p>}
+        {person.isPregnancy && <p className="person-born-action">Edit to mark as born</p>}
       </div>
     </a>
   );

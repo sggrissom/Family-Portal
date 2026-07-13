@@ -169,6 +169,21 @@ func TestCalculateAgeEdgeCases(t *testing.T) {
 	}
 }
 
+func TestCalculatePersonAgePregnancyPastDue(t *testing.T) {
+	dueDate := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+	referenceDate := time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC)
+
+	pregnancyAge := calculatePersonAgeAt(dueDate, referenceDate, true)
+	if pregnancyAge != "41 weeks" {
+		t.Errorf("pregnancy past due should remain gestational age, got %q", pregnancyAge)
+	}
+
+	childAge := calculatePersonAgeAt(dueDate, referenceDate, false)
+	if childAge != "< 1 month" {
+		t.Errorf("converted child should use regular age, got %q", childAge)
+	}
+}
+
 func TestCalculateAgeCurrentTime(t *testing.T) {
 	now := time.Now()
 
