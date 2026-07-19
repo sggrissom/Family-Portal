@@ -3,11 +3,7 @@ import { JSX } from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import "./chart.styles";
-import {
-  ageInMonths,
-  computePercentileLabel,
-  isValidBirthday,
-} from "../../lib/growthPercentiles";
+import { ageInMonths, computePercentileLabel, isValidBirthday } from "../../lib/growthPercentiles";
 
 export interface GrowthChartProps {
   growthData: server.GrowthData[];
@@ -106,7 +102,13 @@ function niceTicks(min: number, max: number, targetCount = 5): number[] {
   return ticks;
 }
 
-export const GrowthChart = ({ growthData, width = 600, height = 400, birthday, gender = 2 }: GrowthChartProps) => {
+export const GrowthChart = ({
+  growthData,
+  width = 600,
+  height = 400,
+  birthday,
+  gender = 2,
+}: GrowthChartProps) => {
   const selected = useSelectedPoint();
   const hovered = useHoveredPoint();
   const zoom = useZoomState();

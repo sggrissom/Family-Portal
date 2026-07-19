@@ -220,7 +220,10 @@ export const cdcWeightGirls: PercentileRow[] = [
 ];
 
 /** Linear interpolation between two adjacent rows in a percentile table. */
-export function interpolatePercentiles(table: PercentileRow[], ageMonths: number): PercentileRow | null {
+export function interpolatePercentiles(
+  table: PercentileRow[],
+  ageMonths: number
+): PercentileRow | null {
   if (table.length === 0) return null;
   if (ageMonths <= table[0].month) return table[0];
   if (ageMonths >= table[table.length - 1].month) return table[table.length - 1];
