@@ -121,11 +121,7 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                         {hasBirthday && <td>{getAgeLabel(record)}</td>}
                         {hasBirthday && (
                           <td>
-                            {pctLabel ? (
-                              <span className="percentile-badge">{pctLabel}</span>
-                            ) : (
-                              "—"
-                            )}
+                            {pctLabel ? <span className="percentile-badge">{pctLabel}</span> : "—"}
                           </td>
                         )}
                         <td>{formatDate(record.measurementDate)}</td>

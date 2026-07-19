@@ -174,7 +174,11 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
             required
             disabled={form.loading}
           />
-          <small>{form.isPregnancy ? "This date stays a due date until you mark the baby as born." : "Use the pregnancy option for an expected baby."}</small>
+          <small>
+            {form.isPregnancy
+              ? "This date stays a due date until you mark the baby as born."
+              : "Use the pregnancy option for an expected baby."}
+          </small>
         </div>
 
         <div className="form-actions">
