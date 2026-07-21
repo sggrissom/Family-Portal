@@ -1,14 +1,23 @@
 package backend
 
 import (
+	"encoding/hex"
 	"errors"
 	"family/cfg"
+	"regexp"
 	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 	"go.hasen.dev/vpack"
 )
+
+const (
+	apnsDeviceTokenHexLength = 64
+	maxFCMDeviceTokenLength  = 4096
+)
+
+var fcmDeviceTokenPattern = regexp.MustCompile(`^[A-Za-z0-9_:\-]+$`)
 
 func RegisterPushNotificationMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, RegisterPushDevice)
@@ -187,12 +196,36 @@ func validateRegisterPushDeviceRequest(req RegisterPushDeviceRequest) error {
 	if req.Platform != "ios" && req.Platform != "android" {
 		return errors.New("platform must be 'ios' or 'android'")
 	}
+	if err := validatePushDeviceToken(req.Platform, req.Token); err != nil {
+		return err
+	}
 	if req.Environment != "sandbox" && req.Environment != "production" {
 		return errors.New("environment must be 'sandbox' or 'production'")
 	}
 	if req.BundleId == "" {
 		return errors.New("bundle ID is required")
 	}
+	return nil
+}
+
+func validatePushDeviceToken(platform, token string) error {
+	switch platform {
+	case "ios":
+		if len(token) != apnsDeviceTokenHexLength {
+			return errors.New("iOS device token must be 64 hexadecimal characters")
+		}
+		if _, err := hex.DecodeString(token); err != nil {
+			return errors.New("iOS device token must be 64 hexadecimal characters")
+		}
+	case "android":
+		if len(token) > maxFCMDeviceTokenLength {
+			return errors.New("Android device token must not exceed 4096 characters")
+		}
+		if !fcmDeviceTokenPattern.MatchString(token) {
+			return errors.New("Android device token contains invalid characters")
+		}
+	}
+
 	return nil
 }
 
