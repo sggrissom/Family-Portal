@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test local typecheck lint format check check-css
+.PHONY: all build deploy test test-race local typecheck lint format check check-css
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -56,6 +56,11 @@ deploy-face-remote:
 
 test:
 	go test ./backend/ -v
+
+# boltdb v1.3.1 uses pointer conversions rejected by Go's checkptr instrumentation.
+# Keep the race detector enabled while disabling only that incompatible check.
+test-race:
+	go test -race -gcflags=all=-d=checkptr=0 ./backend/
 
 typecheck: check-css
 	@echo "Checking TypeScript types..."
