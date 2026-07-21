@@ -45,6 +45,9 @@ jobs:
       - name: Unit tests
         run: make test
 
+      - name: Race detector
+        run: make test-race
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest

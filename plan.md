@@ -204,11 +204,11 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [x] Change linting so it checks Go formatting without modifying source files.
 - [x] Run formatting checks in pull-request CI.
 - [x] Run `go vet` in pull-request CI.
-- [ ] Run backend tests in pull-request CI.
-- [ ] Run TypeScript type checking in pull-request CI.
-- [ ] Run CSS validation in pull-request CI.
-- [ ] Build the production frontend and release binary in pull-request CI.
-- [ ] Add `go test -race` where compatible and document any exclusions.
+- [x] Run backend tests in pull-request CI.
+- [x] Run TypeScript type checking in pull-request CI.
+- [x] Run CSS validation in pull-request CI.
+- [x] Build the production frontend and release binary in pull-request CI.
+- [x] Add `go test -race` where compatible and document any exclusions.
 - [ ] Produce coverage reports and set a pragmatic minimum threshold.
 - [ ] Add dependency and secret scans.
 - [ ] Ensure every CI check is deterministic and does not mutate tracked files.
