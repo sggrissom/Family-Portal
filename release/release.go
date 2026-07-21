@@ -4,11 +4,14 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	family "family"
 	"family/backend"
@@ -41,5 +44,9 @@ func main() {
 	addr := fmt.Sprintf(":%d", Port)
 	log.Printf("listening on %s\n", addr)
 	var appServer = family.NewHTTPServer(addr, secureApp)
-	appServer.ListenAndServe()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := family.RunHTTPServer(ctx, appServer); err != nil {
+		log.Fatalf("server stopped unexpectedly: %v", err)
+	}
 }
