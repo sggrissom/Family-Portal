@@ -4,7 +4,6 @@ import (
 	family "family"
 	"family/backend"
 	"fmt"
-	"net/http"
 	"os"
 
 	"go.hasen.dev/vbeam"
@@ -31,7 +30,7 @@ func StartLocalServer() {
 	secureApp := backend.NewSecurityWrapper(app)
 
 	var addr = fmt.Sprintf(":%d", Port)
-	var appServer = &http.Server{Addr: addr, Handler: secureApp}
+	var appServer = family.NewHTTPServer(addr, secureApp)
 	appServer.ListenAndServe()
 }
 

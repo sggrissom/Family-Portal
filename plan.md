@@ -137,8 +137,8 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 
 ## Step 7: Harden the production server lifecycle
 
-- [ ] Configure HTTP read-header, read, write, and idle timeouts appropriate for uploads and WebSockets.
-- [ ] Set a maximum request-header size.
+- [ ] Configure HTTP read and write timeouts appropriate for uploads and WebSockets. Read-header and idle timeouts are configured.
+- [x] Set a maximum request-header size.
 - [ ] Handle `SIGTERM` and `SIGINT`.
 - [ ] Gracefully stop accepting requests and drain active HTTP requests.
 - [ ] Gracefully close WebSocket connections.

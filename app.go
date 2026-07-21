@@ -5,6 +5,7 @@ import (
 	"family/cfg"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/joho/godotenv"
 	"go.hasen.dev/vbeam"
@@ -12,6 +13,27 @@ import (
 )
 
 var Info vbolt.Info
+
+const (
+	// Keep request headers bounded and short-lived without imposing a global
+	// timeout on photo uploads or long-running WebSocket connections.
+	serverReadHeaderTimeout = 10 * time.Second
+	serverIdleTimeout       = 2 * time.Minute
+	serverMaxHeaderBytes    = 1 << 20 // 1 MiB
+)
+
+// NewHTTPServer applies the shared HTTP transport limits used by local and
+// release servers. Handler-specific limits remain responsible for request
+// bodies because uploads and JSON calls have different requirements.
+func NewHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		IdleTimeout:       serverIdleTimeout,
+		MaxHeaderBytes:    serverMaxHeaderBytes,
+	}
+}
 
 func OpenDB(dbpath string) *vbolt.DB {
 	dbConnection := vbolt.Open(dbpath)
