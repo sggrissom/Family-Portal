@@ -96,11 +96,11 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 
 ## Step 5: Correct and finish push notifications
 
-- [ ] Require a push token to belong to the authenticated user before it can be unregistered.
-- [ ] Correctly remove the old user index when a device token is reassigned.
+- [x] Require a push token to belong to the authenticated user before it can be unregistered.
+- [x] Correctly remove the old user index when a device token is reassigned.
 - [ ] Restrict accepted bundle IDs, environments, and platforms to server configuration.
 - [ ] Validate device-token length and format without logging the token.
-- [ ] Add cross-user push-token authorization tests.
+- [x] Add cross-user push-token authorization tests.
 - [ ] Ensure logout and account deletion deactivate the relevant device tokens.
 - [ ] Handle APNs invalid/unregistered token responses and deactivate stale registrations.
 - [ ] Confirm whether Android 1.0 includes real FCM delivery.

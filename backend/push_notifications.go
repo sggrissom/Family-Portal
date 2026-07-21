@@ -144,9 +144,12 @@ func upsertPushDeviceToken(tx *vbolt.Tx, userId int, req RegisterPushDeviceReque
 }
 
 // deactivatePushDeviceToken soft-deletes a device token by setting IsActive=false
-func deactivatePushDeviceToken(tx *vbolt.Tx, tokenStr string) error {
+func deactivatePushDeviceToken(tx *vbolt.Tx, userId int, tokenStr string) error {
 	token := GetPushDeviceTokenByToken(tx, tokenStr)
-	if token.Id == 0 {
+	// Treat a token owned by another user as missing. Besides preventing one user
+	// from disabling another user's notifications, the indistinguishable error
+	// avoids revealing whether a submitted token is registered.
+	if token.Id == 0 || token.UserId != userId {
 		return errors.New("token not found")
 	}
 
@@ -242,7 +245,7 @@ func UnregisterPushDevice(ctx *vbeam.Context, req UnregisterPushDeviceRequest) (
 
 	// Deactivate device token
 	vbeam.UseWriteTx(ctx)
-	err = deactivatePushDeviceToken(ctx.Tx, req.Token)
+	err = deactivatePushDeviceToken(ctx.Tx, user.Id, req.Token)
 	if err != nil {
 		return
 	}
