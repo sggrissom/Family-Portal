@@ -185,9 +185,9 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 
 - [ ] Decide whether app-version checks must work before login.
 - [ ] If required, expose a public, cacheable version-policy endpoint containing no user data.
-- [ ] Replace the custom numeric version comparison with a standards-compliant semver implementation or explicitly restrict versions to `major.minor.patch`.
-- [ ] Define handling for prerelease and build metadata.
-- [ ] Validate that minimum version never exceeds latest version.
+- [x] Replace the custom numeric version comparison with a standards-compliant semver implementation or explicitly restrict versions to `major.minor.patch`.
+- [x] Define handling for prerelease and build metadata.
+- [x] Validate that minimum version never exceeds latest version.
 - [ ] Add an admin UI or documented operator command for changing minimum/latest versions.
 - [ ] Audit all forced-update messages and store URLs before release.
 - [ ] Define a server-side kill switch for broken app versions if needed.
