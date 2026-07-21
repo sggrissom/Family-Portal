@@ -77,41 +77,59 @@ func platformId(platform string) int {
 	}
 }
 
-// compareSemver compares two semver strings (major.minor.patch).
+// compareSemver compares two validated major.minor.patch version strings.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
 func compareSemver(a, b string) int {
-	aParts := strings.SplitN(a, ".", 3)
-	bParts := strings.SplitN(b, ".", 3)
+	aParts, _ := parseAppVersion(a)
+	bParts, _ := parseAppVersion(b)
 
 	for i := 0; i < 3; i++ {
-		var aNum, bNum int
-		if i < len(aParts) {
-			aNum, _ = strconv.Atoi(aParts[i])
-		}
-		if i < len(bParts) {
-			bNum, _ = strconv.Atoi(bParts[i])
-		}
-		if aNum < bNum {
+		if aParts[i] < bParts[i] {
 			return -1
 		}
-		if aNum > bNum {
+		if aParts[i] > bParts[i] {
 			return 1
 		}
 	}
 	return 0
 }
 
-func isValidSemver(version string) bool {
-	parts := strings.SplitN(version, ".", 3)
+// parseAppVersion deliberately accepts only the SemVer core format. Prerelease
+// and build metadata are not part of the mobile version-policy contract.
+func parseAppVersion(version string) ([3]uint64, bool) {
+	var parsed [3]uint64
+	parts := strings.Split(version, ".")
 	if len(parts) != 3 {
-		return false
+		return parsed, false
 	}
-	for _, part := range parts {
-		if _, err := strconv.Atoi(part); err != nil {
-			return false
+	for i, part := range parts {
+		if part == "" || (len(part) > 1 && part[0] == '0') {
+			return parsed, false
 		}
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return parsed, false
+			}
+		}
+		value, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return parsed, false
+		}
+		parsed[i] = value
 	}
-	return true
+	return parsed, true
+}
+
+func isValidSemver(version string) bool {
+	_, valid := parseAppVersion(version)
+	return valid
+}
+
+func validateMobileVersionRange(minimumVersion, latestVersion string) error {
+	if minimumVersion != "" && latestVersion != "" && compareSemver(minimumVersion, latestVersion) > 0 {
+		return errors.New("minimumVersion must not exceed latestVersion")
+	}
+	return nil
 }
 
 // vbeam procedures
@@ -178,6 +196,10 @@ func AdminSetMobileVersion(ctx *vbeam.Context, req AdminSetMobileVersionRequest)
 	}
 	if req.LatestVersion != "" && !isValidSemver(req.LatestVersion) {
 		err = errors.New("latestVersion must be a valid semver string (e.g. 1.2.0)")
+		return
+	}
+	if validationErr := validateMobileVersionRange(req.MinimumVersion, req.LatestVersion); validationErr != nil {
+		err = validationErr
 		return
 	}
 

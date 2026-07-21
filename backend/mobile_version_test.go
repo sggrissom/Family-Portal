@@ -38,9 +38,7 @@ func TestCompareSemver(t *testing.T) {
 		{name: "minor version greater", a: "1.4.0", b: "1.3.9", expected: 1},
 		{name: "patch version less", a: "1.2.3", b: "1.2.4", expected: -1},
 		{name: "patch version greater", a: "1.2.5", b: "1.2.4", expected: 1},
-		{name: "missing patch treated as zero", a: "1.2", b: "1.2.1", expected: -1},
-		{name: "single number version", a: "2", b: "1.9.9", expected: 1},
-		{name: "invalid part treated as zero", a: "1.a.0", b: "1.0.1", expected: -1},
+		{name: "large numeric component", a: "10000000000.0.0", b: "9999999999.9.9", expected: 1},
 	}
 
 	for _, tc := range testCases {
@@ -65,6 +63,12 @@ func TestIsValidSemver(t *testing.T) {
 		{name: "too many parts", version: "1.2.3.4", expected: false},
 		{name: "non-numeric part", version: "1.a.3", expected: false},
 		{name: "prefixed with v", version: "v1.2.3", expected: false},
+		{name: "prerelease metadata", version: "1.2.3-beta.1", expected: false},
+		{name: "build metadata", version: "1.2.3+42", expected: false},
+		{name: "leading zero", version: "1.02.3", expected: false},
+		{name: "negative component", version: "1.-2.3", expected: false},
+		{name: "positive sign", version: "1.+2.3", expected: false},
+		{name: "numeric overflow", version: "18446744073709551616.0.0", expected: false},
 		{name: "empty string", version: "", expected: false},
 	}
 
@@ -73,6 +77,30 @@ func TestIsValidSemver(t *testing.T) {
 			result := isValidSemver(tc.version)
 			if result != tc.expected {
 				t.Errorf("Expected isValidSemver(%q) to be %t, got %t", tc.version, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestValidateMobileVersionRange(t *testing.T) {
+	testCases := []struct {
+		name           string
+		minimumVersion string
+		latestVersion  string
+		wantError      bool
+	}{
+		{name: "ordered versions", minimumVersion: "1.2.0", latestVersion: "1.3.0"},
+		{name: "equal versions", minimumVersion: "1.2.0", latestVersion: "1.2.0"},
+		{name: "minimum omitted", latestVersion: "1.3.0"},
+		{name: "latest omitted", minimumVersion: "1.2.0"},
+		{name: "minimum exceeds latest", minimumVersion: "2.0.0", latestVersion: "1.9.9", wantError: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateMobileVersionRange(tc.minimumVersion, tc.latestVersion)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("validateMobileVersionRange(%q, %q) error = %v, wantError = %t", tc.minimumVersion, tc.latestVersion, err, tc.wantError)
 			}
 		})
 	}
