@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"net/http"
 	"os"
 
 	family "family"
@@ -41,6 +40,6 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", Port)
 	log.Printf("listening on %s\n", addr)
-	var appServer = &http.Server{Addr: addr, Handler: secureApp}
+	var appServer = family.NewHTTPServer(addr, secureApp)
 	appServer.ListenAndServe()
 }
