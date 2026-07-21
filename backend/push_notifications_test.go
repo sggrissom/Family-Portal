@@ -3,10 +3,46 @@ package backend
 import (
 	"family/cfg"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.hasen.dev/vbolt"
 )
+
+func TestValidateRegisterPushDeviceRequestDeviceToken(t *testing.T) {
+	validAPNSToken := strings.Repeat("a1", 32)
+	tests := []struct {
+		name      string
+		platform  string
+		token     string
+		wantError bool
+	}{
+		{name: "valid APNs token", platform: "ios", token: validAPNSToken},
+		{name: "APNs token too short", platform: "ios", token: validAPNSToken[:62], wantError: true},
+		{name: "APNs token is not hexadecimal", platform: "ios", token: strings.Repeat("z", 64), wantError: true},
+		{name: "valid FCM token", platform: "android", token: "example-fcm_token:registration-123"},
+		{name: "FCM token contains whitespace", platform: "android", token: "invalid token", wantError: true},
+		{name: "FCM token contains control character", platform: "android", token: "invalid\ntoken", wantError: true},
+		{name: "FCM token too long", platform: "android", token: strings.Repeat("a", maxFCMDeviceTokenLength+1), wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRegisterPushDeviceRequest(RegisterPushDeviceRequest{
+				Token:       tt.token,
+				Platform:    tt.platform,
+				Environment: "production",
+				BundleId:    "dev.family.portal",
+			})
+			if tt.wantError && err == nil {
+				t.Fatal("validateRegisterPushDeviceRequest() error = nil, want an error")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatalf("validateRegisterPushDeviceRequest() error = %v, want nil", err)
+			}
+		})
+	}
+}
 
 func openPushNotificationTestDB(t *testing.T) *vbolt.DB {
 	t.Helper()

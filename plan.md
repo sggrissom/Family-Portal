@@ -99,7 +99,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [x] Require a push token to belong to the authenticated user before it can be unregistered.
 - [x] Correctly remove the old user index when a device token is reassigned.
 - [ ] Restrict accepted bundle IDs, environments, and platforms to server configuration.
-- [ ] Validate device-token length and format without logging the token.
+- [x] Validate device-token length and format without logging the token.
 - [x] Add cross-user push-token authorization tests.
 - [ ] Ensure logout and account deletion deactivate the relevant device tokens.
 - [ ] Handle APNs invalid/unregistered token responses and deactivate stale registrations.
