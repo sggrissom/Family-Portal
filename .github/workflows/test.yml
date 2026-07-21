@@ -36,6 +36,9 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Lint and formatting checks
+        run: make lint
+
       - name: TypeScript check
         run: make typecheck
 
