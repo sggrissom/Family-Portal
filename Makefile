@@ -73,7 +73,12 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	go vet -tags release $(shell go list -tags release ./... | grep -v '/cmd/')
-	go fmt ./...
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following Go files need formatting:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
 	@echo "Running TypeScript linter..."
 	npx prettier --check "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
 

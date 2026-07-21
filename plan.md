@@ -201,9 +201,9 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 ## Step 10: Make CI a trustworthy, read-only quality gate
 
 - [x] Format the five frontend files currently failing Prettier.
-- [ ] Change linting so it checks Go formatting without modifying source files.
-- [ ] Run formatting checks in pull-request CI.
-- [ ] Run `go vet` in pull-request CI.
+- [x] Change linting so it checks Go formatting without modifying source files.
+- [x] Run formatting checks in pull-request CI.
+- [x] Run `go vet` in pull-request CI.
 - [ ] Run backend tests in pull-request CI.
 - [ ] Run TypeScript type checking in pull-request CI.
 - [ ] Run CSS validation in pull-request CI.
