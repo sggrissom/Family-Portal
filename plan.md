@@ -150,7 +150,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [ ] Prevent optional dependency failures from corrupting or losing primary user data.
 - [ ] Verify reverse-proxy limits and timeouts match application limits.
 - [ ] Verify TLS, certificate renewal, secure redirects, HSTS, and WebSocket proxying.
-- [ ] Add a graceful-shutdown integration test.
+- [x] Add a graceful-shutdown integration test.
 
 **Exit criteria**
 
