@@ -75,4 +75,11 @@ func TestRunHTTPServerDrainsActiveRequests(t *testing.T) {
 	if err := <-serverDone; err != nil {
 		t.Fatalf("RunHTTPServer() error = %v", err)
 	}
+
+	client := &http.Client{Timeout: 250 * time.Millisecond}
+	resp, err := client.Get("http://" + server.Addr)
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("server accepted a new request after shutdown completed")
+	}
 }
