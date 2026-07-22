@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	family "family"
 	"family/backend"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbeam/esbuilder"
@@ -31,7 +35,11 @@ func StartLocalServer() {
 
 	var addr = fmt.Sprintf(":%d", Port)
 	var appServer = family.NewHTTPServer(addr, secureApp)
-	appServer.ListenAndServe()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := family.RunHTTPServer(ctx, appServer); err != nil {
+		log.Printf("server stopped unexpectedly: %v", err)
+	}
 }
 
 var FEOpts = esbuilder.FEBuildOptions{

@@ -139,8 +139,8 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 
 - [ ] Configure HTTP read and write timeouts appropriate for uploads and WebSockets. Read-header and idle timeouts are configured.
 - [x] Set a maximum request-header size.
-- [ ] Handle `SIGTERM` and `SIGINT`.
-- [ ] Gracefully stop accepting requests and drain active HTTP requests.
+- [x] Handle `SIGTERM` and `SIGINT`.
+- [x] Gracefully stop accepting requests and drain active HTTP requests.
 - [ ] Gracefully close WebSocket connections.
 - [ ] Stop and drain photo, face-analysis, and push workers where safe.
 - [ ] Log and return a nonzero exit status for unexpected server failures.

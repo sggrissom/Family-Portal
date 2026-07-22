@@ -1,6 +1,8 @@
 package family
 
 import (
+	"context"
+	"errors"
 	"family/backend"
 	"family/cfg"
 	"log"
@@ -20,6 +22,7 @@ const (
 	serverReadHeaderTimeout = 10 * time.Second
 	serverIdleTimeout       = 2 * time.Minute
 	serverMaxHeaderBytes    = 1 << 20 // 1 MiB
+	serverShutdownTimeout   = 30 * time.Second
 )
 
 // NewHTTPServer applies the shared HTTP transport limits used by local and
@@ -33,6 +36,37 @@ func NewHTTPServer(addr string, handler http.Handler) *http.Server {
 		IdleTimeout:       serverIdleTimeout,
 		MaxHeaderBytes:    serverMaxHeaderBytes,
 	}
+}
+
+// RunHTTPServer serves requests until the context is canceled. Cancellation
+// stops new connections and gives in-flight HTTP requests time to finish.
+// Callers should derive ctx with signal.NotifyContext for SIGINT and SIGTERM.
+func RunHTTPServer(ctx context.Context, server *http.Server) error {
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serveErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+
+	err := <-serveErr
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func OpenDB(dbpath string) *vbolt.DB {
