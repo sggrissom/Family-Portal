@@ -132,6 +132,27 @@ func validateMobileVersionRange(minimumVersion, latestVersion string) error {
 	return nil
 }
 
+func evaluateMobileVersion(appVersion string, config MobileVersionConfig) CheckMobileVersionResponse {
+	resp := CheckMobileVersionResponse{
+		MinimumVersion: config.MinimumVersion,
+		LatestVersion:  config.LatestVersion,
+		UpdateUrl:      config.UpdateUrl,
+		UpdateMessage:  config.UpdateMessage,
+	}
+
+	if config.Id == 0 {
+		resp.Status = "ok"
+	} else if config.MinimumVersion != "" && compareSemver(appVersion, config.MinimumVersion) < 0 {
+		resp.Status = "update_required"
+	} else if config.LatestVersion != "" && compareSemver(appVersion, config.LatestVersion) < 0 {
+		resp.Status = "update_available"
+	} else {
+		resp.Status = "ok"
+	}
+
+	return resp
+}
+
 // vbeam procedures
 
 func CheckMobileVersion(ctx *vbeam.Context, req CheckMobileVersionRequest) (resp CheckMobileVersionResponse, err error) {
@@ -153,24 +174,7 @@ func CheckMobileVersion(ctx *vbeam.Context, req CheckMobileVersionRequest) (resp
 	id := platformId(req.Platform)
 	var config MobileVersionConfig
 	vbolt.Read(ctx.Tx, MobileVersionBkt, id, &config)
-
-	if config.Id == 0 {
-		resp.Status = "ok"
-		return
-	}
-
-	resp.MinimumVersion = config.MinimumVersion
-	resp.LatestVersion = config.LatestVersion
-	resp.UpdateUrl = config.UpdateUrl
-	resp.UpdateMessage = config.UpdateMessage
-
-	if config.MinimumVersion != "" && compareSemver(req.AppVersion, config.MinimumVersion) < 0 {
-		resp.Status = "update_required"
-	} else if config.LatestVersion != "" && compareSemver(req.AppVersion, config.LatestVersion) < 0 {
-		resp.Status = "update_available"
-	} else {
-		resp.Status = "ok"
-	}
+	resp = evaluateMobileVersion(req.AppVersion, config)
 
 	return
 }

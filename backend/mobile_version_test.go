@@ -105,3 +105,44 @@ func TestValidateMobileVersionRange(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluateMobileVersion(t *testing.T) {
+	configured := MobileVersionConfig{
+		Id:             1,
+		Platform:       "ios",
+		MinimumVersion: "2.1.0",
+		LatestVersion:  "2.3.0",
+		UpdateUrl:      "https://example.com/app",
+		UpdateMessage:  "A newer version is available.",
+	}
+	testCases := []struct {
+		name       string
+		appVersion string
+		config     MobileVersionConfig
+		wantStatus string
+	}{
+		{name: "missing configuration permits app", appVersion: "1.0.0", wantStatus: "ok"},
+		{name: "current version is ok", appVersion: "2.3.0", config: configured, wantStatus: "ok"},
+		{name: "newer version is ok", appVersion: "3.0.0", config: configured, wantStatus: "ok"},
+		{name: "older supported version gets optional update", appVersion: "2.2.0", config: configured, wantStatus: "update_available"},
+		{name: "minimum version remains supported", appVersion: "2.1.0", config: configured, wantStatus: "update_available"},
+		{name: "downgrade below minimum requires update", appVersion: "2.0.9", config: configured, wantStatus: "update_required"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := evaluateMobileVersion(tc.appVersion, tc.config)
+			if got.Status != tc.wantStatus {
+				t.Fatalf("evaluateMobileVersion(%q) status = %q, want %q", tc.appVersion, got.Status, tc.wantStatus)
+			}
+			if tc.config.Id != 0 {
+				if got.MinimumVersion != tc.config.MinimumVersion || got.LatestVersion != tc.config.LatestVersion {
+					t.Errorf("response version policy = %q/%q, want %q/%q", got.MinimumVersion, got.LatestVersion, tc.config.MinimumVersion, tc.config.LatestVersion)
+				}
+				if got.UpdateUrl != tc.config.UpdateUrl || got.UpdateMessage != tc.config.UpdateMessage {
+					t.Errorf("response update guidance = %q/%q, want %q/%q", got.UpdateUrl, got.UpdateMessage, tc.config.UpdateUrl, tc.config.UpdateMessage)
+				}
+			}
+		})
+	}
+}
