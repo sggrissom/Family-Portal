@@ -145,7 +145,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [ ] Stop and drain photo, face-analysis, and push workers where safe.
 - [ ] Log and return a nonzero exit status for unexpected server failures.
 - [ ] Keep `/healthz` as a lightweight liveness probe.
-- [ ] Add `/readyz` checks for database access, writable storage, and required dependencies.
+- [x] Add `/readyz` checks for database access and writable storage. Required external services are optional and do not gate readiness.
 - [ ] Define behavior when face analysis, AI, or push services are unavailable.
 - [ ] Prevent optional dependency failures from corrupting or losing primary user data.
 - [ ] Verify reverse-proxy limits and timeouts match application limits.

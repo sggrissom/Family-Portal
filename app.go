@@ -7,6 +7,8 @@ import (
 	"family/cfg"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -89,6 +91,46 @@ func OpenDB(dbpath string) *vbolt.DB {
 	return dbConnection
 }
 
+// readinessHandler verifies that the application's durable dependencies are
+// usable. Unlike /healthz, this endpoint can be removed from a load balancer
+// while the process remains alive and able to recover.
+func readinessHandler(db *vbolt.DB, staticDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+		if db == nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		tx, err := db.Begin(false)
+		if err != nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		_ = tx.Rollback()
+
+		probe, err := os.CreateTemp(filepath.Clean(staticDir), ".ready-*")
+		if err != nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		probePath := probe.Name()
+		if err := probe.Close(); err != nil {
+			_ = os.Remove(probePath)
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		if err := os.Remove(probePath); err != nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}
+}
+
 func MakeApplication() *vbeam.Application {
 	// Load environment variables from .env file
 	var err error
@@ -136,6 +178,7 @@ func MakeApplication() *vbeam.Application {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	app.HandleFunc("GET /readyz", readinessHandler(app.DB, cfg.StaticDir))
 
 	// Initialize background photo processing worker
 	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
