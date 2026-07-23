@@ -10,6 +10,8 @@ import (
 )
 
 func TestValidateRegisterPushDeviceRequestDeviceToken(t *testing.T) {
+	t.Setenv("APNS_BUNDLE_ID", "dev.family.portal")
+	t.Setenv("APNS_ENVIRONMENT", "production")
 	validAPNSToken := strings.Repeat("a1", 32)
 	tests := []struct {
 		name      string
@@ -20,7 +22,7 @@ func TestValidateRegisterPushDeviceRequestDeviceToken(t *testing.T) {
 		{name: "valid APNs token", platform: "ios", token: validAPNSToken},
 		{name: "APNs token too short", platform: "ios", token: validAPNSToken[:62], wantError: true},
 		{name: "APNs token is not hexadecimal", platform: "ios", token: strings.Repeat("z", 64), wantError: true},
-		{name: "valid FCM token", platform: "android", token: "example-fcm_token:registration-123"},
+		{name: "FCM is not enabled", platform: "android", token: "example-fcm_token:registration-123", wantError: true},
 		{name: "FCM token contains whitespace", platform: "android", token: "invalid token", wantError: true},
 		{name: "FCM token contains control character", platform: "android", token: "invalid\ntoken", wantError: true},
 		{name: "FCM token too long", platform: "android", token: strings.Repeat("a", maxFCMDeviceTokenLength+1), wantError: true},
@@ -39,6 +41,43 @@ func TestValidateRegisterPushDeviceRequestDeviceToken(t *testing.T) {
 			}
 			if !tt.wantError && err != nil {
 				t.Fatalf("validateRegisterPushDeviceRequest() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestValidateRegisterPushDeviceRequestServerConfiguration(t *testing.T) {
+	validRequest := RegisterPushDeviceRequest{
+		Token:       strings.Repeat("a1", 32),
+		Platform:    "ios",
+		Environment: "production",
+		BundleId:    "dev.family.portal",
+	}
+
+	t.Run("matching configuration", func(t *testing.T) {
+		t.Setenv("APNS_BUNDLE_ID", validRequest.BundleId)
+		t.Setenv("APNS_ENVIRONMENT", validRequest.Environment)
+		if err := validateRegisterPushDeviceRequest(validRequest); err != nil {
+			t.Fatalf("validateRegisterPushDeviceRequest() error = %v, want nil", err)
+		}
+	})
+
+	for _, test := range []struct {
+		name        string
+		bundleID    string
+		environment string
+		request     RegisterPushDeviceRequest
+	}{
+		{name: "missing configuration", request: validRequest},
+		{name: "different bundle ID", bundleID: "dev.family.other", environment: "production", request: validRequest},
+		{name: "different environment", bundleID: validRequest.BundleId, environment: "sandbox", request: validRequest},
+		{name: "invalid configured environment", bundleID: validRequest.BundleId, environment: "staging", request: validRequest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("APNS_BUNDLE_ID", test.bundleID)
+			t.Setenv("APNS_ENVIRONMENT", test.environment)
+			if err := validateRegisterPushDeviceRequest(test.request); err == nil {
+				t.Fatal("validateRegisterPushDeviceRequest() error = nil, want an error")
 			}
 		})
 	}
