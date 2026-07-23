@@ -191,7 +191,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [ ] Add an admin UI or documented operator command for changing minimum/latest versions.
 - [ ] Audit all forced-update messages and store URLs before release.
 - [ ] Define a server-side kill switch for broken app versions if needed.
-- [ ] Test `ok`, optional-update, mandatory-update, missing-config, malformed-version, and downgrade cases.
+- [x] Test `ok`, optional-update, mandatory-update, missing-config, malformed-version, and downgrade cases.
 - [ ] Test older supported app builds against the current server before every backend release.
 
 **Exit criteria**
