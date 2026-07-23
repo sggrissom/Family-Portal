@@ -4,8 +4,13 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"go.hasen.dev/vbolt"
 )
 
 func TestNewHTTPServerAppliesTransportLimits(t *testing.T) {
@@ -30,6 +35,49 @@ func TestNewHTTPServerAppliesTransportLimits(t *testing.T) {
 	if server.ReadTimeout != 0 || server.WriteTimeout != 0 {
 		t.Error("global read/write timeouts should not constrain uploads or WebSockets")
 	}
+}
+
+func TestReadinessHandler(t *testing.T) {
+	dir := t.TempDir()
+	db := vbolt.Open(filepath.Join(dir, "ready.db"))
+	t.Cleanup(func() { _ = db.Close() })
+
+	t.Run("ready", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		readinessHandler(db, dir).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+		if response.Body.String() != "ok" {
+			t.Errorf("body = %q, want %q", response.Body.String(), "ok")
+		}
+		if response.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))
+		}
+	})
+
+	t.Run("missing database", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		readinessHandler(nil, dir).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
+
+	t.Run("unwritable storage path", func(t *testing.T) {
+		filePath := filepath.Join(dir, "not-a-directory")
+		if err := os.WriteFile(filePath, []byte("content"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		readinessHandler(db, filePath).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
 }
 
 func TestRunHTTPServerDrainsActiveRequests(t *testing.T) {
