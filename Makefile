@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test test-race local typecheck lint format check check-css
+.PHONY: all build deploy test test-race test-coverage local typecheck lint format check check-css
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -61,6 +61,11 @@ test:
 # Keep the race detector enabled while disabling only that incompatible check.
 test-race:
 	go test -race -gcflags=all=-d=checkptr=0 ./backend/
+
+test-coverage:
+	mkdir -p $(BUILD_DIR)
+	go test ./backend/ -coverprofile=$(BUILD_DIR)/coverage.out
+	go tool cover -html=$(BUILD_DIR)/coverage.out -o $(BUILD_DIR)/coverage.html
 
 typecheck: check-css
 	@echo "Checking TypeScript types..."
