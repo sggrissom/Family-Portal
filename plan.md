@@ -102,7 +102,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [x] Validate device-token length and format without logging the token.
 - [x] Add cross-user push-token authorization tests.
 - [ ] Ensure logout and account deletion deactivate the relevant device tokens.
-- [ ] Handle APNs invalid/unregistered token responses and deactivate stale registrations.
+- [x] Handle APNs invalid/unregistered token responses and deactivate stale registrations.
 - [ ] Confirm whether Android 1.0 includes real FCM delivery.
 - [ ] If FCM is not supported in 1.0, reject Android registration and remove Android claims from release materials.
 - [ ] Define a versioned push payload with event type, record identifier, and deep-link destination.
