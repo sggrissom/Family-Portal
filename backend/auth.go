@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +24,10 @@ var ErrAuthFailure = errors.New("AuthFailure")
 type Claims struct {
 	Username string `json:"username"`
 	jwt.RegisteredClaims
+}
+
+type LogoutRequest struct {
+	DeviceToken string `json:"deviceToken"`
 }
 
 var appDb *vbolt.DB
@@ -144,11 +149,33 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	// Try to get user info before clearing the cookie
 	user, _ := AuthenticateRequest(r)
 
+	// Native clients can identify the device that is signing out so it no
+	// longer receives notifications for this account. An empty body remains
+	// valid for browser clients, which do not register a push device token.
+	var logoutRequest LogoutRequest
+	if r.Body != nil {
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&logoutRequest); err != nil && !errors.Is(err, io.EOF) {
+			vbeam.RespondError(w, errors.New("invalid logout request"))
+			return
+		}
+	}
+
 	// Delete refresh token from database if present
 	if cookie, err := r.Cookie("refreshToken"); err == nil && cookie.Value != "" {
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 			DeleteRefreshToken(tx, cookie.Value)
 			vbolt.TxCommit(tx)
+		})
+	}
+
+	if user.Id != 0 && logoutRequest.DeviceToken != "" {
+		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+			// Do not disclose whether an arbitrary token exists or belongs to a
+			// different user. Logout should still succeed and clear the session.
+			if err := deactivatePushDeviceToken(tx, user.Id, logoutRequest.DeviceToken); err == nil {
+				vbolt.TxCommit(tx)
+			}
 		})
 	}
 

@@ -285,6 +285,88 @@ func TestLogoutHandler(t *testing.T) {
 	}
 }
 
+func TestLogoutHandlerDeactivatesCurrentDeviceToken(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/logout.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("logout-test-secret-key")
+
+	user := User{Id: 42, Name: "Test User", Email: "test@example.com", Creation: time.Now()}
+	deviceToken := strings.Repeat("a", apnsDeviceTokenHexLength)
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+		vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
+		if _, err := upsertPushDeviceToken(tx, user.Id, RegisterPushDeviceRequest{
+			Token: deviceToken, Platform: "ios", Environment: "sandbox", BundleId: "com.example.family",
+		}); err != nil {
+			t.Fatalf("register push device: %v", err)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	authToken, err := generateJwtTokenString(user)
+	if err != nil {
+		t.Fatalf("generate auth token: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/logout", strings.NewReader(`{"deviceToken":"`+deviceToken+`"}`))
+	req.AddCookie(&http.Cookie{Name: "authToken", Value: authToken})
+	recorder := httptest.NewRecorder()
+
+	logoutHandler(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		device := GetPushDeviceTokenByToken(tx, deviceToken)
+		if device.IsActive {
+			t.Error("device token remained active after logout")
+		}
+	})
+}
+
+func TestLogoutHandlerDoesNotDeactivateAnotherUsersDevice(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/logout.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("logout-test-secret-key")
+
+	user := User{Id: 42, Name: "Test User", Email: "test@example.com", Creation: time.Now()}
+	deviceToken := strings.Repeat("b", apnsDeviceTokenHexLength)
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+		vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
+		if _, err := upsertPushDeviceToken(tx, 99, RegisterPushDeviceRequest{
+			Token: deviceToken, Platform: "ios", Environment: "sandbox", BundleId: "com.example.family",
+		}); err != nil {
+			t.Fatalf("register push device: %v", err)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	authToken, err := generateJwtTokenString(user)
+	if err != nil {
+		t.Fatalf("generate auth token: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/logout", strings.NewReader(`{"deviceToken":"`+deviceToken+`"}`))
+	req.AddCookie(&http.Cookie{Name: "authToken", Value: authToken})
+	recorder := httptest.NewRecorder()
+
+	logoutHandler(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		device := GetPushDeviceTokenByToken(tx, deviceToken)
+		if !device.IsActive {
+			t.Error("logout deactivated another user's device token")
+		}
+	})
+}
+
 func TestLogoutHandlerRequiresPost(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/logout", nil)
 	recorder := httptest.NewRecorder()
