@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"encoding/json"
 	"errors"
 	"family/cfg"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 func RegisterMobileVersionMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, CheckMobileVersion)
 	vbeam.RegisterProc(app, AdminSetMobileVersion)
+	app.HandleFunc("GET /api/mobile-version", mobileVersionPolicyHandler(app.DB))
 }
 
 // Request/Response types
@@ -151,6 +154,35 @@ func evaluateMobileVersion(appVersion string, config MobileVersionConfig) CheckM
 	}
 
 	return resp
+}
+
+// mobileVersionPolicyHandler exposes version policy before authentication so a
+// native client can decide whether it must update before presenting login. The
+// response contains only operator-configured public store guidance.
+func mobileVersionPolicyHandler(db *vbolt.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		platform := r.URL.Query().Get("platform")
+		appVersion := r.URL.Query().Get("appVersion")
+		if platform != "ios" && platform != "android" {
+			http.Error(w, "platform must be 'ios' or 'android'", http.StatusBadRequest)
+			return
+		}
+		if !isValidSemver(appVersion) {
+			http.Error(w, "appVersion must be a valid major.minor.patch version", http.StatusBadRequest)
+			return
+		}
+
+		var config MobileVersionConfig
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			vbolt.Read(tx, MobileVersionBkt, platformId(platform), &config)
+		})
+
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(evaluateMobileVersion(appVersion, config)); err != nil {
+			http.Error(w, "failed to encode version policy", http.StatusInternalServerError)
+		}
+	}
 }
 
 // vbeam procedures
