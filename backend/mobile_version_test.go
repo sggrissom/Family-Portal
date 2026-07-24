@@ -1,6 +1,14 @@
 package backend
 
-import "testing"
+import (
+	"encoding/json"
+	"family/cfg"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"go.hasen.dev/vbolt"
+)
 
 func TestPlatformID(t *testing.T) {
 	testCases := []struct {
@@ -144,5 +152,58 @@ func TestEvaluateMobileVersion(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMobileVersionPolicyHandler(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/mobile-version.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { db.Close() })
+
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		config := MobileVersionConfig{
+			Id:             platformId("ios"),
+			Platform:       "ios",
+			MinimumVersion: "2.0.0",
+			LatestVersion:  "2.1.0",
+			UpdateUrl:      "https://example.com/app",
+		}
+		vbolt.Write(tx, MobileVersionBkt, config.Id, &config)
+		vbolt.TxCommit(tx)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/mobile-version?platform=ios&appVersion=1.9.0", nil)
+	recorder := httptest.NewRecorder()
+	mobileVersionPolicyHandler(db).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=300" {
+		t.Errorf("Cache-Control = %q, want public cache policy", got)
+	}
+	var response CheckMobileVersionResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Status != "update_required" || response.MinimumVersion != "2.0.0" {
+		t.Errorf("response = %+v, want mandatory update to 2.0.0", response)
+	}
+}
+
+func TestMobileVersionPolicyHandlerRejectsInvalidRequest(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/mobile-version.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { db.Close() })
+
+	for _, target := range []string{
+		"/api/mobile-version?platform=web&appVersion=1.0.0",
+		"/api/mobile-version?platform=ios&appVersion=1.0",
+	} {
+		recorder := httptest.NewRecorder()
+		mobileVersionPolicyHandler(db).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("%s status = %d, want %d", target, recorder.Code, http.StatusBadRequest)
+		}
 	}
 }
