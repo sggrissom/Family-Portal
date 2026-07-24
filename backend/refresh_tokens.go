@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"family/cfg"
@@ -9,6 +10,8 @@ import (
 	"go.hasen.dev/vbolt"
 	"go.hasen.dev/vpack"
 )
+
+const refreshTokenCleanupInterval = 24 * time.Hour
 
 // RefreshToken represents a long-lived token for persistent login
 type RefreshToken struct {
@@ -136,6 +139,49 @@ func DeleteUserRefreshTokens(tx *vbolt.Tx, userId int) {
 		vbolt.Delete(tx, RefreshTokenBkt, token.Id)
 		vbolt.Delete(tx, RefreshTokenByTokenBkt, token.Token)
 		vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+	}
+}
+
+// CleanupExpiredRefreshTokens removes expired token records and their lookup
+// entries. The caller supplies the clock value so cleanup is deterministic in
+// tests and every token in a run is evaluated against the same instant.
+func CleanupExpiredRefreshTokens(tx *vbolt.Tx, now time.Time) int {
+	var expired []RefreshToken
+	vbolt.IterateAll(tx, RefreshTokenBkt, func(_ int, token RefreshToken) bool {
+		if !token.ExpiresAt.After(now) {
+			expired = append(expired, token)
+		}
+		return true
+	})
+
+	for _, token := range expired {
+		vbolt.Delete(tx, RefreshTokenBkt, token.Id)
+		vbolt.Delete(tx, RefreshTokenByTokenBkt, token.Token)
+		vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+	}
+	return len(expired)
+}
+
+// RunRefreshTokenCleanup purges expired refresh tokens immediately and then at
+// a daily interval until the application context is canceled.
+func RunRefreshTokenCleanup(ctx context.Context, db *vbolt.DB) {
+	cleanup := func() {
+		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+			CleanupExpiredRefreshTokens(tx, time.Now())
+			vbolt.TxCommit(tx)
+		})
+	}
+
+	cleanup()
+	ticker := time.NewTicker(refreshTokenCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
 	}
 }
 

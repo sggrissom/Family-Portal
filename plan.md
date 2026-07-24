@@ -74,7 +74,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [ ] Hash refresh tokens at rest.
 - [ ] Rotate refresh tokens on use.
 - [ ] Detect refresh-token reuse and revoke the affected session family.
-- [ ] Periodically purge expired refresh tokens.
+- [x] Periodically purge expired refresh tokens.
 - [ ] Shorten access-token lifetime once refresh behavior is reliable.
 - [ ] Rate-limit login by IP and account identifier.
 - [ ] Rate-limit signup, password reset, invite-code attempts, refresh, Google token login, AI calls, imports, uploads, and WebSocket connections/messages.
