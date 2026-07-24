@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test test-race test-coverage local typecheck lint format check check-css
+.PHONY: all build deploy test test-race test-coverage local typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -101,3 +101,14 @@ format:
 
 check: test typecheck lint
 	@echo "✅ All quality checks passed!"
+
+# Run after CI checks to catch formatters, generators, or tests that silently
+# rewrite files from the checked-out revision.
+check-clean:
+	@changes="$$(git status --short --untracked-files=no)"; \
+	if [ -n "$$changes" ]; then \
+		echo "CI checks modified tracked files:"; \
+		echo "$$changes"; \
+		exit 1; \
+	fi
+	@echo "Tracked files remain unchanged."
