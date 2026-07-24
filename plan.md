@@ -211,7 +211,8 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [x] Add `go test -race` where compatible and document any exclusions.
 - [x] Produce coverage reports in CI without enforcing a minimum threshold.
 - [ ] Add dependency and secret scans.
-- [ ] Ensure every CI check is deterministic and does not mutate tracked files.
+- [ ] Ensure every CI check is deterministic.
+- [x] Make CI fail when a check mutates tracked files.
 - [ ] Protect the main branch and require all release checks before merge.
 - [ ] Pin or otherwise review third-party GitHub Actions and deployment dependencies.
 

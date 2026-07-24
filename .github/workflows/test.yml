@@ -59,6 +59,9 @@ jobs:
       - name: Race detector
         run: make test-race
 
+      - name: Verify checks did not modify tracked files
+        run: make check-clean
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
