@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"family/cfg"
+	"fmt"
+	"os"
 	"regexp"
 	"time"
 
@@ -193,8 +195,8 @@ func validateRegisterPushDeviceRequest(req RegisterPushDeviceRequest) error {
 	if req.Token == "" {
 		return errors.New("device token is required")
 	}
-	if req.Platform != "ios" && req.Platform != "android" {
-		return errors.New("platform must be 'ios' or 'android'")
+	if req.Platform != "ios" {
+		return errors.New("platform is not enabled by the server")
 	}
 	if err := validatePushDeviceToken(req.Platform, req.Token); err != nil {
 		return err
@@ -204,6 +206,18 @@ func validateRegisterPushDeviceRequest(req RegisterPushDeviceRequest) error {
 	}
 	if req.BundleId == "" {
 		return errors.New("bundle ID is required")
+	}
+
+	configuredBundleID := os.Getenv("APNS_BUNDLE_ID")
+	configuredEnvironment := os.Getenv("APNS_ENVIRONMENT")
+	if configuredBundleID == "" || configuredEnvironment == "" {
+		return errors.New("push registration is not configured")
+	}
+	if configuredEnvironment != "sandbox" && configuredEnvironment != "production" {
+		return fmt.Errorf("push registration has invalid server environment %q", configuredEnvironment)
+	}
+	if req.BundleId != configuredBundleID || req.Environment != configuredEnvironment {
+		return errors.New("bundle ID or environment is not enabled by the server")
 	}
 	return nil
 }
