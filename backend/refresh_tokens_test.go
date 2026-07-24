@@ -298,25 +298,45 @@ func TestDeleteUserRefreshTokens(t *testing.T) {
 	})
 }
 
-// TestCleanupExpiredRefreshTokens is simplified since CleanupExpiredRefreshTokens
-// is now a no-op placeholder. Cleanup happens on token validation instead.
 func TestCleanupExpiredRefreshTokens(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
 
+	var validToken, expiredToken RefreshToken
+	var userId int
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
+		userId = user.Id
 
-		// Create an expired token
-		expiredToken, _ := CreateRefreshToken(tx, user.Id, -1*time.Hour)
-
-		// Validate it - should return false for expired token
-		_, valid := ValidateRefreshToken(tx, expiredToken.Token)
-		if valid {
-			t.Error("Expired token should not be valid")
+		var err error
+		validToken, err = CreateRefreshToken(tx, user.Id, time.Hour)
+		if err != nil {
+			t.Fatalf("CreateRefreshToken(valid) error = %v", err)
+		}
+		expiredToken, err = CreateRefreshToken(tx, user.Id, -time.Hour)
+		if err != nil {
+			t.Fatalf("CreateRefreshToken(expired) error = %v", err)
 		}
 
+		if removed := CleanupExpiredRefreshTokens(tx, time.Now()); removed != 1 {
+			t.Fatalf("CleanupExpiredRefreshTokens() = %d, want 1", removed)
+		}
 		vbolt.TxCommit(tx)
+	})
+
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		if _, found := GetRefreshTokenByToken(tx, expiredToken.Token); found {
+			t.Error("expired token lookup still exists after cleanup")
+		}
+		if _, found := GetRefreshTokenByToken(tx, validToken.Token); !found {
+			t.Error("valid token was removed by cleanup")
+		}
+
+		var tokenIds []int
+		vbolt.ReadTermTargets(tx, RefreshTokenByUserIndex, userId, &tokenIds, vbolt.Window{})
+		if len(tokenIds) != 1 || tokenIds[0] != validToken.Id {
+			t.Errorf("user token index = %v, want [%d]", tokenIds, validToken.Id)
+		}
 	})
 }
 

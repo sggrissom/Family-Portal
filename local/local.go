@@ -37,6 +37,7 @@ func StartLocalServer() {
 	var appServer = family.NewHTTPServer(addr, secureApp)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go backend.RunRefreshTokenCleanup(ctx, app.DB)
 	if err := family.RunHTTPServer(ctx, appServer); err != nil {
 		log.Printf("server stopped unexpectedly: %v", err)
 	}
