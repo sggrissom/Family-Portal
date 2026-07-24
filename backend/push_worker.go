@@ -325,7 +325,9 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 	// Handle specific errors that require token deactivation
 	if errorResp.Reason == "BadDeviceToken" || errorResp.Reason == "Unregistered" {
 		log.Printf("[PUSH_NOTIFICATION] Deactivating invalid token %d: %s", token.Id, errorResp.Reason)
-		DeactivatePushDeviceTokenById(pw.db, token.Id)
+		if err := DeactivatePushDeviceTokenById(pw.db, token.Id); err != nil {
+			return fmt.Errorf("APNs error: %d %s; failed to deactivate token: %w", resp.StatusCode, errorResp.Reason, err)
+		}
 	}
 
 	return fmt.Errorf("APNs error: %d %s", resp.StatusCode, errorResp.Reason)
