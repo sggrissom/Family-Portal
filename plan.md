@@ -79,7 +79,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 - [ ] Rate-limit login by IP and account identifier.
 - [ ] Rate-limit signup, password reset, invite-code attempts, refresh, Google token login, AI calls, imports, uploads, and WebSocket connections/messages.
 - [ ] Use generic authentication failures to avoid account enumeration.
-- [ ] Apply explicit JSON, multipart, import, upload, and WebSocket message-size limits.
+- [x] Apply explicit JSON, multipart, import, upload, and WebSocket message-size limits.
 - [ ] Verify every state-changing endpoint enforces the intended HTTP method.
 - [ ] Document the CSRF threat model and add CSRF tokens wherever cookie/SameSite behavior is insufficient.
 - [ ] Validate request origins where appropriate.

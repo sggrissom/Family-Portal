@@ -7,6 +7,48 @@ import (
 	"go.hasen.dev/vbeam"
 )
 
+const (
+	maxJSONRequestBytes   int64 = 1 << 20   // 1 MiB
+	maxPhotoRequestBytes  int64 = 52 << 20  // 50 MiB file plus multipart metadata
+	maxImportRequestBytes int64 = 512 << 20 // Full-family archives can contain photos.
+)
+
+// RequestSizeLimitWrapper applies endpoint-aware body limits before requests
+// reach parsers. MaxBytesReader also protects requests that use chunked
+// transfer encoding and therefore have no Content-Length header.
+type RequestSizeLimitWrapper struct {
+	next http.Handler
+}
+
+func NewRequestSizeLimitWrapper(next http.Handler) *RequestSizeLimitWrapper {
+	return &RequestSizeLimitWrapper{next: next}
+}
+
+func requestBodyLimit(r *http.Request) int64 {
+	switch r.URL.Path {
+	case "/api/upload-photo":
+		return maxPhotoRequestBytes
+	case "/api/import-bundle":
+		return maxImportRequestBytes
+	}
+
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		return maxJSONRequestBytes
+	}
+	return 0
+}
+
+func (rw *RequestSizeLimitWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if limit := requestBodyLimit(r); limit > 0 {
+		if r.ContentLength > limit {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+	}
+	rw.next.ServeHTTP(w, r)
+}
+
 // SecurityWrapper wraps the vbeam.Application with security headers
 type SecurityWrapper struct {
 	app *vbeam.Application

@@ -553,6 +553,7 @@ func (c *Client) readPump() {
 
 	// Create context with timeout for reads
 	ctx := c.ctx
+	c.conn.SetReadLimit(64 << 10) // Chat protocol messages are limited to 64 KiB.
 
 	for {
 		// Set read timeout
