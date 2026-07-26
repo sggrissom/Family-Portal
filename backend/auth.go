@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"family/cfg"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -32,26 +34,34 @@ type LogoutRequest struct {
 
 var appDb *vbolt.DB
 
-func SetupAuth(app *vbeam.Application) {
-	// Get JWT secret from environment, generate one if not set
+const minimumJWTSecretLength = 32
+
+func resolveJWTSecret() (string, error) {
 	jwtSecret := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecret == "" {
-		// Check if this is production (could be detected by other env vars)
-		if os.Getenv("ENVIRONMENT") == "production" || os.Getenv("PROD") == "true" {
-			log.Fatal("JWT_SECRET_KEY must be set in production environment")
+		if cfg.IsRelease {
+			return "", errors.New("JWT_SECRET_KEY must be set in release builds")
 		}
 
 		token, err := generateToken(32)
 		if err != nil {
-			log.Fatal("error generating JWT secret")
+			return "", errors.New("generate JWT secret")
 		}
-		jwtSecret = token
 		log.Println("Generated JWT secret. Set JWT_SECRET_KEY environment variable for production.")
+		return token, nil
 	}
 
-	// Validate JWT secret strength
-	if len(jwtSecret) < 16 {
-		log.Fatal("JWT secret must be at least 16 characters long")
+	if len(jwtSecret) < minimumJWTSecretLength {
+		return "", fmt.Errorf("JWT_SECRET_KEY must be at least %d characters long", minimumJWTSecretLength)
+	}
+
+	return jwtSecret, nil
+}
+
+func SetupAuth(app *vbeam.Application) {
+	jwtSecret, err := resolveJWTSecret()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	jwtKey = []byte(jwtSecret)
@@ -67,7 +77,7 @@ func SetupAuth(app *vbeam.Application) {
 	app.HandleFunc("/api/login/google/token", googleTokenLoginHandler)
 
 	// Setup Google OAuth configuration
-	err := SetupGoogleOAuth()
+	err = SetupGoogleOAuth()
 	if err != nil {
 		log.Printf("Google OAuth setup failed: %v", err)
 		log.Println("Google login will not be available. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable.")

@@ -13,6 +13,40 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
+func TestResolveJWTSecret(t *testing.T) {
+	t.Run("rejects missing release secret", func(t *testing.T) {
+		if !cfg.IsRelease {
+			t.Skip("release-only assertion")
+		}
+		t.Setenv("JWT_SECRET_KEY", "")
+
+		if _, err := resolveJWTSecret(); err == nil {
+			t.Fatal("resolveJWTSecret() accepted an empty release secret")
+		}
+	})
+
+	t.Run("rejects weak configured secret", func(t *testing.T) {
+		t.Setenv("JWT_SECRET_KEY", strings.Repeat("x", minimumJWTSecretLength-1))
+
+		if _, err := resolveJWTSecret(); err == nil {
+			t.Fatal("resolveJWTSecret() accepted a weak secret")
+		}
+	})
+
+	t.Run("accepts strong configured secret", func(t *testing.T) {
+		want := strings.Repeat("x", minimumJWTSecretLength)
+		t.Setenv("JWT_SECRET_KEY", want)
+
+		got, err := resolveJWTSecret()
+		if err != nil {
+			t.Fatalf("resolveJWTSecret() error = %v", err)
+		}
+		if got != want {
+			t.Errorf("resolveJWTSecret() = %q, want configured secret", got)
+		}
+	})
+}
+
 func TestSetupGoogleOAuth(t *testing.T) {
 	// Save original env vars
 	originalClientID := os.Getenv("GOOGLE_CLIENT_ID")
