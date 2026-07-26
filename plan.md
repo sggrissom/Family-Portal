@@ -68,7 +68,7 @@ This checklist tracks the work required for a reasonable, supportable 1.0 releas
 
 ## Step 4: Protect authentication and API boundaries
 
-- [ ] Make release builds fail at startup when `JWT_SECRET_KEY` is absent or weak.
+- [x] Make release builds fail at startup when `JWT_SECRET_KEY` is absent or weak.
 - [ ] Validate required production values such as `SITE_ROOT`, Google OAuth settings, APNs/FCM settings, AI settings, and storage paths.
 - [ ] Document secret creation, storage, access, rotation, and incident-revocation procedures.
 - [ ] Hash refresh tokens at rest.
