@@ -194,5 +194,5 @@ func MakeApplication() *vbeam.Application {
 
 func MakeSecureApplication() http.Handler {
 	app := MakeApplication()
-	return backend.NewSecurityWrapper(app)
+	return backend.NewRequestSizeLimitWrapper(backend.NewSecurityWrapper(app))
 }

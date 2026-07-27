@@ -40,10 +40,11 @@ func main() {
 
 	// Wrap with security headers
 	secureApp := backend.NewSecurityWrapper(app)
+	limitedApp := backend.NewRequestSizeLimitWrapper(secureApp)
 
 	addr := fmt.Sprintf(":%d", Port)
 	log.Printf("listening on %s\n", addr)
-	var appServer = family.NewHTTPServer(addr, secureApp)
+	var appServer = family.NewHTTPServer(addr, limitedApp)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunRefreshTokenCleanup(ctx, app.DB)

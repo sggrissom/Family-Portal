@@ -32,9 +32,10 @@ func StartLocalServer() {
 
 	// Wrap with security headers
 	secureApp := backend.NewSecurityWrapper(app)
+	limitedApp := backend.NewRequestSizeLimitWrapper(secureApp)
 
 	var addr = fmt.Sprintf(":%d", Port)
-	var appServer = family.NewHTTPServer(addr, secureApp)
+	var appServer = family.NewHTTPServer(addr, limitedApp)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunRefreshTokenCleanup(ctx, app.DB)

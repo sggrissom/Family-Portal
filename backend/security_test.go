@@ -1,12 +1,75 @@
 package backend
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.hasen.dev/vbeam"
 )
+
+func TestRequestSizeLimitWrapper(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		contentType string
+		limit       int64
+	}{
+		{name: "JSON RPC", path: "/rpc/example", contentType: "application/json; charset=utf-8", limit: maxJSONRequestBytes},
+		{name: "photo upload", path: "/api/upload-photo", contentType: "multipart/form-data; boundary=test", limit: maxPhotoRequestBytes},
+		{name: "family import", path: "/api/import-bundle", contentType: "multipart/form-data; boundary=test", limit: maxImportRequestBytes},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+" rejects known oversized body", func(t *testing.T) {
+			next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				t.Fatal("oversized request reached application handler")
+			})
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("body"))
+			req.Header.Set("Content-Type", tt.contentType)
+			req.ContentLength = tt.limit + 1
+			recorder := httptest.NewRecorder()
+
+			NewRequestSizeLimitWrapper(next).ServeHTTP(recorder, req)
+
+			if recorder.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("expected status 413, got %d", recorder.Code)
+			}
+		})
+
+		if tt.limit != maxJSONRequestBytes {
+			continue
+		}
+		t.Run(tt.name+" bounds chunked body", func(t *testing.T) {
+			var readErr error
+			next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				_, readErr = io.Copy(io.Discard, r.Body)
+			})
+			req := httptest.NewRequest(http.MethodPost, tt.path, io.LimitReader(zeroReader{}, tt.limit+1))
+			req.Header.Set("Content-Type", tt.contentType)
+			req.ContentLength = -1
+
+			NewRequestSizeLimitWrapper(next).ServeHTTP(httptest.NewRecorder(), req)
+
+			var tooLarge *http.MaxBytesError
+			if !errors.As(readErr, &tooLarge) {
+				t.Fatalf("expected MaxBytesError, got %v", readErr)
+			}
+		})
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	return len(p), nil
+}
 
 func TestIsWebSocketRequest(t *testing.T) {
 	tests := []struct {
