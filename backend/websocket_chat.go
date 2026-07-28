@@ -39,11 +39,6 @@ func getAllowedOrigins() []string {
 		)
 	}
 
-	// For production, ensure we have the production domain
-	if strings.Contains(cfg.SiteURL, "grissom.zone") {
-		allowedOrigins = append(allowedOrigins, "https://grissom.zone")
-	}
-
 	LogInfo(LogCategorySystem, "WebSocket allowed origins configured", map[string]interface{}{
 		"origins":  allowedOrigins,
 		"siteRoot": siteRoot,
