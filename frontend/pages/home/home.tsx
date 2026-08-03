@@ -40,7 +40,7 @@ const LandingPage = () => (
   <div className="landing-page">
     <section className="landing-hero">
       <div className="hero-content">
-        <h1 className="hero-title">Family Portal</h1>
+        <h1 className="hero-title">Family Record</h1>
         <p className="hero-subtitle">
           A private space for your family to share photos, coordinate schedules, and stay connected.
         </p>

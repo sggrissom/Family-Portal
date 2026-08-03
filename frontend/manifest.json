@@ -1,6 +1,6 @@
 {
-  "name": "Family Portal - Track Your Family's Growth & Milestones",
-  "short_name": "Family Portal",
+  "name": "Family Record - Track Your Family's Growth & Milestones",
+  "short_name": "Family Record",
   "description": "A private family portal to track children's growth, milestones, and memories",
   "start_url": "/",
   "display": "standalone",

@@ -145,18 +145,18 @@ func MakeApplication() *vbeam.Application {
 
 	// Initialize rotating file logger only in production
 	if cfg.IsRelease {
-		vbeam.InitRotatingLogger("family_portal")
+		vbeam.InitRotatingLogger("family_record")
 	}
 
 	// Log application startup
-	backend.LogInfo(backend.LogCategorySystem, "Family Portal application starting", map[string]interface{}{
+	backend.LogInfo(backend.LogCategorySystem, "Family Record application starting", map[string]interface{}{
 		"version":   "1.0.0",
 		"dbPath":    cfg.DBPath,
 		"staticDir": cfg.StaticDir,
 	})
 
 	db := OpenDB(cfg.DBPath)
-	var app = vbeam.NewApplication("FamilyPortal", db)
+	var app = vbeam.NewApplication("Family Record", db)
 
 	backend.SetupAuth(app)
 	backend.RegisterUserMethods(app)

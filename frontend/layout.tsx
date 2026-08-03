@@ -27,7 +27,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
     <header className="site-header">
       <nav className="nav" aria-label="Main navigation">
         <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
-          Family Portal
+          Family Record
         </a>
         <button
           className={vlens.refGet(menuRef) ? "nav-toggle open" : "nav-toggle"}
@@ -134,7 +134,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
 export const Footer = () => (
   <footer className="site-footer">
     <p>
-      © <span id="year">2025</span> Family Portal. All rights reserved.
+      © <span id="year">2025</span> Family Record. All rights reserved.
     </p>
   </footer>
 );
