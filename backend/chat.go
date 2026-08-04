@@ -97,12 +97,21 @@ func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int) (messages []Ch
 	return
 }
 
+// GetVisibleChatMessages returns the most recent messages of every family user
+// can read.
+func GetVisibleChatMessages(tx *vbolt.Tx, user User, limit int) (messages []ChatMessage) {
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		messages = append(messages, GetFamilyChatMessages(tx, familyId, limit)...)
+	}
+	return
+}
+
 func GetChatMessageByIdAndFamily(tx *vbolt.Tx, messageId int, familyId int) (ChatMessage, error) {
 	message := GetChatMessageById(tx, messageId)
 	if message.Id == 0 {
 		return message, errors.New("Message not found")
 	}
-	if message.FamilyId != familyId {
+	if !CanFamilyAccess(tx, familyId, message.FamilyId, AccessView) {
 		return message, errors.New("Access denied: message belongs to another family")
 	}
 	return message, nil
@@ -224,7 +233,7 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 	}
 
 	// Get messages for this family
-	resp.Messages = GetFamilyChatMessages(ctx.Tx, user.FamilyId, limit)
+	resp.Messages = GetVisibleChatMessages(ctx.Tx, user, limit)
 
 	// Log the request
 	LogInfo(LogCategoryAPI, "Chat messages retrieved", map[string]interface{}{

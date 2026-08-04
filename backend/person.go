@@ -215,6 +215,14 @@ func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
 
 }
 
+// GetVisiblePeople returns the roster of every family user can read.
+func GetVisiblePeople(tx *vbolt.Tx, user User) (people []Person) {
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		people = append(people, GetFamilyPeople(tx, familyId)...)
+	}
+	return
+}
+
 func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, error) {
 	// Parse birthdate
 	parsedTime, err := time.Parse("2006-01-02", req.Birthdate)
@@ -378,7 +386,7 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	vbeam.UseWriteTx(ctx)
 
 	person := GetPersonById(ctx.Tx, req.Id)
-	if person.Id == 0 || person.FamilyId != user.FamilyId {
+	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
 		err = errors.New("Person not found or not in your family")
 		return
 	}
@@ -419,7 +427,7 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 	}
 
 	// Get family members
-	resp.People = GetFamilyPeople(ctx.Tx, user.FamilyId)
+	resp.People = GetVisiblePeople(ctx.Tx, user)
 	return
 }
 
@@ -434,7 +442,7 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	resp.Person = GetPersonById(ctx.Tx, req.Id)
 
 	// Validate person belongs to user's family
-	if resp.Person.Id == 0 || resp.Person.FamilyId != user.FamilyId {
+	if resp.Person.Id == 0 || !CanAccessFamily(ctx.Tx, user, resp.Person.FamilyId, AccessView) {
 		err = errors.New("Person not found or not in your family")
 		return
 	}
@@ -487,7 +495,7 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 		person := GetPersonById(ctx.Tx, personId)
 
 		// Validate person exists and belongs to user's family
-		if person.Id == 0 || person.FamilyId != user.FamilyId {
+		if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessView) {
 			err = fmt.Errorf("Person ID %d not found or not in your family", personId)
 			return
 		}
@@ -551,14 +559,14 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 
 	// Get and validate person
 	person := GetPersonById(ctx.Tx, req.PersonId)
-	if person.Id == 0 || person.FamilyId != user.FamilyId {
+	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
 		err = errors.New("Person not found or access denied")
 		return
 	}
 
 	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessView) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -629,13 +637,13 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 
 	// Get and validate both people
 	sourcePerson := GetPersonById(ctx.Tx, req.SourcePersonId)
-	if sourcePerson.Id == 0 || sourcePerson.FamilyId != user.FamilyId {
+	if sourcePerson.Id == 0 || !CanAccessFamily(ctx.Tx, user, sourcePerson.FamilyId, AccessAdmin) {
 		err = errors.New("Source person not found or not in your family")
 		return
 	}
 
 	targetPerson := GetPersonById(ctx.Tx, req.TargetPersonId)
-	if targetPerson.Id == 0 || targetPerson.FamilyId != user.FamilyId {
+	if targetPerson.Id == 0 || !CanAccessFamily(ctx.Tx, user, targetPerson.FamilyId, AccessAdmin) {
 		err = errors.New("Target person not found or not in your family")
 		return
 	}
@@ -721,7 +729,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	}
 
 	// Get all family members
-	people := GetFamilyPeople(ctx.Tx, user.FamilyId)
+	people := GetVisiblePeople(ctx.Tx, user)
 
 	// Build timeline data for each person
 	resp.People = make([]FamilyTimelineItem, 0, len(people))

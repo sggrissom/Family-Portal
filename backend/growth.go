@@ -128,7 +128,7 @@ func GetGrowthDataByIdAndFamily(tx *vbolt.Tx, growthDataId int, familyId int) (G
 	if growthData.Id == 0 {
 		return growthData, errors.New("Growth data not found")
 	}
-	if growthData.FamilyId != familyId {
+	if !CanFamilyAccess(tx, familyId, growthData.FamilyId, AccessView) {
 		return growthData, errors.New("Access denied: growth data belongs to another family")
 	}
 	return growthData, nil
@@ -204,7 +204,7 @@ func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (Grow
 
 	// Validate person belongs to family
 	person := GetPersonById(tx, req.PersonId)
-	if person.Id == 0 || person.FamilyId != familyId {
+	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
 		return growthData, errors.New("Person not found or not in your family")
 	}
 

@@ -76,7 +76,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	if person.FamilyId != user.FamilyId {
+	if !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
 		resp.Error = "You don't have permission to import data for this person"
 		return
 	}

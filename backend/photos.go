@@ -296,6 +296,14 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	return
 }
 
+// GetVisibleImages returns the photos of every family user can read.
+func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		images = append(images, GetFamilyImages(tx, familyId)...)
+	}
+	return
+}
+
 func GetPhotoTagIds(tx *vbolt.Tx, photoId int) []int {
 	var ptIds []int
 	vbolt.ReadTermTargets(tx, PhotoTagByPhotoIndex, photoId, &ptIds, vbolt.Window{})
@@ -618,7 +626,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			validPersons = make([]Person, 0, len(personIds))
 			for _, personId := range personIds {
 				person := GetPersonById(tx, personId)
-				if person.Id == 0 || person.FamilyId != user.FamilyId {
+				if person.Id == 0 || !CanAccessFamily(tx, user, person.FamilyId, AccessContribute) {
 					// Don't commit transaction for invalid person
 					return
 				}
@@ -793,14 +801,15 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get image from database
+	// Get image from database and check the user may see it
 	var image Image
+	var canAccess bool
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		image = GetImageById(tx, imageId)
+		canAccess = CanAccessFamily(tx, user, image.FamilyId, AccessView)
 	})
 
-	// Check if image exists and user has access
-	if image.Id == 0 || image.FamilyId != user.FamilyId {
+	if image.Id == 0 || !canAccess {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -948,7 +957,7 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 	vbeam.UseWriteTx(ctx)
 
 	photo := GetImageById(ctx.Tx, req.PhotoId)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -959,7 +968,7 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 	}
 	for _, tagId := range tagIds {
 		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || tag.FamilyId != user.FamilyId {
+		if tag.Id == 0 || !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessContribute) {
 			err = errors.New("Tag not found or access denied")
 			return
 		}
@@ -1005,7 +1014,7 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 	photo := GetImageById(ctx.Tx, req.Id)
 
 	// Check if photo exists and user has access (same family)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessView) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -1042,7 +1051,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 
 	// Get existing photo
 	photo := GetImageById(ctx.Tx, req.Id)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -1092,7 +1101,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 
 	// Get photo to delete
 	photo := GetImageById(ctx.Tx, req.Id)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessAdmin) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -1237,7 +1246,7 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 	photo := GetImageById(ctx.Tx, req.Id)
 
 	// Check if photo exists and user has access (same family)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessView) {
 		err = ErrAuthFailure
 		return
 	}
@@ -1255,7 +1264,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	}
 
 	// Default: all family photos
-	images := GetFamilyImages(ctx.Tx, user.FamilyId)
+	images := GetVisibleImages(ctx.Tx, user)
 
 	// Optional: only photos tagged with this person
 	if req.PersonId > 0 {
@@ -1269,7 +1278,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 			}
 
 			image := GetImageById(ctx.Tx, photoPerson.PhotoId)
-			if image.Id == 0 || image.FamilyId != user.FamilyId {
+			if image.Id == 0 || !CanAccessFamily(ctx.Tx, user, image.FamilyId, AccessView) {
 				continue
 			}
 
@@ -1331,7 +1340,7 @@ func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp Add
 
 	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -1353,7 +1362,7 @@ func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp Add
 
 		// Validate person belongs to user's family
 		person := GetPersonById(ctx.Tx, personId)
-		if person.Id == 0 || person.FamilyId != user.FamilyId {
+		if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
 			continue // Skip invalid person but don't fail the whole operation
 		}
 
@@ -1394,14 +1403,14 @@ func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequ
 
 	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
-	if photo.Id == 0 || photo.FamilyId != user.FamilyId {
+	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
 	// Validate person belongs to user's family
 	person := GetPersonById(ctx.Tx, req.PersonId)
-	if person.Id == 0 || person.FamilyId != user.FamilyId {
+	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
 		err = errors.New("Person not found or access denied")
 		return
 	}

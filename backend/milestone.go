@@ -237,7 +237,7 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 	if milestone.Id == 0 {
 		return milestone, errors.New("Milestone not found")
 	}
-	if milestone.FamilyId != familyId {
+	if !CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView) {
 		return milestone, errors.New("Access denied: milestone belongs to another family")
 	}
 	return milestone, nil
@@ -283,10 +283,10 @@ func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) (mi
 		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &allMilestones)
 	}
 
-	// Filter by family ID and apply limit
+	// Filter down to what the caller may see and apply limit
 	milestones = make([]Milestone, 0, limit)
 	for _, milestone := range allMilestones {
-		if milestone.FamilyId == familyId {
+		if CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView) {
 			milestones = append(milestones, milestone)
 			if len(milestones) >= limit {
 				break
@@ -344,7 +344,7 @@ func normalizePhotoIds(photoIds []int) []int {
 
 func validatePhotoAccess(tx *vbolt.Tx, photoId int, familyId int) error {
 	photo := GetImageById(tx, photoId)
-	if photo.Id == 0 || photo.FamilyId != familyId {
+	if photo.Id == 0 || !CanFamilyAccess(tx, familyId, photo.FamilyId, AccessContribute) {
 		return errors.New("Photo not found or access denied")
 	}
 	return nil
@@ -502,7 +502,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 
 	// Validate person belongs to family
 	person := GetPersonById(tx, req.PersonId)
-	if person.Id == 0 || person.FamilyId != familyId {
+	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
@@ -766,7 +766,7 @@ func GetPersonMilestones(ctx *vbeam.Context, req GetPersonMilestonesRequest) (re
 
 	// Validate that the person belongs to the user's family
 	person := GetPersonById(ctx.Tx, req.PersonId)
-	if person.Id == 0 || person.FamilyId != user.FamilyId {
+	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessView) {
 		err = errors.New("Person not found or not in your family")
 		return
 	}
@@ -895,7 +895,7 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 	}
 	for _, tagId := range tagIds {
 		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || tag.FamilyId != user.FamilyId {
+		if tag.Id == 0 || !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessContribute) {
 			err = errors.New("Tag not found or access denied")
 			return
 		}

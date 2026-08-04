@@ -84,6 +84,15 @@ func getTagsByFamily(tx *vbolt.Tx, familyId int) []Tag {
 	return tags
 }
 
+// getVisibleTags returns the tags of every family user can read.
+func getVisibleTags(tx *vbolt.Tx, user User) []Tag {
+	tags := []Tag{}
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		tags = append(tags, getTagsByFamily(tx, familyId)...)
+	}
+	return tags
+}
+
 func tagNameExistsInFamily(tx *vbolt.Tx, name string, familyId int, excludeId int) bool {
 	tags := getTagsByFamily(tx, familyId)
 	lowerName := strings.ToLower(name)
@@ -168,7 +177,7 @@ func UpdateTag(ctx *vbeam.Context, req UpdateTagRequest) (resp UpdateTagResponse
 		err = errors.New("Tag not found")
 		return
 	}
-	if tag.FamilyId != user.FamilyId {
+	if !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessContribute) {
 		err = errors.New("Access denied")
 		return
 	}
@@ -202,7 +211,7 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 		err = errors.New("Tag not found")
 		return
 	}
-	if tag.FamilyId != user.FamilyId {
+	if !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessAdmin) {
 		err = errors.New("Access denied")
 		return
 	}
@@ -222,7 +231,7 @@ func ListTags(ctx *vbeam.Context, req ListTagsRequest) (resp ListTagsResponse, e
 		return
 	}
 
-	tags := getTagsByFamily(ctx.Tx, user.FamilyId)
+	tags := getVisibleTags(ctx.Tx, user)
 	sort.Slice(tags, func(i, j int) bool {
 		return strings.ToLower(tags[i].Name) < strings.ToLower(tags[j].Name)
 	})
