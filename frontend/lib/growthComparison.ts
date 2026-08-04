@@ -67,25 +67,25 @@ function nearestByValue(records: AgedRecord[], targetValueMetric: number): AgedR
   return best;
 }
 
-// A comparison is only meaningful if the matched record is actually from around
-// the same point: someone who was already as old (or as tall/heavy) as the target
-// record clearly passed through that point, so their match is always relevant.
-// Someone who falls short is only relevant if they're close enough that the gap is
-// negligible (e.g. a record from a day younger) rather than a real mismatch (e.g. a
-// sibling who's only ever been a toddler being compared to a six-year-old's data).
+// A comparison is only meaningful if the matched record is actually from around the
+// same point: close in age for an age match, close in value for a value match. A
+// record on the far side (much older, or much taller/heavier) is just as irrelevant
+// as one on the near side — e.g. a parent's single adult-height record shouldn't be
+// treated as "at the same age" as a 9-year-old's just because it's technically older,
+// and it shouldn't be treated as "reached this measurement" just because it's taller.
 const AGE_TOLERANCE_RATIO = 0.05;
 const MIN_AGE_TOLERANCE_MONTHS = 0.5;
 const VALUE_TOLERANCE_RATIO = 0.02;
 
 function isAgeMatchRelevant(match: AgedRecord, targetAgeMonths: number): boolean {
   const tolerance = Math.max(MIN_AGE_TOLERANCE_MONTHS, targetAgeMonths * AGE_TOLERANCE_RATIO);
-  return match.ageMonths >= targetAgeMonths - tolerance;
+  return Math.abs(match.ageMonths - targetAgeMonths) <= tolerance;
 }
 
 function isValueMatchRelevant(match: AgedRecord, targetValueMetric: number): boolean {
   const matchValueMetric = toMetric(match.record.value, match.record.unit);
   const tolerance = targetValueMetric * VALUE_TOLERANCE_RATIO;
-  return matchValueMetric >= targetValueMetric - tolerance;
+  return Math.abs(matchValueMetric - targetValueMetric) <= tolerance;
 }
 
 function toPoint(r: AgedRecord, targetValueMetric: number, targetAgeMonths: number): ComparisonPoint {
