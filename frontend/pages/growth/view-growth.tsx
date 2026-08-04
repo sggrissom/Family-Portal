@@ -15,6 +15,8 @@ import {
 } from "../../lib/growthPercentiles";
 import {
   computeFamilyComparisons,
+  describeAgeComparison,
+  describeValueComparison,
   FamilyComparisonEntry,
   ComparisonPoint,
 } from "../../lib/growthComparison";
@@ -230,7 +232,8 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
                       At <strong>{p.ageLabel}</strong> old, {entry.person.name} measured{" "}
                       <strong>
                         {p.value} {p.unit}
-                      </strong>
+                      </strong>{" "}
+                      — {describeValueComparison(p, measurementType)}
                     </>
                   )}
                 />
@@ -244,7 +247,8 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
                       <strong>
                         {p.value} {p.unit}
                       </strong>{" "}
-                      at <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)})
+                      at <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)}) —{" "}
+                      {describeAgeComparison(p)}
                     </>
                   )}
                 />
