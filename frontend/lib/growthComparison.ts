@@ -88,7 +88,11 @@ function isValueMatchRelevant(match: AgedRecord, targetValueMetric: number): boo
   return Math.abs(matchValueMetric - targetValueMetric) <= tolerance;
 }
 
-function toPoint(r: AgedRecord, targetValueMetric: number, targetAgeMonths: number): ComparisonPoint {
+function toPoint(
+  r: AgedRecord,
+  targetValueMetric: number,
+  targetAgeMonths: number
+): ComparisonPoint {
   const targetValueInPointUnit = fromMetric(targetValueMetric, r.record.unit);
   return {
     ageLabel: formatAgeAtMeasurement(r.ageMonths),
@@ -188,7 +192,8 @@ export function computeFamilyComparisons(
     const ageMatch = nearestByAge(records, targetAgeMonths);
     const valueMatch = nearestByValue(records, targetValueMetric);
 
-    const relevantAgeMatch = ageMatch && isAgeMatchRelevant(ageMatch, targetAgeMonths) ? ageMatch : null;
+    const relevantAgeMatch =
+      ageMatch && isAgeMatchRelevant(ageMatch, targetAgeMonths) ? ageMatch : null;
     const relevantValueMatch =
       valueMatch && isValueMatchRelevant(valueMatch, targetValueMetric) ? valueMatch : null;
 
