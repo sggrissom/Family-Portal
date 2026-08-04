@@ -340,6 +340,13 @@ export const UnifiedTimeline = ({
                     </div>
                     <div className="timeline-item-actions">
                       <a
+                        href={`/view-growth/${measurement.id}`}
+                        className="btn-action btn-view"
+                        title="View"
+                      >
+                        👁️
+                      </a>
+                      <a
                         href={`/edit-growth/${measurement.id}`}
                         className="btn-action btn-edit"
                         title="Edit"

@@ -128,6 +128,13 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                         <td>
                           <div className="table-actions">
                             <a
+                              href={`/view-growth/${record.id}`}
+                              className="btn-action btn-view"
+                              title="View"
+                            >
+                              👁️
+                            </a>
+                            <a
                               href={`/edit-growth/${record.id}`}
                               className="btn-action btn-edit"
                               title="Edit"
