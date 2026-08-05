@@ -156,16 +156,14 @@ type CropModalState = {
   cropScale: number;
 };
 
-const useCropModalState = vlens.declareHook(
-  (): CropModalState => ({
-    isOpen: false,
-    personId: 0,
-    personName: "",
-    cropX: 50,
-    cropY: 50,
-    cropScale: 1,
-  })
-);
+const useCropModalState = vlens.declareHook((): CropModalState => ({
+  isOpen: false,
+  personId: 0,
+  personName: "",
+  cropX: 50,
+  cropY: 50,
+  cropScale: 1,
+}));
 
 function openCropModal(state: CropModalState, person: server.Person) {
   state.isOpen = true;

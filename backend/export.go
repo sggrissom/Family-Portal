@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,15 +40,31 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// familyId names the family to export; absent or blank means primary.
+	var requestedFamilyId int
+	if familyIdStr := r.URL.Query().Get("familyId"); familyIdStr != "" {
+		parsed, convErr := strconv.Atoi(familyIdStr)
+		if convErr != nil {
+			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			return
+		}
+		requestedFamilyId = parsed
+	}
+
 	var exportData ExportDataStructure
 	var buildErr error
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-		exportData, buildErr = buildExportData(tx, user.FamilyId)
+		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessView)
+		if resolveErr != nil {
+			buildErr = resolveErr
+			return
+		}
+		exportData, buildErr = buildExportData(tx, familyId)
 		if buildErr != nil {
 			return
 		}
 		if mode == "with_photos" {
-			photos := buildPhotoExportMetadata(tx, user.FamilyId)
+			photos := buildPhotoExportMetadata(tx, familyId)
 			exportData.Photos = photos
 			exportData.TotalPhotos = len(photos)
 		}
@@ -197,7 +214,10 @@ type ExportMilestone struct {
 
 // Request/Response types
 type ExportDataRequest struct {
-	// No parameters needed - exports all family data
+	// FamilyId names the family to export. Zero means the caller's primary
+	// family. Export covers one family at a time rather than every family the
+	// user belongs to, so a bundle round-trips back into a single family.
+	FamilyId int `json:"familyId,omitempty"`
 }
 
 type ExportDataResponse struct {
@@ -213,8 +233,13 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 		return
 	}
 
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
+	if err != nil {
+		return
+	}
+
 	// Get all family data
-	exportData, err := buildExportData(ctx.Tx, user.FamilyId)
+	exportData, err := buildExportData(ctx.Tx, familyId)
 	if err != nil {
 		return
 	}

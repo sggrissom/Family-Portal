@@ -47,17 +47,37 @@ type LoginResponse struct {
 }
 
 type AuthResponse struct {
-	Id       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	IsAdmin  bool   `json:"isAdmin"`
-	FamilyId int    `json:"familyId,omitempty"`
+	Id       int         `json:"id"`
+	Name     string      `json:"name"`
+	Email    string      `json:"email"`
+	IsAdmin  bool        `json:"isAdmin"`
+	FamilyId int         `json:"familyId,omitempty"`
+	Families []FamilyRef `json:"families"`
+}
+
+// FamilyRef names one family the user belongs to, and what they may do in it.
+type FamilyRef struct {
+	Id        int         `json:"id"`
+	Name      string      `json:"name"`
+	Role      AccessLevel `json:"role"`
+	IsPrimary bool        `json:"isPrimary"`
 }
 
 type FamilyInfoResponse struct {
-	Id         int    `json:"id"`
-	Name       string `json:"name"`
-	InviteCode string `json:"inviteCode"`
+	Id         int          `json:"id"`
+	Name       string       `json:"name"`
+	InviteCode string       `json:"inviteCode"`
+	Families   []FamilyInfo `json:"families"`
+}
+
+// FamilyInfo describes one family the user belongs to, including the code used
+// to invite others into it.
+type FamilyInfo struct {
+	Id         int         `json:"id"`
+	Name       string      `json:"name"`
+	InviteCode string      `json:"inviteCode"`
+	Role       AccessLevel `json:"role"`
+	IsPrimary  bool        `json:"isPrimary"`
 }
 
 type JoinFamilyRequest struct {
@@ -77,7 +97,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Creation  time.Time `json:"creation"`
 	LastLogin time.Time `json:"lastLogin"`
-	FamilyId int `json:"familyId"`
+	FamilyId  int       `json:"familyId"`
 }
 
 type Family struct {
@@ -145,9 +165,25 @@ func GetFamily(tx *vbolt.Tx, familyId int) (family Family) {
 	return
 }
 
-// GetFamilyUserIds returns all user IDs for a given family
+// GetFamilyUserIds returns all user IDs for a given family. UsersByFamilyIndex
+// only tracks each user's primary family, so members who joined the family as a
+// secondary one are picked up from FamilyMembership.
 func GetFamilyUserIds(tx *vbolt.Tx, familyId int) (userIds []int) {
+	if familyId == 0 {
+		return
+	}
 	vbolt.ReadTermTargets(tx, UsersByFamilyIndex, familyId, &userIds, vbolt.Window{})
+
+	seen := make(map[int]bool, len(userIds))
+	for _, userId := range userIds {
+		seen[userId] = true
+	}
+	for _, membership := range GetFamilyMemberships(tx, familyId) {
+		if membership.UserId != 0 && !seen[membership.UserId] {
+			seen[membership.UserId] = true
+			userIds = append(userIds, membership.UserId)
+		}
+	}
 	return
 }
 
@@ -219,14 +255,44 @@ func generateInviteCode() string {
 	return token[:8]
 }
 
-func GetAuthResponseFromUser(user User) AuthResponse {
-	return AuthResponse{
+func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
+	resp := AuthResponse{
 		Id:       user.Id,
 		Name:     user.Name,
 		Email:    user.Email,
 		IsAdmin:  user.Id == 1, // First user is admin
 		FamilyId: user.FamilyId,
+		Families: []FamilyRef{},
 	}
+	if tx == nil {
+		return resp
+	}
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		family := GetFamily(tx, familyId)
+		if family.Id == 0 {
+			continue
+		}
+		role := AccessAdmin
+		if membership, found := FindMembership(tx, user.Id, familyId); found {
+			role = membership.Role
+		}
+		resp.Families = append(resp.Families, FamilyRef{
+			Id:        family.Id,
+			Name:      family.Name,
+			Role:      role,
+			IsPrimary: family.Id == user.FamilyId,
+		})
+	}
+	return resp
+}
+
+// GetAuthResponseForUser is the form used by the plain HTTP auth handlers,
+// which have no transaction of their own to read memberships with.
+func GetAuthResponseForUser(user User) (resp AuthResponse) {
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		resp = GetAuthResponseFromUser(tx, user)
+	})
+	return
 }
 
 // vbeam procedures
@@ -257,11 +323,13 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 	// Create user
 	vbeam.UseWriteTx(ctx)
 	user := AddUserTx(ctx.Tx, req, hash)
+	// Built before the commit so it sees the membership AddUserTx just wrote.
+	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 
 	// Return success response
 	resp.Success = true
-	resp.Auth = GetAuthResponseFromUser(user)
+	resp.Auth = auth
 	tokenString, tokenErr := generateJwtTokenString(user)
 	if tokenErr == nil {
 		resp.Token = tokenString
@@ -272,7 +340,7 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 func GetAuthContext(ctx *vbeam.Context, req Empty) (resp AuthResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr == nil && user.Id > 0 {
-		resp = GetAuthResponseFromUser(user)
+		resp = GetAuthResponseFromUser(ctx.Tx, user)
 	}
 	return
 }
@@ -283,22 +351,42 @@ func GetFamilyInfo(ctx *vbeam.Context, req Empty) (resp FamilyInfoResponse, err 
 		return
 	}
 
-	if user.FamilyId == 0 {
-		err = errors.New("User is not part of a family")
+	familyIds := familiesVisibleTo(ctx.Tx, user)
+	if len(familyIds) == 0 {
+		err = ErrNoFamily
 		return
 	}
 
-	family := GetFamily(ctx.Tx, user.FamilyId)
-	if family.Id == 0 {
+	resp.Families = []FamilyInfo{}
+	for _, familyId := range familyIds {
+		family := GetFamily(ctx.Tx, familyId)
+		if family.Id == 0 {
+			continue
+		}
+		role := AccessAdmin
+		if membership, found := FindMembership(ctx.Tx, user.Id, familyId); found {
+			role = membership.Role
+		}
+		resp.Families = append(resp.Families, FamilyInfo{
+			Id:         family.Id,
+			Name:       family.Name,
+			InviteCode: family.InviteCode,
+			Role:       role,
+			IsPrimary:  family.Id == user.FamilyId,
+		})
+	}
+
+	if len(resp.Families) == 0 {
 		err = errors.New("Family not found")
 		return
 	}
 
-	resp = FamilyInfoResponse{
-		Id:         family.Id,
-		Name:       family.Name,
-		InviteCode: family.InviteCode,
-	}
+	// The top-level fields describe the primary family, which is what callers
+	// predating multi-family membership expect to find here.
+	primary := resp.Families[0]
+	resp.Id = primary.Id
+	resp.Name = primary.Name
+	resp.InviteCode = primary.InviteCode
 	return
 }
 
@@ -327,25 +415,29 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 	}
 
 	// Check if user is already in this family
-	if user.FamilyId == family.Id {
+	if _, alreadyMember := FindMembership(ctx.Tx, user.Id, family.Id); alreadyMember || user.FamilyId == family.Id {
 		resp.Success = false
 		resp.Error = "You are already a member of this family"
 		return
 	}
 
-	// Update user's family
+	// Joining adds a family rather than moving between them. The primary
+	// family is left alone, so it keeps naming the user's own household and
+	// stays the default context for mutations that name no family.
 	vbeam.UseWriteTx(ctx)
-	user.FamilyId = family.Id
-	vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
-	// Update family index
-	vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
-	// Joining still moves the user, so the membership row moves with it.
-	moveMembershipTx(ctx.Tx, user.Id, user.FamilyId, AccessAdmin)
+	EnsureMembershipTx(ctx.Tx, user.Id, family.Id, AccessAdmin)
+	if user.FamilyId == 0 {
+		user.FamilyId = family.Id
+		vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
+		vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
+	}
+	// Built before the commit so it sees the membership just written.
+	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 
 	// Return success response
 	resp.Success = true
-	resp.Auth = GetAuthResponseFromUser(user)
+	resp.Auth = auth
 	return
 }
 

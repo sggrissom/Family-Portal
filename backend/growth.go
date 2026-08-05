@@ -134,6 +134,19 @@ func GetGrowthDataByIdAndFamily(tx *vbolt.Tx, growthDataId int, familyId int) (G
 	return growthData, nil
 }
 
+// GetGrowthDataForUser looks a measurement up and checks it against every
+// family the user belongs to, rather than against a single active family.
+func GetGrowthDataForUser(tx *vbolt.Tx, growthDataId int, user User, need AccessLevel) (GrowthData, error) {
+	growthData := GetGrowthDataById(tx, growthDataId)
+	if growthData.Id == 0 {
+		return growthData, errors.New("Growth data not found")
+	}
+	if !CanAccessFamily(tx, user, growthData.FamilyId, need) {
+		return growthData, errors.New("Access denied: growth data belongs to another family")
+	}
+	return growthData, nil
+}
+
 func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int) (GrowthData, error) {
 	var err error
 
@@ -288,9 +301,15 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 		return
 	}
 
+	// The person the measurement hangs off names the family that owns it.
+	familyId, err := ActingFamilyForPerson(ctx.Tx, user, req.PersonId, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Add growth data to database
 	vbeam.UseWriteTx(ctx)
-	growthData, err := AddGrowthDataTx(ctx.Tx, req, user.FamilyId)
+	growthData, err := AddGrowthDataTx(ctx.Tx, req, familyId)
 	if err != nil {
 		return
 	}
@@ -316,7 +335,7 @@ func GetGrowthData(ctx *vbeam.Context, req GetGrowthDataRequest) (resp GetGrowth
 	}
 
 	// Get growth data from database
-	growthData, err := GetGrowthDataByIdAndFamily(ctx.Tx, req.Id, user.FamilyId)
+	growthData, err := GetGrowthDataForUser(ctx.Tx, req.Id, user, AccessView)
 	if err != nil {
 		return
 	}
@@ -338,9 +357,15 @@ func UpdateGrowthData(ctx *vbeam.Context, req UpdateGrowthDataRequest) (resp Upd
 		return
 	}
 
+	// The record's own family is the context the update runs in.
+	existing, err := GetGrowthDataForUser(ctx.Tx, req.Id, user, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Update growth data in database
 	vbeam.UseWriteTx(ctx)
-	growthData, err := UpdateGrowthDataTx(ctx.Tx, req, user.FamilyId)
+	growthData, err := UpdateGrowthDataTx(ctx.Tx, req, existing.FamilyId)
 	if err != nil {
 		return
 	}
@@ -365,9 +390,14 @@ func DeleteGrowthData(ctx *vbeam.Context, req DeleteGrowthDataRequest) (resp Del
 		return
 	}
 
+	existing, err := GetGrowthDataForUser(ctx.Tx, req.Id, user, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Delete growth data from database
 	vbeam.UseWriteTx(ctx)
-	err = DeleteGrowthDataTx(ctx.Tx, req.Id, user.FamilyId)
+	err = DeleteGrowthDataTx(ctx.Tx, req.Id, existing.FamilyId)
 	if err != nil {
 		return
 	}

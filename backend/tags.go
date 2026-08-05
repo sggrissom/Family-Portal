@@ -37,8 +37,9 @@ var TagByFamilyIndex = vbolt.Index(&cfg.Info, "tags_by_family", vpack.FInt, vpac
 
 // Request/Response types
 type CreateTagRequest struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	FamilyId int    `json:"familyId,omitempty"`
 }
 
 type CreateTagResponse struct {
@@ -125,16 +126,21 @@ func CreateTag(ctx *vbeam.Context, req CreateTagRequest) (resp CreateTagResponse
 		return
 	}
 
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	vbeam.UseWriteTx(ctx)
 
-	if tagNameExistsInFamily(ctx.Tx, name, user.FamilyId, -1) {
+	if tagNameExistsInFamily(ctx.Tx, name, familyId, -1) {
 		err = errors.New("A tag with this name already exists")
 		return
 	}
 
 	tag := Tag{
 		Id:        vbolt.NextIntId(ctx.Tx, TagBkt),
-		FamilyId:  user.FamilyId,
+		FamilyId:  familyId,
 		Name:      name,
 		Color:     req.Color,
 		CreatedAt: time.Now(),
@@ -182,7 +188,8 @@ func UpdateTag(ctx *vbeam.Context, req UpdateTagRequest) (resp UpdateTagResponse
 		return
 	}
 
-	if tagNameExistsInFamily(ctx.Tx, name, user.FamilyId, tag.Id) {
+	// Names are unique within the tag's own family, not the user's primary one.
+	if tagNameExistsInFamily(ctx.Tx, name, tag.FamilyId, tag.Id) {
 		err = errors.New("A tag with this name already exists")
 		return
 	}

@@ -103,7 +103,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 	// Log the AI import attempt
 	LogInfo("IMPORT", "AI import processing started", map[string]interface{}{
 		"userId":       user.Id,
-		"familyId":     user.FamilyId,
+		"familyId":     person.FamilyId,
 		"model":        modelName,
 		"textLength":   len(req.UnstructuredText),
 		"generateFile": req.GenerateFile,
@@ -115,7 +115,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		Model:            modelName,
 		SystemPrompt:     prompt,
 		UserID:           user.Id,
-		FamilyID:         user.FamilyId,
+		FamilyID:         person.FamilyId,
 	}
 
 	conversionResult, err := ConvertToJSON(aiRequest)
@@ -130,7 +130,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 	// Log the raw AI response for debugging
 	LogInfo("IMPORT", "AI response received", map[string]interface{}{
 		"userId":       user.Id,
-		"familyId":     user.FamilyId,
+		"familyId":     person.FamilyId,
 		"model":        modelName,
 		"responseLen":  len(conversionResult.GeneratedJSON),
 		"tokensUsed":   conversionResult.TokensUsed,
@@ -211,7 +211,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 	// Log successful processing
 	LogInfo("IMPORT", "AI import processing completed", map[string]interface{}{
 		"userId":          user.Id,
-		"familyId":        user.FamilyId,
+		"familyId":        person.FamilyId,
 		"personId":        req.PersonId,
 		"model":           modelName,
 		"processingTime":  resp.ProcessingTime,

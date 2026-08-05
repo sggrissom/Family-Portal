@@ -243,7 +243,33 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 	return milestone, nil
 }
 
-func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) (milestones []Milestone) {
+// GetMilestoneForUser looks a milestone up and checks it against every family
+// the user belongs to, rather than against a single active family.
+func GetMilestoneForUser(tx *vbolt.Tx, milestoneId int, user User, need AccessLevel) (Milestone, error) {
+	milestone := GetMilestoneById(tx, milestoneId)
+	if milestone.Id == 0 {
+		return milestone, errors.New("Milestone not found")
+	}
+	if !CanAccessFamily(tx, user, milestone.FamilyId, need) {
+		return milestone, errors.New("Access denied: milestone belongs to another family")
+	}
+	return milestone, nil
+}
+
+func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) []Milestone {
+	return searchMilestonesTx(tx, query, limit, func(milestone Milestone) bool {
+		return CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView)
+	})
+}
+
+// SearchVisibleMilestones searches across every family the user belongs to.
+func SearchVisibleMilestones(tx *vbolt.Tx, query string, user User, limit int) []Milestone {
+	return searchMilestonesTx(tx, query, limit, func(milestone Milestone) bool {
+		return CanAccessFamily(tx, user, milestone.FamilyId, AccessView)
+	})
+}
+
+func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Milestone) bool) (milestones []Milestone) {
 	// Parse query into search terms
 	words := strings.Fields(strings.ToLower(query))
 	terms := make([]string, 0, len(words))
@@ -286,7 +312,7 @@ func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) (mi
 	// Filter down to what the caller may see and apply limit
 	milestones = make([]Milestone, 0, limit)
 	for _, milestone := range allMilestones {
-		if CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView) {
+		if canSee(milestone) {
 			milestones = append(milestones, milestone)
 			if len(milestones) >= limit {
 				break
@@ -741,9 +767,15 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		return
 	}
 
+	// The person the milestone hangs off names the family that owns it.
+	familyId, err := ActingFamilyForPerson(ctx.Tx, user, req.PersonId, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Add milestone to database
 	vbeam.UseWriteTx(ctx)
-	milestone, err := AddMilestoneTx(ctx.Tx, req, user.FamilyId)
+	milestone, err := AddMilestoneTx(ctx.Tx, req, familyId)
 	if err != nil {
 		return
 	}
@@ -796,7 +828,7 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 	}
 
 	// Get milestone from database
-	milestone, err := GetMilestoneByIdAndFamily(ctx.Tx, req.Id, user.FamilyId)
+	milestone, err := GetMilestoneForUser(ctx.Tx, req.Id, user, AccessView)
 	if err != nil {
 		return
 	}
@@ -820,9 +852,15 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		return
 	}
 
+	// The record's own family is the context the update runs in.
+	existing, err := GetMilestoneForUser(ctx.Tx, req.Id, user, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Update milestone in database
 	vbeam.UseWriteTx(ctx)
-	milestone, err := UpdateMilestoneTx(ctx.Tx, req, user.FamilyId)
+	milestone, err := UpdateMilestoneTx(ctx.Tx, req, existing.FamilyId)
 	if err != nil {
 		return
 	}
@@ -849,9 +887,14 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 		return
 	}
 
+	existing, err := GetMilestoneForUser(ctx.Tx, req.Id, user, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Delete milestone from database
 	vbeam.UseWriteTx(ctx)
-	err = DeleteMilestoneTx(ctx.Tx, req.Id, user.FamilyId)
+	err = DeleteMilestoneTx(ctx.Tx, req.Id, existing.FamilyId)
 	if err != nil {
 		return
 	}
@@ -883,19 +926,20 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 
 	vbeam.UseWriteTx(ctx)
 
-	_, err = GetMilestoneByIdAndFamily(ctx.Tx, req.MilestoneId, user.FamilyId)
+	// The milestone's own family is the context, and the tags have to live in
+	// it — a tag from another of the user's families is not in scope here.
+	milestone, err := GetMilestoneForUser(ctx.Tx, req.MilestoneId, user, AccessContribute)
 	if err != nil {
 		return
 	}
 
-	// Validate all tag IDs belong to this family
 	tagIds := req.TagIds
 	if tagIds == nil {
 		tagIds = []int{}
 	}
 	for _, tagId := range tagIds {
 		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessContribute) {
+		if tag.Id == 0 || !CanFamilyAccess(ctx.Tx, milestone.FamilyId, tag.FamilyId, AccessContribute) {
 			err = errors.New("Tag not found or access denied")
 			return
 		}
@@ -920,7 +964,7 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 
 	for tagId := range desiredSet {
 		if _, exists := existingSet[tagId]; !exists {
-			addTagToMilestone(ctx.Tx, req.MilestoneId, tagId, user.FamilyId)
+			addTagToMilestone(ctx.Tx, req.MilestoneId, tagId, milestone.FamilyId)
 		}
 	}
 
@@ -954,7 +998,7 @@ func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp Sea
 	}
 
 	// Search milestones
-	milestones := SearchMilestonesTx(ctx.Tx, query, user.FamilyId, limit)
+	milestones := SearchVisibleMilestones(ctx.Tx, query, user, limit)
 
 	resp.Milestones = milestones
 	resp.Query = query

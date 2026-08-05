@@ -326,7 +326,7 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 		"email":  user.Email,
 	})
 
-	resp := GetAuthResponseFromUser(user)
+	resp := GetAuthResponseForUser(user)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LoginResponse{Success: true, Token: token, Auth: resp})
 }

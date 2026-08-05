@@ -71,6 +71,7 @@ type ImportDataRequest struct {
 	MergeStrategy    string `json:"mergeStrategy,omitempty"`    // "create_all", "merge_people", or "skip_duplicates"
 	ImportMilestones bool   `json:"importMilestones,omitempty"` // Whether to import milestones
 	DryRun           bool   `json:"dryRun,omitempty"`           // Preview changes without committing
+	FamilyId         int    `json:"familyId,omitempty"`
 }
 
 type ImportDataResponse struct {
@@ -120,6 +121,11 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		mergeStrategy = "create_all"
 	}
 
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Get available families and people for preview
 	resp.AvailableFamilyIds = getUniqueFamilyIds(importData.People)
 	resp.AvailablePeople = importData.People
@@ -128,7 +134,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	if req.PreviewOnly {
 		filteredPeople := filterPeople(importData.People, req.FilterFamilyIds, req.FilterPersonIds)
 		for _, importPerson := range filteredPeople {
-			matches := findPotentialMatches(ctx.Tx, importPerson, user.FamilyId)
+			matches := findPotentialMatches(ctx.Tx, importPerson, familyId)
 			if len(matches) > 0 {
 				resp.MatchedPeople = append(resp.MatchedPeople, matches...)
 			} else {
@@ -156,7 +162,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	}
 
 	// Import people first to establish ID mappings
-	personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(ctx.Tx, filteredPeople, user.FamilyId, mergeStrategy)
+	personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(ctx.Tx, filteredPeople, familyId, mergeStrategy)
 	resp.ImportedPeople = importedPeople
 	resp.MergedPeople = mergedPeople
 	resp.PersonIdMapping = personIdMapping
@@ -164,7 +170,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
 	// Import tags (family-level, independent of person mapping)
-	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, user.FamilyId)
+	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, familyId)
 	resp.ImportedTags = importedTags
 	resp.SkippedTags = skippedTags
 
@@ -172,7 +178,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	if len(personIdMapping) > 0 {
 		// Import measurements using the person ID mappings (filter by imported people)
 		filteredHeights, filteredWeights := filterMeasurements(importData.Heights, importData.Weights, personIdMapping)
-		importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(ctx.Tx, filteredHeights, filteredWeights, personIdMapping, user.FamilyId)
+		importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(ctx.Tx, filteredHeights, filteredWeights, personIdMapping, familyId)
 		resp.ImportedMeasurements = importedMeasurements
 		resp.SkippedMeasurements = skippedMeasurements
 		resp.Errors = append(resp.Errors, measurementErrors...)
@@ -180,7 +186,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		// Import milestones if requested
 		if req.ImportMilestones && len(importData.Milestones) > 0 {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
-			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, user.FamilyId, tagNameToId)
+			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
 			resp.ImportedMilestones = importedMilestones
 			resp.SkippedMilestones = skippedMilestones
 			resp.Errors = append(resp.Errors, milestoneErrors...)

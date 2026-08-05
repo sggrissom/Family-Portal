@@ -79,17 +79,15 @@ type FamilyTimelineState = {
   selectedTagIds: number[];
 };
 
-const useFamilyTimelineState = vlens.declareHook(
-  (): FamilyTimelineState => ({
-    selectedPerson: "all",
-    selectedType: "all",
-    sortOrder: "newest",
-    searchQuery: "",
-    searchResults: null,
-    isSearching: false,
-    selectedTagIds: [],
-  })
-);
+const useFamilyTimelineState = vlens.declareHook((): FamilyTimelineState => ({
+  selectedPerson: "all",
+  selectedType: "all",
+  sortOrder: "newest",
+  searchQuery: "",
+  searchResults: null,
+  isSearching: false,
+  selectedTagIds: [],
+}));
 
 function generateBirthdayEvents(
   people: server.FamilyTimelineItem[],

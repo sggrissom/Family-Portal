@@ -298,8 +298,10 @@ func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 		if tags := getVisibleTags(tx, fx.userB); len(tags) != 0 {
 			t.Errorf("getVisibleTags leaked %d tags to a foreign family", len(tags))
 		}
-		if msgs := GetVisibleChatMessages(tx, fx.userB, 100); len(msgs) != 0 {
-			t.Errorf("GetVisibleChatMessages leaked %d messages to a foreign family", len(msgs))
+		// Chat is one room per family, so it is read by family rather than
+		// through the resolver; the denial is on the family, not the list.
+		if _, err := GetChatMessageForUser(tx, messageIds[0], fx.userB, AccessView); err == nil {
+			t.Error("GetChatMessageForUser allowed a foreign family")
 		}
 	})
 

@@ -25,15 +25,13 @@ interface SelectedDataPoint {
 
 const formatDate = (s: string) => new Date(s).toLocaleDateString();
 
-const useSelectedPoint = vlens.declareHook(
-  (): SelectedDataPoint => ({
-    key: null,
-    value: 0,
-    unit: "",
-    type: "",
-    date: "",
-  })
-);
+const useSelectedPoint = vlens.declareHook((): SelectedDataPoint => ({
+  key: null,
+  value: 0,
+  unit: "",
+  type: "",
+  date: "",
+}));
 
 const useHoveredPoint = vlens.declareHook((): { key: { id: number; kind: Kind } | null } => ({
   key: null,
@@ -58,28 +56,24 @@ interface TouchState {
   hasMoved: boolean;
 }
 
-const useZoomState = vlens.declareHook(
-  (): ZoomState => ({
-    scale: 1,
-    translateX: 0,
-    translateY: 0,
-    isDragging: false,
-  })
-);
+const useZoomState = vlens.declareHook((): ZoomState => ({
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  isDragging: false,
+}));
 
-const useTouchState = vlens.declareHook(
-  (): TouchState => ({
-    touches: [],
-    initialDistance: 0,
-    initialScale: 1,
-    initialTranslate: { x: 0, y: 0 },
-    focalPoint: { x: 0, y: 0 },
-    initialFocalPoint: { x: 0, y: 0 },
-    touchStartTime: 0,
-    touchStartPosition: { x: 0, y: 0 },
-    hasMoved: false,
-  })
-);
+const useTouchState = vlens.declareHook((): TouchState => ({
+  touches: [],
+  initialDistance: 0,
+  initialScale: 1,
+  initialTranslate: { x: 0, y: 0 },
+  focalPoint: { x: 0, y: 0 },
+  initialFocalPoint: { x: 0, y: 0 },
+  touchStartTime: 0,
+  touchStartPosition: { x: 0, y: 0 },
+  hasMoved: false,
+}));
 
 // -------------------- Helpers --------------------
 

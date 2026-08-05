@@ -27,23 +27,21 @@ type AddPhotoForm = {
   dragActive: boolean;
 };
 
-const useAddPhotoForm = vlens.declareHook(
-  (personId?: string): AddPhotoForm => ({
-    selectedPersonIds: personId ? [personId] : [],
-    title: "",
-    description: "",
-    inputType: "auto",
-    photoDate: "",
-    ageYears: "",
-    ageMonths: "",
-    tagIds: [],
-    selectedFile: null,
-    previewUrl: "",
-    error: "",
-    loading: false,
-    dragActive: false,
-  })
-);
+const useAddPhotoForm = vlens.declareHook((personId?: string): AddPhotoForm => ({
+  selectedPersonIds: personId ? [personId] : [],
+  title: "",
+  description: "",
+  inputType: "auto",
+  photoDate: "",
+  ageYears: "",
+  ageMonths: "",
+  tagIds: [],
+  selectedFile: null,
+  previewUrl: "",
+  error: "",
+  loading: false,
+  dragActive: false,
+}));
 
 type AddPhotoData = {
   people: server.ListPeopleResponse;
@@ -126,6 +124,14 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     // Convert selectedPersonIds to integers and send as JSON
     const personIds = form.selectedPersonIds.map(id => parseInt(id)).filter(id => !isNaN(id));
     formData.append("personIds", JSON.stringify(personIds));
+
+    // The photo belongs to the family of the people in it. With no people
+    // tagged there is nothing to follow, so the backend falls back to the
+    // primary family.
+    const firstTagged = people.find(p => personIds.includes(p.id));
+    if (firstTagged) {
+      formData.append("familyId", String(firstTagged.familyId));
+    }
 
     formData.append("title", form.title.trim());
     formData.append("description", form.description.trim());

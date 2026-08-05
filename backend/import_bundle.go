@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,17 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		RespondValidationError(w, r, "Failed to parse multipart form", err.Error())
 		return
+	}
+
+	// familyId names the family to import into; absent or blank means primary.
+	var requestedFamilyId int
+	if familyIdStr := r.FormValue("familyId"); familyIdStr != "" {
+		parsed, convErr := strconv.Atoi(familyIdStr)
+		if convErr != nil {
+			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			return
+		}
+		requestedFamilyId = parsed
 	}
 
 	file, _, err := r.FormFile("file")
@@ -82,15 +94,22 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp ImportDataResponse
+	var importErr error
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(tx, importData.People, user.FamilyId, "merge_people")
+		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessContribute)
+		if resolveErr != nil {
+			importErr = resolveErr
+			return
+		}
+
+		personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(tx, importData.People, familyId, "merge_people")
 		resp.ImportedPeople = importedPeople
 		resp.MergedPeople = mergedPeople
 		resp.PersonIdMapping = personIdMapping
 		resp.Errors = append(resp.Errors, peopleErrors...)
 		resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
-		tagNameToId, importedTags, skippedTags := importTags(tx, importData.Tags, user.FamilyId)
+		tagNameToId, importedTags, skippedTags := importTags(tx, importData.Tags, familyId)
 		resp.ImportedTags = importedTags
 		resp.SkippedTags = skippedTags
 
@@ -105,14 +124,14 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 		if len(personIdMapping) > 0 {
 			filteredHeights, filteredWeights := filterMeasurements(importData.Heights, importData.Weights, personIdMapping)
-			importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(tx, filteredHeights, filteredWeights, personIdMapping, user.FamilyId)
+			importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(tx, filteredHeights, filteredWeights, personIdMapping, familyId)
 			resp.ImportedMeasurements = importedMeasurements
 			resp.SkippedMeasurements = skippedMeasurements
 			resp.Errors = append(resp.Errors, measurementErrors...)
 
 			if len(importData.Milestones) > 0 {
 				filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
-				importedMilestones, skippedMilestones, milestoneErrors := importMilestones(tx, filteredMilestones, personIdMapping, user.FamilyId, tagNameToId)
+				importedMilestones, skippedMilestones, milestoneErrors := importMilestones(tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
 				resp.ImportedMilestones = importedMilestones
 				resp.SkippedMilestones = skippedMilestones
 				resp.Errors = append(resp.Errors, milestoneErrors...)
@@ -120,7 +139,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(importData.Photos) > 0 {
-			imported, skipped, photoIdMapping := importPhotos(tx, user.FamilyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
+			imported, skipped, photoIdMapping := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
 			resp.ImportedPhotos = imported
 			resp.SkippedPhotos = skipped
 
@@ -151,6 +170,11 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 		vbolt.TxCommit(tx)
 	})
+
+	if importErr != nil {
+		RespondValidationError(w, r, "Failed to import bundle", importErr.Error())
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

@@ -25,6 +25,9 @@ func RegisterChatMethods(app *vbeam.Application) {
 type SendMessageRequest struct {
 	Content         string `json:"content"`
 	ClientMessageId string `json:"clientMessageId"`
+	// FamilyId names the family whose chat this message goes to. Zero means
+	// the caller's primary family.
+	FamilyId int `json:"familyId,omitempty"`
 }
 
 type SendMessageResponse struct {
@@ -34,6 +37,10 @@ type SendMessageResponse struct {
 type GetChatMessagesRequest struct {
 	Limit  *int `json:"limit,omitempty"`
 	Offset *int `json:"offset,omitempty"`
+	// FamilyId names the chat to read. Zero means the caller's primary family.
+	// Chat is one room per family, so this reads a single family rather than
+	// merging every family the user belongs to into one stream.
+	FamilyId int `json:"familyId,omitempty"`
 }
 
 type GetChatMessagesResponse struct {
@@ -97,13 +104,17 @@ func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int) (messages []Ch
 	return
 }
 
-// GetVisibleChatMessages returns the most recent messages of every family user
-// can read.
-func GetVisibleChatMessages(tx *vbolt.Tx, user User, limit int) (messages []ChatMessage) {
-	for _, familyId := range familiesVisibleTo(tx, user) {
-		messages = append(messages, GetFamilyChatMessages(tx, familyId, limit)...)
+// GetChatMessageForUser looks a message up and checks it against every family
+// the user belongs to, rather than against a single active family.
+func GetChatMessageForUser(tx *vbolt.Tx, messageId int, user User, need AccessLevel) (ChatMessage, error) {
+	message := GetChatMessageById(tx, messageId)
+	if message.Id == 0 {
+		return message, errors.New("Message not found")
 	}
-	return
+	if !CanAccessFamily(tx, user, message.FamilyId, need) {
+		return message, errors.New("Access denied: message belongs to another family")
+	}
+	return message, nil
 }
 
 func GetChatMessageByIdAndFamily(tx *vbolt.Tx, messageId int, familyId int) (ChatMessage, error) {
@@ -189,9 +200,14 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 		return
 	}
 
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessContribute)
+	if err != nil {
+		return
+	}
+
 	// Add message to database
 	vbeam.UseWriteTx(ctx)
-	message, err := AddChatMessageTx(ctx.Tx, req, user.FamilyId, user.Id, user.Name)
+	message, err := AddChatMessageTx(ctx.Tx, req, familyId, user.Id, user.Name)
 	if err != nil {
 		return
 	}
@@ -203,13 +219,13 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 
 	// Broadcast the new message to websocket clients
 	if hub := GetChatHub(); hub != nil {
-		hub.BroadcastNewMessage(user.FamilyId, message)
+		hub.BroadcastNewMessage(message.FamilyId, message)
 	}
 
 	// Log the message sending
 	LogInfo(LogCategoryAPI, "Chat message sent", map[string]interface{}{
 		"messageId": message.Id,
-		"familyId":  user.FamilyId,
+		"familyId":  message.FamilyId,
 		"userId":    user.Id,
 		"length":    len(message.Content),
 	})
@@ -232,12 +248,17 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 		limit = *req.Limit
 	}
 
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
+	if err != nil {
+		return
+	}
+
 	// Get messages for this family
-	resp.Messages = GetVisibleChatMessages(ctx.Tx, user, limit)
+	resp.Messages = GetFamilyChatMessages(ctx.Tx, familyId, limit)
 
 	// Log the request
 	LogInfo(LogCategoryAPI, "Chat messages retrieved", map[string]interface{}{
-		"familyId":     user.FamilyId,
+		"familyId":     familyId,
 		"userId":       user.Id,
 		"messageCount": len(resp.Messages),
 		"limit":        limit,
@@ -259,8 +280,9 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 		return
 	}
 
-	// Get the message to verify ownership
-	message, err := GetChatMessageByIdAndFamily(ctx.Tx, req.Id, user.FamilyId)
+	// Get the message to verify ownership. The message's own family is the
+	// context the delete runs in.
+	message, err := GetChatMessageForUser(ctx.Tx, req.Id, user, AccessContribute)
 	if err != nil {
 		return
 	}
@@ -273,7 +295,7 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 
 	// Delete message from database
 	vbeam.UseWriteTx(ctx)
-	err = DeleteChatMessageTx(ctx.Tx, req.Id, user.FamilyId)
+	err = DeleteChatMessageTx(ctx.Tx, req.Id, message.FamilyId)
 	if err != nil {
 		return
 	}
@@ -282,13 +304,13 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 
 	// Broadcast the message deletion to websocket clients
 	if hub := GetChatHub(); hub != nil {
-		hub.BroadcastDeleteMessage(user.FamilyId, req.Id, user.Id)
+		hub.BroadcastDeleteMessage(message.FamilyId, req.Id, user.Id)
 	}
 
 	// Log the message deletion
 	LogInfo(LogCategoryAPI, "Chat message deleted", map[string]interface{}{
 		"messageId": req.Id,
-		"familyId":  user.FamilyId,
+		"familyId":  message.FamilyId,
 		"userId":    user.Id,
 	})
 
@@ -303,8 +325,9 @@ func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) 
 		return
 	}
 
-	// Get all family user IDs
-	familyUserIds := GetFamilyUserIds(tx, sender.FamilyId)
+	// Notify the family the message was posted to, which is not necessarily
+	// the sender's primary family.
+	familyUserIds := GetFamilyUserIds(tx, message.FamilyId)
 	if len(familyUserIds) == 0 {
 		return
 	}
@@ -312,7 +335,7 @@ func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) 
 	// Get online users from the WebSocket hub
 	var onlineUserIds []int
 	if hub := GetChatHub(); hub != nil {
-		onlineUserIds = hub.GetOnlineUsers(sender.FamilyId)
+		onlineUserIds = hub.GetOnlineUsers(message.FamilyId)
 	}
 
 	// Create a set of online users for fast lookup

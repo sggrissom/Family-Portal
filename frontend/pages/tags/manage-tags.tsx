@@ -4,6 +4,7 @@ import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
+import { FamilySelect } from "../../components/FamilySelect";
 import "./manage-tags-styles";
 
 export async function fetch(
@@ -24,23 +25,25 @@ type ManageTagsState = {
   editingId: number | null;
   editName: string;
   editColor: string;
+  // Zero means the primary family. Tags are family-scoped, so a user in
+  // several families has to say which one a new tag belongs to.
+  newFamilyId: number;
   error: string;
   saving: boolean;
 };
 
-const useManageTagsState = vlens.declareHook(
-  (): ManageTagsState => ({
-    initialized: false,
-    tags: [],
-    newName: "",
-    newColor: "#6366f1",
-    editingId: null,
-    editName: "",
-    editColor: "",
-    error: "",
-    saving: false,
-  })
-);
+const useManageTagsState = vlens.declareHook((): ManageTagsState => ({
+  initialized: false,
+  tags: [],
+  newName: "",
+  newColor: "#6366f1",
+  editingId: null,
+  editName: "",
+  editColor: "",
+  newFamilyId: 0,
+  error: "",
+  saving: false,
+}));
 
 export function view(
   route: string,
@@ -66,6 +69,14 @@ export function view(
         {state.error && <div className="manage-tags-error">{state.error}</div>}
 
         {/* Create new tag */}
+        <FamilySelect
+          id="tagFamilyId"
+          value={state.newFamilyId}
+          onChange={familyId => {
+            state.newFamilyId = familyId;
+          }}
+          disabled={state.saving}
+        />
         <div className="tag-create-row">
           <input
             type="text"
@@ -184,7 +195,11 @@ async function onCreateTag(state: ManageTagsState) {
   state.error = "";
   vlens.scheduleRedraw();
 
-  const [resp, err] = await server.CreateTag({ name, color: state.newColor });
+  const [resp, err] = await server.CreateTag({
+    name,
+    color: state.newColor,
+    familyId: state.newFamilyId,
+  });
   if (err || !resp) {
     state.error = err || "Failed to create tag";
   } else {

@@ -26,12 +26,10 @@ type MessageForm = {
   sending: boolean;
 };
 
-const useMessageForm = vlens.declareHook(
-  (): MessageForm => ({
-    message: "",
-    sending: false,
-  })
-);
+const useMessageForm = vlens.declareHook((): MessageForm => ({
+  message: "",
+  sending: false,
+}));
 
 const useChatState = vlens.declareHook(
   (): {
@@ -54,7 +52,10 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.GetChatMessagesResponse>({ messages: [] });
   }
 
-  return server.GetChatMessages({ limit: null, offset: null });
+  // Chat stays on the primary family: the websocket hub subscribes each client
+  // to one room, so reading another family's history here would leave that
+  // conversation without live updates. Unblocked by the Stage 6 fan-out work.
+  return server.GetChatMessages({ limit: null, offset: null, familyId: 0 });
 }
 
 export function view(
@@ -259,6 +260,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       const [result, error] = await server.SendMessage({
         content: messageContent,
         clientMessageId: clientMessageId,
+        familyId: 0,
       });
 
       if (result && !error) {

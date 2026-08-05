@@ -22,18 +22,16 @@ type ProfileState = {
   selectedTagIds: number[];
 };
 
-const useProfileState = vlens.declareHook(
-  (): ProfileState => ({
-    visibleTypes: {
-      milestones: true,
-      measurements: true,
-      photos: true,
-    },
-    selectedAgeFilter: "all",
-    sortOrder: "newest",
-    selectedTagIds: [],
-  })
-);
+const useProfileState = vlens.declareHook((): ProfileState => ({
+  visibleTypes: {
+    milestones: true,
+    measurements: true,
+    photos: true,
+  },
+  selectedAgeFilter: "all",
+  sortOrder: "newest",
+  selectedTagIds: [],
+}));
 
 export async function fetch(route: string, prefix: string) {
   const personId = getIdFromRoute(route) || 0;

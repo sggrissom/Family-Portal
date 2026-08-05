@@ -122,22 +122,20 @@ interface LogsPageState {
 }
 
 // Component state hook for logs page
-const logsPageHook = vlens.declareHook(
-  (): LogsPageState => ({
-    currentFile: "",
-    logEntries: [],
-    loading: false,
-    error: "",
-    levelFilter: "",
-    categoryFilter: "",
-    currentPage: 1,
-    totalLines: 0,
-    hasMore: false,
-    minDurationFilter: "",
-    sortBy: "time",
-    sortDesc: false,
-  })
-);
+const logsPageHook = vlens.declareHook((): LogsPageState => ({
+  currentFile: "",
+  logEntries: [],
+  loading: false,
+  error: "",
+  levelFilter: "",
+  categoryFilter: "",
+  currentPage: 1,
+  totalLines: 0,
+  hasMore: false,
+  minDurationFilter: "",
+  sortBy: "time",
+  sortDesc: false,
+}));
 
 async function loadLogContent(
   filename: string,

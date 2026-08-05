@@ -1,4 +1,5 @@
 import { logWarn } from "./logger";
+import type { FamilyRef } from "@app/server";
 
 export interface AuthCache {
   id: number;
@@ -6,6 +7,7 @@ export interface AuthCache {
   email: string;
   isAdmin: boolean;
   familyId: number;
+  families?: FamilyRef[];
 }
 
 let _auth: AuthCache | null = (() => {
@@ -23,6 +25,21 @@ export function getAuth(): AuthCache | null {
 export function setAuth(a: AuthCache) {
   _auth = a;
   localStorage.setItem("auth-cache", JSON.stringify(a));
+}
+
+// getFamilies returns the families the user belongs to, falling back to the
+// primary family alone for caches written before memberships were returned.
+export function getFamilies(): FamilyRef[] {
+  if (!_auth) {
+    return [];
+  }
+  if (_auth.families && _auth.families.length > 0) {
+    return _auth.families;
+  }
+  if (!_auth.familyId) {
+    return [];
+  }
+  return [{ id: _auth.familyId, name: "", role: 3, isPrimary: true }];
 }
 
 export function clearAuth() {

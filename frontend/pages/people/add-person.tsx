@@ -6,6 +6,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { FamilySelect } from "../../components/FamilySelect";
 import "./add-person-styles";
 
 type Data = {};
@@ -16,23 +17,23 @@ type AddPersonForm = {
   gender: number; // 0 = Male, 1 = Female, 2 = Unknown
   birthdate: string;
   isPregnancy: boolean;
+  familyId: number;
   error: string;
   loading: boolean;
   success: boolean;
 };
 
-const useAddPersonForm = vlens.declareHook(
-  (): AddPersonForm => ({
-    name: "",
-    personType: 0,
-    gender: 0,
-    birthdate: "",
-    isPregnancy: false,
-    error: "",
-    loading: false,
-    success: false,
-  })
-);
+const useAddPersonForm = vlens.declareHook((): AddPersonForm => ({
+  name: "",
+  personType: 0,
+  gender: 0,
+  birthdate: "",
+  isPregnancy: false,
+  familyId: 0,
+  error: "",
+  loading: false,
+  success: false,
+}));
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
@@ -70,6 +71,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       gender: form.gender,
       birthdate: form.birthdate,
       isPregnancy: form.isPregnancy,
+      familyId: form.familyId,
     });
 
     form.loading = false;
@@ -82,6 +84,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.gender = 0;
       form.birthdate = "";
       form.isPregnancy = false;
+      form.familyId = 0;
 
       core.setRoute("/dashboard");
     } else {
@@ -116,6 +119,15 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
       {form.error && <div className="error-message">{form.error}</div>}
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onAddPersonClicked, form)}>
+        <FamilySelect
+          id="familyId"
+          value={form.familyId}
+          onChange={familyId => {
+            form.familyId = familyId;
+          }}
+          disabled={form.loading}
+        />
+
         <div className="form-group">
           <label htmlFor="name">Name</label>
           <input

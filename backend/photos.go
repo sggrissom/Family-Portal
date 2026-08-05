@@ -570,6 +570,18 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// familyId names the family the photo belongs to. Absent or blank means
+	// the caller's primary family.
+	var requestedFamilyId int
+	if familyIdStr := r.FormValue("familyId"); familyIdStr != "" {
+		parsed, convErr := strconv.Atoi(familyIdStr)
+		if convErr != nil {
+			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			return
+		}
+		requestedFamilyId = parsed
+	}
+
 	title := strings.TrimSpace(r.FormValue("title"))
 
 	description := strings.TrimSpace(r.FormValue("description"))
@@ -621,12 +633,18 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	var validPersons []Person
 
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		// Validate all person IDs exist and belong to user's family
+		familyId, err := ResolveActingFamily(tx, user, requestedFamilyId, AccessContribute)
+		if err != nil {
+			// Don't commit transaction for a family the user is not in
+			return
+		}
+
+		// Validate all person IDs exist and belong to that family
 		if len(personIds) > 0 {
 			validPersons = make([]Person, 0, len(personIds))
 			for _, personId := range personIds {
 				person := GetPersonById(tx, personId)
-				if person.Id == 0 || !CanAccessFamily(tx, user, person.FamilyId, AccessContribute) {
+				if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
 					// Don't commit transaction for invalid person
 					return
 				}
@@ -688,7 +706,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		// Create image record
 		image = Image{
 			Id:               vbolt.NextIntId(tx, ImagesBkt),
-			FamilyId:         user.FamilyId,
+			FamilyId:         familyId,
 			OwnerUserId:      user.Id,
 			OriginalFilename: fileHeader.Filename,
 			MimeType:         mimeType,
@@ -705,11 +723,11 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Save image to database
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
-		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, user.FamilyId)
+		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 
 		// Create PhotoPerson relationships for each tagged person
 		for _, person := range validPersons {
-			AddPersonToPhoto(tx, image.Id, person.Id, user.FamilyId)
+			AddPersonToPhoto(tx, image.Id, person.Id, familyId)
 		}
 
 		vbolt.TxCommit(tx)
@@ -966,9 +984,11 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 	if tagIds == nil {
 		tagIds = []int{}
 	}
+	// The photo's own family is the context, so the tags have to live in it —
+	// a tag from another of the user's families is not in scope here.
 	for _, tagId := range tagIds {
 		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || !CanAccessFamily(ctx.Tx, user, tag.FamilyId, AccessContribute) {
+		if tag.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, tag.FamilyId, AccessContribute) {
 			err = errors.New("Tag not found or access denied")
 			return
 		}
@@ -993,7 +1013,7 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 
 	for tagId := range desiredSet {
 		if _, exists := existingSet[tagId]; !exists {
-			addTagToPhoto(ctx.Tx, req.PhotoId, tagId, user.FamilyId)
+			addTagToPhoto(ctx.Tx, req.PhotoId, tagId, photo.FamilyId)
 		}
 	}
 
@@ -1360,14 +1380,14 @@ func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp Add
 			continue
 		}
 
-		// Validate person belongs to user's family
+		// Validate person belongs to the photo's family
 		person := GetPersonById(ctx.Tx, personId)
-		if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
+		if person.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, person.FamilyId, AccessContribute) {
 			continue // Skip invalid person but don't fail the whole operation
 		}
 
 		// Add the association
-		AddPersonToPhoto(ctx.Tx, req.PhotoId, personId, user.FamilyId)
+		AddPersonToPhoto(ctx.Tx, req.PhotoId, personId, photo.FamilyId)
 		person.Age = calculateAge(person.Birthday)
 		addedPeople = append(addedPeople, person)
 	}
@@ -1408,9 +1428,9 @@ func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequ
 		return
 	}
 
-	// Validate person belongs to user's family
+	// Validate person belongs to the photo's family
 	person := GetPersonById(ctx.Tx, req.PersonId)
-	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
+	if person.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, person.FamilyId, AccessContribute) {
 		err = errors.New("Person not found or access denied")
 		return
 	}

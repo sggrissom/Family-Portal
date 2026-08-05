@@ -4,6 +4,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logError } from "../../lib/logger";
+import { FamilySelect } from "../../components/FamilySelect";
 import "./settings-styles";
 
 type Data = {
@@ -23,6 +24,9 @@ type ExportForm = {
   error: string;
   success: boolean;
   exportMode: "data_only" | "with_photos";
+  // Which family to export. Zero means the primary family. Export covers one
+  // family at a time so a bundle imports back into a single family.
+  familyId: number;
 };
 
 type MergeForm = {
@@ -41,47 +45,40 @@ type MergeForm = {
   } | null;
 };
 
-const useJoinFamilyForm = vlens.declareHook(
-  (): JoinFamilyForm => ({
-    inviteCode: "",
-    error: "",
-    loading: false,
-    success: false,
-  })
-);
+const useJoinFamilyForm = vlens.declareHook((): JoinFamilyForm => ({
+  inviteCode: "",
+  error: "",
+  loading: false,
+  success: false,
+}));
 
-const useExportForm = vlens.declareHook(
-  (): ExportForm => ({
-    loading: false,
-    error: "",
-    success: false,
-    exportMode: "data_only",
-  })
-);
+const useExportForm = vlens.declareHook((): ExportForm => ({
+  loading: false,
+  error: "",
+  success: false,
+  exportMode: "data_only",
+  familyId: 0,
+}));
 
-const useMergeForm = vlens.declareHook(
-  (): MergeForm => ({
-    sourcePersonId: 0,
-    targetPersonId: 0,
-    loading: false,
-    error: "",
-    success: false,
-    showConfirmation: false,
-    previewData: null,
-  })
-);
+const useMergeForm = vlens.declareHook((): MergeForm => ({
+  sourcePersonId: 0,
+  targetPersonId: 0,
+  loading: false,
+  error: "",
+  success: false,
+  showConfirmation: false,
+  previewData: null,
+}));
 
 type AppearanceSettings = {
   theme: "light" | "dark";
 };
 
-const useAppearanceSettings = vlens.declareHook(
-  (): AppearanceSettings => ({
-    theme:
-      (localStorage.getItem("theme") as AppearanceSettings["theme"] | null) ??
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
-  })
-);
+const useAppearanceSettings = vlens.declareHook((): AppearanceSettings => ({
+  theme:
+    (localStorage.getItem("theme") as AppearanceSettings["theme"] | null) ??
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+}));
 
 function setTheme(settings: AppearanceSettings, theme: AppearanceSettings["theme"]) {
   const html = document.documentElement;
@@ -96,14 +93,17 @@ function setTheme(settings: AppearanceSettings, theme: AppearanceSettings["theme
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return vlens.rpcOk({ familyInfo: { id: 0, name: "", inviteCode: "" }, people: [] });
+    return vlens.rpcOk({
+      familyInfo: { id: 0, name: "", inviteCode: "", families: [] },
+      people: [],
+    });
   }
 
   const [familyInfo] = await server.GetFamilyInfo({});
   const [peopleResp] = await server.ListPeople({});
 
   return vlens.rpcOk({
-    familyInfo: familyInfo || { id: 0, name: "", inviteCode: "" },
+    familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
     people: peopleResp?.people || [],
   });
 }
@@ -190,7 +190,7 @@ async function onExportDataClicked(exportForm: ExportForm) {
     const timestamp = new Date().toISOString().split("T")[0];
 
     if (exportForm.exportMode === "data_only") {
-      const [resp, err] = await server.ExportData({});
+      const [resp, err] = await server.ExportData({ familyId: exportForm.familyId });
       if (!resp || !resp.jsonData) {
         throw new Error(err || "Failed to export data");
       }
@@ -204,7 +204,8 @@ async function onExportDataClicked(exportForm: ExportForm) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else {
-      const resp = await window.fetch(`/api/export-bundle?mode=with_photos`, {
+      const familyQuery = exportForm.familyId ? `&familyId=${exportForm.familyId}` : "";
+      const resp = await window.fetch(`/api/export-bundle?mode=with_photos${familyQuery}`, {
         credentials: "include",
       });
       if (!resp.ok) {
@@ -324,7 +325,22 @@ function onMergeCancel(form: MergeForm) {
 
 const SettingsPage = ({ data }: SettingsPageProps) => {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const inviteLink = `${baseUrl}/create-account?code=${data.familyInfo.inviteCode}`;
+  // Every family the user belongs to, primary first. Falls back to the
+  // top-level fields, which describe the primary family.
+  const families =
+    data.familyInfo.families && data.familyInfo.families.length > 0
+      ? data.familyInfo.families
+      : data.familyInfo.id > 0
+        ? [
+            {
+              id: data.familyInfo.id,
+              name: data.familyInfo.name,
+              inviteCode: data.familyInfo.inviteCode,
+              role: 3,
+              isPrimary: true,
+            },
+          ]
+        : [];
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
@@ -420,13 +436,18 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         </div>
 
         {/* Family Information - only show if user is in a family */}
-        {data.familyInfo.id > 0 && (
+        {families.length > 0 && (
           <div className="settings-section">
-            <h2>Family Information</h2>
+            <h2>{families.length > 1 ? "Your Families" : "Family Information"}</h2>
             <div className="settings-card">
               <div className="form-group">
-                <label>Family Name</label>
-                <div className="readonly-field">{data.familyInfo.name}</div>
+                <label>{families.length > 1 ? "Families" : "Family Name"}</label>
+                {families.map(family => (
+                  <div key={family.id} className="readonly-field">
+                    {family.name}
+                    {families.length > 1 && family.isPrimary ? " (primary)" : ""}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -451,6 +472,16 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   )}
 
                   {exportForm.error && <div className="error-message">{exportForm.error}</div>}
+
+                  <FamilySelect
+                    id="exportFamilyId"
+                    label="Family to export"
+                    value={exportForm.familyId}
+                    onChange={familyId => {
+                      exportForm.familyId = familyId;
+                    }}
+                    disabled={exportForm.loading}
+                  />
 
                   <div className="export-mode-group">
                     <label className="export-mode-option">
@@ -644,34 +675,46 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         )}
 
         {/* Invite Members - only show if user is in a family */}
-        {data.familyInfo.id > 0 && (
+        {families.length > 0 && (
           <div className="settings-section">
             <h2>Invite Family Members</h2>
             <div className="settings-card">
               <p className="section-description">
                 Share this link with family members to invite them to join your family portal.
+                {families.length > 1 && " Each family has its own code."}
               </p>
 
-              <div className="form-group">
-                <label>Family Invite Code</label>
-                <div className="invite-code-display">
-                  <span className="invite-code">{data.familyInfo.inviteCode}</span>
-                </div>
-              </div>
+              {families.map(family => (
+                <div key={family.id}>
+                  <div className="form-group">
+                    <label>
+                      {families.length > 1 ? `${family.name} Invite Code` : "Family Invite Code"}
+                    </label>
+                    <div className="invite-code-display">
+                      <span className="invite-code">{family.inviteCode}</span>
+                    </div>
+                  </div>
 
-              <div className="form-group">
-                <label>Invite Link</label>
-                <div className="invite-link-display">
-                  <input type="text" value={inviteLink} readOnly className="invite-link-input" />
-                  <button
-                    type="button"
-                    className="btn btn-primary copy-button"
-                    onClick={() => copyInviteLink(data.familyInfo.inviteCode)}
-                  >
-                    Copy Link
-                  </button>
+                  <div className="form-group">
+                    <label>Invite Link</label>
+                    <div className="invite-link-display">
+                      <input
+                        type="text"
+                        value={`${baseUrl}/create-account?code=${family.inviteCode}`}
+                        readOnly
+                        className="invite-link-input"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary copy-button"
+                        onClick={() => copyInviteLink(family.inviteCode)}
+                      >
+                        Copy Link
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
 
               <div className="invite-instructions">
                 <h4>How to invite family members:</h4>

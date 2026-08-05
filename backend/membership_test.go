@@ -1,7 +1,7 @@
-// Tests for the additive FamilyMembership table (Stage 2 of the multi-family
-// plan). Nothing reads memberships for authorization yet, so these assert the
-// invariant that makes Stage 3 safe: every user has exactly one membership, and
-// it matches User.FamilyId.
+// Tests for the FamilyMembership table. Account creation still produces exactly
+// one membership matching User.FamilyId — the invariant Stage 2 established and
+// Stage 3 relies on for the primary-family default. Joining a second family is
+// what adds rows beyond it; see TestJoiningAddsMembershipWithoutDroppingPrior.
 package backend
 
 import (
@@ -147,16 +147,17 @@ func TestEnsureMembershipIsIdempotent(t *testing.T) {
 	})
 }
 
-// JoinFamily still moves the user at this stage, so the membership moves with
-// it and the one-row invariant holds.
-func TestMoveMembershipReplacesPriorFamily(t *testing.T) {
+// Stage 3 made joining additive: the new family is recorded alongside the
+// primary rather than replacing it, and the primary keeps naming the user's
+// own household.
+func TestJoiningAddsMembershipWithoutDroppingPrior(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()
 
 	var user User
 	var otherFamilyId int
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		user = addTestUser(t, tx, "Mover", "mover@example.com", "")
+		user = addTestUser(t, tx, "Joiner", "joiner@example.com", "")
 		other := addTestUser(t, tx, "Other", "other@example.com", "")
 		otherFamilyId = other.FamilyId
 		vbolt.TxCommit(tx)
@@ -165,21 +166,34 @@ func TestMoveMembershipReplacesPriorFamily(t *testing.T) {
 	originalFamilyId := user.FamilyId
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		user.FamilyId = otherFamilyId
-		vbolt.Write(tx, UsersBkt, user.Id, &user)
-		moveMembershipTx(tx, user.Id, otherFamilyId, AccessAdmin)
+		EnsureMembershipTx(tx, user.Id, otherFamilyId, AccessAdmin)
 		vbolt.TxCommit(tx)
 	})
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		assertSingleMembership(t, tx, user)
-		if _, found := FindMembership(tx, user.Id, originalFamilyId); found {
-			t.Error("the previous family's membership should have been dropped")
+		if got := len(GetUserMemberships(tx, user.Id)); got != 2 {
+			t.Fatalf("expected 2 memberships after joining, got %d", got)
 		}
-		// The dropped row must be gone from the family-side index too.
-		for _, membership := range GetFamilyMemberships(tx, originalFamilyId) {
-			if membership.UserId == user.Id {
-				t.Error("stale membership still reachable via MembershipByFamilyIndex")
+		if _, found := FindMembership(tx, user.Id, originalFamilyId); !found {
+			t.Error("joining another family must not drop the original membership")
+		}
+		if _, found := FindMembership(tx, user.Id, otherFamilyId); !found {
+			t.Error("the joined family's membership was not recorded")
+		}
+		if user.FamilyId != originalFamilyId {
+			t.Errorf("primary family changed to %d, expected %d", user.FamilyId, originalFamilyId)
+		}
+
+		// Both families must reach the user from the family side too.
+		for _, familyId := range []int{originalFamilyId, otherFamilyId} {
+			found := false
+			for _, membership := range GetFamilyMemberships(tx, familyId) {
+				if membership.UserId == user.Id {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("family %d cannot reach user %d via MembershipByFamilyIndex", familyId, user.Id)
 			}
 		}
 	})

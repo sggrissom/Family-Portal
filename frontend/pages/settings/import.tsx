@@ -5,6 +5,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { FamilySelect } from "../../components/FamilySelect";
 import "./import-styles";
 
 type Data = {};
@@ -24,6 +25,9 @@ type ImportForm = {
   mergeStrategy: string;
   importMilestones: boolean;
   dryRun: boolean;
+  // The family to import into. Zero means the primary family. Distinct from
+  // selectedFamilyIds, which filters which people to take from the file.
+  targetFamilyId: number;
   // AI Import fields
   activeTab: "json" | "ai";
   selectedPersonId: number | null;
@@ -32,30 +36,29 @@ type ImportForm = {
   aiProcessing: boolean;
 };
 
-const useImportForm = vlens.declareHook(
-  (): ImportForm => ({
-    jsonData: "",
-    file: null,
-    isZip: false,
-    error: "",
-    loading: false,
-    success: false,
-    result: null,
-    previewData: null,
-    showFilters: false,
-    selectedFamilyIds: [],
-    selectedPersonIds: [],
-    mergeStrategy: "create_all",
-    importMilestones: true,
-    dryRun: false,
-    // AI Import fields
-    activeTab: "json",
-    selectedPersonId: null,
-    peopleList: [],
-    unstructuredText: "",
-    aiProcessing: false,
-  })
-);
+const useImportForm = vlens.declareHook((): ImportForm => ({
+  jsonData: "",
+  file: null,
+  isZip: false,
+  error: "",
+  loading: false,
+  success: false,
+  result: null,
+  previewData: null,
+  showFilters: false,
+  selectedFamilyIds: [],
+  selectedPersonIds: [],
+  mergeStrategy: "create_all",
+  importMilestones: true,
+  dryRun: false,
+  targetFamilyId: 0,
+  // AI Import fields
+  activeTab: "json",
+  selectedPersonId: null,
+  peopleList: [],
+  unstructuredText: "",
+  aiProcessing: false,
+}));
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
@@ -125,6 +128,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
     try {
       const formData = new FormData();
       formData.append("file", form.file);
+      if (form.targetFamilyId) {
+        formData.append("familyId", String(form.targetFamilyId));
+      }
       const resp = await window.fetch("/api/import-bundle", {
         method: "POST",
         credentials: "include",
@@ -218,6 +224,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
         dryRun: false,
+        familyId: form.targetFamilyId,
       });
 
       form.loading = false;
@@ -260,6 +267,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
         dryRun: form.dryRun,
+        familyId: form.targetFamilyId,
       });
 
       form.loading = false;
@@ -580,6 +588,16 @@ const ImportPage = ({ form }: ImportPageProps) => {
                     <h3>Import Options</h3>
 
                     <div className="import-options">
+                      <FamilySelect
+                        id="importFamilyId"
+                        label="Import into family"
+                        value={form.targetFamilyId}
+                        onChange={familyId => {
+                          form.targetFamilyId = familyId;
+                        }}
+                        disabled={form.loading}
+                      />
+
                       <div className="option-group">
                         <label className="option-label">
                           <strong>Merge Strategy</strong>

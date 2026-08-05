@@ -25,21 +25,19 @@ type AddMilestoneForm = {
   loading: boolean;
 };
 
-const useAddMilestoneForm = vlens.declareHook(
-  (personId?: string): AddMilestoneForm => ({
-    selectedPersonId: personId || "",
-    description: "",
-    category: "development",
-    inputType: "today",
-    milestoneDate: "",
-    ageYears: "",
-    ageMonths: "",
-    photoIds: [],
-    tagIds: [],
-    error: "",
-    loading: false,
-  })
-);
+const useAddMilestoneForm = vlens.declareHook((personId?: string): AddMilestoneForm => ({
+  selectedPersonId: personId || "",
+  description: "",
+  category: "development",
+  inputType: "today",
+  milestoneDate: "",
+  ageYears: "",
+  ageMonths: "",
+  photoIds: [],
+  tagIds: [],
+  error: "",
+  loading: false,
+}));
 
 type AddMilestoneData = {
   people: server.ListPeopleResponse;

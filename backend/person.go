@@ -46,6 +46,7 @@ type AddPersonRequest struct {
 	Gender      int    `json:"gender"`      // 0 = Male, 1 = Female, 2 = Unknown
 	Birthdate   string `json:"birthdate"`   // YYYY-MM-DD format
 	IsPregnancy bool   `json:"isPregnancy"` // true when birthdate is an expected due date
+	FamilyId    int    `json:"familyId,omitempty"`
 }
 
 type UpdatePersonRequest struct {
@@ -350,9 +351,14 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 		return
 	}
 
-	// Add person to user's family
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessContribute)
+	if err != nil {
+		return
+	}
+
+	// Add person to the named family
 	vbeam.UseWriteTx(ctx)
-	person, err := AddPersonTx(ctx.Tx, req, user.FamilyId)
+	person, err := AddPersonTx(ctx.Tx, req, familyId)
 	if err != nil {
 		return
 	}

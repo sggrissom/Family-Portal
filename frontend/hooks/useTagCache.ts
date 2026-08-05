@@ -7,13 +7,11 @@ interface TagCacheState {
   loading: boolean;
 }
 
-const tagCacheState = vlens.declareHook(
-  (): TagCacheState => ({
-    tags: [],
-    loaded: false,
-    loading: false,
-  })
-);
+const tagCacheState = vlens.declareHook((): TagCacheState => ({
+  tags: [],
+  loaded: false,
+  loading: false,
+}));
 
 export const useTagCache = () => {
   const state = tagCacheState();

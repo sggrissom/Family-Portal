@@ -1,5 +1,11 @@
 import * as rpc from "vlens/rpc"
 
+export type AccessLevel = number;
+export const AccessNone: AccessLevel = 0;
+export const AccessView: AccessLevel = 1;
+export const AccessContribute: AccessLevel = 2;
+export const AccessAdmin: AccessLevel = 3;
+
 export type PersonType = number;
 export const Parent: PersonType = 0;
 export const Child: PersonType = 1;
@@ -16,6 +22,8 @@ export const Weight: MeasurementType = 1;
 // Errors
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
 
 export interface CreateAccountRequest {
     name: string
@@ -41,12 +49,14 @@ export interface AuthResponse {
     email: string
     isAdmin: boolean
     familyId: number
+    families: FamilyRef[]
 }
 
 export interface FamilyInfoResponse {
     id: number
     name: string
     inviteCode: string
+    families: FamilyInfo[]
 }
 
 export interface JoinFamilyRequest {
@@ -65,6 +75,7 @@ export interface AddPersonRequest {
     gender: number
     birthdate: string
     isPregnancy: boolean
+    familyId: number
 }
 
 export interface GetPersonResponse {
@@ -252,6 +263,7 @@ export interface UpdateMilestoneTagsResponse {
 export interface CreateTagRequest {
     name: string
     color: string
+    familyId: number
 }
 
 export interface CreateTagResponse {
@@ -285,6 +297,7 @@ export interface ListTagsResponse {
 export interface SendMessageRequest {
     content: string
     clientMessageId: string
+    familyId: number
 }
 
 export interface SendMessageResponse {
@@ -294,6 +307,7 @@ export interface SendMessageResponse {
 export interface GetChatMessagesRequest {
     limit: number | null
     offset: number | null
+    familyId: number
 }
 
 export interface GetChatMessagesResponse {
@@ -390,6 +404,7 @@ export interface ImportDataRequest {
     mergeStrategy: string
     importMilestones: boolean
     dryRun: boolean
+    familyId: number
 }
 
 export interface ImportDataResponse {
@@ -413,6 +428,7 @@ export interface ImportDataResponse {
 }
 
 export interface ExportDataRequest {
+    familyId: number
 }
 
 export interface ExportDataResponse {
@@ -596,6 +612,21 @@ export interface AdminSetMobileVersionRequest {
 
 export interface AdminSetMobileVersionResponse {
     success: boolean
+}
+
+export interface FamilyRef {
+    id: number
+    name: string
+    role: AccessLevel
+    isPrimary: boolean
+}
+
+export interface FamilyInfo {
+    id: number
+    name: string
+    inviteCode: string
+    role: AccessLevel
+    isPrimary: boolean
 }
 
 export interface Person {

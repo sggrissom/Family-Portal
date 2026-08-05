@@ -99,19 +99,6 @@ func ensureMembershipTx(tx *vbolt.Tx, userId int, familyId int, role AccessLevel
 	return addMembershipTx(tx, userId, familyId, role, joinedAt)
 }
 
-// moveMembershipTx makes familyId the user's only membership, dropping any
-// others. This mirrors the current JoinFamily behavior, where joining a family
-// leaves the previous one. Stage 3 replaces this call with EnsureMembershipTx so
-// that joining becomes additive.
-func moveMembershipTx(tx *vbolt.Tx, userId int, familyId int, role AccessLevel) FamilyMembership {
-	for _, membership := range GetUserMemberships(tx, userId) {
-		if membership.FamilyId != familyId {
-			deleteMembershipTx(tx, membership)
-		}
-	}
-	return EnsureMembershipTx(tx, userId, familyId, role)
-}
-
 // BackfillFamilyMemberships writes one membership row per user, mirroring the
 // user's primary family. Safe to re-run: users that already have the row are
 // skipped, so re-running creates nothing and changes nothing.
