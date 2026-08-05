@@ -13,6 +13,9 @@ type CreateAccountForm = {
   password: string;
   confirmPassword: string;
   familyCode: string;
+  initialPersonName: string;
+  initialPersonGender: number;
+  initialPersonBirthdate: string;
   error: string;
   loading: boolean;
 };
@@ -26,6 +29,9 @@ const useCreateAccountForm = vlens.declareHook(
     password: "",
     confirmPassword: "",
     familyCode: "",
+    initialPersonName: "",
+    initialPersonGender: 2,
+    initialPersonBirthdate: "",
     error: "",
     loading: false,
   })
@@ -70,6 +76,9 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
     password: form.password,
     confirmPassword: form.confirmPassword,
     familyCode: form.familyCode,
+    initialPersonName: form.initialPersonName || form.name,
+    initialPersonGender: form.initialPersonGender,
+    initialPersonBirthdate: form.initialPersonBirthdate,
   });
 
   form.loading = false;
@@ -156,6 +165,50 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
             disabled={form.loading}
           />
         </div>
+
+        <fieldset className="form-section">
+          <legend>Your family profile</legend>
+          <p className="section-hint">
+            We’ll add you as the first adult in this family so photos, milestones, and family
+            timelines can include you too.
+          </p>
+
+          <div className="form-group">
+            <label htmlFor="initialPersonName">Profile Name</label>
+            <input
+              type="text"
+              id="initialPersonName"
+              placeholder="Name to show in your family"
+              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonName"))}
+              disabled={form.loading}
+            />
+            <small className="form-hint">Leave blank to use your account name.</small>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="initialPersonGender">Gender</label>
+            <select
+              id="initialPersonGender"
+              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonGender"))}
+              disabled={form.loading}
+            >
+              <option value={2}>Prefer not to say</option>
+              <option value={0}>Male</option>
+              <option value={1}>Female</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="initialPersonBirthdate">Birthday</label>
+            <input
+              type="date"
+              id="initialPersonBirthdate"
+              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonBirthdate"))}
+              required
+              disabled={form.loading}
+            />
+          </div>
+        </fieldset>
 
         <div className="form-group">
           <label htmlFor="familyCode">Family Code (Optional)</label>

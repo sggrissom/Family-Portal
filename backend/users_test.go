@@ -153,6 +153,54 @@ func TestUserCreation(t *testing.T) {
 	})
 }
 
+func TestCreateAccountInitialPersonRequest(t *testing.T) {
+	testDBPath := "test_initial_person.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	req := CreateAccountRequest{
+		Name:                   "Alex Adult",
+		Email:                  "alex@example.com",
+		Password:               "password123",
+		ConfirmPassword:        "password123",
+		InitialPersonGender:    int(Unknown),
+		InitialPersonBirthdate: "1988-04-12",
+	}
+
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			t.Fatalf("Failed to hash password: %v", err)
+		}
+		user := AddUserTx(tx, req, hash)
+		person, err := AddInitialPersonForAccountTx(tx, req, user.FamilyId)
+		if err != nil {
+			t.Fatalf("Failed to add initial person: %v", err)
+		}
+		if person.FamilyId != user.FamilyId {
+			t.Fatalf("Initial person family = %d, want %d", person.FamilyId, user.FamilyId)
+		}
+		if person.Type != Parent {
+			t.Fatalf("Initial person type = %d, want parent", person.Type)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		userId := GetUserId(tx, req.Email)
+		user := GetUser(tx, userId)
+		people := GetFamilyPeople(tx, user.FamilyId)
+		if len(people) != 1 {
+			t.Fatalf("Family people count = %d, want 1", len(people))
+		}
+		if people[0].Name != req.Name {
+			t.Fatalf("Initial person name = %q, want %q", people[0].Name, req.Name)
+		}
+	})
+}
+
 func TestFamilyManagement(t *testing.T) {
 	testDBPath := "test_families.db"
 	db := vbolt.Open(testDBPath)

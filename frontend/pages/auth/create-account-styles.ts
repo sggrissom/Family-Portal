@@ -116,3 +116,31 @@ block(`
   }
 }
 `);
+
+block(`
+.form-section {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+`);
+
+block(`
+.form-section legend {
+  color: var(--text);
+  font-weight: 700;
+  padding: 0 8px;
+}
+`);
+
+block(`
+.section-hint {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+}
+`);
