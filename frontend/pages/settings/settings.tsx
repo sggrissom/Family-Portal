@@ -45,40 +45,48 @@ type MergeForm = {
   } | null;
 };
 
-const useJoinFamilyForm = vlens.declareHook((): JoinFamilyForm => ({
-  inviteCode: "",
-  error: "",
-  loading: false,
-  success: false,
-}));
+const useJoinFamilyForm = vlens.declareHook(
+  (): JoinFamilyForm => ({
+    inviteCode: "",
+    error: "",
+    loading: false,
+    success: false,
+  })
+);
 
-const useExportForm = vlens.declareHook((): ExportForm => ({
-  loading: false,
-  error: "",
-  success: false,
-  exportMode: "data_only",
-  familyId: 0,
-}));
+const useExportForm = vlens.declareHook(
+  (): ExportForm => ({
+    loading: false,
+    error: "",
+    success: false,
+    exportMode: "data_only",
+    familyId: 0,
+  })
+);
 
-const useMergeForm = vlens.declareHook((): MergeForm => ({
-  sourcePersonId: 0,
-  targetPersonId: 0,
-  loading: false,
-  error: "",
-  success: false,
-  showConfirmation: false,
-  previewData: null,
-}));
+const useMergeForm = vlens.declareHook(
+  (): MergeForm => ({
+    sourcePersonId: 0,
+    targetPersonId: 0,
+    loading: false,
+    error: "",
+    success: false,
+    showConfirmation: false,
+    previewData: null,
+  })
+);
 
 type AppearanceSettings = {
   theme: "light" | "dark";
 };
 
-const useAppearanceSettings = vlens.declareHook((): AppearanceSettings => ({
-  theme:
-    (localStorage.getItem("theme") as AppearanceSettings["theme"] | null) ??
-    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
-}));
+const useAppearanceSettings = vlens.declareHook(
+  (): AppearanceSettings => ({
+    theme:
+      (localStorage.getItem("theme") as AppearanceSettings["theme"] | null) ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+  })
+);
 
 function setTheme(settings: AppearanceSettings, theme: AppearanceSettings["theme"]) {
   const html = document.documentElement;

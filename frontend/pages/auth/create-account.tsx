@@ -19,15 +19,17 @@ type CreateAccountForm = {
 
 type Data = {};
 
-const useCreateAccountForm = vlens.declareHook((): CreateAccountForm => ({
-  name: "",
-  email: "",
-  password: "",
-  confirmPassword: "",
-  familyCode: "",
-  error: "",
-  loading: false,
-}));
+const useCreateAccountForm = vlens.declareHook(
+  (): CreateAccountForm => ({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    familyCode: "",
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return vlens.rpcOk({});

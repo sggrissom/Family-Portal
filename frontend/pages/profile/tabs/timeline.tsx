@@ -17,9 +17,11 @@ type TimelineState = {
   selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
 };
 
-const useTimelineState = vlens.declareHook((): TimelineState => ({
-  selectedAgeFilter: "all",
-}));
+const useTimelineState = vlens.declareHook(
+  (): TimelineState => ({
+    selectedAgeFilter: "all",
+  })
+);
 
 const setAgeFilter = (state: TimelineState, filter: string) => {
   state.selectedAgeFilter = filter;

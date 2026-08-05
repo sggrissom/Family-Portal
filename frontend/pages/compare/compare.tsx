@@ -25,15 +25,17 @@ type CompareState = {
   };
 };
 
-const useCompareState = vlens.declareHook((): CompareState => ({
-  selectedPersonIds: new Set(),
-  selectedAgeFilter: "all",
-  visibleTypes: {
-    milestones: true,
-    measurements: true,
-    photos: true,
-  },
-}));
+const useCompareState = vlens.declareHook(
+  (): CompareState => ({
+    selectedPersonIds: new Set(),
+    selectedAgeFilter: "all",
+    visibleTypes: {
+      milestones: true,
+      measurements: true,
+      photos: true,
+    },
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   // Fetch list of all people for selection
@@ -102,11 +104,13 @@ type ComparisonLoadState = {
   error: string | null;
 };
 
-const useComparisonLoad = vlens.declareHook((): ComparisonLoadState => ({
-  data: null,
-  loading: false,
-  error: null,
-}));
+const useComparisonLoad = vlens.declareHook(
+  (): ComparisonLoadState => ({
+    data: null,
+    loading: false,
+    error: null,
+  })
+);
 
 const loadComparison = async (state: CompareState, loadState: ComparisonLoadState) => {
   if (state.selectedPersonIds.size === 0) {

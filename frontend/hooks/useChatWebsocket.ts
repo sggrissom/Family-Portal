@@ -15,7 +15,12 @@ export const WS_MSG_TYPES = {
 
 // Connection states
 export type ConnectionState =
-  "disconnected" | "connecting" | "connected" | "reconnecting" | "error" | "failed";
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "error"
+  | "failed";
 
 // WebSocket message structure
 export interface WSMessage {
@@ -89,26 +94,28 @@ export interface WebSocketState {
 }
 
 // Create the hook
-export const useChatWebsocket = vlens.declareHook((): WebSocketState => ({
-  socket: null,
-  connectionState: "disconnected",
-  reconnectAttempts: 0,
-  maxReconnectAttempts: 10,
-  reconnectDelay: 1000, // Start with 1 second
-  maxReconnectDelay: 30000, // Max 30 seconds
-  messageQueue: [],
-  lastHeartbeat: 0,
-  heartbeatInterval: null,
-  isDestroyed: false,
-  eventHandlers: {},
-  supportsFallback: true,
-  autoReconnect: true,
-  authToken: null,
-  reconnectTimeout: null,
-  lastActivityTime: 0,
-  watchdogInterval: null,
-  watchdogTimeout: 90000, // 90 seconds
-}));
+export const useChatWebsocket = vlens.declareHook(
+  (): WebSocketState => ({
+    socket: null,
+    connectionState: "disconnected",
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 10,
+    reconnectDelay: 1000, // Start with 1 second
+    maxReconnectDelay: 30000, // Max 30 seconds
+    messageQueue: [],
+    lastHeartbeat: 0,
+    heartbeatInterval: null,
+    isDestroyed: false,
+    eventHandlers: {},
+    supportsFallback: true,
+    autoReconnect: true,
+    authToken: null,
+    reconnectTimeout: null,
+    lastActivityTime: 0,
+    watchdogInterval: null,
+    watchdogTimeout: 90000, // 90 seconds
+  })
+);
 
 // Connect to WebSocket
 export function connectWebSocket(

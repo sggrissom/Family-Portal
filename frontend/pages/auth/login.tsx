@@ -18,13 +18,15 @@ type LoginForm = {
   loading: boolean;
 };
 
-const useLoginForm = vlens.declareHook((): LoginForm => ({
-  email: "",
-  password: "",
-  remember: false,
-  error: "",
-  loading: false,
-}));
+const useLoginForm = vlens.declareHook(
+  (): LoginForm => ({
+    email: "",
+    password: "",
+    remember: false,
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureNoAuthInFetch())) {

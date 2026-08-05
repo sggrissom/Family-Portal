@@ -32,18 +32,20 @@ type ManageTagsState = {
   saving: boolean;
 };
 
-const useManageTagsState = vlens.declareHook((): ManageTagsState => ({
-  initialized: false,
-  tags: [],
-  newName: "",
-  newColor: "#6366f1",
-  editingId: null,
-  editName: "",
-  editColor: "",
-  newFamilyId: 0,
-  error: "",
-  saving: false,
-}));
+const useManageTagsState = vlens.declareHook(
+  (): ManageTagsState => ({
+    initialized: false,
+    tags: [],
+    newName: "",
+    newColor: "#6366f1",
+    editingId: null,
+    editName: "",
+    editColor: "",
+    newFamilyId: 0,
+    error: "",
+    saving: false,
+  })
+);
 
 export function view(
   route: string,

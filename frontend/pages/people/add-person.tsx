@@ -23,17 +23,19 @@ type AddPersonForm = {
   success: boolean;
 };
 
-const useAddPersonForm = vlens.declareHook((): AddPersonForm => ({
-  name: "",
-  personType: 0,
-  gender: 0,
-  birthdate: "",
-  isPregnancy: false,
-  familyId: 0,
-  error: "",
-  loading: false,
-  success: false,
-}));
+const useAddPersonForm = vlens.declareHook(
+  (): AddPersonForm => ({
+    name: "",
+    personType: 0,
+    gender: 0,
+    birthdate: "",
+    isPregnancy: false,
+    familyId: 0,
+    error: "",
+    loading: false,
+    success: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});

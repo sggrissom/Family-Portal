@@ -20,17 +20,19 @@ type PhotoManagementState = {
   lastReanalysisTime: string | null;
 };
 
-const usePhotoManagementState = vlens.declareHook((): PhotoManagementState => ({
-  isReprocessing: false,
-  reprocessProgress: 0,
-  reprocessTotal: 0,
-  reprocessErrors: [],
-  lastReprocessTime: null,
-  processingStats: null,
-  analysisStats: null,
-  isReanalyzing: false,
-  lastReanalysisTime: null,
-}));
+const usePhotoManagementState = vlens.declareHook(
+  (): PhotoManagementState => ({
+    isReprocessing: false,
+    reprocessProgress: 0,
+    reprocessTotal: 0,
+    reprocessErrors: [],
+    lastReprocessTime: null,
+    processingStats: null,
+    analysisStats: null,
+    isReanalyzing: false,
+    lastReanalysisTime: null,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {

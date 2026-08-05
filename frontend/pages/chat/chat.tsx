@@ -26,10 +26,12 @@ type MessageForm = {
   sending: boolean;
 };
 
-const useMessageForm = vlens.declareHook((): MessageForm => ({
-  message: "",
-  sending: false,
-}));
+const useMessageForm = vlens.declareHook(
+  (): MessageForm => ({
+    message: "",
+    sending: false,
+  })
+);
 
 const useChatState = vlens.declareHook(
   (): {

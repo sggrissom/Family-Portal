@@ -18,15 +18,17 @@ type EditPersonForm = {
   loading: boolean;
 };
 
-const useEditPersonForm = vlens.declareHook((): EditPersonForm => ({
-  name: "",
-  personType: 0,
-  gender: 0,
-  birthdate: "",
-  isPregnancy: false,
-  error: "",
-  loading: false,
-}));
+const useEditPersonForm = vlens.declareHook(
+  (): EditPersonForm => ({
+    name: "",
+    personType: 0,
+    gender: 0,
+    birthdate: "",
+    isPregnancy: false,
+    error: "",
+    loading: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   const personId = getIdFromRoute(route) || 0;

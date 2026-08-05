@@ -13,11 +13,13 @@ type FamilyChartState = {
   showWeight: boolean;
 };
 
-const useFamilyChartState = vlens.declareHook((): FamilyChartState => ({
-  selectedPersonIds: new Set(),
-  showHeight: true,
-  showWeight: true,
-}));
+const useFamilyChartState = vlens.declareHook(
+  (): FamilyChartState => ({
+    selectedPersonIds: new Set(),
+    showHeight: true,
+    showWeight: true,
+  })
+);
 
 type ChartDataLoadState = {
   data: server.ComparePeopleResponse | null;
@@ -25,11 +27,13 @@ type ChartDataLoadState = {
   error: string | null;
 };
 
-const useChartDataLoad = vlens.declareHook((): ChartDataLoadState => ({
-  data: null,
-  loading: false,
-  error: null,
-}));
+const useChartDataLoad = vlens.declareHook(
+  (): ChartDataLoadState => ({
+    data: null,
+    loading: false,
+    error: null,
+  })
+);
 
 // Color palette for different people (works in both light and dark themes)
 // Optimized for maximum visual distinction

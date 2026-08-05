@@ -27,21 +27,23 @@ type AddPhotoForm = {
   dragActive: boolean;
 };
 
-const useAddPhotoForm = vlens.declareHook((personId?: string): AddPhotoForm => ({
-  selectedPersonIds: personId ? [personId] : [],
-  title: "",
-  description: "",
-  inputType: "auto",
-  photoDate: "",
-  ageYears: "",
-  ageMonths: "",
-  tagIds: [],
-  selectedFile: null,
-  previewUrl: "",
-  error: "",
-  loading: false,
-  dragActive: false,
-}));
+const useAddPhotoForm = vlens.declareHook(
+  (personId?: string): AddPhotoForm => ({
+    selectedPersonIds: personId ? [personId] : [],
+    title: "",
+    description: "",
+    inputType: "auto",
+    photoDate: "",
+    ageYears: "",
+    ageMonths: "",
+    tagIds: [],
+    selectedFile: null,
+    previewUrl: "",
+    error: "",
+    loading: false,
+    dragActive: false,
+  })
+);
 
 type AddPhotoData = {
   people: server.ListPeopleResponse;

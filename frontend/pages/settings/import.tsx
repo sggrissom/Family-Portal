@@ -36,29 +36,31 @@ type ImportForm = {
   aiProcessing: boolean;
 };
 
-const useImportForm = vlens.declareHook((): ImportForm => ({
-  jsonData: "",
-  file: null,
-  isZip: false,
-  error: "",
-  loading: false,
-  success: false,
-  result: null,
-  previewData: null,
-  showFilters: false,
-  selectedFamilyIds: [],
-  selectedPersonIds: [],
-  mergeStrategy: "create_all",
-  importMilestones: true,
-  dryRun: false,
-  targetFamilyId: 0,
-  // AI Import fields
-  activeTab: "json",
-  selectedPersonId: null,
-  peopleList: [],
-  unstructuredText: "",
-  aiProcessing: false,
-}));
+const useImportForm = vlens.declareHook(
+  (): ImportForm => ({
+    jsonData: "",
+    file: null,
+    isZip: false,
+    error: "",
+    loading: false,
+    success: false,
+    result: null,
+    previewData: null,
+    showFilters: false,
+    selectedFamilyIds: [],
+    selectedPersonIds: [],
+    mergeStrategy: "create_all",
+    importMilestones: true,
+    dryRun: false,
+    targetFamilyId: 0,
+    // AI Import fields
+    activeTab: "json",
+    selectedPersonId: null,
+    peopleList: [],
+    unstructuredText: "",
+    aiProcessing: false,
+  })
+);
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
