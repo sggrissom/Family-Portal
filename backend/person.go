@@ -193,8 +193,10 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 // Buckets for vbolt database storage
 var PeopleBkt = vbolt.Bucket(&cfg.Info, "people", vpack.FInt, PackPerson)
 
-// PersonIndex: term = person_id, target = family_id
-// This allows efficient lookup of people by family
+// PersonIndex: term = family_id, target = person_id
+// This is the *home* family of each person, and remains the anchor for leaf
+// record provenance. Rosters are read from PersonFamilyByFamilyIndex instead —
+// a person can appear on families beyond the one that owns them.
 var PersonIndex = vbolt.Index(&cfg.Info, "person_by_family", vpack.FInt, vpack.FInt)
 
 // Database helper functions
@@ -203,23 +205,37 @@ func GetPersonById(tx *vbolt.Tx, personId int) (person Person) {
 	return
 }
 
+// GetFamilyPeople returns the family's roster. Each person carries the Type they
+// hold *in this family*, taken from their PersonFamily row rather than from the
+// person record, since the same person is a Parent at home and a Child on their
+// parents' roster.
 func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
-	var personIds []int
-	vbolt.ReadTermTargets(tx, PersonIndex, familyId, &personIds, vbolt.Window{})
-	vbolt.ReadSlice(tx, PeopleBkt, personIds, &people)
-
-	// Calculate age for each person
-	for i := range people {
-		people[i].Age = calculatePersonAge(people[i].Birthday, people[i].IsPregnancy)
+	for _, row := range GetFamilyRoster(tx, familyId) {
+		var person Person
+		if !vbolt.Read(tx, PeopleBkt, row.PersonId, &person) {
+			continue
+		}
+		person.Type = row.Role
+		person.Age = calculatePersonAge(person.Birthday, person.IsPregnancy)
+		people = append(people, person)
 	}
 	return
-
 }
 
-// GetVisiblePeople returns the roster of every family user can read.
+// GetVisiblePeople returns the roster of every family user can read, with each
+// person appearing once. A shared person is on more than one of those rosters,
+// so the first hit wins: familiesVisibleTo puts the primary family first, which
+// makes the role in the user's own household the one they see.
 func GetVisiblePeople(tx *vbolt.Tx, user User) (people []Person) {
+	seen := make(map[int]bool)
 	for _, familyId := range familiesVisibleTo(tx, user) {
-		people = append(people, GetFamilyPeople(tx, familyId)...)
+		for _, person := range GetFamilyPeople(tx, familyId) {
+			if seen[person.Id] {
+				continue
+			}
+			seen[person.Id] = true
+			people = append(people, person)
+		}
 	}
 	return
 }
@@ -250,8 +266,11 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 	return person, nil
 }
 
+// updatePersonIndex keeps both halves of a person's home family in sync: the
+// home-family index, and the roster row that puts them on that family's roster.
 func updatePersonIndex(tx *vbolt.Tx, person Person) {
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, person.FamilyId)
+	EnsurePersonFamilyTx(tx, person.Id, person.FamilyId, person.Type)
 }
 
 func calculateAgeAt(birthdate, referenceDate time.Time) string {
@@ -411,6 +430,9 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+	// The edit form is scoped to the person's own household, so it sets the role
+	// on the home roster only. Roles on extended rosters are untouched.
+	SetPersonFamilyRoleTx(ctx.Tx, person.Id, person.FamilyId, person.Type)
 
 	resp.Person = person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
@@ -654,6 +676,16 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 		return
 	}
 
+	// A cross-home-family merge would have to decide what happens to the
+	// FamilyId on every leaf record it rewrites, which is the provenance of a
+	// family that is losing the person. Refuse it until family links (Stage 5)
+	// define what that means. Membership alone made this reachable: a user in
+	// two families now holds admin in both.
+	if sourcePerson.FamilyId != targetPerson.FamilyId {
+		err = errors.New("Cannot merge people from different families")
+		return
+	}
+
 	// Merge growth data
 	growthData := GetPersonGrowthDataTx(ctx.Tx, req.SourcePersonId)
 	for _, gd := range growthData {
@@ -702,7 +734,16 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	}
 	resp.MergedPhotos = mergedPhotoCount
 
+	// Union the rosters before the source disappears: any extended family that
+	// could see the source must still see the surviving record. The target's
+	// existing role wins where both are on the same roster, since
+	// EnsurePersonFamilyTx never overwrites one.
+	for _, row := range GetPersonFamilies(ctx.Tx, req.SourcePersonId) {
+		EnsurePersonFamilyTx(ctx.Tx, req.TargetPersonId, row.FamilyId, row.Role)
+	}
+
 	// Delete source person
+	deletePersonRostersTx(ctx.Tx, req.SourcePersonId)
 	vbolt.Delete(ctx.Tx, PeopleBkt, req.SourcePersonId)
 	vbolt.SetTargetSingleTerm(ctx.Tx, PersonIndex, req.SourcePersonId, -1)
 

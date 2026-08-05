@@ -98,6 +98,17 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: one PersonFamily roster row per person, mirroring
+	// Person.FamilyId and Person.Type. Stage 4 of the multi-family plan
+	// (docs/multi-family-plan.md) — this table is what GetFamilyPeople reads,
+	// so it must be populated before rosters resolve.
+	vbolt.ApplyDBProcess(dbConnection, "2026-0804-backfill-person-family", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillPersonFamilies(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 
