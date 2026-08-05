@@ -302,16 +302,33 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		})
 	}
 
-	// Family size distribution
+	// Family size distribution. Size means membership, not the primary family:
+	// User.FamilyId is only a user's *default* family, so a household whose
+	// members all joined it as a secondary family would measure as empty and be
+	// dropped by the size > 0 filter below. A user in two families counts toward
+	// both, which is what "how big is this household" means — this is a
+	// distribution over families, not a partition of users.
+	familyMembers := make(map[int]map[int]bool)
+	countMember := func(familyId int, userId int) {
+		if familyId == 0 || userId == 0 {
+			return
+		}
+		if familyMembers[familyId] == nil {
+			familyMembers[familyId] = make(map[int]bool)
+		}
+		familyMembers[familyId][userId] = true
+	}
+	for _, user := range users {
+		countMember(user.FamilyId, user.Id)
+	}
+	vbolt.IterateAll(ctx.Tx, FamilyMembershipBkt, func(key int, membership FamilyMembership) bool {
+		countMember(membership.FamilyId, membership.UserId)
+		return true
+	})
+
 	familySizes := make(map[int]int) // family size -> count
 	for _, family := range families {
-		size := 0
-		for _, user := range users {
-			if user.FamilyId == family.Id {
-				size++
-			}
-		}
-		familySizes[size]++
+		familySizes[len(familyMembers[family.Id])]++
 	}
 
 	for size, count := range familySizes {
@@ -357,7 +374,10 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		}
 	}
 
-	// Top active families (by content creation)
+	// Top active families (by content creation). Deliberately provenance: a leaf
+	// record's FamilyId is the family that created it, which is exactly what
+	// "active" should measure. A family that can only *see* a shared person's
+	// photos through a link did not make them and should not score for them.
 	familyActivityMap := make(map[int]*FamilyActivity)
 	for _, family := range families {
 		familyActivityMap[family.Id] = &FamilyActivity{
@@ -477,12 +497,44 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		return true
 	})
 
+	// Children per family, counted on the *home* roster — a person's home family
+	// is Person.FamilyId, and a person shared onto another family's roster is
+	// already counted there. Counting the full PersonFamily roster instead would
+	// count a shared child once per household it appears on, and break the
+	// system-wide averages below, which divide global totals by this sum.
+	//
+	// This is consistent with the provenance counts of photos and milestones
+	// below: a link tops out at MaxLinkAccess (AccessView), so a family that
+	// only hosts a shared person can never create content for them. The two
+	// numbers are both about what a family owns.
+	//
+	// One pass over PeopleBkt rather than a full scan per family, which was
+	// O(families x people).
+	homeChildren := make(map[int]int)
+	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, person Person) bool {
+		if person.FamilyId == 0 {
+			return true
+		}
+		// Role comes from the home roster row. Person.Type is deprecated in
+		// favor of PersonFamily.Role, but is still written in step with it, so
+		// it is the fallback for anyone predating the roster table.
+		role := person.Type
+		if row, found := FindPersonFamily(ctx.Tx, person.Id, person.FamilyId); found {
+			role = row.Role
+		}
+		if role == Child {
+			homeChildren[person.FamilyId]++
+		}
+		return true
+	})
+
 	for _, family := range families {
 		stats := FamilyContentStats{
 			FamilyName: family.Name,
+			Children:   homeChildren[family.Id],
 		}
 
-		// Count photos and milestones for this family
+		// Count photos and milestones for this family, by provenance
 		for _, photo := range photos {
 			if photo.FamilyId == family.Id {
 				stats.Photos++
@@ -495,14 +547,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 			}
 		}
 
-		// Count children in this family
-		vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, person Person) bool {
-			if person.FamilyId == family.Id && person.Type == Child {
-				stats.Children++
-			}
-			return true
-		})
-
 		if stats.Children > 0 {
 			stats.PhotosPerChild = float64(stats.Photos) / float64(stats.Children)
 			stats.MilestonesPerChild = float64(stats.Milestones) / float64(stats.Children)
@@ -513,10 +557,16 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		}
 	}
 
-	// Calculate averages
+	// Calculate averages. The denominator is every child in the system, not the
+	// sum over ContentPerFamily: that slice drops families with no photos and no
+	// milestones, so using it divided a global photo count by a subset of the
+	// children and inflated both averages. (Pre-existing, independent of
+	// multi-family — a family with children and no content has always been
+	// dropped.) Because homeChildren counts home rosters, it is a true partition
+	// of people and stays comparable with the global photo and milestone counts.
 	totalChildren := 0
-	for _, stats := range resp.ContentPerFamily {
-		totalChildren += stats.Children
+	for _, count := range homeChildren {
+		totalChildren += count
 	}
 
 	if totalChildren > 0 {
