@@ -135,13 +135,15 @@ func GetGrowthDataByIdAndFamily(tx *vbolt.Tx, growthDataId int, familyId int) (G
 }
 
 // GetGrowthDataForUser looks a measurement up and checks it against every
-// family the user belongs to, rather than against a single active family.
+// family the user belongs to, rather than against a single active family, plus
+// the people shared into those families by a link carrying measurements — which
+// is off by default, since a measurement is medical data.
 func GetGrowthDataForUser(tx *vbolt.Tx, growthDataId int, user User, need AccessLevel) (GrowthData, error) {
 	growthData := GetGrowthDataById(tx, growthDataId)
 	if growthData.Id == 0 {
 		return growthData, errors.New("Growth data not found")
 	}
-	if !CanAccessFamily(tx, user, growthData.FamilyId, need) {
+	if !CanAccessRecordOfPerson(tx, user, growthData.FamilyId, growthData.PersonId, ScopeGrowth, need) {
 		return growthData, errors.New("Access denied: growth data belongs to another family")
 	}
 	return growthData, nil

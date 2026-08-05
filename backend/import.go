@@ -554,8 +554,10 @@ type PersonMatch struct {
 
 // Find existing person by matching attributes
 func findExistingPerson(tx *vbolt.Tx, importPerson ImportPerson, familyId int) *Person {
-	// Get all family people
-	familyPeople := GetFamilyPeople(tx, familyId)
+	// Match against the people this family owns. Matching a person shared in
+	// from elsewhere would attach the imported records to someone another
+	// family owns.
+	familyPeople := GetFamilyOwnPeople(tx, familyId)
 
 	for _, existing := range familyPeople {
 		// Exact match: same name, birthday, and gender
@@ -572,7 +574,7 @@ func findExistingPerson(tx *vbolt.Tx, importPerson ImportPerson, familyId int) *
 // Find potential matches with confidence scoring
 func findPotentialMatches(tx *vbolt.Tx, importPerson ImportPerson, familyId int) []PersonMatch {
 	var matches []PersonMatch
-	familyPeople := GetFamilyPeople(tx, familyId)
+	familyPeople := GetFamilyOwnPeople(tx, familyId)
 
 	for _, existing := range familyPeople {
 		confidence := calculateMatchConfidence(importPerson, existing)

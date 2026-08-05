@@ -6,6 +6,11 @@ export const AccessView: AccessLevel = 1;
 export const AccessContribute: AccessLevel = 2;
 export const AccessAdmin: AccessLevel = 3;
 
+export type LinkStatus = number;
+export const LinkPending: LinkStatus = 0;
+export const LinkAccepted: LinkStatus = 1;
+export const LinkRevoked: LinkStatus = 2;
+
 export type PersonType = number;
 export const Parent: PersonType = 0;
 export const Child: PersonType = 1;
@@ -24,6 +29,10 @@ export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
 
 export interface CreateAccountRequest {
     name: string
@@ -67,6 +76,73 @@ export interface JoinFamilyResponse {
     success: boolean
     error: string
     auth: AuthResponse
+}
+
+export interface ListFamilyLinksRequest {
+    familyId: number
+}
+
+export interface ListFamilyLinksResponse {
+    links: FamilyLinkView[]
+}
+
+export interface CreateFamilyLinkRequest {
+    familyId: number
+    inviteCode: string
+    kind: string
+    scopes: LinkScopes
+}
+
+export interface CreateFamilyLinkResponse {
+    success: boolean
+    error: string
+    link: FamilyLinkView
+}
+
+export interface FamilyLinkIdRequest {
+    id: number
+}
+
+export interface FamilyLinkActionResponse {
+    success: boolean
+    error: string
+    link: FamilyLinkView
+}
+
+export interface UpdateFamilyLinkRequest {
+    id: number
+    kind: string
+    scopes: LinkScopes
+}
+
+export interface GetPersonSharingRequest {
+    personId: number
+}
+
+export interface GetPersonSharingResponse {
+    personId: number
+    homeFamilyId: number
+    sharedWith: SharedRosterRef[]
+    canShare: ShareTargetRef[]
+    manageable: boolean
+}
+
+export interface SharePersonRequest {
+    personId: number
+    familyId: number
+    role: number
+    relationship: string
+}
+
+export interface PersonSharingActionResponse {
+    success: boolean
+    error: string
+    sharing: GetPersonSharingResponse
+}
+
+export interface UnsharePersonRequest {
+    personId: number
+    familyId: number
 }
 
 export interface AddPersonRequest {
@@ -629,6 +705,41 @@ export interface FamilyInfo {
     isPrimary: boolean
 }
 
+export interface FamilyLinkView {
+    id: number
+    fromFamilyId: number
+    fromFamilyName: string
+    toFamilyId: number
+    toFamilyName: string
+    kind: string
+    access: AccessLevel
+    scopes: LinkScopes
+    status: LinkStatus
+    createdAt: string
+    outgoing: boolean
+    sharedCount: number
+}
+
+export interface LinkScopes {
+    people: boolean
+    milestones: boolean
+    photos: boolean
+    growth: boolean
+}
+
+export interface SharedRosterRef {
+    familyId: number
+    familyName: string
+    role: PersonType
+    relationship: string
+}
+
+export interface ShareTargetRef {
+    familyId: number
+    familyName: string
+    kind: string
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -887,6 +998,38 @@ export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInf
 
 export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
     return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
+}
+
+export async function ListFamilyLinks(data: ListFamilyLinksRequest): Promise<rpc.Response<ListFamilyLinksResponse>> {
+    return await rpc.call<ListFamilyLinksResponse>('ListFamilyLinks', JSON.stringify(data));
+}
+
+export async function CreateFamilyLink(data: CreateFamilyLinkRequest): Promise<rpc.Response<CreateFamilyLinkResponse>> {
+    return await rpc.call<CreateFamilyLinkResponse>('CreateFamilyLink', JSON.stringify(data));
+}
+
+export async function AcceptFamilyLink(data: FamilyLinkIdRequest): Promise<rpc.Response<FamilyLinkActionResponse>> {
+    return await rpc.call<FamilyLinkActionResponse>('AcceptFamilyLink', JSON.stringify(data));
+}
+
+export async function UpdateFamilyLink(data: UpdateFamilyLinkRequest): Promise<rpc.Response<FamilyLinkActionResponse>> {
+    return await rpc.call<FamilyLinkActionResponse>('UpdateFamilyLink', JSON.stringify(data));
+}
+
+export async function RevokeFamilyLink(data: FamilyLinkIdRequest): Promise<rpc.Response<FamilyLinkActionResponse>> {
+    return await rpc.call<FamilyLinkActionResponse>('RevokeFamilyLink', JSON.stringify(data));
+}
+
+export async function GetPersonSharing(data: GetPersonSharingRequest): Promise<rpc.Response<GetPersonSharingResponse>> {
+    return await rpc.call<GetPersonSharingResponse>('GetPersonSharing', JSON.stringify(data));
+}
+
+export async function SharePersonWithFamily(data: SharePersonRequest): Promise<rpc.Response<PersonSharingActionResponse>> {
+    return await rpc.call<PersonSharingActionResponse>('SharePersonWithFamily', JSON.stringify(data));
+}
+
+export async function UnsharePersonFromFamily(data: UnsharePersonRequest): Promise<rpc.Response<PersonSharingActionResponse>> {
+    return await rpc.call<PersonSharingActionResponse>('UnsharePersonFromFamily', JSON.stringify(data));
 }
 
 export async function AddPerson(data: AddPersonRequest): Promise<rpc.Response<GetPersonResponse>> {

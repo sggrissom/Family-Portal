@@ -267,8 +267,10 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
 	}
 
-	// Get all family people
-	people := GetFamilyPeople(tx, familyId)
+	// The people this family owns, not its whole roster: a person shared in
+	// from another household belongs in their own family's bundle, and would
+	// come back from this one as a duplicate homed in the wrong place.
+	people := GetFamilyOwnPeople(tx, familyId)
 
 	// Convert people to export format
 	exportData.People = make([]ImportPerson, len(people))

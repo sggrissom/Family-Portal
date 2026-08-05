@@ -222,6 +222,26 @@ func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
 	return
 }
 
+// GetFamilyOwnPeople returns the people this family *owns* — the ones homed
+// here — rather than the ones on its roster.
+//
+// The two differed only in theory until family links let a household host
+// someone else's child. Anything that treats a person as this family's
+// wants this list: export, which would otherwise put a shared person in a bundle
+// that re-creates them as a separate record on the way back in; import matching,
+// which would otherwise hang the importing family's records off a person another
+// family owns; and face tagging, which would otherwise write a photo-person join
+// across a family boundary that manual tagging refuses.
+func GetFamilyOwnPeople(tx *vbolt.Tx, familyId int) (people []Person) {
+	var personIds []int
+	vbolt.ReadTermTargets(tx, PersonIndex, familyId, &personIds, vbolt.Window{})
+	vbolt.ReadSlice(tx, PeopleBkt, personIds, &people)
+	for i := range people {
+		people[i].Age = calculatePersonAge(people[i].Birthday, people[i].IsPregnancy)
+	}
+	return
+}
+
 // GetVisiblePeople returns the roster of every family user can read, with each
 // person appearing once. A shared person is on more than one of those rosters,
 // so the first hit wins: familiesVisibleTo puts the primary family first, which
@@ -469,8 +489,10 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	// Get person data
 	resp.Person = GetPersonById(ctx.Tx, req.Id)
 
-	// Validate person belongs to user's family
-	if resp.Person.Id == 0 || !CanAccessFamily(ctx.Tx, user, resp.Person.FamilyId, AccessView) {
+	// Validate person belongs to user's family, or has been shared into one of
+	// their families by a link.
+	if !CanAccessPerson(ctx.Tx, user, resp.Person, ScopePeople, AccessView) {
+		resp.Person = Person{}
 		err = errors.New("Person not found or not in your family")
 		return
 	}
@@ -478,20 +500,27 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	// Calculate age
 	resp.Person.Age = calculatePersonAge(resp.Person.Birthday, resp.Person.IsPregnancy)
 
-	// Get growth data for person
-	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
-
-	// Get milestones for person
-	resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
-	for i := range resp.Milestones {
-		resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
-		resp.Milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Milestones[i].Id)
+	// Each section is gated on its own scope. Someone in the person's family
+	// clears all of them; someone seeing a shared person gets only the kinds of
+	// record their link carries, which is what makes "milestones yes,
+	// measurements no" expressible.
+	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopeGrowth, AccessView) {
+		resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
 	}
 
-	// Get photos for person
-	resp.Photos = GetPersonImages(ctx.Tx, req.Id)
-	for i := range resp.Photos {
-		resp.Photos[i].TagIds = GetPhotoTagIds(ctx.Tx, resp.Photos[i].Id)
+	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopeMilestones, AccessView) {
+		resp.Milestones = GetPersonMilestonesTx(ctx.Tx, req.Id)
+		for i := range resp.Milestones {
+			resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
+			resp.Milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Milestones[i].Id)
+		}
+	}
+
+	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopePhotos, AccessView) {
+		resp.Photos = GetPersonImages(ctx.Tx, req.Id)
+		for i := range resp.Photos {
+			resp.Photos[i].TagIds = GetPhotoTagIds(ctx.Tx, resp.Photos[i].Id)
+		}
 	}
 
 	return
@@ -522,8 +551,9 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 		// Get person data
 		person := GetPersonById(ctx.Tx, personId)
 
-		// Validate person exists and belongs to user's family
-		if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessView) {
+		// Validate person exists and belongs to user's family, or was shared
+		// into one of their families by a link.
+		if !CanAccessPerson(ctx.Tx, user, person, ScopePeople, AccessView) {
 			err = fmt.Errorf("Person ID %d not found or not in your family", personId)
 			return
 		}
@@ -531,16 +561,21 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 		// Calculate age
 		person.Age = calculateAge(person.Birthday)
 
-		// Build comparison data
-		milestones := GetPersonMilestonesTx(ctx.Tx, personId)
-		for i := range milestones {
-			milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
+		// Build comparison data, each section gated on its own scope so a
+		// shared person contributes only what their link carries.
+		comparisonData := PersonComparisonData{Person: person}
+		if CanAccessPerson(ctx.Tx, user, person, ScopeGrowth, AccessView) {
+			comparisonData.GrowthData = GetPersonGrowthDataTx(ctx.Tx, personId)
 		}
-		comparisonData := PersonComparisonData{
-			Person:     person,
-			GrowthData: GetPersonGrowthDataTx(ctx.Tx, personId),
-			Milestones: milestones,
-			Photos:     GetPersonImages(ctx.Tx, personId),
+		if CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
+			milestones := GetPersonMilestonesTx(ctx.Tx, personId)
+			for i := range milestones {
+				milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
+			}
+			comparisonData.Milestones = milestones
+		}
+		if CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {
+			comparisonData.Photos = GetPersonImages(ctx.Tx, personId)
 		}
 
 		resp.People = append(resp.People, comparisonData)
@@ -678,9 +713,12 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 
 	// A cross-home-family merge would have to decide what happens to the
 	// FamilyId on every leaf record it rewrites, which is the provenance of a
-	// family that is losing the person. Refuse it until family links (Stage 5)
-	// define what that means. Membership alone made this reachable: a user in
-	// two families now holds admin in both.
+	// family that is losing the person. Stage 5 revisited this and the answer
+	// is still no, now for a concrete reason rather than a missing model: a
+	// link tops out at AccessView, so it cannot confer the admin rights a merge
+	// needs, and the duplicate a link actually produces — the same child on two
+	// rosters — is one Person record already, which is exactly what a merge
+	// would be for. There is nothing left to merge across a link.
 	if sourcePerson.FamilyId != targetPerson.FamilyId {
 		err = errors.New("Cannot merge people from different families")
 		return
@@ -782,20 +820,30 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	resp.People = make([]FamilyTimelineItem, 0, len(people))
 
 	for _, person := range people {
-		timelineMilestones := GetPersonMilestonesTx(ctx.Tx, person.Id)
-		for i := range timelineMilestones {
-			timelineMilestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, timelineMilestones[i].Id)
-			timelineMilestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, timelineMilestones[i].Id)
+		// A person on the roster is not automatically a person whose records
+		// the viewer may read: someone shared in by a link contributes only the
+		// kinds of record that link carries.
+		timelineItem := FamilyTimelineItem{Person: person}
+
+		if CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
+			timelineMilestones := GetPersonMilestonesTx(ctx.Tx, person.Id)
+			for i := range timelineMilestones {
+				timelineMilestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, timelineMilestones[i].Id)
+				timelineMilestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, timelineMilestones[i].Id)
+			}
+			timelineItem.Milestones = timelineMilestones
 		}
-		timelinePhotos := GetPersonImages(ctx.Tx, person.Id)
-		for i := range timelinePhotos {
-			timelinePhotos[i].TagIds = GetPhotoTagIds(ctx.Tx, timelinePhotos[i].Id)
+
+		if CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {
+			timelinePhotos := GetPersonImages(ctx.Tx, person.Id)
+			for i := range timelinePhotos {
+				timelinePhotos[i].TagIds = GetPhotoTagIds(ctx.Tx, timelinePhotos[i].Id)
+			}
+			timelineItem.Photos = timelinePhotos
 		}
-		timelineItem := FamilyTimelineItem{
-			Person:     person,
-			GrowthData: GetPersonGrowthDataTx(ctx.Tx, person.Id),
-			Milestones: timelineMilestones,
-			Photos:     timelinePhotos,
+
+		if CanAccessPerson(ctx.Tx, user, person, ScopeGrowth, AccessView) {
+			timelineItem.GrowthData = GetPersonGrowthDataTx(ctx.Tx, person.Id)
 		}
 
 		resp.People = append(resp.People, timelineItem)

@@ -5,11 +5,13 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logError } from "../../lib/logger";
 import { FamilySelect } from "../../components/FamilySelect";
+import { FamilyLinksSection } from "../../components/FamilyLinks";
 import "./settings-styles";
 
 type Data = {
   familyInfo: server.FamilyInfoResponse;
   people: server.Person[];
+  links: server.FamilyLinkView[];
 };
 
 type JoinFamilyForm = {
@@ -104,15 +106,18 @@ export async function fetch(route: string, prefix: string) {
     return vlens.rpcOk({
       familyInfo: { id: 0, name: "", inviteCode: "", families: [] },
       people: [],
+      links: [],
     });
   }
 
   const [familyInfo] = await server.GetFamilyInfo({});
   const [peopleResp] = await server.ListPeople({});
+  const [linksResp] = await server.ListFamilyLinks({ familyId: 0 });
 
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
     people: peopleResp?.people || [],
+    links: linksResp?.links || [],
   });
 }
 
@@ -460,6 +465,9 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             </div>
           </div>
         )}
+
+        {/* Connections to other households, distinct from membership above */}
+        {families.length > 0 && <FamilyLinksSection initialLinks={data.links} />}
 
         {/* Data Management - only show if user is in a family */}
         {data.familyInfo.id > 0 && (

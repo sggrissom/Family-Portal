@@ -296,10 +296,44 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	return
 }
 
-// GetVisibleImages returns the photos of every family user can read.
+// GetVisibleImages returns the photos of every family the user belongs to, plus
+// the photos of people shared into those families by a link carrying photos.
+// The shared half is per person rather than per family: a link opens up the
+// people it shares, not the sharing family's whole album.
 func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
-	for _, familyId := range familiesVisibleTo(tx, user) {
-		images = append(images, GetFamilyImages(tx, familyId)...)
+	seen := make(map[int]bool)
+	add := func(image Image) {
+		if image.Id == 0 || seen[image.Id] {
+			return
+		}
+		seen[image.Id] = true
+		images = append(images, image)
+	}
+
+	own := familiesVisibleTo(tx, user)
+	member := make(map[int]bool, len(own))
+	for _, familyId := range own {
+		member[familyId] = true
+	}
+	for _, familyId := range own {
+		for _, image := range GetFamilyImages(tx, familyId) {
+			add(image)
+		}
+	}
+
+	for _, familyId := range own {
+		for _, row := range GetFamilyRoster(tx, familyId) {
+			person := GetPersonById(tx, row.PersonId)
+			if person.Id == 0 || member[person.FamilyId] {
+				continue
+			}
+			if !canAccessPersonViaLink(tx, user, person, ScopePhotos, AccessView) {
+				continue
+			}
+			for _, image := range GetPersonImages(tx, person.Id) {
+				add(image)
+			}
+		}
 	}
 	return
 }
@@ -824,7 +858,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	var canAccess bool
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		image = GetImageById(tx, imageId)
-		canAccess = CanAccessFamily(tx, user, image.FamilyId, AccessView)
+		canAccess = CanAccessPhoto(tx, user, image, AccessView)
 	})
 
 	if image.Id == 0 || !canAccess {
@@ -1033,8 +1067,9 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 	// Get photo from database
 	photo := GetImageById(ctx.Tx, req.Id)
 
-	// Check if photo exists and user has access (same family)
-	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessView) {
+	// Check if photo exists and the user has access, either through the owning
+	// family or because someone tagged in it was shared into one of theirs.
+	if !CanAccessPhoto(ctx.Tx, user, photo, AccessView) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
@@ -1265,8 +1300,8 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 	// Get photo from database
 	photo := GetImageById(ctx.Tx, req.Id)
 
-	// Check if photo exists and user has access (same family)
-	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessView) {
+	// Check if photo exists and user has access
+	if !CanAccessPhoto(ctx.Tx, user, photo, AccessView) {
 		err = ErrAuthFailure
 		return
 	}
@@ -1298,7 +1333,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 			}
 
 			image := GetImageById(ctx.Tx, photoPerson.PhotoId)
-			if image.Id == 0 || !CanAccessFamily(ctx.Tx, user, image.FamilyId, AccessView) {
+			if !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
 				continue
 			}
 

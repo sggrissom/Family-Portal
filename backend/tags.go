@@ -85,11 +85,30 @@ func getTagsByFamily(tx *vbolt.Tx, familyId int) []Tag {
 	return tags
 }
 
-// getVisibleTags returns the tags of every family user can read.
+// getVisibleTags returns the tags of every family the user belongs to, plus the
+// tags of families that have shared people into one of them. A tag is a family's
+// own vocabulary, but it is also the label on shared milestones and photos: an
+// unresolvable tag id renders as nothing, so the tags come along with the
+// records that carry them.
 func getVisibleTags(tx *vbolt.Tx, user User) []Tag {
 	tags := []Tag{}
-	for _, familyId := range familiesVisibleTo(tx, user) {
+	seen := make(map[int]bool)
+	appendFamily := func(familyId int) {
+		if seen[familyId] {
+			return
+		}
+		seen[familyId] = true
 		tags = append(tags, getTagsByFamily(tx, familyId)...)
+	}
+
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		appendFamily(familyId)
+	}
+	for _, familyId := range sharedInFamilies(tx, user, ScopeMilestones) {
+		appendFamily(familyId)
+	}
+	for _, familyId := range sharedInFamilies(tx, user, ScopePhotos) {
+		appendFamily(familyId)
 	}
 	return tags
 }

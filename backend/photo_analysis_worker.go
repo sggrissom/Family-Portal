@@ -245,7 +245,10 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 	// Load family members with known face descriptors
 	var knownPersons []Person
 	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
-		all := GetFamilyPeople(tx, job.FamilyId)
+		// Own people only. Manual tagging already refuses to join a photo to a
+		// person from another family, and face recognition must not be the one
+		// path that does it silently.
+		all := GetFamilyOwnPeople(tx, job.FamilyId)
 		for _, p := range all {
 			if len(p.FaceDescriptor) == 128 {
 				knownPersons = append(knownPersons, p)

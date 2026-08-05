@@ -244,13 +244,16 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 }
 
 // GetMilestoneForUser looks a milestone up and checks it against every family
-// the user belongs to, rather than against a single active family.
+// the user belongs to, rather than against a single active family, plus the
+// people shared into those families by a link carrying milestones. Writes ask
+// for AccessContribute, which no link can satisfy, so the link path only ever
+// opens up reads.
 func GetMilestoneForUser(tx *vbolt.Tx, milestoneId int, user User, need AccessLevel) (Milestone, error) {
 	milestone := GetMilestoneById(tx, milestoneId)
 	if milestone.Id == 0 {
 		return milestone, errors.New("Milestone not found")
 	}
-	if !CanAccessFamily(tx, user, milestone.FamilyId, need) {
+	if !CanAccessRecordOfPerson(tx, user, milestone.FamilyId, milestone.PersonId, ScopeMilestones, need) {
 		return milestone, errors.New("Access denied: milestone belongs to another family")
 	}
 	return milestone, nil
@@ -262,10 +265,11 @@ func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) []M
 	})
 }
 
-// SearchVisibleMilestones searches across every family the user belongs to.
+// SearchVisibleMilestones searches across every family the user belongs to,
+// and the milestones of people shared into those families.
 func SearchVisibleMilestones(tx *vbolt.Tx, query string, user User, limit int) []Milestone {
 	return searchMilestonesTx(tx, query, limit, func(milestone Milestone) bool {
-		return CanAccessFamily(tx, user, milestone.FamilyId, AccessView)
+		return CanAccessRecordOfPerson(tx, user, milestone.FamilyId, milestone.PersonId, ScopeMilestones, AccessView)
 	})
 }
 
@@ -796,9 +800,10 @@ func GetPersonMilestones(ctx *vbeam.Context, req GetPersonMilestonesRequest) (re
 		return
 	}
 
-	// Validate that the person belongs to the user's family
+	// Validate that the person belongs to the user's family, or was shared into
+	// one of their families by a link that carries milestones.
 	person := GetPersonById(ctx.Tx, req.PersonId)
-	if person.Id == 0 || !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessView) {
+	if !CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
 		err = errors.New("Person not found or not in your family")
 		return
 	}

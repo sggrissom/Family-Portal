@@ -6,6 +6,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
+import { PersonSharingSection } from "../../components/PersonSharing";
 import "./add-person-styles";
 
 type EditPersonForm = {
@@ -82,7 +83,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-person-container">
-        <EditPersonPage form={form} personId={data.person.id} />
+        <EditPersonPage form={form} personId={data.person.id} personName={data.person.name} />
       </main>
       <Footer />
     </div>
@@ -133,9 +134,10 @@ function onBornNowClicked(form: EditPersonForm) {
 interface EditPersonPageProps {
   form: EditPersonForm;
   personId: number;
+  personName: string;
 }
 
-const EditPersonPage = ({ form, personId }: EditPersonPageProps) => (
+const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => (
   <div className="add-person-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -240,6 +242,10 @@ const EditPersonPage = ({ form, personId }: EditPersonPageProps) => (
           </a>
         </div>
       </form>
+
+      {/* Sharing lives outside the edit form: it saves on its own, and it is a
+          change to who can see this person rather than to their details. */}
+      <PersonSharingSection personId={personId} personName={personName} />
     </div>
   </div>
 );
