@@ -88,6 +88,16 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: one FamilyMembership row per user, mirroring User.FamilyId.
+	// Additive only — nothing reads memberships until Stage 3 of the
+	// multi-family plan (docs/multi-family-plan.md).
+	vbolt.ApplyDBProcess(dbConnection, "2026-0804-backfill-family-membership", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillFamilyMemberships(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 

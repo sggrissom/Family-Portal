@@ -77,7 +77,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Creation  time.Time `json:"creation"`
 	LastLogin time.Time `json:"lastLogin"`
-	FamilyId  int       `json:"familyId"`
+	FamilyId int `json:"familyId"`
 }
 
 type Family struct {
@@ -189,6 +189,8 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 	vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
 	// Index user by family
 	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, user.FamilyId)
+	// Record membership alongside the primary family. Nothing reads this yet.
+	EnsureMembershipTx(tx, user.Id, user.FamilyId, AccessAdmin)
 
 	return user
 }
@@ -337,6 +339,8 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 	vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
 	// Update family index
 	vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
+	// Joining still moves the user, so the membership row moves with it.
+	moveMembershipTx(ctx.Tx, user.Id, user.FamilyId, AccessAdmin)
 	vbolt.TxCommit(ctx.Tx)
 
 	// Return success response
