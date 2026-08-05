@@ -40,6 +40,9 @@ export interface CreateAccountRequest {
     password: string
     confirmPassword: string
     familyCode: string
+    initialPersonName: string
+    initialPersonGender: number
+    initialPersonBirthdate: string
 }
 
 export interface CreateAccountResponse {

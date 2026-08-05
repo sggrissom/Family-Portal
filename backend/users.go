@@ -20,11 +20,14 @@ func RegisterUserMethods(app *vbeam.Application) {
 
 // Request/Response types
 type CreateAccountRequest struct {
-	Name            string `json:"name"`
-	Email           string `json:"email"`
-	Password        string `json:"password"`
-	ConfirmPassword string `json:"confirmPassword"`
-	FamilyCode      string `json:"familyCode,omitempty"`
+	Name                   string `json:"name"`
+	Email                  string `json:"email"`
+	Password               string `json:"password"`
+	ConfirmPassword        string `json:"confirmPassword"`
+	FamilyCode             string `json:"familyCode,omitempty"`
+	InitialPersonName      string `json:"initialPersonName,omitempty"`
+	InitialPersonGender    int    `json:"initialPersonGender,omitempty"`
+	InitialPersonBirthdate string `json:"initialPersonBirthdate,omitempty"`
 }
 
 type LoginRequest struct {
@@ -255,6 +258,22 @@ func generateInviteCode() string {
 	return token[:8]
 }
 
+func initialPersonName(req CreateAccountRequest) string {
+	if req.InitialPersonName != "" {
+		return req.InitialPersonName
+	}
+	return req.Name
+}
+
+func AddInitialPersonForAccountTx(tx *vbolt.Tx, req CreateAccountRequest, familyId int) (Person, error) {
+	return AddPersonTx(tx, AddPersonRequest{
+		Name:       initialPersonName(req),
+		PersonType: int(Parent),
+		Gender:     req.InitialPersonGender,
+		Birthdate:  req.InitialPersonBirthdate,
+	}, familyId)
+}
+
 func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
 	resp := AuthResponse{
 		Id:       user.Id,
@@ -323,6 +342,14 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 	// Create user
 	vbeam.UseWriteTx(ctx)
 	user := AddUserTx(ctx.Tx, req, hash)
+	if req.InitialPersonBirthdate != "" {
+		_, personErr := AddInitialPersonForAccountTx(ctx.Tx, req, user.FamilyId)
+		if personErr != nil {
+			resp.Success = false
+			resp.Error = personErr.Error()
+			return
+		}
+	}
 	// Built before the commit so it sees the membership AddUserTx just wrote.
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
@@ -449,6 +476,16 @@ func validateCreateAccountRequest(req CreateAccountRequest) error {
 	}
 	if req.Email == "" {
 		return errors.New("Email is required")
+	}
+	if req.InitialPersonBirthdate != "" {
+		if err := validateAddPersonRequest(AddPersonRequest{
+			Name:       initialPersonName(req),
+			PersonType: int(Parent),
+			Gender:     req.InitialPersonGender,
+			Birthdate:  req.InitialPersonBirthdate,
+		}); err != nil {
+			return err
+		}
 	}
 
 	// Allow empty passwords for OAuth users
