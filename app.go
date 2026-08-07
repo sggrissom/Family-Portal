@@ -181,6 +181,7 @@ func MakeApplication() *vbeam.Application {
 
 	backend.SetupAuth(app)
 	backend.RegisterUserMethods(app)
+	backend.RegisterPasswordResetMethods(app)
 	backend.RegisterFamilyLinkMethods(app)
 	backend.RegisterPersonMethods(app)
 	backend.RegisterGrowthMethods(app)

@@ -42,6 +42,8 @@ async function main() {
     vlens.routeHandler("/profile/", () => import("@app/pages/profile/profile")),
     vlens.routeHandler("/create-account", () => import("@app/pages/auth/create-account")),
     vlens.routeHandler("/login", () => import("@app/pages/auth/login")),
+    vlens.routeHandler("/forgot-password", () => import("@app/pages/auth/forgot-password")),
+    vlens.routeHandler("/reset-password", () => import("@app/pages/auth/reset-password")),
     vlens.routeHandler("/dashboard", () => import("@app/pages/dashboard/dashboard")),
     vlens.routeHandler("/compare", () => import("@app/pages/compare/compare")),
     vlens.routeHandler(

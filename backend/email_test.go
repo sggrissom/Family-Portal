@@ -1,0 +1,95 @@
+package backend
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestResolveMailSettings(t *testing.T) {
+	t.Run("defaults to the Gmail submission host", func(t *testing.T) {
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "")
+		t.Setenv("MAIL_FROM", "")
+		t.Setenv("EMAIL", "portal@example.com")
+		t.Setenv("APP_PASSWORD", "app-password")
+
+		settings, err := resolveMailSettings()
+		if err != nil {
+			t.Fatalf("resolveMailSettings() error = %v", err)
+		}
+		if settings.addr() != "smtp.gmail.com:587" {
+			t.Errorf("addr() = %q, want smtp.gmail.com:587", settings.addr())
+		}
+		if settings.From != "portal@example.com" {
+			t.Errorf("From = %q, want the EMAIL value", settings.From)
+		}
+	})
+
+	t.Run("honours overrides", func(t *testing.T) {
+		t.Setenv("SMTP_HOST", "smtp.example.com")
+		t.Setenv("SMTP_PORT", "2525")
+		t.Setenv("MAIL_FROM", "noreply@example.com")
+		t.Setenv("EMAIL", "portal@example.com")
+		t.Setenv("APP_PASSWORD", "app-password")
+
+		settings, err := resolveMailSettings()
+		if err != nil {
+			t.Fatalf("resolveMailSettings() error = %v", err)
+		}
+		if settings.addr() != "smtp.example.com:2525" {
+			t.Errorf("addr() = %q", settings.addr())
+		}
+		if settings.From != "noreply@example.com" {
+			t.Errorf("From = %q, want the MAIL_FROM value", settings.From)
+		}
+	})
+
+	t.Run("reports missing credentials", func(t *testing.T) {
+		t.Setenv("EMAIL", "portal@example.com")
+		t.Setenv("APP_PASSWORD", "")
+
+		if _, err := resolveMailSettings(); !errors.Is(err, ErrMailNotConfigured) {
+			t.Errorf("error = %v, want ErrMailNotConfigured", err)
+		}
+	})
+}
+
+func TestSendMailRejectsHeaderInjection(t *testing.T) {
+	t.Setenv("EMAIL", "portal@example.com")
+	t.Setenv("APP_PASSWORD", "app-password")
+
+	tests := []struct {
+		name    string
+		to      string
+		subject string
+	}{
+		{"newline in recipient", "victim@example.com\nBcc: attacker@example.com", "Hello"},
+		{"newline in subject", "victim@example.com", "Hello\r\nBcc: attacker@example.com"},
+		{"malformed recipient", "not-an-address", "Hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A rejection happens before any network call, so this never
+			// contacts an SMTP server.
+			if err := SendMail(tt.to, tt.subject, "body"); err == nil {
+				t.Error("SendMail() accepted a message that could forge headers")
+			}
+		})
+	}
+}
+
+func TestBuildMessageUsesCRLF(t *testing.T) {
+	message := string(buildMessage("from@example.com", "to@example.com", "Subject line", "line one\nline two"))
+
+	if !strings.Contains(message, "From: from@example.com\r\n") {
+		t.Error("From header is missing or not CRLF terminated")
+	}
+	if !strings.Contains(message, "\r\n\r\nline one\r\nline two") {
+		t.Error("body is not separated from headers with CRLF line endings")
+	}
+	if strings.Contains(strings.ReplaceAll(message, "\r\n", ""), "\n") {
+		t.Error("message contains bare newlines")
+	}
+}

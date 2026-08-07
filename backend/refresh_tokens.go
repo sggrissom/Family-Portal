@@ -162,12 +162,15 @@ func CleanupExpiredRefreshTokens(tx *vbolt.Tx, now time.Time) int {
 	return len(expired)
 }
 
-// RunRefreshTokenCleanup purges expired refresh tokens immediately and then at
-// a daily interval until the application context is canceled.
-func RunRefreshTokenCleanup(ctx context.Context, db *vbolt.DB) {
+// RunTokenCleanup purges expired refresh and password reset tokens
+// immediately and then at a daily interval until the application context is
+// canceled.
+func RunTokenCleanup(ctx context.Context, db *vbolt.DB) {
 	cleanup := func() {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-			CleanupExpiredRefreshTokens(tx, time.Now())
+			now := time.Now()
+			CleanupExpiredRefreshTokens(tx, now)
+			CleanupExpiredPasswordResetTokens(tx, now)
 			vbolt.TxCommit(tx)
 		})
 	}

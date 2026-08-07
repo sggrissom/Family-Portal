@@ -28,11 +28,12 @@ export const Weight: MeasurementType = 1;
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrMailNotConfigured = "email delivery is not configured";
 
 export interface CreateAccountRequest {
     name: string
@@ -79,6 +80,34 @@ export interface JoinFamilyResponse {
     success: boolean
     error: string
     auth: AuthResponse
+}
+
+export interface RequestPasswordResetRequest {
+    email: string
+}
+
+export interface RequestPasswordResetResponse {
+    success: boolean
+    error: string
+}
+
+export interface ValidatePasswordResetTokenRequest {
+    token: string
+}
+
+export interface ValidatePasswordResetTokenResponse {
+    valid: boolean
+}
+
+export interface ResetPasswordRequest {
+    token: string
+    password: string
+    confirmPassword: string
+}
+
+export interface ResetPasswordResponse {
+    success: boolean
+    error: string
 }
 
 export interface ListFamilyLinksRequest {
@@ -1001,6 +1030,18 @@ export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInf
 
 export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
     return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
+}
+
+export async function RequestPasswordReset(data: RequestPasswordResetRequest): Promise<rpc.Response<RequestPasswordResetResponse>> {
+    return await rpc.call<RequestPasswordResetResponse>('RequestPasswordReset', JSON.stringify(data));
+}
+
+export async function ValidatePasswordResetToken(data: ValidatePasswordResetTokenRequest): Promise<rpc.Response<ValidatePasswordResetTokenResponse>> {
+    return await rpc.call<ValidatePasswordResetTokenResponse>('ValidatePasswordResetToken', JSON.stringify(data));
+}
+
+export async function ResetPassword(data: ResetPasswordRequest): Promise<rpc.Response<ResetPasswordResponse>> {
+    return await rpc.call<ResetPasswordResponse>('ResetPassword', JSON.stringify(data));
 }
 
 export async function ListFamilyLinks(data: ListFamilyLinksRequest): Promise<rpc.Response<ListFamilyLinksResponse>> {
