@@ -3,8 +3,8 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
-import { ensureNoAuthInFetch } from "../../lib/authHelpers";
 import "./create-account-styles";
 import "./login-styles";
 
@@ -37,8 +37,6 @@ function tokenFromLocation(): string {
 }
 
 export async function fetch(route: string, prefix: string) {
-  await ensureNoAuthInFetch();
-
   const token = tokenFromLocation();
   if (!token) {
     return rpc.ok<Data>({ token: "", valid: false });
@@ -78,6 +76,7 @@ async function onResetPasswordClicked(data: Data, form: ResetPasswordForm, event
   form.loading = false;
 
   if (resp && resp.success) {
+    auth.clearAuth();
     form.done = true;
     form.password = "";
     form.confirmPassword = "";
