@@ -45,7 +45,49 @@ func TestResolveMailSettings(t *testing.T) {
 		}
 	})
 
+	t.Run("relays through the local server without credentials", func(t *testing.T) {
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "")
+		t.Setenv("MAIL_FROM", "noreply@familyrecord.app")
+		t.Setenv("EMAIL", "")
+		t.Setenv("APP_PASSWORD", "")
+
+		settings, err := resolveMailSettings()
+		if err != nil {
+			t.Fatalf("resolveMailSettings() error = %v", err)
+		}
+		if settings.addr() != "127.0.0.1:25" {
+			t.Errorf("addr() = %q, want 127.0.0.1:25", settings.addr())
+		}
+		if settings.From != "noreply@familyrecord.app" {
+			t.Errorf("From = %q, want the MAIL_FROM value", settings.From)
+		}
+		if settings.useAuth() {
+			t.Error("useAuth() = true, want false when no credentials are set")
+		}
+	})
+
+	t.Run("still authenticates when credentials accompany MAIL_FROM", func(t *testing.T) {
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "")
+		t.Setenv("MAIL_FROM", "noreply@example.com")
+		t.Setenv("EMAIL", "portal@example.com")
+		t.Setenv("APP_PASSWORD", "app-password")
+
+		settings, err := resolveMailSettings()
+		if err != nil {
+			t.Fatalf("resolveMailSettings() error = %v", err)
+		}
+		if !settings.useAuth() {
+			t.Error("useAuth() = false, want true when credentials are set")
+		}
+		if settings.addr() != "smtp.gmail.com:587" {
+			t.Errorf("addr() = %q, want the submission host when credentials exist", settings.addr())
+		}
+	})
+
 	t.Run("reports missing credentials", func(t *testing.T) {
+		t.Setenv("MAIL_FROM", "")
 		t.Setenv("EMAIL", "portal@example.com")
 		t.Setenv("APP_PASSWORD", "")
 
