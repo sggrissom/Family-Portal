@@ -83,7 +83,7 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
-	go vet -tags release ./ ./backend ./cfg ./local
+	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following Go files need formatting:"; \
