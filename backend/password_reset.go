@@ -231,24 +231,49 @@ link below to choose a new one:
 This link expires in one hour and can only be used once. Resetting your password
 signs you out everywhere else.
 
-If you did not ask for this, you can ignore this email — your password will not
-change.
+If you did not ask for this, you can ignore this email.
 `, greeting, link)
 }
 
 func deliverPasswordResetEmail(user User, token string) error {
-	link := passwordResetLink(token)
-	subject := "Reset your Family Record password"
-	body := passwordResetBody(user.Name, link)
+	return QueueMail(MailJob{
+		To:      user.Email,
+		Subject: "Reset your Family Record password",
+		Body:    passwordResetBody(user.Name, passwordResetLink(token)),
+		Kind:    "password_reset",
+	})
+}
 
-	err := SendMail(user.Email, subject, body)
-	if errors.Is(err, ErrMailNotConfigured) && !cfg.IsRelease {
-		// Local development has no SMTP credentials; print the link so the
-		// flow is still testable end to end.
-		logMailFallback(user.Email, subject, body)
-		return nil
+// passwordChangedSender delivers the confirmation notice. Like the reset
+// sender it is a variable so tests can observe it without an SMTP server.
+var passwordChangedSender = deliverPasswordChangedEmail
+
+func passwordChangedBody(name string) string {
+	greeting := "Hello,"
+	if name != "" {
+		greeting = "Hello " + name + ","
 	}
-	return err
+	return fmt.Sprintf(`%s
+
+The password for your Family Record account was just changed, and every other
+device signed in to the account has been signed out.
+`, greeting)
+}
+
+// deliverPasswordChangedEmail tells the account holder their password changed.
+// This is the only signal a user gets that somebody reset their account, so it
+// is sent after every completed reset rather than only suspicious ones.
+//
+// The notice carries no link. Recovery starts from the site, which keeps this
+// message worthless to anyone who intercepts it and keeps its shape distinct
+// from the reset mail people are asked to click.
+func deliverPasswordChangedEmail(user User) error {
+	return QueueMail(MailJob{
+		To:      user.Email,
+		Subject: "Your Family Record password was changed",
+		Body:    passwordChangedBody(user.Name),
+		Kind:    "password_changed",
+	})
 }
 
 // RequestPasswordReset issues a reset link for the given address. The response
@@ -296,12 +321,13 @@ func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (
 
 	if token != "" {
 		if sendErr := passwordResetSender(user, token); sendErr != nil {
-			LogErrorSimple(LogCategoryAuth, "Failed to send password reset email", map[string]interface{}{
+			LogErrorSimple(LogCategoryAuth, "Failed to queue password reset email", map[string]interface{}{
 				"userId": user.Id,
 				"error":  sendErr.Error(),
 			})
 		} else {
-			LogInfo(LogCategoryAuth, "Password reset email sent", map[string]interface{}{
+			// Delivery happens on the mail worker, which logs its own outcome.
+			LogInfo(LogCategoryAuth, "Password reset email queued", map[string]interface{}{
 				"userId": user.Id,
 			})
 		}
@@ -362,6 +388,16 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 		"userId": user.Id,
 		"email":  user.Email,
 	})
+
+	// The reset itself is already durable, so a failure to notify is logged
+	// rather than reported: telling the user their reset failed would be false,
+	// and would push them into requesting another one.
+	if sendErr := passwordChangedSender(user); sendErr != nil {
+		LogErrorSimple(LogCategoryAuth, "Failed to queue password changed notice", map[string]interface{}{
+			"userId": user.Id,
+			"error":  sendErr.Error(),
+		})
+	}
 
 	resp.Success = true
 	return

@@ -562,3 +562,148 @@ func TestPasswordResetBodyIncludesLink(t *testing.T) {
 		t.Error("reset email body does not greet the recipient by name")
 	}
 }
+
+// capturePasswordChangedEmails records the confirmation notices a test causes.
+func capturePasswordChangedEmails(t *testing.T, sendErr error) *[]User {
+	t.Helper()
+
+	var sent []User
+	original := passwordChangedSender
+	passwordChangedSender = func(user User) error {
+		sent = append(sent, user)
+		return sendErr
+	}
+	t.Cleanup(func() { passwordChangedSender = original })
+	return &sent
+}
+
+func TestResetPasswordNotifiesTheAccountHolder(t *testing.T) {
+	const oldPassword = "originalpw"
+	const newPassword = "brand-new-password"
+
+	t.Run("confirms a completed reset", func(t *testing.T) {
+		app, cleanup := setupTestApp(t)
+		defer cleanup()
+
+		notices := capturePasswordChangedEmails(t, nil)
+		user := createResetTestUser(t, app, "notify@example.com", oldPassword)
+
+		var token string
+		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
+			var err error
+			token, err = createPasswordResetTokenTx(tx, user.Id, time.Now())
+			if err != nil {
+				t.Fatalf("createPasswordResetTokenTx() error = %v", err)
+			}
+			vbolt.TxCommit(tx)
+		})
+
+		var resp ResetPasswordResponse
+		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
+			var err error
+			resp, err = ResetPassword(&vbeam.Context{Tx: tx}, ResetPasswordRequest{
+				Token:           token,
+				Password:        newPassword,
+				ConfirmPassword: newPassword,
+			})
+			if err != nil {
+				t.Fatalf("ResetPassword() error = %v", err)
+			}
+		})
+		if !resp.Success {
+			t.Fatalf("ResetPassword() success = false, error = %q", resp.Error)
+		}
+
+		if len(*notices) != 1 {
+			t.Fatalf("confirmation emails = %d, want 1", len(*notices))
+		}
+		if (*notices)[0].Email != "notify@example.com" {
+			t.Errorf("confirmation sent to %q, want notify@example.com", (*notices)[0].Email)
+		}
+	})
+
+	t.Run("stays quiet when no reset happened", func(t *testing.T) {
+		app, cleanup := setupTestApp(t)
+		defer cleanup()
+
+		notices := capturePasswordChangedEmails(t, nil)
+		createResetTestUser(t, app, "quiet@example.com", oldPassword)
+
+		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
+			resp, err := ResetPassword(&vbeam.Context{Tx: tx}, ResetPasswordRequest{
+				Token:           "not-a-real-token",
+				Password:        newPassword,
+				ConfirmPassword: newPassword,
+			})
+			if err != nil {
+				t.Fatalf("ResetPassword() error = %v", err)
+			}
+			if resp.Success {
+				t.Fatal("ResetPassword() accepted an invalid token")
+			}
+		})
+
+		if len(*notices) != 0 {
+			t.Errorf("confirmation emails = %d, want 0; a rejected reset must not notify", len(*notices))
+		}
+	})
+
+	t.Run("still succeeds when the notice cannot be sent", func(t *testing.T) {
+		app, cleanup := setupTestApp(t)
+		defer cleanup()
+
+		// The password is already changed by the time the notice is attempted,
+		// so a mail failure must not be reported as a failed reset.
+		capturePasswordChangedEmails(t, errors.New("smtp unavailable"))
+		user := createResetTestUser(t, app, "mailfail@example.com", oldPassword)
+
+		var token string
+		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
+			var err error
+			token, err = createPasswordResetTokenTx(tx, user.Id, time.Now())
+			if err != nil {
+				t.Fatalf("createPasswordResetTokenTx() error = %v", err)
+			}
+			vbolt.TxCommit(tx)
+		})
+
+		var resp ResetPasswordResponse
+		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
+			var err error
+			resp, err = ResetPassword(&vbeam.Context{Tx: tx}, ResetPasswordRequest{
+				Token:           token,
+				Password:        newPassword,
+				ConfirmPassword: newPassword,
+			})
+			if err != nil {
+				t.Fatalf("ResetPassword() error = %v", err)
+			}
+		})
+
+		if !resp.Success {
+			t.Fatalf("ResetPassword() success = false, error = %q", resp.Error)
+		}
+		vbolt.WithReadTx(app.DB, func(tx *vbolt.Tx) {
+			hash := GetPassHash(tx, user.Id)
+			if bcrypt.CompareHashAndPassword(hash, []byte(newPassword)) != nil {
+				t.Error("password was not changed despite a successful response")
+			}
+		})
+	})
+}
+
+func TestPasswordChangedBodyNotifiesWithoutALink(t *testing.T) {
+	body := passwordChangedBody("Sam")
+
+	if !strings.Contains(body, "Sam") {
+		t.Error("confirmation body does not greet the recipient by name")
+	}
+	if !strings.Contains(body, "changed") {
+		t.Error("confirmation body does not say the password changed")
+	}
+	// This message is a notification, not a call to action: it must not train
+	// people to click links in mail about their password.
+	if strings.Contains(body, "http://") || strings.Contains(body, "https://") {
+		t.Errorf("confirmation body contains a link:\n%s", body)
+	}
+}

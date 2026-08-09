@@ -1,11 +1,15 @@
 package backend
 
 import (
+	"crypto/tls"
 	"errors"
+	"family/cfg"
 	"fmt"
 	"log"
+	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"os"
 	"strings"
 	"time"
@@ -27,6 +31,15 @@ const (
 const (
 	defaultRelayHost = "127.0.0.1"
 	defaultRelayPort = "25"
+)
+
+// Bounds on one delivery attempt. net/smtp imposes no deadline of its own, so
+// without these a relay that accepts a connection and then stops responding
+// would block the sender indefinitely — and since sends are queued, one such
+// peer would stall every message behind it.
+const (
+	mailDialTimeout = 10 * time.Second
+	mailSendTimeout = 30 * time.Second
 )
 
 var ErrMailNotConfigured = errors.New("email delivery is not configured")
@@ -123,13 +136,13 @@ func headerSafe(value string) bool {
 	return !strings.ContainsAny(value, "\r\n")
 }
 
-// SendMail delivers a plain-text message over SMTP, authenticating and
-// upgrading to STARTTLS only when credentials are configured. Against a
-// loopback relay it does neither: there is nothing to authenticate to and
-// nothing to protect on that hop. When mail is not configured at all, local
-// builds log the message instead of failing so the full flow can be exercised
-// without a mail server; release builds return an error because silently
-// dropping mail there would strand users.
+// SendMail delivers a plain-text message over SMTP, upgrading to STARTTLS when
+// the server offers it and authenticating only when credentials are configured.
+// Against a loopback relay there is typically nothing to authenticate to and
+// nothing to protect on that hop.
+//
+// This is the synchronous path. Callers serving a user request should use
+// QueueMail instead so a slow relay cannot hold the response open.
 func SendMail(to, subject, body string) error {
 	if _, err := mail.ParseAddress(to); err != nil {
 		return fmt.Errorf("invalid recipient address: %w", err)
@@ -143,23 +156,112 @@ func SendMail(to, subject, body string) error {
 		return err
 	}
 
-	// A nil Auth makes net/smtp skip the AUTH exchange entirely. PlainAuth
-	// would additionally refuse to run over an unencrypted connection, so
-	// building it unconditionally would break local relaying.
-	var auth smtp.Auth
-	if settings.useAuth() {
-		auth = smtp.PlainAuth("", settings.Username, settings.Password, settings.Host)
-	}
 	message := buildMessage(settings.From, to, subject, body)
-
-	if err := smtp.SendMail(settings.addr(), auth, settings.From, []string{to}, message); err != nil {
+	if err := sendSMTP(settings, to, message); err != nil {
 		return fmt.Errorf("send mail to %s: %w", to, err)
 	}
 	return nil
+}
+
+// sendSMTP runs the SMTP conversation for one message. It follows the same
+// sequence smtp.SendMail does — opportunistic STARTTLS whenever the server
+// advertises it, AUTH only when credentials exist — but drives the client
+// directly so the connection can carry a deadline.
+func sendSMTP(settings mailSettings, to string, message []byte) error {
+	conn, err := net.DialTimeout("tcp", settings.addr(), mailDialTimeout)
+	if err != nil {
+		return err
+	}
+
+	// One deadline covers the whole exchange rather than each round trip, so a
+	// peer cannot extend the send indefinitely by answering slowly but steadily.
+	if err := conn.SetDeadline(time.Now().Add(mailSendTimeout)); err != nil {
+		conn.Close()
+		return err
+	}
+
+	client, err := smtp.NewClient(conn, settings.Host)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	defer client.Close()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: settings.Host}); err != nil {
+			return err
+		}
+	}
+
+	// PlainAuth refuses to run over an unencrypted connection, so it is built
+	// only when credentials exist; a loopback relay authenticates nothing.
+	if settings.useAuth() {
+		auth := smtp.PlainAuth("", settings.Username, settings.Password, settings.Host)
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+
+	if err := client.Mail(settings.From); err != nil {
+		return err
+	}
+	if err := client.Rcpt(to); err != nil {
+		return err
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(message); err != nil {
+		w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	return client.Quit()
+}
+
+// isPermanentMailError reports whether the server refused the message in a way
+// that retrying cannot fix. SMTP splits failures at the status code: 5xx is a
+// verdict about this message (no such mailbox, rejected content), 4xx is a
+// statement about right now (greylisting, over quota, out of disk).
+func isPermanentMailError(err error) bool {
+	var protoErr *textproto.Error
+	if errors.As(err, &protoErr) {
+		return protoErr.Code >= 500
+	}
+	return false
 }
 
 // logMailFallback prints a message that could not be delivered. Local builds
 // use this to surface reset links on the console.
 func logMailFallback(to, subject, body string) {
 	log.Printf("[mail] neither MAIL_FROM nor EMAIL/APP_PASSWORD set; message not sent.\nTo: %s\nSubject: %s\n\n%s\n", to, subject, body)
+}
+
+// MailJob is one outbound message. Kind is a short label used in logs so a
+// delivery failure can be traced back to the flow that produced it without
+// putting the recipient or body in the log line.
+type MailJob struct {
+	To      string
+	Subject string
+	Body    string
+	Kind    string
+}
+
+// deliverNow sends a job synchronously. When mail is not configured at all,
+// local builds log the message instead of failing so flows that depend on a
+// link — password reset above all — stay testable without a mail server;
+// release builds report the error, because silently dropping mail there would
+// strand users outside their accounts.
+func deliverNow(job MailJob) error {
+	err := SendMail(job.To, job.Subject, job.Body)
+	if errors.Is(err, ErrMailNotConfigured) && !cfg.IsRelease {
+		logMailFallback(job.To, job.Subject, job.Body)
+		return nil
+	}
+	return err
 }

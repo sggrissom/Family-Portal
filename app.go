@@ -212,6 +212,9 @@ func MakeApplication() *vbeam.Application {
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs
 
+	// Initialize background outbound mail worker
+	backend.InitializeMailWorker(100) // Queue size of 100 messages
+
 	return app
 }
 
