@@ -202,6 +202,7 @@ func MakeApplication() *vbeam.Application {
 		w.Write([]byte("ok"))
 	})
 	app.HandleFunc("GET /readyz", readinessHandler(app.DB, cfg.StaticDir))
+	backend.RegisterBackupHandlers(app)
 
 	// Initialize background photo processing worker
 	backend.InitializePhotoWorker(100, app.DB) // Queue size of 100 jobs
