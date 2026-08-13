@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import { useRef, useState, useEffect } from "preact/hooks";
+import { ProfileImage } from "./ResponsiveImage";
 import "./crop-selector-styles";
 
 export interface CropValues {
@@ -43,15 +44,18 @@ export const CropSelector = ({
     onCropChange({ cropX, cropY, cropScale });
   }, [cropX, cropY, cropScale]);
 
-  const handleMouseDown = (e: MouseEvent) => {
+  const handlePointerDown = (e: PointerEvent) => {
     e.preventDefault();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setStartCrop({ x: cropX, y: cropY });
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handlePointerMove = (e: PointerEvent) => {
     if (!isDragging || !containerRef.current) return;
+
+    e.preventDefault();
 
     const rect = containerRef.current.getBoundingClientRect();
     const deltaX = e.clientX - dragStart.x;
@@ -67,37 +71,11 @@ export const CropSelector = ({
     setCropY(newY);
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  // Touch support
-  const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX, y: touch.clientY });
-      setStartCrop({ x: cropX, y: cropY });
+  const handlePointerUp = (e: PointerEvent) => {
+    const container = e.currentTarget as HTMLDivElement;
+    if (container.hasPointerCapture(e.pointerId)) {
+      container.releasePointerCapture(e.pointerId);
     }
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1 || !containerRef.current) return;
-
-    const touch = e.touches[0];
-    const rect = containerRef.current.getBoundingClientRect();
-    const deltaX = touch.clientX - dragStart.x;
-    const deltaY = touch.clientY - dragStart.y;
-
-    const sensitivity = 100 / cropScale;
-    const newX = Math.max(0, Math.min(100, startCrop.x - (deltaX / rect.width) * sensitivity));
-    const newY = Math.max(0, Math.min(100, startCrop.y - (deltaY / rect.height) * sensitivity));
-
-    setCropX(newX);
-    setCropY(newY);
-  };
-
-  const handleTouchEnd = () => {
     setIsDragging(false);
   };
 
@@ -121,21 +99,15 @@ export const CropSelector = ({
     setCropScale(1);
   };
 
-  // Setup global mouse events
+  // Keep the page behind the editor fixed, particularly while manipulating the
+  // crop or zoom slider on touch devices.
   useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.addEventListener("touchmove", handleTouchMove);
-      document.addEventListener("touchend", handleTouchEnd);
-      return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.removeEventListener("touchmove", handleTouchMove);
-        document.removeEventListener("touchend", handleTouchEnd);
-      };
-    }
-  }, [isDragging, dragStart, startCrop, cropScale]);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
   const previewStyle = {
     transform: `scale(${cropScale})`,
@@ -155,8 +127,10 @@ export const CropSelector = ({
           <div
             ref={containerRef}
             className={`crop-container ${isDragging ? "dragging" : ""}`}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onWheel={handleWheel}
           >
             <div className="crop-image-wrapper" style={previewStyle}>
@@ -171,14 +145,13 @@ export const CropSelector = ({
           <div className="crop-preview-section">
             <h4>Preview</h4>
             <div className="crop-preview-container">
-              <div className="crop-preview-image-wrapper" style={previewStyle}>
-                <img
-                  src={imageSrc}
-                  alt="Preview"
-                  className="crop-preview-image"
-                  draggable={false}
-                />
-              </div>
+              <ProfileImage
+                photoId={photoId}
+                alt="Profile photo preview"
+                cropX={cropX}
+                cropY={cropY}
+                cropScale={cropScale}
+              />
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ block(`
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
+  overscroll-behavior: contain;
 }
 `);
 
@@ -75,6 +76,7 @@ block(`
   border-radius: 8px;
   background: #000;
   cursor: grab;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -163,25 +165,6 @@ block(`
 }
 `);
 
-block(`
-.crop-preview-image-wrapper {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-`);
-
-block(`
-.crop-preview-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-}
-`);
-
 // Controls
 block(`
 .crop-controls {
@@ -217,6 +200,7 @@ block(`
   background: var(--color-border);
   cursor: pointer;
   accent-color: var(--color-primary);
+  touch-action: none;
 }
 `);
 
