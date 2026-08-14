@@ -169,6 +169,8 @@ func MakeApplication() *vbeam.Application {
 		vbeam.InitRotatingLogger("family_record")
 	}
 
+	backend.EnforceProductionConfig(cfg.DBPath, cfg.StaticDir)
+
 	// Log application startup
 	backend.LogInfo(backend.LogCategorySystem, "Family Record application starting", map[string]interface{}{
 		"version":   "1.0.0",

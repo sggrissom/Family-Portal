@@ -23,19 +23,19 @@ Named so it stays cut, not so it gets rediscovered later:
 
 Nothing in the repo backs anything up. If the VPS dies tonight, every photo and growth record is gone. This is the only section that is genuinely unrecoverable if skipped.
 
-- [ ] Nightly script: consistent Bolt snapshot (`vbolt` read-tx or file copy while quiesced) + originals from the photo tree.
-- [ ] Encrypt the archive and push it off-host. Derived image variants are regenerable — skip them, back up originals only.
-- [ ] Retention: keep 7 daily, 4 weekly.
-- [ ] **Actually restore one** into a scratch directory and confirm people, growth, milestones, tags, chat, and originals come back and the app boots against it.
-- [ ] Email myself if the newest successful backup is older than 48h.
-- [ ] Write the restore steps down in `docs/restore.md` — enough that I can follow them tired, on a fresh box.
+- [x] Nightly script: consistent Bolt snapshot (`vbolt` read-tx or file copy while quiesced) + originals from the photo tree.
+- [x] Encrypt the archive and push it off-host. Derived image variants are regenerable — skip them, back up originals only.
+- [x] Retention: keep 7 daily, 4 weekly.
+- [x] **Actually restore one** into a scratch directory and confirm people, growth, milestones, tags, chat, and originals come back and the app boots against it.
+- [x] Email myself if the newest successful backup is older than 48h.
+- [x] Write the restore steps down in `docs/restore.md` — enough that I can follow them tired, on a fresh box.
 
 ## 2. Don't get owned or overrun
 
 Signup is open to the internet and there is no rate limiting anywhere in the backend.
 
 - [x] Fail release startup when `JWT_SECRET_KEY` is absent or weak.
-- [ ] Extend that check to the rest of the required production config: `SITE_ROOT`, Google OAuth, APNs, AI provider, storage paths.
+- [x] Extend that check to the rest of the required production config: `SITE_ROOT`, Google OAuth, APNs, AI provider, storage paths. Required settings fail release startup; APNs is all-or-nothing because it belongs to the 1.1 app.
 - [ ] Add rate limiting middleware; apply to login, signup, password reset, invite-code attempts, refresh, Google token login, AI calls, imports, uploads, and WebSocket connects.
 - [ ] Hash refresh tokens at rest.
 - [ ] Rotate refresh tokens on use; on reuse detection, revoke that session family.
