@@ -109,6 +109,9 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	return dbConnection
+}
+
 // readinessHandler verifies that the application's durable dependencies are
 // usable. Unlike /healthz, this endpoint can be removed from a load balancer
 // while the process remains alive and able to recover.
