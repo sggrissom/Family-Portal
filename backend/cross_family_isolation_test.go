@@ -388,6 +388,20 @@ func TestProceduresRefuseAnotherFamilyId(t *testing.T) {
 			})
 			return err
 		}},
+		{"ListFamilyMembers", func(ctx *vbeam.Context) error {
+			_, err := ListFamilyMembers(ctx, ListFamilyMembersRequest{FamilyId: fx.ownerFamily})
+			return err
+		}},
+		{"RemoveFamilyMember", func(ctx *vbeam.Context) error {
+			_, err := RemoveFamilyMember(ctx, RemoveFamilyMemberRequest{
+				FamilyId: fx.ownerFamily, UserId: fx.owner.Id,
+			})
+			return err
+		}},
+		{"RotateInviteCode", func(ctx *vbeam.Context) error {
+			_, err := RotateInviteCode(ctx, FamilyIdRequest{FamilyId: fx.ownerFamily})
+			return err
+		}},
 	}
 
 	for _, tt := range calls {

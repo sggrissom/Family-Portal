@@ -82,6 +82,44 @@ export interface JoinFamilyResponse {
     auth: AuthResponse
 }
 
+export interface ListFamilyMembersRequest {
+    familyId: number
+}
+
+export interface ListFamilyMembersResponse {
+    familyId: number
+    members: FamilyMemberView[]
+    callerIsOwner: boolean
+}
+
+export interface FamilyIdRequest {
+    familyId: number
+}
+
+export interface LeaveFamilyResponse {
+    success: boolean
+    error: string
+    auth: AuthResponse
+}
+
+export interface RemoveFamilyMemberRequest {
+    familyId: number
+    userId: number
+}
+
+export interface RemoveFamilyMemberResponse {
+    success: boolean
+    error: string
+    members: FamilyMemberView[]
+}
+
+export interface RotateInviteCodeResponse {
+    success: boolean
+    error: string
+    familyId: number
+    inviteCode: string
+}
+
 export interface RequestPasswordResetRequest {
     email: string
 }
@@ -737,6 +775,16 @@ export interface FamilyInfo {
     isPrimary: boolean
 }
 
+export interface FamilyMemberView {
+    userId: number
+    name: string
+    email: string
+    role: AccessLevel
+    joinedAt: string
+    isOwner: boolean
+    isSelf: boolean
+}
+
 export interface FamilyLinkView {
     id: number
     fromFamilyId: number
@@ -1030,6 +1078,22 @@ export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInf
 
 export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
     return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
+}
+
+export async function ListFamilyMembers(data: ListFamilyMembersRequest): Promise<rpc.Response<ListFamilyMembersResponse>> {
+    return await rpc.call<ListFamilyMembersResponse>('ListFamilyMembers', JSON.stringify(data));
+}
+
+export async function LeaveFamily(data: FamilyIdRequest): Promise<rpc.Response<LeaveFamilyResponse>> {
+    return await rpc.call<LeaveFamilyResponse>('LeaveFamily', JSON.stringify(data));
+}
+
+export async function RemoveFamilyMember(data: RemoveFamilyMemberRequest): Promise<rpc.Response<RemoveFamilyMemberResponse>> {
+    return await rpc.call<RemoveFamilyMemberResponse>('RemoveFamilyMember', JSON.stringify(data));
+}
+
+export async function RotateInviteCode(data: FamilyIdRequest): Promise<rpc.Response<RotateInviteCodeResponse>> {
+    return await rpc.call<RotateInviteCodeResponse>('RotateInviteCode', JSON.stringify(data));
 }
 
 export async function RequestPasswordReset(data: RequestPasswordResetRequest): Promise<rpc.Response<RequestPasswordResetResponse>> {

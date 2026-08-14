@@ -242,12 +242,17 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 		return
 	}
 
-	removeMilestoneTagsByTag(ctx.Tx, tag.Id)
-	removePhotoTagsByTag(ctx.Tx, tag.Id)
-	vbolt.SetTargetSingleTerm(ctx.Tx, TagByFamilyIndex, tag.Id, -1)
-	vbolt.Delete(ctx.Tx, TagBkt, tag.Id)
+	deleteTagTx(ctx.Tx, tag)
 	vbolt.TxCommit(ctx.Tx)
 	return
+}
+
+// deleteTagTx removes a tag and unhooks it from everything it labels.
+func deleteTagTx(tx *vbolt.Tx, tag Tag) {
+	removeMilestoneTagsByTag(tx, tag.Id)
+	removePhotoTagsByTag(tx, tag.Id)
+	vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, tag.Id, -1)
+	vbolt.Delete(tx, TagBkt, tag.Id)
 }
 
 func ListTags(ctx *vbeam.Context, req ListTagsRequest) (resp ListTagsResponse, err error) {

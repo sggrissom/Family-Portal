@@ -1168,31 +1168,31 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 		fmt.Printf("Warning: Failed to delete photo files for ID %d: %v\n", photo.Id, err)
 	}
 
-	// Remove PhotoPerson relationships
-	photoPersons := GetPhotoPersonsByPhoto(ctx.Tx, photo.Id)
-	for _, photoPerson := range photoPersons {
-		vbolt.Delete(ctx.Tx, PhotoPersonBkt, photoPerson.Id)
-		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
-		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
-		vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
-	}
-
-	// Remove milestone-photo relationships
-	removePhotoFromMilestones(ctx.Tx, photo.Id)
-
-	// Remove photo-tag relationships
-	removeAllPhotoTags(ctx.Tx, photo.Id)
-
-	// Remove from database
-	vbolt.Delete(ctx.Tx, ImagesBkt, photo.Id)
-
-	// Remove from indexes
-	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByFamilyIndex, photo.Id, -1)
+	deletePhotoRecordTx(ctx.Tx, photo)
 
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Success = true
 	return
+}
+
+// deletePhotoRecordTx removes a photo row and everything that joins to it. The
+// files on disk are the caller's problem: deleting one photo can do it inline,
+// but deleting a whole family's worth is better done after the transaction
+// commits, so a slow filesystem does not hold a write lock.
+func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
+	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
+		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
+		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
+		vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+	}
+
+	removePhotoFromMilestones(tx, photo.Id)
+	removeAllPhotoTags(tx, photo.Id)
+
+	vbolt.Delete(tx, ImagesBkt, photo.Id)
+	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
 }
 
 // Helper function to delete all photo file variants

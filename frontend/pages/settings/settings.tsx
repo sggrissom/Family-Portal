@@ -1,17 +1,21 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
+import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logError } from "../../lib/logger";
 import { FamilySelect } from "../../components/FamilySelect";
 import { FamilyLinksSection } from "../../components/FamilyLinks";
+import { FamilyMembersSection } from "../../components/FamilyMembers";
 import "./settings-styles";
 
 type Data = {
   familyInfo: server.FamilyInfoResponse;
   people: server.Person[];
   links: server.FamilyLinkView[];
+  members: server.FamilyMemberView[];
+  callerIsOwner: boolean;
 };
 
 type JoinFamilyForm = {
@@ -78,6 +82,26 @@ const useMergeForm = vlens.declareHook(
   })
 );
 
+type ChangePasswordForm = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  error: string;
+  success: string;
+  loading: boolean;
+};
+
+const useChangePasswordForm = vlens.declareHook(
+  (): ChangePasswordForm => ({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+    error: "",
+    success: "",
+    loading: false,
+  })
+);
+
 type AppearanceSettings = {
   theme: "light" | "dark";
 };
@@ -107,17 +131,22 @@ export async function fetch(route: string, prefix: string) {
       familyInfo: { id: 0, name: "", inviteCode: "", families: [] },
       people: [],
       links: [],
+      members: [],
+      callerIsOwner: false,
     });
   }
 
   const [familyInfo] = await server.GetFamilyInfo({});
   const [peopleResp] = await server.ListPeople({});
   const [linksResp] = await server.ListFamilyLinks({ familyId: 0 });
+  const [membersResp] = await server.ListFamilyMembers({ familyId: 0 });
 
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
     people: peopleResp?.people || [],
     links: linksResp?.links || [],
+    members: membersResp?.members || [],
+    callerIsOwner: membersResp?.callerIsOwner || false,
   });
 }
 
@@ -192,6 +221,73 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
     form.error = resp?.error || err || "Failed to join family";
   }
   vlens.scheduleRedraw();
+}
+
+// Password change goes through a plain endpoint rather than an RPC because the
+// server has to reissue this browser's session cookies in the response: the
+// change revokes every session the account has, including the one making the
+// request.
+async function onChangePasswordClicked(form: ChangePasswordForm, event: Event) {
+  event.preventDefault();
+  form.loading = true;
+  form.error = "";
+  form.success = "";
+  vlens.scheduleRedraw();
+
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch("/api/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
+      }),
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      form.currentPassword = "";
+      form.newPassword = "";
+      form.confirmPassword = "";
+      if (result.token) {
+        // Keep RPC calls working: the old token's session was just revoked.
+        rpc.setAuthHeaders({ "x-auth-token": result.token });
+        form.success = "Password changed. Other devices have been signed out.";
+      } else {
+        form.success = result.error || "Password changed. Please sign in again.";
+      }
+    } else {
+      form.error = result.error || "Failed to change password";
+    }
+  } catch (e) {
+    logError("ui", "Password change failed", e);
+    form.error = "Network error. Please try again.";
+  }
+
+  form.loading = false;
+  vlens.scheduleRedraw();
+}
+
+// Rotating the code invalidates every invite link already shared, so the
+// confirmation says so rather than treating this as a harmless refresh.
+async function onRotateInviteCode(familyId: number, familyName: string) {
+  if (
+    !confirm(
+      `Generate a new invite code for ${familyName}? Any link or code you have already shared stops working, and anyone still waiting to join will need the new one.`
+    )
+  ) {
+    return;
+  }
+
+  const [resp, err] = await server.RotateInviteCode({ familyId });
+  if (resp && resp.success) {
+    window.location.reload();
+    return;
+  }
+  alert(resp?.error || err || "Could not generate a new invite code");
 }
 
 async function onExportDataClicked(exportForm: ExportForm) {
@@ -357,6 +453,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
+  const passwordForm = useChangePasswordForm();
   const appearance = useAppearanceSettings();
 
   return (
@@ -407,6 +504,73 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h2>Security</h2>
+          <div className="settings-card">
+            <h3>Change password</h3>
+            <p className="section-description">
+              Changing your password signs out every other device you are signed in on. This device
+              stays signed in.
+            </p>
+
+            {passwordForm.success && <div className="success-message">{passwordForm.success}</div>}
+            {passwordForm.error && <div className="error-message">{passwordForm.error}</div>}
+
+            <form onSubmit={vlens.cachePartial(onChangePasswordClicked, passwordForm)}>
+              <div className="form-group">
+                <label htmlFor="currentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="currentPassword"
+                  autoComplete="current-password"
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "currentPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="newPassword">New password</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  autoComplete="new-password"
+                  minLength={8}
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "newPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmNewPassword">Confirm new password</label>
+                <input
+                  type="password"
+                  id="confirmNewPassword"
+                  autoComplete="new-password"
+                  minLength={8}
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "confirmPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  passwordForm.loading ||
+                  !passwordForm.currentPassword ||
+                  !passwordForm.newPassword ||
+                  !passwordForm.confirmPassword
+                }
+              >
+                {passwordForm.loading ? "Changing..." : "Change Password"}
+              </button>
+            </form>
           </div>
         </div>
 
@@ -464,6 +628,14 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               </div>
             </div>
           </div>
+        )}
+
+        {families.length > 0 && (
+          <FamilyMembersSection
+            initialMembers={data.members}
+            initialCallerIsOwner={data.callerIsOwner}
+            familyName={families[0].name}
+          />
         )}
 
         {/* Connections to other households, distinct from membership above */}
@@ -708,6 +880,13 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     </label>
                     <div className="invite-code-display">
                       <span className="invite-code">{family.inviteCode}</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() => onRotateInviteCode(family.id, family.name)}
+                      >
+                        Generate new code
+                      </button>
                     </div>
                   </div>
 

@@ -87,7 +87,10 @@ block(`
 block(`
 .invite-code-display {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;

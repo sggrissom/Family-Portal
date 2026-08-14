@@ -52,13 +52,13 @@ Anything a user can't undo themselves becomes a support request to me.
 - [x] Password reset with single-use, short-lived, hashed tokens.
 - [x] Enumeration-resistant password-reset responses.
 - [x] Rate-limit password-reset requests and token attempts (covered by §2).
-- [ ] Password change with current-password verification.
-- [ ] Revoke other sessions after a password change.
+- [x] Password change with current-password verification.
+- [x] Revoke other sessions after a password change. Every refresh token goes; the browser making the request is handed a fresh session in the same response.
 - [ ] Delete my account — with password/recent-auth confirmation. Must remove sessions, refresh tokens, device tokens, photos and derived files, face descriptors, and index entries; and queued background work must not resurrect any of it.
-- [ ] Leave family.
-- [ ] Owner can remove a member.
-- [ ] Invite-code rotation.
-- [ ] Decide and implement what happens to shared content when a member leaves or deletes — content stays with the family is the simple answer; write it down and make the code match.
+- [x] Leave family. Refused for the last member, since dropping the only membership would strand the household's content; ownership passes to the longest-standing remaining member so a family is never headless.
+- [x] Owner can remove a member.
+- [x] Invite-code rotation. Generation also checks for collisions now.
+- [x] Decide and implement what happens to shared content when a member leaves or deletes — **content stays with the family.** Written down at the top of `backend/membership_procs.go`. Leaving removes exactly one thing: the membership row. A user left with no family gets a fresh empty one, because family-less is not a state the app handles.
 - [ ] Tests: account deletion clears every store, last-member behavior, session revocation, cross-family isolation.
 
 ## 4. Don't ship blind

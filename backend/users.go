@@ -242,7 +242,7 @@ func createFamilyTx(tx *vbolt.Tx, familyName string, createdBy int) Family {
 	family.CreatedBy = createdBy
 
 	// Generate invite code
-	inviteCode := generateInviteCode()
+	inviteCode := generateUniqueInviteCodeTx(tx)
 	family.InviteCode = inviteCode
 
 	// Save family data
@@ -256,6 +256,34 @@ func generateInviteCode() string {
 	// Generate a simple 8-character invite code
 	token, _ := generateToken(4) // 4 bytes = 8 hex characters
 	return token[:8]
+}
+
+// inviteCodeAttempts bounds the search for an unused code. Eight hex characters
+// is a space of four billion, so a second attempt is already improbable; the
+// limit exists so a pathological case cannot spin rather than because collisions
+// are expected.
+const inviteCodeAttempts = 8
+
+// generateUniqueInviteCodeTx returns a code no family is currently using.
+// Without the check a collision would silently point one family's code at
+// another's household, which is worse than any birthday-bound argument about how
+// unlikely that is.
+func generateUniqueInviteCodeTx(tx *vbolt.Tx) string {
+	var code string
+	for range inviteCodeAttempts {
+		code = generateInviteCode()
+		var existing int
+		vbolt.Read(tx, InviteCodeBkt, code, &existing)
+		if existing == 0 {
+			return code
+		}
+	}
+	// Every attempt collided, which should not happen. Returning the last one
+	// keeps the caller working; the log is what makes the situation visible.
+	LogErrorSimple(LogCategorySystem, "Could not find an unused invite code", map[string]interface{}{
+		"attempts": inviteCodeAttempts,
+	})
+	return code
 }
 
 func initialPersonName(req CreateAccountRequest) string {
