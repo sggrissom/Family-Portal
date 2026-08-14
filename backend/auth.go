@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,6 +36,11 @@ type LogoutRequest struct {
 var appDb *vbolt.DB
 
 const minimumJWTSecretLength = 32
+
+// refreshTokenLifetime is how long a login lasts. Rotation issues successors
+// that inherit this deadline rather than extending it, so a session ends a month
+// after the login that started it however often it is refreshed.
+const refreshTokenLifetime = 30 * 24 * time.Hour
 
 func resolveJWTSecret() (string, error) {
 	jwtSecret := os.Getenv("JWT_SECRET_KEY")
@@ -86,6 +92,39 @@ func SetupAuth(app *vbeam.Application) {
 	appDb = app.DB
 }
 
+// invalidCredentialsMessage is the only answer a failed login gets. Wrong
+// password, unknown address, and an account that only signs in with Google all
+// produce this exact string, because any difference between them tells an
+// anonymous caller which addresses have accounts here.
+const invalidCredentialsMessage = "Invalid credentials"
+
+// decoyPasswordHash is a bcrypt hash of a random value nobody can supply. It
+// exists to be compared against, so that a login for an address with no account
+// costs the same time as one for an address with an account.
+var decoyPasswordHash = sync.OnceValue(func() []byte {
+	secret, err := generateToken(32)
+	if err != nil {
+		// A decoy that cannot be built must not take logins down with it; the
+		// worst case is that timing stops being equalized.
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	if err != nil {
+		return nil
+	}
+	return hash
+})
+
+// compareAgainstDecoyPassword spends the same work a real password check would.
+// The result is deliberately discarded: it can never match.
+func compareAgainstDecoyPassword(password string) {
+	hash := decoyPasswordHash()
+	if hash == nil {
+		return
+	}
+	_ = bcrypt.CompareHashAndPassword(hash, []byte(password))
+}
+
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		vbeam.RespondError(w, errors.New("login call must be POST"))
@@ -112,11 +151,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		passHash = GetPassHash(tx, userId)
 	})
 
-	if user.Id == 0 {
-		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with unknown email", map[string]interface{}{
-			"email": credentials.Email,
+	if user.Id == 0 || len(passHash) == 0 {
+		// Hash the submitted password against a decoy anyway. Without this, a
+		// missing account answers in microseconds and a real one takes as long
+		// as bcrypt does, which turns the login form into a directory of who
+		// has an account here. The empty-hash case is a Google-only account,
+		// which must be indistinguishable for the same reason.
+		compareAgainstDecoyPassword(credentials.Password)
+		// The response cannot say which of the two happened, but the log can.
+		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with no usable password on file", map[string]interface{}{
+			"email":        redactEmail(credentials.Email),
+			"accountFound": user.Id != 0,
 		})
-		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
+		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: invalidCredentialsMessage})
 		return
 	}
 
@@ -124,9 +171,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with invalid password", map[string]interface{}{
 			"userId": user.Id,
-			"email":  user.Email,
+			"email":  redactEmail(user.Email),
 		})
-		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
+		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: invalidCredentialsMessage})
 		return
 	}
 
@@ -143,7 +190,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Log successful login
 	LogInfoWithRequest(r, LogCategoryAuth, "User login successful", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	resp := GetAuthResponseForUser(user)
@@ -201,21 +248,13 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Clear refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refreshToken",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Unix(0, 0),
-	})
+	clearRefreshTokenCookie(w)
 
 	// Log logout event
 	if user.Id != 0 {
 		LogInfoWithRequest(r, LogCategoryAuth, "User logout", map[string]interface{}{
 			"userId": user.Id,
-			"email":  user.Email,
+			"email":  redactEmail(user.Email),
 		})
 	}
 
@@ -266,9 +305,9 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 	}
 
 	// Create and set refresh token (30 days)
-	var refreshToken RefreshToken
+	var refreshTokenString string
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		refreshToken, err = CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
+		_, refreshTokenString, err = CreateRefreshToken(tx, user.Id, refreshTokenLifetime)
 		if err != nil {
 			return
 		}
@@ -283,18 +322,37 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		return
 	}
 
-	// Set refresh token cookie (30 days)
+	setRefreshTokenCookie(w, refreshTokenString)
+
+	return
+}
+
+// setRefreshTokenCookie writes the refresh cookie. Rotation means this happens
+// on every refresh, not only at login, so both paths go through here and cannot
+// drift apart in attributes.
+func setRefreshTokenCookie(w http.ResponseWriter, tokenString string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refreshToken",
-		Value:    refreshToken.Token,
+		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   60 * 60 * 24 * 30, // 30 days
+		MaxAge:   int(refreshTokenLifetime.Seconds()),
 	})
+}
 
-	return
+// clearRefreshTokenCookie removes the refresh cookie from the browser.
+func clearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refreshToken",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+	})
 }
 
 func generateJwtTokenString(user User) (string, error) {
@@ -347,22 +405,35 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Exchange the presented token for a fresh one. The rotation and the user
+	// lookup share a write transaction so a token cannot be spent twice by two
+	// requests arriving together.
 	var user User
-	var validToken RefreshToken
-
-	// Validate refresh token and get user
-	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-		var valid bool
-		validToken, valid = ValidateRefreshToken(tx, cookie.Value)
-		if !valid {
+	var rotated RefreshToken
+	var newTokenString string
+	var rotateErr error
+	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		rotated, newTokenString, rotateErr = RotateRefreshToken(tx, cookie.Value, time.Now())
+		if rotateErr != nil {
+			// The reuse case revokes the session, which is a write worth
+			// keeping even though the request fails.
+			vbolt.TxCommit(tx)
 			return
 		}
 
-		user = GetUser(tx, validToken.UserId)
+		user = GetUser(tx, rotated.UserId)
+		if user.Id == 0 {
+			return
+		}
+		vbolt.TxCommit(tx)
 	})
 
-	if user.Id == 0 {
-		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt with invalid token", nil)
+	if errors.Is(rotateErr, ErrRefreshTokenReused) {
+		// Either the token was stolen and replayed, or the legitimate holder
+		// kept using a token after its successor was issued. Both end the
+		// session; the log line is what makes the first case investigable.
+		LogWarnWithRequest(r, LogCategoryAuth, "Refresh token reuse detected; session revoked", nil)
+		clearRefreshTokenCookie(w)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -371,11 +442,18 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update last used timestamp
-	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		UpdateRefreshTokenLastUsed(tx, validToken.Id)
-		vbolt.TxCommit(tx)
-	})
+	if rotateErr != nil || user.Id == 0 {
+		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt with invalid token", nil)
+		clearRefreshTokenCookie(w)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid or expired refresh token",
+		})
+		return
+	}
+
+	setRefreshTokenCookie(w, newTokenString)
 
 	// Generate new JWT (uses helper function that doesn't create new refresh token)
 	token, err := setAuthJwtCookie(user, w)
@@ -395,7 +473,7 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// Log successful refresh
 	LogInfoWithRequest(r, LogCategoryAuth, "Token refresh successful", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	w.Header().Set("Content-Type", "application/json")

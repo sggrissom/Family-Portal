@@ -330,3 +330,37 @@ func TestLogEntryJSONStructure(t *testing.T) {
 		t.Error("Expected timestamp to be recent")
 	}
 }
+
+func TestRedactEmail(t *testing.T) {
+	tests := []struct {
+		name  string
+		email string
+		want  string
+	}{
+		{name: "ordinary address", email: "steven@example.com", want: "s***@example.com"},
+		{name: "subdomain", email: "a.b+tag@mail.example.co.uk", want: "a***@mail.example.co.uk"},
+		{name: "single character local part", email: "x@example.com", want: "x***@example.com"},
+		{name: "not an address", email: "garbage", want: "***"},
+		{name: "leading at sign", email: "@example.com", want: "***"},
+		{name: "empty", email: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := redactEmail(tt.email); got != tt.want {
+				t.Errorf("redactEmail(%q) = %q, want %q", tt.email, got, tt.want)
+			}
+		})
+	}
+}
+
+// The local part is the identifying half of an address; whatever else redaction
+// does, it must not survive into a log line.
+func TestRedactEmailDropsTheLocalPart(t *testing.T) {
+	const email = "verydistinctivename@example.com"
+
+	got := redactEmail(email)
+	if strings.Contains(got, "verydistinctivename") {
+		t.Errorf("redactEmail(%q) = %q, which still contains the local part", email, got)
+	}
+}

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"time"
 
 	"go.hasen.dev/vbolt"
 	"golang.org/x/oauth2"
@@ -16,6 +18,11 @@ import (
 
 // Google iOS Client ID for mobile app token verification
 var googleIOSClientID string
+
+// googleTokenInfoClient talks to Google's tokeninfo endpoint. The default HTTP
+// client has no timeout, which would let an unresponsive Google hold a login
+// request — and its handler goroutine — open indefinitely.
+var googleTokenInfoClient = &http.Client{Timeout: 10 * time.Second}
 
 var oauthConf *oauth2.Config
 var oauthStateString string
@@ -207,8 +214,16 @@ func authenticateForUser(userId int, w http.ResponseWriter) error {
 
 // verifyGoogleIDToken verifies a Google ID token using Google's tokeninfo endpoint
 func verifyGoogleIDToken(idToken string) (*GoogleTokenInfo, error) {
-	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+	resp, err := googleTokenInfoClient.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
 	if err != nil {
+		// net/http puts the request URL in its errors, and this URL carries the
+		// caller's ID token in a query parameter — logging the error verbatim
+		// would write a live credential into the log file. Unwrap to the
+		// underlying transport error, which does not contain it.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return nil, fmt.Errorf("failed to verify token: %v", err)
 	}
 	defer resp.Body.Close()
@@ -296,7 +311,7 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		if user.Id == 0 {
 			LogErrorWithRequest(r, LogCategoryAuth, "Failed to create user from Google sign-in", map[string]interface{}{
-				"email": tokenInfo.Email,
+				"email": redactEmail(tokenInfo.Email),
 			})
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Failed to create account"})
@@ -305,7 +320,7 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		LogInfoWithRequest(r, LogCategoryAuth, "New user created via Google sign-in", map[string]interface{}{
 			"userId": user.Id,
-			"email":  user.Email,
+			"email":  redactEmail(user.Email),
 		})
 	}
 
@@ -323,7 +338,7 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	LogInfoWithRequest(r, LogCategoryAuth, "Google sign-in successful", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	resp := GetAuthResponseForUser(user)

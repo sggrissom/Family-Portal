@@ -150,10 +150,13 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("JSON parse error: %v", err))
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("Response preview: %s", preview))
 
+		// The preview goes back to the user who submitted the text, but not
+		// into the log: it is a chunk of that family's records — names, dates,
+		// measurements — and a parse failure is not a reason to copy it
+		// somewhere with a different retention and a different audience.
 		LogErrorSimple("IMPORT", "Failed to parse AI JSON response", err, map[string]interface{}{
 			"model":       modelName,
 			"responseLen": len(conversionResult.GeneratedJSON),
-			"preview":     preview,
 		})
 		return
 	}

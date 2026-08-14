@@ -1,7 +1,11 @@
 package backend
 
 import (
+	"bytes"
 	"errors"
+	"family/cfg"
+	"log"
+	"os"
 	"strings"
 	"testing"
 )
@@ -133,5 +137,33 @@ func TestBuildMessageUsesCRLF(t *testing.T) {
 	}
 	if strings.Contains(strings.ReplaceAll(message, "\r\n", ""), "\n") {
 		t.Error("message contains bare newlines")
+	}
+}
+
+// An undeliverable password reset email must not leave its link in the log of a
+// production server, where it would outlive the link's own expiry.
+func TestLogMailFallbackKeepsBodiesOutOfReleaseLogs(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	const link = "https://familyrecord.app/reset-password?token=secrettokenvalue"
+	logMailFallback("member@example.com", "Reset your password", "Open this link:\n"+link)
+
+	output := buf.String()
+	if cfg.IsRelease {
+		if strings.Contains(output, link) {
+			t.Error("release build logged the message body")
+		}
+		if strings.Contains(output, "member@example.com") {
+			t.Error("release build logged the full recipient address")
+		}
+		return
+	}
+
+	// Local builds print the link on purpose: it is how you finish a password
+	// reset without a configured mail server.
+	if !strings.Contains(output, link) {
+		t.Error("local build did not print the reset link")
 	}
 }

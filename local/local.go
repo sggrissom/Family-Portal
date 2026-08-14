@@ -30,12 +30,11 @@ func StartLocalServer() {
 	app.StaticData = os.DirFS(cfg.StaticDir)
 	vbeam.GenerateTSBindings(app, "frontend/server.ts")
 
-	// Wrap with security headers
-	secureApp := backend.NewSecurityWrapper(app)
-	limitedApp := backend.NewRequestSizeLimitWrapper(secureApp)
+	// Security headers, request size limits, and rate limiting
+	handler := family.WrapApplication(app)
 
 	var addr = fmt.Sprintf(":%d", Port)
-	var appServer = family.NewHTTPServer(addr, limitedApp)
+	var appServer = family.NewHTTPServer(addr, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunTokenCleanup(ctx, app.DB)

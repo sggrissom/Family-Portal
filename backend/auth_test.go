@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"family/cfg"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.hasen.dev/vbolt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestResolveJWTSecret(t *testing.T) {
@@ -427,5 +429,127 @@ func TestGenerateStateString(t *testing.T) {
 
 	if len(token1) == 0 || len(token2) == 0 {
 		t.Error("Expected non-empty tokens")
+	}
+}
+
+// loginTestUser writes a user with the given password hash, or no hash at all
+// when password is empty, which is what a Google-only account looks like.
+func loginTestUser(t *testing.T, db *vbolt.DB, email, password string) User {
+	t.Helper()
+
+	var user User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		user = User{
+			Id:        vbolt.NextIntId(tx, UsersBkt),
+			Name:      "Login Test",
+			Email:     email,
+			FamilyId:  1,
+			Creation:  time.Now(),
+			LastLogin: time.Now(),
+		}
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+		vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
+
+		hash := []byte{}
+		if password != "" {
+			generated, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				t.Fatalf("bcrypt.GenerateFromPassword() error = %v", err)
+			}
+			hash = generated
+		}
+		vbolt.Write(tx, PasswdBkt, user.Id, &hash)
+		vbolt.TxCommit(tx)
+	})
+	return user
+}
+
+// postLogin runs the login handler and returns the decoded response.
+func postLogin(t *testing.T, email, password string) (*httptest.ResponseRecorder, LoginResponse) {
+	t.Helper()
+
+	body := strings.NewReader(`{"email":"` + email + `","password":"` + password + `"}`)
+	req := httptest.NewRequest("POST", "/api/login", body)
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	loginHandler(recorder, req)
+
+	var resp LoginResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	return recorder, resp
+}
+
+// A failed login must look identical whether or not the address has an account,
+// or the form becomes a way to ask who is a member here.
+func TestLoginFailuresAreIndistinguishable(t *testing.T) {
+	testDBPath := "test_login_enumeration.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+	appDb = db
+
+	loginTestUser(t, db, "member@example.com", "correct-horse-battery")
+	loginTestUser(t, db, "google-only@example.com", "")
+
+	cases := []struct {
+		name     string
+		email    string
+		password string
+	}{
+		{name: "wrong password", email: "member@example.com", password: "wrong-password"},
+		{name: "unknown address", email: "stranger@example.com", password: "wrong-password"},
+		{name: "google-only account", email: "google-only@example.com", password: "wrong-password"},
+	}
+
+	var firstStatus int
+	for i, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder, resp := postLogin(t, tt.email, tt.password)
+
+			if resp.Success {
+				t.Fatal("login succeeded with a bad password")
+			}
+			if resp.Error != invalidCredentialsMessage {
+				t.Errorf("error = %q, want %q", resp.Error, invalidCredentialsMessage)
+			}
+			if i == 0 {
+				firstStatus = recorder.Code
+			} else if recorder.Code != firstStatus {
+				t.Errorf("status = %d, want %d to match the other failures", recorder.Code, firstStatus)
+			}
+		})
+	}
+}
+
+// The response time must not answer the question the message refuses to.
+func TestLoginTimingDoesNotRevealAccounts(t *testing.T) {
+	testDBPath := "test_login_timing.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+	appDb = db
+
+	loginTestUser(t, db, "member@example.com", "correct-horse-battery")
+
+	// Warm the decoy so its one-time construction is not counted below.
+	compareAgainstDecoyPassword("warmup")
+
+	start := time.Now()
+	postLogin(t, "member@example.com", "wrong-password")
+	knownAccount := time.Since(start)
+
+	start = time.Now()
+	postLogin(t, "stranger@example.com", "wrong-password")
+	unknownAccount := time.Since(start)
+
+	// Exact equality is not achievable, but an unknown address must not return
+	// in a fraction of the time a known one takes — that gap is the oracle.
+	if unknownAccount < knownAccount/2 {
+		t.Errorf("unknown address answered in %v against %v for a known one", unknownAccount, knownAccount)
 	}
 }

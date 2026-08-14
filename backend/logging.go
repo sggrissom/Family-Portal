@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -153,6 +154,26 @@ func LogDebug(category string, message string, data ...interface{}) {
 		d = data[0]
 	}
 	logStructured(logLevelDebug, logCategory(category), message, d, nil)
+}
+
+// redactEmail masks an address for logging.
+//
+// Logs are kept for weeks and read by whoever is debugging, so a full address
+// in a log line is a copy of personal data living outside the database — and for
+// failed logins, the address may belong to somebody who has no account here at
+// all. The first character and the domain are enough to recognize an address you
+// already know while not being a usable address on their own.
+func redactEmail(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 {
+		// No local part to preserve, and a value that is not an address at all
+		// should not be echoed verbatim either.
+		if email == "" {
+			return ""
+		}
+		return "***"
+	}
+	return email[:1] + "***" + email[at:]
 }
 
 // getClientIP extracts the client IP from the request

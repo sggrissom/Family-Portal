@@ -109,9 +109,6 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
-	return dbConnection
-}
-
 // readinessHandler verifies that the application's durable dependencies are
 // usable. Unlike /healthz, this endpoint can be removed from a load balancer
 // while the process remains alive and able to recover.
@@ -221,7 +218,16 @@ func MakeApplication() *vbeam.Application {
 	return app
 }
 
+// WrapApplication applies the standard middleware chain. Every server that
+// serves this application to a network builds its handler here, so a wrapper
+// added later cannot end up on one entry point and not another.
+//
+// Order matters: rate limiting is outermost, so a flood is refused before any
+// body is read or any handler touches the database.
+func WrapApplication(app *vbeam.Application) http.Handler {
+	return backend.NewRateLimitWrapper(backend.NewRequestSizeLimitWrapper(backend.NewSecurityWrapper(app)))
+}
+
 func MakeSecureApplication() http.Handler {
-	app := MakeApplication()
-	return backend.NewRequestSizeLimitWrapper(backend.NewSecurityWrapper(app))
+	return WrapApplication(MakeApplication())
 }

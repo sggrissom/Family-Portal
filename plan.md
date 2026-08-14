@@ -36,14 +36,14 @@ Signup is open to the internet and there is no rate limiting anywhere in the bac
 
 - [x] Fail release startup when `JWT_SECRET_KEY` is absent or weak.
 - [x] Extend that check to the rest of the required production config: `SITE_ROOT`, Google OAuth, APNs, AI provider, storage paths. Required settings fail release startup; APNs is all-or-nothing because it belongs to the 1.1 app.
-- [ ] Add rate limiting middleware; apply to login, signup, password reset, invite-code attempts, refresh, Google token login, AI calls, imports, uploads, and WebSocket connects.
-- [ ] Hash refresh tokens at rest.
-- [ ] Rotate refresh tokens on use; on reuse detection, revoke that session family.
+- [x] Add rate limiting middleware; apply to login, signup, password reset, invite-code attempts, refresh, Google token login, AI calls, imports, uploads, and WebSocket connects. Per-client token buckets, keyed by the address the trusted proxy reports, with a catch-all rule so new endpoints are bounded by default.
+- [x] Hash refresh tokens at rest. Existing rows are migrated, so the deploy doesn't sign everyone out.
+- [x] Rotate refresh tokens on use; on reuse detection, revoke that session family. A one-minute grace window keeps concurrent tabs from looking like theft.
 - [x] Periodically purge expired refresh tokens.
 - [x] Explicit JSON, multipart, import, upload, and WebSocket message-size limits.
-- [ ] Generic auth failure messages so login can't be used to enumerate accounts.
-- [ ] Pass over every RPC, upload/download handler, WebSocket action, and admin action confirming family scoping — plus tests that one family cannot read or mutate another's data.
-- [ ] Grep the logs for emails, invite codes, tokens, and AI content; redact what doesn't need to be there.
+- [x] Generic auth failure messages so login can't be used to enumerate accounts — including equal timing, so an unknown address costs the same bcrypt work as a known one.
+- [x] Pass over every RPC, upload/download handler, WebSocket action, and admin action confirming family scoping — plus tests that one family cannot read or mutate another's data. `backend/cross_family_isolation_test.go` calls each procedure as an outsider holding another family's ids.
+- [x] Grep the logs for emails, invite codes, tokens, and AI content; redact what doesn't need to be there. Addresses are masked, the undeliverable-mail fallback stops printing bodies in release, AI response previews stay out of the log, and the Google tokeninfo URL no longer reaches an error string.
 
 ## 3. Don't trap users
 
@@ -51,7 +51,7 @@ Anything a user can't undo themselves becomes a support request to me.
 
 - [x] Password reset with single-use, short-lived, hashed tokens.
 - [x] Enumeration-resistant password-reset responses.
-- [ ] Rate-limit password-reset requests and token attempts (covered by §2).
+- [x] Rate-limit password-reset requests and token attempts (covered by §2).
 - [ ] Password change with current-password verification.
 - [ ] Revoke other sessions after a password change.
 - [ ] Delete my account — with password/recent-auth confirmation. Must remove sessions, refresh tokens, device tokens, photos and derived files, face descriptors, and index entries; and queued background work must not resurrect any of it.

@@ -339,11 +339,11 @@ func TestResetPassword(t *testing.T) {
 
 		var refreshToken string
 		vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
-			created, err := CreateRefreshToken(tx, user.Id, time.Hour)
+			_, created, err := CreateRefreshToken(tx, user.Id, time.Hour)
 			if err != nil {
 				t.Fatalf("CreateRefreshToken() error = %v", err)
 			}
-			refreshToken = created.Token
+			refreshToken = created
 			vbolt.TxCommit(tx)
 		})
 

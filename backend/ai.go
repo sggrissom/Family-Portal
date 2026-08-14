@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -26,6 +27,23 @@ type AIConversionResult struct {
 	TokensUsed    int
 	Model         string
 	ResponseTime  int64 // Milliseconds
+}
+
+// withoutRequestURL strips the request URL that net/http attaches to transport
+// errors.
+//
+// These errors reach the browser: ProcessAIImport and ListAIModels put the
+// failure text straight into their response. The credential now travels in a
+// header rather than a query parameter, so the URL no longer carries a secret —
+// but an error string is still no place for the endpoint a request went to, and
+// the underlying cause ("connection refused", "context deadline exceeded") is
+// the part worth showing anyway.
+func withoutRequestURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }
 
 // GetDefaultAIModel returns the default AI model
@@ -48,17 +66,16 @@ func ListAvailableModels() ([]string, error) {
 		return nil, errors.New("Gemini API key not configured")
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
-
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", "https://generativelanguage.googleapis.com/v1beta/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("X-Goog-Api-Key", apiKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
+		return nil, fmt.Errorf("API request failed: %w", withoutRequestURL(err))
 	}
 	defer resp.Body.Close()
 
@@ -128,20 +145,20 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 	}
 
 	// Make API request
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent?key=%s",
-		request.Model, apiKey)
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent", request.Model)
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Goog-Api-Key", apiKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
+		return nil, fmt.Errorf("API request failed: %w", withoutRequestURL(err))
 	}
 	defer resp.Body.Close()
 

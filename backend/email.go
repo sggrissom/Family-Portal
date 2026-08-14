@@ -236,9 +236,17 @@ func isPermanentMailError(err error) bool {
 	return false
 }
 
-// logMailFallback prints a message that could not be delivered. Local builds
-// use this to surface reset links on the console.
+// logMailFallback reports a message that could not be delivered.
+//
+// The body is printed only in local builds, where seeing the reset link on the
+// console is the point. A release build must never print it: these messages
+// carry single-use password reset links, and a log file is a place they would
+// sit readable long after the link was meant to expire.
 func logMailFallback(to, subject, body string) {
+	if cfg.IsRelease {
+		log.Printf("[mail] outbound mail is not configured; message not sent. To: %s, Subject: %s", redactEmail(to), subject)
+		return
+	}
 	log.Printf("[mail] neither MAIL_FROM nor EMAIL/APP_PASSWORD set; message not sent.\nTo: %s\nSubject: %s\n\n%s\n", to, subject, body)
 }
 

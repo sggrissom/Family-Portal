@@ -386,7 +386,7 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 
 	LogInfo(LogCategoryAuth, "Password reset completed", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	// The reset itself is already durable, so a failure to notify is logged

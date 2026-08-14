@@ -516,16 +516,6 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 
 // authenticateWebSocketRequest validates the WebSocket connection request
 func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User, error) {
-	// Log request details for debugging
-	cookies := ""
-	for _, cookie := range r.Cookies() {
-		if cookie.Name == "authToken" {
-			cookies += "authToken=<present>; "
-		} else {
-			cookies += cookie.Name + "=" + cookie.Value + "; "
-		}
-	}
-
 	// Use existing authentication logic - relies on authToken cookie sent with request
 	user, err := AuthenticateRequest(r)
 	if err != nil {

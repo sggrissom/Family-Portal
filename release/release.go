@@ -38,13 +38,12 @@ func main() {
 	app.Frontend = distFS
 	app.StaticData = os.DirFS(cfg.StaticDir)
 
-	// Wrap with security headers
-	secureApp := backend.NewSecurityWrapper(app)
-	limitedApp := backend.NewRequestSizeLimitWrapper(secureApp)
+	// Security headers, request size limits, and rate limiting
+	handler := family.WrapApplication(app)
 
 	addr := fmt.Sprintf(":%d", Port)
 	log.Printf("listening on %s\n", addr)
-	var appServer = family.NewHTTPServer(addr, limitedApp)
+	var appServer = family.NewHTTPServer(addr, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunTokenCleanup(ctx, app.DB)
