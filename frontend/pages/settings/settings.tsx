@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
+import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
@@ -98,6 +99,22 @@ const useChangePasswordForm = vlens.declareHook(
     confirmPassword: "",
     error: "",
     success: "",
+    loading: false,
+  })
+);
+
+type DeleteAccountForm = {
+  password: string;
+  confirmEmail: string;
+  error: string;
+  loading: boolean;
+};
+
+const useDeleteAccountForm = vlens.declareHook(
+  (): DeleteAccountForm => ({
+    password: "",
+    confirmEmail: "",
+    error: "",
     loading: false,
   })
 );
@@ -264,6 +281,51 @@ async function onChangePasswordClicked(form: ChangePasswordForm, event: Event) {
     }
   } catch (e) {
     logError("ui", "Password change failed", e);
+    form.error = "Network error. Please try again.";
+  }
+
+  form.loading = false;
+  vlens.scheduleRedraw();
+}
+
+async function onDeleteAccountClicked(form: DeleteAccountForm, event: Event) {
+  event.preventDefault();
+
+  if (
+    !confirm(
+      "Delete your account? This cannot be undone. Any family you are the only member of is deleted with everything in it — people, photos, measurements and milestones."
+    )
+  ) {
+    return;
+  }
+
+  form.loading = true;
+  form.error = "";
+  vlens.scheduleRedraw();
+
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch("/api/delete-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        password: form.password,
+        confirmEmail: form.confirmEmail,
+      }),
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      // The account is gone, so there is nothing to log out of — just drop the
+      // cached identity and leave.
+      auth.clearAuth();
+      window.location.href = "/";
+      return;
+    }
+    form.error = result.error || "Could not delete your account";
+  } catch (e) {
+    logError("ui", "Account deletion failed", e);
     form.error = "Network error. Please try again.";
   }
 
@@ -454,7 +516,9 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
   const passwordForm = useChangePasswordForm();
+  const deleteForm = useDeleteAccountForm();
   const appearance = useAppearanceSettings();
+  const accountEmail = auth.getAuth()?.email ?? "";
 
   return (
     <div className="settings-page">
@@ -931,6 +995,60 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             </div>
           </div>
         )}
+
+        <div className="settings-section">
+          <h2>Delete Account</h2>
+          <div className="settings-card">
+            <div className="warning-banner">
+              <strong>⚠️ Warning:</strong> This cannot be undone.
+            </div>
+
+            <p className="section-description">
+              Deleting your account removes your sign-in, your sessions, your registered devices and
+              your chat messages. Records stay with any family that still has another member in it.
+              A family you are the only member of is deleted along with everything in it — people,
+              photos, measurements and milestones. Export your data first if you want to keep it.
+            </p>
+
+            {deleteForm.error && <div className="error-message">{deleteForm.error}</div>}
+
+            <form onSubmit={vlens.cachePartial(onDeleteAccountClicked, deleteForm)}>
+              <div className="form-group">
+                <label htmlFor="deletePassword">Password</label>
+                <input
+                  type="password"
+                  id="deletePassword"
+                  autoComplete="current-password"
+                  {...vlens.attrsBindInput(vlens.ref(deleteForm, "password"))}
+                  disabled={deleteForm.loading}
+                />
+                <small>Leave blank if you sign in with Google.</small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="deleteConfirmEmail">
+                  Type <strong>{accountEmail}</strong> to confirm
+                </label>
+                <input
+                  type="email"
+                  id="deleteConfirmEmail"
+                  autoComplete="off"
+                  {...vlens.attrsBindInput(vlens.ref(deleteForm, "confirmEmail"))}
+                  disabled={deleteForm.loading}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-danger"
+                disabled={deleteForm.loading || !deleteForm.confirmEmail}
+              >
+                {deleteForm.loading ? "Deleting..." : "Delete My Account"}
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );

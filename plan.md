@@ -54,12 +54,12 @@ Anything a user can't undo themselves becomes a support request to me.
 - [x] Rate-limit password-reset requests and token attempts (covered by §2).
 - [x] Password change with current-password verification.
 - [x] Revoke other sessions after a password change. Every refresh token goes; the browser making the request is handed a fresh session in the same response.
-- [ ] Delete my account — with password/recent-auth confirmation. Must remove sessions, refresh tokens, device tokens, photos and derived files, face descriptors, and index entries; and queued background work must not resurrect any of it.
+- [x] Delete my account — with password/recent-auth confirmation. Must remove sessions, refresh tokens, device tokens, photos and derived files, face descriptors, and index entries; and queued background work must not resurrect any of it. Confirmation is the typed email address plus the password when the account has one; a Google-only account has no password to prove. A family the deletion empties is destroyed with everything in it, since nobody could ever reach it again. The photo and face-analysis workers now check the record still exists before writing, and the photo worker discards files for a photo deleted mid-processing.
 - [x] Leave family. Refused for the last member, since dropping the only membership would strand the household's content; ownership passes to the longest-standing remaining member so a family is never headless.
 - [x] Owner can remove a member.
 - [x] Invite-code rotation. Generation also checks for collisions now.
 - [x] Decide and implement what happens to shared content when a member leaves or deletes — **content stays with the family.** Written down at the top of `backend/membership_procs.go`. Leaving removes exactly one thing: the membership row. A user left with no family gets a fresh empty one, because family-less is not a state the app handles.
-- [ ] Tests: account deletion clears every store, last-member behavior, session revocation, cross-family isolation.
+- [x] Tests: account deletion clears every store, last-member behavior, session revocation, cross-family isolation.
 
 ## 4. Don't ship blind
 
@@ -138,7 +138,7 @@ Backend groundwork already landed — keep it working, don't extend it.
 - [x] Version policy checked before authentication, via a public cacheable endpoint with no user data.
 - [x] Semver-compliant comparison, prerelease/build metadata handling, minimum-never-exceeds-latest validation, and tests for ok / optional / mandatory / missing-config / malformed / downgrade.
 - [x] Push token ownership enforced, device-token reassignment reindexed correctly, bundle IDs and platforms restricted to server config, token format validated without logging it, cross-user authorization tests, logout deactivates the device token, APNs invalid/unregistered responses deactivate stale registrations.
-- [ ] Account deletion deactivates all of the user's device tokens — **do this in 1.0** as part of §3.
+- [x] Account deletion deactivates all of the user's device tokens — **do this in 1.0** as part of §3. Done: the rows are deleted outright rather than deactivated, since they hold a token identifying a physical device.
 - [ ] Admin UI or operator command for setting minimum/latest versions.
 - [ ] Audit forced-update messages and store URLs.
 - [ ] Versioned push payload with event type, record ID, and deep-link destination.
