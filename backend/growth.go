@@ -196,6 +196,16 @@ func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int)
 	return growthData, nil
 }
 
+// getFamilyGrowthData returns every measurement the family owns.
+func getFamilyGrowthData(tx *vbolt.Tx, familyId int) (growthData []GrowthData) {
+	var growthDataIds []int
+	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &growthDataIds, vbolt.Window{})
+	if len(growthDataIds) > 0 {
+		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
+	}
+	return
+}
+
 func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 	// Get existing growth data and validate ownership
 	growthData, err := GetGrowthDataByIdAndFamily(tx, growthDataId, familyId)

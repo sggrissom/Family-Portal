@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"errors"
 	"family/cfg"
 	"fmt"
 	"log"
@@ -32,6 +33,12 @@ type PhotoWorker struct {
 }
 
 var globalPhotoWorker *PhotoWorker
+
+// errPhotoRecordGone means the photo was deleted while this job was in flight —
+// most often because the account that owned it was deleted. It is distinct from
+// an ordinary failure because there is nothing to mark failed and nobody to tell:
+// the correct response is to clean up whatever the job already wrote and stop.
+var errPhotoRecordGone = errors.New("photo record no longer exists")
 
 // InitializePhotoWorker starts the background photo processing worker
 func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
@@ -122,6 +129,12 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	log.Printf("[PHOTO_PROCESSING] Setting status to processing for photo %d", job.ImageId)
 	err := pw.updatePhotoStatus(job.ImageId, 1) // 1 = processing
 	if err != nil {
+		if errors.Is(err, errPhotoRecordGone) {
+			// Deleted before we started. Nothing has been written yet, but the
+			// upload's own original may already be on disk.
+			pw.discardJobFiles(job)
+			return
+		}
 		log.Printf("[PHOTO_PROCESSING] FAILED to update photo %d status to processing: %v", job.ImageId, err)
 		return
 	}
@@ -150,6 +163,13 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	log.Printf("[PHOTO_PROCESSING] Marking photo %d as completed", job.ImageId)
 	err = pw.updatePhotoComplete(job.ImageId, processedWidth, processedHeight)
 	if err != nil {
+		if errors.Is(err, errPhotoRecordGone) {
+			// The photo was deleted while we were decoding it. The variants
+			// just written to disk have no record pointing at them, so nothing
+			// will ever serve or clean them up but this.
+			pw.discardJobFiles(job)
+			return
+		}
 		log.Printf("[PHOTO_PROCESSING] FAILED to mark photo %d as complete: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
 		return
@@ -160,6 +180,19 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 
 	processingTime := time.Since(startTime)
 	log.Printf("[PHOTO_PROCESSING] ✅ Successfully completed photo ID %d in %v", job.ImageId, processingTime)
+}
+
+// discardJobFiles removes every file this job could have written, for the case
+// where the photo record disappeared underneath it. It reuses the deletion path
+// a real photo takes, so the two cannot drift apart on which variants exist.
+func (pw *PhotoWorker) discardJobFiles(job PhotoProcessingJob) {
+	log.Printf("[PHOTO_PROCESSING] Photo %d was deleted mid-processing; discarding its files", job.ImageId)
+	if err := deletePhotoFiles(Image{FilePath: job.FilePath}); err != nil {
+		LogErrorSimple(LogCategoryWorker, "Failed to discard files for a deleted photo", map[string]interface{}{
+			"photoId": job.ImageId,
+			"error":   err.Error(),
+		})
+	}
 }
 
 // saveImageVariants saves all processed image variants to disk
@@ -241,7 +274,7 @@ func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {
 	vbolt.WithWriteTx(pw.db, func(tx *vbolt.Tx) {
 		image := GetImageById(tx, imageId)
 		if image.Id == 0 {
-			updateError = fmt.Errorf("image not found")
+			updateError = errPhotoRecordGone
 			return
 		}
 
@@ -273,7 +306,7 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 	vbolt.WithWriteTx(pw.db, func(tx *vbolt.Tx) {
 		image := GetImageById(tx, imageId)
 		if image.Id == 0 {
-			updateError = fmt.Errorf("image not found")
+			updateError = errPhotoRecordGone
 			return
 		}
 

@@ -292,10 +292,24 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 		}
 
 		matched[bestPersonId] = true
+		tagged := false
 		vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
+			// Both ends are re-read inside the write transaction. Everything
+			// above ran against a snapshot taken before the face daemon was
+			// called, and an account deletion in that window would otherwise
+			// have this worker write a join row pointing at a photo and a
+			// person that no longer exist — deleted data, quietly restored.
+			if GetImageById(tx, job.ImageId).Id == 0 || GetPersonById(tx, bestPersonId).Id == 0 {
+				return
+			}
 			addAutoTaggedPersonToPhoto(tx, job.ImageId, bestPersonId, job.FamilyId)
 			vbolt.TxCommit(tx)
+			tagged = true
 		})
+		if !tagged {
+			log.Printf("[FACE_ANALYSIS] Photo %d or person %d disappeared mid-analysis; not tagging", job.ImageId, bestPersonId)
+			continue
+		}
 		log.Printf("[FACE_ANALYSIS] Auto-tagged person %d in photo %d (dist: %.3f)", bestPersonId, job.ImageId, bestDist)
 	}
 }

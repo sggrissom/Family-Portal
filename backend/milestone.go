@@ -640,6 +640,16 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	return milestone, nil
 }
 
+// getFamilyMilestones returns every milestone the family owns.
+func getFamilyMilestones(tx *vbolt.Tx, familyId int) (milestones []Milestone) {
+	var milestoneIds []int
+	vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, familyId, &milestoneIds, vbolt.Window{})
+	if len(milestoneIds) > 0 {
+		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
+	}
+	return
+}
+
 func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	// Get existing milestone and validate ownership
 	milestone, err := GetMilestoneByIdAndFamily(tx, milestoneId, familyId)

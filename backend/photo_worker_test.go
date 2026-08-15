@@ -2,6 +2,7 @@ package backend
 
 import (
 	"bytes"
+	"errors"
 	"family/cfg"
 	"image"
 	"image/png"
@@ -343,12 +344,13 @@ func TestUpdatePhotoStatus(t *testing.T) {
 	t.Run("Update non-existent image", func(t *testing.T) {
 		err := worker.updatePhotoStatus(999, 1)
 		if err == nil {
-			t.Error("Expected error for non-existent image")
+			t.Fatal("Expected error for non-existent image")
 		}
 
-		expectedError := "image not found"
-		if err.Error() != expectedError {
-			t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+		// The sentinel matters, not the wording: processPhotoJob branches on it
+		// to clean up files for a photo that was deleted mid-processing.
+		if !errors.Is(err, errPhotoRecordGone) {
+			t.Errorf("Expected errPhotoRecordGone, got '%v'", err)
 		}
 	})
 
@@ -623,5 +625,45 @@ func TestPhotoProcessingJobStruct(t *testing.T) {
 	}
 	if job.OriginalHeight != 600 {
 		t.Errorf("Expected OriginalHeight 600, got %d", job.OriginalHeight)
+	}
+}
+
+// A queued job whose photo was deleted — most often because the account that
+// owned it was deleted — must write nothing back and must not leave files
+// behind. Without this the worker undoes part of an account deletion.
+func TestProcessPhotoJobDiscardsWorkForADeletedPhoto(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/worker_deleted.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+
+	worker := &PhotoWorker{db: db}
+
+	// Files the upload left on disk before the record was deleted.
+	photosDir := filepath.Join(cfg.StaticDir, "photos")
+	if err := os.MkdirAll(photosDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	orphan := filepath.Join(photosDir, "gone_original.jpg")
+	if err := os.WriteFile(orphan, []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(orphan) })
+
+	// No image row exists for this id: it was deleted after the job was queued.
+	worker.processPhotoJob(PhotoProcessingJob{
+		ImageId:  4242,
+		FamilyId: 1,
+		FilePath: "photos/gone.jpg",
+		FileData: createTestImageData(64, 64),
+		MimeType: "image/png",
+	})
+
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		if GetImageById(tx, 4242).Id != 0 {
+			t.Error("the worker recreated a deleted photo record")
+		}
+	})
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Error("the worker left files on disk for a deleted photo")
 	}
 }

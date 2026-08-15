@@ -88,8 +88,9 @@ var exactPathRules = map[string]RateLimitRule{
 	"/api/google/callback":    rateRuleLogin,
 	"/api/refresh":            rateRuleRefresh,
 	// Guessing the current password from inside a session is still password
-	// guessing, so it is bounded the same way the login form is.
+	// guessing, so both of these are bounded the same way the login form is.
 	"/api/change-password": rateRuleLogin,
+	"/api/delete-account":  rateRuleLogin,
 	"/api/upload-photo":    rateRuleUpload,
 	"/api/import-bundle":   rateRuleImport,
 	"/ws/chat":             rateRuleWebSocket,

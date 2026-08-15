@@ -17,6 +17,7 @@ import (
 // current session can only sign the user out of the browser they are using.
 func RegisterAccountHandlers(app *vbeam.Application) {
 	app.HandleFunc("/api/change-password", changePasswordHandler)
+	app.HandleFunc("/api/delete-account", deleteAccountHandler)
 }
 
 type ChangePasswordRequest struct {

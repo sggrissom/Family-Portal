@@ -21,6 +21,11 @@ import (
 // grants access. The departing user immediately stops being able to read or
 // write anything in that family, and nothing they contributed is touched.
 //
+// Deleting the account is a stronger request and is handled in
+// account_deletion.go: family records still stay, but the account's own data
+// goes, including its chat messages — and a family the deletion empties is
+// destroyed outright, because nobody could ever reach it again.
+//
 // A user who leaves their last family is given a fresh empty one, the same way
 // signup gives a new account a household to put people in. Being family-less is
 // not a state the rest of the application handles, and stranding somebody there
