@@ -4,7 +4,9 @@ package backend
 
 import (
 	"family/cfg"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +127,7 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 
 		// Retrieve family messages
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-			messages := GetFamilyChatMessages(tx, familyId, 10)
+			messages := GetFamilyChatMessages(tx, familyId, 10, 0)
 
 			if len(messages) < 3 {
 				t.Errorf("Expected at least 3 messages, got %d", len(messages))
@@ -210,7 +212,7 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 
 	// Test family 1 isolation
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		family1Messages := GetFamilyChatMessages(tx, family1Id, 10)
+		family1Messages := GetFamilyChatMessages(tx, family1Id, 10, 0)
 
 		if len(family1Messages) != 1 {
 			t.Errorf("Expected 1 message for family 1, got %d", len(family1Messages))
@@ -230,7 +232,7 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 
 	// Test family 2 isolation
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		family2Messages := GetFamilyChatMessages(tx, family2Id, 10)
+		family2Messages := GetFamilyChatMessages(tx, family2Id, 10, 0)
 
 		if len(family2Messages) != 1 {
 			t.Errorf("Expected 1 message for family 2, got %d", len(family2Messages))
@@ -469,5 +471,129 @@ func TestChatMessageIndexing(t *testing.T) {
 				t.Errorf("Message ID %d not found in user index", storedId)
 			}
 		}
+	})
+}
+
+// Chat paging reads back from the newest message, so a limit smaller than the
+// history returns the latest page rather than the family's first messages.
+func TestChatMessagePaging(t *testing.T) {
+	testDBPath := "test_chat_paging_db.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	var testUser User
+	var familyId int
+
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		userReq := CreateAccountRequest{
+			Name:            "Paging User",
+			Email:           "paging@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
+		testUser = AddUserTx(tx, userReq, hash)
+		familyId = testUser.FamilyId
+		vbolt.TxCommit(tx)
+	})
+
+	// 25 messages, "msg-1" oldest through "msg-25" newest.
+	const total = 25
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		for i := 1; i <= total; i++ {
+			message := ChatMessage{
+				FamilyId:  familyId,
+				UserId:    testUser.Id,
+				UserName:  testUser.Name,
+				Content:   fmt.Sprintf("msg-%d", i),
+				CreatedAt: time.Now().Add(time.Duration(i) * time.Second),
+			}
+			message.Id = vbolt.NextIntId(tx, ChatMessagesBkt)
+			vbolt.Write(tx, ChatMessagesBkt, message.Id, &message)
+			vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message.Id, message.FamilyId)
+			vbolt.SetTargetSingleTerm(tx, ChatMessagesByUserIndex, message.Id, message.UserId)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	contents := func(messages []ChatMessage) []string {
+		out := make([]string, len(messages))
+		for i, m := range messages {
+			out[i] = m.Content
+		}
+		return out
+	}
+
+	expect := func(t *testing.T, got []ChatMessage, want []string) {
+		t.Helper()
+		if !slices.Equal(contents(got), want) {
+			t.Errorf("Expected %v, got %v", want, contents(got))
+		}
+	}
+
+	t.Run("FirstPageIsTheNewestMessages", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			// Oldest-first within the page: the page is cut from the recent end,
+			// but reading order is still chronological.
+			expect(t, GetFamilyChatMessages(tx, familyId, 5, 0),
+				[]string{"msg-21", "msg-22", "msg-23", "msg-24", "msg-25"})
+		})
+	})
+
+	t.Run("OffsetPagesBackwards", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			expect(t, GetFamilyChatMessages(tx, familyId, 5, 5),
+				[]string{"msg-16", "msg-17", "msg-18", "msg-19", "msg-20"})
+			expect(t, GetFamilyChatMessages(tx, familyId, 5, 20),
+				[]string{"msg-1", "msg-2", "msg-3", "msg-4", "msg-5"})
+		})
+	})
+
+	t.Run("PagesDoNotOverlapOrSkip", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			var walked []string
+			for offset := 0; offset < total; offset += 10 {
+				page := contents(GetFamilyChatMessages(tx, familyId, 10, offset))
+				walked = append(page, walked...)
+			}
+			if len(walked) != total {
+				t.Fatalf("Expected %d messages across all pages, got %d", total, len(walked))
+			}
+			for i := 1; i <= total; i++ {
+				if want := fmt.Sprintf("msg-%d", i); walked[i-1] != want {
+					t.Errorf("Position %d: expected %s, got %s", i-1, want, walked[i-1])
+				}
+			}
+		})
+	})
+
+	t.Run("OffsetPastTheEndIsEmpty", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			if messages := GetFamilyChatMessages(tx, familyId, 5, total); len(messages) != 0 {
+				t.Errorf("Expected no messages past the start of history, got %d", len(messages))
+			}
+		})
+	})
+
+	t.Run("LastPageIsShortNotWrapped", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			expect(t, GetFamilyChatMessages(tx, familyId, 10, 20),
+				[]string{"msg-1", "msg-2", "msg-3", "msg-4", "msg-5"})
+		})
+	})
+
+	t.Run("NoLimitReadsEverythingChronologically", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			messages := GetFamilyChatMessages(tx, familyId, 0, 0)
+			if len(messages) != total {
+				t.Fatalf("Expected %d messages, got %d", total, len(messages))
+			}
+			if messages[0].Content != "msg-1" || messages[total-1].Content != fmt.Sprintf("msg-%d", total) {
+				t.Errorf("Expected msg-1 first and msg-%d last, got %s first and %s last",
+					total, messages[0].Content, messages[total-1].Content)
+			}
+		})
 	})
 }

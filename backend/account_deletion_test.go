@@ -224,7 +224,7 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		if len(getTagsByFamily(tx, fx.familyId)) != 0 {
 			t.Error("tags survived")
 		}
-		if len(GetFamilyChatMessages(tx, fx.familyId, 0)) != 0 {
+		if len(GetFamilyChatMessages(tx, fx.familyId, 0, 0)) != 0 {
 			t.Error("chat messages survived")
 		}
 		if len(GetFamilyRoster(tx, fx.familyId)) != 0 {
@@ -391,7 +391,7 @@ func TestDeleteAccountLeavesASharedFamilyIntact(t *testing.T) {
 			t.Error("the family's growth data was deleted")
 		}
 		// The account's own speech does not.
-		if len(GetFamilyChatMessages(tx, fx.familyId, 0)) != 0 {
+		if len(GetFamilyChatMessages(tx, fx.familyId, 0, 0)) != 0 {
 			t.Error("the deleted account's chat messages stayed behind")
 		}
 		// Ownership moved rather than pointing at a user that no longer exists.

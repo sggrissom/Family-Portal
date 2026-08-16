@@ -3,6 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
+	"slices"
 	"strings"
 	"time"
 
@@ -95,10 +96,25 @@ func GetChatMessageById(tx *vbolt.Tx, messageId int) (message ChatMessage) {
 	return
 }
 
-func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int) (messages []ChatMessage) {
+// GetFamilyChatMessages reads one page of a family's chat, counting back from
+// the most recent message, and returns it oldest-first.
+//
+// The index carries no priority, so its natural order is by message id — which
+// is chronological, but ascending. Reading it forwards means a limit returns the
+// family's *first* messages and never its latest, so the window walks backwards
+// and the page is flipped afterwards. Callers keep the chronological order they
+// have always had; what changes is which end of the history the limit cuts off.
+//
+// A limit of 0 is unlimited, which is what the deletion sweep wants.
+func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int, offset int) (messages []ChatMessage) {
 	var messageIds []int
-	vbolt.ReadTermTargets(tx, ChatMessagesByFamilyIndex, familyId, &messageIds, vbolt.Window{Limit: limit})
+	vbolt.ReadTermTargets(tx, ChatMessagesByFamilyIndex, familyId, &messageIds, vbolt.Window{
+		Limit:     limit,
+		Offset:    offset,
+		Direction: vbolt.IterateReverse,
+	})
 	if len(messageIds) > 0 {
+		slices.Reverse(messageIds)
 		vbolt.ReadSlice(tx, ChatMessagesBkt, messageIds, &messages)
 	}
 	return
@@ -248,13 +264,22 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 		limit = *req.Limit
 	}
 
+	// Offset counts backwards from the newest message, so offset 0 is the live
+	// end of the conversation and each further page is older. A caller paging
+	// through history must keep its limit fixed, since the pages are cut from
+	// the same end.
+	offset := 0
+	if req.Offset != nil && *req.Offset > 0 {
+		offset = *req.Offset
+	}
+
 	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
 	if err != nil {
 		return
 	}
 
 	// Get messages for this family
-	resp.Messages = GetFamilyChatMessages(ctx.Tx, familyId, limit)
+	resp.Messages = GetFamilyChatMessages(ctx.Tx, familyId, limit, offset)
 
 	// Log the request
 	LogInfo(LogCategoryAPI, "Chat messages retrieved", map[string]interface{}{
@@ -262,6 +287,7 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 		"userId":       user.Id,
 		"messageCount": len(resp.Messages),
 		"limit":        limit,
+		"offset":       offset,
 	})
 
 	return

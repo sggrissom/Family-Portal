@@ -241,7 +241,7 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 		_ = DeleteGrowthDataTx(tx, growth.Id, familyId)
 	}
 
-	for _, message := range GetFamilyChatMessages(tx, familyId, 0) {
+	for _, message := range GetFamilyChatMessages(tx, familyId, 0, 0) {
 		_ = DeleteChatMessageTx(tx, message.Id, familyId)
 	}
 
