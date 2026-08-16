@@ -653,7 +653,73 @@ func deleteEventPhotoRowTx(tx *vbolt.Tx, id int) {
 	vbolt.SetTargetSingleTerm(tx, EventPhotoByFamilyIndex, id, -1)
 }
 
+// ── cascades ──────────────────────────────────────────────────────────────────
+//
+// Each of these deletes a record and everything that hangs off it. They are the
+// bottom-up counterpart of the tree in the model: an Appearance takes its
+// Results and photo joins, an Entry takes its roster and its Appearances, and so
+// on up to Activity.
+//
+// A delete that leaves children behind is not a smaller change than one that
+// does not — it is an orphaned row nothing can ever reach or clean up — so these
+// land with the CRUD procs that call them rather than waiting for the deletion
+// phase.
+
+func deleteAppearanceTx(tx *vbolt.Tx, appearanceId int) {
+	for _, result := range GetAppearanceResults(tx, appearanceId) {
+		deleteResultRowTx(tx, result.Id)
+	}
+	for _, join := range GetAppearancePhotoJoins(tx, appearanceId) {
+		deleteAppearancePhotoRowTx(tx, join.Id)
+	}
+	deleteAppearanceRowTx(tx, appearanceId)
+}
+
+func deleteEntryTx(tx *vbolt.Tx, entryId int) {
+	for _, member := range GetEntryMembers(tx, entryId) {
+		deleteEntryMemberRowTx(tx, member.Id)
+	}
+	for _, appearance := range GetEntryAppearances(tx, entryId) {
+		deleteAppearanceTx(tx, appearance.Id)
+	}
+	deleteEntryRowTx(tx, entryId)
+}
+
+func deleteEventTx(tx *vbolt.Tx, eventId int) {
+	for _, appearance := range GetEventAppearances(tx, eventId) {
+		deleteAppearanceTx(tx, appearance.Id)
+	}
+	for _, join := range GetEventPhotoJoins(tx, eventId) {
+		deleteEventPhotoRowTx(tx, join.Id)
+	}
+	deleteEventRowTx(tx, eventId)
+}
+
+func deleteSeasonTx(tx *vbolt.Tx, seasonId int) {
+	for _, event := range GetSeasonEvents(tx, seasonId) {
+		deleteEventTx(tx, event.Id)
+	}
+	// Entries go after events: an event's cascade already took the appearances
+	// it shares with these entries, so what is left here is entries that never
+	// appeared anywhere.
+	for _, entry := range GetSeasonEntries(tx, seasonId) {
+		deleteEntryTx(tx, entry.Id)
+	}
+	deleteSeasonRowTx(tx, seasonId)
+}
+
+func deleteActivityTx(tx *vbolt.Tx, activityId int) {
+	for _, season := range GetActivitySeasons(tx, activityId) {
+		deleteSeasonTx(tx, season.Id)
+	}
+	deleteActivityRowTx(tx, activityId)
+}
+
 // deleteFamilyActivitiesTx empties all nine buckets for one family.
+//
+// It sweeps each by-family index directly rather than cascading from the
+// activities down, so a row whose parent link is somehow broken still goes.
+// Account deletion is the wrong place to trust the tree.
 //
 // It lands with the schema rather than with the rest of the cascade work
 // because a bucket account deletion does not know about is a data-retention
