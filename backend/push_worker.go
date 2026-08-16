@@ -8,7 +8,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -26,6 +25,10 @@ type PushNotificationJob struct {
 	SenderName       string
 	Content          string
 	RecipientUserIds []int
+	// IsTest marks an admin-issued verification push. It carries a distinct
+	// payload type so the companion app does not try to open a chat message
+	// that was never written.
+	IsTest bool
 }
 
 // APNsPayload represents the Apple Push Notification payload
@@ -62,6 +65,44 @@ type APNsConfig struct {
 	Key      *ecdsa.PrivateKey
 }
 
+// maxRecentPushAttempts bounds the in-memory delivery history kept for the admin
+// page. It exists to answer "did the push I just triggered reach APNs?", not to
+// be an audit log, so a short window is enough and nothing is persisted.
+const maxRecentPushAttempts = 50
+
+// PushAttempt records the outcome of one delivery to one device.
+type PushAttempt struct {
+	Time      time.Time `json:"time"`
+	UserId    int       `json:"userId"`
+	TokenId   int       `json:"tokenId"`
+	TokenHint string    `json:"tokenHint"`
+	// Kind is "chat" or "test".
+	Kind    string `json:"kind"`
+	Success bool   `json:"success"`
+	// StatusCode is the APNs HTTP status, or 0 if the request never completed.
+	StatusCode int `json:"statusCode"`
+	// Reason is the APNs failure reason (e.g. "BadDeviceToken") or a transport error.
+	Reason string `json:"reason"`
+	// ApnsId is Apple's identifier for the notification, which is what Apple asks
+	// for when a delivery is disputed.
+	ApnsId string `json:"apnsId"`
+}
+
+// PushWorkerStats is a live snapshot of push activity. Every field is in-memory:
+// a restart resets the counters and empties the history.
+type PushWorkerStats struct {
+	Enabled        bool          `json:"enabled"`
+	IsRunning      bool          `json:"isRunning"`
+	QueueLength    int           `json:"queueLength"`
+	Sent           int           `json:"sent"`
+	Failed         int           `json:"failed"`
+	Deactivated    int           `json:"deactivated"`
+	LastSentAt     time.Time     `json:"lastSentAt"`
+	LastError      string        `json:"lastError"`
+	LastErrorAt    time.Time     `json:"lastErrorAt"`
+	RecentAttempts []PushAttempt `json:"recentAttempts"`
+}
+
 // PushWorker manages background push notification sending
 type PushWorker struct {
 	jobQueue    chan PushNotificationJob
@@ -73,6 +114,17 @@ type PushWorker struct {
 	tokenMu     sync.RWMutex
 	jwtToken    string
 	tokenExpiry time.Time
+
+	// statsMu guards everything below. Sends happen on the worker goroutine
+	// while the admin page reads from request goroutines.
+	statsMu     sync.Mutex
+	sent        int
+	failed      int
+	deactivated int
+	lastSentAt  time.Time
+	lastError   string
+	lastErrorAt time.Time
+	recent      []PushAttempt
 }
 
 var globalPushWorker *PushWorker
@@ -159,18 +211,63 @@ func loadAPNsConfig() (*APNsConfig, error) {
 // QueuePushNotification adds a notification job to the processing queue
 func QueuePushNotification(job PushNotificationJob) error {
 	if globalPushWorker == nil {
-		log.Printf("Cannot queue push notification: worker not initialized")
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Cannot queue: worker not initialized")
 		return fmt.Errorf("push worker not initialized")
 	}
 
 	select {
 	case globalPushWorker.jobQueue <- job:
-		log.Printf("Push notification queued for message %d (queue length: %d)", job.MessageId, len(globalPushWorker.jobQueue))
+		LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Queued notification", map[string]interface{}{
+			"messageId":   job.MessageId,
+			"isTest":      job.IsTest,
+			"recipients":  len(job.RecipientUserIds),
+			"queueLength": len(globalPushWorker.jobQueue),
+		})
 		return nil
 	default:
-		log.Printf("Cannot queue push notification for message %d: queue is full", job.MessageId)
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Cannot queue: queue is full", map[string]interface{}{
+			"messageId": job.MessageId,
+		})
 		return fmt.Errorf("push notification queue is full")
 	}
+}
+
+// recordAttempt files one delivery outcome into the counters and the bounded
+// history the admin page reads.
+func (pw *PushWorker) recordAttempt(attempt PushAttempt) {
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+
+	if attempt.Success {
+		pw.sent++
+		pw.lastSentAt = attempt.Time
+	} else {
+		pw.failed++
+		pw.lastError = attempt.Reason
+		pw.lastErrorAt = attempt.Time
+	}
+
+	pw.recent = append(pw.recent, attempt)
+	if len(pw.recent) > maxRecentPushAttempts {
+		pw.recent = pw.recent[len(pw.recent)-maxRecentPushAttempts:]
+	}
+}
+
+// recordDeactivation counts a token APNs told us to stop using.
+func (pw *PushWorker) recordDeactivation() {
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+	pw.deactivated++
+}
+
+// maskPushToken renders a device token as a prefix and suffix. It is enough to
+// match a row against what the companion app logs at registration without
+// putting a usable token on an admin screen.
+func maskPushToken(token string) string {
+	if len(token) <= 12 {
+		return token
+	}
+	return token[:8] + "…" + token[len(token)-4:]
 }
 
 // Start begins the background worker goroutine
@@ -210,8 +307,11 @@ func (pw *PushWorker) processJobs() {
 
 // processPushJob processes a single push notification job
 func (pw *PushWorker) processPushJob(job PushNotificationJob) {
-	log.Printf("[PUSH_NOTIFICATION] Processing notification for message %d to %d recipients",
-		job.MessageId, len(job.RecipientUserIds))
+	LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Processing notification", map[string]interface{}{
+		"messageId":  job.MessageId,
+		"isTest":     job.IsTest,
+		"recipients": len(job.RecipientUserIds),
+	})
 
 	// Get device tokens for all recipients
 	var allTokens []PushDeviceToken
@@ -223,18 +323,29 @@ func (pw *PushWorker) processPushJob(job PushNotificationJob) {
 	})
 
 	if len(allTokens) == 0 {
-		log.Printf("[PUSH_NOTIFICATION] No active device tokens for message %d recipients", job.MessageId)
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] No active device tokens for recipients", map[string]interface{}{
+			"messageId":  job.MessageId,
+			"recipients": len(job.RecipientUserIds),
+		})
 		return
 	}
 
-	log.Printf("[PUSH_NOTIFICATION] Found %d device tokens for message %d", len(allTokens), job.MessageId)
+	LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Found device tokens", map[string]interface{}{
+		"messageId": job.MessageId,
+		"tokens":    len(allTokens),
+	})
 
 	// Send notification to each device
 	for _, token := range allTokens {
 		if token.Platform == "ios" {
 			err := pw.sendAPNsNotification(token, job)
 			if err != nil {
-				log.Printf("[PUSH_NOTIFICATION] Failed to send to device %d: %v", token.Id, err)
+				LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Failed to send to device", map[string]interface{}{
+					"messageId": job.MessageId,
+					"tokenId":   token.Id,
+					"userId":    token.UserId,
+					"error":     err.Error(),
+				})
 			}
 		}
 		// Android support can be added here in the future
@@ -243,6 +354,19 @@ func (pw *PushWorker) processPushJob(job PushNotificationJob) {
 
 // sendAPNsNotification sends a push notification via APNs
 func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotificationJob) error {
+	kind := "chat"
+	if job.IsTest {
+		kind = "test"
+	}
+
+	attempt := PushAttempt{
+		Time:      time.Now(),
+		UserId:    token.UserId,
+		TokenId:   token.Id,
+		TokenHint: maskPushToken(token.Token),
+		Kind:      kind,
+	}
+
 	// Truncate content for notification body
 	body := job.Content
 	if len(body) > 100 {
@@ -268,8 +392,20 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 		},
 	}
 
+	// A test push must not look like a chat message: the app routes on
+	// data.type, and there is no message for it to open.
+	if job.IsTest {
+		payload.Aps.Alert.Title = "Test notification"
+		payload.Aps.Alert.Body = body
+		payload.Aps.Category = "test"
+		payload.Data.Type = "test"
+		payload.Data.MessageId = 0
+	}
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
+		attempt.Reason = "payload marshal failed: " + err.Error()
+		pw.recordAttempt(attempt)
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
@@ -286,12 +422,16 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 	// Create request
 	req, err := http.NewRequest("POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
+		attempt.Reason = "request build failed: " + err.Error()
+		pw.recordAttempt(attempt)
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Get JWT token for APNs
 	jwtToken, err := pw.getAPNsJWT()
 	if err != nil {
+		attempt.Reason = "JWT signing failed: " + err.Error()
+		pw.recordAttempt(attempt)
 		return fmt.Errorf("failed to get JWT: %w", err)
 	}
 
@@ -305,13 +445,27 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 	// Send request
 	resp, err := pw.httpClient.Do(req)
 	if err != nil {
+		attempt.Reason = "transport error: " + err.Error()
+		pw.recordAttempt(attempt)
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	attempt.StatusCode = resp.StatusCode
+	// Apple's identifier for this notification, which is what Apple asks for
+	// when a delivery has to be chased down.
+	attempt.ApnsId = resp.Header.Get("apns-id")
+
 	// Handle response
 	if resp.StatusCode == http.StatusOK {
-		log.Printf("[PUSH_NOTIFICATION] Successfully sent to device %d", token.Id)
+		attempt.Success = true
+		pw.recordAttempt(attempt)
+		LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Delivered to APNs", map[string]interface{}{
+			"tokenId": token.Id,
+			"userId":  token.UserId,
+			"kind":    kind,
+			"apnsId":  attempt.ApnsId,
+		})
 		return nil
 	}
 
@@ -321,13 +475,23 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 		Reason string `json:"reason"`
 	}
 	json.Unmarshal(bodyBytes, &errorResp)
+	attempt.Reason = errorResp.Reason
+	if attempt.Reason == "" {
+		attempt.Reason = fmt.Sprintf("HTTP %d with no reason", resp.StatusCode)
+	}
+	pw.recordAttempt(attempt)
 
 	// Handle specific errors that require token deactivation
 	if errorResp.Reason == "BadDeviceToken" || errorResp.Reason == "Unregistered" {
-		log.Printf("[PUSH_NOTIFICATION] Deactivating invalid token %d: %s", token.Id, errorResp.Reason)
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Deactivating invalid token", map[string]interface{}{
+			"tokenId": token.Id,
+			"userId":  token.UserId,
+			"reason":  errorResp.Reason,
+		})
 		if err := DeactivatePushDeviceTokenById(pw.db, token.Id); err != nil {
 			return fmt.Errorf("APNs error: %d %s; failed to deactivate token: %w", resp.StatusCode, errorResp.Reason, err)
 		}
+		pw.recordDeactivation()
 	}
 
 	return fmt.Errorf("APNs error: %d %s", resp.StatusCode, errorResp.Reason)
@@ -379,6 +543,80 @@ func GetPushQueueLength() int {
 		return 0
 	}
 	return len(globalPushWorker.jobQueue)
+}
+
+// GetPushWorkerStats returns a snapshot of push activity since process start.
+// When push is unconfigured the worker was never created, which is itself the
+// answer the admin page needs, so a zeroed snapshot is returned rather than an
+// error.
+func GetPushWorkerStats() PushWorkerStats {
+	if globalPushWorker == nil {
+		return PushWorkerStats{RecentAttempts: []PushAttempt{}}
+	}
+
+	pw := globalPushWorker
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+
+	// Copy the history so callers cannot observe it being appended to, and
+	// reverse it so the most recent attempt reads first.
+	recent := make([]PushAttempt, 0, len(pw.recent))
+	for i := len(pw.recent) - 1; i >= 0; i-- {
+		recent = append(recent, pw.recent[i])
+	}
+
+	return PushWorkerStats{
+		Enabled:        true,
+		IsRunning:      pw.isRunning,
+		QueueLength:    len(pw.jobQueue),
+		Sent:           pw.sent,
+		Failed:         pw.failed,
+		Deactivated:    pw.deactivated,
+		LastSentAt:     pw.lastSentAt,
+		LastError:      pw.lastError,
+		LastErrorAt:    pw.lastErrorAt,
+		RecentAttempts: recent,
+	}
+}
+
+// APNsConfigInfo is the non-secret half of the APNs configuration, safe to show
+// on an admin screen. The signing key itself never leaves the process.
+type APNsConfigInfo struct {
+	Configured  bool   `json:"configured"`
+	TeamId      string `json:"teamId"`
+	KeyId       string `json:"keyId"`
+	BundleId    string `json:"bundleId"`
+	KeyPath     string `json:"keyPath"`
+	Environment string `json:"environment"`
+	KeyLoaded   bool   `json:"keyLoaded"`
+	// LoadError explains why the worker did not start, which is the question an
+	// unconfigured-looking push subsystem actually raises.
+	LoadError string `json:"loadError"`
+}
+
+// GetAPNsConfigInfo reports what the process sees in its environment. It reads
+// the environment directly rather than the worker so it can explain the case
+// where the worker failed to start.
+func GetAPNsConfigInfo() APNsConfigInfo {
+	info := APNsConfigInfo{
+		TeamId:      os.Getenv("APNS_TEAM_ID"),
+		KeyId:       os.Getenv("APNS_KEY_ID"),
+		BundleId:    os.Getenv("APNS_BUNDLE_ID"),
+		KeyPath:     os.Getenv("APNS_KEY_PATH"),
+		Environment: os.Getenv("APNS_ENVIRONMENT"),
+	}
+
+	config, err := loadAPNsConfig()
+	if err != nil {
+		info.LoadError = err.Error()
+	} else {
+		info.KeyLoaded = config.Key != nil
+	}
+
+	info.Configured = info.TeamId != "" && info.KeyId != "" &&
+		info.BundleId != "" && info.KeyPath != "" && info.Environment != ""
+
+	return info
 }
 
 // StopPushWorker gracefully shuts down the global push worker

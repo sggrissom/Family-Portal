@@ -28,6 +28,9 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetLogFiles)
 	vbeam.RegisterProc(app, GetLogContent)
 	vbeam.RegisterProc(app, GetLogStats)
+	vbeam.RegisterProc(app, GetPushStatus)
+	vbeam.RegisterProc(app, ListPushDevices)
+	vbeam.RegisterProc(app, SendTestPushNotification)
 	RegisterAnalyticsMethods(app)
 }
 

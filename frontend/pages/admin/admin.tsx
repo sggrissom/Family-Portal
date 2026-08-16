@@ -108,6 +108,17 @@ const AdminPage = ({ user }: AdminPageProps) => {
           </div>
         </div>
 
+        <a href="/admin/push" className="admin-card admin-card-link">
+          <div className="card-header">
+            <div className="card-icon">🔔</div>
+            <h3>Push Notifications</h3>
+          </div>
+          <div className="card-content">
+            <p>Check APNs configuration, registered devices, and delivery attempts.</p>
+            <div className="card-action">Manage Push →</div>
+          </div>
+        </a>
+
         <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">📋</div>

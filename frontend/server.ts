@@ -25,15 +25,15 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
 export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 
 export interface CreateAccountRequest {
     name: string
@@ -679,6 +679,30 @@ export interface GetLogStatsResponse {
     stats: LogStats
 }
 
+export interface GetPushStatusResponse {
+    config: APNsConfigInfo
+    stats: PushWorkerStats
+    issues: PushConfigIssue[]
+    totalDevices: number
+    activeDevices: number
+    inactiveDevices: number
+}
+
+export interface ListPushDevicesResponse {
+    devices: AdminPushDevice[]
+}
+
+export interface SendTestPushRequest {
+    userId: number
+    message: string
+}
+
+export interface SendTestPushResponse {
+    queued: boolean
+    deviceCount: number
+    targetName: string
+}
+
 export interface AnalyticsOverviewResponse {
     totalUsers: number
     totalFamilies: number
@@ -978,6 +1002,50 @@ export interface LogStats {
     performanceStats: PerformanceStats
 }
 
+export interface APNsConfigInfo {
+    configured: boolean
+    teamId: string
+    keyId: string
+    bundleId: string
+    keyPath: string
+    environment: string
+    keyLoaded: boolean
+    loadError: string
+}
+
+export interface PushWorkerStats {
+    enabled: boolean
+    isRunning: boolean
+    queueLength: number
+    sent: number
+    failed: number
+    deactivated: number
+    lastSentAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: PushAttempt[]
+}
+
+export interface PushConfigIssue {
+    setting: string
+    detail: string
+}
+
+export interface AdminPushDevice {
+    id: number
+    userId: number
+    userName: string
+    userEmail: string
+    tokenHint: string
+    platform: string
+    environment: string
+    bundleId: string
+    createdAt: string
+    updatedAt: string
+    isActive: boolean
+    environmentMismatch: boolean
+}
+
 export interface ActivitySummary {
     date: string
     photos: number
@@ -1052,6 +1120,18 @@ export interface PerformanceStats {
     p99Response: number
     slowestEndpoints: EndpointStats[]
     endpointStats: Record<string, EndpointStats>
+}
+
+export interface PushAttempt {
+    time: string
+    userId: number
+    tokenId: number
+    tokenHint: string
+    kind: string
+    success: boolean
+    statusCode: number
+    reason: string
+    apnsId: string
 }
 
 export interface EndpointStats {
@@ -1326,6 +1406,18 @@ export async function GetLogContent(data: GetLogContentRequest): Promise<rpc.Res
 
 export async function GetLogStats(data: Empty): Promise<rpc.Response<GetLogStatsResponse>> {
     return await rpc.call<GetLogStatsResponse>('GetLogStats', JSON.stringify(data));
+}
+
+export async function GetPushStatus(data: Empty): Promise<rpc.Response<GetPushStatusResponse>> {
+    return await rpc.call<GetPushStatusResponse>('GetPushStatus', JSON.stringify(data));
+}
+
+export async function ListPushDevices(data: Empty): Promise<rpc.Response<ListPushDevicesResponse>> {
+    return await rpc.call<ListPushDevicesResponse>('ListPushDevices', JSON.stringify(data));
+}
+
+export async function SendTestPushNotification(data: SendTestPushRequest): Promise<rpc.Response<SendTestPushResponse>> {
+    return await rpc.call<SendTestPushResponse>('SendTestPushNotification', JSON.stringify(data));
 }
 
 export async function GetAnalyticsOverview(data: Empty): Promise<rpc.Response<AnalyticsOverviewResponse>> {
