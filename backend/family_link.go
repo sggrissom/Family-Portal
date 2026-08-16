@@ -44,6 +44,10 @@ const (
 	ScopeMilestones
 	ScopePhotos
 	ScopeGrowth
+	// ScopeActivities comes last on purpose. Stored masks hold bits 0-4, so
+	// every existing link reads back as Activities: false — no migration, and no
+	// link silently widened to cover a feature it predates.
+	ScopeActivities
 )
 
 // bit is this scope's position in a FamilyLink.Scopes mask.
@@ -231,12 +235,15 @@ type LinkScopes struct {
 	Milestones bool `json:"milestones"`
 	Photos     bool `json:"photos"`
 	Growth     bool `json:"growth"`
+	Activities bool `json:"activities"`
 }
 
 // DefaultLinkScopes is what a new link shares unless the granting family says
 // otherwise: the people put on the other family's roster, and their milestones
 // and photos. Growth measurements are medical data and stay off until they are
-// deliberately turned on.
+// deliberately turned on; activities stay off because every link created before
+// the feature existed would otherwise start sharing something its granter never
+// agreed to.
 func DefaultLinkScopes() LinkScopes {
 	return LinkScopes{People: true, Milestones: true, Photos: true}
 }
@@ -255,6 +262,9 @@ func (scopes LinkScopes) ToMask() int {
 	if scopes.Growth {
 		mask |= ScopeGrowth.bit()
 	}
+	if scopes.Activities {
+		mask |= ScopeActivities.bit()
+	}
 	return mask
 }
 
@@ -264,6 +274,7 @@ func linkScopesFromMask(mask int) LinkScopes {
 		Milestones: mask&ScopeMilestones.bit() != 0,
 		Photos:     mask&ScopePhotos.bit() != 0,
 		Growth:     mask&ScopeGrowth.bit() != 0,
+		Activities: mask&ScopeActivities.bit() != 0,
 	}
 }
 
@@ -272,7 +283,7 @@ func linkScopesFromMask(mask int) LinkScopes {
 // every one of those reads resolves through a person — so People is implied by
 // any of them. An empty mask shares nothing and is rejected by the callers.
 func normalizeLinkScopes(scopes LinkScopes) LinkScopes {
-	if scopes.Milestones || scopes.Photos || scopes.Growth {
+	if scopes.Milestones || scopes.Photos || scopes.Growth || scopes.Activities {
 		scopes.People = true
 	}
 	return scopes

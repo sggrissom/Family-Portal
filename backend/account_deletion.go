@@ -249,6 +249,8 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 		deleteTagTx(tx, tag)
 	}
 
+	deleteFamilyActivitiesTx(tx, familyId)
+
 	// The family's own people, and with them the face descriptors derived from
 	// their photos.
 	for _, person := range GetFamilyOwnPeople(tx, familyId) {
