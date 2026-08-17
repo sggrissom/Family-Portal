@@ -34,6 +34,7 @@ export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrPersonNotFound = "Person not found or not in your family";
 
 export interface CreateAccountRequest {
     name: string
@@ -558,6 +559,67 @@ export interface AppearanceIdRequest {
 export interface SetAppearanceResultsRequest {
     appearanceId: number
     results: ResultInput[]
+}
+
+export interface GetSeasonOverviewRequest {
+    seasonId: number
+}
+
+export interface GetSeasonOverviewResponse {
+    activity: Activity
+    season: Season
+    events: Event[]
+    entries: EntryView[]
+    appearances: AppearanceView[]
+}
+
+export interface GetEventDetailRequest {
+    eventId: number
+}
+
+export interface GetEventDetailResponse {
+    event: Event
+    season: SeasonSummary
+    appearances: AppearanceDetail[]
+}
+
+export interface GetEntryHistoryRequest {
+    entryId: number
+}
+
+export interface GetEntryHistoryResponse {
+    entry: EntryView
+    season: SeasonSummary
+    appearances: AppearanceDetail[]
+}
+
+export interface GetPersonSeasonRequest {
+    personId: number
+    seasonId: number
+}
+
+export interface GetPersonSeasonResponse {
+    personId: number
+    seasonId: number
+    seasons: SeasonSummary[]
+    entries: EntryView[]
+    appearances: AppearanceDetail[]
+}
+
+export interface ListActivityVocabularyRequest {
+    activityId: number
+}
+
+export interface ListActivityVocabularyResponse {
+    activityId: number
+    adjudications: string[]
+    awards: string[]
+    categories: string[]
+    styles: string[]
+    divisions: string[]
+    levels: string[]
+    formats: string[]
+    hosts: string[]
 }
 
 export interface CreateTagRequest {
@@ -1123,6 +1185,20 @@ export interface ResultInput {
     notes: string
 }
 
+export interface SeasonSummary {
+    id: number
+    name: string
+    startDate: string
+    endDate: string
+}
+
+export interface AppearanceDetail {
+    appearance: Appearance
+    results: Result[]
+    entry: Entry
+    event: EventSummary
+}
+
 export interface Tag {
     id: number
     familyId: number
@@ -1356,6 +1432,15 @@ export interface Result {
     notes: string
     sortOrder: number
     createdAt: string
+}
+
+export interface EventSummary {
+    id: number
+    name: string
+    host: string
+    location: string
+    startDate: string
+    endDate: string
 }
 
 export interface PerformanceStats {
@@ -1617,6 +1702,26 @@ export async function DeleteAppearance(data: AppearanceIdRequest): Promise<rpc.R
 
 export async function SetAppearanceResults(data: SetAppearanceResultsRequest): Promise<rpc.Response<AppearanceResponse>> {
     return await rpc.call<AppearanceResponse>('SetAppearanceResults', JSON.stringify(data));
+}
+
+export async function GetSeasonOverview(data: GetSeasonOverviewRequest): Promise<rpc.Response<GetSeasonOverviewResponse>> {
+    return await rpc.call<GetSeasonOverviewResponse>('GetSeasonOverview', JSON.stringify(data));
+}
+
+export async function GetEventDetail(data: GetEventDetailRequest): Promise<rpc.Response<GetEventDetailResponse>> {
+    return await rpc.call<GetEventDetailResponse>('GetEventDetail', JSON.stringify(data));
+}
+
+export async function GetEntryHistory(data: GetEntryHistoryRequest): Promise<rpc.Response<GetEntryHistoryResponse>> {
+    return await rpc.call<GetEntryHistoryResponse>('GetEntryHistory', JSON.stringify(data));
+}
+
+export async function GetPersonSeason(data: GetPersonSeasonRequest): Promise<rpc.Response<GetPersonSeasonResponse>> {
+    return await rpc.call<GetPersonSeasonResponse>('GetPersonSeason', JSON.stringify(data));
+}
+
+export async function ListActivityVocabulary(data: ListActivityVocabularyRequest): Promise<rpc.Response<ListActivityVocabularyResponse>> {
+    return await rpc.call<ListActivityVocabularyResponse>('ListActivityVocabulary', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
