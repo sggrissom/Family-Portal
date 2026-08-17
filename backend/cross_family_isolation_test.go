@@ -461,6 +461,18 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			_, err := ListActivityVocabulary(ctx, ListActivityVocabularyRequest{ActivityId: fx.activity.Id})
 			return err
 		}},
+		{"SetAppearancePhotos", func(ctx *vbeam.Context) error {
+			_, err := SetAppearancePhotos(ctx, SetAppearancePhotosRequest{
+				AppearanceId: fx.appearance.Id, PhotoIds: []int{fx.ownPhotoId},
+			})
+			return err
+		}},
+		{"SetEventPhotos", func(ctx *vbeam.Context) error {
+			_, err := SetEventPhotos(ctx, SetEventPhotosRequest{
+				EventId: fx.event.Id, PhotoIds: []int{fx.ownPhotoId},
+			})
+			return err
+		}},
 	}
 
 	for _, tt := range calls {

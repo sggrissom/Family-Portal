@@ -84,6 +84,7 @@ func eventSummary(event Event) EventSummary {
 type AppearanceDetail struct {
 	Appearance Appearance   `json:"appearance"`
 	Results    []Result     `json:"results"`
+	PhotoIds   []int        `json:"photoIds"`
 	Entry      Entry        `json:"entry"`
 	Event      EventSummary `json:"event"`
 }
@@ -192,7 +193,7 @@ func GetSeasonOverview(ctx *vbeam.Context, req GetSeasonOverviewRequest) (resp G
 	resp.Appearances = []AppearanceView{}
 	for _, event := range resp.Events {
 		for _, appearance := range GetEventAppearances(ctx.Tx, event.Id) {
-			resp.Appearances = append(resp.Appearances, appearanceView(ctx.Tx, appearance))
+			resp.Appearances = append(resp.Appearances, appearanceView(ctx.Tx, user, appearance))
 		}
 	}
 	return
@@ -205,8 +206,11 @@ type GetEventDetailRequest struct {
 }
 
 type GetEventDetailResponse struct {
-	Event       Event              `json:"event"`
-	Season      SeasonSummary      `json:"season"`
+	Event  Event         `json:"event"`
+	Season SeasonSummary `json:"season"`
+	// PhotoIds are the competition's own photos — the weekend shots that are
+	// not of any one routine. A routine's photos travel with its performance.
+	PhotoIds    []int              `json:"photoIds"`
 	Appearances []AppearanceDetail `json:"appearances"`
 }
 
@@ -226,6 +230,7 @@ func GetEventDetail(ctx *vbeam.Context, req GetEventDetailRequest) (resp GetEven
 
 	resp.Event = event
 	resp.Season = seasonSummary(GetSeasonById(ctx.Tx, event.SeasonId))
+	resp.PhotoIds = visiblePhotoIds(ctx.Tx, user, GetEventPhotoIds(ctx.Tx, event.Id))
 
 	summary := eventSummary(event)
 	entries := entryCache{}
@@ -234,6 +239,7 @@ func GetEventDetail(ctx *vbeam.Context, req GetEventDetailRequest) (resp GetEven
 		resp.Appearances = append(resp.Appearances, AppearanceDetail{
 			Appearance: appearance,
 			Results:    sortResults(GetAppearanceResults(ctx.Tx, appearance.Id)),
+			PhotoIds:   visiblePhotoIds(ctx.Tx, user, GetAppearancePhotoIds(ctx.Tx, appearance.Id)),
 			Entry:      entries.get(ctx.Tx, appearance.EntryId),
 			Event:      summary,
 		})
@@ -282,6 +288,7 @@ func GetEntryHistory(ctx *vbeam.Context, req GetEntryHistoryRequest) (resp GetEn
 		resp.Appearances = append(resp.Appearances, AppearanceDetail{
 			Appearance: appearance,
 			Results:    sortResults(GetAppearanceResults(ctx.Tx, appearance.Id)),
+			PhotoIds:   visiblePhotoIds(ctx.Tx, user, GetAppearancePhotoIds(ctx.Tx, appearance.Id)),
 			Entry:      entry,
 			Event:      events.get(ctx.Tx, appearance.EventId),
 		})
@@ -366,6 +373,7 @@ func GetPersonSeason(ctx *vbeam.Context, req GetPersonSeasonRequest) (resp GetPe
 			resp.Appearances = append(resp.Appearances, AppearanceDetail{
 				Appearance: appearance,
 				Results:    sortResults(GetAppearanceResults(ctx.Tx, appearance.Id)),
+				PhotoIds:   visiblePhotoIds(ctx.Tx, user, GetAppearancePhotoIds(ctx.Tx, appearance.Id)),
 				Entry:      entry,
 				Event:      events.get(ctx.Tx, appearance.EventId),
 			})

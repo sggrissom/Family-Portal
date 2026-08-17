@@ -71,12 +71,13 @@ type AppearanceIdRequest struct {
 	Id int `json:"id"`
 }
 
-// AppearanceView is an appearance with its results, which is the only useful
-// shape: an appearance on its own says a routine turned up and nothing about
-// how it went.
+// AppearanceView is an appearance with its results and photos, which is the only
+// useful shape: an appearance on its own says a routine turned up and nothing
+// about how it went.
 type AppearanceView struct {
 	Appearance Appearance `json:"appearance"`
 	Results    []Result   `json:"results"`
+	PhotoIds   []int      `json:"photoIds"`
 }
 
 type AppearanceResponse struct {
@@ -125,10 +126,13 @@ func sortResults(results []Result) []Result {
 	return results
 }
 
-func appearanceView(tx *vbolt.Tx, appearance Appearance) AppearanceView {
+// appearanceView takes the user because photo ids are filtered per caller: a
+// link that reaches a routine does not necessarily reach the photos of it.
+func appearanceView(tx *vbolt.Tx, user User, appearance Appearance) AppearanceView {
 	return AppearanceView{
 		Appearance: appearance,
 		Results:    sortResults(GetAppearanceResults(tx, appearance.Id)),
+		PhotoIds:   visiblePhotoIds(tx, user, GetAppearancePhotoIds(tx, appearance.Id)),
 	}
 }
 
@@ -179,7 +183,7 @@ func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp App
 	writeAppearanceTx(ctx.Tx, &appearance)
 	// The view is built before the commit: TxCommit closes the transaction, and
 	// reading a closed one panics rather than returning stale data.
-	resp.Appearance = appearanceView(ctx.Tx, appearance)
+	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	vbolt.TxCommit(ctx.Tx)
 	return
 }
@@ -205,7 +209,7 @@ func UpdateAppearance(ctx *vbeam.Context, req UpdateAppearanceRequest) (resp App
 	appearance.OccurredAt = occurredAt
 	appearance.Notes = trimField(req.Notes, maxNotesLength)
 	writeAppearanceTx(ctx.Tx, &appearance)
-	resp.Appearance = appearanceView(ctx.Tx, appearance)
+	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	vbolt.TxCommit(ctx.Tx)
 	return
 }
@@ -373,7 +377,7 @@ func SetAppearanceResults(ctx *vbeam.Context, req SetAppearanceResultsRequest) (
 		prepared[i].CreatedAt = now
 		writeResultTx(ctx.Tx, &prepared[i])
 	}
-	resp.Appearance = appearanceView(ctx.Tx, appearance)
+	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	vbolt.TxCommit(ctx.Tx)
 	return
 }
