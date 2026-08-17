@@ -829,6 +829,7 @@ export interface LinkScopes {
     milestones: boolean
     photos: boolean
     growth: boolean
+    activities: boolean
 }
 
 export interface SharedRosterRef {

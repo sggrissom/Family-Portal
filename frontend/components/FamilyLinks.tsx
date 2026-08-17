@@ -11,10 +11,15 @@ const SCOPE_LABELS: { key: keyof server.LinkScopes; label: string; hint: string 
   { key: "milestones", label: "Milestones", hint: "Their milestones and the tags on them" },
   { key: "photos", label: "Photos", hint: "Photos they appear in" },
   { key: "growth", label: "Measurements", hint: "Height and weight history" },
+  {
+    key: "activities",
+    label: "Activities",
+    hint: "Seasons, competitions and results for routines they are in",
+  },
 ];
 
 function defaultScopes(): server.LinkScopes {
-  return { people: true, milestones: true, photos: true, growth: false };
+  return { people: true, milestones: true, photos: true, growth: false, activities: false };
 }
 
 type FamilyLinksState = {
@@ -58,7 +63,7 @@ async function refresh(state: FamilyLinksState) {
 // than separately selectable. The backend normalizes the same way; doing it here
 // too keeps the checkboxes honest about what will be saved.
 function withImpliedPeople(scopes: server.LinkScopes): server.LinkScopes {
-  const needsPeople = scopes.milestones || scopes.photos || scopes.growth;
+  const needsPeople = scopes.milestones || scopes.photos || scopes.growth || scopes.activities;
   return { ...scopes, people: scopes.people || needsPeople };
 }
 

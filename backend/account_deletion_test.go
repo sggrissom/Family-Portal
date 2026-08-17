@@ -110,6 +110,8 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, fx.photo.Id, fx.familyId)
 		tagPersonInPhoto(tx, fx.photo.Id, fx.person.Id, fx.familyId)
 
+		seedFamilyActivities(tx, fx.familyId, fx.person.Id, fx.photo.Id)
+
 		fx.message, err = AddChatMessageTx(tx, SendMessageRequest{
 			Content: "hello", ClientMessageId: "m-1",
 		}, fx.familyId, fx.owner.Id, fx.owner.Name)
@@ -166,6 +168,66 @@ func decodeDeleteAccount(t *testing.T, recorder *httptest.ResponseRecorder) Dele
 
 // countRows reports how many rows a bucket holds, which is how the "every store
 // is clear" assertion avoids depending on the ids it happened to write.
+// seedFamilyActivities puts one row in each of the nine activity buckets, so
+// the deletion assertions below fail if any of them is left unswept.
+func seedFamilyActivities(tx *vbolt.Tx, familyId int, personId int, photoId int) {
+	now := time.Now()
+
+	activity := Activity{
+		Id: vbolt.NextIntId(tx, ActivityBkt), FamilyId: familyId,
+		Name: "Dance", Kind: ActivityKindDance, CreatedAt: now,
+	}
+	writeActivityTx(tx, &activity)
+
+	season := Season{
+		Id: vbolt.NextIntId(tx, SeasonBkt), ActivityId: activity.Id, FamilyId: familyId,
+		Name: "2025-26", StartDate: now, CreatedAt: now,
+	}
+	writeSeasonTx(tx, &season)
+
+	event := Event{
+		Id: vbolt.NextIntId(tx, EventBkt), SeasonId: season.Id, FamilyId: familyId,
+		Name: "Nuvo Nashville", Host: "Nuvo", StartDate: now, CreatedAt: now,
+	}
+	writeEventTx(tx, &event)
+
+	entry := Entry{
+		Id: vbolt.NextIntId(tx, EntryBkt), SeasonId: season.Id, FamilyId: familyId,
+		Name: "Rise Up", Format: "solo", CreatedAt: now,
+	}
+	writeEntryTx(tx, &entry)
+
+	member := EntryMember{
+		Id: vbolt.NextIntId(tx, EntryMemberBkt), EntryId: entry.Id,
+		PersonId: personId, FamilyId: familyId, CreatedAt: now,
+	}
+	writeEntryMemberTx(tx, &member)
+
+	appearance := Appearance{
+		Id: vbolt.NextIntId(tx, AppearanceBkt), EventId: event.Id, EntryId: entry.Id,
+		FamilyId: familyId, OccurredAt: now, CreatedAt: now,
+	}
+	writeAppearanceTx(tx, &appearance)
+
+	result := Result{
+		Id: vbolt.NextIntId(tx, ResultBkt), AppearanceId: appearance.Id, FamilyId: familyId,
+		Kind: ResultKindAdjudication, Label: "High Gold", PersonId: &personId, CreatedAt: now,
+	}
+	writeResultTx(tx, &result)
+
+	appearancePhoto := AppearancePhoto{
+		Id: vbolt.NextIntId(tx, AppearancePhotoBkt), AppearanceId: appearance.Id,
+		PhotoId: photoId, FamilyId: familyId, CreatedAt: now,
+	}
+	writeAppearancePhotoTx(tx, &appearancePhoto)
+
+	eventPhoto := EventPhoto{
+		Id: vbolt.NextIntId(tx, EventPhotoBkt), EventId: event.Id,
+		PhotoId: photoId, FamilyId: familyId, CreatedAt: now,
+	}
+	writeEventPhotoTx(tx, &eventPhoto)
+}
+
 func countRows[T any](t *testing.T, db *vbolt.DB, bkt *vbolt.BucketInfo[int, T]) int {
 	t.Helper()
 
@@ -253,6 +315,16 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		"refresh tokens": countRows(t, fx.db, RefreshTokenBkt),
 		"reset tokens":   countRows(t, fx.db, PasswordResetBkt),
 		"device tokens":  countRows(t, fx.db, PushDeviceTokenBkt),
+
+		"activities":        countRows(t, fx.db, ActivityBkt),
+		"seasons":           countRows(t, fx.db, SeasonBkt),
+		"activity events":   countRows(t, fx.db, EventBkt),
+		"activity entries":  countRows(t, fx.db, EntryBkt),
+		"entry members":     countRows(t, fx.db, EntryMemberBkt),
+		"appearances":       countRows(t, fx.db, AppearanceBkt),
+		"activity results":  countRows(t, fx.db, ResultBkt),
+		"appearance photos": countRows(t, fx.db, AppearancePhotoBkt),
+		"event photos":      countRows(t, fx.db, EventPhotoBkt),
 	} {
 		if got != 0 {
 			t.Errorf("%s remaining = %d, want 0", name, got)

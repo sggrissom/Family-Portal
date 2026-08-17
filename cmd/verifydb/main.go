@@ -63,6 +63,15 @@ func main() {
 		counts["photo_person"] = count(tx, backend.PhotoPersonBkt)
 		counts["chat_messages"] = count(tx, backend.ChatMessagesBkt)
 		counts["family_link"] = count(tx, backend.FamilyLinkBkt)
+		counts["activities"] = count(tx, backend.ActivityBkt)
+		counts["seasons"] = count(tx, backend.SeasonBkt)
+		counts["activity_events"] = count(tx, backend.EventBkt)
+		counts["activity_entries"] = count(tx, backend.EntryBkt)
+		counts["entry_members"] = count(tx, backend.EntryMemberBkt)
+		counts["appearances"] = count(tx, backend.AppearanceBkt)
+		counts["activity_results"] = count(tx, backend.ResultBkt)
+		counts["appearance_photos"] = count(tx, backend.AppearancePhotoBkt)
+		counts["activity_event_photos"] = count(tx, backend.EventPhotoBkt)
 
 		vbolt.IterateAll(tx, backend.ImagesBkt, func(_ int, img backend.Image) bool {
 			images = append(images, img)
@@ -79,7 +88,7 @@ func main() {
 
 	fmt.Printf("database: %s\n\n", *dbPath)
 	for _, name := range names {
-		fmt.Printf("  %-20s %6d\n", name, counts[name])
+		fmt.Printf("  %-22s %6d\n", name, counts[name])
 	}
 
 	// A restored database with zero people is a restored empty file. Nothing
