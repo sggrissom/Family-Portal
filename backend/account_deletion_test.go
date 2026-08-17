@@ -564,6 +564,85 @@ func TestDeleteAccountWithoutAPasswordOnFile(t *testing.T) {
 // Deleting one account must not reach into a family the caller merely has a
 // link to. A link shares content; it never makes the other household's records
 // the caller's to destroy.
+// A child shared into another household can be rostered in that household's
+// group routine, and named by one of its results. Sweeping the deleted family's
+// own buckets does not reach either row, so deleting the person has to.
+func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
+	fx := setupDeletionFixture(t)
+
+	// The outsider's own season, with the deleted family's child on the roster
+	// and named by the result — and with one of the deleted family's photos
+	// attached, which the photo sweep has to reach through the same joins.
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		createFamilyLinkTx(tx, fx.familyId, fx.outsiderFamily, "Grandparents",
+			AccessView, ScopePeople.bit()|ScopeActivities.bit())
+		EnsurePersonFamilyTx(tx, fx.person.Id, fx.outsiderFamily, fx.person.Type)
+		seedFamilyActivities(tx, fx.outsiderFamily, fx.person.Id, fx.photo.Id)
+		vbolt.TxCommit(tx)
+	})
+
+	var theirEntryId, theirAppearanceId int
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		entries := GetFamilyEntries(tx, fx.outsiderFamily)
+		if len(entries) != 1 {
+			t.Fatalf("the outsider family has %d entries, want 1", len(entries))
+		}
+		theirEntryId = entries[0].Id
+		appearances := GetFamilyAppearances(tx, fx.outsiderFamily)
+		if len(appearances) != 1 {
+			t.Fatalf("the outsider family has %d appearances, want 1", len(appearances))
+		}
+		theirAppearanceId = appearances[0].Id
+	})
+
+	recorder := deleteAccountRequest(t, fx.ownerAuth,
+		`{"password":"password123","confirmEmail":"owner@example.com"}`)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetPersonEntryMembers(tx, fx.person.Id)); got != 0 {
+			t.Errorf("a deleted person is still on %d rosters", got)
+		}
+		if got := GetEntryPersonIds(tx, theirEntryId); len(got) != 0 {
+			t.Errorf("the surviving family's roster still holds %v", got)
+		}
+		if got := len(GetPersonResults(tx, fx.person.Id)); got != 0 {
+			t.Errorf("%d results still name a deleted person", got)
+		}
+
+		// The result itself survives, minus the name. The routine still placed.
+		results := GetAppearanceResults(tx, theirAppearanceId)
+		if len(results) != 1 {
+			t.Fatalf("got %d results, want the one to survive", len(results))
+		}
+		if results[0].PersonId != nil {
+			t.Errorf("result still points at person %d", *results[0].PersonId)
+		}
+		if results[0].Label != "High Gold" {
+			t.Errorf("result label = %q, want it untouched", results[0].Label)
+		}
+
+		// The deleted family's photo was attached to the survivor's season, and
+		// that join has to go with the photo.
+		if got := len(GetFamilyAppearancePhotos(tx, fx.outsiderFamily)); got != 0 {
+			t.Errorf("%d appearance-photo joins point at a deleted photo", got)
+		}
+		if got := len(GetFamilyEventPhotos(tx, fx.outsiderFamily)); got != 0 {
+			t.Errorf("%d event-photo joins point at a deleted photo", got)
+		}
+
+		// Everything else in the surviving family is untouched.
+		if got := len(GetFamilyEntries(tx, fx.outsiderFamily)); got != 1 {
+			t.Errorf("the surviving family has %d entries, want its own to remain", got)
+		}
+		if GetFamily(tx, fx.outsiderFamily).Id == 0 {
+			t.Error("the linked family was destroyed")
+		}
+	})
+}
+
 func TestDeleteAccountDoesNotTouchALinkedFamily(t *testing.T) {
 	fx := setupDeletionFixture(t)
 

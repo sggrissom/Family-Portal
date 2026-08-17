@@ -276,11 +276,12 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 	return
 }
 
-// deletePersonRecordTx removes a person, their roster rows, and any photo tag
-// still pointing at them. The photo joins are normally gone already — the
-// family's photos were deleted first — but a person can be tagged in a photo
-// owned by a family that is not being deleted, and that row must not outlive
-// the person it names.
+// deletePersonRecordTx removes a person, their roster rows, any photo tag still
+// pointing at them, and their place on any activity roster. Those joins are
+// normally gone already — the family's photos and activities were deleted first
+// — but a person can be tagged in a photo, or rostered in a routine, owned by a
+// family that is not being deleted, and those rows must not outlive the person
+// they name.
 func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 	for _, photoPerson := range GetPhotoPersonsByPerson(tx, person.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -289,6 +290,7 @@ func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
 	}
 
+	removePersonFromActivitiesTx(tx, person.Id)
 	deletePersonRostersTx(tx, person.Id)
 	vbolt.Delete(tx, PeopleBkt, person.Id)
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, -1)
