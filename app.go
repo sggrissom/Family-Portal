@@ -191,6 +191,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterGrowthMethods(app)
 	backend.RegisterMilestoneMethods(app)
 	backend.RegisterActivityMethods(app)
+	backend.RegisterActivityResultMethods(app)
 	backend.RegisterTagMethods(app)
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)

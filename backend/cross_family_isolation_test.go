@@ -40,10 +40,12 @@ type isolationFixture struct {
 	ownPerson  Person // the outsider's own person
 	ownPhotoId int    // a photo in the outsider's family
 
-	activity Activity
-	season   Season
-	event    Event
-	entry    Entry
+	activity   Activity
+	season     Season
+	event      Event
+	entry      Entry
+	appearance Appearance
+	result     Result
 }
 
 func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
@@ -160,6 +162,16 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 			PersonId: fx.person.Id, FamilyId: fx.ownerFamily, CreatedAt: now,
 		}
 		writeEntryMemberTx(tx, &member)
+		fx.appearance = Appearance{
+			Id: vbolt.NextIntId(tx, AppearanceBkt), EventId: fx.event.Id,
+			EntryId: fx.entry.Id, FamilyId: fx.ownerFamily, OccurredAt: now, CreatedAt: now,
+		}
+		writeAppearanceTx(tx, &fx.appearance)
+		fx.result = Result{
+			Id: vbolt.NextIntId(tx, ResultBkt), AppearanceId: fx.appearance.Id,
+			FamilyId: fx.ownerFamily, Kind: ResultKindAdjudication, Label: "High Gold", CreatedAt: now,
+		}
+		writeResultTx(tx, &fx.result)
 
 		vbolt.TxCommit(tx)
 	})
@@ -403,6 +415,29 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		{"SetEntryRoster", func(ctx *vbeam.Context) error {
 			_, err := SetEntryRoster(ctx, SetEntryRosterRequest{
 				EntryId: fx.entry.Id, PersonIds: []int{fx.ownPerson.Id},
+			})
+			return err
+		}},
+		{"CreateAppearance", func(ctx *vbeam.Context) error {
+			_, err := CreateAppearance(ctx, CreateAppearanceRequest{
+				EventId: fx.event.Id, EntryId: fx.entry.Id,
+			})
+			return err
+		}},
+		{"UpdateAppearance", func(ctx *vbeam.Context) error {
+			_, err := UpdateAppearance(ctx, UpdateAppearanceRequest{
+				Id: fx.appearance.Id, Notes: "theirs",
+			})
+			return err
+		}},
+		{"DeleteAppearance", func(ctx *vbeam.Context) error {
+			_, err := DeleteAppearance(ctx, AppearanceIdRequest{Id: fx.appearance.Id})
+			return err
+		}},
+		{"SetAppearanceResults", func(ctx *vbeam.Context) error {
+			_, err := SetAppearanceResults(ctx, SetAppearanceResultsRequest{
+				AppearanceId: fx.appearance.Id,
+				Results:      []ResultInput{{Kind: ResultKindAdjudication, Label: "Bronze"}},
 			})
 			return err
 		}},
@@ -681,6 +716,18 @@ func assertOwnerDataIntact(t *testing.T, fx isolationFixture) {
 		// rather than destroyed, so it is checked for extra rows as well.
 		if roster := GetEntryPersonIds(tx, fx.entry.Id); len(roster) != 1 || roster[0] != fx.person.Id {
 			t.Errorf("entry roster = %v, want just the owner's person", roster)
+		}
+		if appearance := GetAppearanceById(tx, fx.appearance.Id); appearance.Id == 0 {
+			t.Error("performance was deleted by an outsider")
+		}
+		// Results are replace-all, so an accepted write would have wiped the
+		// existing row rather than added to it. Both directions are checked.
+		results := GetAppearanceResults(tx, fx.appearance.Id)
+		if len(results) != 1 || results[0].Label != fx.result.Label {
+			t.Errorf("appearance results = %+v, want just %q", results, fx.result.Label)
+		}
+		if appearances := GetEventAppearances(tx, fx.event.Id); len(appearances) != 1 {
+			t.Errorf("competition has %d performances, want 1", len(appearances))
 		}
 
 		if people := GetFamilyPeople(tx, fx.ownerFamily); len(people) != 1 {

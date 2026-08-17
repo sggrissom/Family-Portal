@@ -740,9 +740,10 @@ func CreateEntry(ctx *vbeam.Context, req CreateEntryRequest) (resp EntryResponse
 			return
 		}
 	}
-	vbolt.TxCommit(ctx.Tx)
-
+	// The view is built before the commit: TxCommit closes the transaction, and
+	// reading a closed one panics rather than returning stale data.
 	resp.Entry = entryView(ctx.Tx, entry)
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
@@ -767,9 +768,8 @@ func UpdateEntry(ctx *vbeam.Context, req UpdateEntryRequest) (resp EntryResponse
 	vbeam.UseWriteTx(ctx)
 	applyEntryFields(&entry, name, req.Format, req.Style, req.Division, req.Level, req.Notes)
 	writeEntryTx(ctx.Tx, &entry)
-	vbolt.TxCommit(ctx.Tx)
-
 	resp.Entry = entryView(ctx.Tx, entry)
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
@@ -789,9 +789,8 @@ func SetEntryRoster(ctx *vbeam.Context, req SetEntryRosterRequest) (resp EntryRe
 	if err = setEntryRosterTx(ctx.Tx, entry, req.PersonIds); err != nil {
 		return
 	}
-	vbolt.TxCommit(ctx.Tx)
-
 	resp.Entry = entryView(ctx.Tx, entry)
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
