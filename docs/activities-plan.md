@@ -359,10 +359,21 @@ Each phase ends green on `make check`.
    there must be no window in which a bucket exists that account deletion does not know
    about. Phase 5 still owns the per-entity cascades. `cmd/verifydb` counts the nine buckets
    too, so a restore drill cannot silently report a good restore that dropped them.
-2. **Structure CRUD.** Activity, Season, Event, Entry, roster. Tests per proc, including
-   cross-family rejection.
-3. **Results.** Appearance CRUD, `SetAppearanceResults`, the four aggregate read procs,
-   `ListActivityVocabulary`.
+2. **Structure CRUD.** ✅ *Done.* Activity, Season, Event, Entry, roster. Tests per proc,
+   including cross-family rejection.
+3. **Results.** ✅ *Done.* Appearance CRUD, `SetAppearanceResults`, the four aggregate read
+   procs, `ListActivityVocabulary`.
+
+   The access split across the four read procs is worth restating, because it is not
+   uniform. `GetSeasonOverview` and `GetEventDetail` are whole-family: a season and a
+   competition have no person dimension, so a link never reaches them. `GetEntryHistory`
+   and `GetPersonSeason` resolve through a roster and are the two a linked household
+   actually uses — so they carry `SeasonSummary` and `EventSummary` rather than the full
+   records. A performance with no competition name attached is unreadable; that
+   competition's notes are nobody else's business.
+
+   `GetPersonSeason` takes `seasonId` as optional for the same reason: a linked household
+   cannot list seasons, so requiring one would leave it no way to ask the question.
 4. **Photos.** Both join tables, the set-photos procs, and the photo-deletion hook in
    `photos.go`.
 5. **Deletion integration.** Per-entity cascades (Season → Events → …), person deletion
