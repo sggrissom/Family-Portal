@@ -63,9 +63,9 @@ Anything a user can't undo themselves becomes a support request to me.
 
 ## 4. Don't ship blind
 
-- [ ] `README.md`: what it is, architecture sketch, prerequisites, setup, common commands.
-- [ ] `.env.example` listing every required and optional variable, no secrets.
-- [ ] Document production topology: reverse proxy, TLS, paths, permissions, service user, face daemon + models.
+- [x] `README.md`: what it is, architecture sketch, prerequisites, setup, common commands.
+- [x] `.env.example` listing every required and optional variable, no secrets.
+- [x] Document production topology: reverse proxy, TLS, paths, permissions, service user, face daemon + models. `docs/deployment.md`, including the box-from-nothing rebuild order and why the Caddy vhost stays limit-free.
 - [ ] Post-deploy smoke check: landing page, login, `/readyz`, one photo loads, WebSocket connects.
 - [ ] E2E coverage against a compiled release build for the five flows I'd notice breaking: signup/login, add person, add growth, upload photo, chat.
 - [ ] Verify reverse-proxy limits and timeouts match the application's; confirm TLS renewal and WebSocket proxying work.
