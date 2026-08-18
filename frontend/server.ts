@@ -782,6 +782,7 @@ export interface ImportDataRequest {
     previewOnly: boolean
     mergeStrategy: string
     importMilestones: boolean
+    importActivities: boolean
     dryRun: boolean
     familyId: number
 }
@@ -798,6 +799,7 @@ export interface ImportDataResponse {
     skippedTags: number
     importedPhotos: number
     skippedPhotos: number
+    importedActivities: ActivityImportCounts
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
@@ -1239,6 +1241,17 @@ export interface ChatMessage {
 export interface PhotoWithPeople {
     image: Image
     people: Person[]
+}
+
+export interface ActivityImportCounts {
+    activities: number
+    seasons: number
+    events: number
+    entries: number
+    appearances: number
+    results: number
+    reused: number
+    skipped: number
 }
 
 export interface ImportPerson {
