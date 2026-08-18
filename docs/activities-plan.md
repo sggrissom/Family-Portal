@@ -392,10 +392,11 @@ Each phase ends green on `make check`.
    person's own family does not reach either row. `removePersonFromActivitiesTx` takes the
    roster row out and clears `Result.PersonId` — the result survives, because the routine
    still placed.
-6. **Minimal UI.** Season list → season overview → competition detail → routine history, plus
-   entry forms. Routes under `/activities`, `/season`, `/competition`, `/routine` in
-   `frontend/main.tsx`, pages in `frontend/pages/activities/`. Dance vocabulary hardcoded in
-   a label map keyed by `Activity.Kind`, so a sport label pack is a second entry in that map:
+6. **Minimal UI.** *In progress.* Season list → season overview → competition detail → routine
+   history, plus entry forms. Routes under `/activities`, `/season`, `/competition`,
+   `/routine` in `frontend/main.tsx`, pages in `frontend/pages/activities/`. Dance vocabulary
+   hardcoded in a label map keyed by `Activity.Kind`, so a sport label pack is a second entry
+   in that map:
 
    ```ts
    const labels = {
@@ -406,6 +407,10 @@ Each phase ends green on `make check`.
 
    Every user-facing string for these three types goes through this map. Nothing in
    `backend/` knows the word "routine" or "performance."
+
+   Landed so far: `labels.ts` and `/activities` — the program list and the seasons inside
+   the selected program, with create/rename/delete for both. It is deliberately the only
+   screen that talks about programs at all; every later screen starts from a season.
 7. **Export/import.** `export.go` and `import.go` both enumerate entity types explicitly
    (`import.go` has ~40 milestone references), so this is real work and is deliberately last.
    **Until it lands, activity data is absent from backups and exports** — worth knowing
