@@ -434,10 +434,18 @@ Each phase ends green on `make check`.
    never sees an `Activity`, so a season crossing the link arrived with no
    vocabulary and every screen fell back to "Event".
 
-   What is deliberately not here: photos. Both set-photos procs exist and both read procs
-   return photo ids, but attaching a photo needs the photo picker, which is a photos-page
-   project rather than an activities one. The ids are carried through the page data
-   already, so the screens do not change shape when it lands.
+   Photos landed last, and the prediction held: the ids were already flowing through
+   the page data, so no screen changed shape. `SetEventPhotos` hangs the weekend shots
+   off the competition and `SetAppearancePhotos` hangs a routine's own off its
+   performance, both edited through one picker on the competition page and shown
+   read-only wherever a performance renders.
+
+   The picker itself moved to `frontend/components/PhotoPicker.tsx`. It was the same
+   block copied into `add-milestone.tsx` and `edit-milestone.tsx`, and the activities
+   pages would have been the third and fourth copies. Both set-photos procs are
+   replace-all like `SetAppearanceResults`, so the picker edits a draft and only Save
+   writes it — and the response, not the draft, is what the page believes afterwards,
+   since a photo the caller cannot see never attaches.
 7. **Export/import.** ✅ *Done.* `export.go` and `import.go` both
    enumerate entity types explicitly (`import.go` has ~40 milestone references), so this is
    real work and is deliberately last. Activity data is now in both backup paths and comes

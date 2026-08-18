@@ -10,6 +10,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
+import { PhotoPicker, PhotoStrip } from "../../components/PhotoPicker";
 import { ActivityLabels, labelsFor } from "./labels";
 import { ResultList } from "./results";
 import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
@@ -30,6 +31,10 @@ export type CompetitionPageData = {
   entries: server.EntryView[];
   people: server.Person[];
   vocabulary: server.ListActivityVocabularyResponse;
+  // Every photo the viewer can see, not just the ones of the people on a
+  // roster. A competition weekend produces stage shots that nothing has
+  // tagged, and those are exactly the ones worth attaching.
+  photos: server.PhotoWithPeople[];
 };
 
 const emptyDetail: server.GetEventDetailResponse = {
@@ -81,6 +86,7 @@ export async function fetch(
       entries: [],
       people: [],
       vocabulary: emptyVocabulary,
+      photos: [],
     });
   }
 
@@ -96,6 +102,7 @@ export async function fetch(
   const [vocabulary] = await server.ListActivityVocabulary({
     activityId: overview?.activity.id ?? 0,
   });
+  const [photos] = await server.ListFamilyPhotos({ personId: 0 });
 
   return rpc.ok<CompetitionPageData>({
     detail,
@@ -103,6 +110,7 @@ export async function fetch(
     entries: overview?.entries ?? [],
     people: people?.people ?? [],
     vocabulary: vocabulary ?? emptyVocabulary,
+    photos: photos?.photos ?? [],
   });
 }
 
@@ -126,6 +134,16 @@ type CompetitionState = {
   editingResultsFor: number;
   resultRows: ResultRow[];
 
+  // The competition's own photos, which live on the page rather than on any
+  // performance. Held in state because saving them redraws from here.
+  eventPhotoIds: number[];
+  // Which photo set is open: the competition's, or one performance's. Same
+  // one-at-a-time discipline as the results editor, and for the same reason —
+  // set-photos is replace-all, so two open pickers are two pending overwrites.
+  editingEventPhotos: boolean;
+  editingPhotosFor: number;
+  photoDraft: number[];
+
   error: string;
   saving: boolean;
 };
@@ -144,6 +162,10 @@ const useCompetitionState = vlens.declareHook(
     editNotes: "",
     editingResultsFor: 0,
     resultRows: [],
+    eventPhotoIds: [],
+    editingEventPhotos: false,
+    editingPhotosFor: 0,
+    photoDraft: [],
     error: "",
     saving: false,
   })
@@ -169,6 +191,10 @@ export function view(
     state.editingId = 0;
     state.editingResultsFor = 0;
     state.resultRows = [];
+    state.eventPhotoIds = [...(data.detail.photoIds ?? [])];
+    state.editingEventPhotos = false;
+    state.editingPhotosFor = 0;
+    state.photoDraft = [];
     state.error = "";
   }
 
@@ -194,6 +220,58 @@ export function view(
         </div>
 
         {state.error && <div className="error-message">{state.error}</div>}
+
+        <section className="activities-section">
+          <div className="activities-section-head">
+            <h2>Photos</h2>
+            {!state.editingEventPhotos && (
+              <button
+                className="btn btn-secondary"
+                onClick={vlens.cachePartial(onStartEventPhotos, state)}
+                disabled={state.saving}
+              >
+                {state.eventPhotoIds.length === 0 ? "Add photos" : "Edit photos"}
+              </button>
+            )}
+          </div>
+
+          {state.editingEventPhotos ? (
+            <div className="activities-form">
+              <p className="form-hint">
+                Photos of the {labels.event.toLowerCase()} itself — the weekend shots that are not
+                of any one {labels.entry.toLowerCase()}. A {labels.entry.toLowerCase()}'s own photos
+                hang off its {labels.appearance.toLowerCase()} below.
+              </p>
+              <PhotoPicker
+                photos={data.photos}
+                selectedIds={state.photoDraft}
+                onToggle={photoId => onTogglePhotoDraft(state, photoId)}
+                disabled={state.saving}
+                emptyText="No photos yet — upload some first."
+              />
+              <div className="form-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={vlens.cachePartial(onSaveEventPhotos, state)}
+                  disabled={state.saving}
+                >
+                  Save
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={vlens.cachePartial(onCancelPhotos, state)}
+                  disabled={state.saving}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : state.eventPhotoIds.length === 0 ? (
+            <p className="form-hint">No photos of this {labels.event.toLowerCase()} yet.</p>
+          ) : (
+            <PhotoStrip photoIds={state.eventPhotoIds} />
+          )}
+        </section>
 
         <section className="activities-section">
           <div className="activities-section-head">
@@ -239,6 +317,37 @@ export function view(
                         onCancel={vlens.cachePartial(onCancelResults, state)}
                       />
                     </div>
+                  ) : state.editingPhotosFor === detail.appearance.id ? (
+                    <div className="appearance-editing">
+                      <strong className="event-name">{detail.entry.name}</strong>
+                      <PhotoPicker
+                        photos={data.photos}
+                        selectedIds={state.photoDraft}
+                        onToggle={photoId => onTogglePhotoDraft(state, photoId)}
+                        disabled={state.saving}
+                        emptyText="No photos yet — upload some first."
+                      />
+                      <div className="form-actions">
+                        <button
+                          className="btn btn-primary"
+                          onClick={vlens.cachePartial(
+                            onSaveAppearancePhotos,
+                            state,
+                            detail.appearance.id
+                          )}
+                          disabled={state.saving}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={vlens.cachePartial(onCancelPhotos, state)}
+                          disabled={state.saving}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <AppearanceRow state={state} data={data} detail={detail} labels={labels} />
                   )}
@@ -279,6 +388,7 @@ const AppearanceRow = ({
         )}
         <ResultList results={detail.results} people={data.people} />
         {detail.appearance.notes && <p className="event-notes">{detail.appearance.notes}</p>}
+        <PhotoStrip photoIds={detail.photoIds} />
       </div>
       <span className="event-item-actions">
         <button
@@ -287,6 +397,14 @@ const AppearanceRow = ({
           disabled={state.saving}
         >
           {(detail.results ?? []).length === 0 ? "Add results" : "Edit results"}
+        </button>
+        <button
+          className="icon-btn"
+          title={`Photos of this ${labels.appearance.toLowerCase()}`}
+          onClick={vlens.cachePartial(onStartAppearancePhotos, state, detail)}
+          disabled={state.saving}
+        >
+          📸
         </button>
         <button
           className="icon-btn"
@@ -454,6 +572,7 @@ function dateOrNull(value: string): string | null {
 function onShowAddForm(state: CompetitionState, data: CompetitionPageData) {
   state.adding = true;
   state.editingId = 0;
+  closePhotoEditors(state);
   state.newEntryId = data.entries.length > 0 ? data.entries[0].entry.id : 0;
   // Most performances happen on the competition's own dates, and a single-day
   // competition has only one candidate. Prefilling saves the common case a
@@ -466,6 +585,7 @@ function onShowAddForm(state: CompetitionState, data: CompetitionPageData) {
 function onStartEdit(state: CompetitionState, detail: server.AppearanceDetail) {
   state.adding = false;
   state.editingResultsFor = 0;
+  closePhotoEditors(state);
   state.editingId = detail.appearance.id;
   state.editOccurredAt = toDateInputValue(detail.appearance.occurredAt);
   state.editNotes = detail.appearance.notes;
@@ -475,6 +595,97 @@ function onStartEdit(state: CompetitionState, detail: server.AppearanceDetail) {
 function onCancelForm(state: CompetitionState) {
   state.adding = false;
   state.editingId = 0;
+  vlens.scheduleRedraw();
+}
+
+// ── photo handlers ───────────────────────────────────────────────────────────
+//
+// Both set-photos procs are replace-all, so the picker edits a draft copy and
+// only the Save writes it. Cancelling leaves what was already attached alone,
+// which matters more here than on the other editors: an accidental save of an
+// empty draft would silently detach a weekend's photos.
+
+function closePhotoEditors(state: CompetitionState) {
+  state.editingEventPhotos = false;
+  state.editingPhotosFor = 0;
+  state.photoDraft = [];
+}
+
+function onStartEventPhotos(state: CompetitionState) {
+  state.adding = false;
+  state.editingId = 0;
+  state.editingResultsFor = 0;
+  state.editingPhotosFor = 0;
+  state.editingEventPhotos = true;
+  state.photoDraft = [...state.eventPhotoIds];
+  vlens.scheduleRedraw();
+}
+
+function onStartAppearancePhotos(state: CompetitionState, detail: server.AppearanceDetail) {
+  state.adding = false;
+  state.editingId = 0;
+  state.editingResultsFor = 0;
+  state.editingEventPhotos = false;
+  state.editingPhotosFor = detail.appearance.id;
+  state.photoDraft = [...(detail.photoIds ?? [])];
+  vlens.scheduleRedraw();
+}
+
+function onCancelPhotos(state: CompetitionState) {
+  closePhotoEditors(state);
+  vlens.scheduleRedraw();
+}
+
+function onTogglePhotoDraft(state: CompetitionState, photoId: number) {
+  const idx = state.photoDraft.indexOf(photoId);
+  if (idx >= 0) state.photoDraft.splice(idx, 1);
+  else state.photoDraft.push(photoId);
+  vlens.scheduleRedraw();
+}
+
+async function onSaveEventPhotos(state: CompetitionState) {
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.SetEventPhotos({
+    eventId: state.eventId,
+    photoIds: state.photoDraft,
+  });
+  if (err || !resp) {
+    state.error = err || "Failed to save photos";
+  } else {
+    // The response is the authority on what stuck: a photo the caller cannot
+    // see is not attached, so the draft is not necessarily what came back.
+    state.eventPhotoIds = resp.photoIds ?? [];
+    closePhotoEditors(state);
+  }
+  state.saving = false;
+  vlens.scheduleRedraw();
+}
+
+async function onSaveAppearancePhotos(state: CompetitionState, appearanceId: number) {
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.SetAppearancePhotos({
+    appearanceId,
+    photoIds: state.photoDraft,
+  });
+  if (err || !resp) {
+    state.error = err || "Failed to save photos";
+  } else {
+    const idx = state.appearances.findIndex(row => row.appearance.id === appearanceId);
+    if (idx >= 0) {
+      state.appearances[idx] = {
+        ...state.appearances[idx],
+        photoIds: resp.appearance.photoIds ?? [],
+      };
+    }
+    closePhotoEditors(state);
+  }
+  state.saving = false;
   vlens.scheduleRedraw();
 }
 
@@ -494,6 +705,7 @@ function rosterOf(data: CompetitionPageData, entryId: number): server.Person[] {
 function onStartEditResults(state: CompetitionState, detail: server.AppearanceDetail) {
   state.adding = false;
   state.editingId = 0;
+  closePhotoEditors(state);
   state.editingResultsFor = detail.appearance.id;
   state.resultRows = (detail.results ?? []).map(resultToRow);
   vlens.scheduleRedraw();
