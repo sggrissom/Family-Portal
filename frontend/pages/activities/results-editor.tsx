@@ -50,10 +50,10 @@ export function resultToRow(result: server.Result): ResultRow {
   return {
     kind: result.kind,
     label: result.label,
-    rank: result.rank === null ? "" : String(result.rank),
-    outOf: result.outOf === null ? "" : String(result.outOf),
+    rank: result.rank == null ? "" : String(result.rank),
+    outOf: result.outOf == null ? "" : String(result.outOf),
     category: result.category,
-    score: result.score === null ? "" : String(result.score),
+    score: result.score == null ? "" : String(result.score),
     personId: result.personId ?? 0,
     notes: result.notes,
   };

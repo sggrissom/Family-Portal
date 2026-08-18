@@ -37,16 +37,20 @@ function ordinal(n: number): string {
 // resultText is the one-line form of a result. The four kinds use disjoint
 // fields, so each reads differently: a placement leads with its rank, a score
 // with its number, and the two label kinds are just the label a judge wrote.
+//
+// The optional fields are `omitempty` pointers on the wire, so a missing rank
+// or field size arrives as undefined rather than null. Hence the loose checks:
+// a placement with no field size reads "1st", not "1st of undefined".
 export function resultText(result: server.Result): string {
   switch (result.kind) {
     case ResultKindPlacement: {
-      const place = result.rank === null ? result.label : ordinal(result.rank);
-      const field = result.outOf === null ? "" : ` of ${result.outOf}`;
+      const place = result.rank == null ? result.label : ordinal(result.rank);
+      const field = result.outOf == null ? "" : ` of ${result.outOf}`;
       return `${place}${field}`;
     }
     case ResultKindScore: {
-      const score = result.score === null ? result.label : String(result.score);
-      return result.label && result.score !== null ? `${score} ${result.label}` : score;
+      const score = result.score == null ? result.label : String(result.score);
+      return result.label && result.score != null ? `${score} ${result.label}` : score;
     }
     default:
       return result.label;
@@ -74,7 +78,7 @@ export const ResultList = ({
     <ul className="result-list">
       {rows.map(result => {
         const personName =
-          result.personId === null
+          result.personId == null
             ? ""
             : (people.find(person => person.id === result.personId)?.name ?? "");
         const detail = resultDetail(result, personName);
