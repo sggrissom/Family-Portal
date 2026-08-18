@@ -411,10 +411,21 @@ Each phase ends green on `make check`.
    Landed so far: `labels.ts` and `/activities` — the program list and the seasons inside
    the selected program, with create/rename/delete for both. It is deliberately the only
    screen that talks about programs at all; every later screen starts from a season.
-7. **Export/import.** `export.go` and `import.go` both enumerate entity types explicitly
-   (`import.go` has ~40 milestone references), so this is real work and is deliberately last.
-   **Until it lands, activity data is absent from backups and exports** — worth knowing
-   before a full season goes in.
+7. **Export/import.** *Export done; import next.* `export.go` and `import.go` both
+   enumerate entity types explicitly (`import.go` has ~40 milestone references), so this is
+   real work and is deliberately last. **Until import lands, an exported season cannot be
+   restored** — the bundle now carries it, but nothing reads it back.
+
+   The bundle nests the activities tree rather than adding five parallel arrays with cross
+   references. Flattening is exactly what makes `import.go`'s milestone handling as long as
+   it is — every flat array needs its own id-remapping pass — and nested, the parent's new
+   id is simply in scope when the child is written. The one thing that cannot nest is a
+   performance's routine: a performance belongs to both a competition and a routine, and
+   only one can be its parent. Performances hang under the competition, which is how a
+   results sheet arrives, and carry `EntryId` to rejoin the routine.
+
+   `Rank`, `OutOf`, `Score` and `PersonId` stay pointers through the bundle. Marshalling
+   them as zero would turn every award into a 0th-place finish on the way back in.
 
 ## Deferred
 
