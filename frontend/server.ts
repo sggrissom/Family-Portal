@@ -1208,6 +1208,7 @@ export interface ResultInput {
 export interface SeasonSummary {
     id: number
     name: string
+    kind: string
     startDate: string
     endDate: string
 }

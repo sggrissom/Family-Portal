@@ -178,6 +178,12 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
         </div>
 
         <div className="profile-actions">
+          <a
+            href={`/person-activities/${person.id}`}
+            className="btn btn-secondary profile-edit-action"
+          >
+            🏆 Activities
+          </a>
           <a href={`/edit-person/${person.id}`} className="btn btn-secondary profile-edit-action">
             ✏️ Edit
           </a>

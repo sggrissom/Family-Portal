@@ -392,6 +392,12 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 		if len(resp.Entries) != 1 || resp.Entries[0].Entry.Id != fx.groupEntry.Id {
 			t.Errorf("alice's season = %+v, want the group routine", resp.Entries)
 		}
+		// The kind crosses the link with the season summary. It is the only
+		// thing that tells the grandparents' screen to say "Competition"
+		// rather than "Event", and it is not family data — just a vocabulary.
+		if len(resp.Seasons) != 1 || resp.Seasons[0].Kind != ActivityKindDance {
+			t.Errorf("shared season = %+v, want one dance season", resp.Seasons)
+		}
 	})
 
 	// Out of reach: the routine alice is not in, and the two whole-family views.
@@ -437,4 +443,42 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 			t.Error("a shared child's season was readable without the activities scope")
 		}
 	})
+}
+
+// SeasonSummary carries the owning activity's kind because that is what selects
+// the UI's label pack. It is on the summary rather than only on the full record
+// for the link case at the end of this test: a household reading a shared child
+// never sees an Activity, and without the kind every screen it has falls back
+// to "Event" and "Entry".
+func TestSeasonSummaryCarriesActivityKind(t *testing.T) {
+	fx := seedSeason(t)
+
+	detail, err := callAs(t, fx.resultsFixture, GetEventDetail, GetEventDetailRequest{EventId: fx.nuvo.Id})
+	if err != nil {
+		t.Fatalf("GetEventDetail error = %v", err)
+	}
+	if detail.Season.Kind != ActivityKindDance {
+		t.Errorf("event detail season kind = %q, want %q", detail.Season.Kind, ActivityKindDance)
+	}
+
+	history, err := callAs(t, fx.resultsFixture, GetEntryHistory, GetEntryHistoryRequest{EntryId: fx.entry.Id})
+	if err != nil {
+		t.Fatalf("GetEntryHistory error = %v", err)
+	}
+	if history.Season.Kind != ActivityKindDance {
+		t.Errorf("routine history season kind = %q, want %q", history.Season.Kind, ActivityKindDance)
+	}
+
+	person, err := callAs(t, fx.resultsFixture, GetPersonSeason, GetPersonSeasonRequest{PersonId: fx.alice.Id})
+	if err != nil {
+		t.Fatalf("GetPersonSeason error = %v", err)
+	}
+	if len(person.Seasons) == 0 {
+		t.Fatal("alice has no seasons")
+	}
+	for _, season := range person.Seasons {
+		if season.Kind != ActivityKindDance {
+			t.Errorf("season %q kind = %q, want %q", season.Name, season.Kind, ActivityKindDance)
+		}
+	}
 }

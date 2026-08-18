@@ -47,8 +47,14 @@ var ErrPersonNotFound = errors.New("Person not found or not in your family")
 // competition a performance happened at, not what the host family wrote in the
 // notes field about it.
 type SeasonSummary struct {
-	Id        int       `json:"id"`
-	Name      string    `json:"name"`
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+	// Kind is the owning Activity's kind, carried here because it is what
+	// selects the UI's label pack — "Competition" for dance, "Game" for a
+	// sport. A season crossing a link boundary that arrives without it renders
+	// as "Event", which is the one word the plan's label map exists to avoid.
+	// It leaks nothing: the kind is a vocabulary switch, not family data.
+	Kind      string    `json:"kind"`
 	StartDate time.Time `json:"startDate"`
 	EndDate   time.Time `json:"endDate"`
 }
@@ -62,9 +68,14 @@ type EventSummary struct {
 	EndDate   time.Time `json:"endDate"`
 }
 
-func seasonSummary(season Season) SeasonSummary {
+// seasonSummary reads the season's activity for its kind. That is one extra
+// bucket read per season in a response, and a response holds one season on the
+// competition and routine pages and a handful on a person's — small enough that
+// a cache would cost more lines than it saves.
+func seasonSummary(tx *vbolt.Tx, season Season) SeasonSummary {
 	return SeasonSummary{
 		Id: season.Id, Name: season.Name,
+		Kind:      GetActivityById(tx, season.ActivityId).Kind,
 		StartDate: season.StartDate, EndDate: season.EndDate,
 	}
 }
@@ -229,7 +240,7 @@ func GetEventDetail(ctx *vbeam.Context, req GetEventDetailRequest) (resp GetEven
 	}
 
 	resp.Event = event
-	resp.Season = seasonSummary(GetSeasonById(ctx.Tx, event.SeasonId))
+	resp.Season = seasonSummary(ctx.Tx, GetSeasonById(ctx.Tx, event.SeasonId))
 	resp.PhotoIds = visiblePhotoIds(ctx.Tx, user, GetEventPhotoIds(ctx.Tx, event.Id))
 
 	summary := eventSummary(event)
@@ -280,7 +291,7 @@ func GetEntryHistory(ctx *vbeam.Context, req GetEntryHistoryRequest) (resp GetEn
 	}
 
 	resp.Entry = entryView(ctx.Tx, entry)
-	resp.Season = seasonSummary(GetSeasonById(ctx.Tx, entry.SeasonId))
+	resp.Season = seasonSummary(ctx.Tx, GetSeasonById(ctx.Tx, entry.SeasonId))
 
 	events := eventCache{}
 	resp.Appearances = []AppearanceDetail{}
@@ -367,7 +378,7 @@ func GetPersonSeason(ctx *vbeam.Context, req GetPersonSeasonRequest) (resp GetPe
 		resp.Entries = append(resp.Entries, entryView(ctx.Tx, entry))
 		if _, seen := seenSeasons[entry.SeasonId]; !seen {
 			seenSeasons[entry.SeasonId] = struct{}{}
-			resp.Seasons = append(resp.Seasons, seasonSummary(GetSeasonById(ctx.Tx, entry.SeasonId)))
+			resp.Seasons = append(resp.Seasons, seasonSummary(ctx.Tx, GetSeasonById(ctx.Tx, entry.SeasonId)))
 		}
 		for _, appearance := range GetEntryAppearances(ctx.Tx, entry.Id) {
 			resp.Appearances = append(resp.Appearances, AppearanceDetail{

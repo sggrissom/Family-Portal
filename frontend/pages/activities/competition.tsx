@@ -45,7 +45,7 @@ const emptyDetail: server.GetEventDetailResponse = {
     notes: "",
     createdAt: "",
   },
-  season: { id: 0, name: "", startDate: "", endDate: "" },
+  season: { id: 0, name: "", kind: "", startDate: "", endDate: "" },
   photoIds: [],
   appearances: [],
 };
