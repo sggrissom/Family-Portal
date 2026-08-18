@@ -417,7 +417,10 @@ Each phase ends green on `make check`.
    `<datalist>` suggestions, which is the mitigation the free-text decision above depends
    on.
    `/competition/<id>` on `GetEventDetail` — which routines performed there, with
-   add/edit/delete and their results rendered read-only by a shared `ResultList`.
+   add/edit/delete and their results rendered read-only by a shared `ResultList`. The
+   results editor on the same page — a row per line of the results sheet, kind-specific
+   fields, roster-narrowed awards, and `ListActivityVocabulary` behind the label and
+   category fields.
 7. **Export/import.** `export.go` and `import.go` both enumerate entity types explicitly
    (`import.go` has ~40 milestone references), so this is real work and is deliberately last.
    **Until it lands, activity data is absent from backups and exports** — worth knowing
