@@ -390,6 +390,54 @@ func TestDeleteFamilyActivitiesLeavesNoOrphans(t *testing.T) {
 	})
 }
 
+// A person deleted in their own household can still be rostered in another
+// household's group routine, shared in by a link. Sweeping the deleted person's
+// family leaves those rows pointing at somebody who no longer exists.
+//
+// The roster row goes; the result does not. A routine that placed second still
+// placed second after one of its dancers is deleted.
+func TestDeletingAPersonClearsTheirActivityJoinsEverywhere(t *testing.T) {
+	fx, cleanup := setupActivityFixture(t)
+	defer cleanup()
+
+	// Alice is on the group routine and is the one the judges' award names.
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		removePersonFromActivitiesTx(tx, fx.alice.Id)
+		vbolt.TxCommit(tx)
+	})
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetPersonEntryMembers(tx, fx.alice.Id)); got != 0 {
+			t.Errorf("alice is still on %d rosters", got)
+		}
+		if roster := GetEntryPersonIds(tx, fx.groupEntry.Id); len(roster) != 1 || roster[0] != fx.bob.Id {
+			t.Errorf("group roster = %v, want just bob", roster)
+		}
+		if got := len(GetPersonResults(tx, fx.alice.Id)); got != 0 {
+			t.Errorf("%d results still name alice", got)
+		}
+
+		// Both results survive — including the one that used to name her.
+		results := GetAppearanceResults(tx, fx.groupAppr.Id)
+		if len(results) != 2 {
+			t.Fatalf("got %d results, want both to survive", len(results))
+		}
+		for _, result := range results {
+			if result.PersonId != nil {
+				t.Errorf("result %d still points at person %d", result.Id, *result.PersonId)
+			}
+			if result.Label == "" {
+				t.Errorf("result %d lost its label", result.Id)
+			}
+		}
+
+		// Bob was not deleted and keeps everything.
+		if got := len(GetPersonEntryMembers(tx, fx.bob.Id)); got != 2 {
+			t.Errorf("bob is on %d rosters, want 2", got)
+		}
+	})
+}
+
 // Activities is not in DefaultLinkScopes and is the highest bit, so no link that
 // predates the feature can read back as sharing it.
 func TestActivitiesScopeIsOptInAndAdditive(t *testing.T) {

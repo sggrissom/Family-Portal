@@ -374,11 +374,24 @@ Each phase ends green on `make check`.
 
    `GetPersonSeason` takes `seasonId` as optional for the same reason: a linked household
    cannot list seasons, so requiring one would leave it no way to ask the question.
-4. **Photos.** Both join tables, the set-photos procs, and the photo-deletion hook in
-   `photos.go`.
-5. **Deletion integration.** Per-entity cascades (Season → Events → …), person deletion
-   clearing `Result.PersonId`, photo deletion clearing both join tables. The family-wide
-   sweep and its account-deletion test landed in phase 1.
+4. **Photos.** ✅ *Done.* Both join tables, the set-photos procs, and the photo-deletion
+   hook in `photos.go`.
+
+   Photo ids on the read procs are filtered per caller. Reaching a routine through a link
+   is not the same as reaching photos of it — a photo needs `ScopePhotos` and somebody
+   tagged in it, which is a stricter test than the one that got the caller to the
+   performance.
+5. **Deletion integration.** ✅ *Done.* The per-entity cascades (Season → Events → …)
+   landed with the CRUD procs that call them, in phases 1–3; photo deletion clearing both
+   join tables landed in phase 4; the family-wide sweep and its account-deletion test
+   landed in phase 1.
+
+   What remained here was person deletion, and the case that makes it necessary is
+   cross-family: a child shared into another household can be rostered in that
+   household's group routine and named by one of its results. Sweeping the deleted
+   person's own family does not reach either row. `removePersonFromActivitiesTx` takes the
+   roster row out and clears `Result.PersonId` — the result survives, because the routine
+   still placed.
 6. **Minimal UI.** Season list → season overview → competition detail → routine history, plus
    entry forms. Routes under `/activities`, `/season`, `/competition`, `/routine` in
    `frontend/main.tsx`, pages in `frontend/pages/activities/`. Dance vocabulary hardcoded in

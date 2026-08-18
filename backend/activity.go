@@ -715,6 +715,29 @@ func deleteActivityTx(tx *vbolt.Tx, activityId int) {
 	deleteActivityRowTx(tx, activityId)
 }
 
+// removePersonFromActivitiesTx takes a deleted person off every roster and out
+// of every result that named them.
+//
+// This is not covered by deleteFamilyActivitiesTx, and the gap is a real one: a
+// child shared into another household by a link can be rostered in that
+// household's group routine. Sweeping the deleted person's own family leaves
+// those rows behind, pointing at a person who no longer exists — the same shape
+// as the cross-family photo tags deletePersonRecordTx already clears.
+//
+// The roster row goes; the result does not. A routine that placed second still
+// placed second after one of its dancers is deleted, so the result keeps its
+// rank and loses only the name — which is also what the plan asks for, and what
+// makes ResultByPersonIndex safe to walk here.
+func removePersonFromActivitiesTx(tx *vbolt.Tx, personId int) {
+	for _, member := range GetPersonEntryMembers(tx, personId) {
+		deleteEntryMemberRowTx(tx, member.Id)
+	}
+	for _, result := range GetPersonResults(tx, personId) {
+		result.PersonId = nil
+		writeResultTx(tx, &result)
+	}
+}
+
 // deleteFamilyActivitiesTx empties all nine buckets for one family.
 //
 // It sweeps each by-family index directly rather than cascading from the
