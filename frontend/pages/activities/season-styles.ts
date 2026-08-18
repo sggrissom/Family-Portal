@@ -113,3 +113,28 @@ block(`
   flex-shrink: 0;
 }
 `);
+
+block(`
+.roster-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+`);
+
+block(`
+.roster-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+`);
+
+block(`
+.roster-option input[type="checkbox"] {
+  cursor: pointer;
+}
+`);
