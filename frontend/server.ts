@@ -534,6 +534,32 @@ export interface SetEntryRosterRequest {
     personIds: number[]
 }
 
+export interface CreateAppearanceRequest {
+    eventId: number
+    entryId: number
+    occurredAt: string | null
+    notes: string
+}
+
+export interface AppearanceResponse {
+    appearance: AppearanceView
+}
+
+export interface UpdateAppearanceRequest {
+    id: number
+    occurredAt: string | null
+    notes: string
+}
+
+export interface AppearanceIdRequest {
+    id: number
+}
+
+export interface SetAppearanceResultsRequest {
+    appearanceId: number
+    results: ResultInput[]
+}
+
 export interface CreateTagRequest {
     name: string
     color: string
@@ -1081,6 +1107,22 @@ export interface EntryView {
     personIds: number[]
 }
 
+export interface AppearanceView {
+    appearance: Appearance
+    results: Result[]
+}
+
+export interface ResultInput {
+    kind: string
+    label: string
+    rank: number | null
+    outOf: number | null
+    category: string
+    score: number | null
+    personId: number | null
+    notes: string
+}
+
 export interface Tag {
     id: number
     familyId: number
@@ -1287,6 +1329,32 @@ export interface Entry {
     division: string
     level: string
     notes: string
+    createdAt: string
+}
+
+export interface Appearance {
+    id: number
+    eventId: number
+    entryId: number
+    familyId: number
+    occurredAt: string
+    notes: string
+    createdAt: string
+}
+
+export interface Result {
+    id: number
+    appearanceId: number
+    familyId: number
+    kind: string
+    label: string
+    rank: number | null
+    outOf: number | null
+    category: string
+    score: number | null
+    personId: number | null
+    notes: string
+    sortOrder: number
     createdAt: string
 }
 
@@ -1533,6 +1601,22 @@ export async function DeleteEntry(data: EntryIdRequest): Promise<rpc.Response<De
 
 export async function SetEntryRoster(data: SetEntryRosterRequest): Promise<rpc.Response<EntryResponse>> {
     return await rpc.call<EntryResponse>('SetEntryRoster', JSON.stringify(data));
+}
+
+export async function CreateAppearance(data: CreateAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('CreateAppearance', JSON.stringify(data));
+}
+
+export async function UpdateAppearance(data: UpdateAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('UpdateAppearance', JSON.stringify(data));
+}
+
+export async function DeleteAppearance(data: AppearanceIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteAppearance', JSON.stringify(data));
+}
+
+export async function SetAppearanceResults(data: SetAppearanceResultsRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SetAppearanceResults', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
