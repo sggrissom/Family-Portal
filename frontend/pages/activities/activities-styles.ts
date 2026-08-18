@@ -172,6 +172,30 @@ block(`
 `);
 
 block(`
+.season-link {
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+}
+`);
+
+block(`
+.season-link:hover .season-name,
+.season-link:focus-visible .season-name,
+.season-open {
+  color: var(--accent);
+}
+`);
+
+block(`
+.season-open {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+`);
+
+block(`
 .season-name {
   color: var(--text);
   font-weight: 600;
