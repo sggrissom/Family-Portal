@@ -524,7 +524,9 @@ const EntryRow = ({
   return (
     <>
       <div className="event-item-main">
-        <strong className="event-name">{entry.name}</strong>
+        <a className="event-name" href={`/routine/${entry.id}`}>
+          {entry.name}
+        </a>
         {traits && <span className="event-meta">{traits}</span>}
         <span className="event-meta">
           {roster.length > 0 ? roster.join(", ") : `No ${labels.roster.toLowerCase()} yet`}
