@@ -15,6 +15,15 @@ import { ActivityLabels, labelsFor } from "./labels";
 import "./activities-styles";
 import "./season-styles";
 
+// SeasonPageData is the overview plus the two lists the forms on this page
+// need: who can be rostered, and what the family has typed into these fields
+// before. Fetching them here rather than per-form keeps the page to one load.
+export type SeasonPageData = {
+  overview: server.GetSeasonOverviewResponse;
+  people: server.Person[];
+  vocabulary: server.ListActivityVocabularyResponse;
+};
+
 const emptyOverview: server.GetSeasonOverviewResponse = {
   activity: { id: 0, familyId: 0, name: "", kind: "", createdAt: "" },
   season: {
@@ -32,14 +41,46 @@ const emptyOverview: server.GetSeasonOverviewResponse = {
   appearances: [],
 };
 
-export async function fetch(
-  route: string,
-  prefix: string
-): Promise<rpc.Response<server.GetSeasonOverviewResponse>> {
+const emptyVocabulary: server.ListActivityVocabularyResponse = {
+  activityId: 0,
+  adjudications: [],
+  awards: [],
+  categories: [],
+  styles: [],
+  divisions: [],
+  levels: [],
+  formats: [],
+  hosts: [],
+};
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<SeasonPageData>> {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.GetSeasonOverviewResponse>(emptyOverview);
+    return rpc.ok<SeasonPageData>({
+      overview: emptyOverview,
+      people: [],
+      vocabulary: emptyVocabulary,
+    });
   }
-  return server.GetSeasonOverview({ seasonId: getIdFromRoute(route) || 0 });
+
+  const [overview, overviewErr] = await server.GetSeasonOverview({
+    seasonId: getIdFromRoute(route) || 0,
+  });
+  if (overviewErr || !overview) {
+    return [null, overviewErr || "Failed to load season"];
+  }
+
+  // Neither of these is worth failing the page over. A roster picker with no
+  // names or a field with no suggestions is degraded, not broken.
+  const [people] = await server.ListPeople({});
+  const [vocabulary] = await server.ListActivityVocabulary({
+    activityId: overview.activity.id,
+  });
+
+  return rpc.ok<SeasonPageData>({
+    overview,
+    people: people?.people ?? [],
+    vocabulary: vocabulary ?? emptyVocabulary,
+  });
 }
 
 type SeasonState = {
@@ -55,6 +96,13 @@ type SeasonState = {
   addingEvent: boolean;
   editingEventId: number;
   form: EventForm;
+
+  entries: server.EntryView[];
+  // Performance counts per entry, same reason as the per-event counts.
+  entryAppearanceCounts: Record<number, number>;
+  addingEntry: boolean;
+  editingEntryId: number;
+  entryForm: EntryForm;
 
   error: string;
   saving: boolean;
@@ -78,6 +126,26 @@ const blankEventForm = (): EventForm => ({
   notes: "",
 });
 
+type EntryForm = {
+  name: string;
+  format: string;
+  style: string;
+  division: string;
+  level: string;
+  notes: string;
+  personIds: number[];
+};
+
+const blankEntryForm = (): EntryForm => ({
+  name: "",
+  format: "",
+  style: "",
+  division: "",
+  level: "",
+  notes: "",
+  personIds: [],
+});
+
 const useSeasonState = vlens.declareHook(
   (): SeasonState => ({
     initialized: false,
@@ -87,42 +155,53 @@ const useSeasonState = vlens.declareHook(
     addingEvent: false,
     editingEventId: 0,
     form: blankEventForm(),
+    entries: [],
+    entryAppearanceCounts: {},
+    addingEntry: false,
+    editingEntryId: 0,
+    entryForm: blankEntryForm(),
     error: "",
     saving: false,
   })
 );
 
-function countAppearances(appearances: server.AppearanceView[]): Record<number, number> {
+function countBy(
+  appearances: server.AppearanceView[],
+  key: (view: server.AppearanceView) => number
+): Record<number, number> {
   const counts: Record<number, number> = {};
   for (const view of appearances) {
-    counts[view.appearance.eventId] = (counts[view.appearance.eventId] ?? 0) + 1;
+    const id = key(view);
+    counts[id] = (counts[id] ?? 0) + 1;
   }
   return counts;
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: server.GetSeasonOverviewResponse
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: SeasonPageData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) return;
 
+  const overview = data.overview;
   const state = useSeasonState();
   // The hook outlives a route change between two seasons, so reinitialize
   // whenever the season under it is a different one.
-  if (!state.initialized || state.seasonId !== data.season.id) {
+  if (!state.initialized || state.seasonId !== overview.season.id) {
+    const appearances = overview.appearances ?? [];
     state.initialized = true;
-    state.seasonId = data.season.id;
-    state.events = [...(data.events ?? [])];
-    state.appearanceCounts = countAppearances(data.appearances ?? []);
+    state.seasonId = overview.season.id;
+    state.events = [...(overview.events ?? [])];
+    state.appearanceCounts = countBy(appearances, a => a.appearance.eventId);
+    state.entries = [...(overview.entries ?? [])];
+    state.entryAppearanceCounts = countBy(appearances, a => a.appearance.entryId);
     state.addingEvent = false;
     state.editingEventId = 0;
+    state.addingEntry = false;
+    state.editingEntryId = 0;
     state.error = "";
   }
 
-  const labels = labelsFor(data.activity);
-  const dates = formatDateRange(data.season.startDate, data.season.endDate);
+  const labels = labelsFor(overview.activity);
+  const dates = formatDateRange(overview.season.startDate, overview.season.endDate);
 
   return (
     <div>
@@ -133,10 +212,10 @@ export function view(
         </a>
 
         <div className="season-header">
-          <span className="season-eyebrow">{data.activity.name}</span>
-          <h1>{data.season.name}</h1>
+          <span className="season-eyebrow">{overview.activity.name}</span>
+          <h1>{overview.season.name}</h1>
           {dates && <p className="season-dates">{dates}</p>}
-          {data.season.notes && <p className="season-notes">{data.season.notes}</p>}
+          {overview.season.notes && <p className="season-notes">{overview.season.notes}</p>}
         </div>
 
         {state.error && <div className="error-message">{state.error}</div>}
@@ -188,6 +267,62 @@ export function view(
                 ) : (
                   <li key={event.id} className="event-item">
                     <EventRow state={state} event={event} labels={labels} />
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </section>
+
+        <section className="activities-section">
+          <div className="activities-section-head">
+            <h2>{labels.entryPlural}</h2>
+            {!state.addingEntry && (
+              <button
+                className="btn btn-primary"
+                onClick={vlens.cachePartial(onShowEntryForm, state)}
+                disabled={state.saving}
+              >
+                Add {labels.entry.toLowerCase()}
+              </button>
+            )}
+          </div>
+
+          {state.addingEntry && (
+            <EntryFormFields
+              state={state}
+              data={data}
+              labels={labels}
+              submitLabel={`Add ${labels.entry.toLowerCase()}`}
+              onSubmit={vlens.cachePartial(onCreateEntry, state)}
+              onCancel={vlens.cachePartial(onCancelEntryForm, state)}
+            />
+          )}
+
+          {state.entries.length === 0 ? (
+            <div className="empty-state">
+              <p>
+                No {labels.entryPlural.toLowerCase()} yet. A {labels.entry.toLowerCase()} belongs to
+                this season — one that carries over from last year is entered again.
+              </p>
+            </div>
+          ) : (
+            <ul className="event-list">
+              {state.entries.map(entryView =>
+                state.editingEntryId === entryView.entry.id ? (
+                  <li key={entryView.entry.id} className="event-item">
+                    <EntryFormFields
+                      state={state}
+                      data={data}
+                      labels={labels}
+                      submitLabel="Save"
+                      onSubmit={vlens.cachePartial(onSaveEntry, state, entryView)}
+                      onCancel={vlens.cachePartial(onCancelEntryForm, state)}
+                    />
+                  </li>
+                ) : (
+                  <li key={entryView.entry.id} className="event-item">
+                    <EntryRow state={state} data={data} entryView={entryView} labels={labels} />
                   </li>
                 )
               )}
@@ -366,6 +501,220 @@ const EventFormFields = ({
   </div>
 );
 
+const EntryRow = ({
+  state,
+  data,
+  entryView,
+  labels,
+}: {
+  state: SeasonState;
+  data: SeasonPageData;
+  entryView: server.EntryView;
+  labels: ActivityLabels;
+}) => {
+  const entry = entryView.entry;
+  const traits = [entry.format, entry.style, entry.division, entry.level]
+    .filter(part => part)
+    .join(" · ");
+  const roster = rosterNames(data.people, entryView.personIds);
+  const count = state.entryAppearanceCounts[entry.id] ?? 0;
+
+  return (
+    <>
+      <div className="event-item-main">
+        <strong className="event-name">{entry.name}</strong>
+        {traits && <span className="event-meta">{traits}</span>}
+        <span className="event-meta">
+          {roster.length > 0 ? roster.join(", ") : `No ${labels.roster.toLowerCase()} yet`}
+        </span>
+        <span className="event-count">
+          {count === 0
+            ? `Not yet at a ${labels.event.toLowerCase()}`
+            : count === 1
+              ? `1 ${labels.appearance.toLowerCase()}`
+              : `${count} ${labels.appearancePlural.toLowerCase()}`}
+        </span>
+        {entry.notes && <p className="event-notes">{entry.notes}</p>}
+      </div>
+      <span className="event-item-actions">
+        <button
+          className="icon-btn"
+          title={`Edit ${labels.entry.toLowerCase()}`}
+          onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
+          disabled={state.saving}
+        >
+          ✏️
+        </button>
+        <button
+          className="icon-btn"
+          title={`Delete ${labels.entry.toLowerCase()}`}
+          onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
+          disabled={state.saving}
+        >
+          🗑️
+        </button>
+      </span>
+    </>
+  );
+};
+
+// Suggestions come from what this family has already typed into the same
+// field. Without them "High Gold" becomes "high gold" and "Hi-Gold", and the
+// season view can no longer even count labels, let alone group them.
+const Suggestions = ({ id, values }: { id: string; values: string[] }) => (
+  <datalist id={id}>
+    {values.map(value => (
+      <option key={value} value={value} />
+    ))}
+  </datalist>
+);
+
+const EntryFormFields = ({
+  state,
+  data,
+  labels,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: {
+  state: SeasonState;
+  data: SeasonPageData;
+  labels: ActivityLabels;
+  submitLabel: string;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) => (
+  <div className="activities-form">
+    <div className="form-group">
+      <label htmlFor="entryName">Name</label>
+      <input
+        id="entryName"
+        type="text"
+        placeholder={labels.entry === "Routine" ? "Rise Up" : ""}
+        value={state.entryForm.name}
+        onInput={e => {
+          state.entryForm.name = e.currentTarget.value;
+          vlens.scheduleRedraw();
+        }}
+        disabled={state.saving}
+      />
+    </div>
+    <div className="form-row">
+      <div className="form-group flex-1">
+        <label htmlFor="entryFormat">Format</label>
+        <input
+          id="entryFormat"
+          type="text"
+          list="entryFormatOptions"
+          placeholder={labels.entry === "Routine" ? "solo, duet, group" : ""}
+          value={state.entryForm.format}
+          onInput={e => {
+            state.entryForm.format = e.currentTarget.value;
+            vlens.scheduleRedraw();
+          }}
+          disabled={state.saving}
+        />
+        <Suggestions id="entryFormatOptions" values={data.vocabulary.formats ?? []} />
+      </div>
+      <div className="form-group flex-1">
+        <label htmlFor="entryStyle">Style</label>
+        <input
+          id="entryStyle"
+          type="text"
+          list="entryStyleOptions"
+          placeholder={labels.entry === "Routine" ? "Jazz, Lyrical" : ""}
+          value={state.entryForm.style}
+          onInput={e => {
+            state.entryForm.style = e.currentTarget.value;
+            vlens.scheduleRedraw();
+          }}
+          disabled={state.saving}
+        />
+        <Suggestions id="entryStyleOptions" values={data.vocabulary.styles ?? []} />
+      </div>
+    </div>
+    <div className="form-row">
+      <div className="form-group flex-1">
+        <label htmlFor="entryDivision">Division</label>
+        <input
+          id="entryDivision"
+          type="text"
+          list="entryDivisionOptions"
+          value={state.entryForm.division}
+          onInput={e => {
+            state.entryForm.division = e.currentTarget.value;
+            vlens.scheduleRedraw();
+          }}
+          disabled={state.saving}
+        />
+        <Suggestions id="entryDivisionOptions" values={data.vocabulary.divisions ?? []} />
+      </div>
+      <div className="form-group flex-1">
+        <label htmlFor="entryLevel">Level</label>
+        <input
+          id="entryLevel"
+          type="text"
+          list="entryLevelOptions"
+          value={state.entryForm.level}
+          onInput={e => {
+            state.entryForm.level = e.currentTarget.value;
+            vlens.scheduleRedraw();
+          }}
+          disabled={state.saving}
+        />
+        <Suggestions id="entryLevelOptions" values={data.vocabulary.levels ?? []} />
+      </div>
+    </div>
+
+    <div className="form-group">
+      <label>{labels.roster}</label>
+      {data.people.length === 0 ? (
+        <p className="form-hint">No people to add yet.</p>
+      ) : (
+        <div className="roster-picker">
+          {data.people.map(person => (
+            <label key={person.id} className="roster-option">
+              <input
+                type="checkbox"
+                checked={state.entryForm.personIds.includes(person.id)}
+                onChange={vlens.cachePartial(onToggleRosterMember, state, person.id)}
+                disabled={state.saving}
+              />
+              <span>{person.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="entryNotes">Notes</label>
+      <textarea
+        id="entryNotes"
+        rows={2}
+        value={state.entryForm.notes}
+        onInput={e => {
+          state.entryForm.notes = e.currentTarget.value;
+          vlens.scheduleRedraw();
+        }}
+        disabled={state.saving}
+      />
+    </div>
+    <div className="form-actions">
+      <button
+        className="btn btn-primary"
+        onClick={onSubmit}
+        disabled={state.saving || !state.entryForm.name.trim()}
+      >
+        {submitLabel}
+      </button>
+      <button className="btn btn-secondary" onClick={onCancel} disabled={state.saving}>
+        Cancel
+      </button>
+    </div>
+  </div>
+);
+
 // ── handlers ─────────────────────────────────────────────────────────────────
 
 // Empty date inputs go over as null rather than "": the backend reads a nil
@@ -486,6 +835,166 @@ async function onDeleteEvent(state: SeasonState, event: server.Event, labels: Ac
     if (idx >= 0) state.events.splice(idx, 1);
     delete state.appearanceCounts[event.id];
     if (state.editingEventId === event.id) state.editingEventId = 0;
+  }
+  state.saving = false;
+  vlens.scheduleRedraw();
+}
+
+// ── routine handlers ─────────────────────────────────────────────────────────
+
+// rosterNames resolves ids to names in the order the roster was stored, and
+// drops any it cannot resolve. ListPeople is scoped to what the caller can
+// see, so a routine can name someone this viewer has no access to.
+function rosterNames(people: server.Person[], personIds: number[] | null): string[] {
+  return (personIds ?? [])
+    .map(id => people.find(person => person.id === id)?.name)
+    .filter((name): name is string => !!name);
+}
+
+function onShowEntryForm(state: SeasonState) {
+  state.addingEntry = true;
+  state.editingEntryId = 0;
+  state.entryForm = blankEntryForm();
+  vlens.scheduleRedraw();
+}
+
+function onStartEditEntry(state: SeasonState, entryView: server.EntryView) {
+  state.addingEntry = false;
+  state.editingEntryId = entryView.entry.id;
+  state.entryForm = {
+    name: entryView.entry.name,
+    format: entryView.entry.format,
+    style: entryView.entry.style,
+    division: entryView.entry.division,
+    level: entryView.entry.level,
+    notes: entryView.entry.notes,
+    personIds: [...(entryView.personIds ?? [])],
+  };
+  vlens.scheduleRedraw();
+}
+
+function onCancelEntryForm(state: SeasonState) {
+  state.addingEntry = false;
+  state.editingEntryId = 0;
+  vlens.scheduleRedraw();
+}
+
+function onToggleRosterMember(state: SeasonState, personId: number) {
+  const idx = state.entryForm.personIds.indexOf(personId);
+  if (idx >= 0) {
+    state.entryForm.personIds.splice(idx, 1);
+  } else {
+    state.entryForm.personIds.push(personId);
+  }
+  vlens.scheduleRedraw();
+}
+
+// sortEntries keeps the client list in the order GetSeasonOverview returns:
+// by name, ties broken by id.
+function sortEntries(entries: server.EntryView[]) {
+  entries.sort((a, b) => {
+    if (a.entry.name !== b.entry.name) return a.entry.name < b.entry.name ? -1 : 1;
+    return a.entry.id - b.entry.id;
+  });
+}
+
+async function onCreateEntry(state: SeasonState) {
+  const name = state.entryForm.name.trim();
+  if (!name || state.seasonId === 0) return;
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.CreateEntry({
+    seasonId: state.seasonId,
+    name,
+    format: state.entryForm.format.trim(),
+    style: state.entryForm.style.trim(),
+    division: state.entryForm.division.trim(),
+    level: state.entryForm.level.trim(),
+    notes: state.entryForm.notes.trim(),
+    personIds: state.entryForm.personIds,
+  });
+  if (err || !resp) {
+    state.error = err || "Failed to add";
+  } else {
+    state.entries.push(resp.entry);
+    sortEntries(state.entries);
+    state.addingEntry = false;
+  }
+  state.saving = false;
+  vlens.scheduleRedraw();
+}
+
+function sameRoster(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((id, idx) => id === b[idx]);
+}
+
+// Saving an edit is two calls because the backend splits them: UpdateEntry
+// carries the fields, SetEntryRoster replaces the roster. The roster call is
+// skipped when nothing about it changed, which is the common edit.
+async function onSaveEntry(state: SeasonState, original: server.EntryView) {
+  const name = state.entryForm.name.trim();
+  if (!name) return;
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const entryId = original.entry.id;
+  let [resp, err] = await server.UpdateEntry({
+    id: entryId,
+    name,
+    format: state.entryForm.format.trim(),
+    style: state.entryForm.style.trim(),
+    division: state.entryForm.division.trim(),
+    level: state.entryForm.level.trim(),
+    notes: state.entryForm.notes.trim(),
+  });
+
+  if (!err && resp && !sameRoster(state.entryForm.personIds, original.personIds ?? [])) {
+    [resp, err] = await server.SetEntryRoster({
+      entryId,
+      personIds: state.entryForm.personIds,
+    });
+  }
+
+  if (err || !resp) {
+    state.error = err || "Failed to save";
+  } else {
+    const idx = state.entries.findIndex(view => view.entry.id === entryId);
+    if (idx >= 0) state.entries[idx] = resp.entry;
+    sortEntries(state.entries);
+    state.editingEntryId = 0;
+  }
+  state.saving = false;
+  vlens.scheduleRedraw();
+}
+
+async function onDeleteEntry(
+  state: SeasonState,
+  entryView: server.EntryView,
+  labels: ActivityLabels
+) {
+  const count = state.entryAppearanceCounts[entryView.entry.id] ?? 0;
+  const tail =
+    count === 0
+      ? "This cannot be undone."
+      : `Its ${count} ${count === 1 ? labels.appearance.toLowerCase() : labels.appearancePlural.toLowerCase()} and their results go with it. This cannot be undone.`;
+  if (!confirm(`Delete "${entryView.entry.name}"? ${tail}`)) return;
+
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const [, err] = await server.DeleteEntry({ id: entryView.entry.id });
+  if (err) {
+    state.error = err || "Failed to delete";
+  } else {
+    const idx = state.entries.findIndex(row => row.entry.id === entryView.entry.id);
+    if (idx >= 0) state.entries.splice(idx, 1);
+    delete state.entryAppearanceCounts[entryView.entry.id];
+    if (state.editingEntryId === entryView.entry.id) state.editingEntryId = 0;
   }
   state.saving = false;
   vlens.scheduleRedraw();
