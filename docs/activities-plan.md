@@ -392,7 +392,7 @@ Each phase ends green on `make check`.
    person's own family does not reach either row. `removePersonFromActivitiesTx` takes the
    roster row out and clears `Result.PersonId` — the result survives, because the routine
    still placed.
-6. **Minimal UI.** *In progress.* Season list → season overview → competition detail → routine
+6. **Minimal UI.** ✅ *Done.* Season list → season overview → competition detail → routine
    history, plus entry forms. Routes under `/activities`, `/season`, `/competition`,
    `/routine` in `frontend/main.tsx`, pages in `frontend/pages/activities/`. Dance vocabulary
    hardcoded in a label map keyed by `Activity.Kind`, so a sport label pack is a second entry
@@ -420,7 +420,14 @@ Each phase ends green on `make check`.
    add/edit/delete and their results rendered read-only by a shared `ResultList`. The
    results editor on the same page — a row per line of the results sheet, kind-specific
    fields, roster-narrowed awards, and `ListActivityVocabulary` behind the label and
-   category fields.
+   category fields. `/routine/<id>` on `GetEntryHistory` — the routine across every
+   competition it went to, with the per-label adjudication tally that the free-text
+   decision above allows and nothing more.
+
+   What is deliberately not here: photos. Both set-photos procs exist and both read procs
+   return photo ids, but attaching a photo needs the photo picker, which is a photos-page
+   project rather than an activities one. The ids are carried through the page data
+   already, so the screens do not change shape when it lands.
 7. **Export/import.** `export.go` and `import.go` both enumerate entity types explicitly
    (`import.go` has ~40 milestone references), so this is real work and is deliberately last.
    **Until it lands, activity data is absent from backups and exports** — worth knowing
