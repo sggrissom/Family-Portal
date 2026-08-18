@@ -94,6 +94,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
                   <a href="/photos">🖼️ Photos</a>
                   <a href="/family-chart">📈 Growth chart</a>
                   <a href="/chat">💬 Family chat</a>
+                  <a href="/activities">🏆 Activities</a>
                   <a href="/settings">⚙️ Settings</a>
                 </div>
               </li>

@@ -68,3 +68,33 @@ export const formatDate = (dateString: string): string => {
   }
   return new Date(dateString).toLocaleDateString();
 };
+
+/**
+ * Returns true if a date string is a real date rather than Go's zero time
+ * ("0001-01-01T00:00:00Z"), which is what an unset time.Time serializes to.
+ */
+export const isRealDate = (dateString: string | null | undefined): dateString is string => {
+  if (!dateString) return false;
+  const year = new Date(dateString).getFullYear();
+  return !isNaN(year) && year > 1000;
+};
+
+/**
+ * Convert a date string to the YYYY-MM-DD an <input type="date"> expects.
+ * Unset dates become "", which is the empty date input.
+ */
+export const toDateInputValue = (dateString: string | null | undefined): string => {
+  if (!isRealDate(dateString)) return "";
+  return dateString.split("T")[0];
+};
+
+/**
+ * Format a start/end pair for display. Either side may be unset: a single-day
+ * event has no end date, and an event whose dates aren't known yet has neither.
+ */
+export const formatDateRange = (startDate: string, endDate: string): string => {
+  const start = isRealDate(startDate) ? formatDate(startDate) : "";
+  const end = isRealDate(endDate) ? formatDate(endDate) : "";
+  if (start && end && start !== end) return `${start} – ${end}`;
+  return start || end;
+};
