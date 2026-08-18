@@ -65,6 +65,7 @@ async function main() {
     vlens.routeHandler("/view-photo", () => import("@app/pages/photos/view-photo")),
     vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
     vlens.routeHandler("/season/", () => import("@app/pages/activities/season")),
+    vlens.routeHandler("/competition/", () => import("@app/pages/activities/competition")),
     vlens.routeHandler("/activities", () => import("@app/pages/activities/activities")),
     vlens.routeHandler("/manage-tags", () => import("@app/pages/tags/manage-tags")),
     vlens.routeHandler("/import", () => import("@app/pages/settings/import")),

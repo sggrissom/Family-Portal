@@ -351,7 +351,9 @@ const EventRow = ({
   return (
     <>
       <div className="event-item-main">
-        <strong className="event-name">{event.name}</strong>
+        <a className="event-name" href={`/competition/${event.id}`}>
+          {event.name}
+        </a>
         {(dates || where) && (
           <span className="event-meta">{[dates, where].filter(part => part).join(" — ")}</span>
         )}

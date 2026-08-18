@@ -80,6 +80,14 @@ block(`
 block(`
 .event-name {
   color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+`);
+
+block(`
+a.event-name:hover {
+  text-decoration: underline;
 }
 `);
 
