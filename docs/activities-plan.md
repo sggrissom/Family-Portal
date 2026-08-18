@@ -428,10 +428,18 @@ Each phase ends green on `make check`.
    return photo ids, but attaching a photo needs the photo picker, which is a photos-page
    project rather than an activities one. The ids are carried through the page data
    already, so the screens do not change shape when it lands.
-7. **Export/import.** *Export done; import next.* `export.go` and `import.go` both
+7. **Export/import.** ✅ *Done.* `export.go` and `import.go` both
    enumerate entity types explicitly (`import.go` has ~40 milestone references), so this is
-   real work and is deliberately last. **Until import lands, an exported season cannot be
-   restored** — the bundle now carries it, but nothing reads it back.
+   real work and is deliberately last. Activity data is now in both backup paths and comes
+   back through both import paths.
+
+   Import matches every level by name before creating it, so a retried import is reuse
+   rather than a second season. A performance is the level where name matching stops: it is
+   identified by which routine performed at which competition, and an existing one keeps
+   the results it has rather than collecting a second copy.
+
+   Photo joins come back only on the bundle path, which is the only one with a photo id
+   mapping to resolve against. A json-only import restores the season without them.
 
    The bundle nests the activities tree rather than adding five parallel arrays with cross
    references. Flattening is exactly what makes `import.go`'s milestone handling as long as
