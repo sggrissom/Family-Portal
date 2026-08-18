@@ -12,6 +12,7 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
 import { ActivityLabels, labelsFor } from "./labels";
 import { ResultList } from "./results";
+import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
 import "./activities-styles";
 import "./season-styles";
 import "./competition-styles";
@@ -28,6 +29,7 @@ export type CompetitionPageData = {
   activity: server.Activity;
   entries: server.EntryView[];
   people: server.Person[];
+  vocabulary: server.ListActivityVocabularyResponse;
 };
 
 const emptyDetail: server.GetEventDetailResponse = {
@@ -56,6 +58,18 @@ const emptyActivity: server.Activity = {
   createdAt: "",
 };
 
+const emptyVocabulary: server.ListActivityVocabularyResponse = {
+  activityId: 0,
+  adjudications: [],
+  awards: [],
+  categories: [],
+  styles: [],
+  divisions: [],
+  levels: [],
+  formats: [],
+  hosts: [],
+};
+
 export async function fetch(
   route: string,
   prefix: string
@@ -66,6 +80,7 @@ export async function fetch(
       activity: emptyActivity,
       entries: [],
       people: [],
+      vocabulary: emptyVocabulary,
     });
   }
 
@@ -74,16 +89,20 @@ export async function fetch(
     return [null, detailErr || "Failed to load competition"];
   }
 
-  // Neither of these is worth failing the page over: without them the
-  // competition still reads, only the add form is short of choices.
+  // None of these is worth failing the page over: without them the competition
+  // still reads, only the forms are short of choices.
   const [overview] = await server.GetSeasonOverview({ seasonId: detail.season.id });
   const [people] = await server.ListPeople({});
+  const [vocabulary] = await server.ListActivityVocabulary({
+    activityId: overview?.activity.id ?? 0,
+  });
 
   return rpc.ok<CompetitionPageData>({
     detail,
     activity: overview?.activity ?? emptyActivity,
     entries: overview?.entries ?? [],
     people: people?.people ?? [],
+    vocabulary: vocabulary ?? emptyVocabulary,
   });
 }
 
@@ -101,6 +120,12 @@ type CompetitionState = {
   editOccurredAt: string;
   editNotes: string;
 
+  // The performance whose results are open for editing, and the rows being
+  // edited. Only one is open at a time: results are replace-all, so two open
+  // editors would be two pending overwrites of different sets.
+  editingResultsFor: number;
+  resultRows: ResultRow[];
+
   error: string;
   saving: boolean;
 };
@@ -117,6 +142,8 @@ const useCompetitionState = vlens.declareHook(
     editingId: 0,
     editOccurredAt: "",
     editNotes: "",
+    editingResultsFor: 0,
+    resultRows: [],
     error: "",
     saving: false,
   })
@@ -140,6 +167,8 @@ export function view(
     state.appearances = [...(data.detail.appearances ?? [])];
     state.adding = false;
     state.editingId = 0;
+    state.editingResultsFor = 0;
+    state.resultRows = [];
     state.error = "";
   }
 
@@ -199,6 +228,17 @@ export function view(
                 <li key={detail.appearance.id} className="event-item appearance-item">
                   {state.editingId === detail.appearance.id ? (
                     <EditAppearanceForm state={state} detail={detail} labels={labels} />
+                  ) : state.editingResultsFor === detail.appearance.id ? (
+                    <div className="appearance-editing">
+                      <strong className="event-name">{detail.entry.name}</strong>
+                      <ResultsEditor
+                        host={state}
+                        vocabulary={data.vocabulary}
+                        roster={rosterOf(data, detail.entry.id)}
+                        onSave={vlens.cachePartial(onSaveResults, state, detail.appearance.id)}
+                        onCancel={vlens.cachePartial(onCancelResults, state)}
+                      />
+                    </div>
                   ) : (
                     <AppearanceRow state={state} data={data} detail={detail} labels={labels} />
                   )}
@@ -241,6 +281,13 @@ const AppearanceRow = ({
         {detail.appearance.notes && <p className="event-notes">{detail.appearance.notes}</p>}
       </div>
       <span className="event-item-actions">
+        <button
+          className="btn btn-secondary btn-small"
+          onClick={vlens.cachePartial(onStartEditResults, state, detail)}
+          disabled={state.saving}
+        >
+          {(detail.results ?? []).length === 0 ? "Add results" : "Edit results"}
+        </button>
         <button
           className="icon-btn"
           title={`Edit ${labels.appearance.toLowerCase()}`}
@@ -418,6 +465,7 @@ function onShowAddForm(state: CompetitionState, data: CompetitionPageData) {
 
 function onStartEdit(state: CompetitionState, detail: server.AppearanceDetail) {
   state.adding = false;
+  state.editingResultsFor = 0;
   state.editingId = detail.appearance.id;
   state.editOccurredAt = toDateInputValue(detail.appearance.occurredAt);
   state.editNotes = detail.appearance.notes;
@@ -427,6 +475,62 @@ function onStartEdit(state: CompetitionState, detail: server.AppearanceDetail) {
 function onCancelForm(state: CompetitionState) {
   state.adding = false;
   state.editingId = 0;
+  vlens.scheduleRedraw();
+}
+
+// ── result handlers ──────────────────────────────────────────────────────────
+
+// rosterOf finds the people a result on this entry may narrow to. The season
+// overview carries the roster ids; ListPeople carries the names, and drops
+// anyone this viewer cannot see.
+function rosterOf(data: CompetitionPageData, entryId: number): server.Person[] {
+  const entryView = data.entries.find(row => row.entry.id === entryId);
+  const ids = entryView?.personIds ?? [];
+  return ids
+    .map(id => data.people.find(person => person.id === id))
+    .filter((person): person is server.Person => !!person);
+}
+
+function onStartEditResults(state: CompetitionState, detail: server.AppearanceDetail) {
+  state.adding = false;
+  state.editingId = 0;
+  state.editingResultsFor = detail.appearance.id;
+  state.resultRows = (detail.results ?? []).map(resultToRow);
+  vlens.scheduleRedraw();
+}
+
+function onCancelResults(state: CompetitionState) {
+  state.editingResultsFor = 0;
+  state.resultRows = [];
+  vlens.scheduleRedraw();
+}
+
+async function onSaveResults(state: CompetitionState, appearanceId: number) {
+  if (state.resultRows.some(row => rowError(row) !== "")) return;
+
+  state.saving = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.SetAppearanceResults({
+    appearanceId,
+    results: state.resultRows.map(rowToInput),
+  });
+  if (err || !resp) {
+    state.error = err || "Failed to save results";
+  } else {
+    const idx = state.appearances.findIndex(row => row.appearance.id === appearanceId);
+    if (idx >= 0) {
+      state.appearances[idx] = {
+        ...state.appearances[idx],
+        appearance: resp.appearance.appearance,
+        results: resp.appearance.results ?? [],
+      };
+    }
+    state.editingResultsFor = 0;
+    state.resultRows = [];
+  }
+  state.saving = false;
   vlens.scheduleRedraw();
 }
 
