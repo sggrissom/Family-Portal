@@ -19,6 +19,7 @@ import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
 import { labelsForKind } from "./labels";
+import { PhotoStrip } from "../../components/PhotoPicker";
 import { ResultKindAdjudication, ResultList } from "./results";
 import "./activities-styles";
 import "./season-styles";
@@ -259,6 +260,7 @@ const SeasonGroup = ({
                 {detail.appearance.notes && (
                   <p className="event-notes">{detail.appearance.notes}</p>
                 )}
+                <PhotoStrip photoIds={detail.photoIds} />
               </div>
             </li>
           ))}

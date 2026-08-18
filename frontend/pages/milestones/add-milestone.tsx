@@ -9,6 +9,7 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
+import { PhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
 
 type AddMilestoneForm = {
@@ -279,38 +280,17 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
           {/* Photos */}
           <div className="form-group">
             <label>Photos (optional)</label>
-            <div className="milestone-photo-picker">
-              {personPhotos.length === 0 ? (
-                <p className="milestone-photo-picker-empty">
-                  {selectedPersonIdNum > 0
-                    ? "No photos found for this person"
-                    : "Select a family member to see their photos"}
-                </p>
-              ) : (
-                personPhotos.map(p => {
-                  const isSelected = form.photoIds.includes(p.image.id);
-                  return (
-                    <div
-                      key={p.image.id}
-                      className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
-                      onClick={
-                        form.loading
-                          ? undefined
-                          : vlens.cachePartial(onTogglePhoto, form, p.image.id)
-                      }
-                    >
-                      <img
-                        src={`/api/photo/${p.image.id}/thumb`}
-                        className="milestone-photo-picker-img"
-                        alt=""
-                        loading="lazy"
-                      />
-                      {isSelected && <div className="milestone-photo-picker-check">✓</div>}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <PhotoPicker
+              photos={personPhotos}
+              selectedIds={form.photoIds}
+              onToggle={photoId => onTogglePhoto(form, photoId)}
+              disabled={form.loading}
+              emptyText={
+                selectedPersonIdNum > 0
+                  ? "No photos found for this person"
+                  : "Select a family member to see their photos"
+              }
+            />
           </div>
 
           {/* Tags */}

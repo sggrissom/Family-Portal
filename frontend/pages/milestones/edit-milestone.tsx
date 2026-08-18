@@ -9,6 +9,7 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { ErrorPage } from "../../components/ErrorPage";
+import { PhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
 
 type EditMilestoneForm = {
@@ -262,34 +263,13 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
           {/* Photos */}
           <div className="form-group">
             <label>Photos (optional)</label>
-            <div className="milestone-photo-picker">
-              {personPhotos.length === 0 ? (
-                <p className="milestone-photo-picker-empty">No photos found for this person</p>
-              ) : (
-                personPhotos.map(p => {
-                  const isSelected = form.photoIds.includes(p.image.id);
-                  return (
-                    <div
-                      key={p.image.id}
-                      className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
-                      onClick={
-                        form.loading
-                          ? undefined
-                          : vlens.cachePartial(onTogglePhoto, form, p.image.id)
-                      }
-                    >
-                      <img
-                        src={`/api/photo/${p.image.id}/thumb`}
-                        className="milestone-photo-picker-img"
-                        alt=""
-                        loading="lazy"
-                      />
-                      {isSelected && <div className="milestone-photo-picker-check">✓</div>}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <PhotoPicker
+              photos={personPhotos}
+              selectedIds={form.photoIds}
+              onToggle={photoId => onTogglePhoto(form, photoId)}
+              disabled={form.loading}
+              emptyText="No photos found for this person"
+            />
           </div>
 
           {/* Tags */}
