@@ -424,6 +424,16 @@ Each phase ends green on `make check`.
    competition it went to, with the per-label adjudication tally that the free-text
    decision above allows and nothing more.
 
+   `/person-activities/<id>` on `GetPersonSeason` — one child's routines and
+   performances grouped by season, reached from their profile. It is the fourth
+   question, and the only screen a linked household can reach: the other three
+   all start from `/activities`, which resolves an acting family, and a
+   household that was shared one child has none. Without it `ScopeActivities`
+   granted nothing anyone could see. It also cost `SeasonSummary` a `Kind`
+   field — the label map is keyed on `Activity.Kind`, and a linked household
+   never sees an `Activity`, so a season crossing the link arrived with no
+   vocabulary and every screen fell back to "Event".
+
    What is deliberately not here: photos. Both set-photos procs exist and both read procs
    return photo ids, but attaching a photo needs the photo picker, which is a photos-page
    project rather than an activities one. The ids are carried through the page data

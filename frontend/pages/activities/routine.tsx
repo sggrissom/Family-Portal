@@ -12,6 +12,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
+import { labelsForKind } from "./labels";
 import { ResultKindAdjudication, ResultList } from "./results";
 import "./activities-styles";
 import "./season-styles";
@@ -41,7 +42,7 @@ const emptyHistory: server.GetEntryHistoryResponse = {
     },
     personIds: [],
   },
-  season: { id: 0, name: "", startDate: "", endDate: "" },
+  season: { id: 0, name: "", kind: "", startDate: "", endDate: "" },
   appearances: [],
 };
 
@@ -86,6 +87,10 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
   if (!currentAuth) return;
 
   const entry = data.history.entry.entry;
+  // SeasonSummary carries the activity's kind so this page can name things the
+  // way the rest of the UI does — nothing here should say "competition" when
+  // the season is soccer.
+  const labels = labelsForKind(data.history.season.kind);
   const appearances = data.history.appearances ?? [];
   const traits = [entry.format, entry.style, entry.division, entry.level]
     .filter(part => part)
@@ -104,7 +109,7 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
         </a>
 
         <div className="season-header">
-          <span className="season-eyebrow">{traits || "Routine"}</span>
+          <span className="season-eyebrow">{traits || labels.entry}</span>
           <h1>{entry.name}</h1>
           {roster.length > 0 && <p className="season-dates">{roster.join(", ")}</p>}
           {entry.notes && <p className="season-notes">{entry.notes}</p>}
@@ -124,14 +129,19 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
           <h2>
             {appearances.length === 0
               ? "This season"
-              : appearances.length === 1
-                ? "1 competition"
-                : `${appearances.length} competitions`}
+              : `${appearances.length} ${
+                  appearances.length === 1
+                    ? labels.event.toLowerCase()
+                    : labels.eventPlural.toLowerCase()
+                }`}
           </h2>
 
           {appearances.length === 0 ? (
             <div className="empty-state">
-              <p>This routine has not been to a competition yet.</p>
+              <p>
+                This {labels.entry.toLowerCase()} has not been to a {labels.event.toLowerCase()}{" "}
+                yet.
+              </p>
             </div>
           ) : (
             <ul className="event-list">
