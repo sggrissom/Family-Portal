@@ -266,7 +266,10 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                     </li>
                   ) : (
                     <li key={season.id} className="season-item">
-                      <div className="season-item-main">
+                      <a
+                        className="season-item-main season-link"
+                        href={`/activities/season/${season.id}`}
+                      >
                         <strong className="season-name">{season.name}</strong>
                         {formatDateRange(season.startDate, season.endDate) && (
                           <span className="season-dates">
@@ -274,7 +277,8 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                           </span>
                         )}
                         {season.notes && <p className="season-notes">{season.notes}</p>}
-                      </div>
+                        <span className="season-open">Open season →</span>
+                      </a>
                       <span className="season-item-actions">
                         <button
                           className="icon-btn"
