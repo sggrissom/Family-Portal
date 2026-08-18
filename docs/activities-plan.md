@@ -411,6 +411,8 @@ Each phase ends green on `make check`.
    Landed so far: `labels.ts` and `/activities` — the program list and the seasons inside
    the selected program, with create/rename/delete for both. It is deliberately the only
    screen that talks about programs at all; every later screen starts from a season.
+   `/season/<id>` on `GetSeasonOverview` — the season header and its competitions, with
+   create/edit/delete and a per-competition count of what has been recorded there.
 7. **Export/import.** `export.go` and `import.go` both enumerate entity types explicitly
    (`import.go` has ~40 milestone references), so this is real work and is deliberately last.
    **Until it lands, activity data is absent from backups and exports** — worth knowing
