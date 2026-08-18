@@ -35,6 +35,7 @@ export const ErrFamilyAccessDenied = "Access denied: record belongs to another f
 export const ErrNoFamily = "User is not part of a family";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 
 export interface CreateAccountRequest {
     name: string
@@ -580,6 +581,7 @@ export interface GetEventDetailRequest {
 export interface GetEventDetailResponse {
     event: Event
     season: SeasonSummary
+    photoIds: number[]
     appearances: AppearanceDetail[]
 }
 
@@ -620,6 +622,21 @@ export interface ListActivityVocabularyResponse {
     levels: string[]
     formats: string[]
     hosts: string[]
+}
+
+export interface SetAppearancePhotosRequest {
+    appearanceId: number
+    photoIds: number[]
+}
+
+export interface SetEventPhotosRequest {
+    eventId: number
+    photoIds: number[]
+}
+
+export interface SetEventPhotosResponse {
+    eventId: number
+    photoIds: number[]
 }
 
 export interface CreateTagRequest {
@@ -1172,6 +1189,7 @@ export interface EntryView {
 export interface AppearanceView {
     appearance: Appearance
     results: Result[]
+    photoIds: number[]
 }
 
 export interface ResultInput {
@@ -1195,6 +1213,7 @@ export interface SeasonSummary {
 export interface AppearanceDetail {
     appearance: Appearance
     results: Result[]
+    photoIds: number[]
     entry: Entry
     event: EventSummary
 }
@@ -1722,6 +1741,14 @@ export async function GetPersonSeason(data: GetPersonSeasonRequest): Promise<rpc
 
 export async function ListActivityVocabulary(data: ListActivityVocabularyRequest): Promise<rpc.Response<ListActivityVocabularyResponse>> {
     return await rpc.call<ListActivityVocabularyResponse>('ListActivityVocabulary', JSON.stringify(data));
+}
+
+export async function SetAppearancePhotos(data: SetAppearancePhotosRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SetAppearancePhotos', JSON.stringify(data));
+}
+
+export async function SetEventPhotos(data: SetEventPhotosRequest): Promise<rpc.Response<SetEventPhotosResponse>> {
+    return await rpc.call<SetEventPhotosResponse>('SetEventPhotos', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
