@@ -55,6 +55,7 @@ type ImportDataStructure struct {
 	Milestones      []ExportMilestone `json:"milestones"`
 	Tags            []ExportTag       `json:"tags"`
 	Photos          []ExportPhoto     `json:"photos,omitempty"`
+	Activities      []ExportActivity  `json:"activities,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -70,28 +71,32 @@ type ImportDataRequest struct {
 	PreviewOnly      bool   `json:"previewOnly,omitempty"`      // If true, just return available data without importing
 	MergeStrategy    string `json:"mergeStrategy,omitempty"`    // "create_all", "merge_people", or "skip_duplicates"
 	ImportMilestones bool   `json:"importMilestones,omitempty"` // Whether to import milestones
+	ImportActivities bool   `json:"importActivities,omitempty"` // Whether to import activities
 	DryRun           bool   `json:"dryRun,omitempty"`           // Preview changes without committing
 	FamilyId         int    `json:"familyId,omitempty"`
 }
 
 type ImportDataResponse struct {
-	ImportedPeople       int            `json:"importedPeople"`
-	MergedPeople         int            `json:"mergedPeople"`
-	SkippedPeople        int            `json:"skippedPeople"`
-	ImportedMeasurements int            `json:"importedMeasurements"`
-	SkippedMeasurements  int            `json:"skippedMeasurements"`
-	ImportedMilestones   int            `json:"importedMilestones"`
-	SkippedMilestones    int            `json:"skippedMilestones"`
-	ImportedTags         int            `json:"importedTags"`
-	SkippedTags          int            `json:"skippedTags"`
-	ImportedPhotos       int            `json:"importedPhotos"`
-	SkippedPhotos        int            `json:"skippedPhotos"`
-	Errors               []string       `json:"errors,omitempty"`
-	Warnings             []string       `json:"warnings,omitempty"`
-	PersonIdMapping      map[int]int    `json:"personIdMapping,omitempty"`
-	AvailableFamilyIds   []int          `json:"availableFamilyIds,omitempty"`
-	AvailablePeople      []ImportPerson `json:"availablePeople,omitempty"`
-	MatchedPeople        []PersonMatch  `json:"matchedPeople,omitempty"`
+	ImportedPeople       int `json:"importedPeople"`
+	MergedPeople         int `json:"mergedPeople"`
+	SkippedPeople        int `json:"skippedPeople"`
+	ImportedMeasurements int `json:"importedMeasurements"`
+	SkippedMeasurements  int `json:"skippedMeasurements"`
+	ImportedMilestones   int `json:"importedMilestones"`
+	SkippedMilestones    int `json:"skippedMilestones"`
+	ImportedTags         int `json:"importedTags"`
+	SkippedTags          int `json:"skippedTags"`
+	ImportedPhotos       int `json:"importedPhotos"`
+	SkippedPhotos        int `json:"skippedPhotos"`
+	// ImportedActivities counts one level of the activities tree at a time,
+	// because a single number would not say whether the results came back.
+	ImportedActivities ActivityImportCounts `json:"importedActivities"`
+	Errors             []string             `json:"errors,omitempty"`
+	Warnings           []string             `json:"warnings,omitempty"`
+	PersonIdMapping    map[int]int          `json:"personIdMapping,omitempty"`
+	AvailableFamilyIds []int                `json:"availableFamilyIds,omitempty"`
+	AvailablePeople    []ImportPerson       `json:"availablePeople,omitempty"`
+	MatchedPeople      []PersonMatch        `json:"matchedPeople,omitempty"`
 }
 
 // vbeam procedure
@@ -190,6 +195,14 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			resp.ImportedMilestones = importedMilestones
 			resp.SkippedMilestones = skippedMilestones
 			resp.Errors = append(resp.Errors, milestoneErrors...)
+		}
+
+		// Import activities if requested. No photo mapping here: this path
+		// takes JSON alone, so there are no photos to attach the joins to.
+		if req.ImportActivities && len(importData.Activities) > 0 {
+			counts, activityWarnings := importActivities(ctx.Tx, importData.Activities, familyId, personIdMapping, nil)
+			resp.ImportedActivities = counts
+			resp.Warnings = append(resp.Warnings, activityWarnings...)
 		}
 	}
 

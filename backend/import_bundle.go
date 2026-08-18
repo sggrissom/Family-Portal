@@ -138,10 +138,12 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var photoIdMapping map[int]int
 		if len(importData.Photos) > 0 {
-			imported, skipped, photoIdMapping := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
+			imported, skipped, mapping := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
 			resp.ImportedPhotos = imported
 			resp.SkippedPhotos = skipped
+			photoIdMapping = mapping
 
 			// Restore profile photos
 			for _, importPerson := range importData.People {
@@ -164,6 +166,15 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 				person.ProfileCropScale = 1.0
 				vbolt.Write(tx, PeopleBkt, person.Id, &person)
 			}
+		}
+
+		// Activities go in after photos, so the photo joins have a mapping to
+		// resolve against. A bundle exported with photos and restored without
+		// them still restores the season; only the joins are missing.
+		if len(importData.Activities) > 0 {
+			counts, activityWarnings := importActivities(tx, importData.Activities, familyId, personIdMapping, photoIdMapping)
+			resp.ImportedActivities = counts
+			resp.Warnings = append(resp.Warnings, activityWarnings...)
 		}
 
 		resp.SkippedPeople = len(importData.People) - resp.ImportedPeople - resp.MergedPeople

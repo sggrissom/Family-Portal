@@ -24,6 +24,7 @@ type ImportForm = {
   selectedPersonIds: number[];
   mergeStrategy: string;
   importMilestones: boolean;
+  importActivities: boolean;
   dryRun: boolean;
   // The family to import into. Zero means the primary family. Distinct from
   // selectedFamilyIds, which filters which people to take from the file.
@@ -51,6 +52,7 @@ const useImportForm = vlens.declareHook(
     selectedPersonIds: [],
     mergeStrategy: "create_all",
     importMilestones: true,
+    importActivities: true,
     dryRun: false,
     targetFamilyId: 0,
     // AI Import fields
@@ -225,6 +227,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         previewOnly: true,
         mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
+        importActivities: form.importActivities,
         dryRun: false,
         familyId: form.targetFamilyId,
       });
@@ -268,6 +271,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
         previewOnly: false,
         mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
+        importActivities: form.importActivities,
         dryRun: form.dryRun,
         familyId: form.targetFamilyId,
       });
@@ -380,6 +384,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.selectedPersonIds = [];
     form.mergeStrategy = "create_all";
     form.importMilestones = true;
+    form.importActivities = true;
     form.dryRun = false;
     // AI fields
     form.selectedPersonId = null;
@@ -662,6 +667,21 @@ const ImportPage = ({ form }: ImportPageProps) => {
                           />
                           <span>Import Milestones</span>
                           <small>Include milestone data in the import</small>
+                        </label>
+                      </div>
+
+                      <div className="option-group">
+                        <label className="checkbox-option">
+                          <input
+                            type="checkbox"
+                            checked={form.importActivities}
+                            onChange={e => {
+                              form.importActivities = (e.target as HTMLInputElement).checked;
+                              vlens.scheduleRedraw();
+                            }}
+                          />
+                          <span>Import Activities</span>
+                          <small>Include seasons, competitions, routines, and results</small>
                         </label>
                       </div>
 
