@@ -39,6 +39,11 @@ type isolationFixture struct {
 	message    ChatMessage
 	ownPerson  Person // the outsider's own person
 	ownPhotoId int    // a photo in the outsider's family
+
+	activity Activity
+	season   Season
+	event    Event
+	entry    Entry
 }
 
 func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
@@ -128,6 +133,33 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		if err != nil {
 			t.Fatalf("AddChatMessageTx() error = %v", err)
 		}
+
+		now := time.Now()
+		fx.activity = Activity{
+			Id: vbolt.NextIntId(tx, ActivityBkt), FamilyId: fx.ownerFamily,
+			Name: "Dance", Kind: ActivityKindDance, CreatedAt: now,
+		}
+		writeActivityTx(tx, &fx.activity)
+		fx.season = Season{
+			Id: vbolt.NextIntId(tx, SeasonBkt), ActivityId: fx.activity.Id,
+			FamilyId: fx.ownerFamily, Name: "2025-26", StartDate: now, CreatedAt: now,
+		}
+		writeSeasonTx(tx, &fx.season)
+		fx.event = Event{
+			Id: vbolt.NextIntId(tx, EventBkt), SeasonId: fx.season.Id,
+			FamilyId: fx.ownerFamily, Name: "Nuvo Nashville", Host: "Nuvo", StartDate: now, CreatedAt: now,
+		}
+		writeEventTx(tx, &fx.event)
+		fx.entry = Entry{
+			Id: vbolt.NextIntId(tx, EntryBkt), SeasonId: fx.season.Id,
+			FamilyId: fx.ownerFamily, Name: "Rise Up", Format: "group", CreatedAt: now,
+		}
+		writeEntryTx(tx, &fx.entry)
+		member := EntryMember{
+			Id: vbolt.NextIntId(tx, EntryMemberBkt), EntryId: fx.entry.Id,
+			PersonId: fx.person.Id, FamilyId: fx.ownerFamily, CreatedAt: now,
+		}
+		writeEntryMemberTx(tx, &member)
 
 		vbolt.TxCommit(tx)
 	})
@@ -318,6 +350,62 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			})
 			return err
 		}},
+
+		// Activities
+		{"UpdateActivity", func(ctx *vbeam.Context) error {
+			_, err := UpdateActivity(ctx, UpdateActivityRequest{Id: fx.activity.Id, Name: "Theirs", Kind: "dance"})
+			return err
+		}},
+		{"DeleteActivity", func(ctx *vbeam.Context) error {
+			_, err := DeleteActivity(ctx, ActivityIdRequest{Id: fx.activity.Id})
+			return err
+		}},
+		{"ListSeasons", func(ctx *vbeam.Context) error {
+			_, err := ListSeasons(ctx, ListSeasonsRequest{ActivityId: fx.activity.Id})
+			return err
+		}},
+		{"CreateSeason", func(ctx *vbeam.Context) error {
+			_, err := CreateSeason(ctx, CreateSeasonRequest{ActivityId: fx.activity.Id, Name: "Mine now"})
+			return err
+		}},
+		{"UpdateSeason", func(ctx *vbeam.Context) error {
+			_, err := UpdateSeason(ctx, UpdateSeasonRequest{Id: fx.season.Id, Name: "Theirs"})
+			return err
+		}},
+		{"DeleteSeason", func(ctx *vbeam.Context) error {
+			_, err := DeleteSeason(ctx, SeasonIdRequest{Id: fx.season.Id})
+			return err
+		}},
+		{"CreateEvent", func(ctx *vbeam.Context) error {
+			_, err := CreateEvent(ctx, CreateEventRequest{SeasonId: fx.season.Id, Name: "Mine now"})
+			return err
+		}},
+		{"UpdateEvent", func(ctx *vbeam.Context) error {
+			_, err := UpdateEvent(ctx, UpdateEventRequest{Id: fx.event.Id, Name: "Theirs"})
+			return err
+		}},
+		{"DeleteEvent", func(ctx *vbeam.Context) error {
+			_, err := DeleteEvent(ctx, EventIdRequest{Id: fx.event.Id})
+			return err
+		}},
+		{"CreateEntry", func(ctx *vbeam.Context) error {
+			_, err := CreateEntry(ctx, CreateEntryRequest{SeasonId: fx.season.Id, Name: "Mine now"})
+			return err
+		}},
+		{"UpdateEntry", func(ctx *vbeam.Context) error {
+			_, err := UpdateEntry(ctx, UpdateEntryRequest{Id: fx.entry.Id, Name: "Theirs"})
+			return err
+		}},
+		{"DeleteEntry", func(ctx *vbeam.Context) error {
+			_, err := DeleteEntry(ctx, EntryIdRequest{Id: fx.entry.Id})
+			return err
+		}},
+		{"SetEntryRoster", func(ctx *vbeam.Context) error {
+			_, err := SetEntryRoster(ctx, SetEntryRosterRequest{
+				EntryId: fx.entry.Id, PersonIds: []int{fx.ownPerson.Id},
+			})
+			return err
+		}},
 	}
 
 	for _, tt := range calls {
@@ -375,6 +463,16 @@ func TestProceduresRefuseAnotherFamilyId(t *testing.T) {
 		{"CreateTag", func(ctx *vbeam.Context) error {
 			_, err := CreateTag(ctx, CreateTagRequest{
 				Name: "Planted", Color: "#123456", FamilyId: fx.ownerFamily,
+			})
+			return err
+		}},
+		{"ListActivities", func(ctx *vbeam.Context) error {
+			_, err := ListActivities(ctx, ListActivitiesRequest{FamilyId: fx.ownerFamily})
+			return err
+		}},
+		{"CreateActivity", func(ctx *vbeam.Context) error {
+			_, err := CreateActivity(ctx, CreateActivityRequest{
+				Name: "Planted", Kind: "dance", FamilyId: fx.ownerFamily,
 			})
 			return err
 		}},
@@ -567,6 +665,22 @@ func assertOwnerDataIntact(t *testing.T, fx isolationFixture) {
 		vbolt.Read(tx, ChatMessagesBkt, fx.message.Id, &message)
 		if message.Id == 0 {
 			t.Error("chat message was deleted by an outsider")
+		}
+
+		entry := GetEntryById(tx, fx.entry.Id)
+		if entry.Id == 0 || entry.Name != fx.entry.Name {
+			t.Errorf("entry = %+v, want %q", entry, fx.entry.Name)
+		}
+		if season := GetSeasonById(tx, fx.season.Id); season.Id == 0 || season.Name != fx.season.Name {
+			t.Errorf("season = %+v, want %q", season, fx.season.Name)
+		}
+		if event := GetEventById(tx, fx.event.Id); event.Id == 0 || event.Name != fx.event.Name {
+			t.Errorf("competition = %+v, want %q", event, fx.event.Name)
+		}
+		// The roster is the one thing an outsider could plausibly have widened
+		// rather than destroyed, so it is checked for extra rows as well.
+		if roster := GetEntryPersonIds(tx, fx.entry.Id); len(roster) != 1 || roster[0] != fx.person.Id {
+			t.Errorf("entry roster = %v, want just the owner's person", roster)
 		}
 
 		if people := GetFamilyPeople(tx, fx.ownerFamily); len(people) != 1 {

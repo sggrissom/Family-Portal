@@ -406,6 +406,134 @@ export interface UpdateMilestoneTagsRequest {
 export interface UpdateMilestoneTagsResponse {
 }
 
+export interface ListActivitiesRequest {
+    familyId: number
+}
+
+export interface ListActivitiesResponse {
+    familyId: number
+    activities: Activity[]
+}
+
+export interface CreateActivityRequest {
+    familyId: number
+    name: string
+    kind: string
+}
+
+export interface ActivityResponse {
+    activity: Activity
+}
+
+export interface UpdateActivityRequest {
+    id: number
+    name: string
+    kind: string
+}
+
+export interface ActivityIdRequest {
+    id: number
+}
+
+export interface DeleteResponse {
+    success: boolean
+}
+
+export interface ListSeasonsRequest {
+    activityId: number
+}
+
+export interface ListSeasonsResponse {
+    activityId: number
+    seasons: Season[]
+}
+
+export interface CreateSeasonRequest {
+    activityId: number
+    name: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface SeasonResponse {
+    season: Season
+}
+
+export interface UpdateSeasonRequest {
+    id: number
+    name: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface SeasonIdRequest {
+    id: number
+}
+
+export interface CreateEventRequest {
+    seasonId: number
+    name: string
+    host: string
+    location: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface EventResponse {
+    event: Event
+}
+
+export interface UpdateEventRequest {
+    id: number
+    name: string
+    host: string
+    location: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface EventIdRequest {
+    id: number
+}
+
+export interface CreateEntryRequest {
+    seasonId: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+    personIds: number[]
+}
+
+export interface EntryResponse {
+    entry: EntryView
+}
+
+export interface UpdateEntryRequest {
+    id: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+}
+
+export interface EntryIdRequest {
+    id: number
+}
+
+export interface SetEntryRosterRequest {
+    entryId: number
+    personIds: number[]
+}
+
 export interface CreateTagRequest {
     name: string
     color: string
@@ -916,6 +1044,43 @@ export interface FamilyTimelineItem {
     photos: Image[]
 }
 
+export interface Activity {
+    id: number
+    familyId: number
+    name: string
+    kind: string
+    createdAt: string
+}
+
+export interface Season {
+    id: number
+    activityId: number
+    familyId: number
+    name: string
+    startDate: string
+    endDate: string
+    notes: string
+    createdAt: string
+}
+
+export interface Event {
+    id: number
+    seasonId: number
+    familyId: number
+    name: string
+    host: string
+    location: string
+    startDate: string
+    endDate: string
+    notes: string
+    createdAt: string
+}
+
+export interface EntryView {
+    entry: Entry
+    personIds: number[]
+}
+
 export interface Tag {
     id: number
     familyId: number
@@ -1112,6 +1277,19 @@ export interface ErrorAnalysis {
     recentErrors: string[]
 }
 
+export interface Entry {
+    id: number
+    seasonId: number
+    familyId: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+    createdAt: string
+}
+
 export interface PerformanceStats {
     totalRequests: number
     averageResponse: number
@@ -1295,6 +1473,66 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
+}
+
+export async function ListActivities(data: ListActivitiesRequest): Promise<rpc.Response<ListActivitiesResponse>> {
+    return await rpc.call<ListActivitiesResponse>('ListActivities', JSON.stringify(data));
+}
+
+export async function CreateActivity(data: CreateActivityRequest): Promise<rpc.Response<ActivityResponse>> {
+    return await rpc.call<ActivityResponse>('CreateActivity', JSON.stringify(data));
+}
+
+export async function UpdateActivity(data: UpdateActivityRequest): Promise<rpc.Response<ActivityResponse>> {
+    return await rpc.call<ActivityResponse>('UpdateActivity', JSON.stringify(data));
+}
+
+export async function DeleteActivity(data: ActivityIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteActivity', JSON.stringify(data));
+}
+
+export async function ListSeasons(data: ListSeasonsRequest): Promise<rpc.Response<ListSeasonsResponse>> {
+    return await rpc.call<ListSeasonsResponse>('ListSeasons', JSON.stringify(data));
+}
+
+export async function CreateSeason(data: CreateSeasonRequest): Promise<rpc.Response<SeasonResponse>> {
+    return await rpc.call<SeasonResponse>('CreateSeason', JSON.stringify(data));
+}
+
+export async function UpdateSeason(data: UpdateSeasonRequest): Promise<rpc.Response<SeasonResponse>> {
+    return await rpc.call<SeasonResponse>('UpdateSeason', JSON.stringify(data));
+}
+
+export async function DeleteSeason(data: SeasonIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteSeason', JSON.stringify(data));
+}
+
+export async function CreateEvent(data: CreateEventRequest): Promise<rpc.Response<EventResponse>> {
+    return await rpc.call<EventResponse>('CreateEvent', JSON.stringify(data));
+}
+
+export async function UpdateEvent(data: UpdateEventRequest): Promise<rpc.Response<EventResponse>> {
+    return await rpc.call<EventResponse>('UpdateEvent', JSON.stringify(data));
+}
+
+export async function DeleteEvent(data: EventIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteEvent', JSON.stringify(data));
+}
+
+export async function CreateEntry(data: CreateEntryRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('CreateEntry', JSON.stringify(data));
+}
+
+export async function UpdateEntry(data: UpdateEntryRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('UpdateEntry', JSON.stringify(data));
+}
+
+export async function DeleteEntry(data: EntryIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteEntry', JSON.stringify(data));
+}
+
+export async function SetEntryRoster(data: SetEntryRosterRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('SetEntryRoster', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
