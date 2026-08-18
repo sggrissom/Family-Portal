@@ -77,22 +77,29 @@ func setupResultsFixture(t *testing.T) resultsFixture {
 		fx.activity = resp.Activity
 	})
 	fx.as(t, func(ctx *vbeam.Context) {
-		resp, err := CreateSeason(ctx, CreateSeasonRequest{ActivityId: fx.activity.Id, Name: "2025-26"})
+		start := "2025-08-01"
+		resp, err := CreateSeason(ctx, CreateSeasonRequest{
+			ActivityId: fx.activity.Id, Name: "2025-26", StartDate: &start,
+		})
 		if err != nil {
 			t.Fatalf("CreateSeason() error = %v", err)
 		}
 		fx.season = resp.Season
 	})
 	fx.as(t, func(ctx *vbeam.Context) {
-		resp, err := CreateSeason(ctx, CreateSeasonRequest{ActivityId: fx.activity.Id, Name: "2024-25"})
+		start := "2024-08-01"
+		resp, err := CreateSeason(ctx, CreateSeasonRequest{
+			ActivityId: fx.activity.Id, Name: "2024-25", StartDate: &start,
+		})
 		if err != nil {
 			t.Fatalf("CreateSeason(other) error = %v", err)
 		}
 		fx.otherSeason = resp.Season
 	})
 	fx.as(t, func(ctx *vbeam.Context) {
+		start := "2026-02-07"
 		resp, err := CreateEvent(ctx, CreateEventRequest{
-			SeasonId: fx.season.Id, Name: "Nuvo Nashville", Host: "Nuvo",
+			SeasonId: fx.season.Id, Name: "Nuvo Nashville", Host: "Nuvo", StartDate: &start,
 		})
 		if err != nil {
 			t.Fatalf("CreateEvent() error = %v", err)
@@ -152,6 +159,73 @@ func (fx resultsFixture) newAppearance(t *testing.T) Appearance {
 		appearance = resp.Appearance.Appearance
 	})
 	return appearance
+}
+
+// The builders below let a test seed a fuller season than the fixture ships
+// with — a second competition, a second routine — without repeating the
+// one-proc-per-transaction dance each time.
+
+func (fx resultsFixture) createEvent(t *testing.T, seasonId int, name string, host string, startDate string) Event {
+	t.Helper()
+
+	var event Event
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := CreateEvent(ctx, CreateEventRequest{
+			SeasonId: seasonId, Name: name, Host: host, StartDate: &startDate,
+		})
+		if err != nil {
+			t.Fatalf("CreateEvent(%s) error = %v", name, err)
+		}
+		event = resp.Event
+	})
+	return event
+}
+
+func (fx resultsFixture) createEntry(t *testing.T, seasonId int, req CreateEntryRequest) Entry {
+	t.Helper()
+
+	req.SeasonId = seasonId
+	var entry Entry
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := CreateEntry(ctx, req)
+		if err != nil {
+			t.Fatalf("CreateEntry(%s) error = %v", req.Name, err)
+		}
+		entry = resp.Entry.Entry
+	})
+	return entry
+}
+
+// createAppearance takes occurredAt as a string so a test can pass "" for the
+// "sometime that weekend" case the ordering has to fall back on.
+func (fx resultsFixture) createAppearance(t *testing.T, eventId int, entryId int, occurredAt string) Appearance {
+	t.Helper()
+
+	req := CreateAppearanceRequest{EventId: eventId, EntryId: entryId}
+	if occurredAt != "" {
+		req.OccurredAt = &occurredAt
+	}
+	var appearance Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := CreateAppearance(ctx, req)
+		if err != nil {
+			t.Fatalf("CreateAppearance() error = %v", err)
+		}
+		appearance = resp.Appearance.Appearance
+	})
+	return appearance
+}
+
+func (fx resultsFixture) setResults(t *testing.T, appearanceId int, results []ResultInput) {
+	t.Helper()
+
+	fx.as(t, func(ctx *vbeam.Context) {
+		if _, err := SetAppearanceResults(ctx, SetAppearanceResultsRequest{
+			AppearanceId: appearanceId, Results: results,
+		}); err != nil {
+			t.Fatalf("SetAppearanceResults() error = %v", err)
+		}
+	})
 }
 
 func (fx resultsFixture) resultsOf(t *testing.T, appearanceId int) []Result {

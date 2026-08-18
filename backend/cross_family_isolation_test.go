@@ -441,6 +441,26 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			})
 			return err
 		}},
+		{"GetSeasonOverview", func(ctx *vbeam.Context) error {
+			_, err := GetSeasonOverview(ctx, GetSeasonOverviewRequest{SeasonId: fx.season.Id})
+			return err
+		}},
+		{"GetEventDetail", func(ctx *vbeam.Context) error {
+			_, err := GetEventDetail(ctx, GetEventDetailRequest{EventId: fx.event.Id})
+			return err
+		}},
+		{"GetEntryHistory", func(ctx *vbeam.Context) error {
+			_, err := GetEntryHistory(ctx, GetEntryHistoryRequest{EntryId: fx.entry.Id})
+			return err
+		}},
+		{"GetPersonSeason", func(ctx *vbeam.Context) error {
+			_, err := GetPersonSeason(ctx, GetPersonSeasonRequest{PersonId: fx.person.Id})
+			return err
+		}},
+		{"ListActivityVocabulary", func(ctx *vbeam.Context) error {
+			_, err := ListActivityVocabulary(ctx, ListActivityVocabularyRequest{ActivityId: fx.activity.Id})
+			return err
+		}},
 	}
 
 	for _, tt := range calls {
