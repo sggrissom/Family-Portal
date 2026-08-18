@@ -392,7 +392,7 @@ Each phase ends green on `make check`.
    person's own family does not reach either row. `removePersonFromActivitiesTx` takes the
    roster row out and clears `Result.PersonId` — the result survives, because the routine
    still placed.
-6. **Minimal UI.** *In progress.* Season list → season overview → competition detail → routine
+6. **Minimal UI.** ✅ *Done.* Season list → season overview → competition detail → routine
    history, plus entry forms. Routes under `/activities`, `/season`, `/competition`,
    `/routine` in `frontend/main.tsx`, pages in `frontend/pages/activities/`. Dance vocabulary
    hardcoded in a label map keyed by `Activity.Kind`, so a sport label pack is a second entry
@@ -411,6 +411,23 @@ Each phase ends green on `make check`.
    Landed so far: `labels.ts` and `/activities` — the program list and the seasons inside
    the selected program, with create/rename/delete for both. It is deliberately the only
    screen that talks about programs at all; every later screen starts from a season.
+   `/season/<id>` on `GetSeasonOverview` — the season header, its competitions, and its
+   routines with rosters, each with create/edit/delete and a count of what has been
+   recorded against it. `ListActivityVocabulary` is wired into the routine form as
+   `<datalist>` suggestions, which is the mitigation the free-text decision above depends
+   on.
+   `/competition/<id>` on `GetEventDetail` — which routines performed there, with
+   add/edit/delete and their results rendered read-only by a shared `ResultList`. The
+   results editor on the same page — a row per line of the results sheet, kind-specific
+   fields, roster-narrowed awards, and `ListActivityVocabulary` behind the label and
+   category fields. `/routine/<id>` on `GetEntryHistory` — the routine across every
+   competition it went to, with the per-label adjudication tally that the free-text
+   decision above allows and nothing more.
+
+   What is deliberately not here: photos. Both set-photos procs exist and both read procs
+   return photo ids, but attaching a photo needs the photo picker, which is a photos-page
+   project rather than an activities one. The ids are carried through the page data
+   already, so the screens do not change shape when it lands.
 7. **Export/import.** ✅ *Done.* `export.go` and `import.go` both
    enumerate entity types explicitly (`import.go` has ~40 milestone references), so this is
    real work and is deliberately last. Activity data is now in both backup paths and comes

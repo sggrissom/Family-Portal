@@ -198,6 +198,14 @@ block(`
 block(`
 .season-name {
   color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+`);
+
+block(`
+a.season-name:hover {
+  text-decoration: underline;
 }
 `);
 
