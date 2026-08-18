@@ -190,6 +190,7 @@ type ExportDataStructure struct {
 	Milestones      []ExportMilestone `json:"milestones"`
 	Tags            []ExportTag       `json:"tags"`
 	Photos          []ExportPhoto     `json:"photos,omitempty"`
+	Activities      []ExportActivity  `json:"activities,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -197,6 +198,15 @@ type ExportDataStructure struct {
 	TotalMilestones int               `json:"total_milestones"`
 	TotalTags       int               `json:"total_tags"`
 	TotalPhotos     int               `json:"total_photos,omitempty"`
+
+	// The activities tree nests, so one total per level: "3 activities" says
+	// nothing about whether a season's results came through.
+	TotalActivities  int `json:"total_activities,omitempty"`
+	TotalSeasons     int `json:"total_seasons,omitempty"`
+	TotalEvents      int `json:"total_events,omitempty"`
+	TotalEntries     int `json:"total_entries,omitempty"`
+	TotalAppearances int `json:"total_appearances,omitempty"`
+	TotalResults     int `json:"total_results,omitempty"`
 }
 
 // Export milestone structure
@@ -399,6 +409,17 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		}
 	}
 
+	// Activities. personNames is built once here rather than per level: the
+	// tree resolves a name at three separate depths, and the linear scans the
+	// milestone and growth loops above do would be a scan per result.
+	personNames := make(map[int]string, len(people))
+	for _, person := range people {
+		personNames[person.Id] = person.Name
+	}
+	exportData.Activities = buildActivityExport(tx, familyId, personNames)
+	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=
+		countExportedActivities(exportData.Activities)
+
 	// Set export data
 	exportData.Heights = heights
 	exportData.Weights = weights
@@ -410,6 +431,12 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalPeople = len(people)
 	exportData.TotalMilestones = len(milestones)
 	exportData.TotalTags = len(tags)
+	exportData.TotalActivities = len(exportData.Activities)
+	exportData.TotalSeasons = seasonCount
+	exportData.TotalEvents = eventCount
+	exportData.TotalEntries = entryCount
+	exportData.TotalAppearances = appearanceCount
+	exportData.TotalResults = resultCount
 
 	return exportData, nil
 }
