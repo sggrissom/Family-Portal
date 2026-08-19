@@ -92,10 +92,10 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 Cheap, visible, and each one is a real defect if left.
 
-- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states.
+- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states. *(Partly done: a global `:focus-visible` ring and a skip link landed with the contrast work — buttons and links previously had no focus indicator at all. Per-flow tab-order review still outstanding.)*
 - [ ] Accessible names on icon-only controls; labels wired to inputs and validation errors.
 - [ ] Dialogs trap and restore focus.
-- [ ] Light and dark theme contrast check.
+- [x] Light and dark theme contrast check. Computed every token pair against WCAG. The dark theme passes throughout; the light theme did not — white on the primary-button gradient was 2.5:1 and the same green as text was 2.3:1, so the greens are deeper now. Form-control borders were 1.13:1 and get their own token.
 - [ ] Primary flows at phone, tablet, and desktop widths.
 - [ ] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image.
 - [ ] Keep authenticated pages out of the index.
