@@ -72,6 +72,47 @@ CI deploys `main` after the full check gate passes (`.github/workflows/test.yml`
 `make deploy-face-remote` builds it on the VPS, because it needs dlib present at
 build time.
 
+## End-to-end check before deploy
+
+`make e2e` runs `cmd/e2e`, which starts the compiled release binary on a
+scratch deployment and drives the flows a release cannot ship broken: readiness,
+the landing page and its bundle, signup, login, adding a person, recording a
+growth measurement, uploading a photo and serving it back, chat over the
+WebSocket, and logout. Then it sends `SIGTERM` and insists the process drains
+and exits zero.
+
+The unit tests cannot answer any of this. They call handlers in-process against
+a local build; what ships is a release-tagged binary with the frontend embedded
+in it, compile-time storage paths, a config check that refuses to serve, rate
+limiting that cannot be switched off, a face analysis worker that really does
+look for its daemon, and `Secure` cookies no plaintext client can hold. So the
+run puts a TLS reverse proxy in front, the way Caddy sits in front of
+production, and talks to the binary as a browser would.
+
+Because a release build resolves its storage paths at compile time
+(`cfg/release.go`), the scratch deployment has to live where production's does:
+
+```
+sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
+sudo chown -R "$(id -un)" /srv/apps/family/shared
+```
+
+On a machine where that tree would be unwelcome, `bwrap` can supply a throwaway
+one without `sudo` and without leaving anything behind:
+
+```
+bwrap --dev-bind / / --tmpfs /srv \
+  --dir /srv/apps/family/shared/data --dir /srv/apps/family/shared/static \
+  --chdir "$PWD" -- make e2e
+```
+
+Sharing production's paths is also why the run refuses to start when the tree
+already holds a database, a `shared/.env`, or anything at all under `static/` —
+on a real box those mean a real deployment, and the run would be pointed at
+somebody's photos. A refusal deletes nothing; a run that did start removes what
+it created. **Do not run it on the VPS.** CI runs it on a throwaway runner,
+after the race detector.
+
 ## Post-deploy smoke check
 
 `make smoke` runs `cmd/smokecheck` against a deployment and exits nonzero if

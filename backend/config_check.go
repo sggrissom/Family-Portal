@@ -60,6 +60,7 @@ func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
 	issues = append(issues, checkGoogleOAuth()...)
 	issues = append(issues, checkMail()...)
 	issues = append(issues, checkAIProvider()...)
+	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkStoragePaths(dbPath, staticDir)...)
 	return issues
@@ -134,6 +135,28 @@ func checkMail() []ConfigIssue {
 func checkAIProvider() []ConfigIssue {
 	if os.Getenv("GEMINI_API_KEY") == "" {
 		return []ConfigIssue{{Setting: "GEMINI_API_KEY", Detail: "must be set; AI-assisted import is offered in the UI"}}
+	}
+	return nil
+}
+
+// checkBackupToken requires the snapshot credential. The endpoint the nightly
+// backup pulls from authorizes nobody until this is set, and RegisterBackupHandlers
+// stops a release build that lacks it — but it stops it after this report has
+// already been printed, which is how an operator ends up fixing five settings,
+// restarting, and meeting a sixth. Checking it here puts it in the same list.
+func checkBackupToken() []ConfigIssue {
+	token := os.Getenv("BACKUP_TOKEN")
+	if token == "" {
+		return []ConfigIssue{{
+			Setting: "BACKUP_TOKEN",
+			Detail:  "must be set; the snapshot endpoint the nightly backup reads authorizes nobody without it",
+		}}
+	}
+	if len(token) < minimumBackupTokenLength {
+		return []ConfigIssue{{
+			Setting: "BACKUP_TOKEN",
+			Detail:  fmt.Sprintf("must be at least %d characters long", minimumBackupTokenLength),
+		}}
 	}
 	return nil
 }

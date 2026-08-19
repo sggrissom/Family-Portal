@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy smoke test test-race test-coverage local typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke e2e test test-race test-coverage local typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -47,6 +47,13 @@ SMOKE_URL ?= https://familyrecord.app
 smoke:
 	go run ./cmd/smokecheck -url $(SMOKE_URL)
 
+# End-to-end run of the five flows against the compiled release binary, over
+# TLS, on a scratch deployment. A release build resolves its storage paths at
+# compile time, so this needs the tree production would use; cmd/e2e prints the
+# two commands that create it, and refuses to run where a real deployment lives.
+e2e: build
+	go run -tags release ./cmd/e2e -binary $(BUILD_DIR)/$(BINARY_NAME)
+
 deploy-face: build-face
 	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
 
@@ -90,7 +97,7 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
-	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck
+	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following Go files need formatting:"; \

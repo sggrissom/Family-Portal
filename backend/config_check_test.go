@@ -19,6 +19,7 @@ var configEnvVars = []string{
 	"SMTP_HOST",
 	"SMTP_PORT",
 	"GEMINI_API_KEY",
+	"BACKUP_TOKEN",
 	"APNS_TEAM_ID",
 	"APNS_KEY_ID",
 	"APNS_BUNDLE_ID",
@@ -38,6 +39,7 @@ func validConfigEnv() map[string]string {
 	env["GOOGLE_CLIENT_SECRET"] = "client-secret"
 	env["MAIL_FROM"] = "noreply@familyrecord.app"
 	env["GEMINI_API_KEY"] = "gemini-key"
+	env["BACKUP_TOKEN"] = strings.Repeat("b", minimumBackupTokenLength)
 	return env
 }
 
@@ -98,6 +100,7 @@ func TestCheckProductionConfigRequiresEverySetting(t *testing.T) {
 		"GOOGLE_CLIENT_SECRET",
 		"MAIL_FROM",
 		"GEMINI_API_KEY",
+		"BACKUP_TOKEN",
 	}
 
 	for _, name := range required {
@@ -112,6 +115,18 @@ func TestCheckProductionConfigRequiresEverySetting(t *testing.T) {
 				t.Fatalf("CheckProductionConfig() with %s unset reported %q, want an issue for %s", name, settingsWithIssues(issues), name)
 			}
 		})
+	}
+}
+
+func TestCheckProductionConfigRejectsShortBackupToken(t *testing.T) {
+	env := validConfigEnv()
+	env["BACKUP_TOKEN"] = strings.Repeat("b", minimumBackupTokenLength-1)
+	applyEnv(t, env)
+	dbPath, staticDir := storageDirs(t)
+
+	issues := CheckProductionConfig(dbPath, staticDir)
+	if !hasIssue(issues, "BACKUP_TOKEN") {
+		t.Fatalf("CheckProductionConfig() with a short token reported %q, want an issue for BACKUP_TOKEN", settingsWithIssues(issues))
 	}
 }
 
