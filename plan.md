@@ -65,7 +65,7 @@ Anything a user can't undo themselves becomes a support request to me.
 
 - [ ] `README.md`: what it is, architecture sketch, prerequisites, setup, common commands.
 - [x] `.env.example` listing every required and optional variable, no secrets. Grouped by what fails without it: release-required, optional overrides, all-or-nothing APNs, and the face daemon's own variables.
-- [ ] Document production topology: reverse proxy, TLS, paths, permissions, service user, face daemon + models.
+- [x] Document production topology: reverse proxy, TLS, paths, permissions, service user, face daemon + models. `docs/deployment.md`. Turned up two mismatches worth fixing: the app hardcodes `:8666` while `PORT` in `shared/.env` drives the Caddy upstream and the deploy health check, and the unit's `TimeoutStopSec=15` kills the app before its own 30s drain finishes (both live in `tiny-server-helper`).
 - [ ] Post-deploy smoke check: landing page, login, `/readyz`, one photo loads, WebSocket connects.
 - [ ] E2E coverage against a compiled release build for the five flows I'd notice breaking: signup/login, add person, add growth, upload photo, chat.
 - [ ] Verify reverse-proxy limits and timeouts match the application's; confirm TLS renewal and WebSocket proxying work.
