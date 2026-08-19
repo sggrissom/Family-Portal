@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test test-race test-coverage local typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke test test-race test-coverage local typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -39,6 +39,13 @@ build-face:
 
 deploy: build
 	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
+
+# Post-deploy smoke check against a running deployment. Reads SMOKE_EMAIL and
+# SMOKE_PASSWORD from the environment; see docs/deployment.md for what the
+# account needs to be.
+SMOKE_URL ?= https://familyrecord.app
+smoke:
+	go run ./cmd/smokecheck -url $(SMOKE_URL)
 
 deploy-face: build-face
 	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
@@ -83,7 +90,7 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
-	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill
+	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following Go files need formatting:"; \

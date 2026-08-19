@@ -72,6 +72,37 @@ CI deploys `main` after the full check gate passes (`.github/workflows/test.yml`
 `make deploy-face-remote` builds it on the VPS, because it needs dlib present at
 build time.
 
+## Post-deploy smoke check
+
+`make smoke` runs `cmd/smokecheck` against a deployment and exits nonzero if
+anything a visitor would notice is broken. The deploy script's own gate only
+asks whether the process answers `/healthz`, which a release that serves last
+build's frontend, cannot read its database, or refuses every login still
+passes. This asks the six questions that come after that:
+
+| check | what a failure means |
+| --- | --- |
+| `/readyz` | the database is unreadable or `shared/static/` is not writable |
+| landing page | `index.html` is missing, or names a bundle the release does not contain |
+| login | auth is broken, or `JWT_SECRET_KEY` changed under a running session |
+| photo | the RPC layer, the database, or `shared/static/` is not serving files |
+| websocket | `/ws/chat` upgrade, hub registration, or `SITE_ROOT`'s origin list is wrong |
+| logout | the session was not revoked |
+
+Every check is read-only. The one piece of state it creates is a login
+session, which the last check disposes of.
+
+It needs a real account, given as `SMOKE_EMAIL` and `SMOKE_PASSWORD`
+(`-email` and `-password` also work), in a family holding **at least one
+processed photo** — without one, "a photo loads" has nothing to answer. Make it
+a dedicated account rather than a person's, so a failure here is never
+confused with somebody's own session, and so rotating its password costs
+nobody anything.
+
+CI runs it as the last step of the deploy job, from the same two repository
+secrets. When they are unset the step logs a warning and passes, so an
+un-armed check is visible on every deploy rather than silent.
+
 ## Face analysis
 
 The daemon serves `/recognize` and `/embed` over the Unix socket, plus `/healthz`

@@ -111,3 +111,17 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: make deploy DEPLOY_HOST="$DEPLOY_USER@$DEPLOY_HOST"
+
+      # The deploy script already rolled back if /healthz went quiet. This asks
+      # the questions that survive a healthy process: does the site render, does
+      # a real account get in, does a photo come back, does chat connect.
+      - name: Post-deploy smoke check
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_EMAIL" ] || [ -z "$SMOKE_PASSWORD" ]; then
+            echo "::warning::SMOKE_EMAIL and SMOKE_PASSWORD are unset, so this deploy went out unverified. See docs/deployment.md."
+            exit 0
+          fi
+          make smoke
