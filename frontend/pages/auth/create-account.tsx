@@ -233,6 +233,12 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
         >
           {form.loading ? "Creating..." : "Create Account"}
         </button>
+
+        <p className="auth-consent">
+          By creating an account you agree to the <a href="/terms">terms of use</a> and the{" "}
+          <a href="/privacy">privacy page</a>, which covers what is stored, what leaves the server,
+          and how to delete it.
+        </p>
       </form>
 
       <div className="auth-footer">
@@ -240,6 +246,11 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
           Already have an account?
           <a href="/login" className="auth-link">
             Sign in
+          </a>
+        </p>
+        <p>
+          <a href="/support" className="auth-link">
+            Need help?
           </a>
         </p>
       </div>

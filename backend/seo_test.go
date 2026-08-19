@@ -113,6 +113,11 @@ func TestSitemapHandler(t *testing.T) {
 			`<priority>1.0</priority>`,
 			`<loc>` + cfg.SiteURL + `/login</loc>`,
 			`<loc>` + cfg.SiteURL + `/create-account</loc>`,
+			// The policy pages are the only ones a stranger has any reason to
+			// find, and a privacy page nobody can reach is not a privacy page.
+			`<loc>` + cfg.SiteURL + `/privacy</loc>`,
+			`<loc>` + cfg.SiteURL + `/terms</loc>`,
+			`<loc>` + cfg.SiteURL + `/support</loc>`,
 			`</urlset>`,
 		}
 

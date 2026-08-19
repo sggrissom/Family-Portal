@@ -134,9 +134,12 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
 
 export const Footer = () => (
   <footer className="site-footer">
-    <p>
-      © <span id="year">2025</span> Family Record. All rights reserved.
-    </p>
+    <nav className="footer-links" aria-label="Policies and support">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/support">Support</a>
+    </nav>
+    <p>© {new Date().getFullYear()} Family Record. All rights reserved.</p>
   </footer>
 );
 

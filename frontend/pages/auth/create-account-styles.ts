@@ -144,3 +144,13 @@ block(`
   margin: 0;
 }
 `);
+
+block(`
+.auth-consent {
+  margin: 16px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+`);
