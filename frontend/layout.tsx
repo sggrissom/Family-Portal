@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
+import { applyPageMetadata } from "./lib/pageMetadata";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -17,7 +18,23 @@ const useHeader = vlens.declareHook((): HeaderData => {
   };
 });
 
+// vlens exposes no route-change callback, and every routed page renders the
+// header, so this is where per-route metadata gets applied. Redraws call it far
+// more often than navigations do, hence the guard: setting the same values
+// again is harmless but pointless.
+let lastMetadataPath = "";
+
+function syncPageMetadata() {
+  const path = window.location.pathname;
+  if (path === lastMetadataPath) {
+    return;
+  }
+  lastMetadataPath = path;
+  applyPageMetadata(path);
+}
+
 export const Header = ({ isHome }: { isHome: boolean }) => {
+  syncPageMetadata();
   const headerData = useHeader();
   const menuRef = vlens.ref(headerData, "isMenuOpen");
   const currentAuth = auth.getAuth();
