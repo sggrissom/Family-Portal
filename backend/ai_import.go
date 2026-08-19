@@ -81,9 +81,17 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Validate AI configuration
-	if err = ValidateAIConfiguration(); err != nil {
-		resp.Error = fmt.Sprintf("AI not configured: %v", err)
+	// Validate AI configuration.
+	//
+	// AI import is optional and drafting-only: a missing key or an unreachable
+	// provider costs the draft and nothing else. The message says what the user
+	// can do about it, and the reason goes to the log.
+	if configErr := ValidateAIConfiguration(); configErr != nil {
+		LogWarn("IMPORT", "AI import attempted without a configured provider", map[string]interface{}{
+			"userId": user.Id,
+			"error":  configErr.Error(),
+		})
+		resp.Error = "AI import is not available on this server. You can still add records by hand."
 		return
 	}
 
@@ -118,12 +126,18 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		FamilyID:         person.FamilyId,
 	}
 
-	conversionResult, err := ConvertToJSON(aiRequest)
-	if err != nil {
-		resp.Error = fmt.Sprintf("AI conversion failed: %v", err)
-		LogErrorSimple("IMPORT", "AI conversion failed", err, map[string]interface{}{
-			"model": modelName,
+	conversionResult, conversionErr := ConvertToJSON(aiRequest)
+	if conversionErr != nil {
+		// The transport error can name a host or a status line; the reference
+		// code is how it gets to me instead. Nothing was written, and the text
+		// the user pasted is still in the box they pasted it into.
+		reference := NewRequestID()
+		LogErrorSimple("IMPORT", "AI conversion failed", conversionErr, map[string]interface{}{
+			"model":     modelName,
+			"requestId": reference,
 		})
+		resp.Error = "The AI service could not be reached. Please try again in a few minutes, or add the records by hand. " +
+			ReferencePrefix + reference
 		return
 	}
 
@@ -146,7 +160,7 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 			preview = preview[:500] + "..."
 		}
 
-		resp.Error = "AI generated invalid JSON structure"
+		resp.Error = "The AI returned something this app could not read. Try rewording the text, or add the records by hand."
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("JSON parse error: %v", err))
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("Response preview: %s", preview))
 

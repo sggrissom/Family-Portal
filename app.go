@@ -231,10 +231,15 @@ func MakeApplication() *vbeam.Application {
 // serves this application to a network builds its handler here, so a wrapper
 // added later cannot end up on one entry point and not another.
 //
-// Order matters: rate limiting is outermost, so a flood is refused before any
-// body is read or any handler touches the database.
+// Order matters. The correlation id is outermost, so even a request the rate
+// limiter refuses can be found in the log by the code its response carried.
+// Rate limiting comes next, so a flood is refused before any body is read or
+// any handler touches the database.
 func WrapApplication(app *vbeam.Application) http.Handler {
-	return backend.NewRateLimitWrapper(backend.NewRequestSizeLimitWrapper(backend.NewSecurityWrapper(app)))
+	return backend.NewRequestIDWrapper(
+		backend.NewRateLimitWrapper(
+			backend.NewRequestSizeLimitWrapper(
+				backend.NewSecurityWrapper(app))))
 }
 
 func MakeSecureApplication() http.Handler {

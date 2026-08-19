@@ -417,6 +417,15 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 		return
 	}
 
+	// Face analysis is optional and often absent — a local build has no worker
+	// at all, and a release build skips it when the daemon socket is not
+	// reachable. Queueing into nothing used to report a confident count of
+	// photos that would never be looked at, so say so instead.
+	if !GetAnalysisWorkerStats().IsRunning {
+		err = ErrFaceAnalysisUnavailable
+		return
+	}
+
 	// Collect images that need (re)analysis
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
@@ -798,10 +807,13 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		req.Limit = 1000
 	}
 
-	// Read log file
+	// Read log file. An open failure names the path it tried, which is a
+	// directory layout nobody outside the box needs; ProcError trades it for a
+	// reference code.
 	logPath := filepath.Join("logs", req.Filename)
-	file, err := os.Open(logPath)
-	if err != nil {
+	file, openErr := os.Open(logPath)
+	if openErr != nil {
+		err = ProcError(openErr)
 		return
 	}
 	defer file.Close()
@@ -889,8 +901,8 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		flushEntry(pending)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return resp, err
+	if scanErr := scanner.Err(); scanErr != nil {
+		return resp, ProcError(scanErr)
 	}
 
 	// Sort entries if requested

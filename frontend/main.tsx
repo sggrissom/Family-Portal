@@ -3,6 +3,9 @@ import { setRoute, setErrorView } from "vlens/core";
 import * as preact from "preact";
 import * as server from "./server";
 import * as auth from "./lib/authCache";
+import { classifyError } from "./lib/errorDisplay";
+import { ErrorDisplay } from "./components/ErrorDisplay";
+import { Header, Footer } from "./layout";
 import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
@@ -21,17 +24,19 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
     ]);
   }
 
-  // For other errors, show a custom error page
-  return preact.h("div", { className: "error-container" }, [
-    preact.h("main", { className: "error-page" }, [
-      preact.h("h1", {}, "Oops! Something went wrong"),
-      preact.h("p", { className: "error-message" }, error),
-      preact.h("div", { className: "error-actions" }, [
-        preact.h("a", { href: "/", className: "btn btn-primary" }, "Go Home"),
-        preact.h("a", { href: "/dashboard", className: "btn btn-secondary" }, "Dashboard"),
-      ]),
-    ]),
-  ]);
+  // Everything else gets the shared error screen, which sorts the failure into
+  // a category and surfaces the reference code when the server sent one. The
+  // old version printed the raw error string under "Oops!", which was both
+  // unhelpful to a user and the last place a technical message could leak.
+  return (
+    <div>
+      <Header isHome={false} />
+      <main id="app">
+        <ErrorDisplay error={classifyError(error)} />
+      </main>
+      <Footer />
+    </div>
+  );
 }
 
 async function main() {

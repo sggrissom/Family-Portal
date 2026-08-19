@@ -576,7 +576,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseMultipartForm(32 << 20) // 32MB in memory, rest on disk
 	if err != nil {
-		RespondValidationError(w, r, "Failed to parse form", err.Error())
+		RespondValidationError(w, r, "That upload could not be read. Please try again.", err.Error())
 		return
 	}
 
@@ -599,7 +599,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if personIdsStr != "" {
 		// Parse JSON array of person IDs
 		if err := json.Unmarshal([]byte(personIdsStr), &personIds); err != nil {
-			RespondValidationError(w, r, "Invalid person IDs format", err.Error())
+			RespondValidationError(w, r, "The people tagged on this photo could not be read.", err.Error())
 			return
 		}
 	}
@@ -610,7 +610,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if familyIdStr := r.FormValue("familyId"); familyIdStr != "" {
 		parsed, convErr := strconv.Atoi(familyIdStr)
 		if convErr != nil {
-			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			RespondValidationError(w, r, "That family could not be identified.", convErr.Error())
 			return
 		}
 		requestedFamilyId = parsed
@@ -637,7 +637,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the uploaded file
 	file, fileHeader, err := r.FormFile("photo")
 	if err != nil {
-		RespondValidationError(w, r, "Photo file is required", err.Error())
+		RespondValidationError(w, r, "Choose a photo to upload.", err.Error())
 		return
 	}
 	defer file.Close()
@@ -658,18 +658,25 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	// Get image dimensions
 	width, height, err := getImageDimensions(file)
 	if err != nil {
-		RespondValidationError(w, r, "Failed to read image dimensions", err.Error())
+		RespondValidationError(w, r, "That file could not be read as an image. Try a JPEG or PNG.", err.Error())
 		return
 	}
 
-	// Database operations
+	// Database operations.
+	//
+	// Every failure below abandons the transaction by returning, which is
+	// correct — but it used to lose *why*, and the caller answered every one of
+	// them with the same "Failed to upload photo" 500. A user who tagged
+	// somebody else's child and a user whose disk is full deserve different
+	// answers, so each path records one.
 	var image Image
 	var validPersons []Person
+	var uploadErr *AppError
 
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 		familyId, err := ResolveActingFamily(tx, user, requestedFamilyId, AccessContribute)
 		if err != nil {
-			// Don't commit transaction for a family the user is not in
+			uploadErr = NewAppError(ErrCodeForbidden, "You cannot add photos to that family.", err.Error())
 			return
 		}
 
@@ -679,7 +686,10 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			for _, personId := range personIds {
 				person := GetPersonById(tx, personId)
 				if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
-					// Don't commit transaction for invalid person
+					// Deliberately the same answer for "no such person" and
+					// "not your person": telling them apart would let a caller
+					// probe for ids outside their family.
+					uploadErr = NewAppError(ErrCodeValidation, "One of the tagged people is not in your family.")
 					return
 				}
 				validPersons = append(validPersons, person)
@@ -689,7 +699,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		// Generate unique filename
 		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
 		if err != nil {
-			// Don't commit transaction if filename generation fails
+			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
 			return
 		}
 
@@ -697,7 +707,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		photosDir := filepath.Join(cfg.StaticDir, "photos")
 		err = os.MkdirAll(photosDir, 0755)
 		if err != nil {
-			// Don't commit transaction if directory creation fails
+			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
 			return
 		}
 
@@ -705,7 +715,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		file.Seek(0, 0)
 		fileData, err := io.ReadAll(file)
 		if err != nil {
-			// Don't commit transaction if file read fails
+			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
 			return
 		}
 
@@ -717,7 +727,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
 		if err != nil {
-			// Don't commit transaction for invalid date
+			uploadErr = NewAppError(ErrCodeValidation, "That photo date could not be worked out. Check the date or age you entered.", err.Error())
 			return
 		}
 
@@ -730,7 +740,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
 		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
 		if origFile, err := os.Create(originalPath); err != nil {
-			// Don't commit transaction if file save fails
+			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
 			return
 		} else {
 			origFile.Write(fileData)
@@ -768,8 +778,14 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Check if image was created (transaction succeeded)
+	if uploadErr != nil {
+		RespondWithError(w, r, uploadErr, statusForErrorCode(uploadErr.Code))
+		return
+	}
 	if image.Id == 0 {
-		http.Error(w, "Failed to upload photo", http.StatusInternalServerError)
+		// The transaction gave up without saying why. That is a bug rather than
+		// a user error, so it is reported as one.
+		RespondUnexpectedError(w, r, errors.New("photo upload transaction produced no image"))
 		return
 	}
 
@@ -792,10 +808,19 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			OriginalHeight: height,
 		}
 
-		// Queue the job for processing
+		// Queue the job for processing.
+		//
+		// A refused job used to leave the row at status 1, "processing", with
+		// nothing on its way to ever finish it — a photo stuck on a spinner
+		// forever. Marking it failed hides it and lets the user try again,
+		// which is the only accurate thing to say.
 		if err := QueuePhotoProcessing(job); err != nil {
 			log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
-			// Could set status to failed here, but let's keep it as processing for now
+			markPhotoFailed(image.Id)
+			RespondUnavailableError(w, r,
+				"The photo could not be processed right now. Please try again in a few minutes.",
+				err.Error())
+			return
 		}
 	}
 
@@ -818,6 +843,21 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// markPhotoFailed hides a photo whose processing will never happen. Status 2 is
+// what the worker sets on a failed job, and every read path already skips it, so
+// this reuses that state rather than inventing a second kind of broken.
+func markPhotoFailed(imageId int) {
+	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		var image Image
+		if !vbolt.Read(tx, ImagesBkt, imageId, &image) || image.Id == 0 {
+			return
+		}
+		image.Status = 2
+		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		vbolt.TxCommit(tx)
+	})
 }
 
 // Serve photo handler
