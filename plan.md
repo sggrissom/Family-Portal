@@ -108,11 +108,11 @@ Mostly done; finishing the tail.
 - [x] `SIGTERM` / `SIGINT` handling with graceful HTTP drain, plus an integration test.
 - [x] Maximum request-header size.
 - [x] `/readyz` covering database access and writable storage.
-- [ ] HTTP read/write timeouts tuned for uploads and WebSockets (read-header and idle are already set).
-- [ ] Close WebSocket connections gracefully on shutdown.
-- [ ] Stop and drain the photo, face-analysis, and push workers where safe.
-- [ ] Nonzero exit status and a log line on unexpected server failure.
-- [ ] Define behavior when face analysis, AI, or push are down — they must never take primary user data with them.
+- [x] HTTP read/write timeouts tuned for uploads and WebSockets (read-header and idle are already set). Neither can be a server-wide setting: both apply to hijacked WebSocket connections, which `coder/websocket` never clears the deadline on, and no single read budget fits both a login and a 512 MiB import. `backend/request_timeouts.go` sets them per request instead, sized against the body limits in `security.go`.
+- [x] Close WebSocket connections gracefully on shutdown. `http.Server.Shutdown` neither tracks nor waits for hijacked connections, so the hub closes them itself, before the HTTP drain, with a Going Away frame.
+- [x] Stop and drain the photo, face-analysis, and push workers where safe. Photo, mail, and push drain under one shared budget; face analysis is stopped without draining, since a missing suggestion is regenerable and the daemon round trip is the slowest thing the process does. Stopping a worker no longer blocks behind a job in flight — the old form sent on an unbuffered channel.
+- [x] Nonzero exit status and a log line on unexpected server failure. `release.go` returns an error to `main` rather than calling `log.Fatalf`, so the shutdown sequence still runs before the process exits nonzero.
+- [x] Define behavior when face analysis, AI, or push are down — they must never take primary user data with them. `docs/degraded-dependencies.md`, with tests: bounded queues that refuse rather than block, and a chat message that outlives an unavailable push worker.
 
 ## 9. Release
 

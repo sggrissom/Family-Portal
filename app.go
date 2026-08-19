@@ -21,6 +21,11 @@ var Info vbolt.Info
 const (
 	// Keep request headers bounded and short-lived without imposing a global
 	// timeout on photo uploads or long-running WebSocket connections.
+	//
+	// ReadTimeout and WriteTimeout are deliberately absent. Both would apply to
+	// hijacked WebSocket connections, which coder/websocket does not clear the
+	// deadlines on, and neither could be sized for a 1 KiB login and a 512 MiB
+	// import at once. Per-route deadlines live in backend/request_timeouts.go.
 	serverReadHeaderTimeout = 10 * time.Second
 	serverIdleTimeout       = 2 * time.Minute
 	serverMaxHeaderBytes    = 1 << 20 // 1 MiB
@@ -40,9 +45,21 @@ func NewHTTPServer(addr string, handler http.Handler) *http.Server {
 	}
 }
 
-// RunHTTPServer serves requests until the context is canceled. Cancellation
-// stops new connections and gives in-flight HTTP requests time to finish.
+// RunHTTPServer serves requests until the context is canceled, then takes the
+// process down in the order the pieces depend on each other:
+//
+//  1. Chat connections are closed with a Going Away frame. This has to come
+//     first: an upgraded WebSocket has hijacked its connection, and
+//     http.Server.Shutdown neither tracks nor waits for those, so anything left
+//     open here is severed without warning when the process exits.
+//  2. The HTTP server drains. No new requests are accepted; in-flight ones
+//     finish. Once this returns, nothing can queue new background work.
+//  3. The background workers stop, finishing what they had already accepted.
+//
 // Callers should derive ctx with signal.NotifyContext for SIGINT and SIGTERM.
+// An error means the server itself failed; a worker that ran out of drain
+// budget is logged rather than returned, because the process still exited
+// having done everything it could.
 func RunHTTPServer(ctx context.Context, server *http.Server) error {
 	serveErr := make(chan error, 1)
 	go func() {
@@ -54,14 +71,24 @@ func RunHTTPServer(ctx context.Context, server *http.Server) error {
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
+		// The listener died on its own — a port taken, a file descriptor
+		// exhausted. Nothing was signalled, so the workers still need stopping
+		// before the caller exits nonzero.
+		backend.ShutdownWorkers(context.Background())
 		return err
 	case <-ctx.Done():
 	}
 
+	backend.ShutdownChatConnections(context.Background())
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return err
+	shutdownErr := server.Shutdown(shutdownCtx)
+
+	backend.ShutdownWorkers(context.Background())
+
+	if shutdownErr != nil {
+		return shutdownErr
 	}
 
 	err := <-serveErr
@@ -231,10 +258,16 @@ func MakeApplication() *vbeam.Application {
 // serves this application to a network builds its handler here, so a wrapper
 // added later cannot end up on one entry point and not another.
 //
-// Order matters: rate limiting is outermost, so a flood is refused before any
-// body is read or any handler touches the database.
+// Order matters. Rate limiting is outermost, so a flood is refused before any
+// body is read or any handler touches the database. Request deadlines come next
+// — a refused request never needed one — and they must be outside the security
+// wrapper, which dispatches WebSocket upgrades itself and would otherwise leave
+// those connections carrying whatever deadline the last request set.
 func WrapApplication(app *vbeam.Application) http.Handler {
-	return backend.NewRateLimitWrapper(backend.NewRequestSizeLimitWrapper(backend.NewSecurityWrapper(app)))
+	return backend.NewRateLimitWrapper(
+		backend.NewRequestTimeoutWrapper(
+			backend.NewRequestSizeLimitWrapper(
+				backend.NewSecurityWrapper(app))))
 }
 
 func MakeSecureApplication() http.Handler {
