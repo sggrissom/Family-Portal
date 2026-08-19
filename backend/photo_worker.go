@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"errors"
 	"family/cfg"
 	"fmt"
@@ -26,10 +27,9 @@ type PhotoProcessingJob struct {
 
 // PhotoWorker manages background photo processing
 type PhotoWorker struct {
-	jobQueue    chan PhotoProcessingJob
-	stopChannel chan bool
-	isRunning   bool
-	db          *vbolt.DB
+	workerLifecycle
+	jobQueue chan PhotoProcessingJob
+	db       *vbolt.DB
 }
 
 var globalPhotoWorker *PhotoWorker
@@ -49,10 +49,8 @@ func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
 
 	LogInfo(LogCategoryWorker, "Initializing photo processing worker", map[string]interface{}{"queueSize": queueSize})
 	globalPhotoWorker = &PhotoWorker{
-		jobQueue:    make(chan PhotoProcessingJob, queueSize),
-		stopChannel: make(chan bool),
-		isRunning:   false,
-		db:          db,
+		jobQueue: make(chan PhotoProcessingJob, queueSize),
+		db:       db,
 	}
 
 	LogInfo(LogCategoryWorker, "Photo worker initialized with database reference")
@@ -79,24 +77,30 @@ func QueuePhotoProcessing(job PhotoProcessingJob) error {
 
 // Start begins the background worker goroutine
 func (pw *PhotoWorker) Start() {
-	if pw.isRunning {
+	quit, done, ok := pw.start()
+	if !ok {
 		return
 	}
 
-	pw.isRunning = true
-	go pw.processJobs()
+	go pw.processJobs(quit, done)
 	LogInfo(LogCategoryWorker, "Photo processing worker started")
 }
 
-// Stop gracefully shuts down the worker
+// Stop signals the worker to exit and abandons whatever is still queued. The
+// shutdown path calls StopAndDrain instead; this is for tests and for restarts,
+// where finishing the backlog is not the point.
 func (pw *PhotoWorker) Stop() {
-	if !pw.isRunning {
-		return
-	}
-
-	pw.stopChannel <- true
-	pw.isRunning = false
+	pw.stopImmediately()
 	LogInfo(LogCategoryWorker, "Photo processing worker stopped")
+}
+
+// StopAndDrain stops the worker and finishes the photos already accepted,
+// giving up when ctx expires. Draining matters most here of all the workers: a
+// queued job holds the upload's bytes in memory and its database row already
+// says "processing", so abandoning it strands a photo the user is watching for
+// in a state nothing retries.
+func (pw *PhotoWorker) StopAndDrain(ctx context.Context) bool {
+	return pw.stopAndWait(ctx, true)
 }
 
 // GetQueueLength returns the current number of jobs in the queue
@@ -108,13 +112,18 @@ func GetQueueLength() int {
 }
 
 // processJobs is the main worker loop that processes jobs from the queue
-func (pw *PhotoWorker) processJobs() {
+func (pw *PhotoWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
+	defer close(done)
 	for {
 		select {
 		case job := <-pw.jobQueue:
 			pw.processPhotoJob(job)
-		case <-pw.stopChannel:
-			LogInfo(LogCategoryWorker, "Photo worker received stop signal")
+		case <-quit:
+			drained := drainQueue(pw.drainContext(), pw.jobQueue, pw.processPhotoJob)
+			LogInfo(LogCategoryWorker, "Photo worker received stop signal", map[string]interface{}{
+				"drained":   drained,
+				"abandoned": len(pw.jobQueue),
+			})
 			return
 		}
 	}
@@ -353,7 +362,7 @@ func GetProcessingStats() ProcessingStats {
 
 	return ProcessingStats{
 		QueueLength: len(globalPhotoWorker.jobQueue),
-		IsRunning:   globalPhotoWorker.isRunning,
+		IsRunning:   globalPhotoWorker.isRunning(),
 	}
 }
 
@@ -362,4 +371,14 @@ func StopPhotoWorker() {
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
+}
+
+// stopPhotoWorkerAndDrain is the shutdown path's entry point. It reports
+// whether the worker finished; false means photos were still queued when the
+// budget ran out.
+func stopPhotoWorkerAndDrain(ctx context.Context) bool {
+	if globalPhotoWorker == nil {
+		return true
+	}
+	return globalPhotoWorker.StopAndDrain(ctx)
 }

@@ -49,7 +49,7 @@ func TestInitializePhotoWorker(t *testing.T) {
 			t.Error("Expected global photo worker to be initialized")
 		}
 
-		if !globalPhotoWorker.isRunning {
+		if !globalPhotoWorker.isRunning() {
 			t.Error("Expected worker to be running after initialization")
 		}
 
@@ -230,9 +230,8 @@ func TestGetQueueLength(t *testing.T) {
 
 		// Re-initialize worker without starting the processing goroutine
 		globalPhotoWorker = &PhotoWorker{
-			jobQueue:    make(chan PhotoProcessingJob, 10),
-			stopChannel: make(chan bool),
-			db:          db,
+			jobQueue: make(chan PhotoProcessingJob, 10),
+			db:       db,
 		}
 
 		// Add some jobs
@@ -266,26 +265,24 @@ func TestPhotoWorkerStartStop(t *testing.T) {
 	defer db.Close()
 
 	worker := &PhotoWorker{
-		jobQueue:    make(chan PhotoProcessingJob, 5),
-		stopChannel: make(chan bool),
-		isRunning:   false,
-		db:          db,
+		jobQueue: make(chan PhotoProcessingJob, 5),
+		db:       db,
 	}
 
 	t.Run("Start worker", func(t *testing.T) {
-		if worker.isRunning {
+		if worker.isRunning() {
 			t.Error("Expected worker to not be running initially")
 		}
 
 		worker.Start()
 
-		if !worker.isRunning {
+		if !worker.isRunning() {
 			t.Error("Expected worker to be running after start")
 		}
 
 		// Try to start again (should be idempotent)
 		worker.Start()
-		if !worker.isRunning {
+		if !worker.isRunning() {
 			t.Error("Expected worker to still be running after second start")
 		}
 	})
@@ -293,13 +290,13 @@ func TestPhotoWorkerStartStop(t *testing.T) {
 	t.Run("Stop worker", func(t *testing.T) {
 		worker.Stop()
 
-		if worker.isRunning {
+		if worker.isRunning() {
 			t.Error("Expected worker to not be running after stop")
 		}
 
 		// Try to stop again (should be idempotent)
 		worker.Stop()
-		if worker.isRunning {
+		if worker.isRunning() {
 			t.Error("Expected worker to still be stopped after second stop")
 		}
 	})
@@ -531,13 +528,13 @@ func TestStopPhotoWorker(t *testing.T) {
 	t.Run("Stop running worker", func(t *testing.T) {
 		InitializePhotoWorker(5, db)
 
-		if !globalPhotoWorker.isRunning {
+		if !globalPhotoWorker.isRunning() {
 			t.Error("Expected worker to be running before stop")
 		}
 
 		StopPhotoWorker()
 
-		if globalPhotoWorker.isRunning {
+		if globalPhotoWorker.isRunning() {
 			t.Error("Expected worker to be stopped after StopPhotoWorker")
 		}
 	})
