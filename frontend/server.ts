@@ -975,6 +975,22 @@ export interface SystemAnalyticsResponse {
     apiRequestTrends: DataPoint[]
 }
 
+export interface DiagnosticsResponse {
+    version: string
+    commit: string
+    buildTime: string
+    release: boolean
+    goVersion: string
+    startedAt: string
+    uptimeSeconds: number
+    photoQueue: number
+    photoRunning: boolean
+    analysisQueue: number
+    analysisFaces: boolean
+    mailQueue: number
+    pushConfigured: boolean
+}
+
 export interface RegisterPushDeviceRequest {
     token: string
     platform: string
@@ -1903,6 +1919,10 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
+}
+
+export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {
+    return await rpc.call<DiagnosticsResponse>('GetDiagnostics', JSON.stringify(data));
 }
 
 export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promise<rpc.Response<RegisterPushDeviceResponse>> {
