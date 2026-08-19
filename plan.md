@@ -118,8 +118,8 @@ Mostly done; finishing the tail.
 
 - [ ] Clean checkout passes the full CI gate without modifying tracked files.
 - [ ] Protect `main`; require the checks before merge.
-- [ ] Pin third-party GitHub Actions.
-- [ ] Add dependency and secret scanning to CI.
+- [x] Pin third-party GitHub Actions. All five pinned to a commit SHA with the version in a trailing comment — a tag is mutable, and this workflow holds the deploy key.
+- [x] Add dependency and secret scanning to CI. `govulncheck`, `npm audit`, and gitleaks over full history, in a job `deploy` deliberately does not depend on. Turning it on found nine reachable vulnerabilities in `golang.org/x/image` and `golang-jwt/jwt`, all in the photo decode and token parse paths; both are bumped here, which also moved the Go directive to 1.25.
 - [ ] One source of truth for the application version; surface it in logs and an authenticated diagnostics view.
 - [ ] Fresh backup taken and verified immediately before release.
 - [ ] Tag `v1.0.0`, write release notes.

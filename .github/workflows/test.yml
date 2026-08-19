@@ -6,6 +6,16 @@ on:
   push:
     branches: [main]
 
+# Third-party actions are pinned to a commit SHA rather than a tag. A tag is
+# mutable: whoever owns the action can repoint it, and every workflow that
+# references it starts running new code with this repository's deploy key in
+# scope. The trailing comment is the version the SHA corresponds to, so a bump
+# is still a readable diff.
+
+# Nothing in this workflow needs to write to the repository.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     name: Build, Typecheck, and Test
@@ -13,16 +23,16 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -49,7 +59,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-coverage
           path: |
@@ -74,6 +84,57 @@ jobs:
       - name: Verify checks did not modify tracked files
         run: make check-clean
 
+  # Dependency and secret scanning.
+  #
+  # This runs alongside build-test rather than in front of it: a CVE published
+  # this morning in a transitive dependency should not stop the tests from
+  # reporting, and it should not stop a deploy of unrelated code either. What it
+  # should do is block a merge, which is branch protection's job. So `deploy`
+  # deliberately does not list this job in `needs`.
+  security:
+    name: Dependency and secret scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # gitleaks scans history, not just the working tree; a shallow clone
+          # would let a secret committed and reverted last week pass unnoticed.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # govulncheck reports only vulnerabilities in code paths this module
+      # actually reaches, so a finding is worth reading rather than triaging.
+      - name: Go vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      # Frontend dependencies are two packages and their trees. `high` is the
+      # threshold worth failing a build over; anything lower is visible in the
+      # log without blocking.
+      - name: npm audit
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
@@ -82,16 +143,16 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -100,7 +161,7 @@ jobs:
         run: npm ci
 
       - name: Start SSH agent and add deploy key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
 
@@ -110,7 +171,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Checkout deploy tool
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: sggrissom/tiny-server-helper
           path: .tiny-server-helper
