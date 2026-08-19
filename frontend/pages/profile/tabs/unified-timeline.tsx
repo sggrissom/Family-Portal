@@ -1,7 +1,8 @@
 import * as preact from "preact";
 import * as core from "vlens/core";
 import * as server from "../../../server";
-import { calculateAge, formatDate } from "../../../lib/dateUtils";
+import { calculateAge, formatDate, isRealDate } from "../../../lib/dateUtils";
+import { labelsForKind } from "../../activities/labels";
 import {
   getCategoryIcon,
   getCategoryLabel,
@@ -27,10 +28,13 @@ interface UnifiedTimelineProps {
   milestones: server.Milestone[];
   growthData: server.GrowthData[];
   photos: server.Image[];
+  performances: server.AppearanceDetail[];
+  activitySeasons: server.SeasonSummary[];
   visibleTypes: {
     milestones: boolean;
     measurements: boolean;
     photos: boolean;
+    performances: boolean;
   };
   selectedAgeFilter: string;
   sortOrder: "newest" | "oldest";
@@ -40,14 +44,14 @@ interface UnifiedTimelineProps {
 }
 
 // Unified timeline item type
-type TimelineItemType = "milestone" | "measurement" | "photo";
+type TimelineItemType = "milestone" | "measurement" | "photo" | "performance";
 
 interface TimelineItem {
   id: number;
   type: TimelineItemType;
   date: string;
   age: string;
-  data: server.Milestone | server.GrowthData | server.Image;
+  data: server.Milestone | server.GrowthData | server.Image | server.AppearanceDetail;
 }
 
 export const UnifiedTimeline = ({
@@ -55,6 +59,8 @@ export const UnifiedTimeline = ({
   milestones,
   growthData,
   photos,
+  performances,
+  activitySeasons,
   visibleTypes,
   selectedAgeFilter,
   sortOrder,
@@ -122,6 +128,23 @@ export const UnifiedTimeline = ({
     });
   }
 
+  // A performance's time is optional; the competition start date is the same
+  // chronological fallback used by the activities views.
+  if (visibleTypes.performances && performances) {
+    performances.forEach(performance => {
+      const date = isRealDate(performance.appearance.occurredAt)
+        ? performance.appearance.occurredAt
+        : performance.event.startDate;
+      timelineItems.push({
+        id: performance.appearance.id,
+        type: "performance",
+        date,
+        age: calculateAge(person.birthday, date),
+        data: performance,
+      });
+    });
+  }
+
   // Sort timeline items by date
   const sortedItems = [...timelineItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
@@ -171,7 +194,10 @@ export const UnifiedTimeline = ({
       <div className="unified-timeline">
         <div className="empty-state">
           <h3>No entries yet</h3>
-          <p>Start building {person.name}'s story by adding milestones, measurements, or photos.</p>
+          <p>
+            Start building {person.name}'s story by adding milestones, measurements, photos, or
+            performances.
+          </p>
           <div className="empty-state-actions">
             <a href={`/add-milestone/${person.id}`} className="btn btn-primary">
               📝 Add Milestone
@@ -430,6 +456,70 @@ export const UnifiedTimeline = ({
                         href={`/view-photo/${photo.id}`}
                         className="btn-action btn-view"
                         title="View"
+                      >
+                        👁️
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
+              case "performance": {
+                const performance = item.data as server.AppearanceDetail;
+                const season = activitySeasons.find(
+                  candidate => candidate.id === performance.entry.seasonId
+                );
+                const labels = labelsForKind(season?.kind ?? "generic");
+                const resultLabels = (performance.results ?? [])
+                  .map(result => result.label)
+                  .filter(label => label.trim());
+                return (
+                  <div key={`performance-${item.id}`} className="timeline-item performance-item">
+                    <div className="timeline-item-icon">🏆</div>
+                    <div className="timeline-item-content">
+                      <div className="timeline-item-header">
+                        <span className="timeline-item-type performance-type">
+                          {labels.appearance}
+                        </span>
+                        {item.age && <span className="timeline-item-age">{item.age}</span>}
+                        <span className="timeline-item-date">{formatDate(item.date)}</span>
+                      </div>
+                      <div className="timeline-item-description performance-title">
+                        {performance.entry.name} at {performance.event.name}
+                      </div>
+                      {[performance.event.host, performance.event.location].filter(Boolean).length >
+                        0 && (
+                        <div className="performance-meta">
+                          {[performance.event.host, performance.event.location]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      )}
+                      {resultLabels.length > 0 && (
+                        <div className="performance-results">{resultLabels.join(" · ")}</div>
+                      )}
+                      {performance.appearance.notes && (
+                        <div className="performance-notes">{performance.appearance.notes}</div>
+                      )}
+                      {performance.photoIds?.length > 0 && (
+                        <div className="milestone-photos">
+                          {performance.photoIds.map(photoId => (
+                            <ThumbnailImage
+                              key={photoId}
+                              photoId={photoId}
+                              alt=""
+                              className="milestone-photo-thumb"
+                              onClick={() => core.setRoute(`/view-photo/${photoId}`)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="timeline-item-actions">
+                      <a
+                        href={`/routine/${performance.entry.id}`}
+                        className="btn-action btn-view"
+                        title={`View ${labels.entry.toLowerCase()}`}
                       >
                         👁️
                       </a>
