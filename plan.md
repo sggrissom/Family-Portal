@@ -82,11 +82,11 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 ## 6. Errors that don't leak or confuse
 
-- [ ] Stable, user-friendly messages in place of raw technical errors; details stay in server logs.
-- [ ] Correlation ID on unexpected error pages, easy to copy, linked to support.
-- [ ] Distinguish validation / auth / not-found / conflict / rate-limit / server errors.
-- [ ] Explicit handling for failed upload, failed processing, AI unavailable, face analysis unavailable.
-- [ ] Test that error responses never expose file paths, DB internals, stack traces, secrets, or another family's data.
+- [x] Stable, user-friendly messages in place of raw technical errors; details stay in server logs. `AppError.Details` is `json:"-"` now, so the field call sites put raw errors into cannot reach a response at all.
+- [x] Correlation ID on unexpected error pages, easy to copy, linked to support. Twelve hex characters on every response as `X-Request-Id`, and inside the message for procedure failures, since a `vbeam.Context` carries no request.
+- [x] Distinguish validation / auth / not-found / conflict / rate-limit / server errors. Added `CONFLICT`, `RATE_LIMITED`, and `SERVICE_UNAVAILABLE`; the frontend sorts them into six screens with different next steps.
+- [x] Explicit handling for failed upload, failed processing, AI unavailable, face analysis unavailable. The upload transaction now records *why* it gave up instead of answering every failure with one 500; a refused processing job marks the photo failed rather than leaving it on a spinner forever; and re-analysis refuses outright when the daemon is absent.
+- [x] Test that error responses never expose file paths, DB internals, stack traces, secrets, or another family's data. `backend/error_leak_test.go` holds the patterns; cross-family exposure stays covered by `cross_family_isolation_test.go`.
 
 ## 7. Polish
 
@@ -97,9 +97,9 @@ Cheap, visible, and each one is a real defect if left.
 - [ ] Dialogs trap and restore focus.
 - [ ] Light and dark theme contrast check.
 - [ ] Primary flows at phone, tablet, and desktop widths.
-- [ ] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image.
-- [ ] Keep authenticated pages out of the index.
-- [ ] The site is installable, not offline-capable — don't advertise offline, and don't cache authenticated API responses or private photos.
+- [x] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image. There was no OG image at all and the card was `summary`; there is one now, 1200×630, generated to match the installed icon. The manifest claimed `any maskable` on a 16px favicon, which is not a maskable icon; a padded 512 one was added and the rest are plain `any`.
+- [x] Keep authenticated pages out of the index. `robots.txt` denies by default and allows seven public paths — it used to list five private ones and end with `Allow: /`, which left `/photos`, `/profile/3`, `/chat`, and `/settings` open. The document defaults to `noindex, nofollow` and `frontend/lib/pageMetadata.ts` relaxes it per route, so a route added later is excluded by a rule nobody has to remember.
+- [x] The site is installable, not offline-capable — don't advertise offline, and don't cache authenticated API responses or private photos. There is no service worker and nothing claims offline. `/api`, `/rpc`, and `/internal` default to `no-store`; photos went from `immutable` for a year — which would have stranded a reprocessed photo in every client — to five minutes plus revalidation against the existing ETag.
 
 ## 8. Server lifecycle
 
@@ -108,11 +108,11 @@ Mostly done; finishing the tail.
 - [x] `SIGTERM` / `SIGINT` handling with graceful HTTP drain, plus an integration test.
 - [x] Maximum request-header size.
 - [x] `/readyz` covering database access and writable storage.
-- [ ] HTTP read/write timeouts tuned for uploads and WebSockets (read-header and idle are already set).
-- [ ] Close WebSocket connections gracefully on shutdown.
-- [ ] Stop and drain the photo, face-analysis, and push workers where safe.
-- [ ] Nonzero exit status and a log line on unexpected server failure.
-- [ ] Define behavior when face analysis, AI, or push are down — they must never take primary user data with them.
+- [x] HTTP read/write timeouts tuned for uploads and WebSockets (read-header and idle are already set). Neither can be a server-wide setting: both apply to hijacked WebSocket connections, which `coder/websocket` never clears the deadline on, and no single read budget fits both a login and a 512 MiB import. `backend/request_timeouts.go` sets them per request instead, sized against the body limits in `security.go`.
+- [x] Close WebSocket connections gracefully on shutdown. `http.Server.Shutdown` neither tracks nor waits for hijacked connections, so the hub closes them itself, before the HTTP drain, with a Going Away frame.
+- [x] Stop and drain the photo, face-analysis, and push workers where safe. Photo, mail, and push drain under one shared budget; face analysis is stopped without draining, since a missing suggestion is regenerable and the daemon round trip is the slowest thing the process does. Stopping a worker no longer blocks behind a job in flight — the old form sent on an unbuffered channel.
+- [x] Nonzero exit status and a log line on unexpected server failure. `release.go` returns an error to `main` rather than calling `log.Fatalf`, so the shutdown sequence still runs before the process exits nonzero.
+- [x] Define behavior when face analysis, AI, or push are down — they must never take primary user data with them. `docs/degraded-dependencies.md`, with tests: bounded queues that refuse rather than block, and a chat message that outlives an unavailable push worker.
 
 ## 9. Release
 
@@ -120,7 +120,7 @@ Mostly done; finishing the tail.
 - [ ] Protect `main`; require the checks before merge.
 - [x] Pin third-party GitHub Actions. All five pinned to a commit SHA with the version in a trailing comment — a tag is mutable, and this workflow holds the deploy key.
 - [x] Add dependency and secret scanning to CI. `govulncheck`, `npm audit`, and gitleaks over full history, in a job `deploy` deliberately does not depend on. Turning it on found nine reachable vulnerabilities in `golang.org/x/image` and `golang-jwt/jwt`, all in the photo decode and token parse paths; both are bumped here, which also moved the Go directive to 1.25.
-- [ ] One source of truth for the application version; surface it in logs and an authenticated diagnostics view.
+- [x] One source of truth for the application version; surface it in logs and an authenticated diagnostics view. `cfg.Version`, with commit and build time stamped by the linker; a test walks the source tree and fails on any Go file that writes the version down itself, which `app.go` was doing.
 - [ ] Fresh backup taken and verified immediately before release.
 - [ ] Tag `v1.0.0`, write release notes.
 - [ ] Run the smoke check against production and watch it for a few days.

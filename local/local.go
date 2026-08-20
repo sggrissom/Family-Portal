@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"go.hasen.dev/vbeam"
@@ -39,7 +40,10 @@ func StartLocalServer() {
 	defer stop()
 	go backend.RunTokenCleanup(ctx, app.DB)
 	if err := family.RunHTTPServer(ctx, appServer); err != nil {
+		// The dev server's exit status is what `make local` reports, so a
+		// listener that could not start should not look like a clean stop.
 		log.Printf("server stopped unexpectedly: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -55,9 +59,10 @@ var FEOpts = esbuilder.FEBuildOptions{
 	},
 	Outdir: FEDist,
 	Define: map[string]string{
-		"BROWSER": "true",
-		"DEBUG":   "true",
-		"VERBOSE": "false",
+		"BROWSER":       "true",
+		"DEBUG":         "true",
+		"VERBOSE":       "false",
+		"SUPPORT_EMAIL": strconv.Quote(cfg.SupportEmail),
 	},
 }
 

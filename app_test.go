@@ -80,6 +80,23 @@ func TestReadinessHandler(t *testing.T) {
 	})
 }
 
+// waitForListener blocks until addr accepts a connection, failing the test if
+// it never does.
+func waitForListener(t *testing.T, addr string) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("nothing was listening on %s", addr)
+}
+
 func TestRunHTTPServerDrainsActiveRequests(t *testing.T) {
 	requestStarted := make(chan struct{})
 	releaseRequest := make(chan struct{})
@@ -99,6 +116,12 @@ func TestRunHTTPServerDrainsActiveRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- RunHTTPServer(ctx, server) }()
+
+	// RunHTTPServer binds on its own goroutine, so the address is not
+	// necessarily accepting yet. Firing the request before it is gets a
+	// connection refused, which the assertion below reads as "the request never
+	// arrived" — the test failed intermittently for exactly that reason.
+	waitForListener(t, server.Addr)
 
 	responseDone := make(chan error, 1)
 	go func() {
