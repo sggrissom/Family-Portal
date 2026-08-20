@@ -820,6 +820,10 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// photoCacheControl is the caching policy for a served photo variant. It is
+// named so the handler and the test that constrains it cannot drift apart.
+const photoCacheControl = "private, max-age=300, must-revalidate"
+
 // Serve photo handler
 func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -974,8 +978,17 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	// Set content type based on determined optimal format
 	w.Header().Set("Content-Type", contentType)
 
-	// Enhanced cache headers for better performance (1 year for images with versioning)
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	// Photos are the one authenticated response worth caching at all — a grid
+	// re-renders constantly and the bytes do not change often.
+	//
+	// "private" keeps them out of shared caches; only the browser that asked
+	// for them may hold them. The long immutable year this used to declare was
+	// wrong twice over: the URL carries no content hash, so a reprocessed photo
+	// would have stayed stale in every client for a year, and a family's photos
+	// should not sit on disk that long after they stop using the machine. Five
+	// minutes of free reuse, then revalidate against the ETag, which already
+	// covers the id, variant, creation time, and processing status.
+	w.Header().Set("Cache-Control", photoCacheControl)
 	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix(), image.Status))
 
 	// Add Vary header for content negotiation

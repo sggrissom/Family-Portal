@@ -7,11 +7,22 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import "./admin-styles";
 
+type Data = {
+  diagnostics: server.DiagnosticsResponse | null;
+};
+
 export async function fetch(route: string, prefix: string) {
-  return rpc.ok<{}>({});
+  if (!(await ensureAuthInFetch())) {
+    return rpc.ok<Data>({ diagnostics: null });
+  }
+
+  // A failure here must not take the dashboard down with it — the panel's other
+  // cards are how you get to the logs that would explain the failure.
+  const [diagnostics] = await server.GetDiagnostics({});
+  return rpc.ok<Data>({ diagnostics: diagnostics ?? null });
 }
 
-export function view(route: string, prefix: string, data: {}): preact.ComponentChild {
+export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -40,7 +51,7 @@ export function view(route: string, prefix: string, data: {}): preact.ComponentC
     <div>
       <Header isHome={false} />
       <main id="app" className="admin-container">
-        <AdminPage user={currentAuth} />
+        <AdminPage user={currentAuth} diagnostics={data.diagnostics} />
       </main>
       <Footer />
     </div>
@@ -49,9 +60,10 @@ export function view(route: string, prefix: string, data: {}): preact.ComponentC
 
 interface AdminPageProps {
   user: auth.AuthCache;
+  diagnostics: server.DiagnosticsResponse | null;
 }
 
-const AdminPage = ({ user }: AdminPageProps) => {
+const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
   return (
     <div className="admin-page">
       <div className="admin-header">
@@ -62,6 +74,8 @@ const AdminPage = ({ user }: AdminPageProps) => {
         <h1>System Administration</h1>
         <p>Welcome, {user.name} - System Administrator</p>
       </div>
+
+      {diagnostics && <Diagnostics info={diagnostics} />}
 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
@@ -151,3 +165,55 @@ const AdminPage = ({ user }: AdminPageProps) => {
     </div>
   );
 };
+
+// What is actually running, above everything else on the page. When something
+// is wrong the first two questions are "which build is this" and "how long has
+// it been up", and both have been answers you had to SSH for.
+const Diagnostics = ({ info }: { info: server.DiagnosticsResponse }) => (
+  <div className="diagnostics">
+    <div className="diagnostics-primary">
+      <span className="diagnostics-version">v{info.version}</span>
+      <code className="diagnostics-commit">{info.commit}</code>
+      <span className={info.release ? "diagnostics-tag" : "diagnostics-tag diagnostics-tag-warn"}>
+        {info.release ? "release" : "local build"}
+      </span>
+    </div>
+    <dl className="diagnostics-grid">
+      <DiagnosticItem label="Uptime" value={formatUptime(info.uptimeSeconds)} />
+      <DiagnosticItem label="Built" value={info.buildTime} />
+      <DiagnosticItem label="Go" value={info.goVersion} />
+      <DiagnosticItem
+        label="Photo worker"
+        value={info.photoRunning ? `running, ${info.photoQueue} queued` : "stopped"}
+      />
+      <DiagnosticItem
+        label="Face analysis"
+        value={info.analysisFaces ? `running, ${info.analysisQueue} queued` : "unavailable"}
+      />
+      <DiagnosticItem label="Mail queue" value={`${info.mailQueue} waiting`} />
+      <DiagnosticItem label="Push" value={info.pushConfigured ? "configured" : "not configured"} />
+    </dl>
+  </div>
+);
+
+const DiagnosticItem = ({ label, value }: { label: string; value: string }) => (
+  <div className="diagnostics-item">
+    <dt>{label}</dt>
+    <dd>{value}</dd>
+  </div>
+);
+
+// Uptime is read at a glance, so it is rounded to whatever unit makes the
+// number small. "3d 4h" beats "277,481 seconds" every time.
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}

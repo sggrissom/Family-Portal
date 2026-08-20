@@ -25,17 +25,17 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 
 export interface CreateAccountRequest {
     name: string
@@ -975,6 +975,22 @@ export interface SystemAnalyticsResponse {
     apiRequestTrends: DataPoint[]
 }
 
+export interface DiagnosticsResponse {
+    version: string
+    commit: string
+    buildTime: string
+    release: boolean
+    goVersion: string
+    startedAt: string
+    uptimeSeconds: number
+    photoQueue: number
+    photoRunning: boolean
+    analysisQueue: number
+    analysisFaces: boolean
+    mailQueue: number
+    pushConfigured: boolean
+}
+
 export interface RegisterPushDeviceRequest {
     token: string
     platform: string
@@ -1903,6 +1919,10 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
+}
+
+export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {
+    return await rpc.call<DiagnosticsResponse>('GetDiagnostics', JSON.stringify(data));
 }
 
 export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promise<rpc.Response<RegisterPushDeviceResponse>> {
