@@ -328,9 +328,9 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             {children.length > 0 && (
               <div className="person-group">
                 <h4>Children</h4>
-                <div className="checkbox-group">
+                <div className="photo-person-group">
                   {children.map(person => (
-                    <label key={person.id} className="checkbox-option">
+                    <label key={person.id} className="photo-person-option">
                       <input
                         type="checkbox"
                         checked={selectedPersonIds.has(person.id)}
@@ -349,9 +349,9 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             {parents.length > 0 && (
               <div className="person-group">
                 <h4>Parents</h4>
-                <div className="checkbox-group">
+                <div className="photo-person-group">
                   {parents.map(person => (
-                    <label key={person.id} className="checkbox-option">
+                    <label key={person.id} className="photo-person-option">
                       <input
                         type="checkbox"
                         checked={selectedPersonIds.has(person.id)}

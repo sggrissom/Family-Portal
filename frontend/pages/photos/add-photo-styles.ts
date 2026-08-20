@@ -256,6 +256,47 @@ block(`
 }
 `);
 
+// Who is in this photo. These were .checkbox-group / .checkbox-option, which
+// this page never defined — the picker took whatever another page happened to
+// register under those names, or nothing, and the labels ran together inline.
+block(`
+.photo-person-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+`);
+
+block(`
+.photo-person-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+}
+`);
+
+block(`
+.photo-person-option:hover {
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.photo-person-option input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+`);
+
 // Form Enhancements
 block(`
 .add-photo-page textarea {

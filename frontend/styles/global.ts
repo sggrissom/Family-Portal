@@ -625,7 +625,8 @@ block(`
 `);
 
 block(`
-.form-group input {
+.form-group input,
+.form-group textarea {
   padding: 12px 16px;
   border: 1px solid var(--control-border);
   border-radius: 8px;
@@ -637,7 +638,8 @@ block(`
 `);
 
 block(`
-.form-group input:focus-visible {
+.form-group input:focus-visible,
+.form-group textarea:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
@@ -645,7 +647,8 @@ block(`
 `);
 
 block(`
-.form-group input::placeholder {
+.form-group input::placeholder,
+.form-group textarea::placeholder {
   color: var(--muted);
 }
 `);
