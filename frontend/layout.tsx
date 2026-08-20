@@ -25,14 +25,6 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
 
   return (
     <header className="site-header">
-      {/*
-        First thing in the tab order on every page. Without it, reaching the
-        page content by keyboard means tabbing past the whole navigation menu,
-        every time, on every page.
-      */}
-      <a className="skip-link" href="#app">
-        Skip to content
-      </a>
       <nav className="nav" aria-label="Main navigation">
         <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
           Family Record
