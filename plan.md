@@ -116,7 +116,7 @@ Mostly done; finishing the tail.
 
 ## 9. Release
 
-- [ ] Clean checkout passes the full CI gate without modifying tracked files.
+- [x] Clean checkout passes the full CI gate without modifying tracked files. Verified by cloning the repository fresh and running the `build-test` job's steps in order — `npm ci`, `check-css`, `build`, `lint`, `typecheck`, `test`, `test-coverage`, `test-race`, `e2e`, `check-clean`. All pass, and `git status` reports no tracked file changed. `e2e` needs production's compile-time paths, so it ran under `bwrap` with a `tmpfs` `/srv` rather than against the real tree; the recipe is in `docs/deployment.md`.
 - [ ] Protect `main`; require the checks before merge.
 - [x] Pin third-party GitHub Actions. All five pinned to a commit SHA with the version in a trailing comment — a tag is mutable, and this workflow holds the deploy key.
 - [x] Add dependency and secret scanning to CI. `govulncheck`, `npm audit`, and gitleaks over full history, in a job `deploy` deliberately does not depend on. Turning it on found nine reachable vulnerabilities in `golang.org/x/image` and `golang-jwt/jwt`, all in the photo decode and token parse paths; both are bumped here, which also moved the Go directive to 1.25.
