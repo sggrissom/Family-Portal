@@ -29,8 +29,7 @@ const PrivacyPage = () => (
 
     <p className="legal-lead">
       Family Record holds photographs and health measurements of children. This page says exactly
-      what it stores, what leaves the server, and how to get rid of any of it. If something here
-      does not match what the site actually does, the site is wrong and I want to hear about it.
+      what it stores, what leaves the server, and how to get rid of any of it.
     </p>
 
     <h2>Who runs this</h2>
@@ -143,21 +142,7 @@ const PrivacyPage = () => (
 
     <h2>What leaves the server</h2>
     <p>
-      Almost nothing does. Three features involve someone else's servers, and all three are optional
-      — the site works without any of them.
-    </p>
-
-    <h3>AI-assisted import</h3>
-    <p>
-      If you use AI import, the text you paste or upload is sent to Google's Gemini API so it can be
-      turned into structured records.{" "}
-      <strong>
-        The request also includes the names, IDs, and birth dates of the people in your family
-      </strong>{" "}
-      — the model needs them to attach a measurement to the right child. Photos are never sent.
-      Google's handling of that request is governed by their terms, not this page. If you would
-      rather nothing left the server, do not use AI import; every record it creates can be entered
-      by hand.
+      Almost nothing does. Two features involve someone else's servers, and they are optional.
     </p>
 
     <h3>Sign in with Google</h3>
@@ -237,15 +222,13 @@ const PrivacyPage = () => (
     <p>What stays:</p>
     <ul>
       <li>
-        People, growth records, milestones, photos, and tags stay with the family. They are about
-        the children, not about whoever typed them in, and a household should not lose half its
-        history because one adult closed their account.
+        People, growth records, milestones, photos, and tags stay with the family.
       </li>
     </ul>
     <div className="legal-callout">
       <p>
         The exception is a family your departure empties. Once nobody is left in a family, nobody
-        can ever reach its contents again — so that family is destroyed along with everything in it,
+        can ever reach its contents again and that family is destroyed along with everything in it,
         including the photo files on disk and the face summaries derived from them. If you are the
         only member, deleting your account deletes everything.
       </p>
@@ -265,8 +248,7 @@ const PrivacyPage = () => (
     <h2>Children</h2>
     <p>
       This site is for adults to record information about their own children. Accounts are for
-      adults. If you add information about a child who is not yours, get their parent's agreement
-      first — that is a rule of this service, not a suggestion.
+      adults.
     </p>
 
     <h2>Security</h2>

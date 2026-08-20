@@ -35,14 +35,11 @@ const TermsPage = () => (
     <h2>What you get</h2>
     <p>
       An account, a family, and space to keep your family's records and photos on a server I
-      maintain. There is no charge, and no promise that there never will be — if that ever changes
-      you will be told well in advance and given a way to export everything first.
+      maintain. There is no charge.
     </p>
 
     <h2>Your account</h2>
     <ul>
-      <li>You must be an adult to hold an account.</li>
-      <li>Give a real email address. It is the only way to reset a password or reach you.</li>
       <li>
         Keep your password to yourself and keep your invite code out of public view. Anyone holding
         a valid invite code can join your family and see everything in it; rotate it from settings
@@ -61,8 +58,7 @@ const TermsPage = () => (
       <li>You have the right to upload it.</li>
       <li>
         For photographs and information about a child, you are that child's parent or guardian, or
-        you have their parent's or guardian's agreement. This is the rule most likely to matter
-        here, and it is not negotiable.
+        you have their parent's or guardian's agreement.
       </li>
       <li>
         For photographs of other adults, they are fine with you storing them in a private family
@@ -72,7 +68,7 @@ const TermsPage = () => (
 
     <h2>What you may not do</h2>
     <ul>
-      <li>Upload anything illegal, or anything sexual involving a minor.</li>
+      <li>Upload anything illegal.</li>
       <li>Upload material you do not have the right to, or use the site to harass anyone.</li>
       <li>
         Try to reach another family's data, break authentication, or work around the rate limits.
@@ -82,9 +78,7 @@ const TermsPage = () => (
       </li>
     </ul>
     <p>
-      If you find a security flaw, please report it rather than exercise it — see the{" "}
-      <a href="/support">support page</a>. Reports made in good faith are welcome and will not get
-      you in trouble.
+      If you find a security flaw, please report it.
     </p>
 
     <h2>Families and shared content</h2>
