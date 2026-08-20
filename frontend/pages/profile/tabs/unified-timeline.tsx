@@ -1,5 +1,4 @@
 import * as preact from "preact";
-import * as core from "vlens/core";
 import * as server from "../../../server";
 import { calculateAge, formatDate, isRealDate } from "../../../lib/dateUtils";
 import { labelsForKind } from "../../activities/labels";
@@ -285,13 +284,18 @@ export const UnifiedTimeline = ({
                       {milestone.photoIds && milestone.photoIds.length > 0 && (
                         <div className="milestone-photos">
                           {milestone.photoIds.map(photoId => (
-                            <ThumbnailImage
+                            <a
                               key={photoId}
-                              photoId={photoId}
-                              alt=""
-                              className="milestone-photo-thumb"
-                              onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                            />
+                              className="milestone-photo-link"
+                              href={`/view-photo/${photoId}`}
+                              aria-label="View photo"
+                            >
+                              <ThumbnailImage
+                                photoId={photoId}
+                                alt=""
+                                className="milestone-photo-thumb"
+                              />
+                            </a>
                           ))}
                         </div>
                       )}
@@ -415,9 +419,10 @@ export const UnifiedTimeline = ({
                         <span className="timeline-item-date">{formatDate(item.date)}</span>
                       </div>
                       <div className="photo-item-details">
-                        <div
+                        <a
                           className="photo-thumbnail"
-                          onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                          href={`/view-photo/${photo.id}`}
+                          aria-label={`View photo: ${photo.title}`}
                         >
                           <ThumbnailImage
                             photoId={photo.id}
@@ -430,7 +435,7 @@ export const UnifiedTimeline = ({
                           {person.profilePhotoId === photo.id && (
                             <div className="profile-photo-badge">👤 Profile</div>
                           )}
-                        </div>
+                        </a>
                         <div className="photo-info">
                           <div className="photo-title">{photo.title}</div>
                           {photo.description && (
@@ -510,13 +515,18 @@ export const UnifiedTimeline = ({
                       {performance.photoIds?.length > 0 && (
                         <div className="milestone-photos">
                           {performance.photoIds.map(photoId => (
-                            <ThumbnailImage
+                            <a
                               key={photoId}
-                              photoId={photoId}
-                              alt=""
-                              className="milestone-photo-thumb"
-                              onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                            />
+                              className="milestone-photo-link"
+                              href={`/view-photo/${photoId}`}
+                              aria-label="View photo"
+                            >
+                              <ThumbnailImage
+                                photoId={photoId}
+                                alt=""
+                                className="milestone-photo-thumb"
+                              />
+                            </a>
                           ))}
                         </div>
                       )}

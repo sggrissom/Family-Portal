@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import { useRef, useState, useEffect } from "preact/hooks";
 import { ProfileImage } from "./ResponsiveImage";
+import { useModalDialog } from "../hooks/useModalDialog";
 import "./crop-selector-styles";
 
 export interface CropValues {
@@ -29,6 +30,7 @@ export const CropSelector = ({
   onCancel,
 }: CropSelectorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useModalDialog(onCancel);
   const [cropX, setCropX] = useState(initialCropX);
   const [cropY, setCropY] = useState(initialCropY);
   const [cropScale, setCropScale] = useState(initialCropScale);
@@ -79,6 +81,37 @@ export const CropSelector = ({
     setIsDragging(false);
   };
 
+  // Pan and zoom from the keyboard. Dragging was the only way to move the crop,
+  // which left the editor unusable without a pointer. The step matches what a
+  // small drag does: less at high zoom, where the same pixel covers less image.
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const step = 5 / cropScale;
+    switch (e.key) {
+      case "ArrowLeft":
+        setCropX(prev => Math.max(0, prev - step));
+        break;
+      case "ArrowRight":
+        setCropX(prev => Math.min(100, prev + step));
+        break;
+      case "ArrowUp":
+        setCropY(prev => Math.max(0, prev - step));
+        break;
+      case "ArrowDown":
+        setCropY(prev => Math.min(100, prev + step));
+        break;
+      case "+":
+      case "=":
+        setCropScale(prev => Math.min(3, prev + 0.1));
+        break;
+      case "-":
+        setCropScale(prev => Math.max(1, prev - 0.1));
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+  };
+
   // Handle wheel zoom
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -115,11 +148,20 @@ export const CropSelector = ({
   };
 
   return (
-    <div className="crop-selector-modal">
+    <div
+      className="crop-selector-modal"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cropDialogTitle"
+      aria-describedby="cropDialogHint"
+    >
       <div className="crop-selector-content">
         <div className="crop-selector-header">
-          <h2>Adjust Profile Photo</h2>
-          <p>Drag to pan, use slider to zoom</p>
+          <h2 id="cropDialogTitle">Adjust Profile Photo</h2>
+          <p id="cropDialogHint">
+            Drag to pan or use the arrow keys, and the slider to zoom. Escape closes without saving.
+          </p>
         </div>
 
         <div className="crop-selector-body">
@@ -127,11 +169,15 @@ export const CropSelector = ({
           <div
             ref={containerRef}
             className={`crop-container ${isDragging ? "dragging" : ""}`}
+            role="application"
+            aria-label="Crop area — arrow keys pan the photo"
+            tabIndex={0}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             onWheel={handleWheel}
+            onKeyDown={handleKeyDown}
           >
             <div className="crop-image-wrapper" style={previewStyle}>
               <img src={imageSrc} alt="Crop preview" className="crop-image" draggable={false} />

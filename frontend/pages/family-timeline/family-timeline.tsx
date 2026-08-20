@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -602,13 +601,14 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             {milestone.photoIds && milestone.photoIds.length > 0 && (
               <div className="milestone-photos">
                 {milestone.photoIds.map(photoId => (
-                  <ThumbnailImage
+                  <a
                     key={photoId}
-                    photoId={photoId}
-                    alt=""
-                    className="milestone-photo-thumb"
-                    onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                  />
+                    className="milestone-photo-link"
+                    href={`/view-photo/${photoId}`}
+                    aria-label="View photo"
+                  >
+                    <ThumbnailImage photoId={photoId} alt="" className="milestone-photo-thumb" />
+                  </a>
                 ))}
               </div>
             )}
@@ -697,9 +697,10 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
               <span className="timeline-item-date">{formatDate(item.date)}</span>
             </div>
             <div className="photo-item-details">
-              <div
+              <a
                 className="photo-thumbnail"
-                onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                href={`/view-photo/${photo.id}`}
+                aria-label={`View photo: ${photo.title}`}
               >
                 <ThumbnailImage
                   photoId={photo.id}
@@ -709,7 +710,7 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
                   fetchpriority="auto"
                   status={photoStatus.getStatus(photo.id)}
                 />
-              </div>
+              </a>
               <div className="photo-info">
                 <div className="photo-title">{photo.title}</div>
                 {photo.description && <div className="photo-description">{photo.description}</div>}

@@ -63,22 +63,22 @@ Anything a user can't undo themselves becomes a support request to me.
 
 ## 4. Don't ship blind
 
-- [ ] `README.md`: what it is, architecture sketch, prerequisites, setup, common commands.
+- [x] `README.md`: what it is, architecture sketch, prerequisites, setup, common commands.
 - [x] `.env.example` listing every required and optional variable, no secrets. Grouped by what fails without it: release-required, optional overrides, all-or-nothing APNs, and the face daemon's own variables.
 - [x] Document production topology: reverse proxy, TLS, paths, permissions, service user, face daemon + models. `docs/deployment.md`. Turned up two mismatches worth fixing: the app hardcodes `:8666` while `PORT` in `shared/.env` drives the Caddy upstream and the deploy health check, and the unit's `TimeoutStopSec=15` kills the app before its own 30s drain finishes (both live in `tiny-server-helper`).
 - [x] Post-deploy smoke check: landing page, login, `/readyz`, one photo loads, WebSocket connects. `make smoke` runs `cmd/smokecheck`; CI runs it as the last step of the deploy job and warns loudly when the account secrets are unset, rather than skipping quietly. The landing check fetches the content-hashed bundle `index.html` names, so a release whose HTML and `dist` came from different builds fails here instead of serving a blank page, and the WebSocket check sends a heartbeat and waits for the reply, since the handshake alone says nothing about the hub. Every check is read-only; the session it opens is closed by the logout check.
 - [x] E2E coverage against a compiled release build for the five flows I'd notice breaking: signup/login, add person, add growth, upload photo, chat. `make e2e` runs `cmd/e2e`, which starts the release binary behind a TLS reverse proxy — the auth cookie is `Secure`, so nothing talking plaintext can hold a session — and adds readiness, the landing bundle, logout, and a `SIGTERM` that has to drain and exit zero. Waiting for the uploaded photo to finish is also the check that face analysis being unreachable doesn't take an upload down with it. It immediately found `BACKUP_TOKEN` missing from the startup config check, which killed a release build on its own *after* the report had claimed the configuration was fine. A release build resolves its storage paths at compile time, so the run needs the production tree and refuses to start — deleting nothing — if that tree holds a database, a `.env`, or any static file.
-- [ ] Verify reverse-proxy limits and timeouts match the application's; confirm TLS renewal and WebSocket proxying work.
+- [x] Verify reverse-proxy limits and timeouts match the application's; confirm TLS renewal and WebSocket proxying work.
 
 ## 5. Legal and support surface
 
 Four pages, not a compliance program. Needed because other people's kids' photos are in the database.
 
-- [ ] `/privacy` — what's collected (names, birth dates, relationships, growth measurements, photos, chat, device tokens, logs), face-analysis processing and retention, what AI import sends externally, Google auth and push data, retention and deletion behavior, who inside a family can see what.
-- [ ] `/terms`.
-- [ ] `/support` with an address I actually read.
-- [ ] Link all three from the footer, settings, and account creation.
-- [ ] Read the privacy page against what production actually does, and fix whichever one is wrong.
+- [x] `/privacy` — what's collected (names, birth dates, relationships, growth measurements, photos, chat, device tokens, logs), face-analysis processing and retention, what AI import sends externally, Google auth and push data, retention and deletion behavior, who inside a family can see what.
+- [x] `/terms`.
+- [x] `/support` with an address I actually read.
+- [x] Link all three from the footer, settings, and account creation.
+- [x] Read the privacy page against what production actually does, and fix whichever one is wrong.
 
 ## 6. Errors that don't leak or confuse
 
@@ -92,9 +92,9 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 Cheap, visible, and each one is a real defect if left.
 
-- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states. *(Partly done: a global `:focus-visible` ring and a skip link landed with the contrast work — buttons and links previously had no focus indicator at all. Per-flow tab-order review still outstanding.)*
+- [x] Keyboard-navigate the primary flows; fix focus order and missing focus states. The skip link was styled but never rendered, so the first Tab on every page still walked the whole nav; it exists now and moves focus, not just the scroll position. Four controls in the primary flows could not be reached from a keyboard at all: the tag pickers on add/edit milestone and add/edit photo were click-only `div`s, and every photo thumbnail in the timelines navigated from an `onClick` on a `div` or a bare `<img>`. They are buttons and links now. The crop editor could only be panned by dragging; arrow keys pan it and `+`/`-` zoom. Escape closes the mobile menu, which previously trapped a keyboard user behind an overlay they could not see past — and fixing that turned up a listener leak, since each toggle built a new closure and asked `removeEventListener` to detach a function it had never registered.
 - [x] Accessible names on icon-only controls; labels wired to inputs and validation errors. The icon controls had `title` and nothing else, which is the last resort in the accessible-name computation and never reaches a keyboard user; each one now carries an explicit name, and the vague ones say what they act on rather than just "Delete". Sixteen inputs, selects, and textareas had no label at all — chat's message box, the timeline filters, the import textareas, the tag editor. Every form error is a `role="alert"` now, so a failed submit is announced instead of silently appearing above the fold. The compare page's person checkboxes turned out to be broken outright: the row `div` and the checkbox both toggled, so clicking the checkbox cancelled itself out. The row is a `<label>` now, which fixes the double toggle and makes it keyboard-reachable.
-- [ ] Dialogs trap and restore focus.
+- [x] Dialogs trap and restore focus. Only one dialog in the app is not a native `confirm()`: the profile-photo crop editor, which had no dialog role, no focus management, and no way out from the keyboard. `frontend/hooks/useModalDialog.ts` does the whole contract — focus in on open, Tab cycling inside, Escape to dismiss, focus back to the opener on close — so the next dialog gets it by construction rather than by remembering.
 - [x] Light and dark theme contrast check. Computed every token pair against WCAG. The dark theme passes throughout; the light theme did not — white on the primary-button gradient was 2.5:1 and the same green as text was 2.3:1, so the greens are deeper now. Form-control borders were 1.13:1 and get their own token.
 - [x] Primary flows at phone, tablet, and desktop widths. Driven at 390, 768, and 1440 with a headless browser, checking every page for content pushed past the viewport. Desktop and tablet were clean; three real defects turned up. `/family-timeline` was 121px wider than a phone — the header laid its title and the Manage Tags button out with inline flex and `flexShrink: 0`, so the row could not shrink. Add Photo's people picker used `.checkbox-group` and `.checkbox-option` that the page never defined: `block()` registers globally, so the picker took whatever another page happened to register under those names, or nothing, and the labels ran together inline. The same collision ran the other way — add-person's copy hardcoded a light-theme text colour that could win on the import page — so both are scoped now. And `.form-group` styled `input` and `select` but never `textarea`, which is why every description field was a white browser-default box in the dark theme.
 - [x] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image. There was no OG image at all and the card was `summary`; there is one now, 1200×630, generated to match the installed icon. The manifest claimed `any maskable` on a 16px favicon, which is not a maskable icon; a padded 512 one was added and the rest are plain `any`.
@@ -151,8 +151,6 @@ Backend groundwork already landed — keep it working, don't extend it.
 - [ ] Test older supported app builds against the server before each backend release.
 
 ### Deferred product work
-
-- [ ] Offline-first sync and conflict resolution.
 - [ ] Additional family roles, granular per-person permissions, ownership transfer, full-family deletion.
 - [ ] Richer notification categories and preferences.
 - [ ] Expanded face-tagging workflows.
