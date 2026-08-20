@@ -611,6 +611,9 @@ block(`
 
 block(`
 .photo-thumbnail {
+  display: block;
+  color: inherit;
+  text-decoration: none;
   width: 120px;
   height: 120px;
   border-radius: 8px;

@@ -228,6 +228,8 @@ block(`
 block(`
 .tag-pill {
   display: inline-flex;
+  font-family: inherit;
+  color: inherit;
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0.75rem;

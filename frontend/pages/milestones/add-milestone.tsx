@@ -300,20 +300,24 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
           {/* Tags */}
           {tags.length > 0 && (
             <div className="form-group">
-              <label>Tags</label>
-              <div className="tag-picker">
+              <span className="form-group-caption" id="tagPickerLabel">
+                Tags
+              </span>
+              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
                 {tags.map(tag => {
                   const selected = form.tagIds.includes(tag.id);
                   return (
-                    <div
+                    <button
                       key={tag.id}
+                      type="button"
                       className={`tag-pill${selected ? " selected" : ""}`}
                       style={{ borderColor: tag.color }}
+                      aria-pressed={selected}
                       onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
                     >
                       <span className="tag-color-dot" style={{ background: tag.color }} />
                       {tag.name}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
