@@ -141,9 +141,7 @@ const PrivacyPage = () => (
     </ul>
 
     <h2>What leaves the server</h2>
-    <p>
-      Almost nothing does. Two features involve someone else's servers, and they are optional.
-    </p>
+    <p>Almost nothing does. Two features involve someone else's servers, and they are optional.</p>
 
     <h3>Sign in with Google</h3>
     <p>
@@ -221,9 +219,7 @@ const PrivacyPage = () => (
     </ul>
     <p>What stays:</p>
     <ul>
-      <li>
-        People, growth records, milestones, photos, and tags stay with the family.
-      </li>
+      <li>People, growth records, milestones, photos, and tags stay with the family.</li>
     </ul>
     <div className="legal-callout">
       <p>
