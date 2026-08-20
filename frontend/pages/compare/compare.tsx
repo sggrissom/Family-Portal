@@ -191,18 +191,17 @@ const ComparePage = ({ people }: ComparePageProps) => {
         <h2>Select People to Compare</h2>
         <div className="person-checkboxes">
           {people.map(person => (
-            <div
+            <label
               key={person.id}
               className={`person-checkbox-item ${state.selectedPersonIds.has(person.id) ? "selected" : ""}`}
-              onClick={() => togglePersonSelection(state, loadState, person.id)}
             >
               <input
                 type="checkbox"
                 checked={state.selectedPersonIds.has(person.id)}
                 onChange={() => togglePersonSelection(state, loadState, person.id)}
               />
-              <label>{person.name}</label>
-            </div>
+              <span className="person-checkbox-name">{person.name}</span>
+            </label>
           ))}
         </div>
       </div>

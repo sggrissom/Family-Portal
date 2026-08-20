@@ -118,7 +118,11 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
         </div>
       )}
 
-      {form.error && <div className="error-message">{form.error}</div>}
+      {form.error && (
+        <div className="error-message" role="alert">
+          {form.error}
+        </div>
+      )}
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onAddPersonClicked, form)}>
         <FamilySelect

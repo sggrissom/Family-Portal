@@ -352,6 +352,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             <input
               type="text"
               className="search-input"
+              aria-label="Search milestones"
               placeholder="Search milestones..."
               value={state.searchQuery}
               onInput={e => {
@@ -380,8 +381,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
           <div className="timeline-filters">
             <div className="filter-group">
-              <label>Person:</label>
+              <label htmlFor="timelinePerson">Person:</label>
               <select
+                id="timelinePerson"
                 value={state.selectedPerson}
                 onChange={e => {
                   state.selectedPerson = e.currentTarget.value;
@@ -398,8 +400,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             </div>
 
             <div className="filter-group">
-              <label>Type:</label>
+              <label htmlFor="timelineType">Type:</label>
               <select
+                id="timelineType"
                 value={state.selectedType}
                 onChange={e => {
                   state.selectedType = e.currentTarget.value as any;
@@ -415,8 +418,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             </div>
 
             <div className="filter-group">
-              <label>Sort:</label>
+              <label htmlFor="timelineSort">Sort:</label>
               <select
+                id="timelineSort"
                 value={state.sortOrder}
                 onChange={e => {
                   state.sortOrder = e.currentTarget.value as any;
@@ -430,11 +434,14 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
             {tagCache.tags.length > 0 && (
               <div className="filter-group timeline-tag-filter">
-                <label>Tags:</label>
-                <div className="tag-filter-chips">
+                <span className="filter-group-caption" id="timelineTagsLabel">
+                  Tags:
+                </span>
+                <div className="tag-filter-chips" role="group" aria-labelledby="timelineTagsLabel">
                   {tagCache.tags.map(tag => (
                     <button
                       key={tag.id}
+                      aria-pressed={state.selectedTagIds.includes(tag.id)}
                       className={`tag-filter-chip${state.selectedTagIds.includes(tag.id) ? " active" : ""}`}
                       style={
                         state.selectedTagIds.includes(tag.id)
@@ -628,6 +635,7 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
               href={`/edit-milestone/${milestone.id}`}
               className="btn-action btn-edit"
               title="Edit"
+              aria-label="Edit milestone"
             >
               ✏️
             </a>
@@ -655,10 +663,20 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             </div>
           </div>
           <div className="timeline-item-actions">
-            <a href={`/view-growth/${measurement.id}`} className="btn-action btn-view" title="View">
+            <a
+              href={`/view-growth/${measurement.id}`}
+              className="btn-action btn-view"
+              title="View"
+              aria-label="View measurement"
+            >
               👁️
             </a>
-            <a href={`/edit-growth/${measurement.id}`} className="btn-action btn-edit" title="Edit">
+            <a
+              href={`/edit-growth/${measurement.id}`}
+              className="btn-action btn-edit"
+              title="Edit"
+              aria-label="Edit measurement"
+            >
               ✏️
             </a>
           </div>
@@ -716,7 +734,12 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             </div>
           </div>
           <div className="timeline-item-actions">
-            <a href={`/view-photo/${photo.id}`} className="btn-action btn-view" title="View">
+            <a
+              href={`/view-photo/${photo.id}`}
+              className="btn-action btn-view"
+              title="View"
+              aria-label="View photo"
+            >
               👁️
             </a>
           </div>

@@ -310,7 +310,11 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
           <p>Upload and share precious moments with your family</p>
         </div>
 
-        {form.error && <div className="error-message">{form.error}</div>}
+        {form.error && (
+          <div className="error-message" role="alert">
+            {form.error}
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
           {/* Person Selection */}

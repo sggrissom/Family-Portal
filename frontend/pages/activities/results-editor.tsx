@@ -326,6 +326,7 @@ const ResultRowFields = ({
         <button
           className="icon-btn result-remove"
           title="Remove this result"
+          aria-label="Remove this result"
           onClick={vlens.cachePartial(onRemoveResultRow, host, index)}
           disabled={host.saving}
         >

@@ -318,12 +318,14 @@ export const UnifiedTimeline = ({
                         href={`/edit-milestone/${milestone.id}`}
                         className="btn-action btn-edit"
                         title="Edit"
+                        aria-label="Edit milestone"
                       >
                         ✏️
                       </a>
                       <button
                         className="btn-action btn-delete"
                         title="Delete"
+                        aria-label="Delete milestone"
                         onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
                       >
                         🗑️
@@ -369,6 +371,7 @@ export const UnifiedTimeline = ({
                         href={`/view-growth/${measurement.id}`}
                         className="btn-action btn-view"
                         title="View"
+                        aria-label="View measurement"
                       >
                         👁️
                       </a>
@@ -376,12 +379,14 @@ export const UnifiedTimeline = ({
                         href={`/edit-growth/${measurement.id}`}
                         className="btn-action btn-edit"
                         title="Edit"
+                        aria-label="Edit measurement"
                       >
                         ✏️
                       </a>
                       <button
                         className="btn-action btn-delete"
                         title="Delete"
+                        aria-label="Delete measurement"
                         onClick={() =>
                           handleDeleteGrowthData(
                             measurement.id,
@@ -456,6 +461,7 @@ export const UnifiedTimeline = ({
                         href={`/view-photo/${photo.id}`}
                         className="btn-action btn-view"
                         title="View"
+                        aria-label="View photo"
                       >
                         👁️
                       </a>
@@ -520,6 +526,7 @@ export const UnifiedTimeline = ({
                         href={`/routine/${performance.entry.id}`}
                         className="btn-action btn-view"
                         title={`View ${labels.entry.toLowerCase()}`}
+                        aria-label={`View ${labels.entry.toLowerCase()}`}
                       >
                         👁️
                       </a>

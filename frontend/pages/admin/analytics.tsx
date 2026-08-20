@@ -145,7 +145,7 @@ const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
         </div>
 
         <div className="time-selector">
-          <select {...vlens.attrsBindInput(selectedTimeRange)}>
+          <select aria-label="Time range" {...vlens.attrsBindInput(selectedTimeRange)}>
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
             <option value="90d">Last 90 days</option>

@@ -556,7 +556,11 @@ const ImportPage = ({ form }: ImportPageProps) => {
                       everything.
                     </p>
                   </div>
-                  {form.error && <div className="error-message">{form.error}</div>}
+                  {form.error && (
+                    <div className="error-message" role="alert">
+                      {form.error}
+                    </div>
+                  )}
                   <div className="form-actions">
                     <button
                       type="button"
@@ -578,8 +582,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
                   </div>
 
                   <div className="form-section">
-                    <h3>Paste JSON Data</h3>
+                    <h3 id="jsonPasteHeading">Paste JSON Data</h3>
                     <textarea
+                      aria-labelledby="jsonPasteHeading"
                       value={form.jsonData}
                       onInput={handleTextareaChange}
                       onPaste={handleJSONPaste}
@@ -589,7 +594,11 @@ const ImportPage = ({ form }: ImportPageProps) => {
                     />
                   </div>
 
-                  {form.error && <div className="error-message">{form.error}</div>}
+                  {form.error && (
+                    <div className="error-message" role="alert">
+                      {form.error}
+                    </div>
+                  )}
 
                   <div className="form-section">
                     <h3>Import Options</h3>
@@ -732,12 +741,13 @@ const ImportPage = ({ form }: ImportPageProps) => {
           ) : (
             <div className="ai-import-form">
               <div className="form-section">
-                <h3>Select Person</h3>
+                <h3 id="aiPersonHeading">Select Person</h3>
                 <p className="section-description">
                   Choose which person this data is for. The AI will extract heights, weights, and
                   milestones for this person only.
                 </p>
                 <select
+                  aria-labelledby="aiPersonHeading"
                   value={form.selectedPersonId || ""}
                   onChange={e => {
                     const value = (e.target as HTMLSelectElement).value;
@@ -757,11 +767,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
               </div>
 
               <div className="form-section">
-                <h3>Paste Unstructured Text</h3>
+                <h3 id="aiTextHeading">Paste Unstructured Text</h3>
                 <p className="section-description">
                   Paste information about heights, weights, or milestones for the selected person.
                 </p>
                 <textarea
+                  aria-labelledby="aiTextHeading"
                   value={form.unstructuredText}
                   onInput={handleAITextChange}
                   onPaste={handleAIPaste}
@@ -771,7 +782,11 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 />
               </div>
 
-              {form.error && <div className="error-message">{form.error}</div>}
+              {form.error && (
+                <div className="error-message" role="alert">
+                  {form.error}
+                </div>
+              )}
 
               <div className="form-actions">
                 <button

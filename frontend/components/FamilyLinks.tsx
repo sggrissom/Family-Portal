@@ -296,7 +296,11 @@ export const FamilyLinksSection = ({
           anything.
         </p>
 
-        {state.error && <div className="error-message">{state.error}</div>}
+        {state.error && (
+          <div className="error-message" role="alert">
+            {state.error}
+          </div>
+        )}
 
         {links.length > 0 && (
           <div className="family-links">

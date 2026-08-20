@@ -164,7 +164,11 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
           disabled={state.saving}
         />
 
-        {state.error && <div className="error-message">{state.error}</div>}
+        {state.error && (
+          <div className="error-message" role="alert">
+            {state.error}
+          </div>
+        )}
 
         <section className="activities-section">
           <div className="activities-section-head">
@@ -210,6 +214,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                       <button
                         className="icon-btn"
                         title="Rename program"
+                        aria-label="Rename program"
                         onClick={vlens.cachePartial(onStartEditActivity, state, a)}
                         disabled={state.saving}
                       >
@@ -218,6 +223,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                       <button
                         className="icon-btn"
                         title="Delete program"
+                        aria-label="Delete program"
                         onClick={vlens.cachePartial(onDeleteActivity, state, a)}
                         disabled={state.saving}
                       >
@@ -280,6 +286,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                         <button
                           className="icon-btn"
                           title="Edit season"
+                          aria-label="Edit season"
                           onClick={vlens.cachePartial(onStartEditSeason, state, season)}
                           disabled={state.saving}
                         >
@@ -288,6 +295,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                         <button
                           className="icon-btn"
                           title="Delete season"
+                          aria-label="Delete season"
                           onClick={vlens.cachePartial(onDeleteSeason, state, season)}
                           disabled={state.saving}
                         >

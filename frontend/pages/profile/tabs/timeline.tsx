@@ -136,12 +136,14 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
                     href={`/edit-milestone/${milestone.id}`}
                     className="btn-action btn-edit"
                     title="Edit"
+                    aria-label="Edit milestone"
                   >
                     ✏️
                   </a>
                   <button
                     className="btn-action btn-delete"
                     title="Delete"
+                    aria-label="Delete milestone"
                     onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
                   >
                     🗑️
