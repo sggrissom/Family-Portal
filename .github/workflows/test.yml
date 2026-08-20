@@ -16,6 +16,18 @@ on:
 permissions:
   contents: read
 
+# Pinned to an exact patch release, not the `1.25` minor. `setup-go` resolves a
+# minor to whatever it already finds in the runner's tool cache, which is the Go
+# the image happened to ship with and is usually several patches behind — so the
+# security job scanned a stdlib that was missing published fixes and failed on
+# five of them (net/http, net/url, crypto/tls, encoding/xml, html/template) that
+# a current 1.25 had already patched. An exact version makes every job build the
+# same toolchain, and makes the next stdlib advisory a one-line, reviewable bump
+# instead of a silent difference between the runner image and the release notes.
+env:
+  GO_VERSION: '1.25.14'
+  NODE_VERSION: '20'
+
 jobs:
   build-test:
     name: Build, Typecheck, and Test
@@ -28,13 +40,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install Node dependencies
@@ -106,13 +118,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       # govulncheck reports only vulnerabilities in code paths this module
@@ -148,13 +160,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install Node dependencies
