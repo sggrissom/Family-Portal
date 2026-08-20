@@ -31,6 +31,47 @@ trusted peer, which is what lets the rate limiter read `X-Forwarded-For` at all
 appended — so a client-supplied header cannot mint fresh limit budgets. If the
 proxy ever moves off-box, that trust check is the thing to revisit.
 
+## What was actually measured
+
+Checked against production on 20 August 2026. Caddy is 2.6.2 and the effective
+config was read back from its admin API (`localhost:2019/config/apps/http/servers`),
+not from the file, so what follows is what is running rather than what was
+written.
+
+| question | answer |
+| --- | --- |
+| Does the proxy cap request bodies? | No. A 2.7 MB `POST /rpc/GetAuthContext` came back `413` carrying `X-Request-Id` — the **app's** header, so the body reached the app and the app rejected it. The limits in `backend/security.go` are the only ones. |
+| Does the proxy impose timeouts shorter than the app's? | No. The server object has no `read_timeout`, `write_timeout`, or `idle_timeout` key at all, so nothing upstream can cut short the 30-minute import read or the 30-minute download write in `backend/request_timeouts.go`. Caddy's default idle timeout applies between requests on a keep-alive connection, not during a streaming body. |
+| Does WebSocket proxying work? | Yes, and it is checked every deploy rather than once: `cmd/smokecheck` dials `/ws/chat` with a real session, sends a heartbeat, and waits for the reply. Caddy 2 passes upgrades through `reverse_proxy` without configuration. |
+| Is TLS renewing? | Yes. Let's Encrypt, issued 28 July 2026, expiring 26 October 2026, HTTP/2 negotiated. There is no `tls` automation block, so Caddy's defaults apply and it renews at roughly two-thirds of the lifetime — about 27 September. |
+
+### `www.familyrecord.app` does not work
+
+`www` has an A record pointing at this server, but Caddy has no site block for
+it. HTTP gets Caddy's automatic 308 to `https://www.familyrecord.app/`, and the
+HTTPS handshake then fails outright:
+
+```
+$ curl https://www.familyrecord.app/
+TLS connect error: error:0A000438:SSL routines::tlsv1 alert internal error
+```
+
+Caddy will not obtain a certificate for a name no site block claims, so anyone
+who types the `www.` form reaches a browser security warning rather than the
+site. The apex is fine and is what every link, the canonical URL, and the OG
+tags use, so nothing inside the app is affected — but a name that resolves to
+this box and fails TLS is worse than one that does not resolve at all.
+
+The fix belongs in `tiny-server-helper`, not here: either drop the DNS record,
+or have `appctl domain` emit a redirect block for `www` so Caddy claims the name
+and can get a certificate for it.
+
+```
+www.familyrecord.app {
+    redir https://familyrecord.app{uri} permanent
+}
+```
+
 ## Services
 
 | unit | binary | what it is |
