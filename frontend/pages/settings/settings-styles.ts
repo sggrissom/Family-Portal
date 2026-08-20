@@ -578,3 +578,12 @@ block(`
   }
 }
 `);
+
+block(`
+.policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-weight: 600;
+}
+`);

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"go.hasen.dev/vbeam"
@@ -58,9 +59,10 @@ var FEOpts = esbuilder.FEBuildOptions{
 	},
 	Outdir: FEDist,
 	Define: map[string]string{
-		"BROWSER": "true",
-		"DEBUG":   "true",
-		"VERBOSE": "false",
+		"BROWSER":       "true",
+		"DEBUG":         "true",
+		"VERBOSE":       "false",
+		"SUPPORT_EMAIL": strconv.Quote(cfg.SupportEmail),
 	},
 }
 

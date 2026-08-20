@@ -77,6 +77,24 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/privacy</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/terms</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/support</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>`
 
 	w.Write([]byte(sitemapContent))

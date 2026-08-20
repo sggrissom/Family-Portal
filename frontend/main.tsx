@@ -77,6 +77,9 @@ async function main() {
     vlens.routeHandler("/admin/analytics", () => import("@app/pages/admin/analytics")),
     vlens.routeHandler("/admin/push", () => import("@app/pages/admin/push")),
     vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
+    vlens.routeHandler("/privacy", () => import("@app/pages/legal/privacy")),
+    vlens.routeHandler("/terms", () => import("@app/pages/legal/terms")),
+    vlens.routeHandler("/support", () => import("@app/pages/legal/support")),
     vlens.routeHandler("/", () => import("@app/pages/home/home")),
   ]);
 }
