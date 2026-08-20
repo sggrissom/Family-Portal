@@ -92,10 +92,10 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 Cheap, visible, and each one is a real defect if left.
 
-- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states.
+- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states. *(Partly done: a global `:focus-visible` ring and a skip link landed with the contrast work — buttons and links previously had no focus indicator at all. Per-flow tab-order review still outstanding.)*
 - [ ] Accessible names on icon-only controls; labels wired to inputs and validation errors.
 - [ ] Dialogs trap and restore focus.
-- [ ] Light and dark theme contrast check.
+- [x] Light and dark theme contrast check. Computed every token pair against WCAG. The dark theme passes throughout; the light theme did not — white on the primary-button gradient was 2.5:1 and the same green as text was 2.3:1, so the greens are deeper now. Form-control borders were 1.13:1 and get their own token.
 - [ ] Primary flows at phone, tablet, and desktop widths.
 - [x] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image. There was no OG image at all and the card was `summary`; there is one now, 1200×630, generated to match the installed icon. The manifest claimed `any maskable` on a 16px favicon, which is not a maskable icon; a padded 512 one was added and the rest are plain `any`.
 - [x] Keep authenticated pages out of the index. `robots.txt` denies by default and allows seven public paths — it used to list five private ones and end with `Allow: /`, which left `/photos`, `/profile/3`, `/chat`, and `/settings` open. The document defaults to `noindex, nofollow` and `frontend/lib/pageMetadata.ts` relaxes it per route, so a route added later is excluded by a rule nobody has to remember.
