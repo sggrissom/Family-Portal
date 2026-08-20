@@ -1,6 +1,12 @@
 import * as preact from "preact";
-import { useRef, useState, useEffect } from "preact/hooks";
+import * as vlens from "vlens";
 import { ProfileImage } from "./ResponsiveImage";
+import {
+  ModalDialogState,
+  attrsModalDialog,
+  closeModalDialog,
+  newModalDialog,
+} from "../lib/modalDialog";
 import "./crop-selector-styles";
 
 export interface CropValues {
@@ -9,129 +15,200 @@ export interface CropValues {
   cropScale: number; // 1.0+
 }
 
+const MIN_SCALE = 1;
+const MAX_SCALE = 3;
+
 interface CropSelectorProps {
   photoId: number;
-  initialCropX?: number;
-  initialCropY?: number;
-  initialCropScale?: number;
-  onCropChange: (values: CropValues) => void;
+  /** Edited in place — the caller owns the values and reads them back after save. */
+  crop: CropValues;
   onSave: () => void;
   onCancel: () => void;
 }
 
-export const CropSelector = ({
-  photoId,
-  initialCropX = 50,
-  initialCropY = 50,
-  initialCropScale = 1,
-  onCropChange,
-  onSave,
-  onCancel,
-}: CropSelectorProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [cropX, setCropX] = useState(initialCropX);
-  const [cropY, setCropY] = useState(initialCropY);
-  const [cropScale, setCropScale] = useState(initialCropScale);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [startCrop, setStartCrop] = useState({ x: initialCropX, y: initialCropY });
+/**
+ * The editor's own working state. The crop values live in the caller's object;
+ * what is left here is the drag in progress and the dialog's focus bookkeeping.
+ */
+interface CropEditor {
+  crop: CropValues;
+  onSave: () => void;
+  onCancel: () => void;
+  isDragging: boolean;
+  dragStartX: number;
+  dragStartY: number;
+  startCropX: number;
+  startCropY: number;
+  dialog: ModalDialogState;
+}
 
-  // Image src for cropping (use medium size for performance)
+const useCropEditor = vlens.declareHook((crop: CropValues): CropEditor => {
+  const editor: CropEditor = {
+    crop,
+    onSave: () => {},
+    onCancel: () => {},
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    startCropX: 0,
+    startCropY: 0,
+    dialog: newModalDialog(),
+  };
+  editor.dialog.onDismiss = () => cancelCrop(editor);
+  return editor;
+});
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function onPointerDown(editor: CropEditor, event: PointerEvent) {
+  event.preventDefault();
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  editor.isDragging = true;
+  editor.dragStartX = event.clientX;
+  editor.dragStartY = event.clientY;
+  editor.startCropX = editor.crop.cropX;
+  editor.startCropY = editor.crop.cropY;
+  vlens.scheduleRedraw();
+}
+
+function onPointerMove(editor: CropEditor, event: PointerEvent) {
+  if (!editor.isDragging) return;
+
+  event.preventDefault();
+
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const deltaX = event.clientX - editor.dragStartX;
+  const deltaY = event.clientY - editor.dragStartY;
+
+  // Convert pixel delta to percentage (invert because dragging moves the viewport)
+  // Higher scale = more sensitive dragging
+  const sensitivity = 100 / editor.crop.cropScale;
+  editor.crop.cropX = clamp(editor.startCropX - (deltaX / rect.width) * sensitivity, 0, 100);
+  editor.crop.cropY = clamp(editor.startCropY - (deltaY / rect.height) * sensitivity, 0, 100);
+  vlens.scheduleRedraw();
+}
+
+function onPointerUp(editor: CropEditor, event: PointerEvent) {
+  const container = event.currentTarget as HTMLElement;
+  if (container.hasPointerCapture(event.pointerId)) {
+    container.releasePointerCapture(event.pointerId);
+  }
+  editor.isDragging = false;
+  vlens.scheduleRedraw();
+}
+
+// Pan and zoom from the keyboard. Dragging was the only way to move the crop,
+// which left the editor unusable without a pointer. The step matches what a
+// small drag does: less at high zoom, where the same pixel covers less image.
+function onCropKeyDown(editor: CropEditor, event: KeyboardEvent) {
+  const crop = editor.crop;
+  const step = 5 / crop.cropScale;
+  switch (event.key) {
+    case "ArrowLeft":
+      crop.cropX = clamp(crop.cropX - step, 0, 100);
+      break;
+    case "ArrowRight":
+      crop.cropX = clamp(crop.cropX + step, 0, 100);
+      break;
+    case "ArrowUp":
+      crop.cropY = clamp(crop.cropY - step, 0, 100);
+      break;
+    case "ArrowDown":
+      crop.cropY = clamp(crop.cropY + step, 0, 100);
+      break;
+    case "+":
+    case "=":
+      crop.cropScale = clamp(crop.cropScale + 0.1, MIN_SCALE, MAX_SCALE);
+      break;
+    case "-":
+      crop.cropScale = clamp(crop.cropScale - 0.1, MIN_SCALE, MAX_SCALE);
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+  vlens.scheduleRedraw();
+}
+
+function onWheel(editor: CropEditor, event: WheelEvent) {
+  event.preventDefault();
+  const delta = event.deltaY > 0 ? -0.1 : 0.1;
+  editor.crop.cropScale = clamp(editor.crop.cropScale + delta, MIN_SCALE, MAX_SCALE);
+  vlens.scheduleRedraw();
+}
+
+// The slider steps in tenths, so this cannot go through attrsBindInput: that
+// binding parses a numeric ref with parseInt and would floor every zoom level.
+function onScaleInput(editor: CropEditor, event: Event) {
+  const target = event.target as HTMLInputElement;
+  editor.crop.cropScale = parseFloat(target.value);
+  vlens.scheduleRedraw();
+}
+
+function onReset(editor: CropEditor) {
+  editor.crop.cropX = 50;
+  editor.crop.cropY = 50;
+  editor.crop.cropScale = 1;
+  vlens.scheduleRedraw();
+}
+
+function cancelCrop(editor: CropEditor) {
+  closeModalDialog(editor.dialog);
+  editor.onCancel();
+}
+
+function saveCrop(editor: CropEditor) {
+  closeModalDialog(editor.dialog);
+  editor.onSave();
+}
+
+export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorProps) => {
+  const editor = useCropEditor(crop);
+  // The callbacks are fresh closures on every redraw; the handlers below are
+  // bound to the editor alone and read them at event time.
+  editor.onSave = onSave;
+  editor.onCancel = onCancel;
+
+  // Image src for cropping (use large size for performance)
   const imageSrc = `/api/photo/${photoId}/large`;
 
-  // Notify parent of crop changes
-  useEffect(() => {
-    onCropChange({ cropX, cropY, cropScale });
-  }, [cropX, cropY, cropScale]);
-
-  const handlePointerDown = (e: PointerEvent) => {
-    e.preventDefault();
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setStartCrop({ x: cropX, y: cropY });
-  };
-
-  const handlePointerMove = (e: PointerEvent) => {
-    if (!isDragging || !containerRef.current) return;
-
-    e.preventDefault();
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
-
-    // Convert pixel delta to percentage (invert because dragging moves the viewport)
-    // Higher scale = more sensitive dragging
-    const sensitivity = 100 / cropScale;
-    const newX = Math.max(0, Math.min(100, startCrop.x - (deltaX / rect.width) * sensitivity));
-    const newY = Math.max(0, Math.min(100, startCrop.y - (deltaY / rect.height) * sensitivity));
-
-    setCropX(newX);
-    setCropY(newY);
-  };
-
-  const handlePointerUp = (e: PointerEvent) => {
-    const container = e.currentTarget as HTMLDivElement;
-    if (container.hasPointerCapture(e.pointerId)) {
-      container.releasePointerCapture(e.pointerId);
-    }
-    setIsDragging(false);
-  };
-
-  // Handle wheel zoom
-  const handleWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setCropScale(prev => Math.max(1, Math.min(3, prev + delta)));
-  };
-
-  // Slider zoom control
-  const handleScaleChange = (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    setCropScale(parseFloat(target.value));
-  };
-
-  // Reset to defaults
-  const handleReset = () => {
-    setCropX(50);
-    setCropY(50);
-    setCropScale(1);
-  };
-
-  // Keep the page behind the editor fixed, particularly while manipulating the
-  // crop or zoom slider on touch devices.
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
-
   const previewStyle = {
-    transform: `scale(${cropScale})`,
-    transformOrigin: `${cropX}% ${cropY}%`,
+    transform: `scale(${crop.cropScale})`,
+    transformOrigin: `${crop.cropX}% ${crop.cropY}%`,
   };
 
   return (
-    <div className="crop-selector-modal">
+    <div
+      className="crop-selector-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cropDialogTitle"
+      aria-describedby="cropDialogHint"
+      {...attrsModalDialog(editor.dialog)}
+    >
       <div className="crop-selector-content">
         <div className="crop-selector-header">
-          <h2>Adjust Profile Photo</h2>
-          <p>Drag to pan, use slider to zoom</p>
+          <h2 id="cropDialogTitle">Adjust Profile Photo</h2>
+          <p id="cropDialogHint">
+            Drag to pan or use the arrow keys, and the slider to zoom. Escape closes without saving.
+          </p>
         </div>
 
         <div className="crop-selector-body">
           {/* Main crop area */}
           <div
-            ref={containerRef}
-            className={`crop-container ${isDragging ? "dragging" : ""}`}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onWheel={handleWheel}
+            className={`crop-container ${editor.isDragging ? "dragging" : ""}`}
+            role="application"
+            aria-label="Crop area — arrow keys pan the photo"
+            tabIndex={0}
+            onPointerDown={vlens.cachePartial(onPointerDown, editor)}
+            onPointerMove={vlens.cachePartial(onPointerMove, editor)}
+            onPointerUp={vlens.cachePartial(onPointerUp, editor)}
+            onPointerCancel={vlens.cachePartial(onPointerUp, editor)}
+            onWheel={vlens.cachePartial(onWheel, editor)}
+            onKeyDown={vlens.cachePartial(onCropKeyDown, editor)}
           >
             <div className="crop-image-wrapper" style={previewStyle}>
               <img src={imageSrc} alt="Crop preview" className="crop-image" draggable={false} />
@@ -148,9 +225,9 @@ export const CropSelector = ({
               <ProfileImage
                 photoId={photoId}
                 alt="Profile photo preview"
-                cropX={cropX}
-                cropY={cropY}
-                cropScale={cropScale}
+                cropX={crop.cropX}
+                cropY={crop.cropY}
+                cropScale={crop.cropScale}
               />
             </div>
           </div>
@@ -159,28 +236,40 @@ export const CropSelector = ({
         {/* Zoom slider */}
         <div className="crop-controls">
           <label className="zoom-label">
-            <span>Zoom: {cropScale.toFixed(1)}x</span>
+            <span>Zoom: {crop.cropScale.toFixed(1)}x</span>
             <input
               type="range"
-              min="1"
-              max="3"
+              min={MIN_SCALE}
+              max={MAX_SCALE}
               step="0.1"
-              value={cropScale}
-              onInput={handleScaleChange}
+              value={crop.cropScale}
+              onInput={vlens.cachePartial(onScaleInput, editor)}
               className="zoom-slider"
             />
           </label>
-          <button type="button" className="btn btn-outline btn-sm" onClick={handleReset}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={vlens.cachePartial(onReset, editor)}
+          >
             Reset
           </button>
         </div>
 
         {/* Action buttons */}
         <div className="crop-selector-actions">
-          <button type="button" className="btn btn-outline" onClick={onCancel}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={vlens.cachePartial(cancelCrop, editor)}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary" onClick={onSave}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={vlens.cachePartial(saveCrop, editor)}
+          >
             Save as Profile Photo
           </button>
         </div>

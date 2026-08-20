@@ -482,9 +482,10 @@ const PersonColumn = ({
                           <span className="timeline-item-date">{formatDate(item.date)}</span>
                         </div>
                         <div className="photo-item-details">
-                          <div
+                          <a
                             className="photo-thumbnail"
-                            onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                            href={`/view-photo/${photo.id}`}
+                            aria-label={`View photo: ${photo.title}`}
                           >
                             <ThumbnailImage
                               photoId={photo.id}
@@ -494,7 +495,7 @@ const PersonColumn = ({
                               fetchpriority="auto"
                               status={photoStatus.getStatus(photo.id)}
                             />
-                          </div>
+                          </a>
                           <div className="photo-info">
                             <div className="photo-title">{photo.title}</div>
                             {photo.description && (

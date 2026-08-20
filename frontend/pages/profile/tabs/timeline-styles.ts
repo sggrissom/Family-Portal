@@ -164,6 +164,15 @@ block(`
 `);
 
 block(`
+.milestone-photo-link {
+  display: inline-flex;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+`);
+
+block(`
 .milestone-photo-thumb {
   width: 72px;
   height: 72px;

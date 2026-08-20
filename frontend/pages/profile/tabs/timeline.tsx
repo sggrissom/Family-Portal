@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
 import * as server from "../../../server";
 import { calculateAge, formatDate } from "../../../lib/dateUtils";
 import { getCategoryIcon, getCategoryLabel } from "../../../lib/milestoneHelpers";
@@ -120,13 +119,18 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
                   {milestone.photoIds && milestone.photoIds.length > 0 && (
                     <div className="milestone-photos">
                       {milestone.photoIds.map(photoId => (
-                        <ThumbnailImage
+                        <a
                           key={photoId}
-                          photoId={photoId}
-                          alt=""
-                          className="milestone-photo-thumb"
-                          onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                        />
+                          className="milestone-photo-link"
+                          href={`/view-photo/${photoId}`}
+                          aria-label="View photo"
+                        >
+                          <ThumbnailImage
+                            photoId={photoId}
+                            alt=""
+                            className="milestone-photo-thumb"
+                          />
+                        </a>
                       ))}
                     </div>
                   )}
