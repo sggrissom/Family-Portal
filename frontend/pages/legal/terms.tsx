@@ -77,9 +77,7 @@ const TermsPage = () => (
         Automate against the service in a way that degrades it for others, or resell access to it.
       </li>
     </ul>
-    <p>
-      If you find a security flaw, please report it.
-    </p>
+    <p>If you find a security flaw, please report it.</p>
 
     <h2>Families and shared content</h2>
     <p>
