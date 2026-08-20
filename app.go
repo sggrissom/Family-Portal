@@ -198,9 +198,15 @@ func MakeApplication() *vbeam.Application {
 
 	backend.EnforceProductionConfig(cfg.DBPath, cfg.StaticDir)
 
-	// Log application startup
+	// Log application startup. The version is read from cfg rather than written
+	// here, so the log line and the diagnostics view cannot disagree about what
+	// is running; commit and build time are stamped in by the linker.
+	build := cfg.Build()
 	backend.LogInfo(backend.LogCategorySystem, "Family Record application starting", map[string]interface{}{
-		"version":   "1.0.0",
+		"version":   build.Version,
+		"commit":    build.Commit,
+		"buildTime": build.BuildTime,
+		"release":   build.Release,
 		"dbPath":    cfg.DBPath,
 		"staticDir": cfg.StaticDir,
 	})
@@ -228,6 +234,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterExportMethods(app)
 	backend.RegisterAIImportMethods(app)
 	backend.RegisterAdminMethods(app)
+	backend.RegisterDiagnosticsMethods(app)
 	backend.RegisterSEOHandlers(app)
 	backend.RegisterPushNotificationMethods(app)
 	backend.RegisterMobileVersionMethods(app)

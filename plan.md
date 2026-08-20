@@ -120,7 +120,7 @@ Mostly done; finishing the tail.
 - [ ] Protect `main`; require the checks before merge.
 - [ ] Pin third-party GitHub Actions.
 - [ ] Add dependency and secret scanning to CI.
-- [ ] One source of truth for the application version; surface it in logs and an authenticated diagnostics view.
+- [x] One source of truth for the application version; surface it in logs and an authenticated diagnostics view. `cfg.Version`, with commit and build time stamped by the linker; a test walks the source tree and fails on any Go file that writes the version down itself, which `app.go` was doing.
 - [ ] Fresh backup taken and verified immediately before release.
 - [ ] Tag `v1.0.0`, write release notes.
 - [ ] Run the smoke check against production and watch it for a few days.
