@@ -581,7 +581,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             </p>
 
             {passwordForm.success && <div className="success-message">{passwordForm.success}</div>}
-            {passwordForm.error && <div className="error-message">{passwordForm.error}</div>}
+            {passwordForm.error && (
+              <div className="error-message" role="alert">
+                {passwordForm.error}
+              </div>
+            )}
 
             <form onSubmit={vlens.cachePartial(onChangePasswordClicked, passwordForm)}>
               <div className="form-group">
@@ -650,7 +654,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="success-message">Successfully joined family! Reloading page...</div>
             )}
 
-            {joinForm.error && <div className="error-message">{joinForm.error}</div>}
+            {joinForm.error && (
+              <div className="error-message" role="alert">
+                {joinForm.error}
+              </div>
+            )}
 
             <form onSubmit={vlens.cachePartial(onJoinFamilyClicked, joinForm)}>
               <div className="form-group">
@@ -723,7 +731,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     <div className="success-message">Data exported successfully!</div>
                   )}
 
-                  {exportForm.error && <div className="error-message">{exportForm.error}</div>}
+                  {exportForm.error && (
+                    <div className="error-message" role="alert">
+                      {exportForm.error}
+                    </div>
+                  )}
 
                   <FamilySelect
                     id="exportFamilyId"
@@ -814,7 +826,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                 <div className="success-message">People merged successfully! Reloading page...</div>
               )}
 
-              {mergeForm.error && <div className="error-message">{mergeForm.error}</div>}
+              {mergeForm.error && (
+                <div className="error-message" role="alert">
+                  {mergeForm.error}
+                </div>
+              )}
 
               {!mergeForm.showConfirmation && (
                 <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, data.people)}>
@@ -955,10 +971,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   </div>
 
                   <div className="form-group">
-                    <label>Invite Link</label>
+                    <label htmlFor={`inviteLink-${family.id}`}>Invite Link</label>
                     <div className="invite-link-display">
                       <input
                         type="text"
+                        id={`inviteLink-${family.id}`}
                         value={`${baseUrl}/create-account?code=${family.inviteCode}`}
                         readOnly
                         className="invite-link-input"
@@ -1026,7 +1043,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <a href="/privacy">The privacy page</a> lists exactly what goes and what stays.
             </p>
 
-            {deleteForm.error && <div className="error-message">{deleteForm.error}</div>}
+            {deleteForm.error && (
+              <div className="error-message" role="alert">
+                {deleteForm.error}
+              </div>
+            )}
 
             <form onSubmit={vlens.cachePartial(onDeleteAccountClicked, deleteForm)}>
               <div className="form-group">

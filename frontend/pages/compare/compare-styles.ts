@@ -92,7 +92,7 @@ block(`
 `);
 
 block(`
-.person-checkbox-item label {
+.person-checkbox-item .person-checkbox-name {
   cursor: pointer;
   flex: 1;
   font-weight: 500;

@@ -373,6 +373,7 @@ const PushPage = ({ data }: PushPageProps) => {
             <input
               type="text"
               className="push-test-input"
+              aria-label="Test notification message"
               placeholder="Test notification from the Family Portal admin panel."
               value={state.testMessage}
               onInput={(e: any) => {

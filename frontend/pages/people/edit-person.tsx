@@ -145,7 +145,11 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
         <p>Update person details</p>
       </div>
 
-      {form.error && <div className="error-message">{form.error}</div>}
+      {form.error && (
+        <div className="error-message" role="alert">
+          {form.error}
+        </div>
+      )}
 
       <form
         className="auth-form"

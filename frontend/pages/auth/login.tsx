@@ -116,7 +116,11 @@ const LoginPage = ({ form }: LoginPageProps) => (
         <p>Sign in to your family portal</p>
       </div>
 
-      {form.error && <div className="error-message">{form.error}</div>}
+      {form.error && (
+        <div className="error-message" role="alert">
+          {form.error}
+        </div>
+      )}
 
       <div className="auth-methods">
         <button

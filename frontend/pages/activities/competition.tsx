@@ -219,7 +219,11 @@ export function view(
           {event.notes && <p className="season-notes">{event.notes}</p>}
         </div>
 
-        {state.error && <div className="error-message">{state.error}</div>}
+        {state.error && (
+          <div className="error-message" role="alert">
+            {state.error}
+          </div>
+        )}
 
         <section className="activities-section">
           <div className="activities-section-head">
@@ -401,6 +405,7 @@ const AppearanceRow = ({
         <button
           className="icon-btn"
           title={`Photos of this ${labels.appearance.toLowerCase()}`}
+          aria-label={`Photos of this ${labels.appearance.toLowerCase()}`}
           onClick={vlens.cachePartial(onStartAppearancePhotos, state, detail)}
           disabled={state.saving}
         >
@@ -409,6 +414,7 @@ const AppearanceRow = ({
         <button
           className="icon-btn"
           title={`Edit ${labels.appearance.toLowerCase()}`}
+          aria-label={`Edit ${labels.appearance.toLowerCase()}`}
           onClick={vlens.cachePartial(onStartEdit, state, detail)}
           disabled={state.saving}
         >
@@ -417,6 +423,7 @@ const AppearanceRow = ({
         <button
           className="icon-btn"
           title={`Delete ${labels.appearance.toLowerCase()}`}
+          aria-label={`Delete ${labels.appearance.toLowerCase()}`}
           onClick={vlens.cachePartial(onDeleteAppearance, state, detail, labels)}
           disabled={state.saving}
         >

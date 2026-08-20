@@ -131,6 +131,7 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                               href={`/view-growth/${record.id}`}
                               className="btn-action btn-view"
                               title="View"
+                              aria-label="View measurement"
                             >
                               👁️
                             </a>
@@ -138,12 +139,14 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                               href={`/edit-growth/${record.id}`}
                               className="btn-action btn-edit"
                               title="Edit"
+                              aria-label="Edit measurement"
                             >
                               ✏️
                             </a>
                             <button
                               className="btn-action btn-delete"
                               title="Delete"
+                              aria-label="Delete measurement"
                               onClick={() =>
                                 handleDeleteGrowthData(
                                   record.id,

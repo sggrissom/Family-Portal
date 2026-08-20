@@ -72,7 +72,7 @@ export const PhotoStrip = ({ photoIds }: { photoIds: number[] | null }): preact.
   return (
     <div className="photo-strip">
       {ids.map(id => (
-        <a key={id} className="photo-strip-item" href={`/view-photo/${id}`}>
+        <a key={id} className="photo-strip-item" href={`/view-photo/${id}`} aria-label="View photo">
           <img src={`/api/photo/${id}/thumb`} className="photo-strip-img" alt="" loading="lazy" />
         </a>
       ))}

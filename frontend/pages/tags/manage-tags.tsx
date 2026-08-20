@@ -68,7 +68,11 @@ export function view(
         <h1>Manage Tags</h1>
         <p>Create and manage tags to organize your family's milestones and photos.</p>
 
-        {state.error && <div className="manage-tags-error">{state.error}</div>}
+        {state.error && (
+          <div className="manage-tags-error" role="alert">
+            {state.error}
+          </div>
+        )}
 
         {/* Create new tag */}
         <FamilySelect
@@ -82,6 +86,7 @@ export function view(
         <div className="tag-create-row">
           <input
             type="text"
+            aria-label="New tag name"
             placeholder="Tag name"
             value={state.newName}
             onInput={e => {
@@ -93,6 +98,7 @@ export function view(
           <input
             type="color"
             className="tag-color-input"
+            aria-label="New tag color"
             value={state.newColor}
             onInput={e => {
               state.newColor = e.currentTarget.value;
@@ -124,6 +130,7 @@ export function view(
                         <div className="tag-color-swatch" style={{ background: state.editColor }} />
                         <input
                           type="text"
+                          aria-label="Tag name"
                           value={state.editName}
                           onInput={e => {
                             state.editName = e.currentTarget.value;
@@ -134,6 +141,7 @@ export function view(
                         <input
                           type="color"
                           className="tag-color-input"
+                          aria-label="Tag color"
                           value={state.editColor}
                           onInput={e => {
                             state.editColor = e.currentTarget.value;
@@ -164,6 +172,7 @@ export function view(
                       <button
                         className="tag-action-btn"
                         title="Edit"
+                        aria-label={`Edit tag ${tag.name}`}
                         onClick={vlens.cachePartial(onStartEdit, state, tag)}
                         disabled={state.saving}
                       >
@@ -172,6 +181,7 @@ export function view(
                       <button
                         className="tag-action-btn"
                         title="Delete"
+                        aria-label={`Delete tag ${tag.name}`}
                         onClick={vlens.cachePartial(onDeleteTag, state, tag.id)}
                         disabled={state.saving}
                       >

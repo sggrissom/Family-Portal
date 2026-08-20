@@ -135,7 +135,11 @@ export const PersonSharingSection = ({
     <div className="form-group">
       <label>Shared with</label>
 
-      {state.error && <div className="error-message">{state.error}</div>}
+      {state.error && (
+        <div className="error-message" role="alert">
+          {state.error}
+        </div>
+      )}
 
       {sharing.sharedWith.length > 0 && (
         <div className="person-sharing-list">

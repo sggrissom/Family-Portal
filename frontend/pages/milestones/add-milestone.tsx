@@ -219,7 +219,11 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
           <p>Capture special moments and developmental milestones</p>
         </div>
 
-        {form.error && <div className="error-message">{form.error}</div>}
+        {form.error && (
+          <div className="error-message" role="alert">
+            {form.error}
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
           {/* Person Selection */}

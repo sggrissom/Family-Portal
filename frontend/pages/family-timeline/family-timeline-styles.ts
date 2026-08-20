@@ -150,7 +150,8 @@ block(`
 `);
 
 block(`
-.filter-group label {
+.filter-group label,
+.filter-group-caption {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);

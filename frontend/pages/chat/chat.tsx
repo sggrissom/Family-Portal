@@ -427,6 +427,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
                   className="delete-message-btn"
                   onClick={() => handleDeleteMessage(msg.id)}
                   title="Delete message"
+                  aria-label="Delete message"
                 >
                   ×
                 </button>
@@ -545,6 +546,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
           <div className="input-container">
             <input
               type="text"
+              aria-label="Message"
               placeholder="Type your message..."
               value={messageForm.message}
               onInput={e => {

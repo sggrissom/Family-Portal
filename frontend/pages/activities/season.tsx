@@ -218,7 +218,11 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
           {overview.season.notes && <p className="season-notes">{overview.season.notes}</p>}
         </div>
 
-        {state.error && <div className="error-message">{state.error}</div>}
+        {state.error && (
+          <div className="error-message" role="alert">
+            {state.error}
+          </div>
+        )}
 
         <section className="activities-section">
           <div className="activities-section-head">
@@ -370,6 +374,7 @@ const EventRow = ({
         <button
           className="icon-btn"
           title={`Edit ${labels.event.toLowerCase()}`}
+          aria-label={`Edit ${labels.event.toLowerCase()}`}
           onClick={vlens.cachePartial(onStartEditEvent, state, event)}
           disabled={state.saving}
         >
@@ -378,6 +383,7 @@ const EventRow = ({
         <button
           className="icon-btn"
           title={`Delete ${labels.event.toLowerCase()}`}
+          aria-label={`Delete ${labels.event.toLowerCase()}`}
           onClick={vlens.cachePartial(onDeleteEvent, state, event, labels)}
           disabled={state.saving}
         >
@@ -544,6 +550,7 @@ const EntryRow = ({
         <button
           className="icon-btn"
           title={`Edit ${labels.entry.toLowerCase()}`}
+          aria-label={`Edit ${labels.entry.toLowerCase()}`}
           onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
           disabled={state.saving}
         >
@@ -552,6 +559,7 @@ const EntryRow = ({
         <button
           className="icon-btn"
           title={`Delete ${labels.entry.toLowerCase()}`}
+          aria-label={`Delete ${labels.entry.toLowerCase()}`}
           onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
           disabled={state.saving}
         >
