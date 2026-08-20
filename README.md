@@ -1,33 +1,27 @@
 # Family Portal
 
 A private, self-hosted family portal: growth measurements, milestones, photos,
-activities, and family chat, scoped to one household and nobody else.
+activities, and family chat, scoped to a household
 
 It is a single Go binary that serves its own frontend and stores everything in
 one BoltDB file plus a directory of images. There is no external database, no
 object store, and no third-party service the app cannot start without.
 
 Production lives at [familyrecord.app](https://familyrecord.app). An iOS
-companion app is planned for 1.1; the backend groundwork for it is already
-here, but 1.0 is the website.
+companion app has its own repository
 
 ## What it does
 
 - **People** — one record per family member, with birth dates and relationships.
 - **Growth** — height and weight over time, charted against WHO/CDC percentiles,
   with side-by-side comparison between siblings.
-- **Milestones** — dated events with full-text search.
+- **Milestones** — dated events with search.
 - **Photos** — upload, automatic resizing to responsive variants, EXIF-derived
-  dates, tagging, and (in release builds) face recognition that suggests who is
+  dates, tagging, and face recognition that suggests who is
   in a picture.
 - **Activities** — seasons, competitions, and routines with per-event results.
 - **Chat** — real-time family chat over WebSocket.
-- **Import / export** — bulk import from JSON, an AI-assisted importer that
-  turns unstructured notes into records, and a full family export.
-
-Every one of those is scoped to a family. A user belongs to exactly one family
-at a time, and `backend/cross_family_isolation_test.go` exists to keep it that
-way.
+- **Import / export** — bulk import from JSON and a full family export.
 
 ## Architecture
 
@@ -91,14 +85,14 @@ cp .env.example .env    # fill in what you need; see below
 make local
 ```
 
-The dev server listens on <http://family.localhost:8666>. It creates
+The dev server listens on <http://localhost:8666>. It creates
 `.serve/db.bolt` and `.serve/static/` on first run, so there is nothing to
 provision.
 
 Local builds are deliberately forgiving: every required variable is logged as
 missing and startup continues, and a throwaway JWT signing key is generated if
 `JWT_SECRET_KEY` is unset. Only the features you actually configure will work —
-Google sign-in needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, AI import needs
+Google sign-in needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, AI needs
 `GEMINI_API_KEY`, password reset needs mail. A **release** build refuses to
 start when any required variable is missing (`backend/config_check.go`).
 
