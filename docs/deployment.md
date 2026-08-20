@@ -45,32 +45,40 @@ written.
 | Does WebSocket proxying work? | Yes, and it is checked every deploy rather than once: `cmd/smokecheck` dials `/ws/chat` with a real session, sends a heartbeat, and waits for the reply. Caddy 2 passes upgrades through `reverse_proxy` without configuration. |
 | Is TLS renewing? | Yes. Let's Encrypt, issued 28 July 2026, expiring 26 October 2026, HTTP/2 negotiated. There is no `tls` automation block, so Caddy's defaults apply and it renews at roughly two-thirds of the lifetime — about 27 September. |
 
-### `www.familyrecord.app` does not work
+### `www.familyrecord.app` was failing TLS — fixed 20 August 2026
 
-`www` has an A record pointing at this server, but Caddy has no site block for
-it. HTTP gets Caddy's automatic 308 to `https://www.familyrecord.app/`, and the
-HTTPS handshake then fails outright:
+`www` has an A record pointing at this server, but Caddy had no site block for
+it, and Caddy will not obtain a certificate for a name no site block claims. So
+HTTP got Caddy's automatic 308 to `https://www.familyrecord.app/` and the HTTPS
+handshake then died:
 
 ```
 $ curl https://www.familyrecord.app/
 TLS connect error: error:0A000438:SSL routines::tlsv1 alert internal error
 ```
 
-Caddy will not obtain a certificate for a name no site block claims, so anyone
-who types the `www.` form reaches a browser security warning rather than the
-site. The apex is fine and is what every link, the canonical URL, and the OG
-tags use, so nothing inside the app is affected — but a name that resolves to
-this box and fails TLS is worse than one that does not resolve at all.
+Anyone who typed the `www.` form reached a browser security warning. The apex
+was unaffected, and nothing in the app references `www` — links, the canonical
+URL, the OG tags, and the manifest are all apex — so this was invisible from
+inside the application and only findable from outside it.
 
-The fix belongs in `tiny-server-helper`, not here: either drop the DNS record,
-or have `appctl domain` emit a redirect block for `www` so Caddy claims the name
-and can get a certificate for it.
+`/etc/caddy/sites/family.caddy` now carries a second block, added by hand:
 
 ```
 www.familyrecord.app {
     redir https://familyrecord.app{uri} permanent
 }
 ```
+
+Caddy issued a certificate for the name within seconds of the reload, and
+`http://www.familyrecord.app/anything` now lands on
+`https://familyrecord.app/anything` with the path intact.
+
+**This edit is not reproducible from `tiny-server-helper`.** `appctl domain`
+generates the apex block only, so the next run of it over this app would drop
+the `www` block again. The durable fix is to teach that generator about `www`;
+until then, treat `family.caddy` as hand-edited (there is a
+`family.caddy.bak.20260820` next to it holding the pre-edit version).
 
 ## Services
 
