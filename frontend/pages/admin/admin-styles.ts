@@ -716,6 +716,19 @@ block(`
 `);
 
 block(`
+.admin-notice {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--weight-color);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+  color: var(--text);
+}
+`);
+
+block(`
 .diagnostics {
   background: var(--surface);
   border: 1px solid var(--border);

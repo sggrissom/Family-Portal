@@ -18,6 +18,7 @@ type PhotoManagementState = {
   analysisStats: server.AnalysisWorkerStats | null;
   isReanalyzing: boolean;
   lastReanalysisTime: string | null;
+  reanalysisError: string;
 };
 
 const usePhotoManagementState = vlens.declareHook(
@@ -31,6 +32,7 @@ const usePhotoManagementState = vlens.declareHook(
     analysisStats: null,
     isReanalyzing: false,
     lastReanalysisTime: null,
+    reanalysisError: "",
   })
 );
 
@@ -177,6 +179,7 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     if (!confirmed) return;
 
     state.isReanalyzing = true;
+    state.reanalysisError = "";
     vlens.scheduleRedraw();
 
     try {
@@ -184,7 +187,11 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
       if (error) {
         logWarn("admin", "Reanalysis failed", error);
+        // The server refuses outright when the daemon is absent, rather than
+        // reporting a queue that nothing will ever read. Show what it said.
+        state.reanalysisError = error;
       } else if (result) {
+        state.reanalysisError = "";
         state.lastReanalysisTime = new Date().toLocaleString();
         setTimeout(() => {
           window.location.reload();
@@ -268,6 +275,14 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
       <div className="admin-section">
         <h2>Face Analysis</h2>
+        {state.analysisStats && !state.analysisStats.isRunning && (
+          <div className="admin-notice">
+            <strong>Face analysis is not running.</strong> The daemon was unreachable at startup, or
+            this is a local build. The counts below are historical; nothing new is being analyzed,
+            and photos keep every tag applied by hand.
+          </div>
+        )}
+        {state.reanalysisError && <div className="admin-notice">{state.reanalysisError}</div>}
         <div className="photo-stats-grid">
           <div className="stat-card">
             <div className="stat-icon">⏳</div>

@@ -111,7 +111,14 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	// Parse JSON data
 	var importData ImportDataStructure
 	if err = json.Unmarshal([]byte(req.JsonData), &importData); err != nil {
-		err = errors.New("Invalid JSON data: " + err.Error())
+		// The decoder's message names Go types and struct fields, which tells
+		// the user nothing and tells a stranger something. What they can act on
+		// is that the file is not the shape this app exports.
+		LogWarn(LogCategoryAPI, "Import rejected unreadable JSON", map[string]interface{}{
+			"userId": user.Id,
+			"error":  err.Error(),
+		})
+		err = errors.New("That file is not a valid Family Record export. Check that you picked the right file.")
 		return
 	}
 

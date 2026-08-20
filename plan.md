@@ -82,11 +82,11 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 ## 6. Errors that don't leak or confuse
 
-- [ ] Stable, user-friendly messages in place of raw technical errors; details stay in server logs.
-- [ ] Correlation ID on unexpected error pages, easy to copy, linked to support.
-- [ ] Distinguish validation / auth / not-found / conflict / rate-limit / server errors.
-- [ ] Explicit handling for failed upload, failed processing, AI unavailable, face analysis unavailable.
-- [ ] Test that error responses never expose file paths, DB internals, stack traces, secrets, or another family's data.
+- [x] Stable, user-friendly messages in place of raw technical errors; details stay in server logs. `AppError.Details` is `json:"-"` now, so the field call sites put raw errors into cannot reach a response at all.
+- [x] Correlation ID on unexpected error pages, easy to copy, linked to support. Twelve hex characters on every response as `X-Request-Id`, and inside the message for procedure failures, since a `vbeam.Context` carries no request.
+- [x] Distinguish validation / auth / not-found / conflict / rate-limit / server errors. Added `CONFLICT`, `RATE_LIMITED`, and `SERVICE_UNAVAILABLE`; the frontend sorts them into six screens with different next steps.
+- [x] Explicit handling for failed upload, failed processing, AI unavailable, face analysis unavailable. The upload transaction now records *why* it gave up instead of answering every failure with one 500; a refused processing job marks the photo failed rather than leaving it on a spinner forever; and re-analysis refuses outright when the daemon is absent.
+- [x] Test that error responses never expose file paths, DB internals, stack traces, secrets, or another family's data. `backend/error_leak_test.go` holds the patterns; cross-family exposure stays covered by `cross_family_isolation_test.go`.
 
 ## 7. Polish
 
