@@ -6,7 +6,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { FullImage } from "../../components/ResponsiveImage";
-import { CropSelector, CropValues } from "../../components/CropSelector";
+import { CropSelector } from "../../components/CropSelector";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
@@ -183,12 +183,6 @@ function closeCropModal(state: CropModalState) {
   vlens.scheduleRedraw();
 }
 
-function updateCropValues(state: CropModalState, values: CropValues) {
-  state.cropX = values.cropX;
-  state.cropY = values.cropY;
-  state.cropScale = values.cropScale;
-}
-
 const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
@@ -324,10 +318,7 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
       {cropModalState.isOpen && (
         <CropSelector
           photoId={photo.id}
-          initialCropX={cropModalState.cropX}
-          initialCropY={cropModalState.cropY}
-          initialCropScale={cropModalState.cropScale}
-          onCropChange={values => updateCropValues(cropModalState, values)}
+          crop={cropModalState}
           onSave={handleSaveProfilePhoto}
           onCancel={() => closeCropModal(cropModalState)}
         />
