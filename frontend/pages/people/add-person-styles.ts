@@ -46,7 +46,7 @@ block(`
 `);
 
 block(`
-.checkbox-option {
+.add-person-page .checkbox-option {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -54,13 +54,13 @@ block(`
   border: 1px solid rgba(102, 126, 234, 0.25);
   border-radius: 12px;
   background: rgba(102, 126, 234, 0.08);
-  color: #4a5568;
+  color: var(--text);
   font-weight: 600;
 }
 `);
 
 block(`
-.checkbox-option input {
+.add-person-page .checkbox-option input {
   width: 18px;
   height: 18px;
 }

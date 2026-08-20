@@ -22,6 +22,16 @@ block(`
 `);
 
 block(`
+.timeline-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+`);
+
+block(`
 .timeline-header h1 {
   font-size: 2rem;
   font-weight: 700;
