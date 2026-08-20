@@ -78,7 +78,7 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 - [ ] `/terms`.
 - [ ] `/support` with an address I actually read.
 - [ ] Link all three from the footer, settings, and account creation.
-- [ ] Read the privacy page against what production actually does, and fix whichever one is wrong.
+- [x] Read the privacy page against what production actually does, and fix whichever one is wrong. Three claims did not hold, all of them the page's fault rather than the code's. The page said two features involve someone else's servers and named Google sign-in and push/email; AI import is a third, and it sends the pasted text plus the selected person's name, birth date, age, and gender to Google's Gemini API — the one thing on that page a reader would most want to know. The log entry listed timestamps, paths, statuses, durations, and IDs, and attributed IP logging to the reverse proxy, but `logStructured` records the client IP and user-agent itself. And EXIF was described as something read for dates and orientation, without saying that the original file is stored byte-for-byte and served at `/api/photo/{id}/original`, so a location the camera wrote is still in it. Everything else checked out: the face descriptor really is computed from the profile photo and deleted with the person, logs really do age out at ten days, deletion really does clear each store the page lists.
 
 ## 6. Errors that don't leak or confuse
 

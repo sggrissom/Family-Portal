@@ -25,7 +25,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
 const PrivacyPage = () => (
   <article className="legal-page">
     <h1>Privacy</h1>
-    <p className="legal-updated">Last updated 19 August 2026</p>
+    <p className="legal-updated">Last updated 20 August 2026</p>
 
     <p className="legal-lead">
       Family Record holds photographs and health measurements of children. This page says exactly
@@ -78,8 +78,10 @@ const PrivacyPage = () => (
             <td>Photos</td>
             <td>
               The original file you uploaded, resized copies generated from it, any caption and
-              tags, the date, and which people are in it. Dates and orientation are read from the
-              image's EXIF metadata.
+              tags, the date, and which people are in it. The date and orientation are read from the
+              image's EXIF metadata. The original is kept exactly as you sent it, so whatever else
+              your camera wrote into that file — including a location, if it records one — stays in
+              it. The resized copies are re-encoded and do not carry it.
             </td>
           </tr>
           <tr>
@@ -103,9 +105,10 @@ const PrivacyPage = () => (
           <tr>
             <td>Logs</td>
             <td>
-              Server logs of requests and errors: timestamps, paths, status codes, durations, and
-              the user or family ID involved. Email addresses in logs are masked. Photo contents,
-              chat text, invite codes, tokens, and AI request or response bodies are not logged.
+              Server logs of requests and errors: timestamps, paths, status codes, durations, the
+              user or family ID involved, and the IP address and browser user-agent the request
+              arrived with. Email addresses in logs are masked. Photo contents, chat text, invite
+              codes, tokens, and AI request or response bodies are not logged.
             </td>
           </tr>
         </tbody>
@@ -141,13 +144,31 @@ const PrivacyPage = () => (
     </ul>
 
     <h2>What leaves the server</h2>
-    <p>Almost nothing does. Two features involve someone else's servers, and they are optional.</p>
+    <p>
+      Almost nothing does. Three features involve someone else's servers, and all three are
+      optional.
+    </p>
 
     <h3>Sign in with Google</h3>
     <p>
       If you sign in with Google, Google tells the site your email address, name, and verification
       status. That is what is used to find or create your account; nothing is written back to
       Google, and the site gets no access to your Gmail, Drive, contacts, or anything else.
+    </p>
+
+    <h3>AI import</h3>
+    <p>
+      Settings &rarr; Data Management &rarr; Import Data has an option that takes a block of text
+      you paste — an old note, a list of measurements, a message thread — and turns it into records
+      you then review before anything is saved. Doing that sends the text you pasted, together with
+      the name, birth date, age, and gender of the person you selected, to Google's Gemini API.
+      Nothing is sent until you press the button, and nothing else in your family's data goes with
+      it.
+    </p>
+    <p>
+      Google's handling of that text is theirs, not mine. If you would rather nothing left the
+      server, do not use this feature: every record it produces can be entered by hand, and the rest
+      of the app never calls it.
     </p>
 
     <h3>Push notifications</h3>
