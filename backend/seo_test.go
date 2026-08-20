@@ -50,24 +50,48 @@ func TestRobotsHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("Content includes required directives", func(t *testing.T) {
+	// robots.txt denies by default. The old assertions checked that a handful
+	// of private paths were listed, which said nothing about the ones nobody
+	// had thought of — and every route in this application except seven is
+	// somebody's family.
+	t.Run("Denies everything by default", func(t *testing.T) {
 		body := recorder.Body.String()
 
-		expectedContent := []string{
+		required := []string{
 			"User-agent: *",
-			"Disallow: /admin/",
-			"Disallow: /static/",
-			"Disallow: /api/",
-			"Disallow: /dashboard",
-			"Disallow: /auth/",
-			"Allow: /",
+			"Disallow: /",
 			"Sitemap: " + cfg.SiteURL + "/sitemap.xml",
 			"Crawl-delay: 10",
 		}
-
-		for _, expected := range expectedContent {
+		for _, expected := range required {
 			if !strings.Contains(body, expected) {
-				t.Errorf("Expected robots.txt to contain '%s', but got: %s", expected, body)
+				t.Errorf("robots.txt is missing %q:\n%s", expected, body)
+			}
+		}
+
+		// A bare "Allow: /" would undo the blanket disallow for every path.
+		// The root is allowed as "Allow: /$", which matches only the landing
+		// page.
+		for _, line := range strings.Split(body, "\n") {
+			if strings.TrimSpace(line) == "Allow: /" {
+				t.Errorf("robots.txt re-allows the whole site:\n%s", body)
+			}
+		}
+	})
+
+	t.Run("Allows exactly the public pages", func(t *testing.T) {
+		body := recorder.Body.String()
+
+		for _, public := range []string{"/$", "/login", "/create-account", "/forgot-password", "/privacy", "/terms", "/support"} {
+			if !strings.Contains(body, "Allow: "+public) {
+				t.Errorf("robots.txt does not allow the public page %q:\n%s", public, body)
+			}
+		}
+
+		// Nothing behind authentication may be allowed back in.
+		for _, private := range []string{"/dashboard", "/settings", "/photos", "/profile", "/chat", "/admin"} {
+			if strings.Contains(body, "Allow: "+private) {
+				t.Errorf("robots.txt allows the private path %q:\n%s", private, body)
 			}
 		}
 	})

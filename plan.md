@@ -97,9 +97,9 @@ Cheap, visible, and each one is a real defect if left.
 - [ ] Dialogs trap and restore focus.
 - [ ] Light and dark theme contrast check.
 - [ ] Primary flows at phone, tablet, and desktop widths.
-- [ ] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image.
-- [ ] Keep authenticated pages out of the index.
-- [ ] The site is installable, not offline-capable — don't advertise offline, and don't cache authenticated API responses or private photos.
+- [x] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image. There was no OG image at all and the card was `summary`; there is one now, 1200×630, generated to match the installed icon. The manifest claimed `any maskable` on a 16px favicon, which is not a maskable icon; a padded 512 one was added and the rest are plain `any`.
+- [x] Keep authenticated pages out of the index. `robots.txt` denies by default and allows seven public paths — it used to list five private ones and end with `Allow: /`, which left `/photos`, `/profile/3`, `/chat`, and `/settings` open. The document defaults to `noindex, nofollow` and `frontend/lib/pageMetadata.ts` relaxes it per route, so a route added later is excluded by a rule nobody has to remember.
+- [x] The site is installable, not offline-capable — don't advertise offline, and don't cache authenticated API responses or private photos. There is no service worker and nothing claims offline. `/api`, `/rpc`, and `/internal` default to `no-store`; photos went from `immutable` for a year — which would have stranded a reprocessed photo in every client — to five minutes plus revalidation against the existing ETag.
 
 ## 8. Server lifecycle
 
