@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -130,6 +131,11 @@ type ChatHub struct {
 
 	// Mutex for thread-safe access to families map
 	mu sync.RWMutex
+
+	// closing is set once shutdown has begun. It stops new upgrades from being
+	// accepted, so a client cannot reconnect into a hub that is on its way out
+	// and be severed a moment later with no close frame.
+	closing atomic.Bool
 }
 
 // BroadcastMessage contains a message and target family
@@ -167,6 +173,84 @@ func InitializeChatHub() *ChatHub {
 // GetChatHub returns the global chat hub instance
 func GetChatHub() *ChatHub {
 	return globalChatHub
+}
+
+// Shutdown closes every open chat connection with a Going Away frame and waits
+// for the clients to unregister, up to ctx.
+//
+// This has to happen before http.Server.Shutdown rather than after it. A
+// WebSocket upgrade hijacks its connection, and Shutdown does not track or wait
+// for hijacked connections — so without this the process exits with the sockets
+// simply severed. The browser sees a transport error instead of a close frame
+// and reconnects immediately, against a server that is still going down.
+//
+// Reports whether every client was gone before the deadline.
+func (h *ChatHub) Shutdown(ctx context.Context) bool {
+	h.closing.Store(true)
+
+	h.mu.RLock()
+	var clients []*Client
+	for _, familyClients := range h.families {
+		for client := range familyClients {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	LogInfo(LogCategorySystem, "Closing chat connections for shutdown", map[string]interface{}{
+		"clients": len(clients),
+	})
+
+	for _, client := range clients {
+		// Close writes the Going Away frame and then waits for the peer to echo
+		// it. That wait contends with the client's own read pump for the reader,
+		// so it runs on its own goroutine — the frame reaches the wire either
+		// way, and what shutdown actually waits for below is the read pump
+		// noticing the close and unregistering.
+		go func(c *Client) {
+			if err := c.conn.Close(websocket.StatusGoingAway, "server shutting down"); err != nil {
+				// Already gone, or the peer vanished mid-frame. Cancelling the
+				// client's context is what stops its pumps in that case.
+				c.cancel()
+			}
+		}(client)
+	}
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if h.connectionCount() == 0 {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			LogWarn(LogCategorySystem, "Chat connections did not close before the deadline", map[string]interface{}{
+				"remaining": h.connectionCount(),
+			})
+			return false
+		case <-ticker.C:
+		}
+	}
+}
+
+// connectionCount is the number of clients the hub still holds, across families.
+func (h *ChatHub) connectionCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	total := 0
+	for _, clients := range h.families {
+		total += len(clients)
+	}
+	return total
+}
+
+// ShutdownChatHub closes the global hub's connections, if there is one.
+func ShutdownChatHub(ctx context.Context) bool {
+	if globalChatHub == nil {
+		return true
+	}
+	return globalChatHub.Shutdown(ctx)
 }
 
 // run handles hub operations
@@ -468,6 +552,13 @@ func (h *ChatHub) heartbeatChecker() {
 // WebSocket connection handler
 func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		hub := GetChatHub()
+		if hub == nil || hub.closing.Load() {
+			// Refuse the upgrade rather than accept a connection that is about
+			// to be closed from under the client.
+			http.Error(w, "server shutting down", http.StatusServiceUnavailable)
+			return
+		}
 
 		// Authenticate before upgrade
 		user, err := authenticateWebSocketRequest(r, app)
@@ -494,7 +585,7 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 
 		// Create client
 		client := &Client{
-			hub:      GetChatHub(),
+			hub:      hub,
 			conn:     conn,
 			send:     make(chan []byte, 256),
 			userId:   user.Id,

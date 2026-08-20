@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -19,9 +20,8 @@ var mailRetryDelays = []time.Duration{15 * time.Second, 60 * time.Second}
 // unresponsive relay costs a message its latency rather than costing a user
 // their HTTP request.
 type MailWorker struct {
-	jobQueue    chan MailJob
-	stopChannel chan bool
-	isRunning   bool
+	workerLifecycle
+	jobQueue chan MailJob
 }
 
 var globalMailWorker *MailWorker
@@ -41,9 +41,7 @@ func InitializeMailWorker(queueSize int) {
 	}
 
 	globalMailWorker = &MailWorker{
-		jobQueue:    make(chan MailJob, queueSize),
-		stopChannel: make(chan bool),
-		isRunning:   false,
+		jobQueue: make(chan MailJob, queueSize),
 	}
 
 	globalMailWorker.Start()
@@ -77,41 +75,65 @@ func QueueMail(job MailJob) error {
 
 // Start begins the background worker goroutine.
 func (mw *MailWorker) Start() {
-	if mw.isRunning {
+	quit, done, ok := mw.start()
+	if !ok {
 		return
 	}
 
-	mw.isRunning = true
-	go mw.processJobs()
+	go mw.processJobs(quit, done)
 }
 
-// Stop gracefully shuts down the worker.
+// Stop signals the worker to exit, abandoning anything still queued.
 func (mw *MailWorker) Stop() {
-	if !mw.isRunning {
-		return
-	}
-
-	mw.stopChannel <- true
-	mw.isRunning = false
+	mw.stopImmediately()
 	LogInfo(LogCategoryWorker, "Mail worker stopped")
 }
 
+// StopAndDrain stops the worker and makes one last attempt at each message
+// already queued. Password reset is the only way a locked-out user gets back in
+// without me, so a reset accepted a moment before a deploy is worth the attempt
+// — but only one, since the process is on its way out and a backoff would just
+// burn the shutdown budget.
+func (mw *MailWorker) StopAndDrain(ctx context.Context) bool {
+	return mw.stopAndWait(ctx, true)
+}
+
 // processJobs is the main worker loop.
-func (mw *MailWorker) processJobs() {
+func (mw *MailWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
+	defer close(done)
 	for {
 		select {
 		case job := <-mw.jobQueue:
 			// A stop signal can also arrive mid-delivery, during a retry
 			// backoff. Returning here is what makes it take effect; looping
 			// would leave the goroutine running with the signal consumed.
-			if !mw.deliver(job) {
-				LogInfo(LogCategoryWorker, "Mail worker stopped during delivery")
+			if !mw.deliver(job, quit) {
+				drained := drainQueue(mw.drainContext(), mw.jobQueue, mw.deliverFinal)
+				LogInfo(LogCategoryWorker, "Mail worker stopped during delivery", map[string]interface{}{
+					"drained": drained,
+				})
 				return
 			}
-		case <-mw.stopChannel:
-			LogInfo(LogCategoryWorker, "Mail worker received stop signal")
+		case <-quit:
+			drained := drainQueue(mw.drainContext(), mw.jobQueue, mw.deliverFinal)
+			LogInfo(LogCategoryWorker, "Mail worker received stop signal", map[string]interface{}{
+				"drained":   drained,
+				"abandoned": len(mw.jobQueue),
+			})
 			return
 		}
+	}
+}
+
+// deliverFinal makes a single attempt at a message during shutdown. It never
+// retries: the point of draining is to not lose a queued reset link, not to
+// keep the process alive through a backoff.
+func (mw *MailWorker) deliverFinal(job MailJob) {
+	if err := mailDeliverer(job); err != nil {
+		LogErrorSimple(LogCategoryWorker, "Mail delivery failed during shutdown", map[string]interface{}{
+			"kind":  job.Kind,
+			"error": err.Error(),
+		})
 	}
 }
 
@@ -123,7 +145,7 @@ func (mw *MailWorker) processJobs() {
 // behind it; at the volume of mail this application sends that is a fair trade
 // for not needing a durable queue, but it is the reason the backoff is measured
 // in seconds rather than minutes.
-func (mw *MailWorker) deliver(job MailJob) bool {
+func (mw *MailWorker) deliver(job MailJob, quit <-chan struct{}) bool {
 	for attempt := 1; attempt <= mailMaxAttempts; attempt++ {
 		err := mailDeliverer(job)
 		if err == nil {
@@ -153,7 +175,7 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 			"error":   err.Error(),
 		})
 
-		if !mw.wait(mailRetryDelays[attempt-1]) {
+		if !mw.wait(mailRetryDelays[attempt-1], quit) {
 			LogInfo(LogCategoryWorker, "Mail worker stopping; abandoning retry", map[string]interface{}{
 				"kind": job.Kind,
 			})
@@ -167,14 +189,14 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 // wait sleeps between attempts, reporting false if the worker was stopped
 // first. Waiting on the stop channel keeps shutdown from blocking for the
 // length of a backoff.
-func (mw *MailWorker) wait(delay time.Duration) bool {
+func (mw *MailWorker) wait(delay time.Duration, quit <-chan struct{}) bool {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
 	select {
 	case <-timer.C:
 		return true
-	case <-mw.stopChannel:
+	case <-quit:
 		return false
 	}
 }
@@ -192,4 +214,12 @@ func StopMailWorker() {
 	if globalMailWorker != nil {
 		globalMailWorker.Stop()
 	}
+}
+
+// stopMailWorkerAndDrain is the shutdown path's entry point.
+func stopMailWorkerAndDrain(ctx context.Context) bool {
+	if globalMailWorker == nil {
+		return true
+	}
+	return globalMailWorker.StopAndDrain(ctx)
 }

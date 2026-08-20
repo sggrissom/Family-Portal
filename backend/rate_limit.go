@@ -320,6 +320,9 @@ func respondRateLimited(w http.ResponseWriter, r *http.Request, retryAfter time.
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"error":   rateLimitMessage,
+			// The code lets a client tell "slow down and retry" apart from
+			// "you did something wrong"; Retry-After above says when.
+			"code": ErrCodeRateLimited,
 		})
 		return
 	}

@@ -16,6 +16,7 @@ type ProfileState = {
     milestones: boolean;
     measurements: boolean;
     photos: boolean;
+    performances: boolean;
   };
   selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
   sortOrder: "newest" | "oldest";
@@ -28,6 +29,7 @@ const useProfileState = vlens.declareHook(
       milestones: true,
       measurements: true,
       photos: true,
+      performances: true,
     },
     selectedAgeFilter: "all",
     sortOrder: "newest",
@@ -35,14 +37,28 @@ const useProfileState = vlens.declareHook(
   })
 );
 
-export async function fetch(route: string, prefix: string) {
-  const personId = getIdFromRoute(route) || 0;
-  return server.GetPerson({ id: personId });
-}
-
 type ProfileData =
-  | server.GetPersonResponse
+  | (server.GetPersonResponse & {
+      performances: server.AppearanceDetail[];
+      activitySeasons: server.SeasonSummary[];
+    })
   | { person: null; growthData: server.GrowthData[]; milestones: server.Milestone[] };
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<ProfileData>> {
+  const personId = getIdFromRoute(route) || 0;
+  const [person, personError] = await server.GetPerson({ id: personId });
+  if (personError || !person) return [null, personError || "Failed to load person"];
+
+  // Activities have their own sharing scope, so a profile may be visible even
+  // when its performances are not. Treat that case as an empty activity list
+  // rather than making the rest of the profile unavailable.
+  const [activities] = await server.GetPersonSeason({ personId, seasonId: 0 });
+  return rpc.ok<ProfileData>({
+    ...person,
+    performances: activities?.appearances ?? [],
+    activitySeasons: activities?.seasons ?? [],
+  });
+}
 
 const formatDate = (dateString: string) => {
   if (!dateString) return "";
@@ -91,6 +107,8 @@ export function view(route: string, prefix: string, data: ProfileData): preact.C
           growthData={data.growthData}
           milestones={data.milestones}
           photos={data.photos}
+          performances={data.performances ?? []}
+          activitySeasons={data.activitySeasons ?? []}
         />
       </main>
       <Footer />
@@ -103,9 +121,14 @@ interface ProfilePageProps {
   growthData: server.GrowthData[];
   milestones: server.Milestone[];
   photos: server.Image[];
+  performances: server.AppearanceDetail[];
+  activitySeasons: server.SeasonSummary[];
 }
 
-function toggleType(state: ProfileState, type: "milestones" | "measurements" | "photos") {
+function toggleType(
+  state: ProfileState,
+  type: "milestones" | "measurements" | "photos" | "performances"
+) {
   state.visibleTypes[type] = !state.visibleTypes[type];
   vlens.scheduleRedraw();
 }
@@ -127,7 +150,14 @@ function toggleTag(state: ProfileState, tagId: number) {
   vlens.scheduleRedraw();
 }
 
-const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProps) => {
+const ProfilePage = ({
+  person,
+  growthData,
+  milestones,
+  photos,
+  performances,
+  activitySeasons,
+}: ProfilePageProps) => {
   const state = useProfileState();
   const photoStatus = usePhotoStatus();
 
@@ -231,6 +261,12 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
             >
               {state.visibleTypes.photos ? "✓" : ""} Photos
             </button>
+            <button
+              className={`filter-toggle ${state.visibleTypes.performances ? "active" : ""}`}
+              onClick={() => toggleType(state, "performances")}
+            >
+              {state.visibleTypes.performances ? "✓" : ""} Performances
+            </button>
           </div>
         </div>
         <div className="filter-section sort-section">
@@ -259,6 +295,8 @@ const ProfilePage = ({ person, growthData, milestones, photos }: ProfilePageProp
           milestones={milestones}
           growthData={growthData}
           photos={photos}
+          performances={performances}
+          activitySeasons={activitySeasons}
           visibleTypes={state.visibleTypes}
           selectedAgeFilter={state.selectedAgeFilter}
           sortOrder={state.sortOrder}

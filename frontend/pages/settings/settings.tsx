@@ -997,6 +997,21 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         )}
 
         <div className="settings-section">
+          <h2>Policies &amp; Support</h2>
+          <div className="settings-card">
+            <p className="section-description">
+              What is stored, what leaves the server, how long it is kept, and where to write when
+              something is wrong.
+            </p>
+            <div className="policy-links">
+              <a href="/privacy">Privacy</a>
+              <a href="/terms">Terms of use</a>
+              <a href="/support">Support</a>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
           <h2>Delete Account</h2>
           <div className="settings-card">
             <div className="warning-banner">
@@ -1007,7 +1022,8 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               Deleting your account removes your sign-in, your sessions, your registered devices and
               your chat messages. Records stay with any family that still has another member in it.
               A family you are the only member of is deleted along with everything in it — people,
-              photos, measurements and milestones. Export your data first if you want to keep it.
+              photos, measurements and milestones. Export your data first if you want to keep it.{" "}
+              <a href="/privacy">The privacy page</a> lists exactly what goes and what stays.
             </p>
 
             {deleteForm.error && <div className="error-message">{deleteForm.error}</div>}

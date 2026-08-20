@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"family/cfg"
 	"fmt"
 	"io"
@@ -36,7 +37,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		mode = "data_only"
 	}
 	if mode != "data_only" && mode != "with_photos" {
-		RespondValidationError(w, r, "Unsupported export mode", mode)
+		RespondValidationError(w, r, "Choose either a data-only export or one with photos.", mode)
 		return
 	}
 
@@ -45,7 +46,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	if familyIdStr := r.URL.Query().Get("familyId"); familyIdStr != "" {
 		parsed, convErr := strconv.Atoi(familyIdStr)
 		if convErr != nil {
-			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			RespondValidationError(w, r, "That family could not be identified.", convErr.Error())
 			return
 		}
 		requestedFamilyId = parsed
@@ -70,13 +71,20 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	if buildErr != nil {
-		RespondInternalError(w, r, "Failed to build export data", buildErr.Error())
+		// ResolveActingFamily's refusals arrive here too, and answering "failed
+		// to build export data" with a 500 both misreports whose fault it is and
+		// makes an access denial look like an outage.
+		if errors.Is(buildErr, ErrFamilyAccessDenied) || errors.Is(buildErr, ErrNoFamily) {
+			RespondForbiddenError(w, r, "You do not have access to that family's records.")
+			return
+		}
+		RespondUnexpectedError(w, r, buildErr)
 		return
 	}
 
 	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
-		RespondInternalError(w, r, "Failed to marshal export data", err.Error())
+		RespondUnexpectedError(w, r, err)
 		return
 	}
 
@@ -89,7 +97,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		zw := zip.NewWriter(&buf)
 		f, err := zw.Create("data.json")
 		if err != nil {
-			RespondInternalError(w, r, "Failed to create ZIP entry", err.Error())
+			RespondUnexpectedError(w, r, err)
 			return
 		}
 		f.Write(jsonBytes)

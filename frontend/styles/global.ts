@@ -584,6 +584,29 @@ block(`
 }
 `);
 
+block(`
+.footer-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+.footer-links a {
+  color: var(--muted);
+}
+`);
+
+block(`
+.footer-links a:hover {
+  color: var(--text);
+}
+`);
+
 // Shared Form Styles
 block(`
 .form-group {

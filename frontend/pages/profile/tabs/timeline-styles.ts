@@ -174,6 +174,30 @@ block(`
 `);
 
 block(`
+.performance-title {
+  font-weight: 600;
+}
+`);
+
+block(`
+.performance-meta,
+.performance-notes {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+`);
+
+block(`
+.performance-results {
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+`);
+
+block(`
 @media (max-width: 600px) {
   .age-filter {
     padding: 0.75rem;

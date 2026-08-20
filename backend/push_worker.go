@@ -2,6 +2,7 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
@@ -105,9 +106,8 @@ type PushWorkerStats struct {
 
 // PushWorker manages background push notification sending
 type PushWorker struct {
+	workerLifecycle
 	jobQueue    chan PushNotificationJob
-	stopChannel chan bool
-	isRunning   bool
 	db          *vbolt.DB
 	apnsConfig  *APNsConfig
 	httpClient  *http.Client
@@ -153,11 +153,9 @@ func InitializePushWorker(queueSize int, db *vbolt.DB) {
 	})
 
 	globalPushWorker = &PushWorker{
-		jobQueue:    make(chan PushNotificationJob, queueSize),
-		stopChannel: make(chan bool),
-		isRunning:   false,
-		db:          db,
-		apnsConfig:  config,
+		jobQueue:   make(chan PushNotificationJob, queueSize),
+		db:         db,
+		apnsConfig: config,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -272,34 +270,43 @@ func maskPushToken(token string) string {
 
 // Start begins the background worker goroutine
 func (pw *PushWorker) Start() {
-	if pw.isRunning {
+	quit, done, ok := pw.start()
+	if !ok {
 		return
 	}
 
-	pw.isRunning = true
-	go pw.processJobs()
+	go pw.processJobs(quit, done)
 	LogInfo(LogCategoryWorker, "Push notification worker started")
 }
 
-// Stop gracefully shuts down the worker
+// Stop signals the worker to exit, abandoning anything still queued.
 func (pw *PushWorker) Stop() {
-	if !pw.isRunning {
-		return
-	}
-
-	pw.stopChannel <- true
-	pw.isRunning = false
+	pw.stopImmediately()
 	LogInfo(LogCategoryWorker, "Push notification worker stopped")
 }
 
+// StopAndDrain stops the worker and delivers the notifications already queued,
+// giving up when ctx expires. Each one is a single HTTPS call to APNs, so the
+// backlog usually clears in well under the budget — and a notification about a
+// chat message that already exists is the sort of thing whose absence is only
+// ever noticed by the person waiting for it.
+func (pw *PushWorker) StopAndDrain(ctx context.Context) bool {
+	return pw.stopAndWait(ctx, true)
+}
+
 // processJobs is the main worker loop
-func (pw *PushWorker) processJobs() {
+func (pw *PushWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
+	defer close(done)
 	for {
 		select {
 		case job := <-pw.jobQueue:
 			pw.processPushJob(job)
-		case <-pw.stopChannel:
-			LogInfo(LogCategoryWorker, "Push worker received stop signal")
+		case <-quit:
+			drained := drainQueue(pw.drainContext(), pw.jobQueue, pw.processPushJob)
+			LogInfo(LogCategoryWorker, "Push worker received stop signal", map[string]interface{}{
+				"drained":   drained,
+				"abandoned": len(pw.jobQueue),
+			})
 			return
 		}
 	}
@@ -567,7 +574,7 @@ func GetPushWorkerStats() PushWorkerStats {
 
 	return PushWorkerStats{
 		Enabled:        true,
-		IsRunning:      pw.isRunning,
+		IsRunning:      pw.isRunning(),
 		QueueLength:    len(pw.jobQueue),
 		Sent:           pw.sent,
 		Failed:         pw.failed,
@@ -624,6 +631,14 @@ func StopPushWorker() {
 	if globalPushWorker != nil {
 		globalPushWorker.Stop()
 	}
+}
+
+// stopPushWorkerAndDrain is the shutdown path's entry point.
+func stopPushWorkerAndDrain(ctx context.Context) bool {
+	if globalPushWorker == nil {
+		return true
+	}
+	return globalPushWorker.StopAndDrain(ctx)
 }
 
 // IsPushWorkerEnabled returns true if push notifications are configured

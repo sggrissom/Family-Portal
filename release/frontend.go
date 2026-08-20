@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
+
+	"family/cfg"
 
 	"go.hasen.dev/vbeam/esbuilder"
 )
@@ -25,9 +28,10 @@ func main() {
 		Outdir:       "release/dist",
 		NoSourceMaps: true,
 		Define: map[string]string{
-			"BROWSER": "true",
-			"DEBUG":   "false",
-			"VERBOSE": "false",
+			"BROWSER":       "true",
+			"DEBUG":         "false",
+			"VERBOSE":       "false",
+			"SUPPORT_EMAIL": strconv.Quote(cfg.SupportEmail),
 		},
 	}
 
