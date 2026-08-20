@@ -9,21 +9,35 @@
     <meta name="description" content="A private family portal to track children's growth, milestones, and precious memories. Share photos, record height/weight progress, and celebrate achievements together." />
     <meta name="author" content="Family Record" />
     <meta name="keywords" content="family, children, growth tracking, milestones, photos, memories, parenting" />
-    <meta name="robots" content="nofollow" />
-    <link rel="canonical" href="https://familyrecord.app" />
+
+    <!--
+      Default to not being indexed at all. Every route in this application is
+      served the same HTML, so whatever is written here is what a crawler sees
+      on /settings and /profile/3 as much as on the landing page. main.tsx
+      relaxes this to "index, follow" for the handful of pages that are
+      genuinely public, and rewrites the canonical link to match the route.
+    -->
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href="https://familyrecord.app/" />
 
     <!-- Open Graph Meta Tags for Social Sharing -->
     <meta property="og:title" content="Family Record - Track Your Family's Growth & Milestones" />
     <meta property="og:description" content="A private family portal to track children's growth, milestones, and precious memories." />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="/" />
+    <meta property="og:url" content="https://familyrecord.app/" />
     <meta property="og:site_name" content="Family Record" />
     <meta property="og:locale" content="en_US" />
+    <!-- Scrapers do not resolve relative URLs; this has to be absolute. -->
+    <meta property="og:image" content="https://familyrecord.app/images/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Family Record — a private place for your family's growth, milestones, and photos." />
 
     <!-- Twitter Card Meta Tags -->
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Family Record - Track Your Family's Growth & Milestones" />
     <meta name="twitter:description" content="A private family portal to track children's growth, milestones, and precious memories." />
+    <meta name="twitter:image" content="https://familyrecord.app/images/og-image.png" />
 
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#10b981" />

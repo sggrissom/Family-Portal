@@ -76,8 +76,7 @@ func useTestMailWorker(t *testing.T, queueSize int) *MailWorker {
 	mailRetryDelays = []time.Duration{time.Millisecond, time.Millisecond}
 
 	worker := &MailWorker{
-		jobQueue:    make(chan MailJob, queueSize),
-		stopChannel: make(chan bool),
+		jobQueue: make(chan MailJob, queueSize),
 	}
 	globalMailWorker = worker
 	worker.Start()
@@ -198,8 +197,7 @@ func TestQueueMailReportsAFullQueue(t *testing.T) {
 	// A worker that is never started leaves the queue unattended, which is the
 	// only reliable way to fill it.
 	globalMailWorker = &MailWorker{
-		jobQueue:    make(chan MailJob, 1),
-		stopChannel: make(chan bool),
+		jobQueue: make(chan MailJob, 1),
 	}
 	t.Cleanup(func() { globalMailWorker = originalWorker })
 

@@ -28,10 +28,10 @@ type PhotoAnalysisJob struct {
 
 // photoAnalysisWorker manages background face recognition processing
 type photoAnalysisWorker struct {
-	jobQueue    chan PhotoAnalysisJob
-	stopChannel chan bool
-	db          *vbolt.DB
-	client      *http.Client
+	workerLifecycle
+	jobQueue chan PhotoAnalysisJob
+	db       *vbolt.DB
+	client   *http.Client
 }
 
 var globalAnalysisWorker *photoAnalysisWorker
@@ -49,7 +49,7 @@ func GetAnalysisWorkerStats() AnalysisWorkerStats {
 	}
 	return AnalysisWorkerStats{
 		QueueLength: len(globalAnalysisWorker.jobQueue),
-		IsRunning:   true,
+		IsRunning:   globalAnalysisWorker.isRunning(),
 	}
 }
 
@@ -87,13 +87,13 @@ func InitializeAnalysisWorker(db *vbolt.DB) {
 	}
 
 	globalAnalysisWorker = &photoAnalysisWorker{
-		jobQueue:    make(chan PhotoAnalysisJob, 100),
-		stopChannel: make(chan bool),
-		db:          db,
-		client:      client,
+		jobQueue: make(chan PhotoAnalysisJob, 100),
+		db:       db,
+		client:   client,
 	}
 
-	go globalAnalysisWorker.processJobs()
+	quit, done, _ := globalAnalysisWorker.start()
+	go globalAnalysisWorker.processJobs(quit, done)
 	LogInfo(LogCategoryWorker, "Photo analysis worker started", map[string]interface{}{
 		"socket": cfg.FaceAnalysisSocket,
 	})
@@ -123,16 +123,35 @@ func TriggerPersonFaceUpdate(personId int) {
 	}
 }
 
-func (aw *photoAnalysisWorker) processJobs() {
+func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
+	defer close(done)
 	for {
 		select {
 		case job := <-aw.jobQueue:
 			aw.processAnalysisJob(job)
-		case <-aw.stopChannel:
-			LogInfo(LogCategoryWorker, "Photo analysis worker stopped")
+		case <-quit:
+			LogInfo(LogCategoryWorker, "Photo analysis worker stopped", map[string]interface{}{
+				"abandoned": len(aw.jobQueue),
+			})
 			return
 		}
 	}
+}
+
+// StopAnalysisWorker stops the face analysis worker without draining it.
+//
+// This is the one worker whose queue is deliberately abandoned. Every job in it
+// is a round trip to the dlib daemon over a socket, which is the slowest thing
+// the process does, and the output is a *suggested* tag: a photo that misses
+// analysis keeps its pixels, its date, its caption, and every tag a person
+// applied. Nothing is lost that an admin cannot regenerate with "reanalyze all
+// photos", so holding the shutdown open for it would be trading a real cost for
+// a cosmetic one.
+func StopAnalysisWorker(ctx context.Context) bool {
+	if globalAnalysisWorker == nil {
+		return true
+	}
+	return globalAnalysisWorker.stopAndWait(ctx, false)
 }
 
 func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) {

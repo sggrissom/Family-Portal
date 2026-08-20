@@ -24,13 +24,22 @@ var embedded embed.FS
 const Port = 8666
 
 func main() {
+	// run returns rather than calling log.Fatal so that the deferred shutdown
+	// in RunHTTPServer actually runs; the exit status is set here instead.
+	if err := run(); err != nil {
+		log.Printf("server stopped unexpectedly: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Create required directories
 	os.MkdirAll("data", 0755)
 	os.MkdirAll("static", 0755)
 
 	distFS, err := fs.Sub(embedded, "dist")
 	if err != nil {
-		log.Fatalf("failed to sub‐fs: %v", err)
+		return fmt.Errorf("failed to sub-fs the embedded frontend: %w", err)
 	}
 
 	// Create the application with frontend assets
@@ -47,7 +56,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunTokenCleanup(ctx, app.DB)
-	if err := family.RunHTTPServer(ctx, appServer); err != nil {
-		log.Fatalf("server stopped unexpectedly: %v", err)
-	}
+	return family.RunHTTPServer(ctx, appServer)
 }

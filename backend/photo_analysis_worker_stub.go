@@ -2,7 +2,11 @@
 
 package backend
 
-import "go.hasen.dev/vbolt"
+import (
+	"context"
+
+	"go.hasen.dev/vbolt"
+)
 
 // PhotoAnalysisJob represents a photo queued for face analysis
 type PhotoAnalysisJob struct {
@@ -29,3 +33,6 @@ func QueuePhotoAnalysis(job PhotoAnalysisJob) {}
 
 // TriggerPersonFaceUpdate is a no-op in local builds (face tagging disabled)
 func TriggerPersonFaceUpdate(personId int) {}
+
+// StopAnalysisWorker is a no-op in local builds (face tagging disabled)
+func StopAnalysisWorker(ctx context.Context) bool { return true }

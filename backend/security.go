@@ -83,7 +83,28 @@ func (sw *SecurityWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Add security headers to non-WebSocket responses
 	addSecurityHeaders(w)
+	addCacheDefaults(w, r)
 	sw.app.ServeHTTP(w, r)
+}
+
+// addCacheDefaults keeps a family's data out of the browser's disk cache.
+//
+// This runs before the handler, so a handler that knows better — the photo
+// server, the mobile version policy — overrides it by setting the header
+// itself. What it covers is everything that does not: exports, imports,
+// account operations, and any /api or /rpc route added later that would
+// otherwise inherit whatever heuristic the browser applies to a response with
+// no Cache-Control at all.
+//
+// RPC calls are POSTs and would not be cached regardless; the header is set on
+// them anyway so the rule does not depend on that staying true.
+func addCacheDefaults(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/api/"),
+		strings.HasPrefix(r.URL.Path, "/rpc/"),
+		strings.HasPrefix(r.URL.Path, "/internal/"):
+		w.Header().Set("Cache-Control", "no-store")
+	}
 }
 
 func addSecurityHeaders(w http.ResponseWriter) {
