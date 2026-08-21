@@ -236,6 +236,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterAdminMethods(app)
 	backend.RegisterDiagnosticsMethods(app)
 	backend.RegisterSEOHandlers(app)
+	backend.RegisterUniversalLinkHandlers(app)
 	backend.RegisterPushNotificationMethods(app)
 	backend.RegisterNotificationPreferenceMethods(app)
 	backend.RegisterMobileVersionMethods(app)

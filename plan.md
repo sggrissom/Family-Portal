@@ -145,7 +145,7 @@ Backend groundwork already landed — keep it working, don't extend it.
 - [ ] Real-device push testing, sandbox and production.
 - [ ] Mobile API contract doc: supported endpoints, bearer vs cookie auth, refresh token storage and rotation for native clients, error envelope and codes, date/time and time-zone handling, pagination, upload behavior, idempotency for retried creates, nullable-field semantics, worked request/response examples.
 - [ ] App Store submission: privacy labels, account-deletion requirement, listing assets, review notes.
-- [ ] Universal links and deep links.
+- [ ] Universal links and deep links. Server half done: `/.well-known/apple-app-site-association` is published from `IOS_APP_ID`, claiming exactly the six routes the app has a screen for and excluding `/reset-password` and `/api/*`, which have to finish in a browser. A test asserts every `pushEventSpecs` destination is a path the association claims, so an event added with a destination the app cannot open fails the build rather than sending a notification that lands in Safari. The app half — the associated-domains entitlement and routing a tapped notification to its `destination` — is `Family-Portal-Ios`.
 - [ ] Test older supported app builds against the server before each backend release.
 
 ### Deferred product work
