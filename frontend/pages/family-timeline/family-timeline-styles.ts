@@ -463,6 +463,9 @@ block(`
 
 block(`
 .photo-thumbnail {
+  display: block;
+  color: inherit;
+  text-decoration: none;
   flex-shrink: 0;
   width: 120px;
   height: 120px;
@@ -513,6 +516,15 @@ block(`
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+`);
+
+block(`
+.milestone-photo-link {
+  display: inline-flex;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
 }
 `);
 

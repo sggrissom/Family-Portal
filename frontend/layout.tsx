@@ -42,6 +42,9 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
 
   return (
     <header className="site-header">
+      <a className="skip-link" href="#app" onClick={skipToContent}>
+        Skip to main content
+      </a>
       <nav className="nav" aria-label="Main navigation">
         <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
           Family Record
@@ -169,22 +172,64 @@ const logoutClicked = async (event: Event) => {
   await auth.logout();
 };
 
+// Every page renders its content into <main id="app">, which is not focusable,
+// and browsers only move focus to a fragment target that can hold it. Without
+// this the link scrolls but leaves focus in the header, so the next Tab goes
+// back into the nav — exactly what the link exists to skip.
+const skipToContent = (event: Event) => {
+  event.preventDefault();
+  const main = document.getElementById("app");
+  if (!main) return;
+  main.tabIndex = -1;
+  main.focus();
+  main.scrollIntoView();
+};
+
+// The dismissal listeners live here rather than inside menuClicked because the
+// old form built a fresh closure on every toggle and then asked
+// removeEventListener to detach it — a different function object from the one
+// open() had registered, so closing from the button left the previous listener
+// attached for good.
+let detachMenuDismissal: (() => void) | null = null;
+
 const menuClicked = (menuRef: Ref) => {
-  const handleClickOutside = (event: MouseEvent) => {
-    const nav = document.querySelector(".nav");
-    if (event.target instanceof Node && nav && !nav.contains(event.target)) {
-      document.removeEventListener("mousedown", handleClickOutside);
+  const isOpen = !vlens.refGet(menuRef);
+
+  detachMenuDismissal?.();
+  detachMenuDismissal = null;
+
+  if (isOpen) {
+    const close = () => {
+      detachMenuDismissal?.();
+      detachMenuDismissal = null;
       vlens.refSet(menuRef, false);
       vlens.scheduleRedraw();
-    }
-  };
+    };
 
-  const isOpen = !vlens.refGet(menuRef);
-  if (isOpen) {
+    const handleClickOutside = (event: MouseEvent) => {
+      const nav = document.querySelector(".nav");
+      if (event.target instanceof Node && nav && !nav.contains(event.target)) {
+        close();
+      }
+    };
+
+    // On a phone the open menu covers the page, so a keyboard user who tabs
+    // past its last link lands on content they cannot see. Escape is the way
+    // out, and focus goes back to the control that opened the menu.
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      close();
+      document.getElementById("navToggle")?.focus();
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-  } else {
-    document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    detachMenuDismissal = () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }
+
   vlens.refSet(menuRef, isOpen);
   vlens.scheduleRedraw();
 };

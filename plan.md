@@ -75,11 +75,11 @@ Anything a user can't undo themselves becomes a support request to me.
 
 Four pages, not a compliance program. Needed because other people's kids' photos are in the database.
 
-- [ ] `/privacy` — what's collected (names, birth dates, relationships, growth measurements, photos, chat, device tokens, logs), face-analysis processing and retention, what AI import sends externally, Google auth and push data, retention and deletion behavior, who inside a family can see what.
-- [ ] `/terms`.
-- [ ] `/support` with an address I actually read.
-- [ ] Link all three from the footer, settings, and account creation.
-- [ ] Read the privacy page against what production actually does, and fix whichever one is wrong.
+- [x] `/privacy` — what's collected (names, birth dates, relationships, growth measurements, photos, chat, device tokens, logs), face-analysis processing and retention, what AI import sends externally, Google auth and push data, retention and deletion behavior, who inside a family can see what.
+- [x] `/terms`.
+- [x] `/support` with an address I actually read.
+- [x] Link all three from the footer, settings, and account creation.
+- [x] Read the privacy page against what production actually does, and fix whichever one is wrong.
 
 ## 6. Errors that don't leak or confuse
 
@@ -93,9 +93,9 @@ Four pages, not a compliance program. Needed because other people's kids' photos
 
 Cheap, visible, and each one is a real defect if left.
 
-- [ ] Keyboard-navigate the primary flows; fix focus order and missing focus states. *(Partly done: a global `:focus-visible` ring and a skip link landed with the contrast work — buttons and links previously had no focus indicator at all. Per-flow tab-order review still outstanding.)*
+- [x] Keyboard-navigate the primary flows; fix focus order and missing focus states. The skip link was styled but never rendered, so the first Tab on every page still walked the whole nav; it exists now and moves focus, not just the scroll position. Four controls in the primary flows could not be reached from a keyboard at all: the tag pickers on add/edit milestone and add/edit photo were click-only `div`s, and every photo thumbnail in the timelines navigated from an `onClick` on a `div` or a bare `<img>`. They are buttons and links now. The crop editor could only be panned by dragging; arrow keys pan it and `+`/`-` zoom. Escape closes the mobile menu, which previously trapped a keyboard user behind an overlay they could not see past — and fixing that turned up a listener leak, since each toggle built a new closure and asked `removeEventListener` to detach a function it had never registered.
 - [x] Accessible names on icon-only controls; labels wired to inputs and validation errors. The icon controls had `title` and nothing else, which is the last resort in the accessible-name computation and never reaches a keyboard user; each one now carries an explicit name, and the vague ones say what they act on rather than just "Delete". Sixteen inputs, selects, and textareas had no label at all — chat's message box, the timeline filters, the import textareas, the tag editor. Every form error is a `role="alert"` now, so a failed submit is announced instead of silently appearing above the fold. The compare page's person checkboxes turned out to be broken outright: the row `div` and the checkbox both toggled, so clicking the checkbox cancelled itself out. The row is a `<label>` now, which fixes the double toggle and makes it keyboard-reachable.
-- [ ] Dialogs trap and restore focus.
+- [x] Dialogs trap and restore focus. Only one dialog in the app is not a native `confirm()`: the profile-photo crop editor, which had no dialog role, no focus management, and no way out from the keyboard. `frontend/hooks/useModalDialog.ts` does the whole contract — focus in on open, Tab cycling inside, Escape to dismiss, focus back to the opener on close — so the next dialog gets it by construction rather than by remembering.
 - [x] Light and dark theme contrast check. Computed every token pair against WCAG. The dark theme passes throughout; the light theme did not — white on the primary-button gradient was 2.5:1 and the same green as text was 2.3:1, so the greens are deeper now. Form-control borders were 1.13:1 and get their own token.
 - [x] Primary flows at phone, tablet, and desktop widths. Driven at 390, 768, and 1440 with a headless browser, checking every page for content pushed past the viewport. Desktop and tablet were clean; three real defects turned up. `/family-timeline` was 121px wider than a phone — the header laid its title and the Manage Tags button out with inline flex and `flexShrink: 0`, so the row could not shrink. Add Photo's people picker used `.checkbox-group` and `.checkbox-option` that the page never defined: `block()` registers globally, so the picker took whatever another page happened to register under those names, or nothing, and the labels ran together inline. The same collision ran the other way — add-person's copy hardcoded a light-theme text colour that could win on the import page — so both are scoped now. And `.form-group` styled `input` and `select` but never `textarea`, which is why every description field was a white browser-default box in the dark theme.
 - [x] Confirm canonical URLs, favicon, Apple touch icon, PWA manifest, and an Open Graph image. There was no OG image at all and the card was `summary`; there is one now, 1200×630, generated to match the installed icon. The manifest claimed `any maskable` on a 16px favicon, which is not a maskable icon; a padded 512 one was added and the rest are plain `any`.
@@ -118,7 +118,7 @@ Mostly done; finishing the tail.
 ## 9. Release
 
 - [x] Clean checkout passes the full CI gate without modifying tracked files. Verified by cloning the repository fresh and running the `build-test` job's steps in order — `npm ci`, `check-css`, `build`, `lint`, `typecheck`, `test`, `test-coverage`, `test-race`, `e2e`, `check-clean`. All pass, and `git status` reports no tracked file changed. `e2e` needs production's compile-time paths, so it ran under `bwrap` with a `tmpfs` `/srv` rather than against the real tree; the recipe is in `docs/deployment.md`.
-- [ ] Protect `main`; require the checks before merge.
+- [x] Protect `main`; require the checks before merge. Both CI contexts — `Build, Typecheck, and Test` and `Dependency and secret scan` — are required, branches must be up to date before merging, force-pushes and deletion of `main` are blocked, and unresolved review conversations block a merge. No required approving review, since a solo repository would only ever satisfy one by bypassing it. `enforce_admins` is off for the same reason: the checks are the gate, and the owner keeps a way through when a runner breaks at the wrong moment.
 - [x] Pin third-party GitHub Actions. All five pinned to a commit SHA with the version in a trailing comment — a tag is mutable, and this workflow holds the deploy key.
 - [x] Add dependency and secret scanning to CI. `govulncheck`, `npm audit`, and gitleaks over full history, in a job `deploy` deliberately does not depend on. Turning it on found nine reachable vulnerabilities in `golang.org/x/image` and `golang-jwt/jwt`, all in the photo decode and token parse paths; both are bumped here, which also moved the Go directive to 1.25.
 - [x] One source of truth for the application version; surface it in logs and an authenticated diagnostics view. `cfg.Version`, with commit and build time stamped by the linker; a test walks the source tree and fails on any Go file that writes the version down itself, which `app.go` was doing.
@@ -152,8 +152,6 @@ Backend groundwork already landed — keep it working, don't extend it.
 - [ ] Test older supported app builds against the server before each backend release.
 
 ### Deferred product work
-
-- [ ] Offline-first sync and conflict resolution.
 - [ ] Additional family roles, granular per-person permissions, ownership transfer, full-family deletion.
 - [ ] Richer notification categories and preferences.
 - [ ] Expanded face-tagging workflows.

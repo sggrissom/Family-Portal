@@ -346,3 +346,11 @@ block(`
   }
 }
 `);
+
+block(`
+.photo-thumbnail {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+`);
