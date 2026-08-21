@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,23 @@ type Claims struct {
 
 type LogoutRequest struct {
 	DeviceToken string `json:"deviceToken"`
+	// RefreshToken lets a native client revoke the session it is ending.
+	// Browsers send the refreshToken cookie and leave this empty; a client with
+	// no cookie jar has no other way to say which session to delete, and
+	// without it a sign-out left a usable refresh token in the database for the
+	// remainder of its thirty days.
+	RefreshToken string `json:"refreshToken"`
+}
+
+// RefreshRequest is the optional body of POST /api/refresh.
+//
+// The refresh cookie is HttpOnly, Secure and SameSite=Lax, which is right for a
+// browser and unavailable to a native client that does not own a cookie jar.
+// Accepting the token in the body gives such a client a way to present the
+// credential it already holds. It grants nothing new: whoever can send this
+// token could equally have sent it as a cookie.
+type RefreshRequest struct {
+	RefreshToken string `json:"refreshToken"`
 }
 
 var appDb *vbolt.DB
@@ -218,10 +236,13 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Delete refresh token from database if present
-	if cookie, err := r.Cookie("refreshToken"); err == nil && cookie.Value != "" {
+	// Delete the refresh token from the database. The cookie is where a browser
+	// keeps it; the body is where a native client has to put it, and without
+	// that path a sign-out on a phone cleared the device and left a working
+	// refresh token behind for the rest of its thirty days.
+	if presented, _ := presentedRefreshToken(r, logoutRequest.RefreshToken); presented != "" {
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-			DeleteRefreshToken(tx, cookie.Value)
+			DeleteRefreshToken(tx, presented)
 			vbolt.TxCommit(tx)
 		})
 	}
@@ -393,9 +414,28 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get refresh token from cookie
-	cookie, err := r.Cookie("refreshToken")
-	if err != nil || cookie.Value == "" {
+	// The cookie is a browser's copy; the body is a native client's. Decoding
+	// the body is best-effort — an empty body is the browser case and stays
+	// valid — but a malformed one is a client bug worth naming.
+	var refreshRequest RefreshRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&refreshRequest); err != nil && !errors.Is(err, io.EOF) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Invalid refresh request",
+			})
+			return
+		}
+	}
+
+	// A caller that had to name the token in the body has no cookie jar to read
+	// the rotated successor out of, so it gets that successor in the response.
+	// A browser does not, and must not: the cookie is HttpOnly precisely so
+	// script cannot reach it.
+	presented, viaCookie := presentedRefreshToken(r, refreshRequest.RefreshToken)
+
+	if presented == "" {
 		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt without token", nil)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -413,7 +453,7 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	var newTokenString string
 	var rotateErr error
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		rotated, newTokenString, rotateErr = RotateRefreshToken(tx, cookie.Value, time.Now())
+		rotated, newTokenString, rotateErr = RotateRefreshToken(tx, presented, time.Now())
 		if rotateErr != nil {
 			// The reuse case revokes the session, which is a write worth
 			// keeping even though the request fails.
@@ -478,9 +518,28 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	resp := GetAuthResponseForUser(user)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	body := map[string]interface{}{
 		"success": true,
 		"token":   token,
 		"auth":    resp,
-	})
+	}
+	if !viaCookie {
+		body["refreshToken"] = newTokenString
+	}
+	json.NewEncoder(w).Encode(body)
+}
+
+// presentedRefreshToken picks the refresh token a request is offering, and says
+// where it came from. The cookie wins when both are present: a browser sending
+// both has one authoritative copy, and preferring the body would let a stale
+// value in a request override the live session the browser is holding.
+//
+// Which source answered is not bookkeeping — it decides whether the rotated
+// successor may appear in the response body, so it is returned rather than
+// inferred by comparing strings afterwards.
+func presentedRefreshToken(r *http.Request, fromBody string) (token string, viaCookie bool) {
+	if cookie, err := r.Cookie("refreshToken"); err == nil && cookie.Value != "" {
+		return cookie.Value, true
+	}
+	return strings.TrimSpace(fromBody), false
 }
