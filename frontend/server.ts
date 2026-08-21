@@ -1038,6 +1038,10 @@ export interface CheckMobileVersionResponse {
     updateMessage: string
 }
 
+export interface AdminGetMobileVersionsResponse {
+    platforms: AdminMobileVersionPlatform[]
+}
+
 export interface AdminSetMobileVersionRequest {
     platform: string
     minimumVersion: string
@@ -1458,6 +1462,17 @@ export interface ErrorAnalysis {
     errorsByCategory: DistributionPoint[]
     errorsByLevel: DistributionPoint[]
     recentErrors: string[]
+}
+
+export interface AdminMobileVersionPlatform {
+    platform: string
+    configured: boolean
+    minimumVersion: string
+    latestVersion: string
+    updateUrl: string
+    updateMessage: string
+    allowedHosts: string[]
+    warnings: string[]
 }
 
 export interface Entry {
@@ -1959,6 +1974,10 @@ export async function UpdateNotificationPreferences(data: UpdateNotificationPref
 
 export async function CheckMobileVersion(data: CheckMobileVersionRequest): Promise<rpc.Response<CheckMobileVersionResponse>> {
     return await rpc.call<CheckMobileVersionResponse>('CheckMobileVersion', JSON.stringify(data));
+}
+
+export async function AdminGetMobileVersions(data: Empty): Promise<rpc.Response<AdminGetMobileVersionsResponse>> {
+    return await rpc.call<AdminGetMobileVersionsResponse>('AdminGetMobileVersions', JSON.stringify(data));
 }
 
 export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"family/cfg"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 
 func RegisterMobileVersionMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, CheckMobileVersion)
+	vbeam.RegisterProc(app, AdminGetMobileVersions)
 	vbeam.RegisterProc(app, AdminSetMobileVersion)
 	app.HandleFunc("GET /api/mobile-version", mobileVersionPolicyHandler(app.DB))
 }
@@ -44,6 +46,28 @@ type AdminSetMobileVersionRequest struct {
 
 type AdminSetMobileVersionResponse struct {
 	Success bool `json:"success"`
+}
+
+// AdminMobileVersionPlatform is one platform's stored policy as the admin page
+// sees it, including what the server would refuse to serve.
+type AdminMobileVersionPlatform struct {
+	Platform       string `json:"platform"`
+	Configured     bool   `json:"configured"`
+	MinimumVersion string `json:"minimumVersion"`
+	LatestVersion  string `json:"latestVersion"`
+	UpdateUrl      string `json:"updateUrl"`
+	UpdateMessage  string `json:"updateMessage"`
+	// AllowedHosts is the store-URL allowlist for this platform, so the page can
+	// say what a valid URL looks like instead of making the operator guess.
+	AllowedHosts []string `json:"allowedHosts"`
+	// Warnings name stored values that would be rejected if saved today, and are
+	// therefore withheld from clients. Rows predating these rules are still in
+	// the bucket; this is how an operator finds out.
+	Warnings []string `json:"warnings"`
+}
+
+type AdminGetMobileVersionsResponse struct {
+	Platforms []AdminMobileVersionPlatform `json:"platforms"`
 }
 
 // Database types
@@ -128,6 +152,83 @@ func isValidSemver(version string) bool {
 	return valid
 }
 
+// The update URL and message are the only operator-authored strings this
+// server hands to an unauthenticated caller, and a client that has been told it
+// must update will follow the URL before anybody signs in. So neither is taken
+// on trust: the URL has to point at a real store listing, and the message has
+// to be a single short line of prose with no link of its own.
+
+// storeHosts is the set of hosts an update URL may point at, per platform.
+// TestFlight is included for iOS because a build can be forced forward during a
+// beta, before there is an App Store listing to link to.
+var storeHosts = map[string][]string{
+	"ios":     {"apps.apple.com", "itunes.apple.com", "testflight.apple.com"},
+	"android": {"play.google.com"},
+}
+
+const maxUpdateMessageLength = 200
+
+// validateStoreUrl rejects anything that is not an https store listing for the
+// platform being configured. A typo here does not fail loudly at the server —
+// it sends every out-of-date install somewhere else.
+func validateStoreUrl(platform, rawUrl string) error {
+	parsed, parseErr := url.Parse(rawUrl)
+	if parseErr != nil {
+		return errors.New("updateUrl must be a valid URL")
+	}
+	if parsed.Scheme != "https" {
+		return errors.New("updateUrl must be an https URL")
+	}
+	if parsed.User != nil {
+		return errors.New("updateUrl must not contain credentials")
+	}
+	hosts, known := storeHosts[platform]
+	if !known {
+		return errors.New("platform must be 'ios' or 'android'")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, allowed := range hosts {
+		if host == allowed {
+			return nil
+		}
+	}
+	return errors.New("updateUrl must point at one of: " + strings.Join(hosts, ", "))
+}
+
+// validateUpdateMessage keeps the forced-update text to one short line. Control
+// characters would let it forge structure in whatever the client renders it
+// into, and a URL in the text is a link the app cannot check against the store
+// allowlist above.
+func validateUpdateMessage(message string) error {
+	if len(message) > maxUpdateMessageLength {
+		return errors.New("updateMessage must be at most " + strconv.Itoa(maxUpdateMessageLength) + " characters")
+	}
+	for _, char := range message {
+		if char < 0x20 || char == 0x7f {
+			return errors.New("updateMessage must be a single line of plain text")
+		}
+	}
+	if strings.Contains(message, "://") {
+		return errors.New("updateMessage must not contain a URL; use updateUrl for the store link")
+	}
+	return nil
+}
+
+// sanitizeUpdateGuidance drops guidance that would not pass validation today.
+// Rows written before these rules existed are still in the bucket, and this is
+// the last point before the values reach a client.
+func sanitizeUpdateGuidance(config MobileVersionConfig) (updateUrl, updateMessage string) {
+	updateUrl = config.UpdateUrl
+	updateMessage = config.UpdateMessage
+	if updateUrl != "" && validateStoreUrl(config.Platform, updateUrl) != nil {
+		updateUrl = ""
+	}
+	if validateUpdateMessage(updateMessage) != nil {
+		updateMessage = ""
+	}
+	return
+}
+
 func validateMobileVersionRange(minimumVersion, latestVersion string) error {
 	if minimumVersion != "" && latestVersion != "" && compareSemver(minimumVersion, latestVersion) > 0 {
 		return errors.New("minimumVersion must not exceed latestVersion")
@@ -136,11 +237,12 @@ func validateMobileVersionRange(minimumVersion, latestVersion string) error {
 }
 
 func evaluateMobileVersion(appVersion string, config MobileVersionConfig) CheckMobileVersionResponse {
+	updateUrl, updateMessage := sanitizeUpdateGuidance(config)
 	resp := CheckMobileVersionResponse{
 		MinimumVersion: config.MinimumVersion,
 		LatestVersion:  config.LatestVersion,
-		UpdateUrl:      config.UpdateUrl,
-		UpdateMessage:  config.UpdateMessage,
+		UpdateUrl:      updateUrl,
+		UpdateMessage:  updateMessage,
 	}
 
 	if config.Id == 0 {
@@ -211,6 +313,52 @@ func CheckMobileVersion(ctx *vbeam.Context, req CheckMobileVersionRequest) (resp
 	return
 }
 
+// AdminGetMobileVersions reports the stored policy for every platform. Setting
+// a policy blind — with no way to read back what is live — is how a minimum
+// version gets raised past a build nobody has yet.
+func AdminGetMobileVersions(ctx *vbeam.Context, req Empty) (resp AdminGetMobileVersionsResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+	if user.Id != 1 {
+		err = errors.New("admin access required")
+		return
+	}
+
+	resp.Platforms = []AdminMobileVersionPlatform{}
+	for _, platform := range []string{"ios", "android"} {
+		var config MobileVersionConfig
+		configured := vbolt.Read(ctx.Tx, MobileVersionBkt, platformId(platform), &config)
+
+		entry := AdminMobileVersionPlatform{
+			Platform:       platform,
+			Configured:     configured,
+			MinimumVersion: config.MinimumVersion,
+			LatestVersion:  config.LatestVersion,
+			UpdateUrl:      config.UpdateUrl,
+			UpdateMessage:  config.UpdateMessage,
+			AllowedHosts:   storeHosts[platform],
+			Warnings:       []string{},
+		}
+		if config.UpdateUrl != "" {
+			if urlErr := validateStoreUrl(platform, config.UpdateUrl); urlErr != nil {
+				entry.Warnings = append(entry.Warnings, "Stored update URL is withheld from clients: "+urlErr.Error()+".")
+			}
+		} else if config.MinimumVersion != "" || config.LatestVersion != "" {
+			entry.Warnings = append(entry.Warnings, "A version policy is set with no update URL, so a prompted client has nowhere to go.")
+		}
+		if msgErr := validateUpdateMessage(config.UpdateMessage); msgErr != nil {
+			entry.Warnings = append(entry.Warnings, "Stored update message is withheld from clients: "+msgErr.Error()+".")
+		}
+
+		resp.Platforms = append(resp.Platforms, entry)
+	}
+
+	return
+}
+
 func AdminSetMobileVersion(ctx *vbeam.Context, req AdminSetMobileVersionRequest) (resp AdminSetMobileVersionResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -226,15 +374,37 @@ func AdminSetMobileVersion(ctx *vbeam.Context, req AdminSetMobileVersionRequest)
 		err = errors.New("platform must be 'ios' or 'android'")
 		return
 	}
-	if req.MinimumVersion != "" && !isValidSemver(req.MinimumVersion) {
+
+	minimumVersion := strings.TrimSpace(req.MinimumVersion)
+	latestVersion := strings.TrimSpace(req.LatestVersion)
+	updateUrl := strings.TrimSpace(req.UpdateUrl)
+	updateMessage := strings.TrimSpace(req.UpdateMessage)
+
+	if minimumVersion != "" && !isValidSemver(minimumVersion) {
 		err = errors.New("minimumVersion must be a valid semver string (e.g. 1.0.0)")
 		return
 	}
-	if req.LatestVersion != "" && !isValidSemver(req.LatestVersion) {
+	if latestVersion != "" && !isValidSemver(latestVersion) {
 		err = errors.New("latestVersion must be a valid semver string (e.g. 1.2.0)")
 		return
 	}
-	if validationErr := validateMobileVersionRange(req.MinimumVersion, req.LatestVersion); validationErr != nil {
+	if validationErr := validateMobileVersionRange(minimumVersion, latestVersion); validationErr != nil {
+		err = validationErr
+		return
+	}
+	if updateUrl != "" {
+		if validationErr := validateStoreUrl(req.Platform, updateUrl); validationErr != nil {
+			err = validationErr
+			return
+		}
+	}
+	// A prompt with nowhere to send the user is worse than no prompt: on a
+	// mandatory update the app has already refused to continue.
+	if updateUrl == "" && (minimumVersion != "" || latestVersion != "") {
+		err = errors.New("updateUrl is required once a minimum or latest version is set")
+		return
+	}
+	if validationErr := validateUpdateMessage(updateMessage); validationErr != nil {
 		err = validationErr
 		return
 	}
@@ -243,10 +413,10 @@ func AdminSetMobileVersion(ctx *vbeam.Context, req AdminSetMobileVersionRequest)
 	config := MobileVersionConfig{
 		Id:             id,
 		Platform:       req.Platform,
-		MinimumVersion: req.MinimumVersion,
-		LatestVersion:  req.LatestVersion,
-		UpdateUrl:      req.UpdateUrl,
-		UpdateMessage:  req.UpdateMessage,
+		MinimumVersion: minimumVersion,
+		LatestVersion:  latestVersion,
+		UpdateUrl:      updateUrl,
+		UpdateMessage:  updateMessage,
 	}
 
 	vbeam.UseWriteTx(ctx)

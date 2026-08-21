@@ -133,6 +133,19 @@ const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
           </div>
         </a>
 
+        <a href="/admin/app-versions" className="admin-card admin-card-link">
+          <div className="card-header">
+            <div className="card-icon">📱</div>
+            <h3>App Versions</h3>
+          </div>
+          <div className="card-content">
+            <p>
+              Set the minimum and latest companion app builds, and where to send someone to update.
+            </p>
+            <div className="card-action">Manage App Versions →</div>
+          </div>
+        </a>
+
         <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">📋</div>
