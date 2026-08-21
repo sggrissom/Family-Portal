@@ -176,12 +176,12 @@ func SendTestPushNotification(ctx *vbeam.Context, req SendTestPushRequest) (resp
 	}
 
 	job := PushNotificationJob{
+		Event:            PushEventTest,
 		FamilyId:         target.FamilyId,
 		SenderId:         admin.Id,
 		SenderName:       admin.Name,
 		Content:          message,
 		RecipientUserIds: []int{target.Id},
-		IsTest:           true,
 	}
 
 	if err = QueuePushNotification(job); err != nil {

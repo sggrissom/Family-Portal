@@ -1011,6 +1011,20 @@ export interface UnregisterPushDeviceResponse {
     success: boolean
 }
 
+export interface NotificationPreferencesResponse {
+    chatEnabled: boolean
+    showMessageText: boolean
+}
+
+export interface UpdateNotificationPreferencesRequest {
+    chatEnabled: boolean
+    showMessageText: boolean
+}
+
+export interface UpdateNotificationPreferencesResponse {
+    preferences: NotificationPreferencesResponse
+}
+
 export interface CheckMobileVersionRequest {
     platform: string
     appVersion: string
@@ -1354,6 +1368,7 @@ export interface PushWorkerStats {
     sent: number
     failed: number
     deactivated: number
+    suppressed: number
     lastSentAt: string
     lastError: string
     lastErrorAt: string
@@ -1932,6 +1947,14 @@ export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promi
 
 export async function UnregisterPushDevice(data: UnregisterPushDeviceRequest): Promise<rpc.Response<UnregisterPushDeviceResponse>> {
     return await rpc.call<UnregisterPushDeviceResponse>('UnregisterPushDevice', JSON.stringify(data));
+}
+
+export async function GetNotificationPreferences(data: Empty): Promise<rpc.Response<NotificationPreferencesResponse>> {
+    return await rpc.call<NotificationPreferencesResponse>('GetNotificationPreferences', JSON.stringify(data));
+}
+
+export async function UpdateNotificationPreferences(data: UpdateNotificationPreferencesRequest): Promise<rpc.Response<UpdateNotificationPreferencesResponse>> {
+    return await rpc.call<UpdateNotificationPreferencesResponse>('UpdateNotificationPreferences', JSON.stringify(data));
 }
 
 export async function CheckMobileVersion(data: CheckMobileVersionRequest): Promise<rpc.Response<CheckMobileVersionResponse>> {

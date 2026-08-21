@@ -17,6 +17,7 @@ type Data = {
   links: server.FamilyLinkView[];
   members: server.FamilyMemberView[];
   callerIsOwner: boolean;
+  notifications: server.NotificationPreferencesResponse;
 };
 
 type JoinFamilyForm = {
@@ -119,6 +120,71 @@ const useDeleteAccountForm = vlens.declareHook(
   })
 );
 
+// Push notifications are the one place family content reaches a phone without
+// anybody signing in, so the server withholds message text until it is asked
+// for. These mirror `NotificationPreferences` in backend/notification_preferences.go
+// and apply to the companion app, not to this browser.
+type NotificationForm = {
+  chatEnabled: boolean;
+  showMessageText: boolean;
+  saving: boolean;
+  error: string;
+  saved: boolean;
+};
+
+// What the server falls back to when an account has never saved preferences.
+// Repeated here only so a failed fetch renders the same switches the server
+// would have sent.
+const notificationDefaults: server.NotificationPreferencesResponse = {
+  chatEnabled: true,
+  showMessageText: false,
+};
+
+const useNotificationForm = vlens.declareHook(
+  (chatEnabled: boolean, showMessageText: boolean): NotificationForm => ({
+    chatEnabled,
+    showMessageText,
+    saving: false,
+    error: "",
+    saved: false,
+  })
+);
+
+// Each switch saves on its own rather than behind a Save button: there are two
+// of them, and a notification setting that looks changed but was never sent is
+// the kind of thing somebody only finds out about from a lock screen.
+async function onNotificationPreferenceChanged(
+  form: NotificationForm,
+  field: "chatEnabled" | "showMessageText",
+  event: Event
+) {
+  const checked = (event.target as HTMLInputElement).checked;
+  const previous = form[field];
+  form[field] = checked;
+  form.saving = true;
+  form.error = "";
+  form.saved = false;
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.UpdateNotificationPreferences({
+    chatEnabled: form.chatEnabled,
+    showMessageText: form.showMessageText,
+  });
+
+  form.saving = false;
+  if (resp) {
+    // Take the saved state back from the server rather than assuming it.
+    form.chatEnabled = resp.preferences.chatEnabled;
+    form.showMessageText = resp.preferences.showMessageText;
+    form.saved = true;
+  } else {
+    // Put the switch back, so it never shows a setting that was not stored.
+    form[field] = previous;
+    form.error = err || "Could not save your notification settings";
+  }
+  vlens.scheduleRedraw();
+}
+
 type AppearanceSettings = {
   theme: "light" | "dark";
 };
@@ -150,6 +216,7 @@ export async function fetch(route: string, prefix: string) {
       links: [],
       members: [],
       callerIsOwner: false,
+      notifications: notificationDefaults,
     });
   }
 
@@ -157,6 +224,7 @@ export async function fetch(route: string, prefix: string) {
   const [peopleResp] = await server.ListPeople({});
   const [linksResp] = await server.ListFamilyLinks({ familyId: 0 });
   const [membersResp] = await server.ListFamilyMembers({ familyId: 0 });
+  const [notificationsResp] = await server.GetNotificationPreferences({});
 
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
@@ -164,6 +232,7 @@ export async function fetch(route: string, prefix: string) {
     links: linksResp?.links || [],
     members: membersResp?.members || [],
     callerIsOwner: membersResp?.callerIsOwner || false,
+    notifications: notificationsResp || notificationDefaults,
   });
 }
 
@@ -518,6 +587,10 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const passwordForm = useChangePasswordForm();
   const deleteForm = useDeleteAccountForm();
   const appearance = useAppearanceSettings();
+  const notifications = useNotificationForm(
+    data.notifications.chatEnabled,
+    data.notifications.showMessageText
+  );
   const accountEmail = auth.getAuth()?.email ?? "";
 
   return (
@@ -567,6 +640,68 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   <small>Easy on the eyes</small>
                 </span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h2>Notifications</h2>
+          <div className="settings-card">
+            <p className="section-description">
+              These control push notifications on the Family Portal app for iPhone. They follow your
+              account, not the phone, so they apply to every device you sign in on.
+            </p>
+
+            {notifications.saved && (
+              <div className="success-message">Notification settings saved.</div>
+            )}
+            {notifications.error && (
+              <div className="error-message" role="alert">
+                {notifications.error}
+              </div>
+            )}
+
+            <div className="notification-options">
+              <label className="notification-option">
+                <input
+                  type="checkbox"
+                  checked={notifications.chatEnabled}
+                  disabled={notifications.saving}
+                  onChange={vlens.cachePartial(
+                    onNotificationPreferenceChanged,
+                    notifications,
+                    "chatEnabled"
+                  )}
+                />
+                <span>
+                  <strong>Chat messages</strong>
+                  <small>
+                    Notify me when someone in my family sends a message while I am away from the
+                    app.
+                  </small>
+                </span>
+              </label>
+
+              <label className="notification-option">
+                <input
+                  type="checkbox"
+                  checked={notifications.showMessageText}
+                  disabled={notifications.saving}
+                  onChange={vlens.cachePartial(
+                    onNotificationPreferenceChanged,
+                    notifications,
+                    "showMessageText"
+                  )}
+                />
+                <span>
+                  <strong>Show message text on the lock screen</strong>
+                  <small>
+                    Off by default: a notification says only that a message arrived, and you see who
+                    sent it and what it says after unlocking. Turn this on to show the sender and
+                    the message itself on the lock screen.
+                  </small>
+                </span>
+              </label>
             </div>
           </div>
         </div>

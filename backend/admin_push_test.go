@@ -84,7 +84,7 @@ func TestSendAPNsNotificationRecordsSuccess(t *testing.T) {
 	})
 	worker.db = db
 
-	if err := worker.sendAPNsNotification(device, PushNotificationJob{Content: "hello"}); err != nil {
+	if err := worker.sendAPNsNotification(device, PushNotificationJob{Event: PushEventChatMessage, Content: "hello"}, defaultNotificationPreferences(device.UserId)); err != nil {
 		t.Fatalf("sendAPNsNotification() error = %v, want nil", err)
 	}
 
@@ -112,8 +112,8 @@ func TestSendAPNsNotificationRecordsSuccess(t *testing.T) {
 	if attempt.ApnsId != "8A4B2C1D-TEST" {
 		t.Errorf("attempt.ApnsId = %q, want the apns-id response header", attempt.ApnsId)
 	}
-	if attempt.Kind != "chat" {
-		t.Errorf("attempt.Kind = %q, want \"chat\"", attempt.Kind)
+	if attempt.Kind != PushEventChatMessage {
+		t.Errorf("attempt.Kind = %q, want %q", attempt.Kind, PushEventChatMessage)
 	}
 	if attempt.TokenHint == device.Token {
 		t.Error("attempt.TokenHint is the raw device token, want it masked")
@@ -133,7 +133,7 @@ func TestSendAPNsNotificationRecordsFailureReason(t *testing.T) {
 	})
 	worker.db = db
 
-	if err := worker.sendAPNsNotification(device, PushNotificationJob{Content: "hello"}); err == nil {
+	if err := worker.sendAPNsNotification(device, PushNotificationJob{Event: PushEventChatMessage, Content: "hello"}, defaultNotificationPreferences(device.UserId)); err == nil {
 		t.Fatal("sendAPNsNotification() error = nil, want an APNs error")
 	}
 
@@ -183,7 +183,7 @@ func TestSendAPNsNotificationRecordsTransportFailure(t *testing.T) {
 	})
 	worker.db = db
 
-	if err := worker.sendAPNsNotification(device, PushNotificationJob{Content: "hello"}); err == nil {
+	if err := worker.sendAPNsNotification(device, PushNotificationJob{Event: PushEventChatMessage, Content: "hello"}, defaultNotificationPreferences(device.UserId)); err == nil {
 		t.Fatal("sendAPNsNotification() error = nil, want a transport error")
 	}
 
@@ -227,12 +227,11 @@ func TestTestPushUsesDistinctPayloadType(t *testing.T) {
 	worker.db = db
 
 	job := PushNotificationJob{
-		MessageId:  99,
+		Event:      PushEventTest,
 		SenderName: "Admin",
 		Content:    "verification ping",
-		IsTest:     true,
 	}
-	if err := worker.sendAPNsNotification(device, job); err != nil {
+	if err := worker.sendAPNsNotification(device, job, defaultNotificationPreferences(device.UserId)); err != nil {
 		t.Fatalf("sendAPNsNotification() error = %v, want nil", err)
 	}
 
@@ -277,12 +276,17 @@ func TestChatPushKeepsChatPayloadType(t *testing.T) {
 	worker.db = db
 
 	job := PushNotificationJob{
-		MessageId:  7,
+		Event:      PushEventChatMessage,
+		RecordId:   7,
 		SenderId:   3,
 		SenderName: "Dad",
 		Content:    "dinner is ready",
 	}
-	if err := worker.sendAPNsNotification(device, job); err != nil {
+	// Previews on, which is the case that reproduces the payload the app shipped
+	// against; the preview-off default has its own test.
+	prefs := defaultNotificationPreferences(device.UserId)
+	prefs.ShowMessageText = true
+	if err := worker.sendAPNsNotification(device, job, prefs); err != nil {
 		t.Fatalf("sendAPNsNotification() error = %v, want nil", err)
 	}
 

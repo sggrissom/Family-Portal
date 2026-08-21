@@ -58,7 +58,7 @@ func TestSendAPNsNotificationDeactivatesRejectedTokens(t *testing.T) {
 				})},
 			}
 
-			err = worker.sendAPNsNotification(device, PushNotificationJob{Content: "hello"})
+			err = worker.sendAPNsNotification(device, PushNotificationJob{Event: PushEventChatMessage, Content: "hello"}, defaultNotificationPreferences(device.UserId))
 			if err == nil {
 				t.Fatal("sendAPNsNotification() error = nil, want APNs error")
 			}

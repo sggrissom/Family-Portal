@@ -54,6 +54,7 @@ const emptyStatus: server.GetPushStatusResponse = {
     sent: 0,
     failed: 0,
     deactivated: 0,
+    suppressed: 0,
     lastSentAt: "",
     lastError: "",
     lastErrorAt: "",
@@ -289,6 +290,15 @@ const PushPage = ({ data }: PushPageProps) => {
             <h3>Auto-Deactivated</h3>
             <div className="stat-value">{stats.deactivated.toLocaleString()}</div>
             <div className="stat-label">Tokens APNs rejected</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">🔕</div>
+          <div className="stat-content">
+            <h3>Suppressed</h3>
+            <div className="stat-value">{stats.suppressed.toLocaleString()}</div>
+            <div className="stat-label">Recipients who turned this off</div>
           </div>
         </div>
       </div>

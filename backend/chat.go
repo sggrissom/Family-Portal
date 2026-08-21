@@ -384,7 +384,8 @@ func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) 
 
 	// Queue push notification job
 	job := PushNotificationJob{
-		MessageId:        message.Id,
+		Event:            PushEventChatMessage,
+		RecordId:         message.Id,
 		FamilyId:         sender.FamilyId,
 		SenderId:         sender.Id,
 		SenderName:       sender.Name,

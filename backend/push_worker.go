@@ -18,18 +18,74 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
+// Push event types. A job names one of these; everything else about the
+// notification — what the app opens, how the alert reads — follows from it.
+const (
+	PushEventChatMessage = "chat_message"
+	PushEventTest        = "test"
+)
+
+// pushPayloadVersion is the schema version of the payload's `data` object. The
+// companion app reads it before anything else and ignores a payload it does not
+// understand, so an app build older than the server never misroutes a tap.
+// Bump it when a field changes meaning or disappears; adding a field does not
+// need a bump, because an older build simply will not look at it.
+const pushPayloadVersion = 1
+
+// maxAlertBodyLength bounds the visible text. APNs accepts far more, but a lock
+// screen shows a couple of lines and the rest is only weight on the wire.
+const maxAlertBodyLength = 100
+
 // PushNotificationJob represents a push notification to be sent
 type PushNotificationJob struct {
-	MessageId        int
+	// Event is one of the PushEvent constants above. QueuePushNotification
+	// refuses a job naming anything else, so a producer finds out at the queue
+	// rather than by the notification silently not arriving.
+	Event string
+	// RecordId identifies what the event is about — a chat message id for
+	// PushEventChatMessage. Zero when there is no record to open, as with a
+	// test push.
+	RecordId         int
 	FamilyId         int
 	SenderId         int
 	SenderName       string
 	Content          string
 	RecipientUserIds []int
-	// IsTest marks an admin-issued verification push. It carries a distinct
-	// payload type so the companion app does not try to open a chat message
-	// that was never written.
-	IsTest bool
+}
+
+// pushEventSpec is everything the payload builder needs to know about one event
+// type. Adding an event means adding a row here rather than another branch in
+// the builder.
+type pushEventSpec struct {
+	// Category is the APNs category, which selects the notification's actions
+	// on the device.
+	Category string
+	// Destination is the site-relative path the app should open when the
+	// notification is tapped. It matches the web route for the same content, so
+	// the same string works as a universal link.
+	Destination string
+	// Title is the alert title when message previews are on.
+	Title string
+	// QuietTitle and QuietBody are the wording used when previews are off. They
+	// must name nothing about the family: no member names, no content.
+	QuietTitle string
+	QuietBody  string
+}
+
+var pushEventSpecs = map[string]pushEventSpec{
+	PushEventChatMessage: {
+		Category:    "chat_message",
+		Destination: "/chat",
+		Title:       "New message",
+		QuietTitle:  "Family Portal",
+		QuietBody:   "New message",
+	},
+	PushEventTest: {
+		Category:    "test",
+		Destination: "/settings",
+		Title:       "Test notification",
+		QuietTitle:  "Test notification",
+	},
 }
 
 // APNsPayload represents the Apple Push Notification payload
@@ -50,11 +106,26 @@ type APNsAlert struct {
 	Body  string `json:"body"`
 }
 
+// APNsCustomData is the routing half of the payload. iOS never displays it, so
+// it can carry what the app needs to open the right screen — but for that same
+// reason it must not be the only copy of anything the user should see, and it
+// deliberately does not carry message content: text that belongs on the lock
+// screen goes in the alert, subject to the recipient's preferences.
 type APNsCustomData struct {
-	Type       string `json:"type"`
-	MessageId  int    `json:"message_id"`
-	SenderId   int    `json:"sender_id"`
-	SenderName string `json:"sender_name"`
+	// Version is pushPayloadVersion at the time of sending.
+	Version int    `json:"v"`
+	Type    string `json:"type"`
+	// RecordId is the id of the record named by Type.
+	RecordId int `json:"record_id"`
+	// Destination is the in-app path to open on tap.
+	Destination string `json:"destination"`
+	FamilyId    int    `json:"family_id"`
+	SenderId    int    `json:"sender_id"`
+	SenderName  string `json:"sender_name"`
+	// MessageId repeats RecordId for chat events only. It is what the payload
+	// carried before it was versioned, kept so an app build that shipped
+	// against the old shape keeps working.
+	MessageId int `json:"message_id"`
 }
 
 // APNsConfig holds the configuration for APNs
@@ -77,7 +148,8 @@ type PushAttempt struct {
 	UserId    int       `json:"userId"`
 	TokenId   int       `json:"tokenId"`
 	TokenHint string    `json:"tokenHint"`
-	// Kind is "chat" or "test".
+	// Kind is the job's event type, so a row in the admin history says what the
+	// notification was for.
 	Kind    string `json:"kind"`
 	Success bool   `json:"success"`
 	// StatusCode is the APNs HTTP status, or 0 if the request never completed.
@@ -92,12 +164,16 @@ type PushAttempt struct {
 // PushWorkerStats is a live snapshot of push activity. Every field is in-memory:
 // a restart resets the counters and empties the history.
 type PushWorkerStats struct {
-	Enabled        bool          `json:"enabled"`
-	IsRunning      bool          `json:"isRunning"`
-	QueueLength    int           `json:"queueLength"`
-	Sent           int           `json:"sent"`
-	Failed         int           `json:"failed"`
-	Deactivated    int           `json:"deactivated"`
+	Enabled     bool `json:"enabled"`
+	IsRunning   bool `json:"isRunning"`
+	QueueLength int  `json:"queueLength"`
+	Sent        int  `json:"sent"`
+	Failed      int  `json:"failed"`
+	Deactivated int  `json:"deactivated"`
+	// Suppressed counts recipients skipped because they turned this kind of
+	// notification off. It is the difference between "nothing was sent" and
+	// "nothing was sent because nobody wanted it".
+	Suppressed     int           `json:"suppressed"`
 	LastSentAt     time.Time     `json:"lastSentAt"`
 	LastError      string        `json:"lastError"`
 	LastErrorAt    time.Time     `json:"lastErrorAt"`
@@ -121,6 +197,7 @@ type PushWorker struct {
 	sent        int
 	failed      int
 	deactivated int
+	suppressed  int
 	lastSentAt  time.Time
 	lastError   string
 	lastErrorAt time.Time
@@ -208,6 +285,16 @@ func loadAPNsConfig() (*APNsConfig, error) {
 
 // QueuePushNotification adds a notification job to the processing queue
 func QueuePushNotification(job PushNotificationJob) error {
+	// An event the payload builder does not know about would reach a phone as a
+	// notification the app cannot route, so it is refused where the producer
+	// can still see the error.
+	if _, known := pushEventSpecs[job.Event]; !known {
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Cannot queue: unknown event type", map[string]interface{}{
+			"event": job.Event,
+		})
+		return fmt.Errorf("unknown push event %q", job.Event)
+	}
+
 	if globalPushWorker == nil {
 		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Cannot queue: worker not initialized")
 		return fmt.Errorf("push worker not initialized")
@@ -216,15 +303,16 @@ func QueuePushNotification(job PushNotificationJob) error {
 	select {
 	case globalPushWorker.jobQueue <- job:
 		LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Queued notification", map[string]interface{}{
-			"messageId":   job.MessageId,
-			"isTest":      job.IsTest,
+			"event":       job.Event,
+			"recordId":    job.RecordId,
 			"recipients":  len(job.RecipientUserIds),
 			"queueLength": len(globalPushWorker.jobQueue),
 		})
 		return nil
 	default:
 		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Cannot queue: queue is full", map[string]interface{}{
-			"messageId": job.MessageId,
+			"event":    job.Event,
+			"recordId": job.RecordId,
 		})
 		return fmt.Errorf("push notification queue is full")
 	}
@@ -249,6 +337,14 @@ func (pw *PushWorker) recordAttempt(attempt PushAttempt) {
 	if len(pw.recent) > maxRecentPushAttempts {
 		pw.recent = pw.recent[len(pw.recent)-maxRecentPushAttempts:]
 	}
+}
+
+// recordSuppression counts a recipient who has this kind of notification
+// turned off.
+func (pw *PushWorker) recordSuppression() {
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+	pw.suppressed++
 }
 
 // recordDeactivation counts a token APNs told us to stop using.
@@ -312,46 +408,71 @@ func (pw *PushWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
 	}
 }
 
+// pushDelivery pairs one device with the preferences of the account that
+// registered it. The preferences decide how much of the notification is
+// readable without unlocking the phone, so they have to travel with the token
+// rather than be looked up again at send time.
+type pushDelivery struct {
+	Token PushDeviceToken
+	Prefs NotificationPreferences
+}
+
 // processPushJob processes a single push notification job
 func (pw *PushWorker) processPushJob(job PushNotificationJob) {
 	LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Processing notification", map[string]interface{}{
-		"messageId":  job.MessageId,
-		"isTest":     job.IsTest,
+		"event":      job.Event,
+		"recordId":   job.RecordId,
 		"recipients": len(job.RecipientUserIds),
 	})
 
-	// Get device tokens for all recipients
-	var allTokens []PushDeviceToken
+	// Resolve preferences and device tokens together, in one read transaction.
+	var deliveries []pushDelivery
+	suppressed := 0
 	vbolt.WithReadTx(pw.db, func(tx *vbolt.Tx) {
 		for _, userId := range job.RecipientUserIds {
-			tokens := GetActiveDeviceTokensForUser(tx, userId)
-			allTokens = append(allTokens, tokens...)
+			prefs := loadNotificationPreferences(tx, userId)
+			if !prefs.allowsEvent(job.Event) {
+				suppressed++
+				continue
+			}
+			for _, token := range GetActiveDeviceTokensForUser(tx, userId) {
+				deliveries = append(deliveries, pushDelivery{Token: token, Prefs: prefs})
+			}
 		}
 	})
 
-	if len(allTokens) == 0 {
-		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] No active device tokens for recipients", map[string]interface{}{
-			"messageId":  job.MessageId,
+	for i := 0; i < suppressed; i++ {
+		pw.recordSuppression()
+	}
+
+	if len(deliveries) == 0 {
+		LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Nothing to deliver to", map[string]interface{}{
+			"event":      job.Event,
+			"recordId":   job.RecordId,
 			"recipients": len(job.RecipientUserIds),
+			"suppressed": suppressed,
 		})
 		return
 	}
 
 	LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Found device tokens", map[string]interface{}{
-		"messageId": job.MessageId,
-		"tokens":    len(allTokens),
+		"event":      job.Event,
+		"recordId":   job.RecordId,
+		"tokens":     len(deliveries),
+		"suppressed": suppressed,
 	})
 
 	// Send notification to each device
-	for _, token := range allTokens {
-		if token.Platform == "ios" {
-			err := pw.sendAPNsNotification(token, job)
+	for _, delivery := range deliveries {
+		if delivery.Token.Platform == "ios" {
+			err := pw.sendAPNsNotification(delivery.Token, job, delivery.Prefs)
 			if err != nil {
 				LogWarn(LogCategoryWorker, "[PUSH_NOTIFICATION] Failed to send to device", map[string]interface{}{
-					"messageId": job.MessageId,
-					"tokenId":   token.Id,
-					"userId":    token.UserId,
-					"error":     err.Error(),
+					"event":    job.Event,
+					"recordId": job.RecordId,
+					"tokenId":  delivery.Token.Id,
+					"userId":   delivery.Token.UserId,
+					"error":    err.Error(),
 				})
 			}
 		}
@@ -359,55 +480,82 @@ func (pw *PushWorker) processPushJob(job PushNotificationJob) {
 	}
 }
 
-// sendAPNsNotification sends a push notification via APNs
-func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotificationJob) error {
-	kind := "chat"
-	if job.IsTest {
-		kind = "test"
+// truncateAlertBody keeps the visible text to something a lock screen can show.
+func truncateAlertBody(body string) string {
+	if len(body) > maxAlertBodyLength {
+		return body[:maxAlertBodyLength-3] + "..."
+	}
+	return body
+}
+
+// buildAPNsPayload renders one job for one recipient.
+//
+// The split between `aps` and `data` is the whole privacy story: `aps.alert` is
+// what iOS puts on the lock screen, and it says nothing about the family unless
+// the recipient asked for previews; `data` is never displayed, so it can carry
+// the identifiers the app needs once somebody has actually unlocked the phone
+// and opened it.
+func buildAPNsPayload(job PushNotificationJob, prefs NotificationPreferences) APNsPayload {
+	spec := pushEventSpecs[job.Event]
+
+	payload := APNsPayload{
+		Aps: APNsAps{
+			Sound:    "default",
+			Badge:    1,
+			Category: spec.Category,
+		},
+		Data: APNsCustomData{
+			Version:     pushPayloadVersion,
+			Type:        job.Event,
+			RecordId:    job.RecordId,
+			Destination: spec.Destination,
+			FamilyId:    job.FamilyId,
+			SenderId:    job.SenderId,
+			SenderName:  job.SenderName,
+		},
 	}
 
+	switch job.Event {
+	case PushEventTest:
+		// An admin typed this text to check that a specific phone can receive
+		// anything at all. It is not family content, so the preview preference
+		// does not apply — and there is no record for the app to open, which is
+		// why RecordId stays out of the compatibility field below.
+		payload.Aps.Alert = APNsAlert{
+			Title: spec.Title,
+			Body:  truncateAlertBody(job.Content),
+		}
+	case PushEventChatMessage:
+		payload.Data.MessageId = job.RecordId
+		if prefs.ShowMessageText {
+			payload.Aps.Alert = APNsAlert{
+				Title: spec.Title,
+				Body:  truncateAlertBody(fmt.Sprintf("%s: %s", job.SenderName, job.Content)),
+			}
+		} else {
+			payload.Aps.Alert = APNsAlert{Title: spec.QuietTitle, Body: spec.QuietBody}
+		}
+	default:
+		// Unreachable: QueuePushNotification refuses an event with no spec.
+		// Falling back to the quiet wording keeps a mistake from putting
+		// unreviewed text on a lock screen.
+		payload.Aps.Alert = APNsAlert{Title: spec.QuietTitle, Body: spec.QuietBody}
+	}
+
+	return payload
+}
+
+// sendAPNsNotification sends a push notification via APNs
+func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotificationJob, prefs NotificationPreferences) error {
 	attempt := PushAttempt{
 		Time:      time.Now(),
 		UserId:    token.UserId,
 		TokenId:   token.Id,
 		TokenHint: maskPushToken(token.Token),
-		Kind:      kind,
+		Kind:      job.Event,
 	}
 
-	// Truncate content for notification body
-	body := job.Content
-	if len(body) > 100 {
-		body = body[:97] + "..."
-	}
-
-	// Build the payload
-	payload := APNsPayload{
-		Aps: APNsAps{
-			Alert: APNsAlert{
-				Title: "New message",
-				Body:  fmt.Sprintf("%s: %s", job.SenderName, body),
-			},
-			Sound:    "default",
-			Badge:    1,
-			Category: "chat_message",
-		},
-		Data: APNsCustomData{
-			Type:       "chat_message",
-			MessageId:  job.MessageId,
-			SenderId:   job.SenderId,
-			SenderName: job.SenderName,
-		},
-	}
-
-	// A test push must not look like a chat message: the app routes on
-	// data.type, and there is no message for it to open.
-	if job.IsTest {
-		payload.Aps.Alert.Title = "Test notification"
-		payload.Aps.Alert.Body = body
-		payload.Aps.Category = "test"
-		payload.Data.Type = "test"
-		payload.Data.MessageId = 0
-	}
+	payload := buildAPNsPayload(job, prefs)
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -470,7 +618,7 @@ func (pw *PushWorker) sendAPNsNotification(token PushDeviceToken, job PushNotifi
 		LogInfo(LogCategoryWorker, "[PUSH_NOTIFICATION] Delivered to APNs", map[string]interface{}{
 			"tokenId": token.Id,
 			"userId":  token.UserId,
-			"kind":    kind,
+			"kind":    job.Event,
 			"apnsId":  attempt.ApnsId,
 		})
 		return nil
@@ -579,6 +727,7 @@ func GetPushWorkerStats() PushWorkerStats {
 		Sent:           pw.sent,
 		Failed:         pw.failed,
 		Deactivated:    pw.deactivated,
+		Suppressed:     pw.suppressed,
 		LastSentAt:     pw.lastSentAt,
 		LastError:      pw.lastError,
 		LastErrorAt:    pw.lastErrorAt,

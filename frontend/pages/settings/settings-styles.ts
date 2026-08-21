@@ -587,3 +587,57 @@ block(`
   font-weight: 600;
 }
 `);
+
+block(`
+.notification-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+`);
+
+block(`
+.notification-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+`);
+
+block(`
+.notification-option:focus-within {
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.notification-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+`);
+
+block(`
+.notification-option strong {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+`);
+
+block(`
+.notification-option small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+`);

@@ -27,7 +27,7 @@ func TestQueueingPushWithoutAWorkerReportsRatherThanPanics(t *testing.T) {
 	globalPushWorker = nil
 	t.Cleanup(func() { globalPushWorker = previous })
 
-	if err := QueuePushNotification(PushNotificationJob{MessageId: 1, FamilyId: 1}); err == nil {
+	if err := QueuePushNotification(PushNotificationJob{Event: PushEventChatMessage, RecordId: 1, FamilyId: 1}); err == nil {
 		t.Error("QueuePushNotification should report that there is no worker")
 	}
 }
@@ -42,10 +42,10 @@ func TestAFullPushQueueRefusesInsteadOfBlocking(t *testing.T) {
 	globalPushWorker = &PushWorker{jobQueue: make(chan PushNotificationJob, 1)}
 	t.Cleanup(func() { globalPushWorker = previous })
 
-	if err := QueuePushNotification(PushNotificationJob{MessageId: 1}); err != nil {
+	if err := QueuePushNotification(PushNotificationJob{Event: PushEventChatMessage, RecordId: 1}); err != nil {
 		t.Fatalf("first notification rejected: %v", err)
 	}
-	if err := QueuePushNotification(PushNotificationJob{MessageId: 2}); err == nil {
+	if err := QueuePushNotification(PushNotificationJob{Event: PushEventChatMessage, RecordId: 2}); err == nil {
 		t.Error("QueuePushNotification blocked or accepted a job with no room")
 	}
 }
@@ -98,7 +98,7 @@ func TestChatMessageSurvivesAnUnavailablePushWorker(t *testing.T) {
 
 	// The notification attempt happens after the commit above; it fails here
 	// because there is no worker, and the message must still be readable.
-	_ = QueuePushNotification(PushNotificationJob{MessageId: stored.Id, FamilyId: stored.FamilyId})
+	_ = QueuePushNotification(PushNotificationJob{Event: PushEventChatMessage, RecordId: stored.Id, FamilyId: stored.FamilyId})
 
 	var readBack ChatMessage
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {

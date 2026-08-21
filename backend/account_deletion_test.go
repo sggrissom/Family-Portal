@@ -126,6 +126,11 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 			t.Fatalf("upsertPushDeviceToken() error = %v", err)
 		}
 
+		ownerPrefs := NotificationPreferences{
+			UserId: fx.owner.Id, ChatEnabled: true, ShowMessageText: true, UpdatedAt: time.Now(),
+		}
+		vbolt.Write(tx, NotificationPreferencesBkt, ownerPrefs.UserId, &ownerPrefs)
+
 		if _, err := createPasswordResetTokenTx(tx, fx.owner.Id, time.Now()); err != nil {
 			t.Fatalf("createPasswordResetTokenTx() error = %v", err)
 		}
@@ -295,6 +300,11 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		if GetPushDeviceTokenByToken(tx, fx.device).Id != 0 {
 			t.Error("push device token survived")
 		}
+		var prefs NotificationPreferences
+		vbolt.Read(tx, NotificationPreferencesBkt, fx.owner.Id, &prefs)
+		if prefs.UserId != 0 {
+			t.Error("notification preferences survived")
+		}
 	})
 
 	// Nothing may be left pointing at the deleted account or its family. The
@@ -306,15 +316,16 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		t.Errorf("people remaining = %d, want 1 (the outsider's)", got)
 	}
 	for name, got := range map[string]int{
-		"images":         countRows(t, fx.db, ImagesBkt),
-		"photo_person":   countRows(t, fx.db, PhotoPersonBkt),
-		"growth":         countRows(t, fx.db, GrowthDataBkt),
-		"milestones":     countRows(t, fx.db, MilestoneBkt),
-		"tags":           countRows(t, fx.db, TagBkt),
-		"chat":           countRows(t, fx.db, ChatMessagesBkt),
-		"refresh tokens": countRows(t, fx.db, RefreshTokenBkt),
-		"reset tokens":   countRows(t, fx.db, PasswordResetBkt),
-		"device tokens":  countRows(t, fx.db, PushDeviceTokenBkt),
+		"images":                   countRows(t, fx.db, ImagesBkt),
+		"photo_person":             countRows(t, fx.db, PhotoPersonBkt),
+		"growth":                   countRows(t, fx.db, GrowthDataBkt),
+		"milestones":               countRows(t, fx.db, MilestoneBkt),
+		"tags":                     countRows(t, fx.db, TagBkt),
+		"chat":                     countRows(t, fx.db, ChatMessagesBkt),
+		"refresh tokens":           countRows(t, fx.db, RefreshTokenBkt),
+		"reset tokens":             countRows(t, fx.db, PasswordResetBkt),
+		"device tokens":            countRows(t, fx.db, PushDeviceTokenBkt),
+		"notification preferences": countRows(t, fx.db, NotificationPreferencesBkt),
 
 		"activities":        countRows(t, fx.db, ActivityBkt),
 		"seasons":           countRows(t, fx.db, SeasonBkt),
