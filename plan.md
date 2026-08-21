@@ -122,7 +122,6 @@ Mostly done; finishing the tail.
 - [x] Pin third-party GitHub Actions. All five pinned to a commit SHA with the version in a trailing comment — a tag is mutable, and this workflow holds the deploy key.
 - [x] Add dependency and secret scanning to CI. `govulncheck`, `npm audit`, and gitleaks over full history, in a job `deploy` deliberately does not depend on. Turning it on found nine reachable vulnerabilities in `golang.org/x/image` and `golang-jwt/jwt`, all in the photo decode and token parse paths; both are bumped here, which also moved the Go directive to 1.25.
 - [x] One source of truth for the application version; surface it in logs and an authenticated diagnostics view. `cfg.Version`, with commit and build time stamped by the linker; a test walks the source tree and fails on any Go file that writes the version down itself, which `app.go` was doing.
-- [ ] Tag `v1.0.0`, write release notes.
 
 **CI already in place:** formatting checks, `go vet`, backend tests, TypeScript check, CSS validation, release frontend + binary build, `-race`, coverage reporting, and a guard that fails when a check mutates tracked files.
 
