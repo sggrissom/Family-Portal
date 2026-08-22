@@ -62,6 +62,7 @@ func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
 	issues = append(issues, checkAIProvider()...)
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
+	issues = append(issues, checkIOSAppID()...)
 	issues = append(issues, checkStoragePaths(dbPath, staticDir)...)
 	return issues
 }
@@ -196,6 +197,28 @@ func checkAPNs() []ConfigIssue {
 		issues = append(issues, ConfigIssue{Setting: "APNS_KEY_PATH", Detail: "signing key is unusable: " + err.Error()})
 	}
 	return issues
+}
+
+// checkIOSAppID validates the universal-link app identifier when one is set.
+// Unset is a legitimate state — a server with no companion app in the field
+// wants no association file — so this is not a required setting. What it cannot
+// be is wrong: the file is fetched by Apple's CDN and cached on every device
+// that installs the app, so an identifier with a typo in it is a broken
+// association that outlives the deploy that fixed it. The handler refuses to
+// serve a malformed id (see backend/universal_links.go); this is where an
+// operator finds out why the file is 404ing.
+func checkIOSAppID() []ConfigIssue {
+	appID := IOSAppID()
+	if appID == "" {
+		return nil
+	}
+	if !iosAppIDPattern.MatchString(appID) {
+		return []ConfigIssue{{
+			Setting: "IOS_APP_ID",
+			Detail:  "must be <TeamID>.<BundleID>, e.g. ABCDE12345.app.familyrecord.ios; universal links are disabled while it is malformed",
+		}}
+	}
+	return nil
 }
 
 // checkStoragePaths confirms the process can actually write where it stores

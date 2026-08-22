@@ -213,3 +213,43 @@ at app startup** (`backend/photo_analysis_worker.go:71`) — if the daemon is do
 when `app@family` starts, the worker is never created and stays off until the
 app is restarted, however healthy the daemon becomes later. Restart `family` after
 `family-face`, not before.
+
+## Universal links
+
+`/.well-known/apple-app-site-association` is what makes a `familyrecord.app`
+link — including the `destination` every push payload carries — open the
+companion app instead of Safari. The app serves it; Caddy passes it through with
+everything else.
+
+It is off until `IOS_APP_ID` is set in `shared/.env` to the app's
+`<TeamID>.<BundleID>`. Unset, the path 404s, which is the correct answer for a
+server with no app in the field. Malformed, the app refuses to start — see
+`checkIOSAppID` in `backend/config_check.go` — because Apple's CDN and every
+device that installed the app cache this file, so an association naming the
+wrong app is not something a redeploy takes back.
+
+Three things about the serving path have to stay true, and none of them are
+enforceable from inside the application:
+
+- **No redirect.** Apple fetches the file over https and gives up on a 3xx.
+  `https://familyrecord.app/.well-known/apple-app-site-association` must answer
+  200 directly. The `www` block redirects, which is fine — Apple only ever asks
+  the domain named in the app's entitlement.
+- **`Content-Type: application/json`**, which the handler sets, and no signing.
+  The signed `.pkcs7` form was dropped in iOS 10.
+- **The ACME challenge lives under the same prefix.** Caddy answers
+  `/.well-known/acme-challenge/*` itself during issuance; it does not claim the
+  rest of `/.well-known/`. If a future site block ever routes that whole prefix
+  to a static directory, the association file goes with it.
+
+Verify after a deploy that sets it:
+
+```bash
+curl -sS -D- -o /dev/null https://familyrecord.app/.well-known/apple-app-site-association
+curl -sS https://familyrecord.app/.well-known/apple-app-site-association | jq .
+```
+
+The path list itself is in `backend/universal_links.go`, next to the reasoning
+for what is on it. Adding a path there without a screen in the app that opens it
+produces a link that opens the app and then does nothing — worse than the
+browser it took the link from.
