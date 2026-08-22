@@ -273,13 +273,16 @@ func MakeApplication() *vbeam.Application {
 // any handler touches the database. Request deadlines follow — a refused
 // request never needed one — and they must be outside the security wrapper,
 // which dispatches WebSocket upgrades itself and would otherwise leave those
-// connections carrying whatever deadline the last request set.
+// connections carrying whatever deadline the last request set. The bearer
+// token wrapper is innermost, next to the dispatch it exists to feed: it
+// rewrites a header and nothing else, so nothing outside it needs to know.
 func WrapApplication(app *vbeam.Application) http.Handler {
 	return backend.NewRequestIDWrapper(
 		backend.NewRateLimitWrapper(
 			backend.NewRequestTimeoutWrapper(
 				backend.NewRequestSizeLimitWrapper(
-					backend.NewSecurityWrapper(app)))))
+					backend.NewBearerTokenWrapper(
+						backend.NewSecurityWrapper(app))))))
 }
 
 func MakeSecureApplication() http.Handler {
