@@ -142,6 +142,9 @@ if any check modified a tracked file.
   systemd units, paths and ownership, the face daemon.
 - [`docs/restore.md`](docs/restore.md) — backups and how to actually restore
   one, written to be followed on a fresh box.
+- [`docs/mobile-api.md`](docs/mobile-api.md) — the contract the iOS companion
+  app is built against: what a shipped build may rely on, and what changing it
+  would break.
 
 Pushing to `main` builds and deploys to the VPS, then runs the smoke check.
 
@@ -152,7 +155,7 @@ app.go              application wiring: config check, DB, procs, workers, middle
 backend/            domain logic, RPC handlers, storage, workers
 cfg/                build-tag configuration
 cmd/                smokecheck, e2e, faceanalysis, verifydb, restoredrill
-docs/               deployment and restore runbooks
+docs/               runbooks and the mobile API contract
 frontend/           Preact/vlens SPA; server.ts is generated — do not edit
 local/              development server entry point
 release/            production server entry point and embedded dist
