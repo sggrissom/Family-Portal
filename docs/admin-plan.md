@@ -298,7 +298,7 @@ which release this is relative to the last one.
 All of that is already computed by `tiny-server-helper`. None of it is reachable
 from the browser.
 
-### 4.1 Consume `metrics-server` (highest value)
+### 4.1 Consume `metrics-server` (highest value) — **done**
 
 `metrics-server` is deployed and reachable at `metrics.grissom.zone/metrics`. It
 already collects, on a 30-second loop:
@@ -479,8 +479,9 @@ Not urgent, but it's what makes the above cheaper to build.
    complete.
 4. ~~**§3.1 + §3.2** — config status and the problems feed.~~ **Done.** Backup
    age is the one entry still missing from the feed; it arrives with §4.2.
-5. **§4.1** — `metrics-server`. Disk and proxy-measured 5xx are the two things
-   the app genuinely cannot see about itself.
+5. ~~**§4.1** — `metrics-server`.~~ **Done** on this side: `GetHostMetrics`,
+   the Host card, and disk + proxy 5xx in the problems feed. Needs
+   `METRICS_URL` and `METRICS_API_KEY` in `shared/.env` (see deployment.md).
 6. **§4.4** — add the site to `monitor-tui`. Trivial, and arguably should be
    done first since it costs one line.
 7. Everything else as it becomes annoying.

@@ -25,6 +25,8 @@ var configEnvVars = []string{
 	"APNS_BUNDLE_ID",
 	"APNS_KEY_PATH",
 	"APNS_ENVIRONMENT",
+	"METRICS_URL",
+	"METRICS_API_KEY",
 }
 
 // validConfigEnv is a configuration with no issues: every required setting
@@ -249,6 +251,55 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 
 		if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "APNS_KEY_PATH") {
 			t.Fatalf("CheckProductionConfig() accepted a missing APNs key file: %s", settingsWithIssues(issues))
+		}
+	})
+}
+
+// TestCheckProductionConfigTreatsMetricsAsAllOrNothing: consuming
+// metrics-server is optional, but half-configuring it fails invisibly — a URL
+// with no key gets a 401 the panel degrades quietly past.
+func TestCheckProductionConfigTreatsMetricsAsAllOrNothing(t *testing.T) {
+	dbPath, staticDir, logDir := storageDirs(t)
+
+	t.Run("unset is fine", func(t *testing.T) {
+		applyEnv(t, validConfigEnv())
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); len(issues) > 0 {
+			t.Fatalf("CheckProductionConfig() rejected unconfigured host metrics: %s", settingsWithIssues(issues))
+		}
+	})
+
+	t.Run("both set is fine", func(t *testing.T) {
+		env := validConfigEnv()
+		env["METRICS_URL"] = "http://127.0.0.1:9110/metrics"
+		env["METRICS_API_KEY"] = "a-key"
+		applyEnv(t, env)
+
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); len(issues) > 0 {
+			t.Fatalf("CheckProductionConfig() rejected a complete metrics config: %s", settingsWithIssues(issues))
+		}
+	})
+
+	t.Run("one set is a failure", func(t *testing.T) {
+		env := validConfigEnv()
+		env["METRICS_URL"] = "http://127.0.0.1:9110/metrics"
+		applyEnv(t, env)
+
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "METRICS_API_KEY") {
+			t.Fatalf("CheckProductionConfig() accepted a URL with no key: %s", settingsWithIssues(issues))
+		}
+	})
+
+	t.Run("public hostname is a failure", func(t *testing.T) {
+		// metrics-server binds loopback on this box; going out to the public
+		// name makes the request depend on DNS and TLS to reach a service one
+		// hop away.
+		env := validConfigEnv()
+		env["METRICS_URL"] = "https://metrics.grissom.zone/metrics"
+		env["METRICS_API_KEY"] = "a-key"
+		applyEnv(t, env)
+
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "METRICS_URL") {
+			t.Fatalf("CheckProductionConfig() accepted a non-loopback metrics URL: %s", settingsWithIssues(issues))
 		}
 	})
 }

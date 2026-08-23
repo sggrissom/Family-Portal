@@ -63,6 +63,7 @@ func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkIOSAppID()...)
+	issues = append(issues, checkMetrics()...)
 	issues = append(issues, checkStoragePaths(dbPath, staticDir, logDir)...)
 	return issues
 }
@@ -197,6 +198,60 @@ func checkAPNs() []ConfigIssue {
 		issues = append(issues, ConfigIssue{Setting: "APNS_KEY_PATH", Detail: "signing key is unusable: " + err.Error()})
 	}
 	return issues
+}
+
+// metricsEnvVars are the variables that must be set together to consume
+// metrics-server.
+var metricsEnvVars = []string{
+	"METRICS_URL",
+	"METRICS_API_KEY",
+}
+
+// checkMetrics is the second all-or-nothing subsystem, on the APNs pattern.
+// Consuming metrics-server is optional — an unset pair simply hides the host
+// card — but half of it is a mistake that fails invisibly: a URL with no key
+// gets a 401 that the panel degrades quietly past, and a key with no URL does
+// nothing at all.
+//
+// It does not validate that the service answers. That is a runtime condition,
+// reported by the card itself, and a metrics service that is down should never
+// stop the application from starting.
+func checkMetrics() []ConfigIssue {
+	var configured, missing []string
+	for _, name := range metricsEnvVars {
+		if os.Getenv(name) == "" {
+			missing = append(missing, name)
+		} else {
+			configured = append(configured, name)
+		}
+	}
+
+	if len(configured) == 0 {
+		return nil
+	}
+	if len(missing) > 0 {
+		return []ConfigIssue{{
+			Setting: strings.Join(missing, ", "),
+			Detail:  "must be set because host metrics are partially configured (" + strings.Join(configured, ", ") + " present)",
+		}}
+	}
+
+	raw := os.Getenv("METRICS_URL")
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return []ConfigIssue{{Setting: "METRICS_URL", Detail: "must be a full URL, e.g. http://127.0.0.1:9110/metrics"}}
+	}
+	// metrics-server binds loopback and lives on the same box. Pointing this at
+	// the public hostname makes the request leave the machine and depend on
+	// DNS and TLS to reach a service one hop away.
+	if host := parsed.Hostname(); host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		return []ConfigIssue{{
+			Setting: "METRICS_URL",
+			Detail:  "should point at the internal port on loopback; metrics-server runs on this box and binds 127.0.0.1",
+		}}
+	}
+
+	return nil
 }
 
 // checkIOSAppID validates the universal-link app identifier when one is set.

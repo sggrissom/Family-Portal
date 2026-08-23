@@ -70,6 +70,23 @@ type PushProblems struct {
 	LastErrorAt time.Time `json:"lastErrorAt"`
 }
 
+// HostProblems is what the box says about itself, via metrics-server. Absent
+// when host metrics are not configured or the service is not answering — a
+// metrics service that is down must not take the panel with it.
+type HostProblems struct {
+	Available bool `json:"available"`
+	// DiskUsedPct is the shared 20 GB disk, which backupctl's retention policy
+	// already exists to protect.
+	DiskUsedPct float64 `json:"diskUsedPct"`
+	DiskLow     bool    `json:"diskLow"`
+	// Proxy5xx is measured by Caddy, independently of anything this
+	// application logs about itself. It is the only number here that answers
+	// "is the site erroring for people" rather than "did the app notice".
+	Proxy5xx      int `json:"proxy5xx"`
+	Proxy4xx      int `json:"proxy4xx"`
+	WindowSeconds int `json:"windowSeconds"`
+}
+
 type SystemHealthResponse struct {
 	// Healthy is false when anything below is worth looking at. A green page
 	// has to mean something, so this is the one field the UI branches on.
@@ -83,6 +100,7 @@ type SystemHealthResponse struct {
 	Logs         LogProblems     `json:"logs"`
 	Photos       PhotoProblems   `json:"photos"`
 	Push         PushProblems    `json:"push"`
+	Host         HostProblems    `json:"host"`
 }
 
 // healthLogWindow is how far back the landing page looks. A day is the span
@@ -118,6 +136,20 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	resp.Logs = collectLogProblems()
 	resp.Photos = collectPhotoProblems(ctx.Tx)
 
+	// Host metrics are cached and degrade to Available=false, so this cannot
+	// slow the page down by more than the fetch timeout once every 30s.
+	host := fetchHostMetrics()
+	if host.Available {
+		resp.Host = HostProblems{
+			Available:     true,
+			DiskUsedPct:   host.System.Disk.UsedPct,
+			DiskLow:       host.System.Disk.UsedPct >= diskWarnPct,
+			Proxy5xx:      int(host.App.Traffic.Error5xx),
+			Proxy4xx:      int(host.App.Traffic.Error4xx),
+			WindowSeconds: int(host.App.Traffic.WindowSeconds),
+		}
+	}
+
 	push := GetPushWorkerStats()
 	resp.Push = PushProblems{
 		Failed:      push.Failed,
@@ -133,7 +165,9 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 		resp.Photos.Stuck == 0 &&
 		resp.Photos.AnalysisFailed == 0 &&
 		!resp.Photos.WorkerStopped &&
-		resp.Push.LastError == ""
+		resp.Push.LastError == "" &&
+		!resp.Host.DiskLow &&
+		resp.Host.Proxy5xx == 0
 
 	return
 }

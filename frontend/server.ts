@@ -998,6 +998,16 @@ export interface SystemHealthResponse {
     logs: LogProblems
     photos: PhotoProblems
     push: PushProblems
+    host: HostProblems
+}
+
+export interface HostMetricsResponse {
+    configured: boolean
+    available: boolean
+    error: string
+    collectedAt: string
+    system: HostSystem
+    app: HostApp
 }
 
 export interface DiagnosticsResponse {
@@ -1515,6 +1525,28 @@ export interface PushProblems {
     lastErrorAt: string
 }
 
+export interface HostProblems {
+    available: boolean
+    diskUsedPct: number
+    diskLow: boolean
+    proxy5xx: number
+    proxy4xx: number
+    windowSeconds: number
+}
+
+export interface HostSystem {
+    load_avg: HostLoadAvg
+    memory: HostMemory
+    cpu: HostCPU
+    disk: HostDisk
+}
+
+export interface HostApp {
+    name: string
+    disk_kb: number
+    traffic: HostTraffic
+}
+
 export interface AdminMobileVersionPlatform {
     platform: string
     configured: boolean
@@ -1601,6 +1633,42 @@ export interface FailedPhoto {
     id: number
     filePath: string
     createdAt: string
+}
+
+export interface HostLoadAvg {
+    one: number
+    five: number
+    fifteen: number
+}
+
+export interface HostMemory {
+    total_kb: number
+    available_kb: number
+    used_kb: number
+    used_pct: number
+}
+
+export interface HostCPU {
+    user_pct: number
+    system_pct: number
+    idle_pct: number
+    iowait_pct: number
+}
+
+export interface HostDisk {
+    total_kb: number
+    used_kb: number
+    free_kb: number
+    used_pct: number
+}
+
+export interface HostTraffic {
+    window_seconds: number
+    requests_total: number
+    requests_per_min: number
+    error_4xx: number
+    error_5xx: number
+    error_pct: number
 }
 
 export interface EndpointStats {
@@ -2015,6 +2083,10 @@ export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<Syst
 
 export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
     return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function GetHostMetrics(data: Empty): Promise<rpc.Response<HostMetricsResponse>> {
+    return await rpc.call<HostMetricsResponse>('GetHostMetrics', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

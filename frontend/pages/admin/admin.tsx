@@ -10,20 +10,26 @@ import "./admin-styles";
 type Data = {
   diagnostics: server.DiagnosticsResponse | null;
   health: server.SystemHealthResponse | null;
+  host: server.HostMetricsResponse | null;
 };
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<Data>({ diagnostics: null, health: null });
+    return rpc.ok<Data>({ diagnostics: null, health: null, host: null });
   }
 
   // A failure in either must not take the dashboard down with it — the panel's
   // other cards are how you get to the logs that would explain the failure.
-  const [[diagnostics], [health]] = await Promise.all([
+  const [[diagnostics], [health], [host]] = await Promise.all([
     server.GetDiagnostics({}),
     server.GetSystemHealth({}),
+    server.GetHostMetrics({}),
   ]);
-  return rpc.ok<Data>({ diagnostics: diagnostics ?? null, health: health ?? null });
+  return rpc.ok<Data>({
+    diagnostics: diagnostics ?? null,
+    health: health ?? null,
+    host: host ?? null,
+  });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -55,7 +61,12 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     <div>
       <Header isHome={false} />
       <main id="app" className="admin-container">
-        <AdminPage user={currentAuth} diagnostics={data.diagnostics} health={data.health} />
+        <AdminPage
+          user={currentAuth}
+          diagnostics={data.diagnostics}
+          health={data.health}
+          host={data.host}
+        />
       </main>
       <Footer />
     </div>
@@ -66,9 +77,10 @@ interface AdminPageProps {
   user: auth.AuthCache;
   diagnostics: server.DiagnosticsResponse | null;
   health: server.SystemHealthResponse | null;
+  host: server.HostMetricsResponse | null;
 }
 
-const AdminPage = ({ user, diagnostics, health }: AdminPageProps) => {
+const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
   return (
     <div className="admin-page">
       <div className="admin-header">
@@ -82,6 +94,7 @@ const AdminPage = ({ user, diagnostics, health }: AdminPageProps) => {
 
       {diagnostics && <Diagnostics info={diagnostics} />}
       {health && <Problems health={health} />}
+      {host && host.configured && <Host metrics={host} />}
 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
@@ -178,6 +191,7 @@ const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
       <h2 className="problems-title">Needs a look</h2>
 
       <ConfigIssues health={health} />
+      <HostIssues host={health.host} />
       <LogIssues logs={health.logs} />
       <PhotoIssues photos={health.photos} />
       <PushIssues push={health.push} />
@@ -205,6 +219,30 @@ const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
             <code>{issue.setting}</code> {issue.detail}
           </li>
         ))}
+      </ul>
+    </div>
+  );
+};
+
+// The two things the app genuinely cannot see about itself: how full the disk
+// is, and whether the site is erroring for people according to the proxy rather
+// than according to the app's own logging.
+const HostIssues = ({ host }: { host: server.HostProblems }) => {
+  if (!host.available || (!host.diskLow && host.proxy5xx === 0)) return null;
+
+  const windowMinutes = Math.round(host.windowSeconds / 60);
+
+  return (
+    <div className="problem-group">
+      <h3>Host</h3>
+      <ul className="problem-list">
+        {host.diskLow && <li>Disk is {host.diskUsedPct.toFixed(0)}% full</li>}
+        {host.proxy5xx > 0 && (
+          <li>
+            Caddy answered {host.proxy5xx} request{host.proxy5xx === 1 ? "" : "s"} with 5xx in the
+            last {windowMinutes}m{host.proxy4xx > 0 && `, and ${host.proxy4xx} with 4xx`}
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -353,6 +391,68 @@ function formatWhen(timestamp: string): string {
   if (hours < 24) return `${hours}h ago`;
 
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+// The Host card. metrics-server collects all of this on a 30-second loop and
+// none of it was reachable from the browser; the traffic block in particular is
+// measured at the proxy, so it is the app's only outside view of itself.
+const Host = ({ metrics }: { metrics: server.HostMetricsResponse }) => {
+  if (!metrics.available) {
+    return (
+      <div className="diagnostics">
+        <dl className="diagnostics-grid">
+          <DiagnosticItem label="Host metrics" value={metrics.error || "unavailable"} />
+        </dl>
+      </div>
+    );
+  }
+
+  const traffic = metrics.app.traffic;
+  const windowMinutes = Math.round(traffic.window_seconds / 60);
+
+  return (
+    <div className="diagnostics">
+      <dl className="diagnostics-grid">
+        <DiagnosticItem
+          label="Disk"
+          value={`${metrics.system.disk.used_pct.toFixed(0)}% used, ${formatKb(metrics.system.disk.free_kb)} free`}
+        />
+        <DiagnosticItem label="This app" value={formatKb(metrics.app.disk_kb)} />
+        <DiagnosticItem
+          label="Memory"
+          value={`${metrics.system.memory.used_pct.toFixed(0)}% used`}
+        />
+        <DiagnosticItem
+          label="CPU"
+          value={`${(100 - metrics.system.cpu.idle_pct).toFixed(0)}% busy, ${metrics.system.cpu.iowait_pct.toFixed(0)}% iowait`}
+        />
+        <DiagnosticItem
+          label="Load"
+          value={`${metrics.system.load_avg.one.toFixed(2)} / ${metrics.system.load_avg.five.toFixed(2)} / ${metrics.system.load_avg.fifteen.toFixed(2)}`}
+        />
+        <DiagnosticItem
+          label={`Traffic (${windowMinutes}m)`}
+          value={`${traffic.requests_total} requests, ${traffic.requests_per_min.toFixed(1)}/min`}
+        />
+        <DiagnosticItem
+          label="Proxy errors"
+          value={`${traffic.error_5xx} 5xx, ${traffic.error_4xx} 4xx`}
+        />
+      </dl>
+    </div>
+  );
+};
+
+// metrics-server reports sizes in kilobytes.
+function formatKb(kb: number): string {
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = kb;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 // What is actually running, above everything else on the page. When something
