@@ -317,13 +317,7 @@ func CheckMobileVersion(ctx *vbeam.Context, req CheckMobileVersionRequest) (resp
 // a policy blind — with no way to read back what is live — is how a minimum
 // version gets raised past a build nobody has yet.
 func AdminGetMobileVersions(ctx *vbeam.Context, req Empty) (resp AdminGetMobileVersionsResponse, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -360,13 +354,7 @@ func AdminGetMobileVersions(ctx *vbeam.Context, req Empty) (resp AdminGetMobileV
 }
 
 func AdminSetMobileVersion(ctx *vbeam.Context, req AdminSetMobileVersionRequest) (resp AdminSetMobileVersionResponse, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 

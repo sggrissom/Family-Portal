@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// LogFileBaseName is the name given to vbeam.InitRotatingLogger, and so the
+// stem of the file lumberjack writes to. The log viewer needs the same name to
+// recognise the current day's file; it used to carry its own literal, which had
+// drifted, so the "today" badge never lit on the one file you always want.
+const LogFileBaseName = "family_record"
+
+// LogFileName is the current log file as it appears on disk.
+const LogFileName = LogFileBaseName + ".log"
+
 // logLevel represents different log levels (internal type)
 type logLevel string
 
