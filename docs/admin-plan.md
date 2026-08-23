@@ -19,11 +19,11 @@ Seven routes, all gated on `user.Id == 1`:
 
 | route | what it does | state |
 | --- | --- | --- |
-| `/admin` | diagnostics strip + card grid + quick actions | diagnostics good, quick actions all disabled |
+| `/admin` | diagnostics strip + problems feed + card grid | answers "is anything wrong" without a click |
 | `/admin/analytics` | 4 tabs | 1 of 4 works |
 | `/admin/users` | table of every user | works, read-only |
 | `/admin/photos` | processing + face analysis stats, two reprocess buttons | stats good, one action is dangerous |
-| `/admin/logs` | file picker, level/category/duration filters, perf percentiles | works, but see §2 |
+| `/admin/logs` | file picker, reference lookup, search, level/category/time/duration filters, perf percentiles | works |
 | `/admin/push` | APNs config, devices, delivery attempts, test send | **the best page in the panel** |
 | `/admin/app-versions` | min/latest mobile build policy | works |
 
@@ -91,7 +91,7 @@ strip.
 
 Until it's fixed the button should be disabled rather than left armed.
 
-### 1.4 Log statistics are computed from 50 lines
+### 1.4 Log statistics are computed from 50 lines — **done**
 
 `GetLogStats` calls `readRecentLogEntries(path, 50)` per file, and then derives
 from those 50 lines: the level histogram, the category histogram, the error
@@ -160,7 +160,7 @@ This is the part that most changes what the panel is worth, because error
 investigation is the stated purpose and the logs are the only place the answers
 live.
 
-### 2.1 Logs are destroyed by every deploy
+### 2.1 Logs are destroyed by every deploy — **done**
 
 `app@.service` sets `WorkingDirectory=/srv/apps/%i/current`. lumberjack writes
 to `logs/family_record.log` **relative to the working directory**, so logs live
@@ -182,7 +182,7 @@ already where the database and photos live. Add a writability probe to
 
 Everything else in §2 is only worth building on top of this.
 
-### 2.2 There is no way to look up a reference code
+### 2.2 There is no way to look up a reference code — **done**
 
 The whole error design converges on this: `ProcError` mints a request id, logs
 the real cause against it, and returns `"Something went wrong on our end.
@@ -203,14 +203,14 @@ that returns the one entry plus surrounding context lines.
 This is perhaps twenty lines of backend and is the single most useful thing
 missing from the panel.
 
-### 2.3 Filter by time, and default to errors
+### 2.3 Filter by time, and default to errors — **done**
 
 Level and category filters exist; a time range does not, and the default view is
 chronological from the start of the file. When you open the log viewer, it is
 almost always because something is wrong *now*. Default to most-recent-first,
 add a `Since` field, and put an "errors in the last 24h" preset one click away.
 
-### 2.4 Consolidate the log parser
+### 2.4 Consolidate the log parser — **done**
 
 `admin.go` holds ~600 lines of log parsing — ANSI stripping, three fallback
 parse strategies, timing-line regex, stack-trace continuation — with the
@@ -229,7 +229,7 @@ operator who checks in occasionally, that is backwards. The landing page should
 answer "is anything wrong" without a click, and the subsystem pages should be
 where you go *after* it says yes.
 
-### 3.1 Surface `CheckProductionConfig`
+### 3.1 Surface `CheckProductionConfig` — **done**
 
 `config_check.go` already validates SITE_ROOT, Google OAuth, mail, the AI
 provider, BACKUP_TOKEN, APNs, IOS_APP_ID, and both storage paths, and returns
@@ -246,7 +246,7 @@ a card.
 While there: `checkAPNs`'s all-or-nothing pattern is the right model for the new
 optional subsystem in §4.1.
 
-### 3.2 A "recent problems" feed on `/admin`
+### 3.2 A "recent problems" feed on `/admin` — **done** (except backup age, §4.2)
 
 One panel, above the fold, aggregating what is already available:
 
@@ -262,7 +262,7 @@ One panel, above the fold, aggregating what is already available:
 
 Silent when everything is clean. The point is that a green page means something.
 
-### 3.3 Even out worker observability
+### 3.3 Even out worker observability — **done** (photo worker)
 
 `PushWorkerStats` carries `Sent`, `Failed`, `Deactivated`, `Suppressed`,
 `LastSentAt`, `LastError`, `LastErrorAt`, and `RecentAttempts`. That is why the
@@ -298,7 +298,7 @@ which release this is relative to the last one.
 All of that is already computed by `tiny-server-helper`. None of it is reachable
 from the browser.
 
-### 4.1 Consume `metrics-server` (highest value)
+### 4.1 Consume `metrics-server` (highest value) — **done**
 
 `metrics-server` is deployed and reachable at `metrics.grissom.zone/metrics`. It
 already collects, on a 30-second loop:
@@ -421,12 +421,11 @@ The panel has four real actions today: reprocess photos (broken, §1.3), requeue
 face analysis, send a test push, set mobile version policy. Candidates to add,
 in rough order of how often they'd be used:
 
-1. **Clear a stuck photo.** Rows sitting in `Status = 1` with no worker
-   attending them — currently unrecoverable without direct database access, and
-   §1.3 is how they get created.
-2. **Revoke a user's sessions.** `RefreshTokenBkt` is already indexed by user.
-   One button, useful for a lost phone or a stale session after a JWT secret
-   change.
+1. ~~**Clear a stuck photo.**~~ **Done** — `RequeueStuckPhotos`, on the photo
+   page. They are requeued rather than marked failed: the original is still on
+   disk, and a photo whose original is genuinely gone fails once, visibly.
+2. ~~**Revoke a user's sessions.**~~ **Done** — `RevokeUserSessions`, one button
+   per row on `/admin/users`.
 3. **Verify the backup path end-to-end.** Hit `/internal/snapshot` with the
    configured token, confirm the response starts and the declared
    `Content-Length` matches `tx.Size()`, and discard the body. That proves the
@@ -454,9 +453,8 @@ Not urgent, but it's what makes the above cheaper to build.
   `"Unauthorized: Admin access required"`.**~~ **Done** — one
   `requireAdminAccess` helper, one exported `ErrAdminRequired`, and an
   `AdminUserId` constant in place of the magic number.
-- **`admin.go` is 1286 lines** holding three unrelated concerns: user listing,
-  photo maintenance, and a log parser. §2.4 extracts the parser; photo
-  maintenance belongs next to the photo worker.
+- **`admin.go` is 656 lines** after §2.4 extracted the log parser, down from
+  1286. Photo maintenance still belongs next to the photo worker.
 - **Every admin page reimplements the same "Access Denied" block** — six
   near-identical copies of a `Header`/`error-page`/`Footer` tree. One
   `<AdminGuard>` wrapper.
@@ -470,17 +468,19 @@ Not urgent, but it's what makes the above cheaper to build.
 
 ## Suggested order
 
-1. ~~**§1** — the things that are wrong.~~ **Done**, except §1.4 (log stats
-   sampled from 50 lines), which is folded into the §2 log work, and §1.9
-   (bucket scans), which was never work to do.
-2. **§2.1** — logs out of the release directory. Everything else about logs is
-   worth less until log history survives a deploy.
-3. **§2.2** — reference-code search. Small, and it completes a workflow the
-   error-handling design already assumes exists.
-4. **§3.1 + §3.2** — config status and the problems feed. This is the point at
-   which loading `/admin` starts answering the question you came with.
-5. **§4.1** — `metrics-server`. Disk and proxy-measured 5xx are the two things
-   the app genuinely cannot see about itself.
+1. ~~**§1** — the things that are wrong.~~ **Done** (§1.9, bucket scans, was
+   never work to do; §1.4 landed with the §2 log work).
+2. ~~**§2.1** — logs out of the release directory.~~ **Done**, along with §2.4
+   (one scanner in `backend/log_reader.go`) and §1.4 (stats over the whole
+   file, not the last 50 lines).
+3. ~~**§2.2** — reference-code search.~~ **Done**, with §2.3 (time range,
+   newest-first default, and an "errors in the last 24h" preset). §2 is
+   complete.
+4. ~~**§3.1 + §3.2** — config status and the problems feed.~~ **Done.** Backup
+   age is the one entry still missing from the feed; it arrives with §4.2.
+5. ~~**§4.1** — `metrics-server`.~~ **Done** on this side: `GetHostMetrics`,
+   the Host card, and disk + proxy 5xx in the problems feed. Needs
+   `METRICS_URL` and `METRICS_API_KEY` in `shared/.env` (see deployment.md).
 6. **§4.4** — add the site to `monitor-tui`. Trivial, and arguably should be
    done first since it costs one line.
 7. Everything else as it becomes annoying.

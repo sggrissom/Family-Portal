@@ -49,12 +49,12 @@ var apnsEnvVars = []string{
 }
 
 // CheckProductionConfig reports everything about the current environment that
-// would make a release build unfit to serve. dbPath and staticDir are passed in
+// would make a release build unfit to serve. The storage paths are passed in
 // rather than read from cfg so tests can point them at a scratch directory.
 //
 // It never returns a partial answer: callers get the full list so one restart
 // surfaces every problem instead of one per deploy.
-func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
+func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 	issues = append(issues, checkSiteRoot()...)
 	issues = append(issues, checkGoogleOAuth()...)
@@ -63,7 +63,8 @@ func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkIOSAppID()...)
-	issues = append(issues, checkStoragePaths(dbPath, staticDir)...)
+	issues = append(issues, checkMetrics()...)
+	issues = append(issues, checkStoragePaths(dbPath, staticDir, logDir)...)
 	return issues
 }
 
@@ -199,6 +200,60 @@ func checkAPNs() []ConfigIssue {
 	return issues
 }
 
+// metricsEnvVars are the variables that must be set together to consume
+// metrics-server.
+var metricsEnvVars = []string{
+	"METRICS_URL",
+	"METRICS_API_KEY",
+}
+
+// checkMetrics is the second all-or-nothing subsystem, on the APNs pattern.
+// Consuming metrics-server is optional — an unset pair simply hides the host
+// card — but half of it is a mistake that fails invisibly: a URL with no key
+// gets a 401 that the panel degrades quietly past, and a key with no URL does
+// nothing at all.
+//
+// It does not validate that the service answers. That is a runtime condition,
+// reported by the card itself, and a metrics service that is down should never
+// stop the application from starting.
+func checkMetrics() []ConfigIssue {
+	var configured, missing []string
+	for _, name := range metricsEnvVars {
+		if os.Getenv(name) == "" {
+			missing = append(missing, name)
+		} else {
+			configured = append(configured, name)
+		}
+	}
+
+	if len(configured) == 0 {
+		return nil
+	}
+	if len(missing) > 0 {
+		return []ConfigIssue{{
+			Setting: strings.Join(missing, ", "),
+			Detail:  "must be set because host metrics are partially configured (" + strings.Join(configured, ", ") + " present)",
+		}}
+	}
+
+	raw := os.Getenv("METRICS_URL")
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return []ConfigIssue{{Setting: "METRICS_URL", Detail: "must be a full URL, e.g. http://127.0.0.1:9110/metrics"}}
+	}
+	// metrics-server binds loopback and lives on the same box. Pointing this at
+	// the public hostname makes the request leave the machine and depend on
+	// DNS and TLS to reach a service one hop away.
+	if host := parsed.Hostname(); host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		return []ConfigIssue{{
+			Setting: "METRICS_URL",
+			Detail:  "should point at the internal port on loopback; metrics-server runs on this box and binds 127.0.0.1",
+		}}
+	}
+
+	return nil
+}
+
 // checkIOSAppID validates the universal-link app identifier when one is set.
 // Unset is a legitimate state — a server with no companion app in the field
 // wants no association file — so this is not a required setting. What it cannot
@@ -224,7 +279,7 @@ func checkIOSAppID() []ConfigIssue {
 // checkStoragePaths confirms the process can actually write where it stores
 // things. The paths are compile-time constants, so what is being checked is the
 // deployed filesystem: directory present, owned by a user that can write it.
-func checkStoragePaths(dbPath, staticDir string) []ConfigIssue {
+func checkStoragePaths(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 
 	// bolt creates the database file but not the directory holding it.
@@ -232,6 +287,13 @@ func checkStoragePaths(dbPath, staticDir string) []ConfigIssue {
 		issues = append(issues, *issue)
 	}
 	if issue := checkWritableDir("StaticDir", staticDir); issue != nil {
+		issues = append(issues, *issue)
+	}
+	// The rotating logger creates the directory itself and falls back to stderr
+	// if it cannot, so an unwritable LogDir is not fatal — but it is silent, and
+	// silently losing the logs is exactly the failure the admin panel exists to
+	// investigate.
+	if issue := checkWritableDir("LogDir", logDir); issue != nil {
 		issues = append(issues, *issue)
 	}
 	return issues
@@ -269,8 +331,8 @@ func checkWritableDir(setting, dir string) *ConfigIssue {
 // point serves the broken behavior instead of reporting it. Local builds log the
 // same list and continue, because a development machine legitimately has no APNs
 // key or Gemini quota.
-func EnforceProductionConfig(dbPath, staticDir string) {
-	issues := CheckProductionConfig(dbPath, staticDir)
+func EnforceProductionConfig(dbPath, staticDir, logDir string) {
+	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if len(issues) == 0 {
 		return
 	}

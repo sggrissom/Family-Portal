@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
+import * as vlens from "vlens";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -59,8 +60,44 @@ interface UserManagementPageProps {
   data: server.ListAllUsersResponse;
 }
 
+// Per-user outcomes, keyed by id, so one revoked account's message does not
+// appear on another's row.
+type UsersPageState = {
+  busy: { [userId: number]: boolean };
+  results: { [userId: number]: string };
+};
+
+const useUsersPageState = vlens.declareHook((): UsersPageState => ({ busy: {}, results: {} }));
+
+// Signing someone out everywhere: for a lost phone, or a session that outlived
+// a JWT secret change. The access token is a short-lived JWT this cannot
+// recall, so the effect lands when it expires — deleting the refresh tokens is
+// what stops it being renewed, and the confirm says so.
+async function revokeSessions(state: UsersPageState, u: server.AdminUserInfo) {
+  const confirmed = confirm(
+    `Sign ${u.name} out of every device?\n\n` +
+      "Their refresh tokens are deleted immediately. The access token they already hold keeps " +
+      "working until it expires, within the hour."
+  );
+  if (!confirmed) return;
+
+  state.busy[u.id] = true;
+  state.results[u.id] = "";
+  vlens.scheduleRedraw();
+
+  const [result, error] = await server.RevokeUserSessions({ userId: u.id });
+  state.busy[u.id] = false;
+  state.results[u.id] = error
+    ? error
+    : result && result.revoked > 0
+      ? `Revoked ${result.revoked}`
+      : "No active sessions";
+  vlens.scheduleRedraw();
+}
+
 const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
   const users = data.users || [];
+  const state = useUsersPageState();
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -106,6 +143,7 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                   <th>Account Created</th>
                   <th>Last Login</th>
                   <th>Role</th>
+                  <th>Sessions</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,6 +168,18 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                         <span className="admin-badge-small">⚡ Admin</span>
                       ) : (
                         <span className="user-badge">User</span>
+                      )}
+                    </td>
+                    <td className="user-sessions">
+                      <button
+                        className="admin-btn admin-btn-secondary admin-btn-small"
+                        onClick={() => revokeSessions(state, u)}
+                        disabled={state.busy[u.id]}
+                      >
+                        {state.busy[u.id] ? "Revoking…" : "Revoke"}
+                      </button>
+                      {state.results[u.id] && (
+                        <div className="session-result">{state.results[u.id]}</div>
                       )}
                     </td>
                   </tr>
