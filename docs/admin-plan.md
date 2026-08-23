@@ -23,7 +23,7 @@ Seven routes, all gated on `user.Id == 1`:
 | `/admin/analytics` | 4 tabs | 1 of 4 works |
 | `/admin/users` | table of every user | works, read-only |
 | `/admin/photos` | processing + face analysis stats, two reprocess buttons | stats good, one action is dangerous |
-| `/admin/logs` | file picker, level/category/duration filters, perf percentiles | works, but see §2 |
+| `/admin/logs` | file picker, reference lookup, search, level/category/time/duration filters, perf percentiles | works |
 | `/admin/push` | APNs config, devices, delivery attempts, test send | **the best page in the panel** |
 | `/admin/app-versions` | min/latest mobile build policy | works |
 
@@ -182,7 +182,7 @@ already where the database and photos live. Add a writability probe to
 
 Everything else in §2 is only worth building on top of this.
 
-### 2.2 There is no way to look up a reference code
+### 2.2 There is no way to look up a reference code — **done**
 
 The whole error design converges on this: `ProcError` mints a request id, logs
 the real cause against it, and returns `"Something went wrong on our end.
@@ -203,7 +203,7 @@ that returns the one entry plus surrounding context lines.
 This is perhaps twenty lines of backend and is the single most useful thing
 missing from the panel.
 
-### 2.3 Filter by time, and default to errors
+### 2.3 Filter by time, and default to errors — **done**
 
 Level and category filters exist; a time range does not, and the default view is
 chronological from the start of the file. When you open the log viewer, it is
@@ -474,8 +474,9 @@ Not urgent, but it's what makes the above cheaper to build.
 2. ~~**§2.1** — logs out of the release directory.~~ **Done**, along with §2.4
    (one scanner in `backend/log_reader.go`) and §1.4 (stats over the whole
    file, not the last 50 lines).
-3. **§2.2** — reference-code search. Small, and it completes a workflow the
-   error-handling design already assumes exists.
+3. ~~**§2.2** — reference-code search.~~ **Done**, with §2.3 (time range,
+   newest-first default, and an "errors in the last 24h" preset). §2 is
+   complete.
 4. **§3.1 + §3.2** — config status and the problems feed. This is the point at
    which loading `/admin` starts answering the question you came with.
 5. **§4.1** — `metrics-server`. Disk and proxy-measured 5xx are the two things

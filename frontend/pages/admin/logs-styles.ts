@@ -136,6 +136,43 @@ block(`
 `);
 
 block(`
+.filter-group input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.filter-group input:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px var(--admin-accent)20;
+}
+`);
+
+// The search box is the widest control and the one most often typed into, so
+// it gets the full row rather than a 200px grid cell.
+block(`
+.filter-group-search {
+  grid-column: 1 / -1;
+}
+`);
+
+block(`
+.logs-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+`);
+
+block(`
 .filter-group select:focus {
   outline: none;
   border-color: var(--admin-accent);
@@ -633,3 +670,89 @@ block(`
     justify-content: center;
   }
 }`);
+
+// Reference lookup. It sits above the statistics because when somebody has sent
+// you a code, finding it is the only reason the page is open.
+block(`
+.reference-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+`);
+
+block(`
+.reference-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+`);
+
+block(`
+.reference-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.reference-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+`);
+
+block(`
+.reference-input {
+  flex: 1 1 22rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.reference-input:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px var(--admin-accent)20;
+}
+`);
+
+block(`
+.reference-result {
+  margin-top: 1rem;
+}
+`);
+
+block(`
+.reference-found-in {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+`);
+
+// The match is the answer; the context is there to be read past. Dimming the
+// context is what makes the one row you came for findable at a glance.
+block(`
+.reference-match {
+  border-left: 3px solid var(--admin-accent);
+  background: var(--admin-accent)10;
+}
+`);
+
+block(`
+.context-row {
+  opacity: 0.62;
+}
+`);

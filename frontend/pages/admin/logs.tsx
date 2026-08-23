@@ -8,15 +8,6 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logWarn } from "../../lib/logger";
 import "./logs-styles";
 
-// Local type definitions (until server types are generated)
-interface LogFileInfo {
-  name: string;
-  size: number;
-  modTime: string;
-  isToday: boolean;
-  sizeString: string;
-}
-
 const entriesPerPage = 100;
 
 interface LogsPageData {
@@ -69,11 +60,13 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
           filename: initialFile,
           level: "",
           category: "",
+          search: "",
+          sinceHours: 0,
           limit: entriesPerPage,
           offset: 0,
           minDuration: null,
           sortBy: "time",
-          sortDesc: null,
+          sortDesc: true,
         });
         if (!contentErr && contentResult) {
           initialEntries = contentResult.entries || [];
@@ -119,6 +112,16 @@ interface LogsPageState {
   minDurationFilter: string; // In milliseconds for user input
   sortBy: string; // "time" or "duration"
   sortDesc: boolean; // Sort descending
+  // Search
+  searchText: string;
+  sinceHours: number; // 0 means the whole file
+  filesSearched: string[];
+  // Reference lookup, which is its own mode: one entry and its context rather
+  // than a filtered list.
+  referenceInput: string;
+  referenceResult: server.LookupLogReferenceResponse | null;
+  referenceLoading: boolean;
+  referenceError: string;
 }
 
 // Component state hook for logs page
@@ -135,47 +138,52 @@ const logsPageHook = vlens.declareHook(
     hasMore: false,
     minDurationFilter: "",
     sortBy: "time",
-    sortDesc: false,
+    // Newest first: you open the log viewer because something is wrong now.
+    sortDesc: true,
+    searchText: "",
+    sinceHours: 0,
+    filesSearched: [],
+    referenceInput: "",
+    referenceResult: null,
+    referenceLoading: false,
+    referenceError: "",
   })
 );
 
-async function loadLogContent(
-  filename: string,
-  levelFilter: string,
-  categoryFilter: string,
-  currentPage: number,
-  minDurationFilter?: string,
-  sortBy?: string,
-  sortDesc?: boolean
-) {
+// loadLogContent reads the filters off state rather than taking seven
+// positional arguments that every caller passed in the same order anyway.
+async function loadLogContent() {
   const state = logsPageHook();
-  if (!filename) return;
 
   state.loading = true;
   vlens.scheduleRedraw();
 
   try {
-    // Convert milliseconds to microseconds for backend
-    const minDurationMicros =
-      minDurationFilter && minDurationFilter.trim()
-        ? parseInt(minDurationFilter) * 1000
-        : undefined;
+    // The input is in milliseconds; the backend works in microseconds.
+    const minDurationMicros = state.minDurationFilter.trim()
+      ? parseInt(state.minDurationFilter) * 1000
+      : undefined;
 
     const [result, err] = await server.GetLogContent({
-      filename: filename,
-      level: levelFilter || "",
-      category: categoryFilter || "",
+      // An empty filename searches every file, which is what a search wants:
+      // the reference code someone mailed you is not necessarily in today's.
+      filename: state.searchText.trim() ? "" : state.currentFile,
+      level: state.levelFilter || "",
+      category: state.categoryFilter || "",
+      search: state.searchText.trim(),
+      sinceHours: state.sinceHours,
       limit: entriesPerPage,
-      offset: (currentPage - 1) * entriesPerPage,
+      offset: (state.currentPage - 1) * entriesPerPage,
       minDuration: minDurationMicros || null,
-      sortBy: sortBy || "time",
-      sortDesc: sortDesc !== undefined ? sortDesc : null,
+      sortBy: state.sortBy || "time",
+      sortDesc: state.sortDesc,
     });
 
     if (!err && result) {
       state.logEntries = result.entries || [];
       state.totalLines = result.totalLines || 0;
       state.hasMore = result.hasMore || false;
+      state.filesSearched = result.filesSearched || [];
       state.error = "";
     } else {
       state.logEntries = []; // Ensure it's always an array
@@ -190,23 +198,66 @@ async function loadLogContent(
   }
 }
 
+// lookUpReference is the other half of the error-handling design: ProcError
+// shows someone "Reference: <id>", they send it to you, and this finds the
+// cause it was logged against.
+async function lookUpReference() {
+  const state = logsPageHook();
+  if (!state.referenceInput.trim()) {
+    state.referenceResult = null;
+    state.referenceError = "";
+    vlens.scheduleRedraw();
+    return;
+  }
+
+  state.referenceLoading = true;
+  state.referenceError = "";
+  vlens.scheduleRedraw();
+
+  const [result, err] = await server.LookupLogReference({
+    reference: state.referenceInput,
+    context: 10,
+  });
+
+  state.referenceLoading = false;
+  if (err) {
+    state.referenceResult = null;
+    state.referenceError = err;
+  } else {
+    state.referenceResult = result ?? null;
+    state.referenceError = "";
+  }
+  vlens.scheduleRedraw();
+}
+
+function clearReference() {
+  const state = logsPageHook();
+  state.referenceInput = "";
+  state.referenceResult = null;
+  state.referenceError = "";
+  vlens.scheduleRedraw();
+}
+
+// showRecentErrors is the one-click answer to the question that brings you
+// here: what went wrong today, across every file.
+function showRecentErrors() {
+  const state = logsPageHook();
+  state.levelFilter = "ERROR";
+  state.categoryFilter = "";
+  state.minDurationFilter = "";
+  state.searchText = "";
+  state.sinceHours = 24;
+  state.sortBy = "time";
+  state.sortDesc = true;
+  state.currentFile = "";
+  handleFilterChange();
+}
+
 function handleFileChange(filename: string) {
   const state = logsPageHook();
   state.currentFile = filename;
-  state.currentPage = 1;
   state.logEntries = [];
-  state.totalLines = 0;
-  state.hasMore = false;
-  loadLogContent(
-    filename,
-    state.levelFilter,
-    state.categoryFilter,
-    1,
-    state.minDurationFilter,
-    state.sortBy,
-    state.sortDesc
-  );
-  vlens.scheduleRedraw();
+  handleFilterChange();
 }
 
 function handleFilterChange() {
@@ -214,39 +265,20 @@ function handleFilterChange() {
   state.currentPage = 1;
   state.totalLines = 0;
   state.hasMore = false;
-  loadLogContent(
-    state.currentFile,
-    state.levelFilter,
-    state.categoryFilter,
-    1,
-    state.minDurationFilter,
-    state.sortBy,
-    state.sortDesc
-  );
+  loadLogContent();
   vlens.scheduleRedraw();
 }
 
 function handlePageChange(newPage: number) {
   const state = logsPageHook();
 
-  // Calculate total pages
   const totalPages = Math.ceil(state.totalLines / entriesPerPage);
-
-  // Validate new page number
   if (newPage < 1 || (totalPages > 0 && newPage > totalPages)) {
     return; // Don't change if invalid
   }
 
   state.currentPage = newPage;
-  loadLogContent(
-    state.currentFile,
-    state.levelFilter,
-    state.categoryFilter,
-    newPage,
-    state.minDurationFilter,
-    state.sortBy,
-    state.sortDesc
-  );
+  loadLogContent();
   vlens.scheduleRedraw();
 }
 
@@ -385,6 +417,154 @@ function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | und
   ]);
 }
 
+// logEntryRow is one row of the log table. The reference lookup renders its
+// match and context with the same component, so the two views cannot drift on
+// how a log line looks.
+function logEntryRow(entry: server.PublicLogEntry, key: string | number, extraClass?: string) {
+  return preact.h("div", { key, className: extraClass ? `table-row ${extraClass}` : "table-row" }, [
+    preact.h("div", { className: "col-timestamp" }, formatTimestamp(entry.timestamp)),
+    preact.h(
+      "div",
+      { className: "col-level" },
+      preact.h("span", { className: getLevelBadgeClass(entry.level) }, entry.level)
+    ),
+    preact.h(
+      "div",
+      { className: "col-category" },
+      preact.h("span", { className: getCategoryBadgeClass(entry.category) }, entry.category)
+    ),
+    preact.h("div", { className: "col-duration" }, [
+      entry.duration
+        ? preact.h(
+            "span",
+            { className: `duration-badge ${getDurationColor(entry.duration)}` },
+            formatDuration(entry.duration)
+          )
+        : "-",
+      entry.handlerDuration && entry.duration && entry.handlerDuration !== entry.duration
+        ? preact.h(
+            "div",
+            { className: "handler-duration" },
+            `(${formatDuration(entry.handlerDuration)})`
+          )
+        : null,
+    ]),
+    preact.h("div", { className: "col-method" }, [
+      entry.httpMethod
+        ? preact.h(
+            "span",
+            { className: `method-badge method-${entry.httpMethod.toLowerCase()}` },
+            entry.httpMethod
+          )
+        : "-",
+      entry.httpPath ? preact.h("div", { className: "http-path" }, entry.httpPath) : null,
+      entry.httpStatus
+        ? preact.h(
+            "span",
+            { className: `status-badge status-${Math.floor(entry.httpStatus / 100)}xx` },
+            entry.httpStatus
+          )
+        : null,
+    ]),
+    preact.h("div", { className: "col-message" }, [
+      entry.message,
+      entry.data
+        ? preact.h(
+            "div",
+            { className: "log-data" },
+            preact.h("pre", {}, JSON.stringify(entry.data, null, 2))
+          )
+        : null,
+      entry.stackTrace
+        ? preact.h("div", { className: "log-stack-trace" }, preact.h("pre", {}, entry.stackTrace))
+        : null,
+    ]),
+    preact.h("div", { className: "col-user" }, entry.userId ? `User ${entry.userId}` : "-"),
+  ]);
+}
+
+const logTableHeader = () =>
+  preact.h("div", { className: "table-header" }, [
+    preact.h("div", { className: "col-timestamp" }, "Timestamp"),
+    preact.h("div", { className: "col-level" }, "Level"),
+    preact.h("div", { className: "col-category" }, "Category"),
+    preact.h("div", { className: "col-duration" }, "Duration"),
+    preact.h("div", { className: "col-method" }, "Method"),
+    preact.h("div", { className: "col-message" }, "Message"),
+    preact.h("div", { className: "col-user" }, "User"),
+  ]);
+
+// ReferenceLookupPanel is the search box at the top of the page, and the result
+// of a lookup when there is one. It sits above everything else because it is
+// the reason you have the page open when someone has sent you a code.
+function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
+  const result = state.referenceResult;
+
+  return preact.h("div", { className: "reference-panel" }, [
+    preact.h("h3", {}, "Look up a reference code"),
+    preact.h(
+      "p",
+      { className: "reference-hint" },
+      "Paste the code from the error someone reported — or the whole sentence — to find what it was logged against."
+    ),
+    preact.h("div", { className: "reference-controls" }, [
+      preact.h("input", {
+        type: "search",
+        className: "reference-input",
+        placeholder: "e.g. a1b2c3d4e5f6",
+        value: state.referenceInput,
+        onInput: (e: any) => {
+          state.referenceInput = e.currentTarget.value;
+        },
+        onKeyDown: (e: any) => {
+          if (e.key === "Enter") lookUpReference();
+        },
+      }),
+      preact.h(
+        "button",
+        { className: "pagination-btn", onClick: lookUpReference, disabled: state.referenceLoading },
+        state.referenceLoading ? "Looking…" : "Look up"
+      ),
+      result || state.referenceError
+        ? preact.h("button", { className: "pagination-btn", onClick: clearReference }, "Clear")
+        : null,
+    ]),
+
+    state.referenceError
+      ? preact.h("div", { className: "error-message" }, [
+          preact.h("span", { className: "error-icon" }, "⚠️"),
+          preact.h("span", {}, state.referenceError),
+        ])
+      : null,
+
+    result && !result.found
+      ? preact.h(
+          "div",
+          { className: "empty-logs" },
+          preact.h(
+            "p",
+            {},
+            result.filesSearched.length > 0
+              ? `Not found in ${result.filesSearched.length} log file${result.filesSearched.length === 1 ? "" : "s"} (${result.filesSearched.join(", ")}).`
+              : "There are no log files to search."
+          )
+        )
+      : null,
+
+    result && result.found
+      ? preact.h("div", { className: "reference-result" }, [
+          preact.h("div", { className: "reference-found-in" }, `Found in ${result.file}`),
+          preact.h("div", { className: "logs-table" }, [
+            logTableHeader(),
+            ...result.before.map((entry, i) => logEntryRow(entry, `b${i}`, "context-row")),
+            logEntryRow(result.entry, "match", "reference-match"),
+            ...result.after.map((entry, i) => logEntryRow(entry, `a${i}`, "context-row")),
+          ]),
+        ])
+      : null,
+  ]);
+}
+
 export function view(route: string, prefix: string, data: LogsPageData): preact.ComponentChild {
   const userAuth = requireAuthInView();
   if (!userAuth || !userAuth.isAdmin) {
@@ -403,17 +583,13 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
   // Initialize state from fetched data
   const state = logsPageHook();
 
-  // Initialize state on first render if needed
+  // Initialize state on first render if needed. The fetch loaded a page
+  // without knowing the totals, so reload once to fill in pagination.
   if (state.currentFile === "" && data.initialFile) {
     state.currentFile = data.initialFile;
     state.logEntries = data.initialEntries;
-    // Calculate initial totalLines and hasMore based on loaded data
-    // Since we loaded the first page with no filters, we need to load again to get proper counts
     if (data.initialEntries.length > 0) {
-      // Trigger a proper load to get accurate pagination info
-      setTimeout(() => {
-        loadLogContent(data.initialFile, "", "", 1, "", "time", false);
-      }, 0);
+      setTimeout(loadLogContent, 0);
     }
   }
 
@@ -431,79 +607,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
     ),
   ];
 
-  const logRows = state.logEntries.map((entry, index) =>
-    preact.h(
-      "div",
-      {
-        key: index,
-        className: "table-row",
-      },
-      [
-        preact.h("div", { className: "col-timestamp" }, formatTimestamp(entry.timestamp)),
-        preact.h(
-          "div",
-          { className: "col-level" },
-          preact.h("span", { className: getLevelBadgeClass(entry.level) }, entry.level)
-        ),
-        preact.h(
-          "div",
-          { className: "col-category" },
-          preact.h("span", { className: getCategoryBadgeClass(entry.category) }, entry.category)
-        ),
-        preact.h("div", { className: "col-duration" }, [
-          entry.duration
-            ? preact.h(
-                "span",
-                { className: `duration-badge ${getDurationColor(entry.duration)}` },
-                formatDuration(entry.duration)
-              )
-            : "-",
-          entry.handlerDuration && entry.duration && entry.handlerDuration !== entry.duration
-            ? preact.h(
-                "div",
-                { className: "handler-duration" },
-                `(${formatDuration(entry.handlerDuration)})`
-              )
-            : null,
-        ]),
-        preact.h("div", { className: "col-method" }, [
-          entry.httpMethod
-            ? preact.h(
-                "span",
-                { className: `method-badge method-${entry.httpMethod.toLowerCase()}` },
-                entry.httpMethod
-              )
-            : "-",
-          entry.httpPath ? preact.h("div", { className: "http-path" }, entry.httpPath) : null,
-          entry.httpStatus
-            ? preact.h(
-                "span",
-                { className: `status-badge status-${Math.floor(entry.httpStatus / 100)}xx` },
-                entry.httpStatus
-              )
-            : null,
-        ]),
-        preact.h("div", { className: "col-message" }, [
-          entry.message,
-          entry.data
-            ? preact.h(
-                "div",
-                { className: "log-data" },
-                preact.h("pre", {}, JSON.stringify(entry.data, null, 2))
-              )
-            : null,
-          entry.stackTrace
-            ? preact.h(
-                "div",
-                { className: "log-stack-trace" },
-                preact.h("pre", {}, entry.stackTrace)
-              )
-            : null,
-        ]),
-        preact.h("div", { className: "col-user" }, entry.userId ? `User ${entry.userId}` : "-"),
-      ]
-    )
-  );
+  const logRows = state.logEntries.map((entry, index) => logEntryRow(entry, index));
 
   return preact.h("div", {}, [
     preact.h(Header, { isHome: false }),
@@ -526,6 +630,9 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               preact.h("span", {}, state.error || data.error),
             ])
           : null,
+
+        // Reference lookup, first thing on the page.
+        preact.h(ReferenceLookupPanel, { state }),
 
         // Statistics
         data.stats
@@ -573,6 +680,42 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   onChange: (e: any) => handleFileChange(e.currentTarget.value),
                 },
                 fileSelectOptions
+              ),
+            ]),
+            preact.h("div", { className: "filter-group filter-group-search" }, [
+              preact.h("label", { htmlFor: "log-search" }, "Search:"),
+              preact.h("input", {
+                id: "log-search",
+                type: "search",
+                placeholder: "text, path, or reference code — searches every file",
+                value: state.searchText,
+                onInput: (e: any) => {
+                  state.searchText = e.currentTarget.value;
+                },
+                onKeyDown: (e: any) => {
+                  if (e.key === "Enter") handleFilterChange();
+                },
+                onChange: () => handleFilterChange(),
+              }),
+            ]),
+            preact.h("div", { className: "filter-group" }, [
+              preact.h("label", { htmlFor: "since-filter" }, "Time range:"),
+              preact.h(
+                "select",
+                {
+                  id: "since-filter",
+                  value: String(state.sinceHours),
+                  onChange: (e: any) => {
+                    state.sinceHours = parseInt(e.currentTarget.value, 10);
+                    handleFilterChange();
+                  },
+                },
+                [
+                  preact.h("option", { value: "0" }, "Everything"),
+                  preact.h("option", { value: "1" }, "Last hour"),
+                  preact.h("option", { value: "24" }, "Last 24 hours"),
+                  preact.h("option", { value: "168" }, "Last 7 days"),
+                ]
               ),
             ]),
             preact.h("div", { className: "filter-group" }, [
@@ -672,8 +815,23 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             ]),
           ]),
 
+          preact.h("div", { className: "logs-presets" }, [
+            preact.h(
+              "button",
+              { className: "pagination-btn", onClick: showRecentErrors },
+              "Errors in the last 24h"
+            ),
+            state.searchText.trim() && state.filesSearched.length > 0
+              ? preact.h(
+                  "span",
+                  { className: "pagination-info" },
+                  `Searched ${state.filesSearched.length} file${state.filesSearched.length === 1 ? "" : "s"}`
+                )
+              : null,
+          ]),
+
           // Pagination
-          state.currentFile
+          state.currentFile || state.searchText.trim()
             ? (() => {
                 const totalPages =
                   state.totalLines > 0 ? Math.ceil(state.totalLines / entriesPerPage) : 0;
@@ -729,18 +887,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
           ? preact.h(
               "div",
               { className: "logs-content" },
-              preact.h("div", { className: "logs-table" }, [
-                preact.h("div", { className: "table-header" }, [
-                  preact.h("div", { className: "col-timestamp" }, "Timestamp"),
-                  preact.h("div", { className: "col-level" }, "Level"),
-                  preact.h("div", { className: "col-category" }, "Category"),
-                  preact.h("div", { className: "col-duration" }, "Duration"),
-                  preact.h("div", { className: "col-method" }, "Method"),
-                  preact.h("div", { className: "col-message" }, "Message"),
-                  preact.h("div", { className: "col-user" }, "User"),
-                ]),
-                ...logRows,
-              ])
+              preact.h("div", { className: "logs-table" }, [logTableHeader(), ...logRows])
             )
           : null,
 

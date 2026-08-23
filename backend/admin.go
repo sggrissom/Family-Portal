@@ -40,6 +40,7 @@ func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ReanalyzeAllPhotos)
 	vbeam.RegisterProc(app, GetLogFiles)
 	vbeam.RegisterProc(app, GetLogContent)
+	vbeam.RegisterProc(app, LookupLogReference)
 	vbeam.RegisterProc(app, GetLogStats)
 	vbeam.RegisterProc(app, GetPushStatus)
 	vbeam.RegisterProc(app, ListPushDevices)
@@ -387,20 +388,28 @@ type GetLogFilesResponse struct {
 }
 
 type GetLogContentRequest struct {
+	// Filename selects one log file. Empty means every file in the log
+	// directory, which is what a search wants: the reference code someone
+	// mailed you is not necessarily in today's.
 	Filename    string `json:"filename"`
 	Level       string `json:"level,omitempty"`       // Filter by log level
 	Category    string `json:"category,omitempty"`    // Filter by category
+	Search      string `json:"search,omitempty"`      // Case-insensitive text match
+	SinceHours  int    `json:"sinceHours,omitempty"`  // Only entries from the last N hours
 	Limit       int    `json:"limit,omitempty"`       // Limit number of entries (default 1000)
 	Offset      int    `json:"offset,omitempty"`      // Skip entries (for pagination)
 	MinDuration *int   `json:"minDuration,omitempty"` // Minimum duration in microseconds
 	SortBy      string `json:"sortBy,omitempty"`      // Sort by: "time" or "duration"
-	SortDesc    *bool  `json:"sortDesc,omitempty"`    // Sort descending (default: false)
+	SortDesc    *bool  `json:"sortDesc,omitempty"`    // Sort descending (default: newest first)
 }
 
 type GetLogContentResponse struct {
 	Entries    []PublicLogEntry `json:"entries"`
 	TotalLines int              `json:"totalLines"`
 	HasMore    bool             `json:"hasMore"`
+	// FilesSearched names the files the entries came from, so a cross-file
+	// search can say where it looked.
+	FilesSearched []string `json:"filesSearched"`
 }
 
 // Public log entry for API responses
@@ -493,13 +502,19 @@ func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err e
 	return
 }
 
-// GetLogContent returns filtered log content from a specific file
+// GetLogContent returns filtered log content.
+//
+// With no Filename it reads every log file, which is what Search is for: the
+// whole error design converges on someone sending you a reference code, and
+// there was previously no way to find one in the panel at all — the request had
+// Level, Category, Limit, Offset, MinDuration and SortBy, and no text search,
+// so the workflow ended in an SSH session and a grep.
 func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogContentResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	path, pathErr := logFilePath(req.Filename)
+	paths, names, pathErr := resolveLogTargets(req.Filename)
 	if pathErr != nil {
 		err = pathErr
 		return
@@ -509,30 +524,29 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		req.Limit = 1000
 	}
 
-	keep := func(entry logEntry) bool {
-		if req.Level != "" && string(entry.Level) != req.Level {
-			return false
-		}
-		if req.Category != "" && string(entry.Category) != req.Category {
-			return false
-		}
-		if req.MinDuration != nil && (entry.Duration == nil || *entry.Duration < *req.MinDuration) {
-			return false
-		}
-		return true
-	}
+	filter := newLogFilter(req)
 
 	var matched []logEntry
-	// A read failure names the path it tried, which is a directory layout
-	// nobody outside the box needs; ProcError trades it for a reference code.
-	if scanErr := scanLogFile(path, func(entry logEntry) bool {
-		if keep(entry) {
-			matched = append(matched, entry)
+	for _, path := range paths {
+		// A read failure names the path it tried, which is a directory layout
+		// nobody outside the box needs; ProcError trades it for a reference code.
+		if scanErr := scanLogFile(path, func(entry logEntry) bool {
+			if filter.keep(entry) {
+				matched = append(matched, entry)
+			}
+			return true
+		}); scanErr != nil {
+			// Searching every file should not fail because one is unreadable,
+			// but asking for one specific file should.
+			if req.Filename != "" {
+				err = ProcError(scanErr)
+				return
+			}
+			LogErrorSimple(LogCategoryAdmin, "Could not read a log file while searching", map[string]interface{}{
+				"path":  path,
+				"error": scanErr.Error(),
+			})
 		}
-		return true
-	}); scanErr != nil {
-		err = ProcError(scanErr)
-		return
 	}
 
 	sortLogEntries(matched, req.SortBy, req.SortDesc)
@@ -549,16 +563,136 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 	resp.Entries = publicEntries
 	resp.TotalLines = total
 	resp.HasMore = endIdx < total
+	resp.FilesSearched = names
 	return
 }
 
-// sortLogEntries applies the request's ordering. The default — no sortBy — is
-// the order the entries appear in the file, which is chronological.
+type LookupLogReferenceRequest struct {
+	Reference string `json:"reference"`
+	// Context is how many entries either side of the match to return.
+	Context int `json:"context,omitempty"`
+}
+
+type LookupLogReferenceResponse struct {
+	Found bool `json:"found"`
+	// File names the log file the match was in.
+	File string `json:"file"`
+	// Entry is the entry the reference was minted for.
+	Entry PublicLogEntry `json:"entry"`
+	// Before and After are the surrounding entries, in file order. What was
+	// happening either side of a failure is usually more of the answer than
+	// the failure line itself.
+	Before []PublicLogEntry `json:"before"`
+	After  []PublicLogEntry `json:"after"`
+	// FilesSearched says where it looked, so "not found" is a fact about a
+	// known set of files rather than an unqualified shrug.
+	FilesSearched []string `json:"filesSearched"`
+}
+
+// LookupLogReference finds the single entry a reference code was minted for.
+//
+// ProcError logs the real cause against a fresh id and hands the user
+// "Something went wrong on our end. Reference: <id>". The intended workflow is
+// that they send you the code and you find the cause; this is the half of it
+// that was missing. The id is in the entry's data.requestId, so this matches on
+// that field rather than on the message text, and falls back to a plain
+// substring match for the other places a code can appear (a stack trace, or the
+// user-facing sentence itself if it was ever logged).
+func LookupLogReference(ctx *vbeam.Context, req LookupLogReferenceRequest) (resp LookupLogReferenceResponse, err error) {
+	if err = requireAdminAccess(ctx); err != nil {
+		return
+	}
+
+	reference := strings.TrimSpace(req.Reference)
+	// Accept the whole sentence pasted out of the UI, not just the bare code.
+	if idx := strings.Index(reference, ReferencePrefix); idx >= 0 {
+		reference = strings.TrimSpace(reference[idx+len(ReferencePrefix):])
+	}
+	if reference == "" {
+		err = errEmptyReference
+		return
+	}
+
+	context := req.Context
+	if context <= 0 {
+		context = 10
+	}
+	if context > 100 {
+		context = 100
+	}
+
+	paths, names, pathErr := resolveLogTargets("")
+	if pathErr != nil {
+		err = pathErr
+		return
+	}
+	resp.FilesSearched = names
+
+	// Newest file first (resolveLogTargets preserves listLogFiles' order), so a
+	// recent code is found without reading the archive.
+	for i, path := range paths {
+		before := newEntryRing(context)
+		var match *logEntry
+		var after []logEntry
+
+		scanErr := scanLogFile(path, func(entry logEntry) bool {
+			if match != nil {
+				after = append(after, entry)
+				return len(after) < context
+			}
+			if entryHasReference(entry, reference) {
+				found := entry
+				match = &found
+				return true
+			}
+			before.add(entry)
+			return true
+		})
+		if scanErr != nil {
+			LogErrorSimple(LogCategoryAdmin, "Could not read a log file while looking up a reference", map[string]interface{}{
+				"path":  path,
+				"error": scanErr.Error(),
+			})
+			continue
+		}
+
+		if match == nil {
+			continue
+		}
+
+		resp.Found = true
+		resp.File = names[i]
+		resp.Entry = convertToPublicLogEntry(*match)
+		// The ring hands back newest-first; context reads better in file order.
+		preceding := before.newestFirst()
+		for j := len(preceding) - 1; j >= 0; j-- {
+			resp.Before = append(resp.Before, convertToPublicLogEntry(preceding[j]))
+		}
+		for _, entry := range after {
+			resp.After = append(resp.After, convertToPublicLogEntry(entry))
+		}
+		return
+	}
+
+	return
+}
+
+// sortLogEntries applies the request's ordering.
+//
+// The default is newest first. The viewer used to open chronologically from the
+// start of the file, which is the wrong end: you open it because something is
+// wrong *now*.
 func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
-	desc := sortDesc != nil && *sortDesc
+	desc := true
+	if sortDesc != nil {
+		desc = *sortDesc
+	}
 
 	switch sortBy {
 	case "duration":
+		if sortDesc == nil {
+			desc = true // slowest first, for the same reason
+		}
 		sort.SliceStable(entries, func(i, j int) bool {
 			// Entries with no duration are not slow or fast; they sort last
 			// either way rather than clustering at whichever end zero is.
@@ -571,7 +705,7 @@ func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
 			}
 			return *a < *b
 		})
-	case "time":
+	default:
 		sort.SliceStable(entries, func(i, j int) bool {
 			if desc {
 				return entries[i].Timestamp.After(entries[j].Timestamp)

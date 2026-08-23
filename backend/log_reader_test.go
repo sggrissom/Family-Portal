@@ -1,9 +1,16 @@
 package backend
 
 import (
+	"family/cfg"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // writeLog puts a log file in a scratch directory and returns its path.
@@ -186,4 +193,273 @@ func TestLogFilePathRejectsEscapes(t *testing.T) {
 	if _, err := logFilePath("family_record.log"); err != nil {
 		t.Errorf("logFilePath rejected an ordinary name: %v", err)
 	}
+}
+
+// withLogDir puts files into cfg.LogDir for the procs that read the whole
+// directory, and removes exactly what it created. cfg.LogDir is a compile-time
+// constant, so there is nowhere else for them to look.
+func withLogDir(t *testing.T, files map[string]string) {
+	t.Helper()
+
+	createdDir := false
+	if _, err := os.Stat(cfg.LogDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(cfg.LogDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", cfg.LogDir, err)
+		}
+		createdDir = true
+	}
+
+	for name, contents := range files {
+		path := filepath.Join(cfg.LogDir, name)
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("%s already exists; refusing to overwrite it", path)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", path, err)
+		}
+	}
+
+	t.Cleanup(func() {
+		for name := range files {
+			_ = os.Remove(filepath.Join(cfg.LogDir, name))
+		}
+		if createdDir {
+			_ = os.Remove(cfg.LogDir)
+		}
+	})
+}
+
+// adminContext returns a read transaction and token for user 1.
+func adminContext(t *testing.T, db *vbolt.DB) string {
+	t.Helper()
+	appDb = db
+
+	var admin User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		req := CreateAccountRequest{
+			Name:            "Admin User",
+			Email:           "admin@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		admin = AddUserTx(tx, req, hash)
+		admin.Id = 1
+		vbolt.Write(tx, UsersBkt, 1, &admin)
+		vbolt.TxCommit(tx)
+	})
+
+	token, _ := generateAuthJwt(admin, httptest.NewRecorder())
+	return token
+}
+
+func logTestDB(t *testing.T, name string) *vbolt.DB {
+	t.Helper()
+	db := vbolt.Open(name)
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() {
+		db.Close()
+		_ = os.Remove(name)
+	})
+	return db
+}
+
+// TestLookupLogReferenceFindsTheEntryAndItsContext covers the workflow the
+// error design already assumed existed: ProcError mints an id, logs the real
+// cause against it, and shows the user "Reference: <id>". Until now there was
+// no way to look one up without an SSH session.
+func TestLookupLogReferenceFindsTheEntryAndItsContext(t *testing.T) {
+	withLogDir(t, map[string]string{
+		"reftest_family_record.log": `2026/08/22 10:00:00 {"timestamp":"2026-08-22T10:00:00Z","level":"INFO","category":"API","message":"Before one"}
+2026/08/22 10:00:01 {"timestamp":"2026-08-22T10:00:01Z","level":"INFO","category":"API","message":"Before two"}
+2026/08/22 10:00:02 {"timestamp":"2026-08-22T10:00:02Z","level":"ERROR","category":"SYSTEM","message":"Unexpected procedure error","data":{"requestId":"a1b2c3d4e5f6","error":"bolt: tx closed"}}
+2026/08/22 10:00:03 {"timestamp":"2026-08-22T10:00:03Z","level":"INFO","category":"API","message":"After one"}
+`,
+	})
+
+	token := adminContext(t, logTestDB(t, "test_log_reference.db"))
+
+	t.Run("bare code", func(t *testing.T) {
+		var resp LookupLogReferenceResponse
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			var err error
+			resp, err = LookupLogReference(&vbeam.Context{Tx: tx, Token: token},
+				LookupLogReferenceRequest{Reference: "a1b2c3d4e5f6"})
+			if err != nil {
+				t.Fatalf("LookupLogReference() error = %v", err)
+			}
+		})
+
+		if !resp.Found {
+			t.Fatalf("reference not found; searched %v", resp.FilesSearched)
+		}
+		if resp.File != "reftest_family_record.log" {
+			t.Errorf("File = %q", resp.File)
+		}
+		// The cause, not the sentence the user saw — that is the whole point.
+		if data, ok := resp.Entry.Data.(map[string]interface{}); !ok || data["error"] != "bolt: tx closed" {
+			t.Errorf("Entry.Data = %#v, want the logged cause", resp.Entry.Data)
+		}
+		// Context in file order, so it reads like the log does.
+		if len(resp.Before) != 2 || resp.Before[0].Message != "Before one" || resp.Before[1].Message != "Before two" {
+			t.Errorf("Before = %+v, want the two preceding entries in file order", resp.Before)
+		}
+		if len(resp.After) != 1 || resp.After[0].Message != "After one" {
+			t.Errorf("After = %+v", resp.After)
+		}
+	})
+
+	t.Run("whole pasted sentence", func(t *testing.T) {
+		// What someone actually sends you is the message, not the bare code.
+		pasted := "Something went wrong on our end. " + ReferencePrefix + "a1b2c3d4e5f6"
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := LookupLogReference(&vbeam.Context{Tx: tx, Token: token},
+				LookupLogReferenceRequest{Reference: pasted})
+			if err != nil {
+				t.Fatalf("LookupLogReference() error = %v", err)
+			}
+			if !resp.Found {
+				t.Error("a pasted reference sentence was not resolved to its code")
+			}
+		})
+	})
+
+	t.Run("unknown code says where it looked", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := LookupLogReference(&vbeam.Context{Tx: tx, Token: token},
+				LookupLogReferenceRequest{Reference: "ffffffffffff"})
+			if err != nil {
+				t.Fatalf("LookupLogReference() error = %v", err)
+			}
+			if resp.Found {
+				t.Error("found a reference that is not in any file")
+			}
+			if len(resp.FilesSearched) == 0 {
+				t.Error("a miss should still say which files were read")
+			}
+		})
+	})
+
+	t.Run("empty reference is refused", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			if _, err := LookupLogReference(&vbeam.Context{Tx: tx, Token: token},
+				LookupLogReferenceRequest{Reference: "   "}); err == nil {
+				t.Error("an empty reference was accepted")
+			}
+		})
+	})
+
+	t.Run("non-admin is refused", func(t *testing.T) {
+		regular, _ := generateAuthJwt(User{Id: 2, Email: "regular@example.com"}, httptest.NewRecorder())
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			if _, err := LookupLogReference(&vbeam.Context{Tx: tx, Token: regular},
+				LookupLogReferenceRequest{Reference: "a1b2c3d4e5f6"}); err != ErrAdminRequired {
+				t.Errorf("Expected ErrAdminRequired, got %v", err)
+			}
+		})
+	})
+}
+
+// TestGetLogContentSearchesEveryFile: an empty filename means the whole
+// directory, because the code someone mailed you is not necessarily in today's.
+func TestGetLogContentSearchesEveryFile(t *testing.T) {
+	withLogDir(t, map[string]string{
+		"searchtest_a.log": `2026/08/20 10:00:00 {"timestamp":"2026-08-20T10:00:00Z","level":"ERROR","category":"PHOTO","message":"Old failure","data":{"requestId":"aaaaaaaaaaaa"}}
+`,
+		"searchtest_b.log": `2026/08/22 10:00:00 {"timestamp":"2026-08-22T10:00:00Z","level":"INFO","category":"API","message":"Nothing to see"}
+2026/08/22 10:00:01 {"timestamp":"2026-08-22T10:00:01Z","level":"ERROR","category":"PHOTO","message":"New failure","data":{"requestId":"bbbbbbbbbbbb"}}
+`,
+	})
+
+	token := adminContext(t, logTestDB(t, "test_log_search.db"))
+
+	t.Run("search spans files", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token},
+				GetLogContentRequest{Search: "failure"})
+			if err != nil {
+				t.Fatalf("GetLogContent() error = %v", err)
+			}
+			if resp.TotalLines != 2 {
+				t.Errorf("TotalLines = %d, want 2 (one match in each file)", resp.TotalLines)
+			}
+			// Newest first is the default now: you open the log because
+			// something is wrong right now.
+			if len(resp.Entries) > 0 && resp.Entries[0].Message != "New failure" {
+				t.Errorf("first entry = %q, want the most recent", resp.Entries[0].Message)
+			}
+		})
+	})
+
+	t.Run("search matches the structured payload", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token},
+				GetLogContentRequest{Search: "bbbbbbbbbbbb"})
+			if err != nil {
+				t.Fatalf("GetLogContent() error = %v", err)
+			}
+			if resp.TotalLines != 1 {
+				t.Fatalf("TotalLines = %d, want 1", resp.TotalLines)
+			}
+			if resp.Entries[0].Message != "New failure" {
+				t.Errorf("matched %q", resp.Entries[0].Message)
+			}
+		})
+	})
+
+	t.Run("search combines with the level filter", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token},
+				GetLogContentRequest{Search: "failure", Level: "INFO"})
+			if err != nil {
+				t.Fatalf("GetLogContent() error = %v", err)
+			}
+			if resp.TotalLines != 0 {
+				t.Errorf("TotalLines = %d, want 0 — no INFO entry says \"failure\"", resp.TotalLines)
+			}
+		})
+	})
+
+	t.Run("a named file is not a directory search", func(t *testing.T) {
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token},
+				GetLogContentRequest{Filename: "searchtest_a.log", Search: "failure"})
+			if err != nil {
+				t.Fatalf("GetLogContent() error = %v", err)
+			}
+			if resp.TotalLines != 1 {
+				t.Errorf("TotalLines = %d, want 1", resp.TotalLines)
+			}
+		})
+	})
+}
+
+// TestGetLogContentSinceHours: the viewer is almost always opened because
+// something is wrong now, so "the last N hours" has to be one field.
+func TestGetLogContentSinceHours(t *testing.T) {
+	now := time.Now().UTC()
+	recent := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	old := now.Add(-72 * time.Hour).Format(time.RFC3339)
+
+	withLogDir(t, map[string]string{
+		"sincetest.log": `2026/08/22 10:00:00 {"timestamp":"` + old + `","level":"ERROR","category":"SYSTEM","message":"Three days ago"}
+2026/08/22 10:00:01 {"timestamp":"` + recent + `","level":"ERROR","category":"SYSTEM","message":"Two hours ago"}
+`,
+	})
+
+	token := adminContext(t, logTestDB(t, "test_log_since.db"))
+
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token},
+			GetLogContentRequest{Filename: "sincetest.log", Level: "ERROR", SinceHours: 24})
+		if err != nil {
+			t.Fatalf("GetLogContent() error = %v", err)
+		}
+		if resp.TotalLines != 1 {
+			t.Fatalf("TotalLines = %d, want 1", resp.TotalLines)
+		}
+		if resp.Entries[0].Message != "Two hours ago" {
+			t.Errorf("kept %q", resp.Entries[0].Message)
+		}
+	})
 }
