@@ -203,7 +203,8 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 
 	// Queueing into a worker that is not running would report a confident
 	// count of photos nothing will ever pick up.
-	if !GetProcessingStats().IsRunning {
+	pw := activePhotoWorker()
+	if pw == nil {
 		err = ErrPhotoWorkerUnavailable
 		return
 	}
@@ -222,26 +223,9 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 		return true
 	})
 
-	// Feed the queue from a goroutine with blocking sends. A backlog is
-	// routinely larger than the queue, and the caller should not wait on the
-	// worker to drain it — that is the timeout this rewrite exists to avoid.
-	// The jobs carry no image bytes, so the pending slice is cheap to hold.
-	if len(toQueue) > 0 {
-		go func(jobs []PhotoProcessingJob) {
-			for _, job := range jobs {
-				if queueErr := QueuePhotoProcessingBlocking(job); queueErr != nil {
-					LogErrorSimple(LogCategoryAdmin, "Failed to queue photo for reprocessing", map[string]interface{}{
-						"photoId": job.ImageId,
-						"error":   queueErr.Error(),
-					})
-					return
-				}
-			}
-			LogInfo(LogCategoryAdmin, "Reprocess backlog fully queued", map[string]interface{}{
-				"count": len(jobs),
-			})
-		}(toQueue)
-	}
+	queueBacklog(pw, toQueue,
+		"Failed to queue photo for reprocessing",
+		"Reprocess backlog fully queued")
 
 	resp.Queued = len(toQueue)
 	return

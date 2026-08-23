@@ -75,6 +75,25 @@ func (l *workerLifecycle) stop(drainCtx context.Context) <-chan struct{} {
 	return l.done
 }
 
+// stopping returns a channel that closes when this run of the worker is asked
+// to stop. A producer blocked on a full queue selects on it so that stopping the
+// worker releases the producer instead of parking it on a channel nothing will
+// read again.
+//
+// When the worker is not running the returned channel is already closed, so the
+// caller takes the "give up" branch immediately rather than blocking on a nil
+// channel forever.
+func (l *workerLifecycle) stopping() <-chan struct{} {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.running {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+	return l.quit
+}
+
 // drainContext is what a loop consults after quit fires. Nil means exit now.
 func (l *workerLifecycle) drainContext() context.Context {
 	l.mu.Lock()

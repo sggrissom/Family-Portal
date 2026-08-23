@@ -49,6 +49,9 @@ func TestRequeueStuckPhotos(t *testing.T) {
 	t.Run("queues only the stranded rows", func(t *testing.T) {
 		InitializePhotoWorker(10, db)
 		defer func() {
+			// The backlog is fed from a goroutine. Let it finish before
+			// tearing the worker down, or the teardown races the feeder.
+			waitForBacklogFeeders()
 			globalPhotoWorker.Stop()
 			globalPhotoWorker = nil
 		}()

@@ -121,16 +121,79 @@ func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
 	LogInfo(LogCategoryWorker, "Photo processing worker started")
 }
 
-// QueuePhotoProcessingBlocking adds a photo to the processing queue, waiting
-// for room rather than giving up when it is full. Only the admin reprocess path
-// uses it, from its own goroutine: a backlog is routinely larger than the
-// queue, and the non-blocking send would drop most of it on the floor.
-func QueuePhotoProcessingBlocking(job PhotoProcessingJob) error {
-	if globalPhotoWorker == nil {
-		return fmt.Errorf("photo worker not initialized")
+// errPhotoWorkerStopped ends a backlog feed early because the worker it was
+// filling has shut down. The remaining jobs are dropped on purpose: their rows
+// are still unprocessed, so the next reprocess run picks them up.
+var errPhotoWorkerStopped = errors.New("photo worker stopped")
+
+// activePhotoWorker returns the running worker, or nil when there is none. The
+// admin actions resolve it once, up front, and then work with that pointer:
+// checking a global and later reading it again is two different answers.
+func activePhotoWorker() *PhotoWorker {
+	pw := globalPhotoWorker
+	if pw == nil || !pw.isRunning() {
+		return nil
 	}
-	globalPhotoWorker.jobQueue <- job
-	return nil
+	return pw
+}
+
+// queueBlocking hands the worker one job, waiting for room rather than giving
+// up when the queue is full. The admin backlog paths use it: a backlog is
+// routinely larger than the queue, and a non-blocking send would drop most of
+// it on the floor.
+//
+// It gives up if the worker stops while it waits. A plain send would park the
+// feeder on a queue whose reader has already exited, holding the goroutine for
+// the life of the process.
+func (pw *PhotoWorker) queueBlocking(job PhotoProcessingJob) error {
+	select {
+	case pw.jobQueue <- job:
+		return nil
+	case <-pw.stopping():
+		return errPhotoWorkerStopped
+	}
+}
+
+// backlogFeeders counts the goroutines queueBacklog has in flight, so shutdown
+// and tests can wait for them. Without it a test that stops the worker races
+// its own feeder, which is still reaching for package state as the test tears
+// it down.
+var backlogFeeders sync.WaitGroup
+
+// waitForBacklogFeeders blocks until every in-flight backlog feed has finished.
+func waitForBacklogFeeders() {
+	backlogFeeders.Wait()
+}
+
+// queueBacklog feeds jobs to pw from its own goroutine with blocking sends, so
+// the admin RPC that found the backlog returns a count immediately instead of
+// waiting for the worker to drain it. The jobs carry no image bytes, so holding
+// the pending slice is cheap.
+//
+// pw is passed in rather than read from the global inside the loop. The feeder
+// outlives the request, and the batch belongs to the worker that was running
+// when the request was admitted — not to whatever the global points at later.
+func queueBacklog(pw *PhotoWorker, jobs []PhotoProcessingJob, failureMsg, doneMsg string) {
+	if pw == nil || len(jobs) == 0 {
+		return
+	}
+
+	backlogFeeders.Add(1)
+	go func() {
+		defer backlogFeeders.Done()
+		for _, job := range jobs {
+			if err := pw.queueBlocking(job); err != nil {
+				LogErrorSimple(LogCategoryAdmin, failureMsg, map[string]interface{}{
+					"photoId": job.ImageId,
+					"error":   err.Error(),
+				})
+				return
+			}
+		}
+		LogInfo(LogCategoryAdmin, doneMsg, map[string]interface{}{
+			"count": len(jobs),
+		})
+	}()
 }
 
 // QueuePhotoProcessing adds a photo to the processing queue

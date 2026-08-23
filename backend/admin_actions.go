@@ -40,7 +40,8 @@ func RequeueStuckPhotos(ctx *vbeam.Context, req RequeueStuckPhotosRequest) (resp
 		return
 	}
 
-	if !GetProcessingStats().IsRunning {
+	pw := activePhotoWorker()
+	if pw == nil {
 		err = ErrPhotoWorkerUnavailable
 		return
 	}
@@ -60,21 +61,9 @@ func RequeueStuckPhotos(ctx *vbeam.Context, req RequeueStuckPhotosRequest) (resp
 		return true
 	})
 
-	// Same shape as ReprocessAllPhotos: queue from a goroutine with blocking
-	// sends so the caller is not waiting on the worker to drain.
-	if len(toQueue) > 0 {
-		go func(jobs []PhotoProcessingJob) {
-			for _, job := range jobs {
-				if queueErr := QueuePhotoProcessingBlocking(job); queueErr != nil {
-					LogErrorSimple(LogCategoryAdmin, "Failed to requeue a stuck photo", map[string]interface{}{
-						"photoId": job.ImageId,
-						"error":   queueErr.Error(),
-					})
-					return
-				}
-			}
-		}(toQueue)
-	}
+	queueBacklog(pw, toQueue,
+		"Failed to requeue a stuck photo",
+		"Stuck-photo backlog fully queued")
 
 	LogInfo(LogCategoryAdmin, "Requeued photos stranded in processing", map[string]interface{}{
 		"count": len(toQueue),
