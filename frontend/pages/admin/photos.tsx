@@ -18,6 +18,9 @@ type PhotoManagementState = {
   isReanalyzing: boolean;
   lastReanalysisTime: string | null;
   reanalysisError: string;
+  isRequeueing: boolean;
+  requeueResult: string;
+  requeueError: string;
 };
 
 const usePhotoManagementState = vlens.declareHook(
@@ -31,6 +34,9 @@ const usePhotoManagementState = vlens.declareHook(
     isReanalyzing: false,
     lastReanalysisTime: null,
     reanalysisError: "",
+    isRequeueing: false,
+    requeueResult: "",
+    requeueError: "",
   })
 );
 
@@ -94,6 +100,116 @@ export function view(
 
 interface PhotoManagementPageProps {
   data: server.GetPhotoStatsResponse;
+}
+
+// The photo worker, in the shape the push page already uses: counters, the last
+// error, and a short history with measured durations. Photo processing failure
+// is the most common real problem this site has, and until now the worker
+// reported a queue length and a boolean.
+const WorkerPanel = ({
+  stats,
+  onRequeue,
+  state,
+}: {
+  stats: server.ProcessingStats;
+  onRequeue: () => void;
+  state: PhotoManagementState;
+}) => {
+  return (
+    <div className="admin-section">
+      <h2>Processing Worker</h2>
+
+      {!stats.isRunning && (
+        <div className="admin-notice">
+          <strong>The photo worker is not running.</strong> Nothing in the queue will be processed
+          and new uploads will sit unprocessed until the app is restarted.
+        </div>
+      )}
+
+      <div className="photo-stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <h3>Processed</h3>
+            <div className="stat-value">{stats.processed.toLocaleString()}</div>
+            <div className="stat-label">Since this process started</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">❌</div>
+          <div className="stat-content">
+            <h3>Failed</h3>
+            <div className="stat-value">{stats.failed.toLocaleString()}</div>
+            <div className="stat-label">Since this process started</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">🕒</div>
+          <div className="stat-content">
+            <h3>Last Processed</h3>
+            <div className="stat-value">{shortWhen(stats.lastProcessedAt)}</div>
+            {/* A quiet worker and a stalled one look identical without this. */}
+            <div className="stat-label">Most recent success</div>
+          </div>
+        </div>
+      </div>
+
+      {stats.lastError && (
+        <div className="admin-notice">
+          <strong>Last error</strong> ({shortWhen(stats.lastErrorAt)}): {stats.lastError}
+        </div>
+      )}
+
+      {stats.recentAttempts.length > 0 && (
+        <div className="admin-card">
+          <div className="card-header">
+            <div className="card-icon">📜</div>
+            <h3>Recent Attempts</h3>
+          </div>
+          <div className="card-content">
+            <ul className="error-list">
+              {stats.recentAttempts.map(attempt => (
+                <li key={`${attempt.imageId}-${attempt.time}`}>
+                  {attempt.success ? "✅" : "❌"} Photo #{attempt.imageId}
+                  {attempt.reprocess ? " (reprocess)" : ""} · {attempt.durationMs}ms ·{" "}
+                  {shortWhen(attempt.time)}
+                  {attempt.reason && ` · ${attempt.reason}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div className="admin-actions">
+        <button
+          className="admin-btn admin-btn-secondary"
+          onClick={onRequeue}
+          disabled={state.isRequeueing}
+        >
+          {state.isRequeueing ? "Requeuing…" : "Requeue stuck photos"}
+        </button>
+        {state.requeueResult && <span className="last-reprocess">{state.requeueResult}</span>}
+        {state.requeueError && <span className="last-reprocess">{state.requeueError}</span>}
+      </div>
+    </div>
+  );
+};
+
+// Short relative time. These are read at a glance next to a counter.
+function shortWhen(timestamp: string): string {
+  const then = new Date(timestamp).getTime();
+  if (!Number.isFinite(then) || then <= 0) return "never";
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
@@ -197,6 +313,28 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     }
 
     state.isReanalyzing = false;
+    vlens.scheduleRedraw();
+  };
+
+  // Rows stranded in Processing are the failure mode nothing retries: the queue
+  // is in-memory, so the job that owned the row died with the process.
+  const requeueStuck = async () => {
+    state.isRequeueing = true;
+    state.requeueError = "";
+    state.requeueResult = "";
+    vlens.scheduleRedraw();
+
+    const [result, error] = await server.RequeueStuckPhotos({});
+    state.isRequeueing = false;
+    if (error) {
+      logWarn("admin", "Requeue failed", error);
+      state.requeueError = error;
+    } else if (result) {
+      state.requeueResult =
+        result.queued > 0
+          ? `Requeued ${result.queued} photo${result.queued === 1 ? "" : "s"}.`
+          : "Nothing was stuck.";
+    }
     vlens.scheduleRedraw();
   };
 
@@ -384,6 +522,10 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
             )}
           </div>
         </div>
+      )}
+
+      {state.processingStats && (
+        <WorkerPanel stats={state.processingStats} onRequeue={requeueStuck} state={state} />
       )}
 
       {needsReprocessing && (

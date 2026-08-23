@@ -262,7 +262,7 @@ One panel, above the fold, aggregating what is already available:
 
 Silent when everything is clean. The point is that a green page means something.
 
-### 3.3 Even out worker observability
+### 3.3 Even out worker observability — **done** (photo worker)
 
 `PushWorkerStats` carries `Sent`, `Failed`, `Deactivated`, `Suppressed`,
 `LastSentAt`, `LastError`, `LastErrorAt`, and `RecentAttempts`. That is why the
@@ -421,12 +421,11 @@ The panel has four real actions today: reprocess photos (broken, §1.3), requeue
 face analysis, send a test push, set mobile version policy. Candidates to add,
 in rough order of how often they'd be used:
 
-1. **Clear a stuck photo.** Rows sitting in `Status = 1` with no worker
-   attending them — currently unrecoverable without direct database access, and
-   §1.3 is how they get created.
-2. **Revoke a user's sessions.** `RefreshTokenBkt` is already indexed by user.
-   One button, useful for a lost phone or a stale session after a JWT secret
-   change.
+1. ~~**Clear a stuck photo.**~~ **Done** — `RequeueStuckPhotos`, on the photo
+   page. They are requeued rather than marked failed: the original is still on
+   disk, and a photo whose original is genuinely gone fails once, visibly.
+2. ~~**Revoke a user's sessions.**~~ **Done** — `RevokeUserSessions`, one button
+   per row on `/admin/users`.
 3. **Verify the backup path end-to-end.** Hit `/internal/snapshot` with the
    configured token, confirm the response starts and the declared
    `Content-Length` matches `tx.Size()`, and discard the body. That proves the

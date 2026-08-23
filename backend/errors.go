@@ -235,6 +235,7 @@ var publicErrors = []error{
 	ErrFaceAnalysisUnavailable,
 	ErrPhotoWorkerUnavailable,
 	ErrAdminRequired,
+	ErrUserNotFound,
 }
 
 func isPublicError(cause error) bool {
@@ -298,3 +299,7 @@ var ErrPhotoWorkerUnavailable = errors.New("Photo processing is not running on t
 // sixteen times with nineteen copies of this string, and one of those copies
 // getting edited was a matter of time.
 var ErrAdminRequired = errors.New("Unauthorized: Admin access required")
+
+// ErrUserNotFound is returned when an admin action names an account that is not
+// there — a stale id from a page loaded before the account was deleted.
+var ErrUserNotFound = errors.New("No such user")
