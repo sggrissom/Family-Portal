@@ -106,7 +106,7 @@ func RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if user.Id != 1 { // Admin check
+		if user.Id != AdminUserId {
 			RespondForbiddenError(w, r, "Admin access required")
 			return
 		}

@@ -37,6 +37,8 @@ export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
+export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
+export const ErrAdminRequired = "Unauthorized: Admin access required";
 
 export interface CreateAccountRequest {
     name: string
@@ -866,10 +868,7 @@ export interface ReprocessAllPhotosRequest {
 }
 
 export interface ReprocessAllPhotosResponse {
-    processed: number
-    failed: number
-    errors: string[]
-    totalTime: string
+    queued: number
 }
 
 export interface ProcessingStats {
@@ -956,7 +955,7 @@ export interface UserAnalyticsResponse {
     registrationTrends: DataPoint[]
     loginActivityTrends: DataPoint[]
     familySizeDistribution: DistributionPoint[]
-    userRetention: RetentionMetrics
+    userEngagement: EngagementMetrics
     topActiveFamilies: FamilyActivity[]
 }
 
@@ -972,8 +971,7 @@ export interface ContentAnalyticsResponse {
 export interface SystemAnalyticsResponse {
     storageUsage: StorageMetrics
     processingMetrics: ProcessingMetrics
-    errorAnalysis: ErrorAnalysis
-    apiRequestTrends: DataPoint[]
+    photoFailures: PhotoFailureReport
 }
 
 export interface DiagnosticsResponse {
@@ -1421,11 +1419,12 @@ export interface DistributionPoint {
     value: number
 }
 
-export interface RetentionMetrics {
-    day1: number
-    day7: number
-    day30: number
-    day90: number
+export interface EngagementMetrics {
+    total: number
+    neverLoggedIn: number
+    active7d: number
+    active30d: number
+    dormant90d: number
 }
 
 export interface FamilyActivity {
@@ -1453,15 +1452,13 @@ export interface StorageMetrics {
 
 export interface ProcessingMetrics {
     successRate: number
-    averageProcessTime: number
     queueLength: number
 }
 
-export interface ErrorAnalysis {
-    totalErrors: number
-    errorsByCategory: DistributionPoint[]
-    errorsByLevel: DistributionPoint[]
-    recentErrors: string[]
+export interface PhotoFailureReport {
+    failed: number
+    stuck: number
+    recentFailures: FailedPhoto[]
 }
 
 export interface AdminMobileVersionPlatform {
@@ -1544,6 +1541,12 @@ export interface PushAttempt {
     statusCode: number
     reason: string
     apnsId: string
+}
+
+export interface FailedPhoto {
+    id: number
+    filePath: string
+    createdAt: string
 }
 
 export interface EndpointStats {

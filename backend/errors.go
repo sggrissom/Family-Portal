@@ -233,6 +233,8 @@ var publicErrors = []error{
 	ErrFamilyAccessDenied,
 	ErrNoFamily,
 	ErrFaceAnalysisUnavailable,
+	ErrPhotoWorkerUnavailable,
+	ErrAdminRequired,
 }
 
 func isPublicError(cause error) bool {
@@ -285,3 +287,14 @@ func statusForErrorCode(code ErrorCode) int {
 // whose socket was unreachable at startup. It is a declared error so the
 // frontend can say something specific rather than showing a generic failure.
 var ErrFaceAnalysisUnavailable = errors.New("Face analysis is not available on this server")
+
+// ErrPhotoWorkerUnavailable is returned when an action needs the photo
+// processing worker and it is not running. Queueing into a stopped worker would
+// report a count of photos that nothing will ever pick up.
+var ErrPhotoWorkerUnavailable = errors.New("Photo processing is not running on this server")
+
+// ErrAdminRequired is the single instance of the admin gate's error. The panel
+// is gated on user 1 — fine for one operator, but the check was written out
+// sixteen times with nineteen copies of this string, and one of those copies
+// getting edited was a matter of time.
+var ErrAdminRequired = errors.New("Unauthorized: Admin access required")

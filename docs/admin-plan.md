@@ -41,7 +41,7 @@ Backend surface: `admin.go` (1286 lines), `admin_push.go`, `analytics.go`,
 
 ## 1. Things that are wrong (fix before adding anything)
 
-### 1.1 Three of the four analytics tabs are permanent placeholders
+### 1.1 Three of the four analytics tabs are permanent placeholders — **done**
 
 `analytics.tsx:157-159` renders `UsersViewPlaceholder`, `ContentViewPlaceholder`,
 and `SystemViewPlaceholder`. Each says "Loading … data…" forever. Nothing is
@@ -58,7 +58,7 @@ Fix: fetch on tab selection into the `AnalyticsState` slots that already exist
 unused). This is the highest ratio of value to work in the whole panel — the
 backend is already written and tested.
 
-### 1.2 The time-range selector does nothing
+### 1.2 The time-range selector does nothing — **done** (deleted)
 
 `analytics.tsx:148` binds a `<select>` to `state.selectedTimeRange`. Nothing
 reads it. Every window in `analytics.go` is hardcoded — 7 days for the activity
@@ -66,7 +66,7 @@ summary, 30 for the trends. Either thread a range through the request types or
 delete the control. Deleting it is fine; a fixed 30-day window is the right
 default for this site.
 
-### 1.3 `ReprocessAllPhotos` will take the site down
+### 1.3 `ReprocessAllPhotos` will take the site down — **done**
 
 `admin.go` — the proc calls `vbeam.UseWriteTx(ctx)`, then loops over every
 unprocessed photo doing a full decode and re-encode to AVIF and WebP at seven
@@ -105,7 +105,7 @@ this is an admin page loaded by one person) or label the window honestly and
 make it a parameter. Prefer computing properly; §2.1 makes the files small
 enough per day that it's cheap.
 
-### 1.5 Two analytics numbers are fabricated
+### 1.5 Two analytics numbers are fabricated — **done**
 
 - `calculateAverageProcessingTime` measures nothing. It returns
   `0.5s + 0.1s per MB + 0.05s per megapixel`, an arithmetic expression over file
@@ -119,7 +119,7 @@ enough per day that it's cheap.
 A dashboard that invents plausible numbers is worse than one with a gap in it,
 because you stop being able to tell which numbers to trust.
 
-### 1.6 Retention is not measuring retention
+### 1.6 Retention is not measuring retention — **done**
 
 `GetUserAnalytics` computes Day1/7/30/90 as "registered at least N days ago AND
 logged in within the last N days", divided by *all* users. Day-1 retention can
@@ -130,14 +130,14 @@ sign. Drop it, or replace it with something a single operator can act on —
 "accounts that have never logged in since signup" is a real answer to a real
 question.
 
-### 1.7 The log viewer's "today" badge never lights
+### 1.7 The log viewer's "today" badge never lights — **done**
 
 `admin.go:609` special-cases `family_portal.log`. The logger is initialized as
 `family_record` (`app.go`), so the file is `family_record.log` and `IsToday` is
 false for the one file you always want. One-line fix; it should read the name
 from the same constant `InitRotatingLogger` is given rather than a literal.
 
-### 1.8 Four disabled buttons and a "Coming Soon" card
+### 1.8 Four disabled buttons and a "Coming Soon" card — **done**
 
 `admin.tsx` ships Export User Data, System Health Check, Clear Cache, and
 Maintenance Mode as permanently `disabled`, plus a System Settings card that
@@ -450,11 +450,10 @@ account export already exists as a user-facing feature.
 
 Not urgent, but it's what makes the above cheaper to build.
 
-- **`user.Id != 1` appears 16 times, with 19 copies of the string
-  `"Unauthorized: Admin access required"`,** alongside a `requireAdminAccess`
-  helper that only 9 call sites use. Collapse to that one helper and one
-  exported `ErrAdminRequired`. Admin-as-user-1 is fine for one operator, but it
-  should be a named constant in one place rather than a magic number in sixteen.
+- ~~**`user.Id != 1` appears 16 times, with 19 copies of the string
+  `"Unauthorized: Admin access required"`.**~~ **Done** — one
+  `requireAdminAccess` helper, one exported `ErrAdminRequired`, and an
+  `AdminUserId` constant in place of the magic number.
 - **`admin.go` is 1286 lines** holding three unrelated concerns: user listing,
   photo maintenance, and a log parser. §2.4 extracts the parser; photo
   maintenance belongs next to the photo worker.
@@ -471,9 +470,9 @@ Not urgent, but it's what makes the above cheaper to build.
 
 ## Suggested order
 
-1. **§1** — the things that are wrong. §1.3 first, since it can take the site
-   down, then §1.1 because three working backend procs are one afternoon from
-   being three working tabs.
+1. ~~**§1** — the things that are wrong.~~ **Done**, except §1.4 (log stats
+   sampled from 50 lines), which is folded into the §2 log work, and §1.9
+   (bucket scans), which was never work to do.
 2. **§2.1** — logs out of the release directory. Everything else about logs is
    worth less until log history survives a deploy.
 3. **§2.2** — reference-code search. Small, and it completes a workflow the

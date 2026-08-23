@@ -14,7 +14,14 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// PhotoProcessingJob represents a photo that needs to be processed
+// PhotoProcessingJob represents a photo that needs to be processed.
+//
+// An upload carries its bytes in FileData. A reprocess job does not: the
+// admin panel can queue every unprocessed photo at once, and holding all of
+// their originals in memory to do it would be worse than the long write
+// transaction that shape replaced. Reprocess jobs set Reprocess and leave
+// FileData nil, and the worker reads the original back off disk when it gets
+// to them.
 type PhotoProcessingJob struct {
 	ImageId        int
 	FamilyId       int
@@ -23,6 +30,7 @@ type PhotoProcessingJob struct {
 	MimeType       string
 	OriginalWidth  int
 	OriginalHeight int
+	Reprocess      bool
 }
 
 // PhotoWorker manages background photo processing
@@ -56,6 +64,18 @@ func InitializePhotoWorker(queueSize int, db *vbolt.DB) {
 	LogInfo(LogCategoryWorker, "Photo worker initialized with database reference")
 	globalPhotoWorker.Start()
 	LogInfo(LogCategoryWorker, "Photo processing worker started")
+}
+
+// QueuePhotoProcessingBlocking adds a photo to the processing queue, waiting
+// for room rather than giving up when it is full. Only the admin reprocess path
+// uses it, from its own goroutine: a backlog is routinely larger than the
+// queue, and the non-blocking send would drop most of it on the floor.
+func QueuePhotoProcessingBlocking(job PhotoProcessingJob) error {
+	if globalPhotoWorker == nil {
+		return fmt.Errorf("photo worker not initialized")
+	}
+	globalPhotoWorker.jobQueue <- job
+	return nil
 }
 
 // QueuePhotoProcessing adds a photo to the processing queue
@@ -148,9 +168,28 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		return
 	}
 
+	// A reprocess job arrives without its bytes; read the original back now,
+	// one photo at a time, rather than having held it since it was queued.
+	sourceData := job.FileData
+	if len(sourceData) == 0 {
+		sourceData, err = os.ReadFile(getOriginalPhotoPath(Image{FilePath: job.FilePath}))
+		if err != nil {
+			log.Printf("[PHOTO_PROCESSING] FAILED to read original for photo ID %d: %v", job.ImageId, err)
+			pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
+			return
+		}
+	}
+
+	// Reprocessing writes over an existing set of variants. Formats the current
+	// pipeline no longer emits would otherwise survive as stale files that
+	// isPhotoProcessed keeps counting as a processed photo.
+	if job.Reprocess {
+		cleanupOldVariants(strings.TrimSuffix(filepath.Join(cfg.StaticDir, job.FilePath), filepath.Ext(job.FilePath)))
+	}
+
 	// Process the image and create multiple sizes/formats
 	log.Printf("[PHOTO_PROCESSING] Processing image formats and sizes for photo %d", job.ImageId)
-	processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(job.FileData, job.MimeType)
+	processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(sourceData, job.MimeType)
 	if err != nil {
 		log.Printf("[PHOTO_PROCESSING] FAILED to process photo ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden

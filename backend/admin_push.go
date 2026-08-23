@@ -201,13 +201,7 @@ func SendTestPushNotification(ctx *vbeam.Context, req SendTestPushRequest) (resp
 // requirePushAdmin resolves the caller and enforces the admin check shared by
 // every proc in this file.
 func requirePushAdmin(ctx *vbeam.Context) (user User, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 	return

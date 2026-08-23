@@ -347,9 +347,17 @@ func TestGetUserAnalytics(t *testing.T) {
 				}
 			}
 
-			// Check retention metrics structure
-			if resp.UserRetention.Day1 < 0 || resp.UserRetention.Day1 > 100 {
-				t.Errorf("Day1 retention should be between 0 and 100, got %f", resp.UserRetention.Day1)
+			// Engagement is a partition of the accounts: everyone is either
+			// never-signed-in or falls into exactly one recency bucket, so the
+			// buckets can never add up to more than the total. (Active7d is
+			// counted inside Active30d, hence the subtraction.)
+			eng := resp.UserEngagement
+			counted := eng.NeverLoggedIn + eng.Active30d + eng.Dormant90d
+			if counted > eng.Total {
+				t.Errorf("Engagement buckets (%d) exceed total accounts (%d)", counted, eng.Total)
+			}
+			if eng.Active7d > eng.Active30d {
+				t.Errorf("Active7d (%d) should not exceed Active30d (%d)", eng.Active7d, eng.Active30d)
 			}
 		})
 	})
@@ -551,8 +559,11 @@ func TestGetSystemAnalytics(t *testing.T) {
 			if resp.ProcessingMetrics.SuccessRate < 0 {
 				t.Error("Success rate should not be negative")
 			}
-			if resp.ProcessingMetrics.AverageProcessTime < 0 {
-				t.Error("Average processing time should not be negative")
+			if resp.PhotoFailures.Failed < 0 || resp.PhotoFailures.Stuck < 0 {
+				t.Error("Photo failure counts should not be negative")
+			}
+			if len(resp.PhotoFailures.RecentFailures) > resp.PhotoFailures.Failed {
+				t.Error("Recent failures should be a subset of failed photos")
 			}
 		})
 	})
@@ -623,19 +634,92 @@ func TestAnalyticsDataStructures(t *testing.T) {
 		}
 	})
 
-	t.Run("RetentionMetrics", func(t *testing.T) {
-		retention := RetentionMetrics{
-			Day1:  95.5,
-			Day7:  80.0,
-			Day30: 65.5,
-			Day90: 45.0,
-		}
+	t.Run("EngagementMetrics", func(t *testing.T) {
+		eng := EngagementMetrics{Total: 10, NeverLoggedIn: 2, Active7d: 3, Active30d: 5, Dormant90d: 1}
 
-		if retention.Day1 != 95.5 {
-			t.Errorf("Expected Day1 retention 95.5, got %f", retention.Day1)
+		if eng.Active7d > eng.Active30d {
+			t.Error("Active7d should be counted within Active30d")
 		}
-		if retention.Day90 != 45.0 {
-			t.Errorf("Expected Day90 retention 45.0, got %f", retention.Day90)
+		if eng.NeverLoggedIn+eng.Active30d+eng.Dormant90d > eng.Total {
+			t.Error("Buckets should not exceed the total")
 		}
 	})
+}
+
+// TestUserEngagementBuckets pins the classification the old retention block got
+// wrong: signup stamps LastLogin with Creation, so an account that never came
+// back must not be counted as active, and each account lands in exactly one
+// recency bucket.
+func TestUserEngagementBuckets(t *testing.T) {
+	testDBPath := "test_user_engagement.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	appDb = db
+	now := time.Now()
+
+	var adminUser User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		req := CreateAccountRequest{
+			Name:            "Admin User",
+			Email:           "admin@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		adminUser = AddUserTx(tx, req, hash)
+		adminUser.Id = 1
+		// The admin signed up long ago and is here right now.
+		adminUser.Creation = now.AddDate(0, 0, -200)
+		adminUser.LastLogin = now
+		vbolt.Write(tx, UsersBkt, 1, &adminUser)
+
+		// Signed up a month ago and never came back: LastLogin == Creation.
+		created := now.AddDate(0, 0, -30)
+		never := User{Id: 2, Name: "Never", Email: "never@example.com", Creation: created, LastLogin: created}
+		vbolt.Write(tx, UsersBkt, never.Id, &never)
+
+		// Signed up long ago, last seen three weeks back.
+		lapsed := User{Id: 3, Name: "Lapsed", Email: "lapsed@example.com",
+			Creation: now.AddDate(0, 0, -200), LastLogin: now.AddDate(0, 0, -21)}
+		vbolt.Write(tx, UsersBkt, lapsed.Id, &lapsed)
+
+		// Signed up long ago, not seen in half a year.
+		dormant := User{Id: 4, Name: "Dormant", Email: "dormant@example.com",
+			Creation: now.AddDate(0, 0, -400), LastLogin: now.AddDate(0, 0, -180)}
+		vbolt.Write(tx, UsersBkt, dormant.Id, &dormant)
+
+		vbolt.TxCommit(tx)
+	})
+
+	var resp UserAnalyticsResponse
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		ctx := &vbeam.Context{Tx: tx}
+		ctx.Token, _ = generateAuthJwt(adminUser, httptest.NewRecorder())
+
+		var err error
+		resp, err = GetUserAnalytics(ctx, Empty{})
+		if err != nil {
+			t.Fatalf("GetUserAnalytics failed: %v", err)
+		}
+	})
+
+	eng := resp.UserEngagement
+	if eng.Total != 4 {
+		t.Errorf("Total = %d, want 4", eng.Total)
+	}
+	if eng.NeverLoggedIn != 1 {
+		t.Errorf("NeverLoggedIn = %d, want 1 (the account whose only login is its signup)", eng.NeverLoggedIn)
+	}
+	if eng.Active7d != 1 {
+		t.Errorf("Active7d = %d, want 1", eng.Active7d)
+	}
+	if eng.Active30d != 2 {
+		t.Errorf("Active30d = %d, want 2 (Active7d is counted within it)", eng.Active30d)
+	}
+	if eng.Dormant90d != 1 {
+		t.Errorf("Dormant90d = %d, want 1", eng.Dormant90d)
+	}
 }

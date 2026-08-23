@@ -307,7 +307,7 @@ func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
 		Id:       user.Id,
 		Name:     user.Name,
 		Email:    user.Email,
-		IsAdmin:  user.Id == 1, // First user is admin
+		IsAdmin:  user.Id == AdminUserId,
 		FamilyId: user.FamilyId,
 		Families: []FamilyRef{},
 	}

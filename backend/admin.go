@@ -18,6 +18,25 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
+// AdminUserId is the account that owns the admin panel. One operator, so
+// membership is a fixed id rather than a role — but it is named here rather
+// than being a bare 1 in sixteen conditions.
+const AdminUserId = 1
+
+// requireAdminAccess is the admin gate for every admin proc. Callers return
+// its error unchanged; it is a declared public error so the text reaches the
+// browser instead of a reference code.
+func requireAdminAccess(ctx *vbeam.Context) error {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		return ErrAuthFailure
+	}
+	if user.Id != AdminUserId {
+		return ErrAdminRequired
+	}
+	return nil
+}
+
 func RegisterAdminMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListAllUsers)
 	vbeam.RegisterProc(app, GetPhotoStats)
@@ -51,22 +70,13 @@ type ListAllUsersResponse struct {
 
 // Admin-only procedure to list all registered users
 func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err error) {
-	// Get authenticated user
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	// Check if user is admin (ID == 1)
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
 	// Log admin action
 	LogInfo(LogCategoryAdmin, "Admin accessed user list", map[string]interface{}{
-		"adminUserId": user.Id,
+		"adminUserId": AdminUserId,
 	})
 
 	// Get all users using IterateAll
@@ -121,24 +131,12 @@ type GetPhotoStatsResponse struct {
 type ReprocessAllPhotosRequest struct{}
 
 type ReprocessAllPhotosResponse struct {
-	Processed int      `json:"processed"`
-	Failed    int      `json:"failed"`
-	Errors    []string `json:"errors"`
-	TotalTime string   `json:"totalTime"`
+	Queued int `json:"queued"`
 }
 
 // Get photo statistics for admin dashboard
 func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoStatsResponse, err error) {
-	// Get authenticated user
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	// Check if user is admin (ID == 1)
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -191,65 +189,66 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	return
 }
 
-// Reprocess all photos with modern formats and responsive sizes
+// ReprocessAllPhotos queues every unprocessed photo for the photo worker.
+//
+// This used to decode and re-encode every photo inline, at seven sizes in two
+// formats each, inside an open write transaction. bolt allows one writer, so
+// for the length of that loop every upload, chat message and milestone save in
+// the application blocked — and the two-minute RPC write timeout severed the
+// response long before a real backlog finished, leaving rows stuck in
+// Processing with nothing that would ever move them.
+//
+// It queues now, the same shape ReanalyzeAllPhotos already used, and returns a
+// count immediately. Progress is the worker queue depth, which the diagnostics
+// strip and this page already poll.
 func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp ReprocessAllPhotosResponse, err error) {
-	// Get authenticated user
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Check if user is admin (ID == 1)
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	// Queueing into a worker that is not running would report a confident
+	// count of photos nothing will ever pick up.
+	if !GetProcessingStats().IsRunning {
+		err = ErrPhotoWorkerUnavailable
 		return
 	}
 
-	vbeam.UseWriteTx(ctx)
-	startTime := time.Now()
-
-	// Get all photos that need reprocessing
-	var photosToProcess []Image
+	var toQueue []PhotoProcessingJob
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
 		if !isPhotoProcessed(image) {
-			photosToProcess = append(photosToProcess, image)
+			toQueue = append(toQueue, PhotoProcessingJob{
+				ImageId:   image.Id,
+				FamilyId:  image.FamilyId,
+				FilePath:  image.FilePath,
+				MimeType:  image.MimeType,
+				Reprocess: true,
+			})
 		}
 		return true
 	})
 
-	var errors []string
-	processed := 0
-	failed := 0
-
-	for _, photo := range photosToProcess {
-		// Update status to processing
-		photo.Status = 1 // Processing
-		vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
-
-		// Attempt to reprocess
-		if reprocessErr := reprocessSinglePhoto(photo); reprocessErr != nil {
-			failed++
-			errors = append(errors, fmt.Sprintf("Photo %d: %v", photo.Id, reprocessErr))
-			// Mark as failed/needs reprocessing
-			photo.Status = 2
-		} else {
-			processed++
-			// Mark as successfully processed
-			photo.Status = 0
-		}
-
-		// Update final status
-		vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
+	// Feed the queue from a goroutine with blocking sends. A backlog is
+	// routinely larger than the queue, and the caller should not wait on the
+	// worker to drain it — that is the timeout this rewrite exists to avoid.
+	// The jobs carry no image bytes, so the pending slice is cheap to hold.
+	if len(toQueue) > 0 {
+		go func(jobs []PhotoProcessingJob) {
+			for _, job := range jobs {
+				if queueErr := QueuePhotoProcessingBlocking(job); queueErr != nil {
+					LogErrorSimple(LogCategoryAdmin, "Failed to queue photo for reprocessing", map[string]interface{}{
+						"photoId": job.ImageId,
+						"error":   queueErr.Error(),
+					})
+					return
+				}
+			}
+			LogInfo(LogCategoryAdmin, "Reprocess backlog fully queued", map[string]interface{}{
+				"count": len(jobs),
+			})
+		}(toQueue)
 	}
 
-	vbolt.TxCommit(ctx.Tx)
-
-	resp.Processed = processed
-	resp.Failed = failed
-	resp.Errors = errors
-	resp.TotalTime = time.Since(startTime).String()
-
+	resp.Queued = len(toQueue)
 	return
 }
 
@@ -281,63 +280,6 @@ func isPhotoProcessed(photo Image) bool {
 	return false
 }
 
-// Helper function to reprocess a single photo
-func reprocessSinglePhoto(photo Image) error {
-	// Read the original file
-	originalPath := getOriginalPhotoPath(photo)
-	originalData, err := os.ReadFile(originalPath)
-	if err != nil {
-		return fmt.Errorf("failed to read original file: %w", err)
-	}
-
-	// Reprocess with modern formats and sizes
-	processedImages, _, _, err := ProcessAndSaveMultipleSizes(originalData, photo.MimeType)
-	if err != nil {
-		return fmt.Errorf("failed to process image: %w", err)
-	}
-
-	// Save all variants to disk
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	// Clean up old variants first (except original)
-	cleanupOldVariants(baseFilename)
-
-	// Save new variants
-	for key, data := range processedImages {
-		parts := strings.Split(key, "_")
-		if len(parts) != 2 {
-			continue
-		}
-		sizeName, format := parts[0], parts[1]
-
-		var ext string
-		switch format {
-		case "webp":
-			ext = ".webp"
-		case "avif":
-			ext = ".avif"
-		case "png":
-			ext = ".png"
-		default:
-			ext = ".jpg"
-		}
-
-		var fileName string
-		if sizeName == "large" {
-			fileName = baseFilename + ext
-		} else {
-			fileName = baseFilename + "_" + sizeName + ext
-		}
-
-		if err := os.WriteFile(fileName, data, 0644); err != nil {
-			return fmt.Errorf("failed to save variant %s: %w", fileName, err)
-		}
-	}
-
-	return nil
-}
-
 // Helper function to get the original photo path
 func getOriginalPhotoPath(photo Image) string {
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
@@ -365,16 +307,7 @@ func cleanupOldVariants(baseFilename string) {
 
 // GetPhotoProcessingStats returns statistics about photo processing queue
 func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStats, err error) {
-	// Get authenticated user
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	// Check if user is admin (ID == 1)
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -385,13 +318,7 @@ func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStat
 
 // GetAnalysisStats returns live stats from the face analysis worker
 func GetAnalysisStats(ctx *vbeam.Context, req Empty) (resp AnalysisWorkerStats, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 	resp = GetAnalysisWorkerStats()
@@ -407,13 +334,7 @@ type ReanalyzeAllPhotosResponse struct {
 
 // ReanalyzeAllPhotos queues all pending/failed photos for face analysis
 func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp ReanalyzeAllPhotosResponse, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -565,15 +486,7 @@ type GetLogStatsResponse struct {
 
 // GetLogFiles returns list of available log files
 func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err error) {
-	// Check admin authentication
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -603,10 +516,10 @@ func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err e
 			continue
 		}
 
-		// Check if this is today's log file
-		// Could be family_portal-YYYY-MM-DD.log or family_portal.log (current day)
+		// Rotated files carry the date in the name; the live file is
+		// LogFileName and counts as today when it was written to today.
 		isToday := strings.Contains(file.Name(), today) ||
-			(file.Name() == "family_portal.log" && info.ModTime().Format("2006-01-02") == today)
+			(file.Name() == LogFileName && info.ModTime().Format("2006-01-02") == today)
 
 		logFile := LogFileInfo{
 			Name:       file.Name(),
@@ -784,15 +697,7 @@ func parseTimingLogLine(line string) (*logEntry, bool) {
 
 // GetLogContent returns filtered log content from a specific file
 func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogContentResponse, err error) {
-	// Check admin authentication
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
@@ -963,15 +868,7 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 
 // GetLogStats returns summary statistics about logs
 func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err error) {
-	// Check admin authentication
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 

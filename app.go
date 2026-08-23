@@ -193,7 +193,7 @@ func MakeApplication() *vbeam.Application {
 
 	// Initialize rotating file logger only in production
 	if cfg.IsRelease {
-		vbeam.InitRotatingLogger("family_record")
+		vbeam.InitRotatingLogger(backend.LogFileBaseName)
 	}
 
 	backend.EnforceProductionConfig(cfg.DBPath, cfg.StaticDir)

@@ -766,3 +766,85 @@ func TestAdminUserInfo(t *testing.T) {
 		t.Errorf("Expected family name 'Admin Family', got '%s'", adminInfo.FamilyName)
 	}
 }
+
+// TestReprocessAllPhotosQueues pins the shape §1.3 of the admin plan asked for:
+// the proc queues and returns, rather than decoding every photo inside an open
+// write transaction that blocked all other writers until the RPC timed out.
+func TestReprocessAllPhotosQueues(t *testing.T) {
+	if globalPhotoWorker != nil {
+		globalPhotoWorker.Stop()
+	}
+	globalPhotoWorker = nil
+
+	testDBPath := "test_reprocess_all.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	appDb = db
+
+	var adminUser User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		req := CreateAccountRequest{
+			Name:            "Admin User",
+			Email:           "admin@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		adminUser = AddUserTx(tx, req, hash)
+		adminUser.Id = 1
+		vbolt.Write(tx, UsersBkt, 1, &adminUser)
+
+		// No variant files exist for these, so isPhotoProcessed is false for all.
+		for id := 1; id <= 3; id++ {
+			img := Image{Id: id, FamilyId: 1, FilePath: fmt.Sprintf("photos/reprocess-%d.jpg", id), MimeType: "image/jpeg"}
+			vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
+
+	t.Run("Refuses when the worker is not running", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: adminToken}
+			_, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{})
+			if err != ErrPhotoWorkerUnavailable {
+				t.Errorf("Expected ErrPhotoWorkerUnavailable, got %v", err)
+			}
+		})
+	})
+
+	t.Run("Queues the backlog from a read transaction", func(t *testing.T) {
+		InitializePhotoWorker(10, db)
+		defer func() {
+			globalPhotoWorker.Stop()
+			globalPhotoWorker = nil
+		}()
+
+		// A read transaction is the point: the old implementation called
+		// vbeam.UseWriteTx and held the single bolt writer for the whole run.
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: adminToken}
+			resp, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{})
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+			if resp.Queued != 3 {
+				t.Errorf("Queued = %d, want 3", resp.Queued)
+			}
+		})
+	})
+
+	t.Run("Non-admin is refused", func(t *testing.T) {
+		regularToken, _ := generateAuthJwt(User{Id: 2, Email: "regular@example.com"}, httptest.NewRecorder())
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: regularToken}
+			if _, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{}); err != ErrAdminRequired {
+				t.Errorf("Expected ErrAdminRequired, got %v", err)
+			}
+		})
+	})
+}

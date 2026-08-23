@@ -111,17 +111,6 @@ const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
           </div>
         </a>
 
-        <div className="admin-card">
-          <div className="card-header">
-            <div className="card-icon">🛠️</div>
-            <h3>System Settings</h3>
-          </div>
-          <div className="card-content">
-            <p>Configure system-wide settings and maintenance options.</p>
-            <div className="card-placeholder">Coming Soon</div>
-          </div>
-        </div>
-
         <a href="/admin/push" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="card-icon">🔔</div>
@@ -156,24 +145,6 @@ const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
             <div className="card-action">View System Logs →</div>
           </div>
         </a>
-      </div>
-
-      <div className="admin-section">
-        <h2>Quick Actions</h2>
-        <div className="admin-actions">
-          <button className="admin-btn admin-btn-secondary" disabled>
-            Export User Data
-          </button>
-          <button className="admin-btn admin-btn-secondary" disabled>
-            System Health Check
-          </button>
-          <button className="admin-btn admin-btn-secondary" disabled>
-            Clear Cache
-          </button>
-          <button className="admin-btn admin-btn-danger" disabled>
-            Maintenance Mode
-          </button>
-        </div>
       </div>
     </div>
   );
