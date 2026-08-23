@@ -104,12 +104,19 @@ cannot write.
 | `/srv/apps/family/shared/.env` | secrets, mode 600, **not backed up** |
 | `/srv/apps/family/shared/data/db.bolt` | the database (`cfg.DBPath`) |
 | `/srv/apps/family/shared/static/` | uploads and derived variants (`cfg.StaticDir`) |
+| `/srv/apps/family/shared/logs/` | the rotating application log (`cfg.LogDir`) |
 | `/srv/apps/family-face/shared/` | the face daemon's own env and models |
 | `/run/family-face/face.sock` | app → daemon socket (`cfg.FaceAnalysisSocket`) |
 
 Storage paths are compile-time constants in `cfg/release.go`, not environment
-variables. Startup probes both for writability and a release build refuses to
-serve if either fails (`backend/config_check.go`).
+variables. Startup probes all three for writability and a release build refuses
+to serve if any fails (`backend/config_check.go`).
+
+Logs live under `shared/` deliberately. The unit sets
+`WorkingDirectory=/srv/apps/%i/current`, so a relative log path put the file
+*inside the release directory*: every deploy started an empty log and the sixth
+deploy after an incident pruned the evidence, which is the wrong window — the
+moment you most want logs is right after a deploy that broke something.
 
 ## Deploys
 
@@ -142,7 +149,8 @@ Because a release build resolves its storage paths at compile time
 (`cfg/release.go`), the scratch deployment has to live where production's does:
 
 ```
-sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
+sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static \
+  /srv/apps/family/shared/logs
 sudo chown -R "$(id -un)" /srv/apps/family/shared
 ```
 
@@ -152,6 +160,7 @@ one without `sudo` and without leaving anything behind:
 ```
 bwrap --dev-bind / / --tmpfs /srv \
   --dir /srv/apps/family/shared/data --dir /srv/apps/family/shared/static \
+  --dir /srv/apps/family/shared/logs \
   --chdir "$PWD" -- make e2e
 ```
 
@@ -213,6 +222,35 @@ at app startup** (`backend/photo_analysis_worker.go:71`) — if the daemon is do
 when `app@family` starts, the worker is never created and stays off until the
 app is restarted, however healthy the daemon becomes later. Restart `family` after
 `family-face`, not before.
+
+## Host metrics
+
+`/admin` shows a Host card and folds disk pressure and proxy-measured 5xx into
+its problems feed, both read from
+[`metrics-server`](https://github.com/sggrissom/tiny-server-helper), which is
+already deployed on this box as an `internal@` unit. The traffic block is the
+interesting half: it comes from Caddy's access log, so it answers "is the site
+erroring for people" independently of anything this application logs about
+itself.
+
+Two settings in `shared/.env`, both or neither:
+
+| variable | value |
+| --- | --- |
+| `METRICS_URL` | `http://127.0.0.1:<PORT>/metrics`, where `PORT` is the one in `/srv/apps/metrics-server/shared/.env` |
+| `METRICS_API_KEY` | the `API_KEY` from that same file |
+
+Point it at **loopback**, not `metrics.grissom.zone`: the service runs on this
+box and binds `127.0.0.1`, so there is no reason for the request to leave the
+machine or depend on public DNS and TLS. A non-loopback host is a startup
+failure, as is setting one variable without the other — a URL with no key gets
+a 401 the panel would degrade quietly past, which is the kind of
+half-configuration `checkAPNs` already exists to prevent.
+
+Unset is a legitimate state: the card is hidden and the feed simply has less to
+say. A metrics service that is down never takes the panel with it — the fetch
+has a three-second timeout, the result is cached for 30 seconds either way, and
+a failure renders as one line naming the reason.
 
 ## Universal links
 

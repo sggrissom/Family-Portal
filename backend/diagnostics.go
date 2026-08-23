@@ -1,7 +1,6 @@
 package backend
 
 import (
-	"errors"
 	"family/cfg"
 	"runtime"
 	"time"
@@ -52,13 +51,7 @@ func RegisterDiagnosticsMethods(app *vbeam.Application) {
 // anything derived from a configured secret. The diagnostics view answers "what
 // is running", not "how is it configured".
 func GetDiagnostics(ctx *vbeam.Context, req Empty) (resp DiagnosticsResponse, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-	if user.Id != 1 {
-		err = errors.New("Unauthorized: Admin access required")
+	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 

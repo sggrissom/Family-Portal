@@ -10,29 +10,33 @@ import "./admin-styles";
 
 type PhotoManagementState = {
   isReprocessing: boolean;
-  reprocessProgress: number;
-  reprocessTotal: number;
-  reprocessErrors: string[];
+  reprocessQueued: number;
+  reprocessError: string;
   lastReprocessTime: string | null;
   processingStats: server.ProcessingStats | null;
   analysisStats: server.AnalysisWorkerStats | null;
   isReanalyzing: boolean;
   lastReanalysisTime: string | null;
   reanalysisError: string;
+  isRequeueing: boolean;
+  requeueResult: string;
+  requeueError: string;
 };
 
 const usePhotoManagementState = vlens.declareHook(
   (): PhotoManagementState => ({
     isReprocessing: false,
-    reprocessProgress: 0,
-    reprocessTotal: 0,
-    reprocessErrors: [],
+    reprocessQueued: 0,
+    reprocessError: "",
     lastReprocessTime: null,
     processingStats: null,
     analysisStats: null,
     isReanalyzing: false,
     lastReanalysisTime: null,
     reanalysisError: "",
+    isRequeueing: false,
+    requeueResult: "",
+    requeueError: "",
   })
 );
 
@@ -98,6 +102,116 @@ interface PhotoManagementPageProps {
   data: server.GetPhotoStatsResponse;
 }
 
+// The photo worker, in the shape the push page already uses: counters, the last
+// error, and a short history with measured durations. Photo processing failure
+// is the most common real problem this site has, and until now the worker
+// reported a queue length and a boolean.
+const WorkerPanel = ({
+  stats,
+  onRequeue,
+  state,
+}: {
+  stats: server.ProcessingStats;
+  onRequeue: () => void;
+  state: PhotoManagementState;
+}) => {
+  return (
+    <div className="admin-section">
+      <h2>Processing Worker</h2>
+
+      {!stats.isRunning && (
+        <div className="admin-notice">
+          <strong>The photo worker is not running.</strong> Nothing in the queue will be processed
+          and new uploads will sit unprocessed until the app is restarted.
+        </div>
+      )}
+
+      <div className="photo-stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <h3>Processed</h3>
+            <div className="stat-value">{stats.processed.toLocaleString()}</div>
+            <div className="stat-label">Since this process started</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">❌</div>
+          <div className="stat-content">
+            <h3>Failed</h3>
+            <div className="stat-value">{stats.failed.toLocaleString()}</div>
+            <div className="stat-label">Since this process started</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">🕒</div>
+          <div className="stat-content">
+            <h3>Last Processed</h3>
+            <div className="stat-value">{shortWhen(stats.lastProcessedAt)}</div>
+            {/* A quiet worker and a stalled one look identical without this. */}
+            <div className="stat-label">Most recent success</div>
+          </div>
+        </div>
+      </div>
+
+      {stats.lastError && (
+        <div className="admin-notice">
+          <strong>Last error</strong> ({shortWhen(stats.lastErrorAt)}): {stats.lastError}
+        </div>
+      )}
+
+      {stats.recentAttempts.length > 0 && (
+        <div className="admin-card">
+          <div className="card-header">
+            <div className="card-icon">📜</div>
+            <h3>Recent Attempts</h3>
+          </div>
+          <div className="card-content">
+            <ul className="error-list">
+              {stats.recentAttempts.map(attempt => (
+                <li key={`${attempt.imageId}-${attempt.time}`}>
+                  {attempt.success ? "✅" : "❌"} Photo #{attempt.imageId}
+                  {attempt.reprocess ? " (reprocess)" : ""} · {attempt.durationMs}ms ·{" "}
+                  {shortWhen(attempt.time)}
+                  {attempt.reason && ` · ${attempt.reason}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div className="admin-actions">
+        <button
+          className="admin-btn admin-btn-secondary"
+          onClick={onRequeue}
+          disabled={state.isRequeueing}
+        >
+          {state.isRequeueing ? "Requeuing…" : "Requeue stuck photos"}
+        </button>
+        {state.requeueResult && <span className="last-reprocess">{state.requeueResult}</span>}
+        {state.requeueError && <span className="last-reprocess">{state.requeueError}</span>}
+      </div>
+    </div>
+  );
+};
+
+// Short relative time. These are read at a glance next to a counter.
+function shortWhen(timestamp: string): string {
+  const then = new Date(timestamp).getTime();
+  if (!Number.isFinite(then) || then <= 0) return "never";
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
   const state = usePhotoManagementState();
 
@@ -137,33 +251,30 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
   const startReprocessing = async () => {
     const confirmed = confirm(
-      `This will reprocess all ${data.totalPhotos} photos with modern formats and optimized sizes. ` +
-        "This may take several minutes and cannot be undone. Continue?"
+      `Queue ${data.pendingPhotos} photos for reprocessing into modern formats and optimized sizes? ` +
+        "They are handled in the background; the queue count below shows progress."
     );
 
     if (!confirmed) return;
 
     state.isReprocessing = true;
-    state.reprocessProgress = 0;
-    state.reprocessTotal = data.totalPhotos;
-    state.reprocessErrors = [];
+    state.reprocessError = "";
     vlens.scheduleRedraw();
 
     try {
       const [result, error] = await server.ReprocessAllPhotos({});
 
       if (error) {
-        state.reprocessErrors.push(error);
+        logWarn("admin", "Reprocessing failed", error);
+        // The server refuses outright when the worker is not running, rather
+        // than reporting a queue nothing will read. Show what it said.
+        state.reprocessError = error;
       } else if (result) {
-        state.reprocessProgress = result.processed;
+        state.reprocessQueued = result.queued;
         state.lastReprocessTime = new Date().toLocaleString();
-        // Refresh the page data
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
       }
     } catch (err) {
-      state.reprocessErrors.push("Failed to start reprocessing: " + String(err));
+      state.reprocessError = "Failed to start reprocessing: " + String(err);
     }
 
     state.isReprocessing = false;
@@ -202,6 +313,28 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     }
 
     state.isReanalyzing = false;
+    vlens.scheduleRedraw();
+  };
+
+  // Rows stranded in Processing are the failure mode nothing retries: the queue
+  // is in-memory, so the job that owned the row died with the process.
+  const requeueStuck = async () => {
+    state.isRequeueing = true;
+    state.requeueError = "";
+    state.requeueResult = "";
+    vlens.scheduleRedraw();
+
+    const [result, error] = await server.RequeueStuckPhotos({});
+    state.isRequeueing = false;
+    if (error) {
+      logWarn("admin", "Requeue failed", error);
+      state.requeueError = error;
+    } else if (result) {
+      state.requeueResult =
+        result.queued > 0
+          ? `Requeued ${result.queued} photo${result.queued === 1 ? "" : "s"}.`
+          : "Nothing was stuck.";
+    }
     vlens.scheduleRedraw();
   };
 
@@ -391,6 +524,10 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
       )}
 
+      {state.processingStats && (
+        <WorkerPanel stats={state.processingStats} onRequeue={requeueStuck} state={state} />
+      )}
+
       {needsReprocessing && (
         <div className="admin-card reprocess-card">
           <div className="card-header">
@@ -405,15 +542,7 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
             {state.isReprocessing ? (
               <div className="reprocess-progress">
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${(state.reprocessProgress / state.reprocessTotal) * 100}%` }}
-                  ></div>
-                </div>
-                <div className="progress-text">
-                  Processing... {state.reprocessProgress} / {state.reprocessTotal} photos
-                </div>
+                <div className="progress-text">Queuing photos for reprocessing...</div>
               </div>
             ) : (
               <div className="reprocess-actions">
@@ -427,7 +556,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                     : "All Photos Processed"}
                 </button>
                 {state.lastReprocessTime && (
-                  <div className="last-reprocess">Last processed: {state.lastReprocessTime}</div>
+                  <div className="last-reprocess">
+                    Queued {state.reprocessQueued} photos at {state.lastReprocessTime}
+                  </div>
                 )}
               </div>
             )}
@@ -435,19 +566,13 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
       )}
 
-      {state.reprocessErrors.length > 0 && (
+      {state.reprocessError && (
         <div className="admin-card error-card">
           <div className="card-header">
             <div className="card-icon">⚠️</div>
-            <h3>Processing Errors</h3>
+            <h3>Reprocessing Error</h3>
           </div>
-          <div className="card-content">
-            <ul className="error-list">
-              {state.reprocessErrors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          </div>
+          <div className="card-content">{state.reprocessError}</div>
         </div>
       )}
 

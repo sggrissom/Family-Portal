@@ -22,8 +22,8 @@ export async function fetch(route: string, prefix: string) {
     });
   }
 
-  // For now, just return the overview data to fix the loading issue
-  // Other sections will be loaded on-demand when their tabs are selected
+  // Only the overview is fetched up front. The other three tabs load when
+  // they are first selected — see loadTab below.
   return server.GetAnalyticsOverview({});
 }
 
@@ -71,27 +71,66 @@ interface AnalyticsPageProps {
   overviewData: server.AnalyticsOverviewResponse;
 }
 
+type AnalyticsView = "overview" | "users" | "content" | "system";
+
 type AnalyticsState = {
-  selectedTimeRange: string;
-  selectedView: string;
+  selectedView: AnalyticsView;
   userData?: server.UserAnalyticsResponse;
   contentData?: server.ContentAnalyticsResponse;
   systemData?: server.SystemAnalyticsResponse;
   loading: { [key: string]: boolean };
+  errors: { [key: string]: string };
 };
 
 const useAnalyticsState = vlens.declareHook((): AnalyticsState => {
   return {
-    selectedTimeRange: "30d",
     selectedView: "overview",
     loading: {},
+    errors: {},
   };
 });
 
 const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
   const state = useAnalyticsState();
-  const selectedTimeRange = vlens.ref(state, "selectedTimeRange");
-  const selectedView = vlens.ref(state, "selectedView");
+
+  // Each tab's data is fetched once, the first time it is opened. The three
+  // procs behind them have existed and been registered all along; nothing was
+  // calling them, so the tabs said "Loading…" forever.
+  const loadTab = async (view: AnalyticsView) => {
+    if (state.loading[view]) return;
+    state.loading[view] = true;
+    state.errors[view] = "";
+
+    const finish = (message: string) => {
+      state.loading[view] = false;
+      state.errors[view] = message;
+      vlens.scheduleRedraw();
+    };
+
+    if (view === "users") {
+      const [result, error] = await server.GetUserAnalytics({});
+      if (result) state.userData = result;
+      finish(error ?? "");
+    } else if (view === "content") {
+      const [result, error] = await server.GetContentAnalytics({});
+      if (result) state.contentData = result;
+      finish(error ?? "");
+    } else if (view === "system") {
+      const [result, error] = await server.GetSystemAnalytics({});
+      if (result) state.systemData = result;
+      finish(error ?? "");
+    }
+  };
+
+  const selectView = (view: AnalyticsView) => {
+    state.selectedView = view;
+    vlens.scheduleRedraw();
+    if (view !== "overview" && !tabData(state, view)) {
+      loadTab(view);
+    }
+  };
+
+  const view = state.selectedView;
 
   return (
     <div className="analytics-page">
@@ -106,57 +145,80 @@ const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
 
       <div className="analytics-controls">
         <div className="view-selector">
-          <button
-            className={`view-btn ${vlens.refGet(selectedView) === "overview" ? "active" : ""}`}
-            onClick={() => {
-              vlens.refSet(selectedView, "overview");
-              vlens.scheduleRedraw();
-            }}
-          >
-            Overview
-          </button>
-          <button
-            className={`view-btn ${vlens.refGet(selectedView) === "users" ? "active" : ""}`}
-            onClick={() => {
-              vlens.refSet(selectedView, "users");
-              vlens.scheduleRedraw();
-            }}
-          >
-            Users
-          </button>
-          <button
-            className={`view-btn ${vlens.refGet(selectedView) === "content" ? "active" : ""}`}
-            onClick={() => {
-              vlens.refSet(selectedView, "content");
-              vlens.scheduleRedraw();
-            }}
-          >
-            Content
-          </button>
-          <button
-            className={`view-btn ${vlens.refGet(selectedView) === "system" ? "active" : ""}`}
-            onClick={() => {
-              vlens.refSet(selectedView, "system");
-              vlens.scheduleRedraw();
-            }}
-          >
-            System
-          </button>
-        </div>
-
-        <div className="time-selector">
-          <select aria-label="Time range" {...vlens.attrsBindInput(selectedTimeRange)}>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
+          {(["overview", "users", "content", "system"] as AnalyticsView[]).map(name => (
+            <button
+              key={name}
+              className={`view-btn ${view === name ? "active" : ""}`}
+              onClick={() => selectView(name)}
+            >
+              {viewLabels[name]}
+            </button>
+          ))}
         </div>
       </div>
 
-      {vlens.refGet(selectedView) === "overview" && <OverviewView data={overviewData} />}
-      {vlens.refGet(selectedView) === "users" && <UsersViewPlaceholder />}
-      {vlens.refGet(selectedView) === "content" && <ContentViewPlaceholder />}
-      {vlens.refGet(selectedView) === "system" && <SystemViewPlaceholder />}
+      {view === "overview" && <OverviewView data={overviewData} />}
+      {view !== "overview" && (
+        <TabContent state={state} view={view} onRetry={() => loadTab(view)} />
+      )}
+    </div>
+  );
+};
+
+const viewLabels: { [key in AnalyticsView]: string } = {
+  overview: "Overview",
+  users: "Users",
+  content: "Content",
+  system: "System",
+};
+
+function tabData(state: AnalyticsState, view: AnalyticsView) {
+  if (view === "users") return state.userData;
+  if (view === "content") return state.contentData;
+  if (view === "system") return state.systemData;
+  return undefined;
+}
+
+// A tab is one of three things: still fetching, failed with something worth
+// reading, or loaded. The old placeholders showed the first of those forever.
+const TabContent = ({
+  state,
+  view,
+  onRetry,
+}: {
+  state: AnalyticsState;
+  view: AnalyticsView;
+  onRetry: () => void;
+}) => {
+  const error = state.errors[view];
+  if (error) {
+    return (
+      <div className="analytics-content">
+        <div className="chart-placeholder large">
+          <div>
+            <h3>{viewLabels[view]} Analytics</h3>
+            <p>{error}</p>
+            <button className="admin-btn admin-btn-secondary" onClick={onRetry}>
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "users" && state.userData) return <UsersView data={state.userData} />;
+  if (view === "content" && state.contentData) return <ContentView data={state.contentData} />;
+  if (view === "system" && state.systemData) return <SystemView data={state.systemData} />;
+
+  return (
+    <div className="analytics-content">
+      <div className="chart-placeholder large">
+        <div>
+          <h3>{viewLabels[view]} Analytics</h3>
+          <p>Loading…</p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -247,23 +309,27 @@ const UsersView = ({ data }: { data: server.UserAnalyticsResponse }) => {
         </div>
 
         <div className="chart-card">
-          <h3>User Retention</h3>
+          <h3>Account Engagement</h3>
           <div className="retention-metrics">
             <div className="retention-item">
-              <span className="retention-label">Day 1</span>
-              <span className="retention-value">{data.userRetention.day1.toFixed(1)}%</span>
+              <span className="retention-label">Accounts</span>
+              <span className="retention-value">{data.userEngagement.total}</span>
             </div>
             <div className="retention-item">
-              <span className="retention-label">Day 7</span>
-              <span className="retention-value">{data.userRetention.day7.toFixed(1)}%</span>
+              <span className="retention-label">Never signed in</span>
+              <span className="retention-value">{data.userEngagement.neverLoggedIn}</span>
             </div>
             <div className="retention-item">
-              <span className="retention-label">Day 30</span>
-              <span className="retention-value">{data.userRetention.day30.toFixed(1)}%</span>
+              <span className="retention-label">Active (7d)</span>
+              <span className="retention-value">{data.userEngagement.active7d}</span>
             </div>
             <div className="retention-item">
-              <span className="retention-label">Day 90</span>
-              <span className="retention-value">{data.userRetention.day90.toFixed(1)}%</span>
+              <span className="retention-label">Active (30d)</span>
+              <span className="retention-value">{data.userEngagement.active30d}</span>
+            </div>
+            <div className="retention-item">
+              <span className="retention-label">Dormant 90d+</span>
+              <span className="retention-value">{data.userEngagement.dormant90d}</span>
             </div>
           </div>
         </div>
@@ -379,34 +445,30 @@ const SystemView = ({ data }: { data: server.SystemAnalyticsResponse }) => {
 
       <div className="charts-grid">
         <div className="chart-card">
-          <h3>Error Analysis</h3>
+          <h3>Photo Processing Failures</h3>
           <div className="error-summary">
             <div className="error-stat">
-              <span className="error-label">Total Errors</span>
-              <span className="error-value">{data.errorAnalysis.totalErrors}</span>
+              <span className="error-label">Failed</span>
+              <span className="error-value">{data.photoFailures.failed}</span>
             </div>
-            <div className="error-categories">
-              {data.errorAnalysis.errorsByCategory.map((category, index) => (
-                <div key={index} className="error-category">
-                  <span>{category.label}</span>
-                  <span>{category.value}</span>
-                </div>
-              ))}
+            <div className="error-stat">
+              <span className="error-label">Stuck in processing over an hour</span>
+              <span className="error-value">{data.photoFailures.stuck}</span>
             </div>
           </div>
         </div>
 
         <div className="chart-card">
-          <h3>Recent Errors</h3>
+          <h3>Recent Failures</h3>
           <div className="recent-errors">
-            {data.errorAnalysis.recentErrors.length > 0 ? (
-              data.errorAnalysis.recentErrors.slice(0, 5).map((error, index) => (
-                <div key={index} className="error-item">
-                  {error}
+            {data.photoFailures.recentFailures.length > 0 ? (
+              data.photoFailures.recentFailures.map(photo => (
+                <div key={photo.id} className="error-item">
+                  #{photo.id} · {photo.filePath} · {photo.createdAt}
                 </div>
               ))
             ) : (
-              <div className="no-errors">No recent errors</div>
+              <div className="no-errors">No failed photos</div>
             )}
           </div>
         </div>
@@ -570,54 +632,6 @@ const SimplePieChart = ({ data }: { data: server.DistributionPoint[] }) => {
           </div>
         );
       })}
-    </div>
-  );
-};
-
-// Placeholder components for other views
-const UsersViewPlaceholder = () => {
-  return (
-    <div className="analytics-content">
-      <div className="chart-placeholder large">
-        <div>
-          <h3>User Analytics</h3>
-          <p>Loading user analytics data...</p>
-          <p>
-            This section will show registration trends, user retention, and family engagement
-            metrics.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ContentViewPlaceholder = () => {
-  return (
-    <div className="analytics-content">
-      <div className="chart-placeholder large">
-        <div>
-          <h3>Content Analytics</h3>
-          <p>Loading content analytics data...</p>
-          <p>
-            This section will show photo upload trends, milestone tracking, and content patterns.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SystemViewPlaceholder = () => {
-  return (
-    <div className="analytics-content">
-      <div className="chart-placeholder large">
-        <div>
-          <h3>System Analytics</h3>
-          <p>Loading system analytics data...</p>
-          <p>This section will show storage usage, processing metrics, and error analysis.</p>
-        </div>
-      </div>
     </div>
   );
 };

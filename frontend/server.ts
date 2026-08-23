@@ -25,18 +25,21 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
+export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
+export const ErrAdminRequired = "Unauthorized: Admin access required";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
+export const ErrUserNotFound = "No such user";
 
 export interface CreateAccountRequest {
     name: string
@@ -866,15 +869,18 @@ export interface ReprocessAllPhotosRequest {
 }
 
 export interface ReprocessAllPhotosResponse {
-    processed: number
-    failed: number
-    errors: string[]
-    totalTime: string
+    queued: number
 }
 
 export interface ProcessingStats {
     queueLength: number
     isRunning: boolean
+    processed: number
+    failed: number
+    lastProcessedAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: PhotoAttempt[]
 }
 
 export interface AnalysisWorkerStats {
@@ -898,6 +904,8 @@ export interface GetLogContentRequest {
     filename: string
     level: string
     category: string
+    search: string
+    sinceHours: number
     limit: number
     offset: number
     minDuration: number | null
@@ -909,6 +917,21 @@ export interface GetLogContentResponse {
     entries: PublicLogEntry[]
     totalLines: number
     hasMore: boolean
+    filesSearched: string[]
+}
+
+export interface LookupLogReferenceRequest {
+    reference: string
+    context: number
+}
+
+export interface LookupLogReferenceResponse {
+    found: boolean
+    file: string
+    entry: PublicLogEntry
+    before: PublicLogEntry[]
+    after: PublicLogEntry[]
+    filesSearched: string[]
 }
 
 export interface GetLogStatsResponse {
@@ -956,7 +979,7 @@ export interface UserAnalyticsResponse {
     registrationTrends: DataPoint[]
     loginActivityTrends: DataPoint[]
     familySizeDistribution: DistributionPoint[]
-    userRetention: RetentionMetrics
+    userEngagement: EngagementMetrics
     topActiveFamilies: FamilyActivity[]
 }
 
@@ -972,8 +995,41 @@ export interface ContentAnalyticsResponse {
 export interface SystemAnalyticsResponse {
     storageUsage: StorageMetrics
     processingMetrics: ProcessingMetrics
-    errorAnalysis: ErrorAnalysis
-    apiRequestTrends: DataPoint[]
+    photoFailures: PhotoFailureReport
+}
+
+export interface SystemHealthResponse {
+    healthy: boolean
+    releaseBuild: boolean
+    configIssues: ConfigProblem[]
+    logs: LogProblems
+    photos: PhotoProblems
+    push: PushProblems
+    host: HostProblems
+}
+
+export interface HostMetricsResponse {
+    configured: boolean
+    available: boolean
+    error: string
+    collectedAt: string
+    system: HostSystem
+    app: HostApp
+}
+
+export interface RequeueStuckPhotosRequest {
+}
+
+export interface RequeueStuckPhotosResponse {
+    queued: number
+}
+
+export interface RevokeUserSessionsRequest {
+    userId: number
+}
+
+export interface RevokeUserSessionsResponse {
+    revoked: number
 }
 
 export interface DiagnosticsResponse {
@@ -1319,6 +1375,15 @@ export interface AdminUserInfo {
     isAdmin: boolean
 }
 
+export interface PhotoAttempt {
+    time: string
+    imageId: number
+    reprocess: boolean
+    success: boolean
+    durationMs: number
+    reason: string
+}
+
 export interface LogFileInfo {
     name: string
     size: number
@@ -1421,11 +1486,12 @@ export interface DistributionPoint {
     value: number
 }
 
-export interface RetentionMetrics {
-    day1: number
-    day7: number
-    day30: number
-    day90: number
+export interface EngagementMetrics {
+    total: number
+    neverLoggedIn: number
+    active7d: number
+    active30d: number
+    dormant90d: number
 }
 
 export interface FamilyActivity {
@@ -1453,15 +1519,63 @@ export interface StorageMetrics {
 
 export interface ProcessingMetrics {
     successRate: number
-    averageProcessTime: number
     queueLength: number
 }
 
-export interface ErrorAnalysis {
-    totalErrors: number
-    errorsByCategory: DistributionPoint[]
-    errorsByLevel: DistributionPoint[]
-    recentErrors: string[]
+export interface PhotoFailureReport {
+    failed: number
+    stuck: number
+    recentFailures: FailedPhoto[]
+}
+
+export interface ConfigProblem {
+    setting: string
+    detail: string
+}
+
+export interface LogProblems {
+    windowHours: number
+    errors: number
+    recentErrors: PublicLogEntry[]
+    requests4xx: number
+    requests5xx: number
+    unavailable: boolean
+}
+
+export interface PhotoProblems {
+    failed: number
+    stuck: number
+    analysisFailed: number
+    workerStopped: boolean
+    queueLength: number
+}
+
+export interface PushProblems {
+    failed: number
+    lastError: string
+    lastErrorAt: string
+}
+
+export interface HostProblems {
+    available: boolean
+    diskUsedPct: number
+    diskLow: boolean
+    proxy5xx: number
+    proxy4xx: number
+    windowSeconds: number
+}
+
+export interface HostSystem {
+    load_avg: HostLoadAvg
+    memory: HostMemory
+    cpu: HostCPU
+    disk: HostDisk
+}
+
+export interface HostApp {
+    name: string
+    disk_kb: number
+    traffic: HostTraffic
 }
 
 export interface AdminMobileVersionPlatform {
@@ -1544,6 +1658,48 @@ export interface PushAttempt {
     statusCode: number
     reason: string
     apnsId: string
+}
+
+export interface FailedPhoto {
+    id: number
+    filePath: string
+    createdAt: string
+}
+
+export interface HostLoadAvg {
+    one: number
+    five: number
+    fifteen: number
+}
+
+export interface HostMemory {
+    total_kb: number
+    available_kb: number
+    used_kb: number
+    used_pct: number
+}
+
+export interface HostCPU {
+    user_pct: number
+    system_pct: number
+    idle_pct: number
+    iowait_pct: number
+}
+
+export interface HostDisk {
+    total_kb: number
+    used_kb: number
+    free_kb: number
+    used_pct: number
+}
+
+export interface HostTraffic {
+    window_seconds: number
+    requests_total: number
+    requests_per_min: number
+    error_4xx: number
+    error_5xx: number
+    error_pct: number
 }
 
 export interface EndpointStats {
@@ -1920,6 +2076,10 @@ export async function GetLogContent(data: GetLogContentRequest): Promise<rpc.Res
     return await rpc.call<GetLogContentResponse>('GetLogContent', JSON.stringify(data));
 }
 
+export async function LookupLogReference(data: LookupLogReferenceRequest): Promise<rpc.Response<LookupLogReferenceResponse>> {
+    return await rpc.call<LookupLogReferenceResponse>('LookupLogReference', JSON.stringify(data));
+}
+
 export async function GetLogStats(data: Empty): Promise<rpc.Response<GetLogStatsResponse>> {
     return await rpc.call<GetLogStatsResponse>('GetLogStats', JSON.stringify(data));
 }
@@ -1950,6 +2110,22 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
+}
+
+export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
+    return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function GetHostMetrics(data: Empty): Promise<rpc.Response<HostMetricsResponse>> {
+    return await rpc.call<HostMetricsResponse>('GetHostMetrics', JSON.stringify(data));
+}
+
+export async function RequeueStuckPhotos(data: RequeueStuckPhotosRequest): Promise<rpc.Response<RequeueStuckPhotosResponse>> {
+    return await rpc.call<RequeueStuckPhotosResponse>('RequeueStuckPhotos', JSON.stringify(data));
+}
+
+export async function RevokeUserSessions(data: RevokeUserSessionsRequest): Promise<rpc.Response<RevokeUserSessionsResponse>> {
+    return await rpc.call<RevokeUserSessionsResponse>('RevokeUserSessions', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

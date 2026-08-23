@@ -23,7 +23,8 @@
 // A release build resolves its storage paths at compile time (cfg/release.go),
 // so the scratch deployment has to live where production would:
 //
-//	sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
+//	sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static \
+//	  /srv/apps/family/shared/logs
 //	sudo chown -R "$(id -un)" /srv/apps/family/shared
 //
 // On a machine where that tree would be unwelcome, bwrap can supply a throwaway
@@ -684,7 +685,7 @@ func (h *harness) preflight() error {
 		return fmt.Errorf("a database already exists at %s; e2e will not run against it", cfg.DBPath)
 	}
 
-	for _, dir := range []string{filepath.Dir(cfg.DBPath), cfg.StaticDir} {
+	for _, dir := range []string{filepath.Dir(cfg.DBPath), cfg.StaticDir, cfg.LogDir} {
 		if err := ensureScratchDir(dir); err != nil {
 			return err
 		}
@@ -873,6 +874,7 @@ func (h *harness) cleanup() {
 	}
 	_ = os.Remove(cfg.DBPath)
 	removeContents(cfg.StaticDir)
+	removeContents(cfg.LogDir)
 }
 
 // removeContents empties a directory without removing the directory itself,
@@ -889,14 +891,16 @@ func removeContents(dir string) {
 
 // dumpServerLog prints what the server said. A release build redirects the
 // standard logger to a rotating file as its second act (app.go), so almost
-// everything worth reading is in that file rather than on the pipe.
+// everything worth reading is in that file rather than on the pipe. The file is
+// under cfg.LogDir, not the child's working directory — logs live in shared/ so
+// they survive a deploy.
 func (h *harness) dumpServerLog() {
 	sections := []struct {
 		name string
 		text string
 	}{
 		{"output", h.log.tail()},
-		{"log file", tailFile(filepath.Join(h.dir, "logs", "family_record.log"))},
+		{"log file", tailFile(filepath.Join(cfg.LogDir, "family_record.log"))},
 	}
 	for _, section := range sections {
 		if section.text == "" {

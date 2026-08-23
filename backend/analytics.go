@@ -1,7 +1,7 @@
 package backend
 
 import (
-	"errors"
+	"sort"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -46,7 +46,7 @@ type UserAnalyticsResponse struct {
 	RegistrationTrends     []DataPoint         `json:"registrationTrends"`
 	LoginActivityTrends    []DataPoint         `json:"loginActivityTrends"`
 	FamilySizeDistribution []DistributionPoint `json:"familySizeDistribution"`
-	UserRetention          RetentionMetrics    `json:"userRetention"`
+	UserEngagement         EngagementMetrics   `json:"userEngagement"`
 	TopActiveFamilies      []FamilyActivity    `json:"topActiveFamilies"`
 }
 
@@ -60,11 +60,21 @@ type DistributionPoint struct {
 	Value int    `json:"value"`
 }
 
-type RetentionMetrics struct {
-	Day1  float64 `json:"day1"`
-	Day7  float64 `json:"day7"`
-	Day30 float64 `json:"day30"`
-	Day90 float64 `json:"day90"`
+// EngagementMetrics replaces a Day1/7/30/90 retention block that was not
+// measuring retention: each figure counted "registered at least N days ago AND
+// logged in within the last N days" over *all* users, so Day-1 could never
+// exceed the share of the whole user base that happened to log in yesterday,
+// and the four numbers were comparable to nothing, least of all each other.
+//
+// For a site with a handful of accounts, counts of accounts an operator can act
+// on are the useful thing. These are counts, not percentages, for the same
+// reason.
+type EngagementMetrics struct {
+	Total         int `json:"total"`
+	NeverLoggedIn int `json:"neverLoggedIn"`
+	Active7d      int `json:"active7d"`
+	Active30d     int `json:"active30d"`
+	Dormant90d    int `json:"dormant90d"`
 }
 
 type FamilyActivity struct {
@@ -96,10 +106,9 @@ type FamilyContentStats struct {
 
 // System Analytics
 type SystemAnalyticsResponse struct {
-	StorageUsage      StorageMetrics    `json:"storageUsage"`
-	ProcessingMetrics ProcessingMetrics `json:"processingMetrics"`
-	ErrorAnalysis     ErrorAnalysis     `json:"errorAnalysis"`
-	APIRequestTrends  []DataPoint       `json:"apiRequestTrends"`
+	StorageUsage      StorageMetrics     `json:"storageUsage"`
+	ProcessingMetrics ProcessingMetrics  `json:"processingMetrics"`
+	PhotoFailures     PhotoFailureReport `json:"photoFailures"`
 }
 
 type StorageMetrics struct {
@@ -109,28 +118,29 @@ type StorageMetrics struct {
 }
 
 type ProcessingMetrics struct {
-	SuccessRate        float64 `json:"successRate"`
-	AverageProcessTime float64 `json:"averageProcessTime"`
-	QueueLength        int     `json:"queueLength"`
+	SuccessRate float64 `json:"successRate"`
+	QueueLength int     `json:"queueLength"`
 }
 
-type ErrorAnalysis struct {
-	TotalErrors      int                 `json:"totalErrors"`
-	ErrorsByCategory []DistributionPoint `json:"errorsByCategory"`
-	ErrorsByLevel    []DistributionPoint `json:"errorsByLevel"`
-	RecentErrors     []string            `json:"recentErrors"`
+// PhotoFailureReport replaces an "Error Analysis" block that returned three
+// hardcoded empty slices and a TotalErrors set to the count of failed photos —
+// a general error dashboard that was, underneath, only ever counting one thing.
+// This reports that one thing and says so. Log-derived error counts belong to
+// /admin/logs, which actually parses the logs.
+//
+// Stuck means a row still marked Processing with nothing attending it: the
+// worker sets that status when it picks a job up, so anything sitting in it an
+// hour later was interrupted and nothing will move it on its own.
+type PhotoFailureReport struct {
+	Failed         int           `json:"failed"`
+	Stuck          int           `json:"stuck"`
+	RecentFailures []FailedPhoto `json:"recentFailures"`
 }
 
-// Helper function to check admin access
-func requireAdminAccess(ctx *vbeam.Context) error {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		return ErrAuthFailure
-	}
-	if user.Id != 1 {
-		return errors.New("Unauthorized: Admin access required")
-	}
-	return nil
+type FailedPhoto struct {
+	Id        int    `json:"id"`
+	FilePath  string `json:"filePath"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // Get analytics overview with key metrics
@@ -340,37 +350,24 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		}
 	}
 
-	// Calculate retention (simplified)
-	totalUsers := len(users)
-	if totalUsers > 0 {
-		day1Retained := 0
-		day7Retained := 0
-		day30Retained := 0
-		day90Retained := 0
-
-		for _, user := range users {
-			daysSinceReg := int(now.Sub(user.Creation).Hours() / 24)
-			daysSinceLogin := int(now.Sub(user.LastLogin).Hours() / 24)
-
-			if daysSinceReg >= 1 && daysSinceLogin <= 1 {
-				day1Retained++
-			}
-			if daysSinceReg >= 7 && daysSinceLogin <= 7 {
-				day7Retained++
-			}
-			if daysSinceReg >= 30 && daysSinceLogin <= 30 {
-				day30Retained++
-			}
-			if daysSinceReg >= 90 && daysSinceLogin <= 90 {
-				day90Retained++
-			}
+	// Engagement. "Never logged in" has to be inferred: AddUserTx stamps
+	// LastLogin with Creation at signup rather than leaving it zero, so an
+	// account that never came back looks like one that logged in once, at the
+	// moment it was made. A minute of slack separates the two.
+	resp.UserEngagement.Total = len(users)
+	for _, user := range users {
+		if !user.LastLogin.After(user.Creation.Add(time.Minute)) {
+			resp.UserEngagement.NeverLoggedIn++
+			continue
 		}
-
-		resp.UserRetention = RetentionMetrics{
-			Day1:  float64(day1Retained) / float64(totalUsers) * 100,
-			Day7:  float64(day7Retained) / float64(totalUsers) * 100,
-			Day30: float64(day30Retained) / float64(totalUsers) * 100,
-			Day90: float64(day90Retained) / float64(totalUsers) * 100,
+		switch {
+		case user.LastLogin.After(now.AddDate(0, 0, -7)):
+			resp.UserEngagement.Active7d++
+			resp.UserEngagement.Active30d++
+		case user.LastLogin.After(now.AddDate(0, 0, -30)):
+			resp.UserEngagement.Active30d++
+		case user.LastLogin.Before(now.AddDate(0, 0, -90)):
+			resp.UserEngagement.Dormant90d++
 		}
 	}
 
@@ -626,22 +623,35 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		successRate = float64(len(photos)-failedCount) / float64(len(photos)) * 100
 	}
 
-	// Calculate estimated average processing time based on file size and status
-	avgProcessTime := calculateAverageProcessingTime(photos)
-
 	resp.ProcessingMetrics = ProcessingMetrics{
-		SuccessRate:        successRate,
-		AverageProcessTime: avgProcessTime,
-		QueueLength:        processingCount,
+		SuccessRate: successRate,
+		QueueLength: processingCount,
 	}
 
-	// Error analysis (simplified - would need log analysis for full implementation)
-	resp.ErrorAnalysis = ErrorAnalysis{
-		TotalErrors:      failedCount,
-		ErrorsByCategory: []DistributionPoint{},
-		ErrorsByLevel:    []DistributionPoint{},
-		RecentErrors:     []string{},
+	// Photo failures, and rows stranded in Processing. Newest first, capped —
+	// this is a "what should I go look at" list, not an export.
+	stuckBefore := time.Now().Add(-time.Hour)
+	var failures []FailedPhoto
+	for _, photo := range photos {
+		switch {
+		case photo.Status == 2:
+			failures = append(failures, FailedPhoto{
+				Id:        photo.Id,
+				FilePath:  photo.FilePath,
+				CreatedAt: photo.CreatedAt.Format("2006-01-02 15:04"),
+			})
+		case photo.Status == 1 && photo.CreatedAt.Before(stuckBefore):
+			resp.PhotoFailures.Stuck++
+		}
 	}
+	sort.Slice(failures, func(i, j int) bool {
+		return failures[i].CreatedAt > failures[j].CreatedAt
+	})
+	if len(failures) > 20 {
+		failures = failures[:20]
+	}
+	resp.PhotoFailures.Failed = failedCount
+	resp.PhotoFailures.RecentFailures = failures
 
 	LogInfo(LogCategoryAdmin, "System analytics accessed", nil)
 	return
@@ -707,41 +717,4 @@ func calculateStorageGrowthTrend(photos []Image) []DataPoint {
 	}
 
 	return trend
-}
-
-// calculateAverageProcessingTime estimates processing time based on historical data
-func calculateAverageProcessingTime(photos []Image) float64 {
-	if len(photos) == 0 {
-		return 0
-	}
-
-	// Simplified estimation: base processing time on file size
-	// Larger files generally take longer to process
-	totalEstimatedTime := 0.0
-	processedPhotos := 0
-
-	for _, photo := range photos {
-		// Only consider photos that have been processed (status 0 = done)
-		if photo.Status == 0 {
-			// Estimate processing time based on file size
-			// Base time: 0.5 seconds + (file size in MB * 0.1 seconds per MB)
-			fileSizeMB := float64(photo.FileSize) / (1024 * 1024)
-			estimatedTime := 0.5 + (fileSizeMB * 0.1)
-
-			// Add complexity factor based on image dimensions
-			if photo.Width > 0 && photo.Height > 0 {
-				megapixels := float64(photo.Width*photo.Height) / 1000000
-				estimatedTime += megapixels * 0.05 // 0.05 seconds per megapixel
-			}
-
-			totalEstimatedTime += estimatedTime
-			processedPhotos++
-		}
-	}
-
-	if processedPhotos == 0 {
-		return 0
-	}
-
-	return totalEstimatedTime / float64(processedPhotos)
 }
