@@ -39,6 +39,7 @@ export const ErrLinkExists = "These families are already linked in that directio
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
+export const ErrUserNotFound = "No such user";
 
 export interface CreateAccountRequest {
     name: string
@@ -874,6 +875,12 @@ export interface ReprocessAllPhotosResponse {
 export interface ProcessingStats {
     queueLength: number
     isRunning: boolean
+    processed: number
+    failed: number
+    lastProcessedAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: PhotoAttempt[]
 }
 
 export interface AnalysisWorkerStats {
@@ -1008,6 +1015,21 @@ export interface HostMetricsResponse {
     collectedAt: string
     system: HostSystem
     app: HostApp
+}
+
+export interface RequeueStuckPhotosRequest {
+}
+
+export interface RequeueStuckPhotosResponse {
+    queued: number
+}
+
+export interface RevokeUserSessionsRequest {
+    userId: number
+}
+
+export interface RevokeUserSessionsResponse {
+    revoked: number
 }
 
 export interface DiagnosticsResponse {
@@ -1351,6 +1373,15 @@ export interface AdminUserInfo {
     familyId: number
     familyName: string
     isAdmin: boolean
+}
+
+export interface PhotoAttempt {
+    time: string
+    imageId: number
+    reprocess: boolean
+    success: boolean
+    durationMs: number
+    reason: string
 }
 
 export interface LogFileInfo {
@@ -2087,6 +2118,14 @@ export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemH
 
 export async function GetHostMetrics(data: Empty): Promise<rpc.Response<HostMetricsResponse>> {
     return await rpc.call<HostMetricsResponse>('GetHostMetrics', JSON.stringify(data));
+}
+
+export async function RequeueStuckPhotos(data: RequeueStuckPhotosRequest): Promise<rpc.Response<RequeueStuckPhotosResponse>> {
+    return await rpc.call<RequeueStuckPhotosResponse>('RequeueStuckPhotos', JSON.stringify(data));
+}
+
+export async function RevokeUserSessions(data: RevokeUserSessionsRequest): Promise<rpc.Response<RevokeUserSessionsResponse>> {
+    return await rpc.call<RevokeUserSessionsResponse>('RevokeUserSessions', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

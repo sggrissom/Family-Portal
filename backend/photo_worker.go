@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"go.hasen.dev/vbolt"
@@ -33,11 +34,65 @@ type PhotoProcessingJob struct {
 	Reprocess      bool
 }
 
+// maxRecentPhotoAttempts bounds the in-memory history the admin page reads.
+const maxRecentPhotoAttempts = 20
+
+// PhotoAttempt is one photo's trip through the worker. Photo processing failure
+// is the most common real problem this site has and was the least visible one:
+// the worker's only observable state was a queue length and a boolean, so a
+// photo that failed left a Status = 2 row and a line in a log file nobody was
+// reading.
+type PhotoAttempt struct {
+	Time    time.Time `json:"time"`
+	ImageId int       `json:"imageId"`
+	// Reprocess distinguishes a backlog job from a fresh upload, which fail for
+	// different reasons — a missing original versus a bad decode.
+	Reprocess bool `json:"reprocess"`
+	Success   bool `json:"success"`
+	// DurationMs is measured, unlike the "average process time" the analytics
+	// page used to derive from file size with an arithmetic expression.
+	DurationMs int `json:"durationMs"`
+	// Reason is why it failed, empty on success.
+	Reason string `json:"reason"`
+}
+
 // PhotoWorker manages background photo processing
 type PhotoWorker struct {
 	workerLifecycle
 	jobQueue chan PhotoProcessingJob
 	db       *vbolt.DB
+
+	// statsMu guards everything below. Processing happens on the worker
+	// goroutine while the admin page reads from request goroutines.
+	statsMu       sync.Mutex
+	processed     int
+	failed        int
+	lastProcessed time.Time
+	lastError     string
+	lastErrorAt   time.Time
+	recent        []PhotoAttempt
+}
+
+// recordAttempt files one outcome into the counters and the bounded history.
+// Same shape as the push worker's, which is the one page in the panel that
+// answers the questions you actually arrive with.
+func (pw *PhotoWorker) recordAttempt(attempt PhotoAttempt) {
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+
+	if attempt.Success {
+		pw.processed++
+		pw.lastProcessed = attempt.Time
+	} else {
+		pw.failed++
+		pw.lastError = attempt.Reason
+		pw.lastErrorAt = attempt.Time
+	}
+
+	pw.recent = append(pw.recent, attempt)
+	if len(pw.recent) > maxRecentPhotoAttempts {
+		pw.recent = pw.recent[len(pw.recent)-maxRecentPhotoAttempts:]
+	}
 }
 
 var globalPhotoWorker *PhotoWorker
@@ -154,6 +209,20 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	startTime := time.Now()
 	log.Printf("[PHOTO_PROCESSING] Starting processing of photo ID %d (size: %d bytes)", job.ImageId, len(job.FileData))
 
+	// Every exit below files an outcome, so the counters cannot drift from what
+	// the worker actually did. A photo deleted mid-flight is neither: there is
+	// nothing to mark and nobody to tell.
+	outcome := func(success bool, reason string) {
+		pw.recordAttempt(PhotoAttempt{
+			Time:       time.Now(),
+			ImageId:    job.ImageId,
+			Reprocess:  job.Reprocess,
+			Success:    success,
+			DurationMs: int(time.Since(startTime).Milliseconds()),
+			Reason:     reason,
+		})
+	}
+
 	// Update status to processing in database
 	log.Printf("[PHOTO_PROCESSING] Setting status to processing for photo %d", job.ImageId)
 	err := pw.updatePhotoStatus(job.ImageId, 1) // 1 = processing
@@ -165,6 +234,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 			return
 		}
 		log.Printf("[PHOTO_PROCESSING] FAILED to update photo %d status to processing: %v", job.ImageId, err)
+		outcome(false, "could not mark the photo as processing: "+err.Error())
 		return
 	}
 
@@ -176,6 +246,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		if err != nil {
 			log.Printf("[PHOTO_PROCESSING] FAILED to read original for photo ID %d: %v", job.ImageId, err)
 			pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
+			outcome(false, "original file is missing: "+err.Error())
 			return
 		}
 	}
@@ -193,6 +264,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	if err != nil {
 		log.Printf("[PHOTO_PROCESSING] FAILED to process photo ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
+		outcome(false, "could not decode or re-encode the image: "+err.Error())
 		return
 	}
 	log.Printf("[PHOTO_PROCESSING] Generated %d image variants for photo %d", len(processedImages), job.ImageId)
@@ -203,6 +275,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	if err != nil {
 		log.Printf("[PHOTO_PROCESSING] FAILED to save photo variants for ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
+		outcome(false, "could not write the variants to disk: "+err.Error())
 		return
 	}
 	log.Printf("[PHOTO_PROCESSING] Successfully saved all variants for photo %d", job.ImageId)
@@ -220,12 +293,14 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		}
 		log.Printf("[PHOTO_PROCESSING] FAILED to mark photo %d as complete: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2) // 2 = failed/hidden
+		outcome(false, "could not mark the photo complete: "+err.Error())
 		return
 	}
 
 	// Queue face analysis for the processed photo
 	QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: job.ImageId, FamilyId: job.FamilyId})
 
+	outcome(true, "")
 	processingTime := time.Since(startTime)
 	log.Printf("[PHOTO_PROCESSING] ✅ Successfully completed photo ID %d in %v", job.ImageId, processingTime)
 }
@@ -384,24 +459,46 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 	return updateError
 }
 
-// ProcessingStats returns statistics about the photo processing worker
+// ProcessingStats is a live snapshot of photo processing. Every counter is
+// in-memory: a restart resets them and empties the history.
 type ProcessingStats struct {
 	QueueLength int  `json:"queueLength"`
 	IsRunning   bool `json:"isRunning"`
+	Processed   int  `json:"processed"`
+	Failed      int  `json:"failed"`
+	// LastProcessedAt is how you tell a quiet worker from a stalled one.
+	LastProcessedAt time.Time      `json:"lastProcessedAt"`
+	LastError       string         `json:"lastError"`
+	LastErrorAt     time.Time      `json:"lastErrorAt"`
+	RecentAttempts  []PhotoAttempt `json:"recentAttempts"`
 }
 
 // GetProcessingStats returns current processing statistics
 func GetProcessingStats() ProcessingStats {
 	if globalPhotoWorker == nil {
-		return ProcessingStats{
-			QueueLength: 0,
-			IsRunning:   false,
-		}
+		return ProcessingStats{RecentAttempts: []PhotoAttempt{}}
+	}
+
+	pw := globalPhotoWorker
+	pw.statsMu.Lock()
+	defer pw.statsMu.Unlock()
+
+	// Copy the history so callers cannot observe it being appended to, and
+	// reverse it so the most recent attempt reads first.
+	recent := make([]PhotoAttempt, 0, len(pw.recent))
+	for i := len(pw.recent) - 1; i >= 0; i-- {
+		recent = append(recent, pw.recent[i])
 	}
 
 	return ProcessingStats{
-		QueueLength: len(globalPhotoWorker.jobQueue),
-		IsRunning:   globalPhotoWorker.isRunning(),
+		QueueLength:     len(pw.jobQueue),
+		IsRunning:       pw.isRunning(),
+		Processed:       pw.processed,
+		Failed:          pw.failed,
+		LastProcessedAt: pw.lastProcessed,
+		LastError:       pw.lastError,
+		LastErrorAt:     pw.lastErrorAt,
+		RecentAttempts:  recent,
 	}
 }
 

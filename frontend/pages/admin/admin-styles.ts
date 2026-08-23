@@ -972,3 +972,18 @@ block(`
   text-decoration: underline;
 }
 `);
+
+block(`
+.admin-btn-small {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+}
+`);
+
+block(`
+.session-result {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+`);
