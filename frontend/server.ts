@@ -25,20 +25,20 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 
 export interface CreateAccountRequest {
     name: string
@@ -991,6 +991,15 @@ export interface SystemAnalyticsResponse {
     photoFailures: PhotoFailureReport
 }
 
+export interface SystemHealthResponse {
+    healthy: boolean
+    releaseBuild: boolean
+    configIssues: ConfigProblem[]
+    logs: LogProblems
+    photos: PhotoProblems
+    push: PushProblems
+}
+
 export interface DiagnosticsResponse {
     version: string
     commit: string
@@ -1476,6 +1485,34 @@ export interface PhotoFailureReport {
     failed: number
     stuck: number
     recentFailures: FailedPhoto[]
+}
+
+export interface ConfigProblem {
+    setting: string
+    detail: string
+}
+
+export interface LogProblems {
+    windowHours: number
+    errors: number
+    recentErrors: PublicLogEntry[]
+    requests4xx: number
+    requests5xx: number
+    unavailable: boolean
+}
+
+export interface PhotoProblems {
+    failed: number
+    stuck: number
+    analysisFailed: number
+    workerStopped: boolean
+    queueLength: number
+}
+
+export interface PushProblems {
+    failed: number
+    lastError: string
+    lastErrorAt: string
 }
 
 export interface AdminMobileVersionPlatform {
@@ -1974,6 +2011,10 @@ export async function GetContentAnalytics(data: Empty): Promise<rpc.Response<Con
 
 export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<SystemAnalyticsResponse>> {
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
+}
+
+export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
+    return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

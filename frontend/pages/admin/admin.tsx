@@ -9,17 +9,21 @@ import "./admin-styles";
 
 type Data = {
   diagnostics: server.DiagnosticsResponse | null;
+  health: server.SystemHealthResponse | null;
 };
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<Data>({ diagnostics: null });
+    return rpc.ok<Data>({ diagnostics: null, health: null });
   }
 
-  // A failure here must not take the dashboard down with it — the panel's other
-  // cards are how you get to the logs that would explain the failure.
-  const [diagnostics] = await server.GetDiagnostics({});
-  return rpc.ok<Data>({ diagnostics: diagnostics ?? null });
+  // A failure in either must not take the dashboard down with it — the panel's
+  // other cards are how you get to the logs that would explain the failure.
+  const [[diagnostics], [health]] = await Promise.all([
+    server.GetDiagnostics({}),
+    server.GetSystemHealth({}),
+  ]);
+  return rpc.ok<Data>({ diagnostics: diagnostics ?? null, health: health ?? null });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -51,7 +55,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     <div>
       <Header isHome={false} />
       <main id="app" className="admin-container">
-        <AdminPage user={currentAuth} diagnostics={data.diagnostics} />
+        <AdminPage user={currentAuth} diagnostics={data.diagnostics} health={data.health} />
       </main>
       <Footer />
     </div>
@@ -61,9 +65,10 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
 interface AdminPageProps {
   user: auth.AuthCache;
   diagnostics: server.DiagnosticsResponse | null;
+  health: server.SystemHealthResponse | null;
 }
 
-const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
+const AdminPage = ({ user, diagnostics, health }: AdminPageProps) => {
   return (
     <div className="admin-page">
       <div className="admin-header">
@@ -76,6 +81,7 @@ const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
       </div>
 
       {diagnostics && <Diagnostics info={diagnostics} />}
+      {health && <Problems health={health} />}
 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
@@ -149,6 +155,205 @@ const AdminPage = ({ user, diagnostics }: AdminPageProps) => {
     </div>
   );
 };
+
+// The problems feed. Everything in it was already available somewhere in the
+// panel; what was missing was one place that asks all of it at once. It stays
+// quiet when there is nothing to say, because a green page only means something
+// if it is capable of being red.
+const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
+  if (health.healthy) {
+    return (
+      <div className="problems problems-clear">
+        <span className="problems-icon">✅</span>
+        <span>
+          Nothing to report. No errors in the last {health.logs.windowHours}h, no failed photos, no
+          configuration problems.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="problems">
+      <h2 className="problems-title">Needs a look</h2>
+
+      <ConfigIssues health={health} />
+      <LogIssues logs={health.logs} />
+      <PhotoIssues photos={health.photos} />
+      <PushIssues push={health.push} />
+    </div>
+  );
+};
+
+const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
+  if (health.configIssues.length === 0) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Configuration</h3>
+      {/* A release build refuses to start with any of these, so seeing one on
+          production means the environment changed under a running process. A
+          local build logs them and carries on. */}
+      <p className="problem-note">
+        {health.releaseBuild
+          ? "This build refuses to start with these unset, so the environment has changed since it started."
+          : "These would fail a release build. A development machine legitimately has no APNs key."}
+      </p>
+      <ul className="problem-list">
+        {health.configIssues.map(issue => (
+          <li key={issue.setting}>
+            <code>{issue.setting}</code> {issue.detail}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const LogIssues = ({ logs }: { logs: server.LogProblems }) => {
+  if (logs.unavailable) {
+    return (
+      <div className="problem-group">
+        <h3>Logs</h3>
+        <p className="problem-note">
+          No log file has been written in the last {logs.windowHours}h. Either this is a fresh
+          deploy, or the logger is writing somewhere nothing is reading.
+        </p>
+      </div>
+    );
+  }
+
+  if (logs.errors === 0 && logs.requests5xx === 0) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Logs, last {logs.windowHours}h</h3>
+      <ul className="problem-list">
+        {logs.errors > 0 && (
+          <li>
+            {logs.errors} error{logs.errors === 1 ? "" : "s"}
+          </li>
+        )}
+        {logs.requests5xx > 0 && (
+          <li>
+            {logs.requests5xx} request{logs.requests5xx === 1 ? "" : "s"} answered 5xx
+            {logs.requests4xx > 0 && `, ${logs.requests4xx} answered 4xx`}
+          </li>
+        )}
+      </ul>
+
+      {logs.recentErrors.length > 0 && (
+        <div className="problem-errors">
+          {logs.recentErrors.map((entry, index) => (
+            <ErrorLine key={index} entry={entry} />
+          ))}
+        </div>
+      )}
+
+      <a className="problem-action" href="/admin/logs">
+        Open the log viewer →
+      </a>
+    </div>
+  );
+};
+
+// One error, with its reference code as a link straight into the log viewer's
+// lookup. That code is the join key the whole error design is built around;
+// making it clickable is what turns the feed into a starting point rather than
+// a thing to read and then go searching manually.
+const ErrorLine = ({ entry }: { entry: server.PublicLogEntry }) => {
+  const reference = referenceOf(entry);
+
+  return (
+    <div className="problem-error">
+      <span className="problem-error-time">{formatWhen(entry.timestamp)}</span>
+      <span className="problem-error-message">{entry.message}</span>
+      {reference && (
+        <a className="problem-error-ref" href={`/admin/logs?ref=${encodeURIComponent(reference)}`}>
+          {reference}
+        </a>
+      )}
+    </div>
+  );
+};
+
+// ProcError writes the correlation id to data.requestId. The payload is
+// whatever JSON was logged, so this checks rather than assumes.
+function referenceOf(entry: server.PublicLogEntry): string | null {
+  const data = entry.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const id = (data as Record<string, unknown>)["requestId"];
+    if (typeof id === "string" && id !== "") return id;
+  }
+  return null;
+}
+
+const PhotoIssues = ({ photos }: { photos: server.PhotoProblems }) => {
+  const anything =
+    photos.failed > 0 || photos.stuck > 0 || photos.analysisFailed > 0 || photos.workerStopped;
+  if (!anything) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Photos</h3>
+      <ul className="problem-list">
+        {photos.workerStopped && (
+          <li>
+            The photo worker is not running
+            {photos.queueLength > 0 && `, and ${photos.queueLength} jobs are queued behind it`}
+          </li>
+        )}
+        {photos.failed > 0 && <li>{photos.failed} failed to process</li>}
+        {/* Stranded rows are the ones nothing will ever retry, which is why
+            they are called out separately from ordinary failures. */}
+        {photos.stuck > 0 && (
+          <li>{photos.stuck} stuck in processing for over an hour with nothing attending them</li>
+        )}
+        {photos.analysisFailed > 0 && <li>{photos.analysisFailed} failed face analysis</li>}
+      </ul>
+      <a className="problem-action" href="/admin/photos">
+        Open photo management →
+      </a>
+    </div>
+  );
+};
+
+const PushIssues = ({ push }: { push: server.PushProblems }) => {
+  if (!push.lastError) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Push notifications</h3>
+      <ul className="problem-list">
+        <li>
+          Last error {formatWhen(push.lastErrorAt)}: {push.lastError}
+        </li>
+        {push.failed > 0 && <li>{push.failed} failed since this process started</li>}
+      </ul>
+      <a className="problem-action" href="/admin/push">
+        Open push notifications →
+      </a>
+    </div>
+  );
+};
+
+// Relative time, because in this context "40m ago" is the useful form and a
+// wall-clock timestamp is one subtraction away from being useful.
+function formatWhen(timestamp: string): string {
+  const then = new Date(timestamp).getTime();
+  if (!Number.isFinite(then)) return timestamp;
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 // What is actually running, above everything else on the page. When something
 // is wrong the first two questions are "which build is this" and "how long has

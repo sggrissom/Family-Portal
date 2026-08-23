@@ -234,6 +234,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterExportMethods(app)
 	backend.RegisterAIImportMethods(app)
 	backend.RegisterAdminMethods(app)
+	backend.RegisterAdminHealthMethods(app)
 	backend.RegisterDiagnosticsMethods(app)
 	backend.RegisterSEOHandlers(app)
 	backend.RegisterUniversalLinkHandlers(app)

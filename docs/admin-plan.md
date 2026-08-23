@@ -19,7 +19,7 @@ Seven routes, all gated on `user.Id == 1`:
 
 | route | what it does | state |
 | --- | --- | --- |
-| `/admin` | diagnostics strip + card grid + quick actions | diagnostics good, quick actions all disabled |
+| `/admin` | diagnostics strip + problems feed + card grid | answers "is anything wrong" without a click |
 | `/admin/analytics` | 4 tabs | 1 of 4 works |
 | `/admin/users` | table of every user | works, read-only |
 | `/admin/photos` | processing + face analysis stats, two reprocess buttons | stats good, one action is dangerous |
@@ -229,7 +229,7 @@ operator who checks in occasionally, that is backwards. The landing page should
 answer "is anything wrong" without a click, and the subsystem pages should be
 where you go *after* it says yes.
 
-### 3.1 Surface `CheckProductionConfig`
+### 3.1 Surface `CheckProductionConfig` — **done**
 
 `config_check.go` already validates SITE_ROOT, Google OAuth, mail, the AI
 provider, BACKUP_TOKEN, APNs, IOS_APP_ID, and both storage paths, and returns
@@ -246,7 +246,7 @@ a card.
 While there: `checkAPNs`'s all-or-nothing pattern is the right model for the new
 optional subsystem in §4.1.
 
-### 3.2 A "recent problems" feed on `/admin`
+### 3.2 A "recent problems" feed on `/admin` — **done** (except backup age, §4.2)
 
 One panel, above the fold, aggregating what is already available:
 
@@ -477,8 +477,8 @@ Not urgent, but it's what makes the above cheaper to build.
 3. ~~**§2.2** — reference-code search.~~ **Done**, with §2.3 (time range,
    newest-first default, and an "errors in the last 24h" preset). §2 is
    complete.
-4. **§3.1 + §3.2** — config status and the problems feed. This is the point at
-   which loading `/admin` starts answering the question you came with.
+4. ~~**§3.1 + §3.2** — config status and the problems feed.~~ **Done.** Backup
+   age is the one entry still missing from the feed; it arrives with §4.2.
 5. **§4.1** — `metrics-server`. Disk and proxy-measured 5xx are the two things
    the app genuinely cannot see about itself.
 6. **§4.4** — add the site to `monitor-tui`. Trivial, and arguably should be

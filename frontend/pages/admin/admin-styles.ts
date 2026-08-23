@@ -811,3 +811,164 @@ block(`
   overflow-wrap: anywhere;
 }
 `);
+
+// The problems feed. It sits directly under the diagnostics strip, above the
+// card grid, because "is anything wrong" is the question you arrive with.
+block(`
+.problems {
+  background: var(--admin-surface-elevated);
+  border: 1px solid var(--admin-border);
+  border-left: 3px solid var(--admin-danger);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+}
+`);
+
+// Clear is deliberately quiet: one line, no heading, no colour competing with
+// the cards. It is an absence of news, and should read like one.
+block(`
+.problems-clear {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-left-color: var(--admin-success);
+  padding: 0.9rem 1.25rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.problems-icon {
+  font-size: 1rem;
+}
+`);
+
+block(`
+.problems-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+`);
+
+block(`
+.problem-group {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--admin-border);
+}
+`);
+
+block(`
+.problem-group:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+`);
+
+block(`
+.problem-group h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+`);
+
+block(`
+.problem-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.problem-list {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+`);
+
+block(`
+.problem-list li {
+  margin-bottom: 0.2rem;
+}
+`);
+
+block(`
+.problem-list code {
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+`);
+
+block(`
+.problem-errors {
+  margin-bottom: 0.6rem;
+}
+`);
+
+block(`
+.problem-error {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.3rem 0;
+  font-size: 0.88rem;
+  border-top: 1px solid var(--admin-border);
+}
+`);
+
+block(`
+.problem-error-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.problem-error-message {
+  flex: 1 1 12rem;
+  color: var(--text);
+}
+`);
+
+// The reference code is a link into the log viewer's lookup, so it is styled
+// as the actionable thing on the row rather than as incidental metadata.
+block(`
+.problem-error-ref {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--admin-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--admin-accent);
+}
+`);
+
+block(`
+.problem-error-ref:hover {
+  border-bottom-style: solid;
+}
+`);
+
+block(`
+.problem-action {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--admin-accent);
+  text-decoration: none;
+}
+`);
+
+block(`
+.problem-action:hover {
+  text-decoration: underline;
+}
+`);

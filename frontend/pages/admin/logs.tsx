@@ -583,6 +583,17 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
   // Initialize state from fetched data
   const state = logsPageHook();
 
+  // A reference code can arrive in the URL — the problems feed on /admin links
+  // each error straight to its own lookup, which is the point of putting the
+  // code in the message in the first place.
+  if (!state.referenceInput && !state.referenceResult && !state.referenceLoading) {
+    const fromUrl = new URLSearchParams(window.location.search).get("ref");
+    if (fromUrl) {
+      state.referenceInput = fromUrl;
+      setTimeout(lookUpReference, 0);
+    }
+  }
+
   // Initialize state on first render if needed. The fetch loaded a page
   // without knowing the totals, so reload once to fill in pagination.
   if (state.currentFile === "" && data.initialFile) {
