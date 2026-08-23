@@ -1,16 +1,10 @@
 package backend
 
 import (
-	"bufio"
-	"encoding/json"
-	"errors"
 	"family/cfg"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -490,209 +484,13 @@ func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err e
 		return
 	}
 
-	// Get log files from logs directory
-	logDir := "logs"
-	files, err := os.ReadDir(logDir)
-	if err != nil {
-		// If logs directory doesn't exist, return empty list
-		if os.IsNotExist(err) {
-			resp.Files = []LogFileInfo{}
-			err = nil
-			return
-		}
+	files, listErr := listLogFiles()
+	if listErr != nil {
+		err = ProcError(listErr)
 		return
 	}
-
-	today := time.Now().Format("2006-01-02")
-	var logFiles []LogFileInfo
-
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".log") {
-			continue
-		}
-
-		info, err := file.Info()
-		if err != nil {
-			continue
-		}
-
-		// Rotated files carry the date in the name; the live file is
-		// LogFileName and counts as today when it was written to today.
-		isToday := strings.Contains(file.Name(), today) ||
-			(file.Name() == LogFileName && info.ModTime().Format("2006-01-02") == today)
-
-		logFile := LogFileInfo{
-			Name:       file.Name(),
-			Size:       info.Size(),
-			ModTime:    info.ModTime(),
-			IsToday:    isToday,
-			SizeString: formatFileSize(info.Size()),
-		}
-
-		logFiles = append(logFiles, logFile)
-	}
-
-	// Sort by modification time (newest first)
-	sort.Slice(logFiles, func(i, j int) bool {
-		return logFiles[i].ModTime.After(logFiles[j].ModTime)
-	})
-
-	resp.Files = logFiles
+	resp.Files = files
 	return
-}
-
-// Helper functions for parsing non-JSON log lines
-var ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-// stripAnsiCodes removes ANSI escape sequences from a string
-func stripAnsiCodes(input string) string {
-	return ansiEscapeRegex.ReplaceAllString(input, "")
-}
-
-// extractJSONFromLogLine attempts to extract JSON from a timestamp-prefixed log line
-func extractJSONFromLogLine(line string) (string, bool) {
-	// Check if line contains JSON (starts with timestamp, then has JSON)
-	if idx := strings.Index(line, "{"); idx != -1 {
-		jsonPart := line[idx:]
-		// Verify this looks like JSON by checking if it ends with }
-		if strings.HasSuffix(strings.TrimSpace(jsonPart), "}") {
-			return jsonPart, true
-		}
-	}
-	return line, false
-}
-
-// parseLogTimestamp attempts to parse a timestamp from a plain text log line
-func parseLogTimestamp(line string) (time.Time, string) {
-	// Try to match the Go log format: 2025/09/26 15:53:22
-	timestampRegex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(.*)`)
-	matches := timestampRegex.FindStringSubmatch(line)
-
-	if len(matches) == 3 {
-		if timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1]); err == nil {
-			return timestamp, matches[2] // Return timestamp and remaining message
-		}
-	}
-
-	// If no timestamp found, return current time and original line
-	return time.Now(), line
-}
-
-var newLogLineRegex = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`)
-
-func isNewLogLine(line string) bool {
-	return newLogLineRegex.MatchString(line)
-}
-
-// detectLogLevel attempts to detect log level from plain text log message
-func detectLogLevel(message string) logLevel {
-	upperMessage := strings.ToUpper(message)
-
-	// Check for error indicators
-	errorKeywords := []string{"ERROR", "FATAL", "PANIC", "FAILED", "FAILURE", "EXCEPTION", "CRITICAL"}
-	for _, keyword := range errorKeywords {
-		if strings.Contains(upperMessage, keyword) {
-			return logLevelError
-		}
-	}
-
-	// Check for warning indicators
-	warnKeywords := []string{"WARN", "WARNING", "DEPRECATED"}
-	for _, keyword := range warnKeywords {
-		if strings.Contains(upperMessage, keyword) {
-			return logLevelWarn
-		}
-	}
-
-	// Check for debug indicators
-	debugKeywords := []string{"DEBUG", "TRACE", "VERBOSE"}
-	for _, keyword := range debugKeywords {
-		if strings.Contains(upperMessage, keyword) {
-			return logLevelDebug
-		}
-	}
-
-	// Default to info
-	return logLevelInfo
-}
-
-// categorizeLogMessage attempts to categorize a plain text log message
-func categorizeLogMessage(message string) logCategory {
-	message = strings.ToUpper(message)
-
-	if strings.Contains(message, "PHOTO") || strings.Contains(message, "IMAGE") {
-		return logCategoryPhoto
-	}
-	if strings.Contains(message, "AUTH") || strings.Contains(message, "LOGIN") {
-		return logCategoryAuth
-	}
-	if strings.Contains(message, "ADMIN") {
-		return logCategoryAdmin
-	}
-	if strings.Contains(message, "API") || strings.Contains(message, "RPC") || strings.Contains(message, "GET") || strings.Contains(message, "POST") {
-		return logCategoryAPI
-	}
-	if strings.Contains(message, "WORKER") || strings.Contains(message, "PROCESSING") || strings.Contains(message, "QUEUE") {
-		return logCategoryWorker
-	}
-
-	return logCategorySystem
-}
-
-// parseTimingLogLine attempts to parse HTTP timing log entries
-// Format: "2025/09/27 17:31:28 200 POST /rpc/SendMessage ⎯⎯⎯ 12759µs [12602µs]"
-func parseTimingLogLine(line string) (*logEntry, bool) {
-	// Clean ANSI codes first
-	cleanLine := stripAnsiCodes(line)
-
-	// Pattern to match timing logs: timestamp, status, method, path, duration, optional handler duration
-	timingRegex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(\d+)\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^\s⎯]+).*?(\d+)µs(?:\s+\[(\d+)µs\])?`)
-	matches := timingRegex.FindStringSubmatch(cleanLine)
-
-	if len(matches) < 6 {
-		return nil, false
-	}
-
-	// Parse timestamp
-	timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1])
-	if err != nil {
-		return nil, false
-	}
-
-	// Parse status code
-	status, err := strconv.Atoi(matches[2])
-	if err != nil {
-		return nil, false
-	}
-
-	// Parse duration
-	duration, err := strconv.Atoi(matches[5])
-	if err != nil {
-		return nil, false
-	}
-
-	// Parse handler duration if present
-	var handlerDuration *int
-	if len(matches) > 6 && matches[6] != "" {
-		if hd, err := strconv.Atoi(matches[6]); err == nil {
-			handlerDuration = &hd
-		}
-	}
-
-	// Build log entry
-	entry := &logEntry{
-		Timestamp:       timestamp,
-		Level:           logLevelInfo,   // HTTP timing logs are info level
-		Category:        logCategoryAPI, // HTTP requests are API category
-		Message:         fmt.Sprintf("%s %s %s", matches[3], matches[4], matches[2]),
-		Duration:        &duration,
-		HandlerDuration: handlerDuration,
-		HTTPMethod:      matches[3],
-		HTTPPath:        matches[4],
-		HTTPStatus:      &status,
-	}
-
-	return entry, true
 }
 
 // GetLogContent returns filtered log content from a specific file
@@ -701,172 +499,96 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		return
 	}
 
-	// Validate filename (security check)
-	if strings.Contains(req.Filename, "..") || strings.Contains(req.Filename, "/") {
-		err = errors.New("Invalid filename")
+	path, pathErr := logFilePath(req.Filename)
+	if pathErr != nil {
+		err = pathErr
 		return
 	}
 
-	// Set default limit
 	if req.Limit <= 0 {
 		req.Limit = 1000
 	}
 
-	// Read log file. An open failure names the path it tried, which is a
-	// directory layout nobody outside the box needs; ProcError trades it for a
-	// reference code.
-	logPath := filepath.Join("logs", req.Filename)
-	file, openErr := os.Open(logPath)
-	if openErr != nil {
-		err = ProcError(openErr)
-		return
-	}
-	defer file.Close()
-
-	// First pass: parse all entries and apply filters to get total count
-	var allFilteredEntries []logEntry
-	scanner := bufio.NewScanner(file)
-
-	parseLine := func(trimmed string) logEntry {
-		var entry logEntry
-		jsonPart, hasJSON := extractJSONFromLogLine(trimmed)
-
-		if hasJSON {
-			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
-				// JSON parsing succeeded, use the parsed entry
-			} else {
-				hasJSON = false
-			}
-		}
-
-		if !hasJSON {
-			if timingEntry, isTiming := parseTimingLogLine(trimmed); isTiming {
-				entry = *timingEntry
-			} else {
-				cleanLine := stripAnsiCodes(trimmed)
-				timestamp, message := parseLogTimestamp(cleanLine)
-				category := categorizeLogMessage(message)
-				level := detectLogLevel(message)
-
-				entry = logEntry{
-					Timestamp: timestamp,
-					Level:     level,
-					Category:  category,
-					Message:   message,
-				}
-			}
-		}
-
-		return entry
-	}
-
-	flushEntry := func(entry logEntry) {
+	keep := func(entry logEntry) bool {
 		if req.Level != "" && string(entry.Level) != req.Level {
-			return
+			return false
 		}
 		if req.Category != "" && string(entry.Category) != req.Category {
-			return
+			return false
 		}
 		if req.MinDuration != nil && (entry.Duration == nil || *entry.Duration < *req.MinDuration) {
-			return
+			return false
 		}
-		allFilteredEntries = append(allFilteredEntries, entry)
+		return true
 	}
 
-	var hasPending bool
-	var pending logEntry
-	var stackLines []string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
+	var matched []logEntry
+	// A read failure names the path it tried, which is a directory layout
+	// nobody outside the box needs; ProcError trades it for a reference code.
+	if scanErr := scanLogFile(path, func(entry logEntry) bool {
+		if keep(entry) {
+			matched = append(matched, entry)
 		}
-
-		if isNewLogLine(trimmed) {
-			if hasPending {
-				if len(stackLines) > 0 {
-					pending.StackTrace = strings.Join(stackLines, "\n")
-				}
-				flushEntry(pending)
-			}
-			pending = parseLine(trimmed)
-			stackLines = stackLines[:0]
-			hasPending = true
-		} else if hasPending {
-			stackLines = append(stackLines, line)
-		}
+		return true
+	}); scanErr != nil {
+		err = ProcError(scanErr)
+		return
 	}
 
-	if hasPending {
-		if len(stackLines) > 0 {
-			pending.StackTrace = strings.Join(stackLines, "\n")
-		}
-		flushEntry(pending)
-	}
+	sortLogEntries(matched, req.SortBy, req.SortDesc)
 
-	if scanErr := scanner.Err(); scanErr != nil {
-		return resp, ProcError(scanErr)
-	}
+	total := len(matched)
+	startIdx := min(req.Offset, total)
+	endIdx := min(req.Offset+req.Limit, total)
 
-	// Sort entries if requested
-	if req.SortBy == "duration" {
-		sort.Slice(allFilteredEntries, func(i, j int) bool {
-			// Handle nil durations - put entries without duration at the end
-			if allFilteredEntries[i].Duration == nil && allFilteredEntries[j].Duration == nil {
-				return false // Equal, keep original order
-			}
-			if allFilteredEntries[i].Duration == nil {
-				return false // i goes after j
-			}
-			if allFilteredEntries[j].Duration == nil {
-				return true // i goes before j
-			}
-
-			// Both have durations, compare them
-			if req.SortDesc != nil && *req.SortDesc {
-				return *allFilteredEntries[i].Duration > *allFilteredEntries[j].Duration // Descending
-			}
-			return *allFilteredEntries[i].Duration < *allFilteredEntries[j].Duration // Ascending
-		})
-	} else if req.SortBy == "time" && req.SortDesc != nil && *req.SortDesc {
-		// Sort by time descending (most recent first)
-		sort.Slice(allFilteredEntries, func(i, j int) bool {
-			return allFilteredEntries[i].Timestamp.After(allFilteredEntries[j].Timestamp)
-		})
-	}
-	// Default is chronological order (ascending by time), no sorting needed
-
-	// Calculate pagination based on filtered results
-	totalFilteredLines := len(allFilteredEntries)
-	startIdx := req.Offset
-	endIdx := req.Offset + req.Limit
-
-	// Ensure we don't go beyond available entries
-	if startIdx > totalFilteredLines {
-		startIdx = totalFilteredLines
-	}
-	if endIdx > totalFilteredLines {
-		endIdx = totalFilteredLines
-	}
-
-	// Extract the requested page
 	var publicEntries []PublicLogEntry
-	if startIdx < totalFilteredLines {
-		for i := startIdx; i < endIdx; i++ {
-			publicEntries = append(publicEntries, convertToPublicLogEntry(allFilteredEntries[i]))
-		}
+	for i := startIdx; i < endIdx; i++ {
+		publicEntries = append(publicEntries, convertToPublicLogEntry(matched[i]))
 	}
 
 	resp.Entries = publicEntries
-	resp.TotalLines = totalFilteredLines
-	resp.HasMore = endIdx < totalFilteredLines
-
+	resp.TotalLines = total
+	resp.HasMore = endIdx < total
 	return
 }
 
-// GetLogStats returns summary statistics about logs
+// sortLogEntries applies the request's ordering. The default — no sortBy — is
+// the order the entries appear in the file, which is chronological.
+func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
+	desc := sortDesc != nil && *sortDesc
+
+	switch sortBy {
+	case "duration":
+		sort.SliceStable(entries, func(i, j int) bool {
+			// Entries with no duration are not slow or fast; they sort last
+			// either way rather than clustering at whichever end zero is.
+			a, b := entries[i].Duration, entries[j].Duration
+			if a == nil || b == nil {
+				return a != nil && b == nil
+			}
+			if desc {
+				return *a > *b
+			}
+			return *a < *b
+		})
+	case "time":
+		sort.SliceStable(entries, func(i, j int) bool {
+			if desc {
+				return entries[i].Timestamp.After(entries[j].Timestamp)
+			}
+			return entries[i].Timestamp.Before(entries[j].Timestamp)
+		})
+	}
+}
+
+// GetLogStats returns summary statistics about logs.
+//
+// Every statistic here used to be derived from the last 50 lines of each file:
+// the level and category histograms, the error list, the request count, and the
+// p50/p90/p95/p99 latency percentiles. On a normal day that is well under a
+// minute of traffic, presented as a performance summary. It reads the files
+// through now — this is an admin page loaded by one person, and §2.1 keeps a
+// day's traffic in one file.
 func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -883,301 +605,52 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 		},
 	}
 
-	// Get log files
-	logDir := "logs"
-	files, err := os.ReadDir(logDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			resp.Stats = stats
-			err = nil
-			return
-		}
+	files, listErr := listLogFiles()
+	if listErr != nil {
+		err = ProcError(listErr)
 		return
 	}
 
-	var totalSize int64
-	var allRecentEntries []logEntry
+	// Recent entries and the error list are the tail of the whole corpus, so
+	// they are collected in ring buffers rather than by materialising every
+	// entry in every file and sorting it.
+	recent := newEntryRing(statsRecentEntries)
+	recentErrors := newEntryRing(statsRecentErrors)
+	perf := newPerfAccumulator()
 
-	// Process each log file
 	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".log") {
-			continue
-		}
-
-		info, err := file.Info()
-		if err != nil {
-			continue
-		}
-
 		stats.TotalFiles++
-		totalSize += info.Size()
+		stats.TotalSize += file.Size
 
-		// Read recent entries from the file (last few lines)
-		entries := readRecentLogEntries(filepath.Join(logDir, file.Name()), 50)
-		allRecentEntries = append(allRecentEntries, entries...)
-
-		// Count levels and categories
-		for _, entry := range entries {
+		scanErr := scanLogFile(filepath.Join(cfg.LogDir, file.Name), func(entry logEntry) bool {
 			stats.ByLevel[string(entry.Level)]++
 			stats.ByCategory[string(entry.Category)]++
-
-			// Collect errors
-			if entry.Level == logLevelError && len(stats.Errors) < 10 {
-				stats.Errors = append(stats.Errors, convertToPublicLogEntry(entry))
+			if entry.Level == logLevelError {
+				recentErrors.add(entry)
 			}
+			recent.add(entry)
+			perf.add(entry)
+			return true
+		})
+		if scanErr != nil {
+			// One unreadable file should not blank the whole page.
+			LogErrorSimple(LogCategoryAdmin, "Could not read a log file for stats", map[string]interface{}{
+				"file":  file.Name,
+				"error": scanErr.Error(),
+			})
 		}
 	}
 
-	stats.TotalSize = totalSize
+	stats.PerformanceStats = perf.result()
 
-	// Calculate performance statistics
-	calculatePerformanceStats(&stats.PerformanceStats, allRecentEntries)
-
-	// Sort all recent entries by timestamp and take the most recent
-	sort.Slice(allRecentEntries, func(i, j int) bool {
-		return allRecentEntries[i].Timestamp.After(allRecentEntries[j].Timestamp)
-	})
-
-	// Convert to public format
-	var publicRecentEntries []PublicLogEntry
-	for _, entry := range allRecentEntries {
-		publicRecentEntries = append(publicRecentEntries, convertToPublicLogEntry(entry))
+	// Newest first: when this list is short, it is the last thing that happened.
+	for _, entry := range recent.newestFirst() {
+		stats.Recent = append(stats.Recent, convertToPublicLogEntry(entry))
 	}
-
-	if len(publicRecentEntries) > 10 {
-		stats.Recent = publicRecentEntries[:10]
-	} else {
-		stats.Recent = publicRecentEntries
+	for _, entry := range recentErrors.newestFirst() {
+		stats.Errors = append(stats.Errors, convertToPublicLogEntry(entry))
 	}
 
 	resp.Stats = stats
 	return
-}
-
-// calculatePerformanceStats computes performance metrics from log entries
-func calculatePerformanceStats(perfStats *PerformanceStats, entries []logEntry) {
-	var durations []int
-	endpointData := make(map[string][]endpointRequest)
-
-	// Collect timing data from entries
-	for _, entry := range entries {
-		if entry.Duration != nil && *entry.Duration > 0 {
-			durations = append(durations, *entry.Duration)
-			perfStats.TotalRequests++
-
-			// Group by endpoint if we have HTTP method and path
-			if entry.HTTPMethod != "" && entry.HTTPPath != "" {
-				key := entry.HTTPMethod + " " + entry.HTTPPath
-				endpointData[key] = append(endpointData[key], endpointRequest{
-					Duration:   *entry.Duration,
-					StatusCode: entry.HTTPStatus,
-				})
-			}
-		}
-	}
-
-	if len(durations) == 0 {
-		return
-	}
-
-	// Sort durations for percentile calculations
-	sort.Ints(durations)
-
-	// Calculate overall statistics
-	perfStats.AverageResponse = calculateAverage(durations)
-	perfStats.MedianResponse = calculatePercentile(durations, 50)
-	perfStats.P90Response = calculatePercentile(durations, 90)
-	perfStats.P95Response = calculatePercentile(durations, 95)
-	perfStats.P99Response = calculatePercentile(durations, 99)
-
-	// Calculate endpoint statistics
-	var slowestEndpoints []EndpointStats
-	for endpoint, requests := range endpointData {
-		stats := calculateEndpointStats(endpoint, requests)
-		perfStats.EndpointStats[endpoint] = stats
-		slowestEndpoints = append(slowestEndpoints, stats)
-	}
-
-	// Sort endpoints by average response time and take top 10
-	sort.Slice(slowestEndpoints, func(i, j int) bool {
-		return slowestEndpoints[i].AverageResponse > slowestEndpoints[j].AverageResponse
-	})
-
-	if len(slowestEndpoints) > 10 {
-		perfStats.SlowestEndpoints = slowestEndpoints[:10]
-	} else {
-		perfStats.SlowestEndpoints = slowestEndpoints
-	}
-}
-
-// Helper struct for endpoint request data
-type endpointRequest struct {
-	Duration   int
-	StatusCode *int
-}
-
-// calculateEndpointStats computes statistics for a specific endpoint
-func calculateEndpointStats(endpoint string, requests []endpointRequest) EndpointStats {
-	parts := strings.SplitN(endpoint, " ", 2)
-	method := parts[0]
-	path := ""
-	if len(parts) > 1 {
-		path = parts[1]
-	}
-
-	durations := make([]int, len(requests))
-	errors := 0
-
-	for i, req := range requests {
-		durations[i] = req.Duration
-		if req.StatusCode != nil && *req.StatusCode >= 400 {
-			errors++
-		}
-	}
-
-	sort.Ints(durations)
-
-	return EndpointStats{
-		Path:            path,
-		Method:          method,
-		Count:           len(requests),
-		AverageResponse: calculateAverage(durations),
-		MinResponse:     durations[0],
-		MaxResponse:     durations[len(durations)-1],
-		ErrorRate:       float64(errors) / float64(len(requests)) * 100,
-	}
-}
-
-// calculateAverage computes the average of a slice of integers
-func calculateAverage(values []int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	sum := 0
-	for _, v := range values {
-		sum += v
-	}
-	return sum / len(values)
-}
-
-// calculatePercentile computes the nth percentile of a sorted slice
-func calculatePercentile(sortedValues []int, percentile int) int {
-	if len(sortedValues) == 0 {
-		return 0
-	}
-	if percentile <= 0 {
-		return sortedValues[0]
-	}
-	if percentile >= 100 {
-		return sortedValues[len(sortedValues)-1]
-	}
-
-	index := float64(percentile) / 100.0 * float64(len(sortedValues)-1)
-	lower := int(index)
-	upper := lower + 1
-
-	if upper >= len(sortedValues) {
-		return sortedValues[lower]
-	}
-
-	// Linear interpolation
-	weight := index - float64(lower)
-	return int(float64(sortedValues[lower])*(1-weight) + float64(sortedValues[upper])*weight)
-}
-
-// Helper function to format file sizes
-func formatFileSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// Helper function to read recent log entries from a file
-func readRecentLogEntries(filepath string, maxEntries int) []logEntry {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return []logEntry{}
-	}
-	defer file.Close()
-
-	var entries []logEntry
-	scanner := bufio.NewScanner(file)
-
-	parseLine := func(trimmed string) logEntry {
-		var entry logEntry
-		jsonPart, hasJSON := extractJSONFromLogLine(trimmed)
-
-		if hasJSON {
-			if err := json.Unmarshal([]byte(jsonPart), &entry); err == nil {
-				// JSON parsing succeeded, use the parsed entry
-			} else {
-				hasJSON = false
-			}
-		}
-
-		if !hasJSON {
-			cleanLine := stripAnsiCodes(trimmed)
-			timestamp, message := parseLogTimestamp(cleanLine)
-			category := categorizeLogMessage(message)
-			level := detectLogLevel(message)
-
-			entry = logEntry{
-				Timestamp: timestamp,
-				Level:     level,
-				Category:  category,
-				Message:   message,
-			}
-		}
-
-		return entry
-	}
-
-	appendEntry := func(entry logEntry) {
-		entries = append(entries, entry)
-		if len(entries) > maxEntries {
-			entries = entries[1:]
-		}
-	}
-
-	var hasPending bool
-	var pending logEntry
-	var stackLines []string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-
-		if isNewLogLine(trimmed) {
-			if hasPending {
-				if len(stackLines) > 0 {
-					pending.StackTrace = strings.Join(stackLines, "\n")
-				}
-				appendEntry(pending)
-			}
-			pending = parseLine(trimmed)
-			stackLines = stackLines[:0]
-			hasPending = true
-		} else if hasPending {
-			stackLines = append(stackLines, line)
-		}
-	}
-
-	if hasPending {
-		if len(stackLines) > 0 {
-			pending.StackTrace = strings.Join(stackLines, "\n")
-		}
-		appendEntry(pending)
-	}
-
-	return entries
 }

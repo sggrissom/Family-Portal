@@ -91,7 +91,7 @@ strip.
 
 Until it's fixed the button should be disabled rather than left armed.
 
-### 1.4 Log statistics are computed from 50 lines
+### 1.4 Log statistics are computed from 50 lines — **done**
 
 `GetLogStats` calls `readRecentLogEntries(path, 50)` per file, and then derives
 from those 50 lines: the level histogram, the category histogram, the error
@@ -160,7 +160,7 @@ This is the part that most changes what the panel is worth, because error
 investigation is the stated purpose and the logs are the only place the answers
 live.
 
-### 2.1 Logs are destroyed by every deploy
+### 2.1 Logs are destroyed by every deploy — **done**
 
 `app@.service` sets `WorkingDirectory=/srv/apps/%i/current`. lumberjack writes
 to `logs/family_record.log` **relative to the working directory**, so logs live
@@ -210,7 +210,7 @@ chronological from the start of the file. When you open the log viewer, it is
 almost always because something is wrong *now*. Default to most-recent-first,
 add a `Since` field, and put an "errors in the last 24h" preset one click away.
 
-### 2.4 Consolidate the log parser
+### 2.4 Consolidate the log parser — **done**
 
 `admin.go` holds ~600 lines of log parsing — ANSI stripping, three fallback
 parse strategies, timing-line regex, stack-trace continuation — with the
@@ -454,9 +454,8 @@ Not urgent, but it's what makes the above cheaper to build.
   `"Unauthorized: Admin access required"`.**~~ **Done** — one
   `requireAdminAccess` helper, one exported `ErrAdminRequired`, and an
   `AdminUserId` constant in place of the magic number.
-- **`admin.go` is 1286 lines** holding three unrelated concerns: user listing,
-  photo maintenance, and a log parser. §2.4 extracts the parser; photo
-  maintenance belongs next to the photo worker.
+- **`admin.go` is 656 lines** after §2.4 extracted the log parser, down from
+  1286. Photo maintenance still belongs next to the photo worker.
 - **Every admin page reimplements the same "Access Denied" block** — six
   near-identical copies of a `Header`/`error-page`/`Footer` tree. One
   `<AdminGuard>` wrapper.
@@ -470,11 +469,11 @@ Not urgent, but it's what makes the above cheaper to build.
 
 ## Suggested order
 
-1. ~~**§1** — the things that are wrong.~~ **Done**, except §1.4 (log stats
-   sampled from 50 lines), which is folded into the §2 log work, and §1.9
-   (bucket scans), which was never work to do.
-2. **§2.1** — logs out of the release directory. Everything else about logs is
-   worth less until log history survives a deploy.
+1. ~~**§1** — the things that are wrong.~~ **Done** (§1.9, bucket scans, was
+   never work to do; §1.4 landed with the §2 log work).
+2. ~~**§2.1** — logs out of the release directory.~~ **Done**, along with §2.4
+   (one scanner in `backend/log_reader.go`) and §1.4 (stats over the whole
+   file, not the last 50 lines).
 3. **§2.2** — reference-code search. Small, and it completes a workflow the
    error-handling design already assumes exists.
 4. **§3.1 + §3.2** — config status and the problems feed. This is the point at

@@ -193,10 +193,10 @@ func MakeApplication() *vbeam.Application {
 
 	// Initialize rotating file logger only in production
 	if cfg.IsRelease {
-		vbeam.InitRotatingLogger(backend.LogFileBaseName)
+		backend.InitRotatingLogger()
 	}
 
-	backend.EnforceProductionConfig(cfg.DBPath, cfg.StaticDir)
+	backend.EnforceProductionConfig(cfg.DBPath, cfg.StaticDir, cfg.LogDir)
 
 	// Log application startup. The version is read from cfg rather than written
 	// here, so the log line and the diagnostics view cannot disagree about what

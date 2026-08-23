@@ -16,6 +16,7 @@ require (
 	golang.org/x/crypto v0.34.0
 	golang.org/x/image v0.45.0
 	golang.org/x/oauth2 v0.31.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
@@ -34,5 +35,4 @@ require (
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.33.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

@@ -51,19 +51,20 @@ func applyEnv(t *testing.T, env map[string]string) {
 	}
 }
 
-// storageDirs returns a scratch database path and static directory that both
-// pass the writability check.
-func storageDirs(t *testing.T) (dbPath, staticDir string) {
+// storageDirs returns a scratch database path, static directory and log
+// directory that all pass the writability check.
+func storageDirs(t *testing.T) (dbPath, staticDir, logDir string) {
 	t.Helper()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
 	staticDir = filepath.Join(root, "static")
-	for _, dir := range []string{dataDir, staticDir} {
+	logDir = filepath.Join(root, "logs")
+	for _, dir := range []string{dataDir, staticDir, logDir} {
 		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatalf("Mkdir(%s) error = %v", dir, err)
 		}
 	}
-	return filepath.Join(dataDir, "db.bolt"), staticDir
+	return filepath.Join(dataDir, "db.bolt"), staticDir, logDir
 }
 
 // settingsWithIssues reports the Setting field of every issue found.
@@ -86,9 +87,9 @@ func hasIssue(issues []ConfigIssue, setting string) bool {
 
 func TestCheckProductionConfigAcceptsCompleteConfig(t *testing.T) {
 	applyEnv(t, validConfigEnv())
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	if issues := CheckProductionConfig(dbPath, staticDir); len(issues) > 0 {
+	if issues := CheckProductionConfig(dbPath, staticDir, logDir); len(issues) > 0 {
 		t.Fatalf("CheckProductionConfig() reported %d issues (%s), want none", len(issues), settingsWithIssues(issues))
 	}
 }
@@ -108,9 +109,9 @@ func TestCheckProductionConfigRequiresEverySetting(t *testing.T) {
 			env := validConfigEnv()
 			env[name] = ""
 			applyEnv(t, env)
-			dbPath, staticDir := storageDirs(t)
+			dbPath, staticDir, logDir := storageDirs(t)
 
-			issues := CheckProductionConfig(dbPath, staticDir)
+			issues := CheckProductionConfig(dbPath, staticDir, logDir)
 			if !hasIssue(issues, name) {
 				t.Fatalf("CheckProductionConfig() with %s unset reported %q, want an issue for %s", name, settingsWithIssues(issues), name)
 			}
@@ -122,9 +123,9 @@ func TestCheckProductionConfigRejectsShortBackupToken(t *testing.T) {
 	env := validConfigEnv()
 	env["BACKUP_TOKEN"] = strings.Repeat("b", minimumBackupTokenLength-1)
 	applyEnv(t, env)
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	issues := CheckProductionConfig(dbPath, staticDir)
+	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if !hasIssue(issues, "BACKUP_TOKEN") {
 		t.Fatalf("CheckProductionConfig() with a short token reported %q, want an issue for BACKUP_TOKEN", settingsWithIssues(issues))
 	}
@@ -136,9 +137,9 @@ func TestCheckProductionConfigReportsEveryProblemAtOnce(t *testing.T) {
 	env["GOOGLE_CLIENT_ID"] = ""
 	env["GEMINI_API_KEY"] = ""
 	applyEnv(t, env)
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	issues := CheckProductionConfig(dbPath, staticDir)
+	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if len(issues) != 3 {
 		t.Fatalf("CheckProductionConfig() reported %d issues (%s), want 3", len(issues), settingsWithIssues(issues))
 	}
@@ -163,9 +164,9 @@ func TestCheckProductionConfigValidatesSiteRoot(t *testing.T) {
 			env := validConfigEnv()
 			env["SITE_ROOT"] = tt.siteRoot
 			applyEnv(t, env)
-			dbPath, staticDir := storageDirs(t)
+			dbPath, staticDir, logDir := storageDirs(t)
 
-			issues := CheckProductionConfig(dbPath, staticDir)
+			issues := CheckProductionConfig(dbPath, staticDir, logDir)
 			if got := hasIssue(issues, "SITE_ROOT"); got != tt.wantIssue {
 				t.Fatalf("CheckProductionConfig() SITE_ROOT=%q issue = %v, want %v", tt.siteRoot, got, tt.wantIssue)
 			}
@@ -179,9 +180,9 @@ func TestCheckProductionConfigAcceptsSMTPCredentialsInsteadOfMailFrom(t *testing
 	env["EMAIL"] = "portal@example.com"
 	env["APP_PASSWORD"] = "app-password"
 	applyEnv(t, env)
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	issues := CheckProductionConfig(dbPath, staticDir)
+	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if hasIssue(issues, "MAIL_FROM") {
 		t.Fatalf("CheckProductionConfig() rejected EMAIL/APP_PASSWORD delivery: %s", settingsWithIssues(issues))
 	}
@@ -191,9 +192,9 @@ func TestCheckProductionConfigRejectsUnparseableMailFrom(t *testing.T) {
 	env := validConfigEnv()
 	env["MAIL_FROM"] = "not an address"
 	applyEnv(t, env)
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	if issues := CheckProductionConfig(dbPath, staticDir); !hasIssue(issues, "MAIL_FROM") {
+	if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "MAIL_FROM") {
 		t.Fatalf("CheckProductionConfig() accepted an invalid MAIL_FROM: %s", settingsWithIssues(issues))
 	}
 }
@@ -201,9 +202,9 @@ func TestCheckProductionConfigRejectsUnparseableMailFrom(t *testing.T) {
 func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 	t.Run("unset is fine", func(t *testing.T) {
 		applyEnv(t, validConfigEnv())
-		dbPath, staticDir := storageDirs(t)
+		dbPath, staticDir, logDir := storageDirs(t)
 
-		if issues := CheckProductionConfig(dbPath, staticDir); len(issues) > 0 {
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); len(issues) > 0 {
 			t.Fatalf("CheckProductionConfig() rejected an unconfigured APNs: %s", settingsWithIssues(issues))
 		}
 	})
@@ -213,9 +214,9 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 		env["APNS_TEAM_ID"] = "TEAMID1234"
 		env["APNS_BUNDLE_ID"] = "app.familyrecord.ios"
 		applyEnv(t, env)
-		dbPath, staticDir := storageDirs(t)
+		dbPath, staticDir, logDir := storageDirs(t)
 
-		issues := CheckProductionConfig(dbPath, staticDir)
+		issues := CheckProductionConfig(dbPath, staticDir, logDir)
 		if !hasIssue(issues, "APNS_KEY_ID") || !hasIssue(issues, "APNS_KEY_PATH") || !hasIssue(issues, "APNS_ENVIRONMENT") {
 			t.Fatalf("CheckProductionConfig() did not report the missing APNs settings: %s", settingsWithIssues(issues))
 		}
@@ -229,9 +230,9 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 		env["APNS_KEY_PATH"] = filepath.Join(t.TempDir(), "AuthKey.p8")
 		env["APNS_ENVIRONMENT"] = "staging"
 		applyEnv(t, env)
-		dbPath, staticDir := storageDirs(t)
+		dbPath, staticDir, logDir := storageDirs(t)
 
-		if issues := CheckProductionConfig(dbPath, staticDir); !hasIssue(issues, "APNS_ENVIRONMENT") {
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "APNS_ENVIRONMENT") {
 			t.Fatalf("CheckProductionConfig() accepted APNS_ENVIRONMENT=staging: %s", settingsWithIssues(issues))
 		}
 	})
@@ -244,9 +245,9 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 		env["APNS_KEY_PATH"] = filepath.Join(t.TempDir(), "missing.p8")
 		env["APNS_ENVIRONMENT"] = "production"
 		applyEnv(t, env)
-		dbPath, staticDir := storageDirs(t)
+		dbPath, staticDir, logDir := storageDirs(t)
 
-		if issues := CheckProductionConfig(dbPath, staticDir); !hasIssue(issues, "APNS_KEY_PATH") {
+		if issues := CheckProductionConfig(dbPath, staticDir, logDir); !hasIssue(issues, "APNS_KEY_PATH") {
 			t.Fatalf("CheckProductionConfig() accepted a missing APNs key file: %s", settingsWithIssues(issues))
 		}
 	})
@@ -255,9 +256,9 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 func TestCheckProductionConfigValidatesStoragePaths(t *testing.T) {
 	t.Run("missing static directory", func(t *testing.T) {
 		applyEnv(t, validConfigEnv())
-		dbPath, _ := storageDirs(t)
+		dbPath, _, logDir := storageDirs(t)
 
-		issues := CheckProductionConfig(dbPath, filepath.Join(t.TempDir(), "absent"))
+		issues := CheckProductionConfig(dbPath, filepath.Join(t.TempDir(), "absent"), logDir)
 		if !hasIssue(issues, "StaticDir") {
 			t.Fatalf("CheckProductionConfig() accepted a missing static directory: %s", settingsWithIssues(issues))
 		}
@@ -265,9 +266,9 @@ func TestCheckProductionConfigValidatesStoragePaths(t *testing.T) {
 
 	t.Run("missing database directory", func(t *testing.T) {
 		applyEnv(t, validConfigEnv())
-		_, staticDir := storageDirs(t)
+		_, staticDir, logDir := storageDirs(t)
 
-		issues := CheckProductionConfig(filepath.Join(t.TempDir(), "absent", "db.bolt"), staticDir)
+		issues := CheckProductionConfig(filepath.Join(t.TempDir(), "absent", "db.bolt"), staticDir, logDir)
 		if !hasIssue(issues, "DBPath") {
 			t.Fatalf("CheckProductionConfig() accepted a missing database directory: %s", settingsWithIssues(issues))
 		}
@@ -275,15 +276,25 @@ func TestCheckProductionConfigValidatesStoragePaths(t *testing.T) {
 
 	t.Run("static path is a file", func(t *testing.T) {
 		applyEnv(t, validConfigEnv())
-		dbPath, _ := storageDirs(t)
+		dbPath, _, logDir := storageDirs(t)
 		notADir := filepath.Join(t.TempDir(), "static")
 		if err := os.WriteFile(notADir, []byte("x"), 0o644); err != nil {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
 
-		issues := CheckProductionConfig(dbPath, notADir)
+		issues := CheckProductionConfig(dbPath, notADir, logDir)
 		if !hasIssue(issues, "StaticDir") {
 			t.Fatalf("CheckProductionConfig() accepted a file as the static directory: %s", settingsWithIssues(issues))
+		}
+	})
+
+	t.Run("missing log directory", func(t *testing.T) {
+		applyEnv(t, validConfigEnv())
+		dbPath, staticDir, _ := storageDirs(t)
+
+		issues := CheckProductionConfig(dbPath, staticDir, filepath.Join(t.TempDir(), "absent"))
+		if !hasIssue(issues, "LogDir") {
+			t.Fatalf("CheckProductionConfig() accepted a missing log directory: %s", settingsWithIssues(issues))
 		}
 	})
 
@@ -292,13 +303,13 @@ func TestCheckProductionConfigValidatesStoragePaths(t *testing.T) {
 			t.Skip("root bypasses directory permissions")
 		}
 		applyEnv(t, validConfigEnv())
-		dbPath, _ := storageDirs(t)
+		dbPath, _, logDir := storageDirs(t)
 		readOnly := filepath.Join(t.TempDir(), "static")
 		if err := os.Mkdir(readOnly, 0o555); err != nil {
 			t.Fatalf("Mkdir() error = %v", err)
 		}
 
-		issues := CheckProductionConfig(dbPath, readOnly)
+		issues := CheckProductionConfig(dbPath, readOnly, logDir)
 		if !hasIssue(issues, "StaticDir") {
 			t.Fatalf("CheckProductionConfig() accepted an unwritable static directory: %s", settingsWithIssues(issues))
 		}
@@ -307,9 +318,9 @@ func TestCheckProductionConfigValidatesStoragePaths(t *testing.T) {
 
 func TestCheckProductionConfigLeavesNoProbeFilesBehind(t *testing.T) {
 	applyEnv(t, validConfigEnv())
-	dbPath, staticDir := storageDirs(t)
+	dbPath, staticDir, logDir := storageDirs(t)
 
-	CheckProductionConfig(dbPath, staticDir)
+	CheckProductionConfig(dbPath, staticDir, logDir)
 
 	entries, err := os.ReadDir(staticDir)
 	if err != nil {

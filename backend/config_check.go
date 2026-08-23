@@ -49,12 +49,12 @@ var apnsEnvVars = []string{
 }
 
 // CheckProductionConfig reports everything about the current environment that
-// would make a release build unfit to serve. dbPath and staticDir are passed in
+// would make a release build unfit to serve. The storage paths are passed in
 // rather than read from cfg so tests can point them at a scratch directory.
 //
 // It never returns a partial answer: callers get the full list so one restart
 // surfaces every problem instead of one per deploy.
-func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
+func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 	issues = append(issues, checkSiteRoot()...)
 	issues = append(issues, checkGoogleOAuth()...)
@@ -63,7 +63,7 @@ func CheckProductionConfig(dbPath, staticDir string) []ConfigIssue {
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkIOSAppID()...)
-	issues = append(issues, checkStoragePaths(dbPath, staticDir)...)
+	issues = append(issues, checkStoragePaths(dbPath, staticDir, logDir)...)
 	return issues
 }
 
@@ -224,7 +224,7 @@ func checkIOSAppID() []ConfigIssue {
 // checkStoragePaths confirms the process can actually write where it stores
 // things. The paths are compile-time constants, so what is being checked is the
 // deployed filesystem: directory present, owned by a user that can write it.
-func checkStoragePaths(dbPath, staticDir string) []ConfigIssue {
+func checkStoragePaths(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 
 	// bolt creates the database file but not the directory holding it.
@@ -232,6 +232,13 @@ func checkStoragePaths(dbPath, staticDir string) []ConfigIssue {
 		issues = append(issues, *issue)
 	}
 	if issue := checkWritableDir("StaticDir", staticDir); issue != nil {
+		issues = append(issues, *issue)
+	}
+	// The rotating logger creates the directory itself and falls back to stderr
+	// if it cannot, so an unwritable LogDir is not fatal — but it is silent, and
+	// silently losing the logs is exactly the failure the admin panel exists to
+	// investigate.
+	if issue := checkWritableDir("LogDir", logDir); issue != nil {
 		issues = append(issues, *issue)
 	}
 	return issues
@@ -269,8 +276,8 @@ func checkWritableDir(setting, dir string) *ConfigIssue {
 // point serves the broken behavior instead of reporting it. Local builds log the
 // same list and continue, because a development machine legitimately has no APNs
 // key or Gemini quota.
-func EnforceProductionConfig(dbPath, staticDir string) {
-	issues := CheckProductionConfig(dbPath, staticDir)
+func EnforceProductionConfig(dbPath, staticDir, logDir string) {
+	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if len(issues) == 0 {
 		return
 	}

@@ -104,12 +104,19 @@ cannot write.
 | `/srv/apps/family/shared/.env` | secrets, mode 600, **not backed up** |
 | `/srv/apps/family/shared/data/db.bolt` | the database (`cfg.DBPath`) |
 | `/srv/apps/family/shared/static/` | uploads and derived variants (`cfg.StaticDir`) |
+| `/srv/apps/family/shared/logs/` | the rotating application log (`cfg.LogDir`) |
 | `/srv/apps/family-face/shared/` | the face daemon's own env and models |
 | `/run/family-face/face.sock` | app → daemon socket (`cfg.FaceAnalysisSocket`) |
 
 Storage paths are compile-time constants in `cfg/release.go`, not environment
-variables. Startup probes both for writability and a release build refuses to
-serve if either fails (`backend/config_check.go`).
+variables. Startup probes all three for writability and a release build refuses
+to serve if any fails (`backend/config_check.go`).
+
+Logs live under `shared/` deliberately. The unit sets
+`WorkingDirectory=/srv/apps/%i/current`, so a relative log path put the file
+*inside the release directory*: every deploy started an empty log and the sixth
+deploy after an incident pruned the evidence, which is the wrong window — the
+moment you most want logs is right after a deploy that broke something.
 
 ## Deploys
 
@@ -142,7 +149,8 @@ Because a release build resolves its storage paths at compile time
 (`cfg/release.go`), the scratch deployment has to live where production's does:
 
 ```
-sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
+sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static \
+  /srv/apps/family/shared/logs
 sudo chown -R "$(id -un)" /srv/apps/family/shared
 ```
 
@@ -152,6 +160,7 @@ one without `sudo` and without leaving anything behind:
 ```
 bwrap --dev-bind / / --tmpfs /srv \
   --dir /srv/apps/family/shared/data --dir /srv/apps/family/shared/static \
+  --dir /srv/apps/family/shared/logs \
   --chdir "$PWD" -- make e2e
 ```
 
