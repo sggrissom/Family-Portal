@@ -274,9 +274,6 @@ func TestValidateUpdateMessage(t *testing.T) {
 	}
 }
 
-// Rows written before the guidance rules existed are still in the bucket, and
-// this endpoint answers before anybody signs in — so the last check happens on
-// the way out, not only on the way in.
 func TestEvaluateMobileVersionWithholdsUnsafeGuidance(t *testing.T) {
 	config := MobileVersionConfig{
 		Id:             platformId("ios"),
@@ -299,8 +296,6 @@ func TestEvaluateMobileVersionWithholdsUnsafeGuidance(t *testing.T) {
 	}
 }
 
-// mobileVersionFixture is an admin (user 1, which is what the admin procs check
-// for) and an ordinary account in the same database.
 type mobileVersionFixture struct {
 	db      *vbolt.DB
 	admin   User
@@ -328,8 +323,6 @@ func setupMobileVersionFixture(t *testing.T) mobileVersionFixture {
 	return fx
 }
 
-// as runs fn in a write transaction as the given user. The write procs commit
-// their own transaction, so fn calls exactly one of them.
 func (fx mobileVersionFixture) as(t *testing.T, user User, fn func(ctx *vbeam.Context)) {
 	t.Helper()
 
@@ -405,8 +398,6 @@ func TestAdminSetMobileVersionStoresPolicy(t *testing.T) {
 	}
 }
 
-// Everything below is what an unauthenticated client would be handed and act on,
-// so a typo or a compromised admin session must not get past the save.
 func TestAdminSetMobileVersionRejectsUnsafeGuidance(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -474,8 +465,6 @@ func TestAdminSetMobileVersionRejectsUnsafeGuidance(t *testing.T) {
 	}
 }
 
-// A row written before these rules existed still evaluates, but its guidance is
-// withheld — the admin page is where that becomes visible.
 func TestAdminGetMobileVersionsWarnsAboutStoredGuidance(t *testing.T) {
 	fx := setupMobileVersionFixture(t)
 
@@ -503,8 +492,6 @@ func TestAdminGetMobileVersionsWarnsAboutStoredGuidance(t *testing.T) {
 	}
 }
 
-// A version policy decides whether an install keeps working, so neither reading
-// nor writing it is open to an ordinary account.
 func TestMobileVersionAdminProcsRequireAdmin(t *testing.T) {
 	fx := setupMobileVersionFixture(t)
 

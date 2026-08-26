@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for Google OAuth authentication
-// Tests: OAuth setup, configuration validation, user info processing
 package backend
 
 import (
@@ -14,14 +12,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Test OAuth configuration setup
 func TestGoogleOAuthSetup(t *testing.T) {
-	// Save original environment variables
 	originalClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	originalClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	originalSiteRoot := os.Getenv("SITE_ROOT")
 
-	// Restore environment after test
 	defer func() {
 		os.Setenv("GOOGLE_CLIENT_ID", originalClientID)
 		os.Setenv("GOOGLE_CLIENT_SECRET", originalClientSecret)
@@ -29,7 +24,6 @@ func TestGoogleOAuthSetup(t *testing.T) {
 	}()
 
 	t.Run("SuccessfulSetup", func(t *testing.T) {
-		// Set test environment variables
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 		os.Setenv("SITE_ROOT", "https://example.com")
@@ -39,7 +33,6 @@ func TestGoogleOAuthSetup(t *testing.T) {
 			t.Errorf("Expected successful setup, got error: %v", err)
 		}
 
-		// Verify configuration was set
 		if oauthConf == nil {
 			t.Error("OAuth configuration was not set")
 		}
@@ -53,14 +46,12 @@ func TestGoogleOAuthSetup(t *testing.T) {
 			t.Errorf("Expected redirect URL 'https://example.com/api/google/callback', got '%s'", oauthConf.RedirectURL)
 		}
 
-		// Verify state string was generated
 		if oauthStateString == "" {
 			t.Error("OAuth state string was not generated")
 		}
 	})
 
 	t.Run("DefaultSiteRoot", func(t *testing.T) {
-		// Set test environment variables without SITE_ROOT
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 		os.Unsetenv("SITE_ROOT")
@@ -70,14 +61,12 @@ func TestGoogleOAuthSetup(t *testing.T) {
 			t.Errorf("Expected successful setup, got error: %v", err)
 		}
 
-		// Should use default localhost URL
 		if oauthConf.RedirectURL != "http://localhost:8666/api/google/callback" {
 			t.Errorf("Expected default redirect URL, got '%s'", oauthConf.RedirectURL)
 		}
 	})
 
 	t.Run("MissingClientID", func(t *testing.T) {
-		// Remove client ID
 		os.Unsetenv("GOOGLE_CLIENT_ID")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 
@@ -91,7 +80,6 @@ func TestGoogleOAuthSetup(t *testing.T) {
 	})
 
 	t.Run("MissingClientSecret", func(t *testing.T) {
-		// Remove client secret
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Unsetenv("GOOGLE_CLIENT_SECRET")
 
@@ -105,9 +93,7 @@ func TestGoogleOAuthSetup(t *testing.T) {
 	})
 }
 
-// Test OAuth scopes configuration
 func TestOAuthScopes(t *testing.T) {
-	// Set test environment variables
 	os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 	os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 
@@ -132,10 +118,8 @@ func TestOAuthScopes(t *testing.T) {
 	}
 }
 
-// Test Google login handler
 func TestGoogleLoginHandler(t *testing.T) {
 	t.Run("WithValidConfig", func(t *testing.T) {
-		// Setup OAuth configuration
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 		SetupGoogleOAuth()
@@ -145,7 +129,6 @@ func TestGoogleLoginHandler(t *testing.T) {
 
 		googleLoginHandler(w, req)
 
-		// Should redirect to Google OAuth URL
 		if w.Code != http.StatusTemporaryRedirect {
 			t.Errorf("Expected status %d, got %d", http.StatusTemporaryRedirect, w.Code)
 		}
@@ -163,7 +146,6 @@ func TestGoogleLoginHandler(t *testing.T) {
 	})
 
 	t.Run("WithoutConfig", func(t *testing.T) {
-		// Clear OAuth configuration
 		oauthConf = nil
 
 		req := httptest.NewRequest("GET", "/api/google/login", nil)
@@ -171,7 +153,6 @@ func TestGoogleLoginHandler(t *testing.T) {
 
 		googleLoginHandler(w, req)
 
-		// Should return error
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
 		}
@@ -183,10 +164,8 @@ func TestGoogleLoginHandler(t *testing.T) {
 	})
 }
 
-// Test Google callback handler
 func TestGoogleCallbackHandler(t *testing.T) {
 	t.Run("WithoutConfig", func(t *testing.T) {
-		// Clear OAuth configuration
 		oauthConf = nil
 
 		req := httptest.NewRequest("GET", "/api/google/callback", nil)
@@ -194,14 +173,12 @@ func TestGoogleCallbackHandler(t *testing.T) {
 
 		googleCallbackHandler(w, req)
 
-		// Should return error
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
 		}
 	})
 
 	t.Run("InvalidState", func(t *testing.T) {
-		// Setup OAuth configuration
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 		SetupGoogleOAuth()
@@ -211,7 +188,6 @@ func TestGoogleCallbackHandler(t *testing.T) {
 
 		googleCallbackHandler(w, req)
 
-		// Should return bad request for invalid state
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 		}
@@ -223,7 +199,6 @@ func TestGoogleCallbackHandler(t *testing.T) {
 	})
 }
 
-// Test user info parsing
 func TestParseUserInfo(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -316,9 +291,7 @@ func TestParseUserInfo(t *testing.T) {
 	}
 }
 
-// Test OAuth URL generation
 func TestOAuthURLGeneration(t *testing.T) {
-	// Setup OAuth configuration
 	os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 	os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 	os.Setenv("SITE_ROOT", "https://example.com")
@@ -328,10 +301,8 @@ func TestOAuthURLGeneration(t *testing.T) {
 		t.Fatalf("Failed to setup OAuth: %v", err)
 	}
 
-	// Generate OAuth URL
 	url := oauthConf.AuthCodeURL(oauthStateString, oauth2.AccessTypeOffline)
 
-	// Verify URL components
 	if !strings.Contains(url, "accounts.google.com") {
 		t.Error("URL should contain Google OAuth endpoint")
 	}
@@ -352,7 +323,6 @@ func TestOAuthURLGeneration(t *testing.T) {
 	}
 }
 
-// Test user creation from Google OAuth (simplified)
 func TestCreateUserFromOAuthStructure(t *testing.T) {
 	testUserInfo := UserInfo{
 		Email:         "test@example.com",
@@ -364,7 +334,6 @@ func TestCreateUserFromOAuthStructure(t *testing.T) {
 		Locale:        "en",
 	}
 
-	// Test that user info structure is valid
 	if testUserInfo.Email == "" {
 		t.Error("Email should not be empty")
 	}
@@ -376,7 +345,6 @@ func TestCreateUserFromOAuthStructure(t *testing.T) {
 	}
 }
 
-// Test handling of unverified emails
 func TestUnverifiedEmailHandling(t *testing.T) {
 	testUserInfo := UserInfo{
 		Email:         "unverified@example.com",
@@ -384,23 +352,17 @@ func TestUnverifiedEmailHandling(t *testing.T) {
 		Name:          "Unverified User",
 	}
 
-	// In a real implementation, unverified emails should be rejected
-	// This test ensures we properly check the VerifiedEmail field
 	if !testUserInfo.VerifiedEmail {
-		// This is the expected behavior - unverified emails should not be allowed
 		t.Log("Correctly identified unverified email")
 	} else {
 		t.Error("Should have detected unverified email")
 	}
 }
 
-// Test state string generation
 func TestStateStringGeneration(t *testing.T) {
-	// Generate multiple state strings to ensure they're different
 	states := make(map[string]bool)
 
 	for i := 0; i < 10; i++ {
-		// Setup generates a new state string each time
 		os.Setenv("GOOGLE_CLIENT_ID", "test_client_id")
 		os.Setenv("GOOGLE_CLIENT_SECRET", "test_client_secret")
 
@@ -417,7 +379,6 @@ func TestStateStringGeneration(t *testing.T) {
 			t.Error("State string should be at least 10 characters for security")
 		}
 
-		// Check for uniqueness
 		if states[oauthStateString] {
 			t.Error("State strings should be unique")
 		}

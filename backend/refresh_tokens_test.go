@@ -11,7 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// setupRefreshTokenTestDB creates a test database
 func setupRefreshTokenTestDB(t *testing.T) *vbolt.DB {
 	testDBPath := "test_refresh_tokens.db"
 	db := vbolt.Open(testDBPath)
@@ -19,14 +18,12 @@ func setupRefreshTokenTestDB(t *testing.T) *vbolt.DB {
 	return db
 }
 
-// cleanupRefreshTokenTestDB removes the test database
 func cleanupRefreshTokenTestDB(db *vbolt.DB) {
 	path := db.Path()
 	db.Close()
 	os.Remove(path)
 }
 
-// createRefreshTokenTestUser creates a test user
 func createRefreshTokenTestUser(tx *vbolt.Tx, email string, name string) User {
 	user := User{
 		Id:        vbolt.NextIntId(tx, UsersBkt),
@@ -36,7 +33,6 @@ func createRefreshTokenTestUser(tx *vbolt.Tx, email string, name string) User {
 		LastLogin: time.Now(),
 	}
 
-	// Create a family for the user
 	family := Family{
 		Id:         vbolt.NextIntId(tx, FamiliesBkt),
 		Name:       name + "'s Family",
@@ -61,16 +57,13 @@ func TestCreateRefreshToken(t *testing.T) {
 	defer cleanupRefreshTokenTestDB(db)
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create a test user
 		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
 
-		// Create refresh token
 		token, tokenString, err := CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
 		if err != nil {
 			t.Fatalf("Failed to create refresh token: %v", err)
 		}
 
-		// Verify token properties
 		if token.Id == 0 {
 			t.Error("Token ID should not be 0")
 		}
@@ -100,8 +93,6 @@ func TestCreateRefreshToken(t *testing.T) {
 	})
 }
 
-// A database file that leaks must not hand over live sessions, so the token
-// itself must appear nowhere in storage.
 func TestRefreshTokensAreStoredHashed(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -129,7 +120,6 @@ func TestRefreshTokensAreStoredHashed(t *testing.T) {
 			t.Errorf("read back hash = %q, want %q", readBack.TokenHash, stored.TokenHash)
 		}
 
-		// The lookup bucket must be keyed by the hash, not the token.
 		var idByToken int
 		vbolt.Read(tx, RefreshTokenByTokenBkt, tokenString, &idByToken)
 		if idByToken != 0 {
@@ -152,7 +142,6 @@ func TestGetRefreshTokenByToken(t *testing.T) {
 	})
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Test retrieving existing token
 		token, found := GetRefreshTokenByToken(tx, tokenString)
 		if !found {
 			t.Error("Token should be found")
@@ -161,7 +150,6 @@ func TestGetRefreshTokenByToken(t *testing.T) {
 			t.Errorf("Token id = %d, want %d", token.Id, created.Id)
 		}
 
-		// Test retrieving non-existent token
 		_, found = GetRefreshTokenByToken(tx, "nonexistent")
 		if found {
 			t.Error("Non-existent token should not be found")
@@ -180,20 +168,17 @@ func TestValidateRefreshToken(t *testing.T) {
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
 
-		// Create valid token
 		validToken, tokenString, _ := CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
 		validTokenString = tokenString
 		validId = validToken.Id
 
-		// Create expired token
-		_, expiredString, _ := CreateRefreshToken(tx, user.Id, -1*time.Hour) // Already expired
+		_, expiredString, _ := CreateRefreshToken(tx, user.Id, -1*time.Hour)
 		expiredTokenString = expiredString
 
 		vbolt.TxCommit(tx)
 	})
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Test valid token
 		token, valid := ValidateRefreshToken(tx, validTokenString)
 		if !valid {
 			t.Error("Valid token should be validated successfully")
@@ -202,13 +187,11 @@ func TestValidateRefreshToken(t *testing.T) {
 			t.Errorf("Token id = %d, want %d", token.Id, validId)
 		}
 
-		// Test expired token
 		_, valid = ValidateRefreshToken(tx, expiredTokenString)
 		if valid {
 			t.Error("Expired token should not be valid")
 		}
 
-		// Test non-existent token
 		_, valid = ValidateRefreshToken(tx, "nonexistent")
 		if valid {
 			t.Error("Non-existent token should not be valid")
@@ -231,7 +214,6 @@ func TestUpdateRefreshTokenLastUsed(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Wait a bit to ensure timestamp difference
 	time.Sleep(10 * time.Millisecond)
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -316,8 +298,6 @@ func TestRotateRefreshTokenRejectsUnknownAndExpiredTokens(t *testing.T) {
 	})
 }
 
-// A token replayed after the grace window is treated as stolen: the whole
-// session dies, including the successor the thief or the owner is holding.
 func TestRotateRefreshTokenRevokesSessionOnReuse(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -340,7 +320,6 @@ func TestRotateRefreshTokenRevokesSessionOnReuse(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Well past the grace window: this is a replay, not a race.
 	replayAt := start.Add(refreshTokenReuseGrace + time.Second)
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		if _, _, err := RotateRefreshToken(tx, originalString, replayAt); !errors.Is(err, ErrRefreshTokenReused) {
@@ -359,7 +338,6 @@ func TestRotateRefreshTokenRevokesSessionOnReuse(t *testing.T) {
 	})
 }
 
-// Two tabs refreshing at the same moment must not look like theft.
 func TestRotateRefreshTokenToleratesConcurrentTabs(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -380,7 +358,6 @@ func TestRotateRefreshTokenToleratesConcurrentTabs(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// The second tab presents the same cookie a moment later.
 	var raceString string
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		var err error
@@ -410,7 +387,6 @@ func TestDeleteRefreshToken(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify token exists
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		_, found := GetRefreshTokenByToken(tx, tokenString)
 		if !found {
@@ -418,13 +394,11 @@ func TestDeleteRefreshToken(t *testing.T) {
 		}
 	})
 
-	// Delete token
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		DeleteRefreshToken(tx, tokenString)
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify token is deleted
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		_, found := GetRefreshTokenByToken(tx, tokenString)
 		if found {
@@ -433,8 +407,6 @@ func TestDeleteRefreshToken(t *testing.T) {
 	})
 }
 
-// Logging out has to end the session, not just drop the link that happened to
-// be in the cookie.
 func TestDeleteRefreshTokenRemovesTheWholeSession(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -474,7 +446,6 @@ func TestDeleteUserRefreshTokens(t *testing.T) {
 		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
 		userId = user.Id
 
-		// Create multiple tokens for the user
 		_, token1String, _ = CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
 		_, token2String, _ = CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
 		_, token3String, _ = CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
@@ -482,7 +453,6 @@ func TestDeleteUserRefreshTokens(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify all tokens exist
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		if _, found := GetRefreshTokenByToken(tx, token1String); !found {
 			t.Error("Token 1 should exist")
@@ -495,13 +465,11 @@ func TestDeleteUserRefreshTokens(t *testing.T) {
 		}
 	})
 
-	// Delete all user tokens
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		DeleteUserRefreshTokens(tx, userId)
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify all tokens are deleted
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		if _, found := GetRefreshTokenByToken(tx, token1String); found {
 			t.Error("Token 1 should be deleted")
@@ -558,8 +526,6 @@ func TestCleanupExpiredRefreshTokens(t *testing.T) {
 	})
 }
 
-// The deploy that introduces hashing must not sign everyone out: rows written
-// before it are rewritten so the cookies people already hold keep working.
 func TestHashStoredRefreshTokensUpgradesLegacyRows(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -567,8 +533,6 @@ func TestHashStoredRefreshTokensUpgradesLegacyRows(t *testing.T) {
 	rawToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	var legacyId int
 
-	// Write a row in the pre-hashing shape: the token itself in the hash slot,
-	// no session, and a lookup entry keyed by the raw token.
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
 		legacy := RefreshToken{
@@ -615,7 +579,6 @@ func TestHashStoredRefreshTokensUpgradesLegacyRows(t *testing.T) {
 		}
 	})
 
-	// Running again finds nothing left to convert.
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		if converted := HashStoredRefreshTokens(tx); converted != 0 {
 			t.Errorf("second HashStoredRefreshTokens() = %d, want 0", converted)
@@ -625,7 +588,6 @@ func TestHashStoredRefreshTokensUpgradesLegacyRows(t *testing.T) {
 }
 
 func TestGenerateRefreshToken(t *testing.T) {
-	// Generate multiple tokens
 	token1, err := generateRefreshToken()
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
@@ -636,12 +598,10 @@ func TestGenerateRefreshToken(t *testing.T) {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
 
-	// Verify token format
 	if len(token1) != 64 {
 		t.Errorf("Token length = %d, want 64 hex characters", len(token1))
 	}
 
-	// Verify tokens are unique
 	if token1 == token2 {
 		t.Error("Generated tokens should be unique")
 	}

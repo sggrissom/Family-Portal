@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// configEnvVars is every variable the checks read. Tests set all of them so a
-// developer's own environment cannot change the outcome.
 var configEnvVars = []string{
 	"SITE_ROOT",
 	"GOOGLE_CLIENT_ID",
@@ -29,8 +27,6 @@ var configEnvVars = []string{
 	"METRICS_API_KEY",
 }
 
-// validConfigEnv is a configuration with no issues: every required setting
-// present and the optional APNs group left entirely unset.
 func validConfigEnv() map[string]string {
 	env := map[string]string{}
 	for _, name := range configEnvVars {
@@ -45,7 +41,6 @@ func validConfigEnv() map[string]string {
 	return env
 }
 
-// applyEnv sets the given environment for the duration of the test.
 func applyEnv(t *testing.T, env map[string]string) {
 	t.Helper()
 	for _, name := range configEnvVars {
@@ -53,8 +48,6 @@ func applyEnv(t *testing.T, env map[string]string) {
 	}
 }
 
-// storageDirs returns a scratch database path, static directory and log
-// directory that all pass the writability check.
 func storageDirs(t *testing.T) (dbPath, staticDir, logDir string) {
 	t.Helper()
 	root := t.TempDir()
@@ -69,7 +62,6 @@ func storageDirs(t *testing.T) (dbPath, staticDir, logDir string) {
 	return filepath.Join(dataDir, "db.bolt"), staticDir, logDir
 }
 
-// settingsWithIssues reports the Setting field of every issue found.
 func settingsWithIssues(issues []ConfigIssue) string {
 	settings := make([]string, 0, len(issues))
 	for _, issue := range issues {
@@ -255,9 +247,6 @@ func TestCheckProductionConfigTreatsAPNsAsAllOrNothing(t *testing.T) {
 	})
 }
 
-// TestCheckProductionConfigTreatsMetricsAsAllOrNothing: consuming
-// metrics-server is optional, but half-configuring it fails invisibly — a URL
-// with no key gets a 401 the panel degrades quietly past.
 func TestCheckProductionConfigTreatsMetricsAsAllOrNothing(t *testing.T) {
 	dbPath, staticDir, logDir := storageDirs(t)
 
@@ -290,9 +279,6 @@ func TestCheckProductionConfigTreatsMetricsAsAllOrNothing(t *testing.T) {
 	})
 
 	t.Run("public hostname is a failure", func(t *testing.T) {
-		// metrics-server binds loopback on this box; going out to the public
-		// name makes the request depend on DNS and TLS to reach a service one
-		// hop away.
 		env := validConfigEnv()
 		env["METRICS_URL"] = "https://metrics.grissom.zone/metrics"
 		env["METRICS_API_KEY"] = "a-key"

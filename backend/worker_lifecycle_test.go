@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// testWorker is a minimal worker built on the shared lifecycle, so the
-// start/stop/drain contract can be tested without a database, a mail relay, or
-// a face daemon behind it.
 type testWorker struct {
 	workerLifecycle
 	jobQueue  chan int
@@ -52,12 +49,9 @@ func TestStopDoesNotBlockOnABusyWorker(t *testing.T) {
 	worker := newTestWorker(4)
 	worker.Start()
 
-	// Hand it a job and let it start, then leave it wedged inside process.
 	worker.jobQueue <- 1
 	waitFor(t, func() bool { return len(worker.jobQueue) == 0 })
 
-	// The old form sent on an unbuffered channel, so this call would have
-	// blocked until the wedged job finished — which is to say, forever.
 	stopped := make(chan bool, 1)
 	go func() { stopped <- worker.stopAndWait(shortCtx(t, 200*time.Millisecond), false) }()
 
@@ -101,8 +95,6 @@ func TestStoppingAWorkerTwiceIsSafe(t *testing.T) {
 	if !worker.stopAndWait(shortCtx(t, time.Second), false) {
 		t.Fatal("first stop did not complete")
 	}
-	// A second stop closing the same channel would panic; the running flag is
-	// what prevents it.
 	if !worker.stopAndWait(shortCtx(t, time.Second), false) {
 		t.Fatal("second stop did not complete")
 	}
@@ -121,8 +113,6 @@ func TestAWorkerCanBeRestarted(t *testing.T) {
 	worker.Start()
 	worker.stopAndWait(shortCtx(t, time.Second), false)
 
-	// Start allocates fresh channels; reusing the closed ones would spin the
-	// loop instantly.
 	worker.Start()
 	if !worker.isRunning() {
 		t.Fatal("worker did not restart")
@@ -139,7 +129,7 @@ func TestDrainQueueHonorsItsDeadline(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // already expired
+	cancel()
 
 	if drained := drainQueue(ctx, queue, func(int) {}); drained != 0 {
 		t.Errorf("drained = %d, want 0 from an expired context", drained)

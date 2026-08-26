@@ -19,8 +19,6 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<Data>({ diagnostics: null, health: null, host: null });
   }
 
-  // A failure in either must not take the dashboard down with it — the panel's
-  // other cards are how you get to the logs that would explain the failure.
   const [[diagnostics], [health], [host]] = await Promise.all([
     server.GetDiagnostics({}),
     server.GetSystemHealth({}),
@@ -39,7 +37,6 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     return;
   }
 
-  // Check if user is admin (ID == 1)
   if (!currentAuth.isAdmin) {
     return (
       <div>
@@ -172,13 +169,6 @@ const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
   );
 };
 
-// The backup path, on a button.
-//
-// restore.md's open question is whether the snapshot endpoint actually works,
-// because nothing exercises it from this side: backupctl fetches it at night
-// and the only evidence is a file on a box this application cannot read. When
-// it does fail it fails as a 404 — the same answer an unauthorized caller gets
-// — so the panel is the only place that can say which cause it was.
 type BackupState = {
   checking: boolean;
   result: server.VerifyBackupPathResponse | null;
@@ -244,8 +234,6 @@ const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) =
         {formatBytes(result.receivedBytes)} in {(result.durationMs / 1000).toFixed(1)}s.
       </p>
     )}
-    {/* A replayed pass after an edited .env would be the most misleading thing
-        on this page, so a cached result says so and says how old it is. */}
     {result.cached && (
       <p className="problem-note">
         Checked {formatWhen(result.checkedAt)}. The snapshot endpoint allows ten requests an hour
@@ -256,7 +244,6 @@ const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) =
   </div>
 );
 
-// The snapshot is the whole database, so this is megabytes at best.
 function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];
   let size = bytes;
@@ -268,10 +255,6 @@ function formatBytes(bytes: number): string {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-// The problems feed. Everything in it was already available somewhere in the
-// panel; what was missing was one place that asks all of it at once. It stays
-// quiet when there is nothing to say, because a green page only means something
-// if it is capable of being red.
 const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
   if (health.healthy) {
     return (
@@ -304,9 +287,6 @@ const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
   return (
     <div className="problem-group">
       <h3>Configuration</h3>
-      {/* A release build refuses to start with any of these, so seeing one on
-          production means the environment changed under a running process. A
-          local build logs them and carries on. */}
       <p className="problem-note">
         {health.releaseBuild
           ? "This build refuses to start with these unset, so the environment has changed since it started."
@@ -323,9 +303,6 @@ const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
   );
 };
 
-// The two things the app genuinely cannot see about itself: how full the disk
-// is, and whether the site is erroring for people according to the proxy rather
-// than according to the app's own logging.
 const HostIssues = ({ host }: { host: server.HostProblems }) => {
   if (!host.available || (!host.diskLow && host.proxy5xx === 0)) return null;
 
@@ -394,10 +371,6 @@ const LogIssues = ({ logs }: { logs: server.LogProblems }) => {
   );
 };
 
-// One error, with its reference code as a link straight into the log viewer's
-// lookup. That code is the join key the whole error design is built around;
-// making it clickable is what turns the feed into a starting point rather than
-// a thing to read and then go searching manually.
 const ErrorLine = ({ entry }: { entry: server.PublicLogEntry }) => {
   const reference = referenceOf(entry);
 
@@ -414,8 +387,6 @@ const ErrorLine = ({ entry }: { entry: server.PublicLogEntry }) => {
   );
 };
 
-// ProcError writes the correlation id to data.requestId. The payload is
-// whatever JSON was logged, so this checks rather than assumes.
 function referenceOf(entry: server.PublicLogEntry): string | null {
   const data = entry.data;
   if (data && typeof data === "object" && !Array.isArray(data)) {
@@ -441,8 +412,6 @@ const PhotoIssues = ({ photos }: { photos: server.PhotoProblems }) => {
           </li>
         )}
         {photos.failed > 0 && <li>{photos.failed} failed to process</li>}
-        {/* Stranded rows are the ones nothing will ever retry, which is why
-            they are called out separately from ordinary failures. */}
         {photos.stuck > 0 && (
           <li>{photos.stuck} stuck in processing for over an hour with nothing attending them</li>
         )}
@@ -474,8 +443,6 @@ const PushIssues = ({ push }: { push: server.PushProblems }) => {
   );
 };
 
-// Relative time, because in this context "40m ago" is the useful form and a
-// wall-clock timestamp is one subtraction away from being useful.
 function formatWhen(timestamp: string): string {
   const then = new Date(timestamp).getTime();
   if (!Number.isFinite(then)) return timestamp;
@@ -492,9 +459,6 @@ function formatWhen(timestamp: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// The Host card. metrics-server collects all of this on a 30-second loop and
-// none of it was reachable from the browser; the traffic block in particular is
-// measured at the proxy, so it is the app's only outside view of itself.
 const Host = ({ metrics }: { metrics: server.HostMetricsResponse }) => {
   if (!metrics.available) {
     return (
@@ -542,7 +506,6 @@ const Host = ({ metrics }: { metrics: server.HostMetricsResponse }) => {
   );
 };
 
-// metrics-server reports sizes in kilobytes.
 function formatKb(kb: number): string {
   const units = ["KB", "MB", "GB", "TB"];
   let size = kb;
@@ -554,9 +517,6 @@ function formatKb(kb: number): string {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-// What is actually running, above everything else on the page. When something
-// is wrong the first two questions are "which build is this" and "how long has
-// it been up", and both have been answers you had to SSH for.
 const Diagnostics = ({ info }: { info: server.DiagnosticsResponse }) => (
   <div className="diagnostics">
     <div className="diagnostics-primary">
@@ -591,8 +551,6 @@ const DiagnosticItem = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-// Uptime is read at a glance, so it is rounded to whatever unit makes the
-// number small. "3d 4h" beats "277,481 seconds" every time.
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
 

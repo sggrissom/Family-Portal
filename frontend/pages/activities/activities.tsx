@@ -1,9 +1,3 @@
-// The top of the activities feature: the programs a family tracks, and the
-// seasons inside each one. Everything else in the feature hangs off a season,
-// so this page is where a season is created and named.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -18,9 +12,6 @@ import "./activities-styles";
 type ActivitiesData = {
   familyId: number;
   activities: server.Activity[];
-  // Seasons of selectedActivityId only. Switching activities reloads them
-  // rather than fetching every season up front — a family with several
-  // programs only ever looks at one at a time.
   selectedActivityId: number;
   seasons: server.Season[];
 };
@@ -584,11 +575,6 @@ const SeasonEditForm = ({ state, season }: { state: ActivitiesState; season: ser
   </div>
 );
 
-// ── family switching ────────────────────────────────────────────
-
-// selectFamily reloads the whole page for a user in more than one family.
-// Activities are family-scoped, so the list, the selection, and the season
-// list underneath it all belong to whichever family is showing.
 async function selectFamily(state: ActivitiesState, familyId: number) {
   if (state.familyId === familyId) return;
   state.familyId = familyId;
@@ -616,8 +602,6 @@ async function selectFamily(state: ActivitiesState, familyId: number) {
   state.loadingSeasons = false;
   await selectActivity(state, state.activities.length > 0 ? state.activities[0].id : 0);
 }
-
-// ── activity handlers ────────────────────────────────────────────────────────
 
 function onShowActivityForm(state: ActivitiesState) {
   state.addingActivity = true;
@@ -730,9 +714,6 @@ function onSelectActivity(state: ActivitiesState, activityId: number) {
   void selectActivity(state, activityId);
 }
 
-// selectActivity switches the season list over. Seasons for the previous
-// activity are dropped immediately so a slow load never shows one activity's
-// heading above another's seasons.
 async function selectActivity(state: ActivitiesState, activityId: number) {
   state.selectedActivityId = activityId;
   state.seasons = [];
@@ -748,7 +729,6 @@ async function selectActivity(state: ActivitiesState, activityId: number) {
   vlens.scheduleRedraw();
 
   const [resp, err] = await server.ListSeasons({ activityId });
-  // A second click while this one was in flight wins; drop the stale answer.
   if (state.selectedActivityId !== activityId) return;
   if (err || !resp) {
     state.error = err || "Failed to load seasons";
@@ -758,8 +738,6 @@ async function selectActivity(state: ActivitiesState, activityId: number) {
   state.loadingSeasons = false;
   vlens.scheduleRedraw();
 }
-
-// ── season handlers ──────────────────────────────────────────────────────────
 
 function onShowSeasonForm(state: ActivitiesState) {
   state.addingSeason = true;
@@ -776,8 +754,6 @@ function onCancelSeasonForm(state: ActivitiesState) {
   vlens.scheduleRedraw();
 }
 
-// Empty date inputs go over as null rather than "": the backend reads a nil
-// pointer as "not known yet" and stores the zero time.
 function dateOrNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;

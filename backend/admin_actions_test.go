@@ -12,9 +12,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// TestRequeueStuckPhotos: rows stranded in Processing are currently
-// unrecoverable without editing the database, and §1.3's old reprocess
-// implementation is how they got created.
 func TestRequeueStuckPhotos(t *testing.T) {
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
@@ -27,11 +24,8 @@ func TestRequeueStuckPhotos(t *testing.T) {
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		images := []Image{
-			// Stranded: claiming to be in progress since three hours ago.
 			{Id: 1, FamilyId: 1, Status: 1, CreatedAt: now.Add(-3 * time.Hour), FilePath: "photos/stuck.jpg", MimeType: "image/jpeg"},
-			// Genuinely in progress right now.
 			{Id: 2, FamilyId: 1, Status: 1, CreatedAt: now, FilePath: "photos/live.jpg", MimeType: "image/jpeg"},
-			// Failed and done are not this button's business.
 			{Id: 3, FamilyId: 1, Status: 2, CreatedAt: now.Add(-3 * time.Hour), FilePath: "photos/failed.jpg"},
 			{Id: 4, FamilyId: 1, Status: 0, CreatedAt: now.Add(-3 * time.Hour), FilePath: "photos/done.jpg"},
 		}
@@ -52,8 +46,6 @@ func TestRequeueStuckPhotos(t *testing.T) {
 	t.Run("queues only the stranded rows", func(t *testing.T) {
 		InitializePhotoWorker(10, db)
 		defer func() {
-			// The backlog is fed from a goroutine. Let it finish before
-			// tearing the worker down, or the teardown races the feeder.
 			waitForBacklogFeeders()
 			globalPhotoWorker.Stop()
 			globalPhotoWorker = nil
@@ -80,13 +72,10 @@ func TestRequeueStuckPhotos(t *testing.T) {
 	})
 }
 
-// TestRevokeUserSessions: one button for a lost phone, or a session that
-// outlived a JWT secret change.
 func TestRevokeUserSessions(t *testing.T) {
 	db := logTestDB(t, "test_revoke_sessions.db")
 	token := adminContext(t, db)
 
-	// Two logins for the target, and one for a bystander who must be untouched.
 	var targetId, bystanderId int
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		target := User{Id: 2, Name: "Target", Email: "target@example.com", Creation: time.Now(), LastLogin: time.Now()}
@@ -155,9 +144,6 @@ func TestRevokeUserSessions(t *testing.T) {
 	})
 }
 
-// TestPhotoWorkerRecordsAttempts — photo processing failure is the most common
-// real problem this site has and was the least visible: the worker's only
-// observable state was a queue length and a boolean.
 func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
@@ -177,7 +163,6 @@ func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 		globalPhotoWorker = nil
 	}()
 
-	// A reprocess job whose original is not on disk: fails at a known step.
 	globalPhotoWorker.processPhotoJob(PhotoProcessingJob{
 		ImageId:   1,
 		FamilyId:  1,
@@ -206,11 +191,6 @@ func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 	}
 }
 
-// TestVerifyBackupPath covers the check restore.md says is still unproven: the
-// snapshot endpoint, exercised over the path the nightly backup uses. Each
-// subtest is a real failure backupctl has reported or could report, and the
-// point of every one of them is that the panel names the cause rather than
-// leaving an operator to guess which of them a 404 meant.
 func TestVerifyBackupPath(t *testing.T) {
 	const token = "a-token-that-is-long-enough-to-be-real"
 
@@ -239,8 +219,6 @@ func TestVerifyBackupPath(t *testing.T) {
 	})
 
 	t.Run("a truncated stream fails", func(t *testing.T) {
-		// The failure that matters most: backupctl stores whatever body it
-		// receives, so a short stream is a backup that looks successful.
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Length", "4096")
 			_, _ = w.Write([]byte("only this much"))
@@ -258,8 +236,6 @@ func TestVerifyBackupPath(t *testing.T) {
 	})
 
 	t.Run("a snapshot with no declared length fails", func(t *testing.T) {
-		// Without Content-Length nothing downstream can tell a complete
-		// snapshot from a truncated one, which is the whole check.
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("first"))
 			w.(http.Flusher).Flush()
@@ -288,15 +264,12 @@ func TestVerifyBackupPath(t *testing.T) {
 		if result.OK || result.Status != http.StatusNotFound {
 			t.Fatalf("OK = %v, Status = %d, want false and 404", result.OK, result.Status)
 		}
-		// backupctl reports this as a hard failure and cannot say which cause
-		// it was. Saying both is the entire value of the button.
 		if !strings.Contains(result.Detail, "BACKUP_TOKEN") || !strings.Contains(result.Detail, "rate-limited") {
 			t.Errorf("Detail = %q, want the stale-token and spent-budget causes both named", result.Detail)
 		}
 	})
 
 	t.Run("409 is inconclusive rather than a failure", func(t *testing.T) {
-		// A nightly backup that happens to be running is not a broken backup.
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "snapshot already in progress", http.StatusConflict)
 		}))
@@ -342,10 +315,6 @@ func TestVerifyBackupPath(t *testing.T) {
 	})
 }
 
-// TestVerifyBackupPathCooldown: the snapshot endpoint allows ten requests an
-// hour and backupctl fetches from the same loopback address, so a row of
-// impatient presses could spend the nightly backup's budget — and an exhausted
-// budget answers 404, the symptom this check exists to explain.
 func TestVerifyBackupPathCooldown(t *testing.T) {
 	db := logTestDB(t, "test_verify_backup.db")
 	adminToken := adminContext(t, db)
@@ -390,18 +359,11 @@ func TestVerifyBackupPathCooldown(t *testing.T) {
 	})
 }
 
-// TestVerifyBackupPathAgainstTheRealEndpoint runs the check against the actual
-// snapshot handler behind the actual rate limiter, rather than against a stand
-// -in that answers however the test likes. The stand-in tests above say the
-// check reads a response correctly; this one says it agrees with the endpoint
-// it will really be pointed at.
 func TestVerifyBackupPathAgainstTheRealEndpoint(t *testing.T) {
 	const token = "a-backup-token-of-at-least-32-characters"
 
 	db := logTestDB(t, "test_snapshot_endpoint.db")
 
-	// The limiter is constructed per wrapper, so this test owns its own budget
-	// and cannot spend anyone else's.
 	t.Setenv("RATE_LIMIT_DISABLED", "")
 
 	mux := http.NewServeMux()
@@ -421,7 +383,6 @@ func TestVerifyBackupPathAgainstTheRealEndpoint(t *testing.T) {
 	})
 
 	t.Run("a token the endpoint does not hold is refused", func(t *testing.T) {
-		// What an .env edited since startup looks like from here.
 		result := runBackupVerification(server.URL, "a-different-token-of-at-least-32-chars")
 
 		if result.OK || result.Status != http.StatusNotFound {
@@ -430,10 +391,6 @@ func TestVerifyBackupPathAgainstTheRealEndpoint(t *testing.T) {
 	})
 
 	t.Run("a spent budget looks exactly like a bad token", func(t *testing.T) {
-		// This is why the check has a cooldown: the endpoint disguises a rate
-		// limit as a 404, so pressing the button often enough to exhaust the
-		// budget would break the nightly backup *and* report the failure as a
-		// token problem.
 		var last VerifyBackupPathResponse
 		for i := 0; i < 12; i++ {
 			last = runBackupVerification(server.URL, token)

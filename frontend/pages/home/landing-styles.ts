@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Landing Page Styles
 block(`
 .landing-container {
   max-width: 1200px;

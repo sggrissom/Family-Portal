@@ -42,12 +42,11 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdatePhotoTags)
 }
 
-// Request/Response types
 type AddPhotoRequest struct {
-	PersonIds   []int  `json:"personIds"` // Array of person IDs to tag in the photo
+	PersonIds   []int  `json:"personIds"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	InputType   string `json:"inputType"` // 'today' | 'date' | 'age'
+	InputType   string `json:"inputType"`
 	PhotoDate   string `json:"photoDate,omitempty"`
 	AgeYears    *int   `json:"ageYears,omitempty"`
 	AgeMonths   *int   `json:"ageMonths,omitempty"`
@@ -93,11 +92,10 @@ type GetPhotoStatusRequest struct {
 }
 
 type GetPhotoStatusResponse struct {
-	Status int `json:"status"` // 0 = active, 1 = processing, 2 = failed
+	Status int `json:"status"`
 }
 
 type ListFamilyPhotosRequest struct {
-	// Optional person filter. When set, only returns photos tagged with this person.
 	PersonId int `json:"personId,omitempty"`
 }
 
@@ -129,7 +127,6 @@ type RemovePersonFromPhotoResponse struct {
 	Success bool `json:"success"`
 }
 
-// Database types
 type Image struct {
 	Id               int       `json:"id"`
 	FamilyId         int       `json:"familyId"`
@@ -144,22 +141,20 @@ type Image struct {
 	Description      string    `json:"description"`
 	PhotoDate        time.Time `json:"photoDate"`
 	CreatedAt        time.Time `json:"createdAt"`
-	Status           int       `json:"status"`         // 0 = active, 1 = processing, 2 = hidden
-	AnalysisStatus   int       `json:"analysisStatus"` // 0 = pending, 1 = analyzing, 2 = done, 3 = failed
+	Status           int       `json:"status"`
+	AnalysisStatus   int       `json:"analysisStatus"`
 	TagIds           []int     `json:"tagIds,omitempty"`
 }
 
-// PhotoPerson represents the many-to-many relationship between photos and people
 type PhotoPerson struct {
 	Id         int       `json:"id"`
 	PhotoId    int       `json:"photoId"`
 	PersonId   int       `json:"personId"`
 	FamilyId   int       `json:"familyId"`
 	CreatedAt  time.Time `json:"createdAt"`
-	AutoTagged bool      `json:"autoTagged"` // true = set by face recognition, false = manually tagged
+	AutoTagged bool      `json:"autoTagged"`
 }
 
-// Packing function for vbolt serialization
 func PackImage(self *Image, buf *vpack.Buffer) {
 	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
@@ -181,7 +176,6 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	}
 }
 
-// Packing function for PhotoPerson
 func PackPhotoPerson(self *PhotoPerson, buf *vpack.Buffer) {
 	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
@@ -194,7 +188,6 @@ func PackPhotoPerson(self *PhotoPerson, buf *vpack.Buffer) {
 	}
 }
 
-// PhotoTag represents the many-to-many relationship between photos and tags
 type PhotoTag struct {
 	Id        int
 	PhotoId   int
@@ -212,20 +205,15 @@ func PackPhotoTag(self *PhotoTag, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 }
 
-// Buckets for vbolt database storage
 var ImagesBkt = vbolt.Bucket(&cfg.Info, "images", vpack.FInt, PackImage)
 var PhotoPersonBkt = vbolt.Bucket(&cfg.Info, "photo_person", vpack.FInt, PackPhotoPerson)
 
-// ImageByFamilyIndex: term = family_id, target = image_id
 var ImageByFamilyIndex = vbolt.Index(&cfg.Info, "image_by_family", vpack.FInt, vpack.FInt)
 
-// PhotoPersonByPhotoIndex: term = photo_id, target = photo_person_id
 var PhotoPersonByPhotoIndex = vbolt.Index(&cfg.Info, "photo_person_by_photo", vpack.FInt, vpack.FInt)
 
-// PhotoPersonByPersonIndex: term = person_id, target = photo_person_id
 var PhotoPersonByPersonIndex = vbolt.Index(&cfg.Info, "photo_person_by_person", vpack.FInt, vpack.FInt)
 
-// PhotoPersonByFamilyIndex: term = family_id, target = photo_person_id
 var PhotoPersonByFamilyIndex = vbolt.Index(&cfg.Info, "photo_person_by_family", vpack.FInt, vpack.FInt)
 
 var PhotoTagBkt = vbolt.Bucket(&cfg.Info, "photo_tags", vpack.FInt, PackPhotoTag)
@@ -233,7 +221,6 @@ var PhotoTagByPhotoIndex = vbolt.Index(&cfg.Info, "photo_tag_by_photo", vpack.FI
 var PhotoTagByTagIndex = vbolt.Index(&cfg.Info, "photo_tag_by_tag", vpack.FInt, vpack.FInt)
 var PhotoTagByFamilyIndex = vbolt.Index(&cfg.Info, "photo_tag_by_family", vpack.FInt, vpack.FInt)
 
-// Database helper functions
 func GetImageById(tx *vbolt.Tx, imageId int) (image Image) {
 	vbolt.Read(tx, ImagesBkt, imageId, &image)
 	return
@@ -244,7 +231,6 @@ func GetPhotoPersonById(tx *vbolt.Tx, photoPersonId int) (photoPerson PhotoPerso
 	return
 }
 
-// Get all PhotoPerson records for a specific photo
 func GetPhotoPersonsByPhoto(tx *vbolt.Tx, photoId int) (photoPersons []PhotoPerson) {
 	var photoPersonIds []int
 	vbolt.ReadTermTargets(tx, PhotoPersonByPhotoIndex, photoId, &photoPersonIds, vbolt.Window{})
@@ -252,7 +238,6 @@ func GetPhotoPersonsByPhoto(tx *vbolt.Tx, photoId int) (photoPersons []PhotoPers
 	return
 }
 
-// Get all PhotoPerson records for a specific person
 func GetPhotoPersonsByPerson(tx *vbolt.Tx, personId int) (photoPersons []PhotoPerson) {
 	var photoPersonIds []int
 	vbolt.ReadTermTargets(tx, PhotoPersonByPersonIndex, personId, &photoPersonIds, vbolt.Window{})
@@ -260,7 +245,6 @@ func GetPhotoPersonsByPerson(tx *vbolt.Tx, personId int) (photoPersons []PhotoPe
 	return
 }
 
-// Get all people associated with a photo
 func GetPhotoPeople(tx *vbolt.Tx, photoId int) (people []Person) {
 	photoPersons := GetPhotoPersonsByPhoto(tx, photoId)
 	people = make([]Person, 0, len(photoPersons))
@@ -274,7 +258,6 @@ func GetPhotoPeople(tx *vbolt.Tx, photoId int) (people []Person) {
 	return
 }
 
-// Get all images for a specific person
 func GetPersonImages(tx *vbolt.Tx, personId int) (images []Image) {
 	photoPersons := GetPhotoPersonsByPerson(tx, personId)
 	images = make([]Image, 0, len(photoPersons))
@@ -288,7 +271,6 @@ func GetPersonImages(tx *vbolt.Tx, personId int) (images []Image) {
 	return
 }
 
-// Get all images for a family
 func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	var imageIds []int
 	vbolt.ReadTermTargets(tx, ImageByFamilyIndex, familyId, &imageIds, vbolt.Window{})
@@ -296,10 +278,6 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	return
 }
 
-// GetVisibleImages returns the photos of every family the user belongs to, plus
-// the photos of people shared into those families by a link carrying photos.
-// The shared half is per person rather than per family: a link opens up the
-// people it shares, not the sharing family's whole album.
 func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
 	seen := make(map[int]bool)
 	add := func(image Image) {
@@ -418,7 +396,6 @@ func removePhotoTagsByTag(tx *vbolt.Tx, tagId int) {
 	}
 }
 
-// Add a person to a photo
 func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (photoPersonId int) {
 	photoPerson := PhotoPerson{
 		Id:        vbolt.NextIntId(tx, PhotoPersonBkt),
@@ -436,7 +413,6 @@ func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (ph
 	return photoPerson.Id
 }
 
-// Remove a person from a photo
 func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
 	photoPersons := GetPhotoPersonsByPhoto(tx, photoId)
 
@@ -451,7 +427,6 @@ func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
 	}
 }
 
-// Generate unique filename
 func generateUniqueFilename(originalFilename string) (string, error) {
 	ext := filepath.Ext(originalFilename)
 	bytes := make([]byte, 16)
@@ -462,7 +437,6 @@ func generateUniqueFilename(originalFilename string) (string, error) {
 	return filename, nil
 }
 
-// Validate image file type
 func isValidImageType(mimeType string) bool {
 	validTypes := []string{
 		"image/jpeg",
@@ -478,9 +452,7 @@ func isValidImageType(mimeType string) bool {
 	return false
 }
 
-// Get image dimensions
 func getImageDimensions(file multipart.File) (int, int, error) {
-	// Reset file position
 	file.Seek(0, 0)
 
 	config, _, err := image.DecodeConfig(file)
@@ -488,23 +460,19 @@ func getImageDimensions(file multipart.File) (int, int, error) {
 		return 0, 0, err
 	}
 
-	// Reset file position for later use
 	file.Seek(0, 0)
 
 	return config.Width, config.Height, nil
 }
 
-// Extract date from EXIF metadata
 func extractExifDate(fileData []byte) (time.Time, error) {
 	reader := bytes.NewReader(fileData)
 
-	// Decode EXIF data
 	x, err := exif.Decode(reader)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to decode EXIF: %w", err)
 	}
 
-	// Try to get DateTime tag (when photo was taken)
 	tm, err := x.DateTime()
 	if err != nil {
 		return time.Time{}, fmt.Errorf("no DateTime found in EXIF: %w", err)
@@ -513,24 +481,19 @@ func extractExifDate(fileData []byte) (time.Time, error) {
 	return tm, nil
 }
 
-// Generate default title if none provided
 func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	if !photoDate.IsZero() {
 		return fmt.Sprintf("Photo from %s", photoDate.Format("Jan 2, 2006"))
 	}
-	// Fall back to filename without extension
 	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 }
 
-// Calculate photo date based on input type
 func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
 	switch inputType {
 	case "auto":
-		// Try to extract from EXIF first
 		if exifDate, err := extractExifDate(fileData); err == nil {
 			return exifDate, nil
 		}
-		// Fall back to today if EXIF extraction fails
 		return time.Now(), nil
 	case "today":
 		return time.Now(), nil
@@ -549,7 +512,6 @@ func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMo
 			months = *ageMonths
 		}
 
-		// Calculate date when person was this age
 		targetAge := time.Duration(*ageYears)*365*24*time.Hour + time.Duration(months)*30*24*time.Hour
 		photoDateTime := person.Birthday.Add(targetAge)
 
@@ -559,53 +521,44 @@ func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMo
 	}
 }
 
-// Upload photo handler
 func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse multipart form (32MB max to account for larger images)
-	// Validate file size limit (50MB max)
-	const maxFileSize = 50 << 20 // 50MB
+	const maxFileSize = 50 << 20
 	if r.ContentLength > maxFileSize {
 		RespondFileTooLargeError(w, r, "50MB")
 		return
 	}
 
-	err := r.ParseMultipartForm(32 << 20) // 32MB in memory, rest on disk
+	err := r.ParseMultipartForm(32 << 20)
 	if err != nil {
 		RespondValidationError(w, r, "That upload could not be read. Please try again.", err.Error())
 		return
 	}
 
-	// Get authenticated user from request context
 	user, ok := GetUserFromContext(r)
 	if !ok {
 		RespondAuthError(w, r, "Authentication required")
 		return
 	}
 
-	// Log photo upload start
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload started", map[string]interface{}{
 		"userId": user.Id,
 	})
 
-	// Parse form data for person IDs (can be multiple)
 	personIdsStr := r.FormValue("personIds")
 	var personIds []int
 
 	if personIdsStr != "" {
-		// Parse JSON array of person IDs
 		if err := json.Unmarshal([]byte(personIdsStr), &personIds); err != nil {
 			RespondValidationError(w, r, "The people tagged on this photo could not be read.", err.Error())
 			return
 		}
 	}
 
-	// familyId names the family the photo belongs to. Absent or blank means
-	// the caller's primary family.
 	var requestedFamilyId int
 	if familyIdStr := r.FormValue("familyId"); familyIdStr != "" {
 		parsed, convErr := strconv.Atoi(familyIdStr)
@@ -634,7 +587,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get the uploaded file
 	file, fileHeader, err := r.FormFile("photo")
 	if err != nil {
 		RespondValidationError(w, r, "Choose a photo to upload.", err.Error())
@@ -642,33 +594,23 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Validate file size (32MB max for original upload)
-	if fileHeader.Size > 32<<20 { // 32MB
+	if fileHeader.Size > 32<<20 {
 		RespondFileTooLargeError(w, r, "32MB")
 		return
 	}
 
-	// Validate file type
 	mimeType := fileHeader.Header.Get("Content-Type")
 	if !isValidImageType(mimeType) {
 		RespondInvalidFileTypeError(w, r, "JPEG, PNG, GIF")
 		return
 	}
 
-	// Get image dimensions
 	width, height, err := getImageDimensions(file)
 	if err != nil {
 		RespondValidationError(w, r, "That file could not be read as an image. Try a JPEG or PNG.", err.Error())
 		return
 	}
 
-	// Database operations.
-	//
-	// Every failure below abandons the transaction by returning, which is
-	// correct — but it used to lose *why*, and the caller answered every one of
-	// them with the same "Failed to upload photo" 500. A user who tagged
-	// somebody else's child and a user whose disk is full deserve different
-	// answers, so each path records one.
 	var image Image
 	var validPersons []Person
 	var uploadErr *AppError
@@ -680,15 +622,11 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Validate all person IDs exist and belong to that family
 		if len(personIds) > 0 {
 			validPersons = make([]Person, 0, len(personIds))
 			for _, personId := range personIds {
 				person := GetPersonById(tx, personId)
 				if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
-					// Deliberately the same answer for "no such person" and
-					// "not your person": telling them apart would let a caller
-					// probe for ids outside their family.
 					uploadErr = NewAppError(ErrCodeValidation, "One of the tagged people is not in your family.")
 					return
 				}
@@ -696,14 +634,12 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Generate unique filename
 		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
 		if err != nil {
 			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
 			return
 		}
 
-		// Ensure photos directory exists
 		photosDir := filepath.Join(cfg.StaticDir, "photos")
 		err = os.MkdirAll(photosDir, 0755)
 		if err != nil {
@@ -711,7 +647,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Read file into memory for processing
 		file.Seek(0, 0)
 		fileData, err := io.ReadAll(file)
 		if err != nil {
@@ -719,8 +654,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Calculate photo date (now that we have fileData for EXIF)
-		// Use first person for age-based calculation, or empty person for non-age calculations
 		var referencePerson Person
 		if len(validPersons) > 0 {
 			referencePerson = validPersons[0]
@@ -731,12 +664,10 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Generate title if not provided
 		if title == "" {
 			title = generateDefaultTitle(fileHeader.Filename, calculatedPhotoDate)
 		}
 
-		// Save original file for background processing
 		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
 		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
 		if origFile, err := os.Create(originalPath); err != nil {
@@ -747,14 +678,13 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			origFile.Close()
 		}
 
-		// Create image record
 		image = Image{
 			Id:               vbolt.NextIntId(tx, ImagesBkt),
 			FamilyId:         familyId,
 			OwnerUserId:      user.Id,
 			OriginalFilename: fileHeader.Filename,
 			MimeType:         mimeType,
-			FileSize:         int(fileHeader.Size), // Original file size for now
+			FileSize:         int(fileHeader.Size),
 			Width:            width,
 			Height:           height,
 			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
@@ -762,14 +692,12 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			Description:      description,
 			PhotoDate:        calculatedPhotoDate,
 			CreatedAt:        time.Now(),
-			Status:           1, // Processing
+			Status:           1,
 		}
 
-		// Save image to database
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 
-		// Create PhotoPerson relationships for each tagged person
 		for _, person := range validPersons {
 			AddPersonToPhoto(tx, image.Id, person.Id, familyId)
 		}
@@ -777,27 +705,20 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Check if image was created (transaction succeeded)
 	if uploadErr != nil {
 		RespondWithError(w, r, uploadErr, statusForErrorCode(uploadErr.Code))
 		return
 	}
 	if image.Id == 0 {
-		// The transaction gave up without saying why. That is a bug rather than
-		// a user error, so it is reported as one.
 		RespondUnexpectedError(w, r, errors.New("photo upload transaction produced no image"))
 		return
 	}
 
-	// Queue photo for background processing
-	// Reset file reader to get file data for processing
 	file.Seek(0, 0)
 	fileData, err := io.ReadAll(file)
 	if err != nil {
 		log.Printf("Failed to read file for processing queue: %v", err)
-		// Don't fail the upload, just log the error
 	} else {
-		// Create processing job
 		job := PhotoProcessingJob{
 			ImageId:        image.Id,
 			FamilyId:       image.FamilyId,
@@ -808,12 +729,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			OriginalHeight: height,
 		}
 
-		// Queue the job for processing.
-		//
-		// A refused job used to leave the row at status 1, "processing", with
-		// nothing on its way to ever finish it — a photo stuck on a spinner
-		// forever. Marking it failed hides it and lets the user try again,
-		// which is the only accurate thing to say.
 		if err := QueuePhotoProcessing(job); err != nil {
 			log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
 			markPhotoFailed(image.Id)
@@ -824,7 +739,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Log successful photo upload
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{
 		"userId":      user.Id,
 		"photoId":     image.Id,
@@ -835,7 +749,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		"filename":    fileHeader.Filename,
 	})
 
-	// Return success response (TagIds will be empty for new uploads)
 	image.TagIds = []int{}
 	response := AddPhotoResponse{
 		Image: image,
@@ -845,9 +758,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// markPhotoFailed hides a photo whose processing will never happen. Status 2 is
-// what the worker sets on a failed job, and every read path already skips it, so
-// this reuses that state rather than inventing a second kind of broken.
 func markPhotoFailed(imageId int) {
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 		var image Image
@@ -860,18 +770,14 @@ func markPhotoFailed(imageId int) {
 	})
 }
 
-// photoCacheControl is the caching policy for a served photo variant. It is
-// named so the handler and the test that constrains it cannot drift apart.
 const photoCacheControl = "private, max-age=300, must-revalidate"
 
-// Serve photo handler
 func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract image ID from URL path (e.g., /api/photo/123 -> 123, /api/photo/123/thumb -> 123 + thumb)
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/photo/"), "/")
 	if len(pathParts) == 0 || pathParts[0] == "" {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -884,20 +790,17 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for size variant (thumb, medium, large)
 	sizeVariant := ""
 	if len(pathParts) > 1 {
 		sizeVariant = pathParts[1]
 	}
 
-	// Get authenticated user from request context
 	user, ok := GetUserFromContext(r)
 	if !ok {
-		RespondNotFoundError(w, r, "Not found") // Return 404 to avoid leaking photo existence
+		RespondNotFoundError(w, r, "Not found")
 		return
 	}
 
-	// Get image from database and check the user may see it
 	var image Image
 	var canAccess bool
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
@@ -910,23 +813,19 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If photo is still processing, serve placeholder
 	if image.Status == 1 {
 		serveProcessingPlaceholder(w, r)
 		return
 	}
 
-	// If photo failed processing, serve error placeholder or 404
 	if image.Status == 2 {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 
-	// Determine optimal format based on browser support
 	acceptHeader := r.Header.Get("Accept")
 	optimalFormat := GetOptimalImageFormat(acceptHeader)
 
-	// Validate size variant
 	validSizes := map[string]bool{
 		"small": true, "thumb": true, "medium": true,
 		"large": true, "xlarge": true, "xxlarge": true, "original": true,
@@ -937,24 +836,20 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default to large if no size specified
 	if sizeVariant == "" {
 		sizeVariant = "large"
 	}
 
-	// Construct file path based on size and optimal format
 	basePath := filepath.Join(cfg.StaticDir, image.FilePath)
 	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
 	var fullPath string
 	var contentType string
 
-	// Handle original size (serve as-is)
 	if sizeVariant == "original" {
 		fullPath = baseFilename + "_original" + filepath.Ext(basePath)
 		contentType = image.MimeType
 	} else {
-		// Try to find the best format variant
 		for _, format := range []string{optimalFormat, "webp", "jpeg"} {
 			var ext string
 			switch format {
@@ -975,14 +870,12 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 				fullPath = baseFilename + "_" + sizeVariant + ext
 			}
 
-			// Check if this variant exists
 			if _, err := os.Stat(fullPath); err == nil {
 				break
 			}
 		}
 	}
 
-	// Validate that the file path doesn't contain directory traversal
 	cleanPath := filepath.Clean(fullPath)
 	staticDir := filepath.Clean(cfg.StaticDir)
 	if !strings.HasPrefix(cleanPath, staticDir) {
@@ -990,16 +883,13 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if file exists, fall back to JPEG large if variant doesn't exist
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		if sizeVariant != "original" {
-			// Fall back to JPEG large image
 			fallbackPath := baseFilename + ".jpg"
 			if _, err := os.Stat(fallbackPath); err == nil {
 				fullPath = fallbackPath
 				contentType = "image/jpeg"
 			} else {
-				// Ultimate fallback to original file
 				originalPath := baseFilename + "_original" + filepath.Ext(basePath)
 				if _, err := os.Stat(originalPath); err == nil {
 					fullPath = originalPath
@@ -1015,30 +905,15 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set content type based on determined optimal format
 	w.Header().Set("Content-Type", contentType)
 
-	// Photos are the one authenticated response worth caching at all — a grid
-	// re-renders constantly and the bytes do not change often.
-	//
-	// "private" keeps them out of shared caches; only the browser that asked
-	// for them may hold them. The long immutable year this used to declare was
-	// wrong twice over: the URL carries no content hash, so a reprocessed photo
-	// would have stayed stale in every client for a year, and a family's photos
-	// should not sit on disk that long after they stop using the machine. Five
-	// minutes of free reuse, then revalidate against the ETag, which already
-	// covers the id, variant, creation time, and processing status.
 	w.Header().Set("Cache-Control", photoCacheControl)
 	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix(), image.Status))
 
-	// Add Vary header for content negotiation
 	w.Header().Set("Vary", "Accept")
 
-	// Serve the file
 	http.ServeFile(w, r, fullPath)
 }
-
-// vbeam procedures for photo operations
 
 type UpdatePhotoTagsRequest struct {
 	PhotoId int   `json:"photoId"`
@@ -1071,8 +946,6 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 	if tagIds == nil {
 		tagIds = []int{}
 	}
-	// The photo's own family is the context, so the tags have to live in it —
-	// a tag from another of the user's families is not in scope here.
 	for _, tagId := range tagIds {
 		tag := getTagById(ctx.Tx, tagId)
 		if tag.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, tag.FamilyId, AccessContribute) {
@@ -1108,29 +981,22 @@ func UpdatePhotoTags(ctx *vbeam.Context, req UpdatePhotoTagsRequest) (resp Updat
 	return
 }
 
-// GetPhoto retrieves a photo by ID with family access control
 func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Get photo from database
 	photo := GetImageById(ctx.Tx, req.Id)
 
-	// Check if photo exists and the user has access, either through the owning
-	// family or because someone tagged in it was shared into one of theirs.
 	if !CanAccessPhoto(ctx.Tx, user, photo, AccessView) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
-	// Get all people associated with this photo
 	people := GetPhotoPeople(ctx.Tx, photo.Id)
 
-	// Calculate age for all people
 	for i := range people {
 		people[i].Age = calculateAge(people[i].Birthday)
 	}
@@ -1141,53 +1007,44 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 	return
 }
 
-// UpdatePhoto updates photo metadata (title, description, date)
 func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if err = validateUpdatePhotoRequest(req); err != nil {
 		return
 	}
 
 	vbeam.UseWriteTx(ctx)
 
-	// Get existing photo
 	photo := GetImageById(ctx.Tx, req.Id)
 	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
-	// Get people for date calculation (use first person if available)
 	people := GetPhotoPeople(ctx.Tx, photo.Id)
 	var referencePerson Person
 	if len(people) > 0 {
 		referencePerson = people[0]
 	}
 
-	// Calculate new photo date
 	calculatedPhotoDate, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
 	if err != nil {
 		return
 	}
 
-	// Update photo fields
 	photo.Title = strings.TrimSpace(req.Title)
 	photo.Description = strings.TrimSpace(req.Description)
 	photo.PhotoDate = calculatedPhotoDate
 
-	// Generate title if empty
 	if photo.Title == "" {
 		photo.Title = generateDefaultTitle(photo.OriginalFilename, calculatedPhotoDate)
 	}
 
-	// Save updated photo
 	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
 
 	resp.Image = photo
@@ -1196,9 +1053,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	return
 }
 
-// DeletePhoto removes a photo and all associated files
 func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
@@ -1207,17 +1062,14 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 
 	vbeam.UseWriteTx(ctx)
 
-	// Get photo to delete
 	photo := GetImageById(ctx.Tx, req.Id)
 	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessAdmin) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
-	// Delete photo files from disk
 	err = deletePhotoFiles(photo)
 	if err != nil {
-		// Log error but continue with database cleanup
 		fmt.Printf("Warning: Failed to delete photo files for ID %d: %v\n", photo.Id, err)
 	}
 
@@ -1229,10 +1081,6 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 	return
 }
 
-// deletePhotoRecordTx removes a photo row and everything that joins to it. The
-// files on disk are the caller's problem: deleting one photo can do it inline,
-// but deleting a whole family's worth is better done after the transaction
-// commits, so a slow filesystem does not hold a write lock.
 func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -1249,19 +1097,15 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
 }
 
-// Helper function to delete all photo file variants
 func deletePhotoFiles(photo Image) error {
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
 	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
-	// All size variants
 	sizes := []string{"small", "thumb", "medium", "large", "xlarge", "xxlarge"}
-	// All formats
 	formats := []string{"jpg", "webp", "avif", "png"}
 
 	var filesToDelete []string
 
-	// Add all size/format combinations
 	for _, size := range sizes {
 		for _, format := range formats {
 			var fileName string
@@ -1274,20 +1118,18 @@ func deletePhotoFiles(photo Image) error {
 		}
 	}
 
-	// Add original backup file
 	filesToDelete = append(filesToDelete, base+"_original"+filepath.Ext(basePath))
 
 	var lastError error
 	for _, filePath := range filesToDelete {
 		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			lastError = err // Keep track of last error but continue
+			lastError = err
 		}
 	}
 
 	return lastError
 }
 
-// Validation for update request
 func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	if req.Id <= 0 {
 		return errors.New("Invalid photo ID")
@@ -1320,9 +1162,7 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	return nil
 }
 
-// serveProcessingPlaceholder serves a placeholder image for photos still being processed
 func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
-	// Generate a simple SVG placeholder
 	svgContent := `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
 		<rect width="100%" height="100%" fill="#f0f0f0"/>
 		<circle cx="200" cy="120" r="30" fill="#d0d0d0">
@@ -1342,19 +1182,15 @@ func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(svgContent))
 }
 
-// GetPhotoStatus returns the processing status of a photo
 func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhotoStatusResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Get photo from database
 	photo := GetImageById(ctx.Tx, req.Id)
 
-	// Check if photo exists and user has access
 	if !CanAccessPhoto(ctx.Tx, user, photo, AccessView) {
 		err = ErrAuthFailure
 		return
@@ -1365,17 +1201,14 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 }
 
 func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp ListFamilyPhotosResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Default: all family photos
 	images := GetVisibleImages(ctx.Tx, user)
 
-	// Optional: only photos tagged with this person
 	if req.PersonId > 0 {
 		photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.PersonId)
 		images = make([]Image, 0, len(photoPersons))
@@ -1396,26 +1229,21 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		}
 	}
 
-	// Filter out failed photos and create PhotoWithPeople structs
 	resp.Photos = make([]PhotoWithPeople, 0, len(images))
 
 	for _, image := range images {
-		// Skip failed photos (status=2)
 		if image.Status == 2 {
 			continue
 		}
 
-		// Get all people associated with this photo
 		people := GetPhotoPeople(ctx.Tx, image.Id)
 
-		// Calculate age for all people
 		for i := range people {
 			people[i].Age = calculateAge(people[i].Birthday)
 		}
 
 		image.TagIds = GetPhotoTagIds(ctx.Tx, image.Id)
 
-		// Add to response (photos without people are still included)
 		resp.Photos = append(resp.Photos, PhotoWithPeople{
 			Image:  image,
 			People: people,
@@ -1425,16 +1253,13 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	return
 }
 
-// AddPeopleToPhoto adds multiple people to an existing photo
 func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp AddPeopleToPhotoResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if req.PhotoId <= 0 {
 		err = errors.New("Invalid photo ID")
 		return
@@ -1447,35 +1272,29 @@ func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp Add
 
 	vbeam.UseWriteTx(ctx)
 
-	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
 	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
-	// Get currently associated people to avoid duplicates
 	existingPeople := GetPhotoPeople(ctx.Tx, req.PhotoId)
 	existingPersonIds := make(map[int]bool)
 	for _, person := range existingPeople {
 		existingPersonIds[person.Id] = true
 	}
 
-	// Add new people
 	var addedPeople []Person
 	for _, personId := range req.PersonIds {
-		// Skip if already associated
 		if existingPersonIds[personId] {
 			continue
 		}
 
-		// Validate person belongs to the photo's family
 		person := GetPersonById(ctx.Tx, personId)
 		if person.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, person.FamilyId, AccessContribute) {
-			continue // Skip invalid person but don't fail the whole operation
+			continue
 		}
 
-		// Add the association
 		AddPersonToPhoto(ctx.Tx, req.PhotoId, personId, photo.FamilyId)
 		person.Age = calculateAge(person.Birthday)
 		addedPeople = append(addedPeople, person)
@@ -1488,16 +1307,13 @@ func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp Add
 	return
 }
 
-// RemovePersonFromPhotoProc removes a person from a photo
 func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequest) (resp RemovePersonFromPhotoResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if req.PhotoId <= 0 {
 		err = errors.New("Invalid photo ID")
 		return
@@ -1510,21 +1326,18 @@ func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequ
 
 	vbeam.UseWriteTx(ctx)
 
-	// Get and validate photo
 	photo := GetImageById(ctx.Tx, req.PhotoId)
 	if photo.Id == 0 || !CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
 		err = errors.New("Photo not found or access denied")
 		return
 	}
 
-	// Validate person belongs to the photo's family
 	person := GetPersonById(ctx.Tx, req.PersonId)
 	if person.Id == 0 || !CanFamilyAccess(ctx.Tx, photo.FamilyId, person.FamilyId, AccessContribute) {
 		err = errors.New("Person not found or access denied")
 		return
 	}
 
-	// Remove the association
 	RemovePersonFromPhoto(ctx.Tx, req.PhotoId, req.PersonId)
 
 	vbolt.TxCommit(ctx.Tx)

@@ -11,7 +11,7 @@ interface ResponsiveImageProps {
   onClick?: () => void;
   width?: number;
   height?: number;
-  status?: number; // 0 = active, 1 = processing, 2 = failed
+  status?: number;
 }
 
 export const ResponsiveImage = ({
@@ -26,7 +26,6 @@ export const ResponsiveImage = ({
   height,
   status = 0,
 }: ResponsiveImageProps) => {
-  // Define responsive breakpoints and corresponding image sizes
   const imageSizes = [
     { size: "thumb", width: 300 },
     { size: "medium", width: 600 },
@@ -34,25 +33,20 @@ export const ResponsiveImage = ({
     { size: "xlarge", width: 1200 },
   ];
 
-  // Generate srcset for different sizes
   const srcset = imageSizes
     .map(img => `/api/photo/${photoId}/${img.size} ${img.width}w`)
     .join(", ");
 
-  // Default src (fallback)
   const src = `/api/photo/${photoId}/medium`;
 
-  // Add processing wrapper class if needed
   const wrapperClass = status === 1 ? "processing-image-wrapper" : undefined;
   const imageClass = status === 1 ? `${className || ""} processing-image`.trim() : className;
 
   const imageElement = (
     <picture>
-      {/* Modern formats with srcset */}
       <source srcSet={srcset} sizes={sizes} type="image/avif" />
       <source srcSet={srcset} sizes={sizes} type="image/webp" />
 
-      {/* Fallback img element */}
       <img
         src={src}
         alt={alt}
@@ -68,7 +62,6 @@ export const ResponsiveImage = ({
     </picture>
   );
 
-  // Wrap with processing indicator if needed
   if (status === 1) {
     return (
       <div className={wrapperClass}>
@@ -126,9 +119,9 @@ interface ProfileImageProps {
   loading?: "lazy" | "eager";
   fetchpriority?: "high" | "low" | "auto";
   status?: number;
-  cropX?: number; // 0-100 (default 50 = center)
-  cropY?: number; // 0-100 (default 50 = center)
-  cropScale?: number; // 1.0+ (default 1.0 = no zoom)
+  cropX?: number;
+  cropY?: number;
+  cropScale?: number;
 }
 
 export const ProfileImage = ({
@@ -142,8 +135,6 @@ export const ProfileImage = ({
   cropY = 50,
   cropScale = 1,
 }: ProfileImageProps) => {
-  // If there's cropping/zoom applied, use a container with overflow hidden
-  // Guard against zero values from import (Go zero values for unset crop fields)
   const effectiveCropScale = cropScale || 1;
   const effectiveCropX = cropX || 50;
   const effectiveCropY = cropY || 50;
@@ -174,7 +165,6 @@ export const ProfileImage = ({
     );
   }
 
-  // No cropping - use simple image
   return (
     <ResponsiveImage
       photoId={photoId}
@@ -204,7 +194,7 @@ export const FullImage = ({
   alt,
   className,
   loading = "eager",
-  fetchpriority = "high", // Default to high priority for full images
+  fetchpriority = "high",
   status,
 }: FullImageProps) => {
   return (

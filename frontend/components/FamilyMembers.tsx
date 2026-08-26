@@ -5,7 +5,6 @@ import { FamilySelect } from "./FamilySelect";
 import "./family-members-styles";
 
 type FamilyMembersState = {
-  // Zero means the primary family, matching what the backend falls back to.
   familyId: number;
   members: server.FamilyMemberView[] | null;
   callerIsOwner: boolean;
@@ -79,8 +78,6 @@ async function onLeaveFamily(state: FamilyMembersState, familyName: string) {
 
   state.busy = false;
   if (resp && resp.success) {
-    // Which families exist and which one is primary have both changed, so the
-    // whole page is rebuilt rather than patched.
     window.location.reload();
     return;
   }
@@ -91,12 +88,9 @@ async function onLeaveFamily(state: FamilyMembersState, familyName: string) {
 interface FamilyMembersSectionProps {
   initialMembers: server.FamilyMemberView[];
   initialCallerIsOwner: boolean;
-  // Name of the family currently selected, for the confirmation prompt.
   familyName: string;
 }
 
-// FamilyMembersSection is who is in the household and how somebody stops being
-// in it — the two operations that otherwise turn into a support request.
 export const FamilyMembersSection = ({
   initialMembers,
   initialCallerIsOwner,

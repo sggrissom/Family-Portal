@@ -66,13 +66,11 @@ export function view(
 
   const form = useEditPersonForm();
 
-  // Initialize form with current values on first render
   if (!form.name && data.person.name) {
     form.name = data.person.name;
     form.personType = data.person.type;
     form.gender = data.person.gender;
     form.isPregnancy = data.person.isPregnancy;
-    // Format birthday from ISO to YYYY-MM-DD
     if (data.person.birthday) {
       const d = new Date(data.person.birthday);
       form.birthdate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -247,8 +245,6 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
         </div>
       </form>
 
-      {/* Sharing lives outside the edit form: it saves on its own, and it is a
-          change to who can see this person rather than to their details. */}
       <PersonSharingSection personId={personId} personName={personName} />
     </div>
   </div>

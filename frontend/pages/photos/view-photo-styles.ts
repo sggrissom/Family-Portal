@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// View Photo Page Container
 block(`
 .view-photo-container {
   max-width: 1200px;
@@ -17,7 +16,6 @@ block(`
 }
 `);
 
-// Header with back navigation
 block(`
 .photo-header {
   display: flex;
@@ -47,7 +45,6 @@ block(`
 }
 `);
 
-// Main photo display
 block(`
 .photo-display {
   display: flex;
@@ -69,7 +66,6 @@ block(`
 }
 `);
 
-// Photo information panel
 block(`
 .photo-info-panel {
   background: var(--surface);
@@ -132,7 +128,6 @@ block(`
 }
 `);
 
-// Action buttons
 block(`
 .photo-actions {
   display: flex;
@@ -248,7 +243,6 @@ block(`
 }
 `);
 
-// Photo tags section
 block(`.photo-tags { margin-top: 1rem; }`);
 block(`.tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }`);
 block(`
@@ -272,7 +266,6 @@ block(`
 }
 `);
 
-// Error page
 block(`
 .error-page {
   text-align: center;
@@ -294,7 +287,6 @@ block(`
 }
 `);
 
-// Responsive design
 block(`
 @media (max-width: 768px) {
   .view-photo-container {

@@ -1,7 +1,5 @@
 import { block } from "vlens/css";
 
-// People-First Dashboard Redesign - Massive Photos & Clean Navigation
-
 block(`
 .dashboard-container {
   max-width: 1400px;
@@ -40,7 +38,6 @@ block(`
 }
 `);
 
-// NEW LAYOUT STRUCTURE - PEOPLE FIRST
 block(`
 .dashboard-content {
   display: flex;
@@ -49,7 +46,6 @@ block(`
 }
 `);
 
-// FAMILY SECTION - PRIMARY FOCUS
 block(`
 .family-section {
 }
@@ -74,7 +70,6 @@ block(`
 }
 `);
 
-// PEOPLE GROUPS - ORGANIZED BY FAMILY STRUCTURE
 block(`
 .people-groups {
   display: flex;
@@ -95,7 +90,6 @@ block(`
 }
 `);
 
-// PEOPLE GRID - SIMPLIFIED AND SPACIOUS
 block(`
 .people-grid {
   display: grid;
@@ -104,7 +98,6 @@ block(`
 }
 `);
 
-// DRAMATICALLY LARGER PERSON CARDS
 block(`
 .person-card {
   display: flex;
@@ -132,7 +125,6 @@ block(`
 }
 `);
 
-// MASSIVE PROFILE PHOTOS - 160px on desktop!
 block(`
 .person-avatar {
   display: flex;
@@ -176,7 +168,6 @@ block(`
 }
 `);
 
-// ENHANCED PERSON INFO
 block(`
 .person-info {
   flex: 1;
@@ -223,7 +214,6 @@ block(`
 }
 `);
 
-// QUICK ACTIONS - COMPACT AND UNOBTRUSIVE
 block(`
 .quick-actions {
   background: var(--surface);
@@ -297,7 +287,6 @@ block(`
 }
 `);
 
-// EMPTY STATE WITH BETTER VISUAL HIERARCHY
 block(`
 .empty-state {
   text-align: center;
@@ -319,7 +308,6 @@ block(`
 }
 `);
 
-// CLICKABLE STYLING
 block(`
 .person-card.clickable {
   text-decoration: none;
@@ -334,7 +322,6 @@ block(`
 }
 `);
 
-// DESKTOP LAYOUT - HORIZONTAL QUICK ACTIONS
 block(`
 @media (min-width: 1201px) {
   .quick-actions {
@@ -380,7 +367,6 @@ block(`
 }
 `);
 
-// RESPONSIVE DESIGN - MOBILE FIRST APPROACH
 block(`
 @media (max-width: 1200px) {
   .dashboard-content {
@@ -471,7 +457,6 @@ block(`
     font-size: 1.1rem;
   }
 
-
   .quick-actions {
     padding: 20px;
   }
@@ -526,11 +511,9 @@ block(`
   .person-details {
     font-size: 1rem;
   }
-
 }
 `);
 
-// Focused dashboard actions
 block(`
 .quick-actions {
   margin-top: 28px;

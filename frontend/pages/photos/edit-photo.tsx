@@ -26,7 +26,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 type EditPhotoForm = {
   title: string;
   description: string;
-  inputType: string; // 'auto' | 'today' | 'date' | 'age'
+  inputType: string;
   photoDate: string;
   ageYears: string;
   ageMonths: string;
@@ -50,13 +50,12 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     };
   }
 
-  // Convert photo date to form format
   const photoDate = photo.photoDate ? new Date(photo.photoDate).toISOString().split("T")[0] : "";
 
   return {
     title: photo.title || "",
     description: photo.description || "",
-    inputType: "date", // Default to date since we have a known date
+    inputType: "date",
     photoDate: photoDate,
     ageYears: "",
     ageMonths: "",
@@ -123,7 +122,6 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
   form.loading = true;
   form.error = "";
 
-  // Validation
   if (form.inputType === "date" && !form.photoDate) {
     form.error = "Please select a date";
     form.loading = false;
@@ -160,7 +158,6 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
 
     if (resp && resp.image) {
       await server.UpdatePhotoTags({ photoId: photo.id, tagIds: form.tagIds });
-      // Success! Navigate to view photo page
       core.setRoute(`/view-photo/${photo.id}`);
     } else {
       form.error = "Failed to update photo";
@@ -185,7 +182,7 @@ const formatPhotoDate = (dateString: string) => {
   if (dateString.includes("T") && dateString.endsWith("Z")) {
     const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const month = parseInt(dateParts[1]) - 1;
     const day = parseInt(dateParts[2]);
     return new Date(year, month, day).toLocaleDateString();
   }
@@ -201,7 +198,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
           <p>Update photo details and information</p>
         </div>
 
-        {/* Photo preview */}
         <div className="photo-preview">
           <ThumbnailImage photoId={photo.id} alt={photo.title} className="preview-image" />
           <div className="photo-info">
@@ -221,7 +217,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
         )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitEdit, form, photo)}>
-          {/* Title */}
           <div className="form-group">
             <label htmlFor="title">Photo Title (Optional)</label>
             <input
@@ -233,7 +228,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             />
           </div>
 
-          {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description (Optional)</label>
             <textarea
@@ -245,7 +239,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             />
           </div>
 
-          {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When was this photo taken?</label>
             <div className="radio-group">
@@ -296,7 +289,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             </div>
           </div>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
@@ -311,7 +303,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -342,7 +333,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             </div>
           )}
 
-          {/* Tags */}
           {allTags.length > 0 && (
             <div className="form-group">
               <span className="form-group-caption" id="tagPickerLabel">
@@ -369,7 +359,6 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="form-actions">
             <a href={`/view-photo/${photo.id}`} className="btn btn-secondary">
               Cancel

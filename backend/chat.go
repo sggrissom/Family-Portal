@@ -13,22 +13,17 @@ import (
 )
 
 func RegisterChatMethods(app *vbeam.Application) {
-	// Initialize chat hub for WebSocket functionality
 	InitializeChatHub()
 
-	// Register REST API procedures
 	vbeam.RegisterProc(app, SendMessage)
 	vbeam.RegisterProc(app, GetChatMessages)
 	vbeam.RegisterProc(app, DeleteMessage)
 }
 
-// Request/Response types
 type SendMessageRequest struct {
 	Content         string `json:"content"`
 	ClientMessageId string `json:"clientMessageId"`
-	// FamilyId names the family whose chat this message goes to. Zero means
-	// the caller's primary family.
-	FamilyId int `json:"familyId,omitempty"`
+	FamilyId        int    `json:"familyId,omitempty"`
 }
 
 type SendMessageResponse struct {
@@ -36,12 +31,9 @@ type SendMessageResponse struct {
 }
 
 type GetChatMessagesRequest struct {
-	Limit  *int `json:"limit,omitempty"`
-	Offset *int `json:"offset,omitempty"`
-	// FamilyId names the chat to read. Zero means the caller's primary family.
-	// Chat is one room per family, so this reads a single family rather than
-	// merging every family the user belongs to into one stream.
-	FamilyId int `json:"familyId,omitempty"`
+	Limit    *int `json:"limit,omitempty"`
+	Offset   *int `json:"offset,omitempty"`
+	FamilyId int  `json:"familyId,omitempty"`
 }
 
 type GetChatMessagesResponse struct {
@@ -56,7 +48,6 @@ type DeleteMessageResponse struct {
 	Success bool `json:"success"`
 }
 
-// Database types
 type ChatMessage struct {
 	Id              int       `json:"id"`
 	FamilyId        int       `json:"familyId"`
@@ -67,7 +58,6 @@ type ChatMessage struct {
 	ClientMessageId string    `json:"clientMessageId"`
 }
 
-// Packing function for vbolt serialization
 func PackChatMessage(self *ChatMessage, buf *vpack.Buffer) {
 	vpack.Version(1, buf)
 	vpack.Int(&self.Id, buf)
@@ -79,33 +69,17 @@ func PackChatMessage(self *ChatMessage, buf *vpack.Buffer) {
 	vpack.String(&self.ClientMessageId, buf)
 }
 
-// Buckets for vbolt database storage
 var ChatMessagesBkt = vbolt.Bucket(&cfg.Info, "chat_messages", vpack.FInt, PackChatMessage)
 
-// ChatMessagesByFamilyIndex: term = family_id, target = message_id
-// This allows efficient lookup of messages by family
 var ChatMessagesByFamilyIndex = vbolt.Index(&cfg.Info, "chat_messages_by_family", vpack.FInt, vpack.FInt)
 
-// ChatMessagesByUserIndex: term = user_id, target = message_id
-// This allows efficient lookup of messages by user
 var ChatMessagesByUserIndex = vbolt.Index(&cfg.Info, "chat_messages_by_user", vpack.FInt, vpack.FInt)
 
-// Database helper functions
 func GetChatMessageById(tx *vbolt.Tx, messageId int) (message ChatMessage) {
 	vbolt.Read(tx, ChatMessagesBkt, messageId, &message)
 	return
 }
 
-// GetFamilyChatMessages reads one page of a family's chat, counting back from
-// the most recent message, and returns it oldest-first.
-//
-// The index carries no priority, so its natural order is by message id — which
-// is chronological, but ascending. Reading it forwards means a limit returns the
-// family's *first* messages and never its latest, so the window walks backwards
-// and the page is flipped afterwards. Callers keep the chronological order they
-// have always had; what changes is which end of the history the limit cuts off.
-//
-// A limit of 0 is unlimited, which is what the deletion sweep wants.
 func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int, offset int) (messages []ChatMessage) {
 	var messageIds []int
 	vbolt.ReadTermTargets(tx, ChatMessagesByFamilyIndex, familyId, &messageIds, vbolt.Window{
@@ -120,8 +94,6 @@ func GetFamilyChatMessages(tx *vbolt.Tx, familyId int, limit int, offset int) (m
 	return
 }
 
-// GetChatMessageForUser looks a message up and checks it against every family
-// the user belongs to, rather than against a single active family.
 func GetChatMessageForUser(tx *vbolt.Tx, messageId int, user User, need AccessLevel) (ChatMessage, error) {
 	message := GetChatMessageById(tx, messageId)
 	if message.Id == 0 {
@@ -147,7 +119,6 @@ func GetChatMessageByIdAndFamily(tx *vbolt.Tx, messageId int, familyId int) (Cha
 func AddChatMessageTx(tx *vbolt.Tx, req SendMessageRequest, familyId int, userId int, userName string) (ChatMessage, error) {
 	var message ChatMessage
 
-	// Create message record
 	message.Id = vbolt.NextIntId(tx, ChatMessagesBkt)
 	message.FamilyId = familyId
 	message.UserId = userId
@@ -169,17 +140,14 @@ func updateChatMessageIndices(tx *vbolt.Tx, message ChatMessage) {
 }
 
 func DeleteChatMessageTx(tx *vbolt.Tx, messageId int, familyId int) error {
-	// Get existing message and validate ownership
 	message, err := GetChatMessageByIdAndFamily(tx, messageId, familyId)
 	if err != nil {
 		return err
 	}
 
-	// Remove from indices
 	vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message.Id, -1)
 	vbolt.SetTargetSingleTerm(tx, ChatMessagesByUserIndex, message.Id, -1)
 
-	// Delete the record
 	vbolt.Delete(tx, ChatMessagesBkt, message.Id)
 
 	return nil
@@ -202,16 +170,13 @@ func validateDeleteMessageRequest(req DeleteMessageRequest) error {
 	return nil
 }
 
-// vbeam procedures
 func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if err = validateSendMessageRequest(req); err != nil {
 		return
 	}
@@ -221,24 +186,20 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 		return
 	}
 
-	// Add message to database
 	vbeam.UseWriteTx(ctx)
 	message, err := AddChatMessageTx(ctx.Tx, req, familyId, user.Id, user.Name)
 	if err != nil {
 		return
 	}
 
-	// Queue push notifications for offline users
 	queueChatPushNotifications(ctx.Tx, user, message)
 
 	vbolt.TxCommit(ctx.Tx)
 
-	// Broadcast the new message to websocket clients
 	if hub := GetChatHub(); hub != nil {
 		hub.BroadcastNewMessage(message.FamilyId, message)
 	}
 
-	// Log the message sending
 	LogInfo(LogCategoryAPI, "Chat message sent", map[string]interface{}{
 		"messageId": message.Id,
 		"familyId":  message.FamilyId,
@@ -251,23 +212,17 @@ func SendMessage(ctx *vbeam.Context, req SendMessageRequest) (resp SendMessageRe
 }
 
 func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetChatMessagesResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Set default limit
 	limit := 100
 	if req.Limit != nil && *req.Limit > 0 && *req.Limit <= 200 {
 		limit = *req.Limit
 	}
 
-	// Offset counts backwards from the newest message, so offset 0 is the live
-	// end of the conversation and each further page is older. A caller paging
-	// through history must keep its limit fixed, since the pages are cut from
-	// the same end.
 	offset := 0
 	if req.Offset != nil && *req.Offset > 0 {
 		offset = *req.Offset
@@ -278,10 +233,8 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 		return
 	}
 
-	// Get messages for this family
 	resp.Messages = GetFamilyChatMessages(ctx.Tx, familyId, limit, offset)
 
-	// Log the request
 	LogInfo(LogCategoryAPI, "Chat messages retrieved", map[string]interface{}{
 		"familyId":     familyId,
 		"userId":       user.Id,
@@ -294,32 +247,26 @@ func GetChatMessages(ctx *vbeam.Context, req GetChatMessagesRequest) (resp GetCh
 }
 
 func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMessageResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if err = validateDeleteMessageRequest(req); err != nil {
 		return
 	}
 
-	// Get the message to verify ownership. The message's own family is the
-	// context the delete runs in.
 	message, err := GetChatMessageForUser(ctx.Tx, req.Id, user, AccessContribute)
 	if err != nil {
 		return
 	}
 
-	// Only allow users to delete their own messages
 	if message.UserId != user.Id {
 		err = errors.New("You can only delete your own messages")
 		return
 	}
 
-	// Delete message from database
 	vbeam.UseWriteTx(ctx)
 	err = DeleteChatMessageTx(ctx.Tx, req.Id, message.FamilyId)
 	if err != nil {
@@ -328,12 +275,10 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 
 	vbolt.TxCommit(ctx.Tx)
 
-	// Broadcast the message deletion to websocket clients
 	if hub := GetChatHub(); hub != nil {
 		hub.BroadcastDeleteMessage(message.FamilyId, req.Id, user.Id)
 	}
 
-	// Log the message deletion
 	LogInfo(LogCategoryAPI, "Chat message deleted", map[string]interface{}{
 		"messageId": req.Id,
 		"familyId":  message.FamilyId,
@@ -344,33 +289,26 @@ func DeleteMessage(ctx *vbeam.Context, req DeleteMessageRequest) (resp DeleteMes
 	return
 }
 
-// queueChatPushNotifications queues push notifications for offline family members
 func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) {
-	// Check if push notifications are enabled
 	if !IsPushWorkerEnabled() {
 		return
 	}
 
-	// Notify the family the message was posted to, which is not necessarily
-	// the sender's primary family.
 	familyUserIds := GetFamilyUserIds(tx, message.FamilyId)
 	if len(familyUserIds) == 0 {
 		return
 	}
 
-	// Get online users from the WebSocket hub
 	var onlineUserIds []int
 	if hub := GetChatHub(); hub != nil {
 		onlineUserIds = hub.GetOnlineUsers(message.FamilyId)
 	}
 
-	// Create a set of online users for fast lookup
 	onlineSet := make(map[int]bool)
 	for _, userId := range onlineUserIds {
 		onlineSet[userId] = true
 	}
 
-	// Filter to offline users (excluding sender)
 	var offlineUserIds []int
 	for _, userId := range familyUserIds {
 		if userId != sender.Id && !onlineSet[userId] {
@@ -382,7 +320,6 @@ func queueChatPushNotifications(tx *vbolt.Tx, sender User, message ChatMessage) 
 		return
 	}
 
-	// Queue push notification job
 	job := PushNotificationJob{
 		Event:            PushEventChatMessage,
 		RecordId:         message.Id,

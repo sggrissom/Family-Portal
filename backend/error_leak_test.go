@@ -10,9 +10,6 @@ import (
 	"testing"
 )
 
-// forbiddenInResponses are the shapes of thing that must never appear in an
-// error a user can see. Each one is something that either helps an attacker or
-// helps nobody.
 var forbiddenInResponses = []struct {
 	name    string
 	pattern *regexp.Regexp
@@ -35,8 +32,6 @@ func assertNoLeak(t *testing.T, body string) {
 	}
 }
 
-// RespondUnexpectedError is the one responder built for causes that must not be
-// shown. Whatever it is handed, the body must say the same fixed thing.
 func TestUnexpectedErrorNeverEchoesItsCause(t *testing.T) {
 	causes := []error{
 		&os.PathError{Op: "open", Path: "/srv/apps/family/shared/data/db.bolt", Err: os.ErrPermission},
@@ -68,8 +63,6 @@ func TestUnexpectedErrorNeverEchoesItsCause(t *testing.T) {
 	}
 }
 
-// The same rule for procedures, whose errors vbeam writes straight into the
-// response body.
 func TestProcErrorNeverEchoesItsCause(t *testing.T) {
 	cause := errorString("open /srv/apps/family/shared/static/photos/1.jpg: permission denied")
 
@@ -84,8 +77,6 @@ func TestProcErrorNeverEchoesItsCause(t *testing.T) {
 	}
 }
 
-// A reference is only worth having if it is actually in the message, in the
-// shape the frontend looks for.
 func TestProcErrorCarriesAReference(t *testing.T) {
 	safe := ProcError(errorString("something internal"))
 
@@ -95,9 +86,6 @@ func TestProcErrorCarriesAReference(t *testing.T) {
 	}
 }
 
-// Declared errors are the vocabulary the frontend matches on, so they have to
-// survive unchanged — sanitizing them would break every comparison in
-// frontend/server.ts.
 func TestProcErrorPassesDeclaredErrorsThrough(t *testing.T) {
 	for _, declared := range publicErrors {
 		if got := ProcError(declared); got != declared {
@@ -112,9 +100,6 @@ func TestProcErrorOnNilIsNil(t *testing.T) {
 	}
 }
 
-// Every responder, not just the unexpected one, has to keep its details out of
-// the body — the helpers all accept a details argument and call sites pass raw
-// errors into it.
 func TestNoResponderLeaksItsDetails(t *testing.T) {
 	const secret = "open /srv/apps/family/shared/.env: permission denied"
 
@@ -143,8 +128,6 @@ func TestNoResponderLeaksItsDetails(t *testing.T) {
 	}
 }
 
-// The correlation id has to reach the client, or none of the above is
-// actionable when somebody writes in.
 func TestEveryResponseCarriesACorrelationId(t *testing.T) {
 	var seen string
 	wrapper := NewRequestIDWrapper(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -178,8 +161,6 @@ func TestCorrelationIdsDiffer(t *testing.T) {
 	}
 }
 
-// A request that never passed through the wrapper — anything constructed in a
-// test — must not make the responders panic.
 func TestRequestIDIsEmptyWithoutTheWrapper(t *testing.T) {
 	if got := RequestID(httptest.NewRequest(http.MethodGet, "/", nil)); got != "" {
 		t.Errorf("RequestID = %q, want empty", got)

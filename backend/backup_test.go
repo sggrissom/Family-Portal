@@ -1,5 +1,3 @@
-// Package backend tests for the database snapshot endpoint.
-// Tests: token authorization, streamed bytes open as a bolt DB, concurrency refusal.
 package backend
 
 import (
@@ -19,8 +17,6 @@ import (
 
 const testBackupToken = "0123456789abcdef0123456789abcdef"
 
-// snapshotTestDB opens a scratch database holding one known milestone so a
-// restored snapshot has something to read back.
 func snapshotTestDB(t *testing.T) (*vbolt.DB, Milestone) {
 	t.Helper()
 
@@ -131,8 +127,6 @@ func TestSnapshotHandlerRestoresIntoScratchDatabase(t *testing.T) {
 		t.Errorf("Content-Length = %d, want %d streamed bytes", declared, len(body))
 	}
 
-	// The streamed bytes must open cleanly as a bolt database and still hold
-	// the row written before the snapshot.
 	restoredPath := filepath.Join(t.TempDir(), "restored.db")
 	if err := os.WriteFile(restoredPath, body, 0o600); err != nil {
 		t.Fatal(err)
@@ -179,8 +173,6 @@ func TestSnapshotHandlerRejectsUnauthorizedCallers(t *testing.T) {
 	}
 }
 
-// blockingRecorder pauses inside the first Write so a second request can be
-// served while the first snapshot still holds the read transaction.
 type blockingRecorder struct {
 	*httptest.ResponseRecorder
 	writing chan struct{}
@@ -230,7 +222,6 @@ func TestSnapshotHandlerRefusesConcurrentSnapshots(t *testing.T) {
 		t.Fatalf("first snapshot status = %d, want %d", blocked.Code, http.StatusOK)
 	}
 
-	// The lock is released once the first snapshot finishes.
 	third := httptest.NewRecorder()
 	handler.ServeHTTP(third, snapshotRequest(testBackupToken))
 	if third.Code != http.StatusOK {

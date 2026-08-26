@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// logLevel represents different log levels (internal type)
 type logLevel string
 
 const (
@@ -18,7 +17,6 @@ const (
 	logLevelDebug logLevel = "DEBUG"
 )
 
-// logCategory represents different areas of the application (internal type)
 type logCategory string
 
 const (
@@ -31,26 +29,23 @@ const (
 	logCategoryImport logCategory = "IMPORT"
 )
 
-// logEntry represents a structured log entry (internal type)
 type logEntry struct {
-	Timestamp time.Time   `json:"timestamp"`
-	Level     logLevel    `json:"level"`
-	Category  logCategory `json:"category"`
-	Message   string      `json:"message"`
-	Data      interface{} `json:"data,omitempty"`
-	UserID    *int        `json:"userId,omitempty"`
-	IP        string      `json:"ip,omitempty"`
-	UserAgent string      `json:"userAgent,omitempty"`
-	// HTTP timing fields for performance analysis
-	Duration        *int   `json:"duration,omitempty"`        // Total duration in microseconds
-	HandlerDuration *int   `json:"handlerDuration,omitempty"` // Handler duration in microseconds
-	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
-	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
-	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
-	StackTrace      string `json:"-"`                         // Populated during log file parsing only
+	Timestamp       time.Time   `json:"timestamp"`
+	Level           logLevel    `json:"level"`
+	Category        logCategory `json:"category"`
+	Message         string      `json:"message"`
+	Data            interface{} `json:"data,omitempty"`
+	UserID          *int        `json:"userId,omitempty"`
+	IP              string      `json:"ip,omitempty"`
+	UserAgent       string      `json:"userAgent,omitempty"`
+	Duration        *int        `json:"duration,omitempty"`
+	HandlerDuration *int        `json:"handlerDuration,omitempty"`
+	HTTPMethod      string      `json:"httpMethod,omitempty"`
+	HTTPPath        string      `json:"httpPath,omitempty"`
+	HTTPStatus      *int        `json:"httpStatus,omitempty"`
+	StackTrace      string      `json:"-"`
 }
 
-// logStructured writes a structured log entry
 func logStructured(level logLevel, category logCategory, message string, data interface{}, r *http.Request) {
 	entry := logEntry{
 		Timestamp: time.Now(),
@@ -60,30 +55,24 @@ func logStructured(level logLevel, category logCategory, message string, data in
 		Data:      data,
 	}
 
-	// Add request context if available
 	if r != nil {
 		entry.IP = getClientIP(r)
 		entry.UserAgent = r.Header.Get("User-Agent")
 
-		// Try to get user from context
 		if user, ok := GetUserFromContext(r); ok {
 			entry.UserID = &user.Id
 		}
 	}
 
-	// Marshal to JSON
 	jsonBytes, err := json.Marshal(entry)
 	if err != nil {
-		// Fallback to plain log if JSON marshaling fails
 		log.Printf("[%s] [%s] %s - JSON marshal error: %v", level, category, message, err)
 		return
 	}
 
-	// Write to log (will go to rotating file via vbeam.InitRotatingLogger)
 	log.Println(string(jsonBytes))
 }
 
-// Public constants for logging categories
 const (
 	LogCategoryAuth   = "AUTH"
 	LogCategoryPhoto  = "PHOTO"
@@ -93,7 +82,6 @@ const (
 	LogCategorySystem = "SYSTEM"
 )
 
-// LogInfo logs an info-level message
 func LogInfo(category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -102,7 +90,6 @@ func LogInfo(category string, message string, data ...interface{}) {
 	logStructured(logLevelInfo, logCategory(category), message, d, nil)
 }
 
-// LogInfoWithRequest logs an info-level message with request context
 func LogInfoWithRequest(r *http.Request, category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -111,7 +98,6 @@ func LogInfoWithRequest(r *http.Request, category string, message string, data .
 	logStructured(logLevelInfo, logCategory(category), message, d, r)
 }
 
-// LogWarn logs a warning-level message
 func LogWarn(category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -120,7 +106,6 @@ func LogWarn(category string, message string, data ...interface{}) {
 	logStructured(logLevelWarn, logCategory(category), message, d, nil)
 }
 
-// LogWarnWithRequest logs a warning-level message with request context
 func LogWarnWithRequest(r *http.Request, category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -129,7 +114,6 @@ func LogWarnWithRequest(r *http.Request, category string, message string, data .
 	logStructured(logLevelWarn, logCategory(category), message, d, r)
 }
 
-// LogErrorSimple logs an error-level message
 func LogErrorSimple(category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -138,7 +122,6 @@ func LogErrorSimple(category string, message string, data ...interface{}) {
 	logStructured(logLevelError, logCategory(category), message, d, nil)
 }
 
-// LogErrorWithRequest logs an error-level message with request context
 func LogErrorWithRequest(r *http.Request, category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -147,7 +130,6 @@ func LogErrorWithRequest(r *http.Request, category string, message string, data 
 	logStructured(logLevelError, logCategory(category), message, d, r)
 }
 
-// LogDebug logs a debug-level message (only in development)
 func LogDebug(category string, message string, data ...interface{}) {
 	var d interface{}
 	if len(data) > 0 {
@@ -156,18 +138,9 @@ func LogDebug(category string, message string, data ...interface{}) {
 	logStructured(logLevelDebug, logCategory(category), message, d, nil)
 }
 
-// redactEmail masks an address for logging.
-//
-// Logs are kept for weeks and read by whoever is debugging, so a full address
-// in a log line is a copy of personal data living outside the database — and for
-// failed logins, the address may belong to somebody who has no account here at
-// all. The first character and the domain are enough to recognize an address you
-// already know while not being a usable address on their own.
 func redactEmail(email string) string {
 	at := strings.LastIndex(email, "@")
 	if at <= 0 {
-		// No local part to preserve, and a value that is not an address at all
-		// should not be echoed verbatim either.
 		if email == "" {
 			return ""
 		}
@@ -176,12 +149,9 @@ func redactEmail(email string) string {
 	return email[:1] + "***" + email[at:]
 }
 
-// getClientIP extracts the client IP from the request
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (for proxies)
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff != "" {
-		// Take the first IP if multiple are present
 		if idx := len(xff); idx > 0 {
 			if commaIdx := 0; commaIdx < idx {
 				for i, c := range xff {
@@ -198,12 +168,10 @@ func getClientIP(r *http.Request) string {
 		}
 	}
 
-	// Check X-Real-IP header
 	xri := r.Header.Get("X-Real-IP")
 	if xri != "" {
 		return xri
 	}
 
-	// Fall back to RemoteAddr
 	return r.RemoteAddr
 }

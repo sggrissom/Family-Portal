@@ -10,9 +10,9 @@ import {
 import "./crop-selector-styles";
 
 export interface CropValues {
-  cropX: number; // 0-100
-  cropY: number; // 0-100
-  cropScale: number; // 1.0+
+  cropX: number;
+  cropY: number;
+  cropScale: number;
 }
 
 const MIN_SCALE = 1;
@@ -20,16 +20,11 @@ const MAX_SCALE = 3;
 
 interface CropSelectorProps {
   photoId: number;
-  /** Edited in place — the caller owns the values and reads them back after save. */
   crop: CropValues;
   onSave: () => void;
   onCancel: () => void;
 }
 
-/**
- * The editor's own working state. The crop values live in the caller's object;
- * what is left here is the drag in progress and the dialog's focus bookkeeping.
- */
 interface CropEditor {
   crop: CropValues;
   onSave: () => void;
@@ -82,8 +77,6 @@ function onPointerMove(editor: CropEditor, event: PointerEvent) {
   const deltaX = event.clientX - editor.dragStartX;
   const deltaY = event.clientY - editor.dragStartY;
 
-  // Convert pixel delta to percentage (invert because dragging moves the viewport)
-  // Higher scale = more sensitive dragging
   const sensitivity = 100 / editor.crop.cropScale;
   editor.crop.cropX = clamp(editor.startCropX - (deltaX / rect.width) * sensitivity, 0, 100);
   editor.crop.cropY = clamp(editor.startCropY - (deltaY / rect.height) * sensitivity, 0, 100);
@@ -99,9 +92,6 @@ function onPointerUp(editor: CropEditor, event: PointerEvent) {
   vlens.scheduleRedraw();
 }
 
-// Pan and zoom from the keyboard. Dragging was the only way to move the crop,
-// which left the editor unusable without a pointer. The step matches what a
-// small drag does: less at high zoom, where the same pixel covers less image.
 function onCropKeyDown(editor: CropEditor, event: KeyboardEvent) {
   const crop = editor.crop;
   const step = 5 / crop.cropScale;
@@ -139,8 +129,6 @@ function onWheel(editor: CropEditor, event: WheelEvent) {
   vlens.scheduleRedraw();
 }
 
-// The slider steps in tenths, so this cannot go through attrsBindInput: that
-// binding parses a numeric ref with parseInt and would floor every zoom level.
 function onScaleInput(editor: CropEditor, event: Event) {
   const target = event.target as HTMLInputElement;
   editor.crop.cropScale = parseFloat(target.value);
@@ -166,12 +154,9 @@ function saveCrop(editor: CropEditor) {
 
 export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorProps) => {
   const editor = useCropEditor(crop);
-  // The callbacks are fresh closures on every redraw; the handlers below are
-  // bound to the editor alone and read them at event time.
   editor.onSave = onSave;
   editor.onCancel = onCancel;
 
-  // Image src for cropping (use large size for performance)
   const imageSrc = `/api/photo/${photoId}/large`;
 
   const previewStyle = {
@@ -197,7 +182,6 @@ export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorPr
         </div>
 
         <div className="crop-selector-body">
-          {/* Main crop area */}
           <div
             className={`crop-container ${editor.isDragging ? "dragging" : ""}`}
             role="application"
@@ -218,7 +202,6 @@ export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorPr
             </div>
           </div>
 
-          {/* Preview of result */}
           <div className="crop-preview-section">
             <h4>Preview</h4>
             <div className="crop-preview-container">
@@ -233,7 +216,6 @@ export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorPr
           </div>
         </div>
 
-        {/* Zoom slider */}
         <div className="crop-controls">
           <label className="zoom-label">
             <span>Zoom: {crop.cropScale.toFixed(1)}x</span>
@@ -256,7 +238,6 @@ export const CropSelector = ({ photoId, crop, onSave, onCancel }: CropSelectorPr
           </button>
         </div>
 
-        {/* Action buttons */}
         <div className="crop-selector-actions">
           <button
             type="button"

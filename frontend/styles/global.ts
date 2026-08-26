@@ -607,7 +607,6 @@ block(`
 }
 `);
 
-// Shared Form Styles
 block(`
 .form-group {
   display: flex;
@@ -693,7 +692,6 @@ textarea:disabled {
 }
 `);
 
-// Shared Message Styles
 block(`
 .error-message {
   background: #fee2e2;
@@ -734,7 +732,6 @@ block(`
 }
 `);
 
-// Shared Utility Classes
 block(`
 .empty-state {
   text-align: center;
@@ -753,7 +750,6 @@ block(`
 }
 `);
 
-// Shared Button Variants
 block(`
 .btn-secondary {
   background: transparent;
@@ -770,7 +766,6 @@ block(`
 }
 `);
 
-// Radio Button and Checkbox Shared Styles
 block(`
 .radio-group {
   display: grid;
@@ -838,7 +833,6 @@ block(`
 }
 `);
 
-// Form Layout Utilities
 block(`
 .form-row {
   display: flex;
@@ -865,7 +859,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for shared components
 block(`
 @media (max-width: 580px) {
   .radio-group {
@@ -892,7 +885,6 @@ block(`
 }
 `);
 
-// Header authentication styles
 block(`
 .user-info-container {
   padding: 0;
@@ -1002,7 +994,6 @@ block(`
 }
 `);
 
-// Mobile-specific user info styling
 block(`
 @media (max-width: 640px) {
   .user-info-container {
@@ -1024,7 +1015,6 @@ block(`
 }
 `);
 
-// Compact action menu
 block(`
 .nav {
   position: relative;

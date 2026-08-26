@@ -6,13 +6,13 @@ import { splitPeopleByType } from "../../lib/routeHelpers";
 
 type GrowthFormData = {
   selectedPersonId: string;
-  measurementType: string; // 'height' | 'weight'
+  measurementType: string;
   value: string;
-  unit: string; // cm, in, kg, lbs
-  heightInputMode: string; // 'decimal' | 'feet-inches'
+  unit: string;
+  heightInputMode: string;
   feet: string;
   inches: string;
-  inputType: string; // 'today' | 'date' | 'age'
+  inputType: string;
   measurementDate: string;
   ageYears: string;
   ageMonths: string;
@@ -57,7 +57,6 @@ async function onSubmitGrowth(
   form.loading = true;
   form.error = "";
 
-  // Validation
   if (!form.selectedPersonId) {
     form.error = "Please select a family member";
     form.loading = false;
@@ -65,7 +64,6 @@ async function onSubmitGrowth(
     return;
   }
 
-  // Calculate the actual value based on input mode
   let actualValue: number;
   if (
     form.measurementType === "height" &&
@@ -107,7 +105,6 @@ async function onSubmitGrowth(
 
   try {
     if (mode === "add") {
-      // Prepare add request
       const request: server.AddGrowthDataRequest = {
         personId: parseInt(form.selectedPersonId),
         measurementType: form.measurementType,
@@ -129,7 +126,6 @@ async function onSubmitGrowth(
         vlens.scheduleRedraw();
       }
     } else {
-      // Prepare update request
       if (!growthId) {
         form.error = "Growth record ID is missing";
         form.loading = false;
@@ -244,7 +240,6 @@ export const GrowthForm = ({
           className="auth-form growth-form"
           onSubmit={vlens.cachePartial(onSubmitGrowth, mode, form, growthData?.id, onSuccess)}
         >
-          {/* Person Selection - only show for add mode */}
           {mode === "add" && people && (
             <div className="form-group">
               <label htmlFor="person">Family Member</label>
@@ -276,7 +271,6 @@ export const GrowthForm = ({
             </div>
           )}
 
-          {/* Measurement Type */}
           <fieldset className="form-group growth-choice-group">
             <legend>Measurement Type</legend>
             <div className="radio-group growth-radio-group">
@@ -305,7 +299,6 @@ export const GrowthForm = ({
             </div>
           </fieldset>
 
-          {/* Height Input Mode Toggle (only for height in inches) */}
           {form.measurementType === "height" && form.unit === "in" && (
             <fieldset className="form-group growth-choice-group">
               <legend>Height Input Mode</legend>
@@ -336,7 +329,6 @@ export const GrowthForm = ({
             </fieldset>
           )}
 
-          {/* Value and Unit - Decimal Mode */}
           {!(
             form.measurementType === "height" &&
             form.unit === "in" &&
@@ -375,7 +367,6 @@ export const GrowthForm = ({
             </div>
           )}
 
-          {/* Feet & Inches Mode */}
           {form.measurementType === "height" &&
             form.unit === "in" &&
             form.heightInputMode === "feet-inches" && (
@@ -418,7 +409,6 @@ export const GrowthForm = ({
               </div>
             )}
 
-          {/* Date or Age Toggle */}
           <fieldset className="form-group growth-choice-group">
             <legend>When was this measured?</legend>
             <div className="radio-group growth-radio-group">
@@ -458,7 +448,6 @@ export const GrowthForm = ({
             </div>
           </fieldset>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Measurement Date</label>
@@ -473,7 +462,6 @@ export const GrowthForm = ({
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -504,7 +492,6 @@ export const GrowthForm = ({
             </div>
           )}
 
-          {/* Submit Button */}
           <div className="form-actions">
             <button
               type="button"

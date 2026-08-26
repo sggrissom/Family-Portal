@@ -7,9 +7,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// The bundle has to carry every level of the tree. A season that exports its
-// competitions but drops its results is worse than no export at all, because
-// the totals still look plausible.
 func TestExportCarriesTheWholeActivityTree(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -54,8 +51,6 @@ func TestExportCarriesTheWholeActivityTree(t *testing.T) {
 	for _, appearance := range event.Appearances {
 		if appearance.EntryId == fx.groupEntry.Id {
 			results = appearance.Results
-			// A performance names the routine it belongs to, since the routine
-			// is not its parent in the tree.
 			if appearance.EntryName != "Rise Up" {
 				t.Errorf("appearance names its entry as %q", appearance.EntryName)
 			}
@@ -65,8 +60,6 @@ func TestExportCarriesTheWholeActivityTree(t *testing.T) {
 		t.Fatalf("expected 2 results on the group appearance, got %d", len(results))
 	}
 
-	// SortOrder is what the results sheet's order survives on, so results come
-	// out sorted rather than in whatever order the index walk returned.
 	if results[0].SortOrder > results[1].SortOrder {
 		t.Errorf("results came out unsorted: %d then %d", results[0].SortOrder, results[1].SortOrder)
 	}
@@ -80,15 +73,10 @@ func TestExportCarriesTheWholeActivityTree(t *testing.T) {
 	}
 }
 
-// Rank, OutOf, Score and PersonId are pointers precisely so "no placement" and
-// "first place" stay different. JSON is where that distinction is easiest to
-// lose, so the check goes through a real marshal/unmarshal round trip.
 func TestExportedResultsKeepTheirOptionalFieldsOptional(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
 
-	// Give the solo a placement, so the bundle holds one result with the
-	// numeric fields set and one without.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		placement := Result{
 			Id: vbolt.NextIntId(tx, ResultBkt), AppearanceId: fx.soloAppr.Id, FamilyId: fx.famA,
@@ -139,15 +127,11 @@ func TestExportedResultsKeepTheirOptionalFieldsOptional(t *testing.T) {
 	if adjudication == nil {
 		t.Fatal("adjudication result did not survive the round trip")
 	}
-	// This is the case that would break silently: an adjudication with a zero
-	// rank reads as a first-place finish.
 	if adjudication.Rank != nil || adjudication.OutOf != nil || adjudication.Score != nil {
 		t.Errorf("adjudication picked up numeric fields it never had: %+v", *adjudication)
 	}
 }
 
-// A result that names one person carries the name, and a roster carries the
-// names of everyone on it — the ids alone are unreadable in a bundle.
 func TestExportedActivitiesNamePeople(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -190,9 +174,6 @@ func TestExportedActivitiesNamePeople(t *testing.T) {
 	}
 }
 
-// Photo joins are part of the record: a competition's weekend shots and a
-// performance's own photos both have to come out, or restoring a bundle loses
-// which photo went with which routine.
 func TestExportCarriesActivityPhotoJoins(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -218,8 +199,6 @@ func TestExportCarriesActivityPhotoJoins(t *testing.T) {
 	}
 }
 
-// Export covers one family. Family B can see alice through the link, but her
-// routine belongs to family A's season and has no business in B's bundle.
 func TestExportActivitiesStayWithTheirFamily(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -237,9 +216,6 @@ func TestExportActivitiesStayWithTheirFamily(t *testing.T) {
 	}
 }
 
-// A family with no activities must not grow an "activities": [] key. The
-// bundle is compared and diffed by hand, and every optional section in it is
-// already omitempty.
 func TestEmptyActivitiesAreOmittedFromTheBundle(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()

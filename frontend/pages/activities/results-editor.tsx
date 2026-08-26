@@ -1,11 +1,3 @@
-// Editing a performance's results.
-//
-// Results are replace-all on the wire (SetAppearanceResults), because that is
-// how they arrive: one results sheet, read off in one sitting. So this is a
-// row editor over a local list, and saving sends the whole set.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
@@ -18,10 +10,6 @@ import {
 } from "./results";
 import "./results-editor-styles";
 
-// ResultRow holds every field as a string because an empty numeric input has
-// to stay distinguishable from a zero: the backend takes nil pointers for
-// "no rank" and "no score", and <input type="number"> valueAsNumber gives NaN
-// for both empty and garbage.
 export type ResultRow = {
   kind: string;
   label: string;
@@ -29,8 +17,6 @@ export type ResultRow = {
   outOf: string;
   category: string;
   score: string;
-  // 0 means the result belongs to the whole entry, which is the common case.
-  // A non-zero id narrows an award to one person on the roster.
   personId: number;
   notes: string;
 };
@@ -73,9 +59,6 @@ function numberOrNull(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-// rowToInput drops the fields the chosen kind does not use rather than sending
-// them. The four kinds have disjoint fields, and a rank left over from a row
-// that used to be a placement would otherwise ride along into an award.
 export function rowToInput(row: ResultRow): server.ResultInput {
   const usesRank = row.kind === ResultKindPlacement;
   const usesScore = row.kind === ResultKindScore;
@@ -91,10 +74,6 @@ export function rowToInput(row: ResultRow): server.ResultInput {
   };
 }
 
-// rowError mirrors validateResultInput on the server. Duplicating it is worth
-// one thing only: the message lands under the field that is wrong, instead of
-// arriving at the top of the page after a round trip that rejected the whole
-// sheet.
 export function rowError(row: ResultRow): string {
   switch (row.kind) {
     case ResultKindAdjudication:
@@ -143,9 +122,6 @@ export const ResultsEditor = ({
 }: {
   host: ResultsEditorHost;
   vocabulary: server.ListActivityVocabularyResponse;
-  // The people on this entry's roster. A result can only narrow to one of
-  // them — the backend rejects anyone else, since a stray id would land in
-  // ResultByPersonIndex and surface under another kid's awards.
   roster: server.Person[];
   onSave: () => void;
   onCancel: () => void;

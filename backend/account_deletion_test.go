@@ -15,9 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// deletionFixture is one household with a full set of records in it, plus a
-// second unrelated family. Every store the deletion is supposed to clear has
-// something in it, so a store the code forgets shows up as a leftover.
 type deletionFixture struct {
 	db *vbolt.DB
 
@@ -70,7 +67,6 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 			t.Fatalf("AddPersonTx(outsider) error = %v", err)
 		}
 
-		// A face descriptor, which is the derived data the plan calls out.
 		person := GetPersonById(tx, fx.person.Id)
 		person.FaceDescriptor = make([]float32, 128)
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
@@ -171,10 +167,6 @@ func decodeDeleteAccount(t *testing.T, recorder *httptest.ResponseRecorder) Dele
 	return resp
 }
 
-// countRows reports how many rows a bucket holds, which is how the "every store
-// is clear" assertion avoids depending on the ids it happened to write.
-// seedFamilyActivities puts one row in each of the nine activity buckets, so
-// the deletion assertions below fail if any of them is left unswept.
 func seedFamilyActivities(tx *vbolt.Tx, familyId int, personId int, photoId int) {
 	now := time.Now()
 
@@ -275,7 +267,6 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 			t.Error("the emptied family survived")
 		}
 
-		// Everything the family owned.
 		if GetPersonById(tx, fx.person.Id).Id != 0 {
 			t.Error("person survived, and with it their face descriptor")
 		}
@@ -307,8 +298,6 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		}
 	})
 
-	// Nothing may be left pointing at the deleted account or its family. The
-	// outsider's own records are the control: they must still be there.
 	if got := countRows(t, fx.db, UsersBkt); got != 1 {
 		t.Errorf("users remaining = %d, want 1 (the outsider)", got)
 	}
@@ -355,7 +344,6 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 func TestDeleteAccountDeletesOrphanedPhotoFiles(t *testing.T) {
 	fx := setupDeletionFixture(t)
 
-	// Stand in for the variants a processed photo leaves on disk.
 	photosDir := filepath.Join(cfg.StaticDir, "photos")
 	if err := os.MkdirAll(photosDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -410,8 +398,6 @@ func TestDeleteAccountRevokesSessions(t *testing.T) {
 		}
 	})
 
-	// Both session cookies are cleared, so the browser is not left holding a
-	// JWT that still parses for another day.
 	cleared := map[string]bool{}
 	for _, cookie := range recorder.Result().Cookies() {
 		if cookie.Value == "" {
@@ -424,7 +410,6 @@ func TestDeleteAccountRevokesSessions(t *testing.T) {
 		}
 	}
 
-	// The JWT no longer authenticates anything, because the user is gone.
 	if _, err := AuthenticateRequest(authedRequest(fx.ownerAuth)); err == nil {
 		t.Error("the deleted account's token still authenticates")
 	}
@@ -439,7 +424,6 @@ func authedRequest(token string) *http.Request {
 func TestDeleteAccountLeavesASharedFamilyIntact(t *testing.T) {
 	fx := setupDeletionFixture(t)
 
-	// A second member of the same household, so the family is not emptied.
 	hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.MinCost)
 	var partner User
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -460,7 +444,6 @@ func TestDeleteAccountLeavesASharedFamilyIntact(t *testing.T) {
 		if GetFamily(tx, fx.familyId).Id == 0 {
 			t.Fatal("a family with a remaining member was destroyed")
 		}
-		// Family records stay with the family.
 		if GetPersonById(tx, fx.person.Id).Id == 0 {
 			t.Error("the family's person was deleted along with one member's account")
 		}
@@ -473,11 +456,9 @@ func TestDeleteAccountLeavesASharedFamilyIntact(t *testing.T) {
 		if len(getFamilyGrowthData(tx, fx.familyId)) == 0 {
 			t.Error("the family's growth data was deleted")
 		}
-		// The account's own speech does not.
 		if len(GetFamilyChatMessages(tx, fx.familyId, 0, 0)) != 0 {
 			t.Error("the deleted account's chat messages stayed behind")
 		}
-		// Ownership moved rather than pointing at a user that no longer exists.
 		if got := familyOwnerId(tx, fx.familyId); got != partner.Id {
 			t.Errorf("owner = %d, want the remaining member %d", got, partner.Id)
 		}
@@ -541,9 +522,6 @@ func TestDeleteAccountRequiresAuthentication(t *testing.T) {
 	})
 }
 
-// A Google-only account has no password to prove, so the typed address is the
-// whole confirmation. It must still work — otherwise those users cannot delete
-// their accounts at all.
 func TestDeleteAccountWithoutAPasswordOnFile(t *testing.T) {
 	db := vbolt.Open(t.TempDir() + "/deletion_google.db")
 	vbolt.InitBuckets(db, &cfg.Info)
@@ -572,18 +550,9 @@ func TestDeleteAccountWithoutAPasswordOnFile(t *testing.T) {
 	})
 }
 
-// Deleting one account must not reach into a family the caller merely has a
-// link to. A link shares content; it never makes the other household's records
-// the caller's to destroy.
-// A child shared into another household can be rostered in that household's
-// group routine, and named by one of its results. Sweeping the deleted family's
-// own buckets does not reach either row, so deleting the person has to.
 func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
 	fx := setupDeletionFixture(t)
 
-	// The outsider's own season, with the deleted family's child on the roster
-	// and named by the result — and with one of the deleted family's photos
-	// attached, which the photo sweep has to reach through the same joins.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		createFamilyLinkTx(tx, fx.familyId, fx.outsiderFamily, "Grandparents",
 			AccessView, ScopePeople.bit()|ScopeActivities.bit())
@@ -623,7 +592,6 @@ func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
 			t.Errorf("%d results still name a deleted person", got)
 		}
 
-		// The result itself survives, minus the name. The routine still placed.
 		results := GetAppearanceResults(tx, theirAppearanceId)
 		if len(results) != 1 {
 			t.Fatalf("got %d results, want the one to survive", len(results))
@@ -635,8 +603,6 @@ func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
 			t.Errorf("result label = %q, want it untouched", results[0].Label)
 		}
 
-		// The deleted family's photo was attached to the survivor's season, and
-		// that join has to go with the photo.
 		if got := len(GetFamilyAppearancePhotos(tx, fx.outsiderFamily)); got != 0 {
 			t.Errorf("%d appearance-photo joins point at a deleted photo", got)
 		}
@@ -644,7 +610,6 @@ func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
 			t.Errorf("%d event-photo joins point at a deleted photo", got)
 		}
 
-		// Everything else in the surviving family is untouched.
 		if got := len(GetFamilyEntries(tx, fx.outsiderFamily)); got != 1 {
 			t.Errorf("the surviving family has %d entries, want its own to remain", got)
 		}
@@ -662,7 +627,6 @@ func TestDeleteAccountDoesNotTouchALinkedFamily(t *testing.T) {
 		link := createFamilyLinkTx(tx, fx.outsiderFamily, fx.familyId, "Grandparents",
 			AccessView, ScopePeople.bit()|ScopePhotos.bit())
 		linkId = link.Id
-		// The outsider's child is shared onto the deleted family's roster.
 		EnsurePersonFamilyTx(tx, fx.outsiderPerson.Id, fx.familyId, fx.outsiderPerson.Type)
 		vbolt.TxCommit(tx)
 	})
@@ -674,14 +638,12 @@ func TestDeleteAccountDoesNotTouchALinkedFamily(t *testing.T) {
 	}
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		// The shared person belongs to the other household and stays there.
 		if GetPersonById(tx, fx.outsiderPerson.Id).Id == 0 {
 			t.Error("a person shared in by a link was deleted with the account")
 		}
 		if GetFamily(tx, fx.outsiderFamily).Id == 0 {
 			t.Error("the linked family was destroyed")
 		}
-		// The link itself has nothing left to point at.
 		var link FamilyLink
 		vbolt.Read(tx, FamilyLinkBkt, linkId, &link)
 		if link.Id != 0 {

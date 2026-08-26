@@ -13,8 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// accountTestUser sets up the globals the plain HTTP handlers read and returns a
-// user with a known password plus a signed auth token for them.
 func accountTestUser(t *testing.T, email, password string) (*vbolt.DB, User, string) {
 	t.Helper()
 
@@ -46,8 +44,6 @@ func accountTestUser(t *testing.T, email, password string) (*vbolt.DB, User, str
 	return db, user, token
 }
 
-// silencePasswordChangedEmail keeps the notice off the real mail queue and
-// reports how many times it was asked for.
 func silencePasswordChangedEmail(t *testing.T) *int {
 	t.Helper()
 
@@ -120,7 +116,6 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	db, user, authToken := accountTestUser(t, "sessions@example.com", "originalpw")
 	silencePasswordChangedEmail(t)
 
-	// Two sessions the user is not making this request from.
 	var otherTokens []string
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for range 2 {
@@ -147,8 +142,6 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 		}
 	})
 
-	// The browser that made the change keeps working: it is handed a refresh
-	// cookie naming a live token.
 	var refreshCookie *http.Cookie
 	for _, cookie := range recorder.Result().Cookies() {
 		if cookie.Name == "refreshToken" && cookie.Value != "" {

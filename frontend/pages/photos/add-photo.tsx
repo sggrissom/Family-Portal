@@ -12,10 +12,10 @@ import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import "./add-photo-styles";
 
 type AddPhotoForm = {
-  selectedPersonIds: string[]; // Array of person IDs
+  selectedPersonIds: string[];
   title: string;
   description: string;
-  inputType: string; // 'auto' | 'today' | 'date' | 'age'
+  inputType: string;
   photoDate: string;
   ageYears: string;
   ageMonths: string;
@@ -73,7 +73,6 @@ export function view(route: string, prefix: string, data: AddPhotoData): preact.
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-photo/123)
   const personId = getIdFromRoute(route);
   const personIdFromUrl = personId ? personId.toString() : undefined;
 
@@ -94,9 +93,6 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   event.preventDefault();
   form.loading = true;
   form.error = "";
-
-  // Validation (photos without people are allowed)
-  // No validation needed for selectedPersonIds - empty array is valid for family photos
 
   if (!form.selectedFile) {
     form.error = "Please select a photo to upload";
@@ -120,16 +116,11 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
   }
 
   try {
-    // Prepare FormData for multipart upload
     const formData = new FormData();
 
-    // Convert selectedPersonIds to integers and send as JSON
     const personIds = form.selectedPersonIds.map(id => parseInt(id)).filter(id => !isNaN(id));
     formData.append("personIds", JSON.stringify(personIds));
 
-    // The photo belongs to the family of the people in it. With no people
-    // tagged there is nothing to follow, so the backend falls back to the
-    // primary family.
     const firstTagged = people.find(p => personIds.includes(p.id));
     if (firstTagged) {
       formData.append("familyId", String(firstTagged.familyId));
@@ -140,7 +131,6 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     formData.append("inputType", form.inputType);
     formData.append("photo", form.selectedFile);
 
-    // Add date/age specific fields
     if (form.inputType === "date") {
       formData.append("photoDate", form.photoDate);
     } else if (form.inputType === "age") {
@@ -150,13 +140,11 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
       }
     }
 
-    // Verify authentication (auth is handled via cookies)
     const currentAuth = auth.getAuth();
     if (!currentAuth) {
       throw new Error("Authentication required");
     }
 
-    // Call the backend API
     const response = await window.fetch("/api/upload-photo", {
       method: "POST",
       credentials: "include",
@@ -170,23 +158,18 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
 
     const responseData = await response.json();
 
-    // Start monitoring the uploaded photo for processing status
     if (responseData.image && responseData.image.status === 1) {
       const photoStatus = usePhotoStatus();
       photoStatus.startMonitoring(responseData.image.id, responseData.image.status);
     }
 
-    // Tag the uploaded photo
     if (form.tagIds.length > 0 && responseData.image?.id) {
       await server.UpdatePhotoTags({ photoId: responseData.image.id, tagIds: form.tagIds });
     }
 
-    // Redirect after successful upload
     if (form.selectedPersonIds.length === 1) {
-      // If only one person selected, go to their profile
       core.setRoute(`/profile/${form.selectedPersonIds[0]}`);
     } else {
-      // Otherwise go to family photos page
       core.setRoute("/photos");
     }
   } catch (error) {
@@ -213,10 +196,8 @@ function onPersonToggle(form: AddPhotoForm, personId: string) {
   const index = form.selectedPersonIds.indexOf(personId);
 
   if (index === -1) {
-    // Add person
     form.selectedPersonIds.push(personId);
   } else {
-    // Remove person
     form.selectedPersonIds.splice(index, 1);
   }
 
@@ -233,14 +214,12 @@ function onFileSelect(form: AddPhotoForm, event: Event) {
 }
 
 function handleFileSelection(form: AddPhotoForm, file: File) {
-  // Validate file type
   if (!file.type.startsWith("image/")) {
     form.error = "Please select a valid image file";
     vlens.scheduleRedraw();
     return;
   }
 
-  // Validate file size (max 10MB)
   if (file.size > 10 * 1024 * 1024) {
     form.error = "File size too large. Please select an image under 10MB";
     vlens.scheduleRedraw();
@@ -250,7 +229,6 @@ function handleFileSelection(form: AddPhotoForm, file: File) {
   form.selectedFile = file;
   form.error = "";
 
-  // Create preview URL
   const reader = new FileReader();
   reader.onload = e => {
     form.previewUrl = e.target?.result as string;
@@ -297,7 +275,6 @@ interface AddPhotoPageProps {
 }
 
 const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
-  // Filter to show all family members for photos
   const { children, parents } = splitPeopleByType(people);
 
   const selectedPersonIds = new Set(form.selectedPersonIds.map(id => parseInt(id)));
@@ -317,7 +294,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
         )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
-          {/* Person Selection */}
           <div className="form-group">
             <label>Who's in this photo? (Optional)</label>
             <p className="field-hint">
@@ -366,7 +342,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             )}
           </div>
 
-          {/* File Upload */}
           <div className="form-group">
             <label>Photo</label>
             <div
@@ -419,7 +394,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             </div>
           </div>
 
-          {/* Title */}
           <div className="form-group">
             <label htmlFor="title">Photo Title (Optional)</label>
             <input
@@ -431,7 +405,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             />
           </div>
 
-          {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description (Optional)</label>
             <textarea
@@ -443,7 +416,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             />
           </div>
 
-          {/* Tags */}
           {tags.length > 0 && (
             <div className="form-group">
               <span className="form-group-caption" id="tagPickerLabel">
@@ -470,7 +442,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             </div>
           )}
 
-          {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When was this photo taken?</label>
             <div className="radio-group">
@@ -523,7 +494,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             </div>
           </div>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
@@ -538,7 +508,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -569,7 +538,6 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
             </div>
           )}
 
-          {/* Submit Button */}
           <div className="form-actions">
             <a href="/dashboard" className="btn btn-secondary">
               Cancel

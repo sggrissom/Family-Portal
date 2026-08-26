@@ -17,14 +17,12 @@ func RegisterAIImportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ListAIModels)
 }
 
-// AI Import Request/Response types
 type ProcessAIImportRequest struct {
-	PersonId         int    `json:"personId"` // The person to import data for
+	PersonId         int    `json:"personId"`
 	UnstructuredText string `json:"unstructuredText"`
-	GenerateFile     bool   `json:"generateFile"` // Whether to save intermediate file
+	GenerateFile     bool   `json:"generateFile"`
 }
 
-// AIImportDataStructure represents the simplified AI import format for a single person
 type AIImportDataStructure struct {
 	PersonId        int               `json:"personId"`
 	Heights         []ImportHeight    `json:"heights"`
@@ -38,8 +36,8 @@ type AIImportDataStructure struct {
 type ProcessAIImportResponse struct {
 	Success            bool     `json:"success"`
 	GeneratedJSON      string   `json:"generatedJSON"`
-	FilePath           string   `json:"filePath,omitempty"` // Path to saved file if requested
-	ProcessingTime     int64    `json:"processingTime"`     // Milliseconds
+	FilePath           string   `json:"filePath,omitempty"`
+	ProcessingTime     int64    `json:"processingTime"`
 	TokensUsed         int      `json:"tokensUsed,omitempty"`
 	ModelUsed          string   `json:"modelUsed"`
 	ProviderUsed       string   `json:"providerUsed"`
@@ -47,18 +45,15 @@ type ProcessAIImportResponse struct {
 	ValidationWarnings []string `json:"validationWarnings,omitempty"`
 }
 
-// ProcessAIImport handles the AI-powered import conversion
 func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp ProcessAIImportResponse, err error) {
 	startTime := time.Now()
 
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if strings.TrimSpace(req.UnstructuredText) == "" {
 		resp.Error = "No text provided for AI processing"
 		return
@@ -69,7 +64,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Get the person and verify family ownership
 	person := GetPersonById(ctx.Tx, req.PersonId)
 	if person.Id == 0 {
 		resp.Error = "Person not found"
@@ -81,11 +75,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Validate AI configuration.
-	//
-	// AI import is optional and drafting-only: a missing key or an unreachable
-	// provider costs the draft and nothing else. The message says what the user
-	// can do about it, and the reason goes to the log.
 	if configErr := ValidateAIConfiguration(); configErr != nil {
 		LogWarn("IMPORT", "AI import attempted without a configured provider", map[string]interface{}{
 			"userId": user.Id,
@@ -95,20 +84,16 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Get model (use environment override or default)
 	modelName := os.Getenv("AI_MODEL")
 	if modelName == "" {
 		modelName = GetDefaultAIModel()
 	}
 
-	// Format person context for the AI
 	personContext := formatPersonContext(person)
 
-	// Get default prompt with person context and current date
 	currentDate := time.Now().Format("2006-01-02")
 	prompt := GetDefaultPrompt(personContext, currentDate)
 
-	// Log the AI import attempt
 	LogInfo("IMPORT", "AI import processing started", map[string]interface{}{
 		"userId":       user.Id,
 		"familyId":     person.FamilyId,
@@ -117,7 +102,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		"generateFile": req.GenerateFile,
 	})
 
-	// Process with AI
 	aiRequest := AIConversionRequest{
 		UnstructuredText: req.UnstructuredText,
 		Model:            modelName,
@@ -128,9 +112,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 
 	conversionResult, conversionErr := ConvertToJSON(aiRequest)
 	if conversionErr != nil {
-		// The transport error can name a host or a status line; the reference
-		// code is how it gets to me instead. Nothing was written, and the text
-		// the user pasted is still in the box they pasted it into.
 		reference := NewRequestID()
 		LogErrorSimple("IMPORT", "AI conversion failed", conversionErr, map[string]interface{}{
 			"model":     modelName,
@@ -141,7 +122,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Log the raw AI response for debugging
 	LogInfo("IMPORT", "AI response received", map[string]interface{}{
 		"userId":       user.Id,
 		"familyId":     person.FamilyId,
@@ -151,10 +131,8 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		"responseTime": conversionResult.ResponseTime,
 	})
 
-	// Validate the generated JSON structure
 	var aiImportData AIImportDataStructure
 	if err = json.Unmarshal([]byte(conversionResult.GeneratedJSON), &aiImportData); err != nil {
-		// Get a preview of the response for debugging
 		preview := conversionResult.GeneratedJSON
 		if len(preview) > 500 {
 			preview = preview[:500] + "..."
@@ -164,10 +142,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("JSON parse error: %v", err))
 		resp.ValidationWarnings = append(resp.ValidationWarnings, fmt.Sprintf("Response preview: %s", preview))
 
-		// The preview goes back to the user who submitted the text, but not
-		// into the log: it is a chunk of that family's records — names, dates,
-		// measurements — and a parse failure is not a reason to copy it
-		// somewhere with a different retention and a different audience.
 		LogErrorSimple("IMPORT", "Failed to parse AI JSON response", err, map[string]interface{}{
 			"model":       modelName,
 			"responseLen": len(conversionResult.GeneratedJSON),
@@ -175,34 +149,27 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		return
 	}
 
-	// Validate person ID matches
 	if aiImportData.PersonId != req.PersonId {
 		resp.ValidationWarnings = append(resp.ValidationWarnings,
 			fmt.Sprintf("Warning: AI returned PersonId %d, expected %d", aiImportData.PersonId, req.PersonId))
 	}
 
-	// Basic data validation
 	if len(aiImportData.Heights) == 0 && len(aiImportData.Weights) == 0 && len(aiImportData.Milestones) == 0 {
 		resp.ValidationWarnings = append(resp.ValidationWarnings, "No data extracted from text")
 	}
 
-	// Convert AIImportDataStructure to full ImportDataStructure format
-	// This allows the existing import flow to work without modification
 	fullImportData := convertToImportDataStructure(person, aiImportData)
 
-	// Re-serialize to JSON for the import flow
 	fullJSON, err := json.MarshalIndent(fullImportData, "", "  ")
 	if err != nil {
 		resp.Error = "Failed to convert AI data to import format"
 		return
 	}
 
-	// Generate file if requested
 	if req.GenerateFile {
 		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("ai_import_%s_%d.json", timestamp, user.Id)
 
-		// Create temp directory if it doesn't exist
 		tempDir := filepath.Join(os.TempDir(), "family_portal", "ai_imports")
 		if err = os.MkdirAll(tempDir, 0755); err != nil {
 			resp.ValidationWarnings = append(resp.ValidationWarnings, "Could not create temp directory for file")
@@ -217,7 +184,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 		}
 	}
 
-	// Prepare response
 	resp.Success = true
 	resp.GeneratedJSON = string(fullJSON)
 	resp.ProcessingTime = time.Since(startTime).Milliseconds()
@@ -225,7 +191,6 @@ func ProcessAIImport(ctx *vbeam.Context, req ProcessAIImportRequest) (resp Proce
 	resp.ModelUsed = modelName
 	resp.ProviderUsed = "gemini"
 
-	// Log successful processing
 	LogInfo("IMPORT", "AI import processing completed", map[string]interface{}{
 		"userId":          user.Id,
 		"familyId":        person.FamilyId,
@@ -249,9 +214,7 @@ type ListAIModelsResponse struct {
 	Error  string   `json:"error,omitempty"`
 }
 
-// ListAIModels returns the list of available AI models
 func ListAIModels(ctx *vbeam.Context, req ListAIModelsRequest) (resp ListAIModelsResponse, err error) {
-	// Check authentication
 	_, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
@@ -268,9 +231,7 @@ func ListAIModels(ctx *vbeam.Context, req ListAIModelsRequest) (resp ListAIModel
 	return
 }
 
-// Helper function to read text files
 func ReadTextFile(reader io.Reader, maxSize int64) (string, error) {
-	// Limit file size to prevent abuse
 	limitedReader := io.LimitReader(reader, maxSize)
 
 	content, err := io.ReadAll(limitedReader)
@@ -281,7 +242,6 @@ func ReadTextFile(reader io.Reader, maxSize int64) (string, error) {
 	return string(content), nil
 }
 
-// formatPersonContext formats a single person's information into a context string for the AI
 func formatPersonContext(person Person) string {
 	return fmt.Sprintf(`PERSON CONTEXT:
 - Person ID: %d
@@ -303,7 +263,6 @@ func formatPersonContext(person Person) string {
 	)
 }
 
-// formatPersonType returns human-readable person type
 func formatPersonType(t PersonType) string {
 	if t == Parent {
 		return "Parent"
@@ -311,7 +270,6 @@ func formatPersonType(t PersonType) string {
 	return "Child"
 }
 
-// formatGender returns human-readable gender
 func formatGender(g GenderType) string {
 	switch g {
 	case Male:
@@ -323,9 +281,7 @@ func formatGender(g GenderType) string {
 	}
 }
 
-// convertToImportDataStructure converts AI import format to full import format
 func convertToImportDataStructure(person Person, aiData AIImportDataStructure) ImportDataStructure {
-	// Create ImportPerson from existing person
 	importPerson := ImportPerson{
 		Id:       person.Id,
 		FamilyId: person.FamilyId,
@@ -337,7 +293,6 @@ func convertToImportDataStructure(person Person, aiData AIImportDataStructure) I
 		ImageId:  person.ProfilePhotoId,
 	}
 
-	// Build full import structure
 	return ImportDataStructure{
 		People:          []ImportPerson{importPerson},
 		Heights:         aiData.Heights,
@@ -351,8 +306,7 @@ func convertToImportDataStructure(person Person, aiData AIImportDataStructure) I
 	}
 }
 
-// Constants for AI processing
 const (
-	MaxTextSize = 1024 * 1024     // 1MB max for unstructured text
-	MaxFileSize = 5 * 1024 * 1024 // 5MB max for uploaded files
+	MaxTextSize = 1024 * 1024
+	MaxFileSize = 5 * 1024 * 1024
 )

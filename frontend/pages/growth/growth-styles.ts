@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Growth Form Page Styles (Add Growth & Edit Growth)
 block(`
 .add-growth-container {
   max-width: 580px;
@@ -53,7 +52,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for growth pages
 block(`
 @media (max-width: 580px) {
   .add-growth-container {

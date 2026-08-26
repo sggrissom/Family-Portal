@@ -11,9 +11,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// The whole point of the defaults is that they hold for an account that has
-// never opened the settings page. A stored bool would read back false there,
-// which would silence a user who never asked to be silenced.
 func TestNotificationPreferenceDefaults(t *testing.T) {
 	db := vbolt.Open(t.TempDir() + "/prefs.db")
 	vbolt.InitBuckets(db, &cfg.Info)
@@ -49,7 +46,6 @@ func TestNotificationPreferencesRoundTrip(t *testing.T) {
 		if got.ChatEnabled != false || got.ShowMessageText != true {
 			t.Errorf("loaded %+v, want the saved values back rather than the defaults", got)
 		}
-		// One account's settings must not answer for another's.
 		if other := loadNotificationPreferences(tx, 8); !other.ChatEnabled {
 			t.Error("a different account picked up the saved preferences")
 		}
@@ -65,14 +61,11 @@ func TestAllowsEventIgnoresPreferencesForTestPushes(t *testing.T) {
 	if !silent.allowsEvent(PushEventTest) {
 		t.Error("an admin test push was suppressed; it verifies the delivery path, not content")
 	}
-	// An event with no spec must not be delivered by accident.
 	if silent.allowsEvent("photo_added") {
 		t.Error("an unknown event was allowed through")
 	}
 }
 
-// A notification is the one thing that shows family content without anybody
-// signing in, so the preview-off wording must name nothing about the family.
 func TestQuietPayloadKeepsFamilyContentOffTheLockScreen(t *testing.T) {
 	job := PushNotificationJob{
 		Event:      PushEventChatMessage,
@@ -95,8 +88,6 @@ func TestQuietPayloadKeepsFamilyContentOffTheLockScreen(t *testing.T) {
 		t.Error("alert body is empty; a notification with no text is not worth delivering")
 	}
 
-	// The routing half is never displayed, so it may carry identifiers — but
-	// not the message text, which would put it back on the device unasked.
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -138,8 +129,6 @@ func TestLongPreviewIsTruncated(t *testing.T) {
 	}
 }
 
-// The app reads the version first and ignores a payload it does not understand,
-// so every payload has to carry one — along with enough to open the right screen.
 func TestPayloadCarriesVersionEventAndDestination(t *testing.T) {
 	payload := buildAPNsPayload(PushNotificationJob{
 		Event:      PushEventChatMessage,
@@ -165,14 +154,11 @@ func TestPayloadCarriesVersionEventAndDestination(t *testing.T) {
 	if payload.Data.FamilyId != 3 {
 		t.Errorf("data.family_id = %d, want 3", payload.Data.FamilyId)
 	}
-	// The pre-versioning field, kept so a shipped build keeps routing.
 	if payload.Data.MessageId != 12 {
 		t.Errorf("data.message_id = %d, want the record id repeated for older builds", payload.Data.MessageId)
 	}
 }
 
-// A test push has no record behind it, so nothing in the payload may point an
-// older build at a chat message id.
 func TestTestPushCarriesNoRecordToOpen(t *testing.T) {
 	payload := buildAPNsPayload(PushNotificationJob{
 		Event:   PushEventTest,
@@ -185,14 +171,11 @@ func TestTestPushCarriesNoRecordToOpen(t *testing.T) {
 	if payload.Data.MessageId != 0 {
 		t.Errorf("data.message_id = %d, want 0", payload.Data.MessageId)
 	}
-	// The admin typed this text to check delivery; it is not family content.
 	if payload.Aps.Alert.Body != "verification ping" {
 		t.Errorf("alert body = %q, want the admin's text verbatim", payload.Aps.Alert.Body)
 	}
 }
 
-// An event the payload builder has no spec for would arrive as a notification
-// the app cannot route, so the producer has to find out at the queue.
 func TestQueueRefusesAnUnknownEvent(t *testing.T) {
 	previous := globalPushWorker
 	globalPushWorker = &PushWorker{jobQueue: make(chan PushNotificationJob, 1)}
@@ -206,7 +189,6 @@ func TestQueueRefusesAnUnknownEvent(t *testing.T) {
 	}
 }
 
-// Turning chat notifications off has to stop the send, not just the wording.
 func TestProcessPushJobSkipsRecipientsWhoTurnedChatOff(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	device := createActivePushDevice(t, db)
@@ -247,8 +229,6 @@ func TestProcessPushJobSkipsRecipientsWhoTurnedChatOff(t *testing.T) {
 	}
 }
 
-// The same account still gets an admin's verification push, because that
-// answers a question about the device rather than delivering content.
 func TestProcessPushJobStillDeliversATestPush(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	device := createActivePushDevice(t, db)

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Compare page container
 block(`
 .compare-page {
   max-width: 1400px;
@@ -30,7 +29,6 @@ block(`
 }
 `);
 
-// Person selector section
 block(`
 .person-selector {
   background: var(--surface);
@@ -99,7 +97,6 @@ block(`
 }
 `);
 
-// Filter controls
 block(`
 .compare-filters {
   background: var(--surface);
@@ -173,7 +170,6 @@ block(`
 }
 `);
 
-// Comparison grid
 block(`
 .comparison-grid {
   display: grid;
@@ -205,7 +201,6 @@ block(`
 }
 `);
 
-// Person comparison column
 block(`
 .person-column {
   background: var(--surface);
@@ -271,7 +266,6 @@ block(`
 }
 `);
 
-// Empty states
 block(`
 .compare-empty-state {
   text-align: center;
@@ -297,7 +291,6 @@ block(`
 }
 `);
 
-// Mobile responsive
 block(`
 @media (max-width: 900px) {
   .comparison-grid.two-column,

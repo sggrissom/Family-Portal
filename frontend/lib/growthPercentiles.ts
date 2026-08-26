@@ -1,7 +1,3 @@
-// WHO 2006 Child Growth Standards (0-24 months) and CDC NCHS 2000 Growth Charts (2-20 years)
-// Percentiles: 3rd, 15th, 50th, 85th, 97th
-// Height in cm, Weight in kg
-
 export interface PercentileRow {
   month: number;
   p3: number;
@@ -11,7 +7,6 @@ export interface PercentileRow {
   p97: number;
 }
 
-// WHO Boys Length-for-age (cm), 0-24 months
 export const whoHeightBoys: PercentileRow[] = [
   { month: 0, p3: 46.1, p15: 47.9, p50: 49.9, p85: 51.9, p97: 53.7 },
   { month: 1, p3: 50.8, p15: 52.8, p50: 54.7, p85: 56.7, p97: 58.6 },
@@ -40,7 +35,6 @@ export const whoHeightBoys: PercentileRow[] = [
   { month: 24, p3: 81.7, p15: 84.7, p50: 87.8, p85: 90.9, p97: 93.9 },
 ];
 
-// WHO Girls Length-for-age (cm), 0-24 months
 export const whoHeightGirls: PercentileRow[] = [
   { month: 0, p3: 45.4, p15: 47.2, p50: 49.1, p85: 51.1, p97: 52.9 },
   { month: 1, p3: 49.8, p15: 51.8, p50: 53.7, p85: 55.7, p97: 57.6 },
@@ -69,7 +63,6 @@ export const whoHeightGirls: PercentileRow[] = [
   { month: 24, p3: 79.6, p15: 83.0, p50: 86.4, p85: 89.8, p97: 93.3 },
 ];
 
-// WHO Boys Weight-for-age (kg), 0-24 months
 export const whoWeightBoys: PercentileRow[] = [
   { month: 0, p3: 2.5, p15: 2.9, p50: 3.3, p85: 3.9, p97: 4.4 },
   { month: 1, p3: 3.4, p15: 3.9, p50: 4.5, p85: 5.1, p97: 5.8 },
@@ -98,7 +91,6 @@ export const whoWeightBoys: PercentileRow[] = [
   { month: 24, p3: 9.8, p15: 10.8, p50: 12.2, p85: 13.7, p97: 15.3 },
 ];
 
-// WHO Girls Weight-for-age (kg), 0-24 months
 export const whoWeightGirls: PercentileRow[] = [
   { month: 0, p3: 2.4, p15: 2.8, p50: 3.2, p85: 3.7, p97: 4.2 },
   { month: 1, p3: 3.2, p15: 3.6, p50: 4.2, p85: 4.8, p97: 5.5 },
@@ -127,7 +119,6 @@ export const whoWeightGirls: PercentileRow[] = [
   { month: 24, p3: 9.0, p15: 10.2, p50: 11.5, p85: 13.1, p97: 14.9 },
 ];
 
-// CDC NCHS 2000 Boys Stature-for-age (cm), annual from 24-240 months (2-20 yr)
 export const cdcHeightBoys: PercentileRow[] = [
   { month: 24, p3: 82.3, p15: 85.1, p50: 87.6, p85: 90.2, p97: 93.0 },
   { month: 36, p3: 89.0, p15: 92.4, p50: 95.7, p85: 98.9, p97: 101.9 },
@@ -150,7 +141,6 @@ export const cdcHeightBoys: PercentileRow[] = [
   { month: 240, p3: 159.0, p15: 166.0, p50: 174.0, p85: 180.6, p97: 186.2 },
 ];
 
-// CDC NCHS 2000 Girls Stature-for-age (cm), annual from 24-240 months (2-20 yr)
 export const cdcHeightGirls: PercentileRow[] = [
   { month: 24, p3: 80.9, p15: 83.7, p50: 86.4, p85: 89.1, p97: 91.9 },
   { month: 36, p3: 88.3, p15: 91.7, p50: 94.9, p85: 98.2, p97: 101.5 },
@@ -173,7 +163,6 @@ export const cdcHeightGirls: PercentileRow[] = [
   { month: 240, p3: 148.7, p15: 154.9, p50: 161.3, p85: 167.5, p97: 173.5 },
 ];
 
-// CDC NCHS 2000 Boys Weight-for-age (kg), annual from 24-240 months (2-20 yr)
 export const cdcWeightBoys: PercentileRow[] = [
   { month: 24, p3: 10.5, p15: 11.6, p50: 12.9, p85: 14.5, p97: 16.4 },
   { month: 36, p3: 12.1, p15: 13.5, p50: 14.9, p85: 17.1, p97: 19.7 },
@@ -196,7 +185,6 @@ export const cdcWeightBoys: PercentileRow[] = [
   { month: 240, p3: 57.4, p15: 66.7, p50: 78.1, p85: 92.8, p97: 114.8 },
 ];
 
-// CDC NCHS 2000 Girls Weight-for-age (kg), annual from 24-240 months (2-20 yr)
 export const cdcWeightGirls: PercentileRow[] = [
   { month: 24, p3: 10.1, p15: 11.2, p50: 12.5, p85: 14.0, p97: 15.9 },
   { month: 36, p3: 11.6, p15: 13.0, p50: 14.6, p85: 16.5, p97: 18.9 },
@@ -219,7 +207,6 @@ export const cdcWeightGirls: PercentileRow[] = [
   { month: 240, p3: 41.5, p15: 50.1, p50: 61.2, p85: 76.9, p97: 101.1 },
 ];
 
-/** Linear interpolation between two adjacent rows in a percentile table. */
 export function interpolatePercentiles(
   table: PercentileRow[],
   ageMonths: number
@@ -246,10 +233,9 @@ export function interpolatePercentiles(
   return null;
 }
 
-/** Pick the right WHO/CDC table and interpolate. Returns null if age is out of range (>240 months). */
 export function getPercentileRow(
   ageMonths: number,
-  gender: number, // 0=Male, 1=Female, 2=Unknown
+  gender: number,
   type: "height" | "weight"
 ): PercentileRow | null {
   if (ageMonths < 0 || ageMonths > 240) return null;
@@ -270,7 +256,6 @@ export function getPercentileRow(
   if (gender === 0) return interpolatePercentiles(maleTable, ageMonths);
   if (gender === 1) return interpolatePercentiles(femaleTable, ageMonths);
 
-  // Unknown: average male and female
   const m = interpolatePercentiles(maleTable, ageMonths);
   const f = interpolatePercentiles(femaleTable, ageMonths);
   if (!m || !f) return m || f;
@@ -284,15 +269,12 @@ export function getPercentileRow(
   };
 }
 
-/** Given a value and a percentile row, returns an approximate percentile rank. */
 function approxPercentileRank(value: number, row: PercentileRow): number | "below" {
   if (value < row.p3) return "below";
   if (value > row.p97) {
     const span = row.p97 - row.p85;
     if (span < 1e-9) return 97;
 
-    // Extrapolate using the 85th-97th segment so values above the top band
-    // still get a more precise rank instead of collapsing to >97th.
     const delta = value - row.p97;
     const extraPercentile = (delta / span) * (97 - 85);
     return Math.min(99.9, 97 + extraPercentile);
@@ -323,16 +305,6 @@ function ordinalSuffix(n: number): string {
   return "th";
 }
 
-/**
- * Returns a human-readable percentile label like "~75th %ile", "<3rd %ile", or "~99.2th %ile".
- * Returns null if the age is out of range (>240 months / >20 years) or birthday is not provided.
- *
- * @param value   Raw measurement value
- * @param unit    Unit of value ("cm", "in", "kg", "lbs")
- * @param ageMonths  Age in months at measurement time
- * @param gender  0=Male, 1=Female, 2=Unknown
- * @param type    "height" or "weight"
- */
 export function computePercentileLabel(
   value: number,
   unit: string,
@@ -342,7 +314,6 @@ export function computePercentileLabel(
 ): string | null {
   if (ageMonths < 0 || ageMonths > 240) return null;
 
-  // Normalize to metric
   let normalized = value;
   if (unit === "in") normalized = value * 2.54;
   else if (unit === "lbs") normalized = value * 0.453592;
@@ -361,14 +332,12 @@ export function computePercentileLabel(
   return `~${rounded}${ordinalSuffix(rounded)} %ile`;
 }
 
-/** Returns true if birthday is a real date (not Go's zero time "0001-01-01"). */
 export function isValidBirthday(birthday: string | undefined | null): birthday is string {
   if (!birthday) return false;
   const year = new Date(birthday).getFullYear();
   return year > 1000;
 }
 
-/** Calculate age in months between two dates. */
 export function ageInMonths(birthday: string | Date, measurementDate: string | Date): number {
   const birth = new Date(birthday);
   const measure = new Date(measurementDate);
@@ -378,7 +347,6 @@ export function ageInMonths(birthday: string | Date, measurementDate: string | D
   return yearDiff * 12 + monthDiff + dayDiff / 30.4375;
 }
 
-/** Format an age in months as a human-readable string. */
 export function formatAgeAtMeasurement(ageMonths: number): string {
   if (ageMonths < 0) return "—";
   if (ageMonths < 24) {

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Edit Photo Page Container
 block(`
 .edit-photo-container {
   max-width: 600px;
@@ -19,7 +18,6 @@ block(`
 }
 `);
 
-// Ensure auth-card doesn't restrict content
 block(`
 .edit-photo-page .auth-card {
   max-height: none;
@@ -28,7 +26,6 @@ block(`
 }
 `);
 
-// Photo preview section
 block(`
 .photo-preview {
   display: flex;
@@ -68,7 +65,6 @@ block(`
 }
 `);
 
-// Form actions
 block(`
 .form-actions {
   display: flex;
@@ -83,9 +79,6 @@ block(`
 }
 `);
 
-// Remove duplicate button styles - use global styles from styles.ts instead
-
-// Error page
 block(`
 .error-page {
   text-align: center;
@@ -107,7 +100,6 @@ block(`
 }
 `);
 
-// Tag picker
 block(`
 .tag-picker {
   display: flex;
@@ -149,7 +141,6 @@ block(`
 }
 `);
 
-// Responsive design
 block(`
 @media (max-width: 768px) {
   .edit-photo-container {

@@ -38,7 +38,7 @@ const formatPhotoDate = (dateString: string) => {
   if (dateString.includes("T") && dateString.endsWith("Z")) {
     const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const month = parseInt(dateParts[1]) - 1;
     const day = parseInt(dateParts[2]);
     return new Date(year, month, day).toLocaleDateString();
   }
@@ -103,7 +103,6 @@ async function handleDeletePhoto(photo: server.Image) {
 
     if (resp && resp.success) {
       alert("Photo deleted successfully");
-      // Navigate back to family photos page
       core.setRoute("/photos");
     } else {
       alert("Failed to delete photo");
@@ -136,7 +135,6 @@ async function handleSetProfilePhoto(
 
     if (resp && resp.person) {
       alert("Profile photo set successfully");
-      // Refresh the page to show updated data
       core.setRoute(`/view-photo/${photo.id}`);
     } else {
       alert("Failed to set profile photo");
@@ -146,7 +144,6 @@ async function handleSetProfilePhoto(
   }
 }
 
-// State for crop modal
 type CropModalState = {
   isOpen: boolean;
   personId: number;
@@ -171,7 +168,6 @@ function openCropModal(state: CropModalState, person: server.Person) {
   state.isOpen = true;
   state.personId = person.id;
   state.personName = person.name;
-  // Use existing crop values if this is already the profile photo
   state.cropX = person.profileCropX || 50;
   state.cropY = person.profileCropY || 50;
   state.cropScale = person.profileCropScale || 1;
@@ -200,14 +196,12 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
 
   return (
     <div className="view-photo-page">
-      {/* Header with navigation */}
       <div className="photo-header">
         <a href="/photos" className="back-link">
           ← Back to Photos
         </a>
       </div>
 
-      {/* Main photo display */}
       <div className="photo-display">
         <FullImage
           photoId={photo.id}
@@ -217,14 +211,12 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
         />
       </div>
 
-      {/* Photo information */}
       <div className="photo-info-panel">
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
           <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
           {photo.description && <div className="view-photo-description">{photo.description}</div>}
 
-          {/* People in the photo */}
           <div className="photo-people">
             {people.length > 0 ? (
               <div>
@@ -250,7 +242,6 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
             )}
           </div>
 
-          {/* Tags */}
           {photo.tagIds && photo.tagIds.length > 0 && (
             <div className="photo-tags">
               <h3>Tags</h3>
@@ -276,13 +267,11 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="photo-actions">
           <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
             ✏️ Edit
           </a>
 
-          {/* Profile photo buttons for each person */}
           {people.length > 0 && (
             <div className="profile-photo-actions">
               <h4>Set as Profile Photo:</h4>
@@ -314,7 +303,6 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
         </div>
       </div>
 
-      {/* Crop selector modal */}
       {cropModalState.isOpen && (
         <CropSelector
           photoId={photo.id}

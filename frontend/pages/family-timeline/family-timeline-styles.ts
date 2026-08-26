@@ -196,8 +196,6 @@ block(`
 }
 `);
 
-/* ── Year jump navigation (Phase 3) ── */
-
 block(`
 .year-jump-nav {
   display: flex;
@@ -230,8 +228,6 @@ block(`
 }
 `);
 
-/* ── Timeline spine + year groups (Phase 1) ── */
-
 block(`
 .timeline-items {
   display: flex;
@@ -253,8 +249,6 @@ block(`
   border-radius: 1px;
 }
 `);
-
-/* Year banner */
 
 block(`
 .year-banner {
@@ -293,8 +287,6 @@ block(`
   opacity: 0.5;
 }
 `);
-
-/* Timeline items */
 
 block(`
 .timeline-item {
@@ -399,8 +391,6 @@ block(`
   color: rgb(59, 130, 246);
 }
 `);
-
-/* Birthday item (Phase 2) */
 
 block(`
 .birthday-item {

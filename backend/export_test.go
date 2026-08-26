@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for data export functionality
-// Tests: export data structures, database queries, unit conversions, family isolation
 package backend
 
 import (
@@ -15,7 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Test export data structure and JSON serialization
 func TestExportDataStructure(t *testing.T) {
 	exportData := ExportDataStructure{
 		People: []ImportPerson{
@@ -34,7 +31,7 @@ func TestExportDataStructure(t *testing.T) {
 			{
 				Id:         1,
 				PersonId:   1,
-				Inches:     39.37, // 100 cm
+				Inches:     39.37,
 				Date:       time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
 				DateString: "2023-06-15",
 				Age:        3.5,
@@ -45,7 +42,7 @@ func TestExportDataStructure(t *testing.T) {
 			{
 				Id:         1,
 				PersonId:   1,
-				Pounds:     44.09, // 20 kg
+				Pounds:     44.09,
 				Date:       time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
 				DateString: "2023-06-15",
 				Age:        3.5,
@@ -71,20 +68,17 @@ func TestExportDataStructure(t *testing.T) {
 		TotalMilestones: 1,
 	}
 
-	// Test JSON serialization
 	jsonData, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal export data: %v", err)
 	}
 
-	// Test JSON deserialization
 	var decoded ExportDataStructure
 	err = json.Unmarshal(jsonData, &decoded)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal export data: %v", err)
 	}
 
-	// Verify data integrity
 	if len(decoded.People) != 1 {
 		t.Errorf("Expected 1 person, got %d", len(decoded.People))
 	}
@@ -98,7 +92,6 @@ func TestExportDataStructure(t *testing.T) {
 		t.Errorf("Expected 1 milestone, got %d", len(decoded.Milestones))
 	}
 
-	// Verify specific data
 	person := decoded.People[0]
 	if person.Name != "Test Child" {
 		t.Errorf("Expected person name 'Test Child', got '%s'", person.Name)
@@ -120,7 +113,6 @@ func TestExportDataStructure(t *testing.T) {
 	}
 }
 
-// Test unit conversion functions
 func TestUnitConversions(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -158,13 +150,11 @@ func TestUnitConversions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test cm to inches
 			convertedInches := tc.cm / 2.54
 			if math.Abs(convertedInches-tc.inches) > tc.tolerance {
 				t.Errorf("CM to inches: expected %f, got %f", tc.inches, convertedInches)
 			}
 
-			// Test kg to pounds
 			convertedPounds := tc.kg * 2.20462
 			if math.Abs(convertedPounds-tc.pounds) > tc.tolerance {
 				t.Errorf("KG to pounds: expected %f, got %f", tc.pounds, convertedPounds)
@@ -173,7 +163,6 @@ func TestUnitConversions(t *testing.T) {
 	}
 }
 
-// Test age calculation function
 func TestCalculateAgeAtDate(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -222,7 +211,6 @@ func TestCalculateAgeAtDate(t *testing.T) {
 	}
 }
 
-// Test family data isolation in export context
 func TestExportFamilyDataIsolation(t *testing.T) {
 	testDBPath := "test_export_isolation.db"
 	db := vbolt.Open(testDBPath)
@@ -233,7 +221,6 @@ func TestExportFamilyDataIsolation(t *testing.T) {
 	var testUser1, testUser2 User
 	var family1Id, family2Id int
 
-	// Setup: Create two users in different families
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq1 := CreateAccountRequest{
 			Name:            "User One",
@@ -258,12 +245,10 @@ func TestExportFamilyDataIsolation(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test family people isolation
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		family1People := GetFamilyPeople(tx, family1Id)
 		family2People := GetFamilyPeople(tx, family2Id)
 
-		// Each family should only have their own people
 		for _, person := range family1People {
 			if person.FamilyId != family1Id {
 				t.Errorf("Family 1 people query returned person from family %d", person.FamilyId)
@@ -276,14 +261,12 @@ func TestExportFamilyDataIsolation(t *testing.T) {
 			}
 		}
 
-		// Families should be different
 		if family1Id == family2Id {
 			t.Error("Different users should have different family IDs")
 		}
 	})
 }
 
-// Test export data completeness validation
 func TestExportDataCompleteness(t *testing.T) {
 	testDBPath := "test_export_completeness.db"
 	db := vbolt.Open(testDBPath)
@@ -294,7 +277,6 @@ func TestExportDataCompleteness(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup: Create comprehensive test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -305,11 +287,10 @@ func TestExportDataCompleteness(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Add a person
 		personReq := AddPersonRequest{
 			Name:       "Test Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-06-15",
 		}
 		var err error
@@ -321,9 +302,7 @@ func TestExportDataCompleteness(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test data retrieval functions
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Test people retrieval
 		people := GetFamilyPeople(tx, testUser.FamilyId)
 		if len(people) == 0 {
 			t.Error("No people found for family")
@@ -345,27 +324,22 @@ func TestExportDataCompleteness(t *testing.T) {
 			t.Error("Test person not found in family people")
 		}
 
-		// Test milestones retrieval (empty case)
 		var milestoneIds []int
 		vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, testUser.FamilyId, &milestoneIds, vbolt.Window{})
 
-		// Should be empty for new family
 		if len(milestoneIds) != 0 {
 			t.Errorf("Expected 0 milestones for new family, got %d", len(milestoneIds))
 		}
 
-		// Test growth data retrieval (empty case)
 		var growthDataIds []int
 		vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, testUser.FamilyId, &growthDataIds, vbolt.Window{})
 
-		// Should be empty for new family
 		if len(growthDataIds) != 0 {
 			t.Errorf("Expected 0 growth data entries for new family, got %d", len(growthDataIds))
 		}
 	})
 }
 
-// Test empty family export scenario
 func TestEmptyFamilyExport(t *testing.T) {
 	testDBPath := "test_empty_export.db"
 	db := vbolt.Open(testDBPath)
@@ -375,7 +349,6 @@ func TestEmptyFamilyExport(t *testing.T) {
 
 	var testUser User
 
-	// Setup: Create user with minimal data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -388,22 +361,17 @@ func TestEmptyFamilyExport(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test empty data retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Get people (should be empty or just the user's automatically created person)
 		people := GetFamilyPeople(tx, testUser.FamilyId)
 
-		// Get milestones (should be empty)
 		var milestoneIds []int
 		vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, testUser.FamilyId, &milestoneIds, vbolt.Window{})
 
-		// Get growth data (should be empty)
 		var growthDataIds []int
 		vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, testUser.FamilyId, &growthDataIds, vbolt.Window{})
 
-		// Simulate building export data structure
 		exportData := ExportDataStructure{
-			People:          []ImportPerson{}, // Would be populated from people
+			People:          []ImportPerson{},
 			Heights:         []ImportHeight{},
 			Weights:         []ImportWeight{},
 			Milestones:      []ExportMilestone{},
@@ -414,7 +382,6 @@ func TestEmptyFamilyExport(t *testing.T) {
 			TotalMilestones: len(milestoneIds),
 		}
 
-		// Verify structure is valid even when empty
 		if exportData.TotalHeights != 0 {
 			t.Errorf("Expected 0 total heights, got %d", exportData.TotalHeights)
 		}
@@ -428,7 +395,6 @@ func TestEmptyFamilyExport(t *testing.T) {
 			t.Errorf("Expected 0 growth data entries, got %d", len(growthDataIds))
 		}
 
-		// Export date should be set
 		if exportData.ExportDate.IsZero() {
 			t.Error("Export date should be set even for empty export")
 		}
@@ -460,7 +426,6 @@ func TestExportPhotoStructure(t *testing.T) {
 }
 
 func TestExportDataStructurePhotoOmitempty(t *testing.T) {
-	// Photos present → field appears in JSON
 	with := ExportDataStructure{
 		Photos:      []ExportPhoto{{Id: 1, ZipPath: "photos/a_original.jpg"}},
 		TotalPhotos: 1,
@@ -471,7 +436,6 @@ func TestExportDataStructurePhotoOmitempty(t *testing.T) {
 		t.Error("expected photos field in JSON")
 	}
 
-	// No photos → omitempty suppresses the field
 	without := ExportDataStructure{ExportDate: time.Now()}
 	data2, _ := json.Marshal(without)
 	if strings.Contains(string(data2), `"photos"`) {
@@ -479,9 +443,7 @@ func TestExportDataStructurePhotoOmitempty(t *testing.T) {
 	}
 }
 
-// Test export/import compatibility
 func TestExportImportCompatibility(t *testing.T) {
-	// Create sample export data in the expected format
 	exportData := ExportDataStructure{
 		People: []ImportPerson{
 			{
@@ -523,20 +485,17 @@ func TestExportImportCompatibility(t *testing.T) {
 		TotalPeople:  1,
 	}
 
-	// Test that export data can be marshaled to JSON
 	jsonData, err := json.Marshal(exportData)
 	if err != nil {
 		t.Fatalf("Failed to marshal export data: %v", err)
 	}
 
-	// Test that JSON can be unmarshaled back to ImportDataStructure
 	var importData ImportDataStructure
 	err = json.Unmarshal(jsonData, &importData)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal as import data: %v", err)
 	}
 
-	// Verify data compatibility
 	if len(importData.People) != 1 {
 		t.Errorf("Expected 1 person in import data, got %d", len(importData.People))
 	}
@@ -547,7 +506,6 @@ func TestExportImportCompatibility(t *testing.T) {
 		t.Errorf("Expected 1 weight in import data, got %d", len(importData.Weights))
 	}
 
-	// Verify specific field compatibility
 	person := importData.People[0]
 	if person.Name != "Test Child" {
 		t.Errorf("Person name not preserved: expected 'Test Child', got '%s'", person.Name)

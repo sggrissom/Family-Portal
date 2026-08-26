@@ -12,7 +12,6 @@ import (
 )
 
 func TestLogStructured(t *testing.T) {
-	// Capture log output
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer log.SetOutput(os.Stderr)
@@ -288,15 +287,12 @@ func TestLogEntryJSONStructure(t *testing.T) {
 
 	output := strings.TrimSpace(buf.String())
 
-	// Extract just the JSON part (after the timestamp prefix)
-	// The format is "YYYY/MM/DD HH:MM:SS {json}"
 	parts := strings.SplitN(output, " {", 2)
 	if len(parts) != 2 {
 		t.Fatalf("Expected log output to contain JSON, got: %s", output)
 	}
 	jsonPart := "{" + parts[1]
 
-	// Parse the JSON to verify structure
 	var entry logEntry
 	err := json.Unmarshal([]byte(jsonPart), &entry)
 	if err != nil {
@@ -304,7 +300,6 @@ func TestLogEntryJSONStructure(t *testing.T) {
 		return
 	}
 
-	// Verify fields
 	if entry.Level != logLevelInfo {
 		t.Errorf("Expected level 'INFO', got '%s'", entry.Level)
 	}
@@ -325,7 +320,6 @@ func TestLogEntryJSONStructure(t *testing.T) {
 		t.Errorf("Expected UserAgent 'test-browser/1.0', got '%s'", entry.UserAgent)
 	}
 
-	// Verify timestamp is recent (within 1 second)
 	if time.Since(entry.Timestamp) > time.Second {
 		t.Error("Expected timestamp to be recent")
 	}
@@ -354,8 +348,6 @@ func TestRedactEmail(t *testing.T) {
 	}
 }
 
-// The local part is the identifying half of an address; whatever else redaction
-// does, it must not survive into a log line.
 func TestRedactEmailDropsTheLocalPart(t *testing.T) {
 	const email = "verydistinctivename@example.com"
 

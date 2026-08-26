@@ -18,7 +18,6 @@ func RegisterUserMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, JoinFamily)
 }
 
-// Request/Response types
 type CreateAccountRequest struct {
 	Name                   string `json:"name"`
 	Email                  string `json:"email"`
@@ -58,7 +57,6 @@ type AuthResponse struct {
 	Families []FamilyRef `json:"families"`
 }
 
-// FamilyRef names one family the user belongs to, and what they may do in it.
 type FamilyRef struct {
 	Id        int         `json:"id"`
 	Name      string      `json:"name"`
@@ -73,8 +71,6 @@ type FamilyInfoResponse struct {
 	Families   []FamilyInfo `json:"families"`
 }
 
-// FamilyInfo describes one family the user belongs to, including the code used
-// to invite others into it.
 type FamilyInfo struct {
 	Id         int         `json:"id"`
 	Name       string      `json:"name"`
@@ -93,7 +89,6 @@ type JoinFamilyResponse struct {
 	Auth    AuthResponse `json:"auth,omitempty"`
 }
 
-// Database types
 type User struct {
 	Id        int       `json:"id"`
 	Name      string    `json:"name"`
@@ -111,7 +106,6 @@ type Family struct {
 	CreatedBy  int       `json:"createdBy"`
 }
 
-// Packing functions for vbolt serialization
 func PackUser(self *User, buf *vpack.Buffer) {
 	vpack.Version(1, buf)
 	vpack.Int(&self.Id, buf)
@@ -131,23 +125,17 @@ func PackFamily(self *Family, buf *vpack.Buffer) {
 	vpack.Int(&self.CreatedBy, buf)
 }
 
-// Buckets for vbolt database storage
 var UsersBkt = vbolt.Bucket(&cfg.Info, "users", vpack.FInt, PackUser)
 var FamiliesBkt = vbolt.Bucket(&cfg.Info, "families", vpack.FInt, PackFamily)
 
-// user id => hashed password
 var PasswdBkt = vbolt.Bucket(&cfg.Info, "passwd", vpack.FInt, vpack.ByteSlice)
 
-// email => user id
 var EmailBkt = vbolt.Bucket(&cfg.Info, "email", vpack.StringZ, vpack.Int)
 
-// invite code => family id
 var InviteCodeBkt = vbolt.Bucket(&cfg.Info, "invite_codes", vpack.StringZ, vpack.Int)
 
-// UsersByFamilyIndex: term = family_id, target = user_id
 var UsersByFamilyIndex = vbolt.Index(&cfg.Info, "users_by_family", vpack.FInt, vpack.FInt)
 
-// Database helper functions
 func GetUserId(tx *vbolt.Tx, email string) (userId int) {
 	vbolt.Read(tx, EmailBkt, email, &userId)
 	return
@@ -168,9 +156,6 @@ func GetFamily(tx *vbolt.Tx, familyId int) (family Family) {
 	return
 }
 
-// GetFamilyUserIds returns all user IDs for a given family. UsersByFamilyIndex
-// only tracks each user's primary family, so members who joined the family as a
-// secondary one are picked up from FamilyMembership.
 func GetFamilyUserIds(tx *vbolt.Tx, familyId int) (userIds []int) {
 	if familyId == 0 {
 		return
@@ -207,7 +192,6 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 	user.Creation = time.Now()
 	user.LastLogin = time.Now()
 
-	// Handle family assignment
 	if req.FamilyCode != "" {
 		family := GetFamilyByInviteCode(tx, req.FamilyCode)
 		if family.Id != 0 {
@@ -215,20 +199,15 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 		}
 	}
 
-	// If no family or invalid code, create new family
 	if user.FamilyId == 0 {
 		family := createFamilyTx(tx, user.Name+"'s Family", user.Id)
 		user.FamilyId = family.Id
 	}
 
-	// Save user data
 	vbolt.Write(tx, UsersBkt, user.Id, &user)
-	// Store password hash (can be empty for OAuth users)
 	vbolt.Write(tx, PasswdBkt, user.Id, &hash)
 	vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
-	// Index user by family
 	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, user.FamilyId)
-	// Record membership alongside the primary family. Nothing reads this yet.
 	EnsureMembershipTx(tx, user.Id, user.FamilyId, AccessAdmin)
 
 	return user
@@ -241,11 +220,9 @@ func createFamilyTx(tx *vbolt.Tx, familyName string, createdBy int) Family {
 	family.Creation = time.Now()
 	family.CreatedBy = createdBy
 
-	// Generate invite code
 	inviteCode := generateUniqueInviteCodeTx(tx)
 	family.InviteCode = inviteCode
 
-	// Save family data
 	vbolt.Write(tx, FamiliesBkt, family.Id, &family)
 	vbolt.Write(tx, InviteCodeBkt, inviteCode, &family.Id)
 
@@ -253,21 +230,12 @@ func createFamilyTx(tx *vbolt.Tx, familyName string, createdBy int) Family {
 }
 
 func generateInviteCode() string {
-	// Generate a simple 8-character invite code
-	token, _ := generateToken(4) // 4 bytes = 8 hex characters
+	token, _ := generateToken(4)
 	return token[:8]
 }
 
-// inviteCodeAttempts bounds the search for an unused code. Eight hex characters
-// is a space of four billion, so a second attempt is already improbable; the
-// limit exists so a pathological case cannot spin rather than because collisions
-// are expected.
 const inviteCodeAttempts = 8
 
-// generateUniqueInviteCodeTx returns a code no family is currently using.
-// Without the check a collision would silently point one family's code at
-// another's household, which is worse than any birthday-bound argument about how
-// unlikely that is.
 func generateUniqueInviteCodeTx(tx *vbolt.Tx) string {
 	var code string
 	for range inviteCodeAttempts {
@@ -278,8 +246,6 @@ func generateUniqueInviteCodeTx(tx *vbolt.Tx) string {
 			return code
 		}
 	}
-	// Every attempt collided, which should not happen. Returning the last one
-	// keeps the caller working; the log is what makes the situation visible.
 	LogErrorSimple(LogCategorySystem, "Could not find an unused invite code", map[string]interface{}{
 		"attempts": inviteCodeAttempts,
 	})
@@ -333,8 +299,6 @@ func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
 	return resp
 }
 
-// GetAuthResponseForUser is the form used by the plain HTTP auth handlers,
-// which have no transaction of their own to read memberships with.
 func GetAuthResponseForUser(user User) (resp AuthResponse) {
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		resp = GetAuthResponseFromUser(tx, user)
@@ -342,16 +306,13 @@ func GetAuthResponseForUser(user User) (resp AuthResponse) {
 	return
 }
 
-// vbeam procedures
 func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAccountResponse, err error) {
-	// Validate request
 	if err = validateCreateAccountRequest(req); err != nil {
 		resp.Success = false
 		resp.Error = err.Error()
 		return
 	}
 
-	// Check if email already exists
 	userId := GetUserId(ctx.Tx, req.Email)
 	if userId != 0 {
 		resp.Success = false
@@ -359,7 +320,6 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 		return
 	}
 
-	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		resp.Success = false
@@ -367,7 +327,6 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 		return
 	}
 
-	// Create user
 	vbeam.UseWriteTx(ctx)
 	user := AddUserTx(ctx.Tx, req, hash)
 	if req.InitialPersonBirthdate != "" {
@@ -378,11 +337,9 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 			return
 		}
 	}
-	// Built before the commit so it sees the membership AddUserTx just wrote.
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 
-	// Return success response
 	resp.Success = true
 	resp.Auth = auth
 	tokenString, tokenErr := generateJwtTokenString(user)
@@ -436,8 +393,6 @@ func GetFamilyInfo(ctx *vbeam.Context, req Empty) (resp FamilyInfoResponse, err 
 		return
 	}
 
-	// The top-level fields describe the primary family, which is what callers
-	// predating multi-family membership expect to find here.
 	primary := resp.Families[0]
 	resp.Id = primary.Id
 	resp.Name = primary.Name
@@ -446,7 +401,6 @@ func GetFamilyInfo(ctx *vbeam.Context, req Empty) (resp FamilyInfoResponse, err 
 }
 
 func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyResponse, err error) {
-	// Get authenticated user
 	user, err := GetAuthUser(ctx)
 	if err != nil {
 		resp.Success = false
@@ -454,14 +408,12 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 		return
 	}
 
-	// Validate invite code
 	if req.InviteCode == "" {
 		resp.Success = false
 		resp.Error = "Invite code is required"
 		return
 	}
 
-	// Find family by invite code
 	family := GetFamilyByInviteCode(ctx.Tx, req.InviteCode)
 	if family.Id == 0 {
 		resp.Success = false
@@ -469,16 +421,12 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 		return
 	}
 
-	// Check if user is already in this family
 	if _, alreadyMember := FindMembership(ctx.Tx, user.Id, family.Id); alreadyMember || user.FamilyId == family.Id {
 		resp.Success = false
 		resp.Error = "You are already a member of this family"
 		return
 	}
 
-	// Joining adds a family rather than moving between them. The primary
-	// family is left alone, so it keeps naming the user's own household and
-	// stays the default context for mutations that name no family.
 	vbeam.UseWriteTx(ctx)
 	EnsureMembershipTx(ctx.Tx, user.Id, family.Id, AccessAdmin)
 	if user.FamilyId == 0 {
@@ -486,11 +434,9 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 		vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
 		vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
 	}
-	// Built before the commit so it sees the membership just written.
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 
-	// Return success response
 	resp.Success = true
 	resp.Auth = auth
 	return
@@ -516,7 +462,6 @@ func validateCreateAccountRequest(req CreateAccountRequest) error {
 		}
 	}
 
-	// Allow empty passwords for OAuth users
 	if req.Password != "" {
 		if len(req.Password) < 8 {
 			return errors.New("Password must be at least 8 characters")

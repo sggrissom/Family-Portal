@@ -1,25 +1,12 @@
-// Vocabulary for the activities UI, keyed by Activity.Kind.
-//
-// Nothing in backend/ knows the word "routine" or "competition" — the schema
-// is deliberately activity-agnostic (Event, Entry, Appearance). This map is
-// the only place the domain word comes back, so shipping a sport label pack is
-// a second entry here rather than a second set of screens.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as server from "../../server";
 
 export interface ActivityLabels {
-  // A season's competitions / games / meets.
   event: string;
   eventPlural: string;
-  // The recurring competitive unit: a routine, a team, a swim event.
   entry: string;
   entryPlural: string;
-  // One entry at one event.
   appearance: string;
   appearancePlural: string;
-  // What the people on an entry are called collectively.
   roster: string;
 }
 
@@ -53,9 +40,6 @@ const generic: ActivityLabels = {
   roster: "Members",
 };
 
-// Kind values the backend normalizes to. Anything else it stores becomes
-// "generic", so the default branch here is not dead code — it is the same
-// fallback normalizeActivityKind applies on write.
 export const ActivityKindDance = "dance";
 export const ActivityKindSport = "sport";
 export const ActivityKindGeneric = "generic";

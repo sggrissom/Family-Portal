@@ -1,14 +1,3 @@
-// One child's activities: every routine they are on and every performance of
-// those routines, grouped by season.
-//
-// This is the fourth question in docs/activities-plan.md, and the only one of
-// the four with a screen that a linked household can reach. The other three
-// pages all start from /activities, which resolves an acting family — a
-// household that was shared one child has none, so without this page
-// ScopeActivities is a checkbox that grants nothing anyone can see.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -47,9 +36,6 @@ export async function fetch(
     return rpc.ok<PersonActivitiesData>({ season: emptySeason, people: [] });
   }
 
-  // seasonId 0 asks for every season the child has ever been in. A linked
-  // household cannot list seasons — those have no person dimension — so this
-  // page never has one to narrow by.
   const [season, seasonErr] = await server.GetPersonSeason({
     personId: getIdFromRoute(route) || 0,
     seasonId: 0,
@@ -58,16 +44,10 @@ export async function fetch(
     return [null, seasonErr || "Failed to load activities"];
   }
 
-  // Names for the subject of the page and for any result narrowed to one
-  // performer. A viewer who reached this child through a link may not see
-  // every co-performer, so a missing name is normal rather than an error.
   const [people] = await server.ListPeople({});
   return rpc.ok<PersonActivitiesData>({ season, people: people?.people ?? [] });
 }
 
-// countLabels is the same honest tally the routine page shows: an exact count
-// per adjudication label, never a ranking. Diamond and Gold are strings, and
-// every host uses its own scale.
 function countLabels(appearances: server.AppearanceDetail[]): { label: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const detail of appearances) {
@@ -87,8 +67,6 @@ function entryTraits(entry: server.Entry): string {
   return [entry.format, entry.style, entry.division, entry.level].filter(part => part).join(" · ");
 }
 
-// appearanceWhen prefers the performance's own time and falls back to the
-// competition's dates, which is the same fallback the server sorts on.
 function appearanceWhen(detail: server.AppearanceDetail): string {
   if (isRealDate(detail.appearance.occurredAt)) {
     return formatDate(detail.appearance.occurredAt);
@@ -110,11 +88,6 @@ export function view(
   const person = data.people.find(p => p.id === personId);
   const name = person?.name ?? "This person";
 
-  // Season and competition pages take plain family access, so a linked
-  // household cannot open either — GetSeasonOverview and GetEventDetail have
-  // no person dimension to reach through. Only link to them for a viewer whose
-  // own family owns the child. The routine page is different: it resolves
-  // through the roster, so everyone who can see this page can open it.
   const ownsPerson = !!person && auth.getFamilies().some(family => family.id === person.familyId);
 
   const seasons = data.season.seasons ?? [];
@@ -174,9 +147,6 @@ const SeasonGroup = ({
   people: server.Person[];
   ownsPerson: boolean;
 }): preact.ComponentChild => {
-  // The label pack comes off the season's activity kind, which is why
-  // SeasonSummary carries it — a page that spans a dance season and a soccer
-  // season needs both vocabularies at once.
   const labels = labelsForKind(season.kind);
   const dates = formatDateRange(season.startDate, season.endDate);
   const adjudications = countLabels(appearances);

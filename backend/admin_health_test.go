@@ -11,9 +11,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// TestGetSystemHealthReportsEveryProblemClass walks the aggregation the landing
-// page depends on: one call, every subsystem, and Healthy false if any of them
-// has something to say.
 func TestGetSystemHealthReportsEveryProblemClass(t *testing.T) {
 	now := time.Now().UTC()
 	recent := now.Add(-2 * time.Hour).Format(time.RFC3339)
@@ -31,7 +28,6 @@ func TestGetSystemHealthReportsEveryProblemClass(t *testing.T) {
 	token := adminContext(t, db)
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Failed, stranded in Processing, in progress, and failed analysis.
 		images := []Image{
 			{Id: 1, FamilyId: 1, Status: 2, CreatedAt: now.Add(-2 * time.Hour)},
 			{Id: 2, FamilyId: 1, Status: 1, CreatedAt: now.Add(-3 * time.Hour)},
@@ -67,8 +63,6 @@ func TestGetSystemHealthReportsEveryProblemClass(t *testing.T) {
 		if resp.Logs.WindowHours != 24 {
 			t.Errorf("WindowHours = %d, want 24", resp.Logs.WindowHours)
 		}
-		// The reference code is the join key into the log viewer's lookup, so
-		// it has to survive into the feed.
 		if len(resp.Logs.RecentErrors) != 1 {
 			t.Fatalf("RecentErrors has %d entries, want 1", len(resp.Logs.RecentErrors))
 		}
@@ -100,8 +94,6 @@ func TestGetSystemHealthReportsEveryProblemClass(t *testing.T) {
 	})
 }
 
-// TestGetSystemHealthIsQuietWhenNothingIsWrong: a green page has to mean
-// something, so nothing may report a problem on its own.
 func TestGetSystemHealthIsQuietWhenNothingIsWrong(t *testing.T) {
 	recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
 	withLogDir(t, map[string]string{
@@ -112,7 +104,6 @@ func TestGetSystemHealthIsQuietWhenNothingIsWrong(t *testing.T) {
 	db := logTestDB(t, "test_system_health_quiet.db")
 	token := adminContext(t, db)
 
-	// A photo worker has to be running, or a stopped one is itself a problem.
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
@@ -123,8 +114,6 @@ func TestGetSystemHealthIsQuietWhenNothingIsWrong(t *testing.T) {
 		globalPhotoWorker = nil
 	})
 
-	// The config check reads the real environment, which a test machine does
-	// not have set up; assert on the parts this test controls instead.
 	var resp SystemHealthResponse
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		var err error
@@ -145,12 +134,7 @@ func TestGetSystemHealthIsQuietWhenNothingIsWrong(t *testing.T) {
 	}
 }
 
-// TestGetSystemHealthFlagsMissingLogs — no log file written today means either
-// a fresh deploy or a logger writing nowhere, and the page should not present
-// "zero errors" as good news in that case.
 func TestGetSystemHealthFlagsMissingLogs(t *testing.T) {
-	// Deliberately no withLogDir: whatever cfg.LogDir holds, nothing in it was
-	// written inside the window.
 	if entries, err := os.ReadDir(cfg.LogDir); err == nil && len(entries) > 0 {
 		t.Skip("cfg.LogDir already holds log files")
 	}

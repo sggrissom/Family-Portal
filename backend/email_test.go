@@ -117,8 +117,6 @@ func TestSendMailRejectsHeaderInjection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// A rejection happens before any network call, so this never
-			// contacts an SMTP server.
 			if err := SendMail(tt.to, tt.subject, "body"); err == nil {
 				t.Error("SendMail() accepted a message that could forge headers")
 			}
@@ -140,8 +138,6 @@ func TestBuildMessageUsesCRLF(t *testing.T) {
 	}
 }
 
-// An undeliverable password reset email must not leave its link in the log of a
-// production server, where it would outlive the link's own expiry.
 func TestLogMailFallbackKeepsBodiesOutOfReleaseLogs(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -161,8 +157,6 @@ func TestLogMailFallbackKeepsBodiesOutOfReleaseLogs(t *testing.T) {
 		return
 	}
 
-	// Local builds print the link on purpose: it is how you finish a password
-	// reset without a configured mail server.
 	if !strings.Contains(output, link) {
 		t.Error("local build did not print the reset link")
 	}

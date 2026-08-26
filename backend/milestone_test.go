@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for milestone functionality
-// Tests: adding milestones, date parsing, validation, multiple milestones
 package backend
 
 import (
@@ -22,9 +20,7 @@ func TestAddMilestone(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup: Create test user and person
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create user
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
 			Email:           "test@example.com",
@@ -34,11 +30,10 @@ func TestAddMilestone(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Create person
 		personReq := AddPersonRequest{
 			Name:       "Test Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-06-15",
 		}
 		var err error
@@ -49,7 +44,6 @@ func TestAddMilestone(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test valid milestone requests
 	validRequests := []AddMilestoneRequest{
 		{
 			PersonId:      testPerson.Id,
@@ -89,7 +83,6 @@ func TestAddMilestone(t *testing.T) {
 		},
 	}
 
-	// Test adding valid milestones
 	var addedMilestones []Milestone
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for _, req := range validRequests {
@@ -99,7 +92,6 @@ func TestAddMilestone(t *testing.T) {
 			}
 			addedMilestones = append(addedMilestones, milestone)
 
-			// Verify basic fields
 			if milestone.PersonId != req.PersonId {
 				t.Errorf("Expected PersonId %d, got %d", req.PersonId, milestone.PersonId)
 			}
@@ -122,14 +114,13 @@ func TestAddMilestone(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test invalid milestone requests - database level checks
 	databaseInvalidRequests := []struct {
 		request     AddMilestoneRequest
 		description string
 	}{
 		{
 			request: AddMilestoneRequest{
-				PersonId:    99999, // Non-existent person
+				PersonId:    99999,
 				Description: "Test milestone",
 				Category:    "development",
 				InputType:   "today",
@@ -138,25 +129,21 @@ func TestAddMilestone(t *testing.T) {
 		},
 	}
 
-	// Test requests that should fail at database level
 	for _, test := range databaseInvalidRequests {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			_, err := AddMilestoneTx(tx, test.request, testUser.FamilyId)
 			if err == nil {
 				t.Errorf("Expected error for %s, but got none", test.description)
 			}
-			// Don't commit invalid transactions
 		})
 	}
 
-	// Verify data retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrievedMilestones := GetPersonMilestonesTx(tx, testPerson.Id)
 		if len(retrievedMilestones) != len(addedMilestones) {
 			t.Errorf("Expected %d milestone records, got %d", len(addedMilestones), len(retrievedMilestones))
 		}
 
-		// Verify each record can be retrieved by ID
 		for _, original := range addedMilestones {
 			retrieved := GetMilestoneById(tx, original.Id)
 			if retrieved.Id == 0 {
@@ -287,7 +274,6 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 }
 
 func TestParseMilestoneDate(t *testing.T) {
-	// Test person birthday
 	birthday := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -330,7 +316,6 @@ func TestParseMilestoneDate(t *testing.T) {
 			request: AddMilestoneRequest{
 				InputType: "today",
 			},
-			// For today, we just check it doesn't error, exact time will vary
 			shouldError: false,
 		},
 		{
@@ -362,7 +347,7 @@ func TestParseMilestoneDate(t *testing.T) {
 			request: AddMilestoneRequest{
 				InputType: "age",
 				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(15), // > 11
+				AgeMonths: intPtr(15),
 			},
 			shouldError: true,
 		},
@@ -542,7 +527,6 @@ func TestMultipleMilestones(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -567,7 +551,6 @@ func TestMultipleMilestones(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Add multiple milestones over time
 	milestones := []AddMilestoneRequest{
 		{
 			PersonId:      testPerson.Id,
@@ -614,14 +597,12 @@ func TestMultipleMilestones(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify all milestones are retrievable
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrievedMilestones := GetPersonMilestonesTx(tx, testPerson.Id)
 		if len(retrievedMilestones) != len(milestones) {
 			t.Errorf("Expected %d milestones, got %d", len(milestones), len(retrievedMilestones))
 		}
 
-		// Count by category
 		categoryCount := make(map[string]int)
 		for _, milestone := range retrievedMilestones {
 			categoryCount[milestone.Category]++

@@ -8,20 +8,11 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// The contract these tests hold is documented in docs/degraded-dependencies.md:
-// an optional dependency failing may cost its own output and nothing else.
-
-// Face analysis is unreachable in a local build by construction — the worker is
-// a stub — so a photo upload has to survive it never running.
 func TestQueueingAnalysisWithoutAWorkerIsHarmless(t *testing.T) {
-	// No panic, no error to propagate, nothing to check: the whole point is
-	// that the upload path cannot tell the difference.
 	QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: 1, FamilyId: 1})
 	TriggerPersonFaceUpdate(1)
 }
 
-// Push is optional, and a chat message must not depend on it. Without a
-// configured worker the queue call fails, and the caller's job is to swallow it.
 func TestQueueingPushWithoutAWorkerReportsRatherThanPanics(t *testing.T) {
 	previous := globalPushWorker
 	globalPushWorker = nil
@@ -32,13 +23,8 @@ func TestQueueingPushWithoutAWorkerReportsRatherThanPanics(t *testing.T) {
 	}
 }
 
-// A full queue drops derived work rather than blocking the request that
-// produced it. An unbounded queue would trade a dropped notification for a
-// stalled handler, which is the wrong way round.
 func TestAFullPushQueueRefusesInsteadOfBlocking(t *testing.T) {
 	previous := globalPushWorker
-	// A worker that is never started leaves its queue unattended, which is the
-	// only reliable way to fill it.
 	globalPushWorker = &PushWorker{jobQueue: make(chan PushNotificationJob, 1)}
 	t.Cleanup(func() { globalPushWorker = previous })
 
@@ -63,8 +49,6 @@ func TestAFullPhotoQueueRefusesInsteadOfBlocking(t *testing.T) {
 	}
 }
 
-// AI import is a drafting step. With no key configured it must report that in
-// the response rather than fail the call or write anything.
 func TestAIImportWithoutAKeyReportsInTheResponse(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 
@@ -73,9 +57,6 @@ func TestAIImportWithoutAKeyReportsInTheResponse(t *testing.T) {
 	}
 }
 
-// A chat message is committed before the notification is queued, so a push
-// outage cannot cost anyone their message. This checks the ordering holds by
-// sending with no push worker at all and finding the message in the database.
 func TestChatMessageSurvivesAnUnavailablePushWorker(t *testing.T) {
 	dbPath := "test_degraded_chat.db"
 	db := vbolt.Open(dbPath)
@@ -96,8 +77,6 @@ func TestChatMessageSurvivesAnUnavailablePushWorker(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// The notification attempt happens after the commit above; it fails here
-	// because there is no worker, and the message must still be readable.
 	_ = QueuePushNotification(PushNotificationJob{Event: PushEventChatMessage, RecordId: stored.Id, FamilyId: stored.FamilyId})
 
 	var readBack ChatMessage

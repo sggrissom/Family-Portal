@@ -15,8 +15,8 @@ import "./add-milestone-styles";
 type EditMilestoneForm = {
   selectedPersonId: string;
   description: string;
-  category: string; // 'development' | 'behavior' | 'health' | 'achievement' | 'first' | 'other'
-  inputType: string; // 'today' | 'date' | 'age'
+  category: string;
+  inputType: string;
   milestoneDate: string;
   ageYears: string;
   ageMonths: string;
@@ -31,7 +31,7 @@ const useEditMilestoneForm = vlens.declareHook(
     selectedPersonId: milestone?.personId?.toString() || "",
     description: milestone?.description || "",
     category: milestone?.category || "development",
-    inputType: "date", // Default to date since we have the original date
+    inputType: "date",
     milestoneDate: milestone?.milestoneDate ? milestone.milestoneDate.split("T")[0] : "",
     ageYears: "",
     ageMonths: "",
@@ -120,7 +120,6 @@ async function onSubmitMilestone(
   form.loading = true;
   form.error = "";
 
-  // Validation
   if (!form.description.trim()) {
     form.error = "Please enter a description";
     form.loading = false;
@@ -142,7 +141,6 @@ async function onSubmitMilestone(
     return;
   }
 
-  // Prepare API request
   const request: server.UpdateMilestoneRequest = {
     id: milestone.id,
     description: form.description.trim(),
@@ -228,7 +226,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
           className="auth-form"
           onSubmit={vlens.cachePartial(onSubmitMilestone, form, milestone)}
         >
-          {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description</label>
             <textarea
@@ -241,7 +238,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             />
           </div>
 
-          {/* Category */}
           <div className="form-group">
             <label>Category</label>
             <div className="category-grid">
@@ -264,7 +260,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             </div>
           </div>
 
-          {/* Photos */}
           <div className="form-group">
             <label>Photos (optional)</label>
             <PhotoPicker
@@ -276,7 +271,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             />
           </div>
 
-          {/* Tags */}
           {allTags.length > 0 && (
             <div className="form-group">
               <span className="form-group-caption" id="tagPickerLabel">
@@ -303,7 +297,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             </div>
           )}
 
-          {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When did this happen?</label>
             <div className="radio-group">
@@ -343,7 +336,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             </div>
           </div>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Milestone Date</label>
@@ -358,7 +350,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -389,7 +380,6 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
             </div>
           )}
 
-          {/* Submit Button */}
           <div className="form-actions">
             <a href={`/profile/${form.selectedPersonId}`} className="btn btn-secondary">
               Cancel

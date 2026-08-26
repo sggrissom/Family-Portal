@@ -1,17 +1,3 @@
-// Restoring a family's activities from an export bundle.
-//
-// The tree is walked top-down and every level is matched by name before it is
-// created, so importing the same bundle twice does not leave a family with two
-// programs called "Dance". The matching is what makes this safe to re-run; the
-// alternative — always creating — turns a retried import into a duplicate
-// season nobody can tell apart from the real one.
-//
-// A performance is the level where matching stops being about names: it is
-// identified by which routine performed at which competition, exactly as the
-// schema says. An existing one is left alone along with its results, rather
-// than having a second set of results appended to it.
-//
-// See docs/activities-plan.md, phase 7.
 package backend
 
 import (
@@ -22,9 +8,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// ActivityImportCounts reports one number per level, matching the export's
-// per-level totals. A single "imported 3" would not say whether the results
-// came back.
 type ActivityImportCounts struct {
 	Activities  int `json:"activities"`
 	Seasons     int `json:"seasons"`
@@ -32,24 +15,10 @@ type ActivityImportCounts struct {
 	Entries     int `json:"entries"`
 	Appearances int `json:"appearances"`
 	Results     int `json:"results"`
-	// Reused counts records matched to something already in the family rather
-	// than created. A re-imported bundle is nearly all reuse, which is the
-	// signal that the import did the right thing.
-	Reused int `json:"reused"`
-	// Skipped counts records dropped as unusable — a result whose kind is not
-	// one of the four, most often.
-	Skipped int `json:"skipped"`
+	Reused      int `json:"reused"`
+	Skipped     int `json:"skipped"`
 }
 
-// importActivities restores the activities tree into familyId.
-//
-// personIdMapping is the old-id → new-id map the people import produced;
-// rosters and the person a result narrows to are remapped through it, and
-// anything it cannot resolve is dropped rather than pointed at a stranger.
-//
-// photoIdMapping may be nil. The JSON-only import path has no photos in it, so
-// there is nothing to attach; the bundle path passes the map it built and the
-// joins come back with it.
 func importActivities(
 	tx *vbolt.Tx,
 	activities []ExportActivity,
@@ -138,8 +107,6 @@ func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCou
 		counts.Seasons++
 	}
 
-	// Routines are imported before competitions, because a performance names
-	// the routine it belongs to and needs its new id already in hand.
 	entryIdMapping := make(map[int]int, len(args.season.Entries))
 	entryRosters := make(map[int]map[int]bool, len(args.season.Entries))
 	for _, sourceEntry := range args.season.Entries {
@@ -223,13 +190,6 @@ func findOrCreateEntry(
 	return entry, false
 }
 
-// importRoster writes the roster of a newly created entry and returns the set
-// of person ids on it, which the results below need: a result may only narrow
-// to somebody on the roster.
-//
-// A reused entry keeps the roster it already has. The bundle's roster is a
-// snapshot of the same routine, and overwriting would silently drop anyone
-// added since the export.
 func importRoster(
 	tx *vbolt.Tx,
 	entry Entry,
@@ -322,9 +282,6 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 			continue
 		}
 
-		// A performance is identified by which routine performed where, not by
-		// a name. One that is already on file keeps the results it has rather
-		// than collecting a second copy of them.
 		if appearanceExists(tx, event.Id, entryId) {
 			counts.Reused++
 			continue
@@ -415,10 +372,6 @@ func importResults(
 			continue
 		}
 
-		// The person a result narrows to has to be on this entry's roster, or
-		// it would land in ResultByPersonIndex under somebody who was never in
-		// the routine. An unresolvable one clears the field rather than
-		// dropping the result: the routine still placed.
 		var personId *int
 		if source.PersonId != nil {
 			newPersonId, mapped := personIdMapping[*source.PersonId]
@@ -450,9 +403,6 @@ func importResults(
 	}
 }
 
-// attachPhotos remaps photo ids and calls write for each one that resolved. A
-// nil mapping means this import path carried no photos, so there is nothing to
-// attach and nothing worth warning about.
 func attachPhotos(photoIdMapping map[int]int, photoIds []int, write func(int)) {
 	if len(photoIdMapping) == 0 {
 		return

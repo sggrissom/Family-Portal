@@ -42,10 +42,8 @@ export const usePhotoFilter = () => {
   const togglePerson = (personId: number) => {
     const currentIndex = state.selectedPeopleIds.indexOf(personId);
     if (currentIndex === -1) {
-      // Add person
       state.selectedPeopleIds = [...state.selectedPeopleIds, personId];
     } else {
-      // Remove person
       state.selectedPeopleIds = state.selectedPeopleIds.filter(id => id !== personId);
     }
     vlens.scheduleRedraw();
@@ -103,7 +101,7 @@ export const usePhotoFilter = () => {
 
   const loadPeople = async () => {
     if (state.peopleLoaded || state.peopleLoading) {
-      return; // Already loaded or loading
+      return;
     }
 
     state.peopleLoading = true;
@@ -141,24 +139,20 @@ export const usePhotoFilter = () => {
   const filterPhotos = (photos: server.PhotoWithPeople[]): server.PhotoWithPeople[] => {
     let filtered = photos;
 
-    // Filter by people
     if (state.selectedPeopleIds.length > 0) {
       filtered = filtered.filter(photoWithPeople => {
-        // Show if ANY selected person is in the photo
         return state.selectedPeopleIds.some(selectedId =>
           photoWithPeople.people.some(person => person.id === selectedId)
         );
       });
     }
 
-    // Filter by tags
     if (state.selectedTagIds.length > 0) {
       filtered = filtered.filter(p =>
         state.selectedTagIds.some(tagId => p.image.tagIds?.includes(tagId))
       );
     }
 
-    // Filter by date range
     if (state.dateFrom || state.dateTo) {
       const { from, to } = normalizeDateRange(state.dateFrom, state.dateTo);
 

@@ -44,7 +44,6 @@ interface DashboardPageProps {
 }
 
 const DashboardPage = ({ user, data }: DashboardPageProps) => {
-  // Ensure people is always an array
   const people = data.people || [];
   const parents = people.filter(p => p.type === 0);
   const children = people.filter(p => p.type === 1);
@@ -57,7 +56,6 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
       </div>
 
       <div className="dashboard-content">
-        {/* Main Family Members Section */}
         <div className="family-section">
           <div className="section-header">
             <h2>Your Family</h2>
@@ -221,11 +219,11 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
   const getGenderIcon = (gender: number) => {
     switch (gender) {
       case 0:
-        return "👨"; // Male
+        return "👨";
       case 1:
-        return "👩"; // Female
+        return "👩";
       default:
-        return "👤"; // Unknown
+        return "👤";
     }
   };
 

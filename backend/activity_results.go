@@ -1,16 +1,3 @@
-// Appearances and results: a routine at a competition, and how it did there.
-//
-// Appearance is the hinge of the whole schema — one Entry at one Event — so
-// these procs are what turn the structure phase 2 built into a season anybody
-// would want to look at. Results hang off an appearance and are always edited as
-// a set, because that is how they arrive: one results sheet, read off in one
-// sitting. See docs/activities-plan.md.
-//
-// Access follows the entry, not the event. An appearance carries no roster of
-// its own, so canAccessAppearance resolves to the entry that names the people —
-// which is what lets a linked household read the group routine its child is in.
-// Writes ask for AccessContribute, and a link is capped at AccessView, so every
-// mutation here stays membership-only.
 package backend
 
 import (
@@ -42,25 +29,15 @@ var (
 	ErrTooManyResults         = errors.New("That is more results than one performance can hold")
 )
 
-// maxResultsPerAppearance is a sanity bound rather than a domain limit. A
-// routine collects an adjudication, a placement or two, and a handful of special
-// awards; anything past this is a client bug or a paste accident, and the write
-// is unbounded without it.
 const maxResultsPerAppearance = 50
-
-// ── appearances ───────────────────────────────────────────────────────────────
 
 type CreateAppearanceRequest struct {
 	EventId    int     `json:"eventId"`
 	EntryId    int     `json:"entryId"`
-	OccurredAt *string `json:"occurredAt,omitempty"` // YYYY-MM-DD; absent means "sometime that weekend"
+	OccurredAt *string `json:"occurredAt,omitempty"`
 	Notes      string  `json:"notes"`
 }
 
-// UpdateAppearanceRequest deliberately cannot move an appearance to a different
-// event or entry. Which routine performed at which competition is the identity
-// of the record, not a field on it; a misfiled appearance is deleted and
-// re-entered, which also makes it obvious that its results went with it.
 type UpdateAppearanceRequest struct {
 	Id         int     `json:"id"`
 	OccurredAt *string `json:"occurredAt,omitempty"`
@@ -71,9 +48,6 @@ type AppearanceIdRequest struct {
 	Id int `json:"id"`
 }
 
-// AppearanceView is an appearance with its results and photos, which is the only
-// useful shape: an appearance on its own says a routine turned up and nothing
-// about how it went.
 type AppearanceView struct {
 	Appearance Appearance `json:"appearance"`
 	Results    []Result   `json:"results"`
@@ -89,9 +63,6 @@ type SetAppearanceResultsRequest struct {
 	Results      []ResultInput `json:"results"`
 }
 
-// ResultInput is a Result without the fields the server owns. SortOrder is
-// absent on purpose — position in the array is the order, so reordering a
-// results sheet is a reordered array rather than a second field to keep in sync.
 type ResultInput struct {
 	Kind     string   `json:"kind"`
 	Label    string   `json:"label"`
@@ -114,8 +85,6 @@ func getAppearanceForUser(tx *vbolt.Tx, id int, user User, need AccessLevel) (Ap
 	return appearance, nil
 }
 
-// sortResults puts results in the order the client asked for, falling back to id
-// so a set written before SortOrder mattered still comes back stably.
 func sortResults(results []Result) []Result {
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].SortOrder != results[j].SortOrder {
@@ -126,8 +95,6 @@ func sortResults(results []Result) []Result {
 	return results
 }
 
-// appearanceView takes the user because photo ids are filtered per caller: a
-// link that reaches a routine does not necessarily reach the photos of it.
 func appearanceView(tx *vbolt.Tx, user User, appearance Appearance) AppearanceView {
 	return AppearanceView{
 		Appearance: appearance,
@@ -136,15 +103,6 @@ func appearanceView(tx *vbolt.Tx, user User, appearance Appearance) AppearanceVi
 	}
 }
 
-// CreateAppearance takes both parents by id and checks that they agree. The
-// event names the season and the entry names the season, so an entry from
-// another season — or another family — is rejected here rather than becoming a
-// row that neither the competition view nor the routine view can explain.
-//
-// Two appearances of the same entry at the same event are allowed. A routine
-// that dances in its category and again in the overall round is two
-// performances with two sets of results, and collapsing them would lose the
-// second.
 func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp AppearanceResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -181,9 +139,9 @@ func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp App
 		CreatedAt:  time.Now(),
 	}
 	writeAppearanceTx(ctx.Tx, &appearance)
-	// The view is built before the commit: TxCommit closes the transaction, and
-	// reading a closed one panics rather than returning stale data.
 	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
+	// Build the response before committing: TxCommit closes the tx, and reading a
+	// closed one panics.
 	vbolt.TxCommit(ctx.Tx)
 	return
 }
@@ -234,13 +192,6 @@ func DeleteAppearance(ctx *vbeam.Context, req AppearanceIdRequest) (resp DeleteR
 	return
 }
 
-// ── results ───────────────────────────────────────────────────────────────────
-
-// normalizeResultKind rejects what it does not recognize, unlike
-// normalizeActivityKind, which degrades to generic. Activity.Kind only picks
-// vocabulary, so guessing wrong is a cosmetic problem; Result.Kind decides which
-// fields carry the meaning, so a typo would file a placement under a label
-// nothing reads and silently lose it.
 func normalizeResultKind(kind string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case ResultKindAdjudication:
@@ -256,11 +207,6 @@ func normalizeResultKind(kind string) (string, bool) {
 	}
 }
 
-// validateResultInput enforces that each kind carries the field it exists for.
-// The rest stays free text — competitions do not agree on what a level or an
-// adjudication is called, and the plan is explicit that nothing here normalizes
-// those. What it will not accept is a result with no content at all, which is
-// what an accidental extra row in a form looks like.
 func validateResultInput(kind string, in ResultInput, label string) error {
 	switch kind {
 	case ResultKindAdjudication, ResultKindAward:
@@ -288,13 +234,6 @@ func validateResultInput(kind string, in ResultInput, label string) error {
 	return nil
 }
 
-// resultPersonId resolves the optional person a result names. It must be someone
-// on the entry's roster: PersonId narrows an award to one dancer inside a group,
-// and without this check any person id at all would land in ResultByPersonIndex,
-// where another family's "a kid's individual awards" view would find it.
-//
-// A zero or negative id is read as "names nobody" rather than an error, so a
-// form that sends 0 for an unset select does the harmless thing.
 func resultPersonId(in ResultInput, roster []int) (*int, error) {
 	if in.PersonId == nil || *in.PersonId <= 0 {
 		return nil, nil
@@ -307,15 +246,6 @@ func resultPersonId(in ResultInput, roster []int) (*int, error) {
 	return nil, ErrResultPersonNotOnEntry
 }
 
-// SetAppearanceResults replaces the whole set. Results arrive together off one
-// sheet and are entered together, so replace-all is the honest shape — and
-// per-result CRUD would triple the proc count to let somebody edit a placement
-// without looking at the adjudication next to it.
-//
-// The existing rows are deleted rather than reused, so ids and CreatedAt change
-// on every edit. Nothing holds a Result id — photos attach to appearances, not
-// results — so there is nothing for the churn to break, and matching old rows to
-// new ones would need an identity the input does not have.
 func SetAppearanceResults(ctx *vbeam.Context, req SetAppearanceResultsRequest) (resp AppearanceResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -334,9 +264,6 @@ func SetAppearanceResults(ctx *vbeam.Context, req SetAppearanceResultsRequest) (
 	}
 	roster := GetEntryPersonIds(ctx.Tx, appearance.EntryId)
 
-	// Everything is validated before anything is written, so a bad row partway
-	// down a results sheet leaves the appearance holding what it held before
-	// rather than half a new set.
 	prepared := make([]Result, 0, len(req.Results))
 	for i, in := range req.Results {
 		kind, ok := normalizeResultKind(in.Kind)

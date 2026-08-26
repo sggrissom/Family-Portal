@@ -9,10 +9,6 @@ import (
 
 const testIOSAppID = "ABCDE12345.app.familyrecord.ios"
 
-// fetchAssociation serves the association file and returns the recorder plus the
-// decoded document. The document is decoded generically rather than into
-// appSiteAssociation, because what Apple reads is the JSON, and a wrong key
-// name would round-trip through the Go type without anyone noticing.
 func fetchAssociation(t *testing.T) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, AppSiteAssociationPath, nil)
@@ -39,15 +35,13 @@ func TestAppSiteAssociationUnconfigured(t *testing.T) {
 }
 
 func TestAppSiteAssociationMalformedIDIsNotServed(t *testing.T) {
-	// A wrong appID is cached by Apple and by every device that fetched it, so
-	// each of these must produce nothing rather than something plausible.
 	for _, appID := range []string{
-		"app.familyrecord.ios",               // no team prefix
-		"ABCDE1234.app.familyrecord",         // nine-character team id
-		"abcde12345.app.familyrecord",        // lowercase team id
-		"ABCDE12345.",                        // no bundle id
-		"ABCDE12345.app familyrecord",        // space
-		"ABCDE12345.app.familyrecord/photos", // a URL pasted where an id was wanted
+		"app.familyrecord.ios",
+		"ABCDE1234.app.familyrecord",
+		"abcde12345.app.familyrecord",
+		"ABCDE12345.",
+		"ABCDE12345.app familyrecord",
+		"ABCDE12345.app.familyrecord/photos",
 	} {
 		t.Run(appID, func(t *testing.T) {
 			t.Setenv("IOS_APP_ID", appID)
@@ -74,8 +68,6 @@ func TestAppSiteAssociationHeaders(t *testing.T) {
 	t.Setenv("IOS_APP_ID", testIOSAppID)
 	rec, _ := fetchAssociation(t)
 
-	// Apple refuses anything that is not application/json, and refuses a
-	// redirect outright.
 	if got := rec.Header().Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
@@ -92,8 +84,6 @@ func TestAppSiteAssociationShape(t *testing.T) {
 	if !ok {
 		t.Fatal("missing applinks object")
 	}
-	// The legacy key must be present and empty; iOS treats its absence as a
-	// malformed document.
 	apps, ok := applinks["apps"].([]any)
 	if !ok || len(apps) != 0 {
 		t.Errorf("applinks.apps = %v, want an empty array", applinks["apps"])
@@ -119,7 +109,6 @@ func TestAppSiteAssociationShape(t *testing.T) {
 	}
 }
 
-// associationComponents returns the components list as Apple would read it.
 func associationComponents(t *testing.T, doc map[string]any) []map[string]any {
 	t.Helper()
 	details := doc["applinks"].(map[string]any)["details"].([]any)
@@ -136,9 +125,6 @@ func TestAppSiteAssociationExclusionsComeFirst(t *testing.T) {
 	_, doc := fetchAssociation(t)
 	components := associationComponents(t, doc)
 
-	// iOS takes the first matching component. An exclusion listed after an
-	// allow rule that also matches never runs, which is how /reset-password
-	// ends up opening an app with no reset screen.
 	seenAllow := false
 	for _, c := range components {
 		excluded, _ := c["exclude"].(bool)
@@ -157,12 +143,8 @@ func TestAppSiteAssociationExcludesFlowsThatMustStayInTheBrowser(t *testing.T) {
 	components := associationComponents(t, doc)
 
 	required := map[string]bool{
-		// A single-use token from an email, answered by a page the app does not
-		// have.
 		"/reset-password": false,
-		// Includes the Google OAuth callback, which has to finish in the browser
-		// session that started it.
-		"/api/*": false,
+		"/api/*":          false,
 	}
 	for _, c := range components {
 		path, _ := c["/"].(string)
@@ -192,8 +174,6 @@ func TestAppSiteAssociationClaimsThePushDestinations(t *testing.T) {
 		claimed[path] = true
 	}
 
-	// Every destination the push worker can send has to be a path the app is
-	// allowed to open, or tapping that notification lands in Safari.
 	for event, spec := range pushEventSpecs {
 		if !claimed[spec.Destination] {
 			t.Errorf("push event %q has destination %q, which the association does not claim", event, spec.Destination)
@@ -222,18 +202,12 @@ func TestCheckIOSAppIDOptionalButValidated(t *testing.T) {
 		if len(issues) != 1 || issues[0].Setting != "IOS_APP_ID" {
 			t.Fatalf("expected one IOS_APP_ID issue, got %v", issues)
 		}
-		// The report goes in a startup log; it must not echo the value back.
 		if got := issues[0].Detail; got == "" {
 			t.Error("expected a detail explaining the expected form")
 		}
 	})
 }
 
-// TestAppSiteAssociationIsReachableThroughTheApplication exercises the route as
-// registered rather than the handler in isolation. Apple fetches this path
-// exactly once per app install and will not follow a redirect or accept a 404,
-// so "the handler is correct but nothing routes to it" is a failure mode worth
-// having a test for.
 func TestAppSiteAssociationIsReachableThroughTheApplication(t *testing.T) {
 	t.Setenv("IOS_APP_ID", testIOSAppID)
 

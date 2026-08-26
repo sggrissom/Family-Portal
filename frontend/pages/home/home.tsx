@@ -18,7 +18,6 @@ export async function fetch(route: string, prefix: string) {
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
-  // Redirect authenticated users to dashboard
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
     core.setRoute("/dashboard");

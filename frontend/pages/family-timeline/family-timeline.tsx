@@ -174,7 +174,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
   const people = data.people || [];
 
-  // Search handler
   const handleSearch = async () => {
     const query = state.searchQuery.trim();
     if (!query) {
@@ -207,7 +206,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     vlens.scheduleRedraw();
   };
 
-  // Build combined timeline from all people
   const allTimelineItems: TimelineItem[] = [];
 
   for (const personData of people) {
@@ -256,7 +254,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     }
   }
 
-  // Generate and inject birthday events based on the data's date range
   if (allTimelineItems.length > 0) {
     let minDate = new Date(allTimelineItems[0].date);
     let maxDate = new Date(allTimelineItems[0].date);
@@ -269,7 +266,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     allTimelineItems.push(...birthdayEvents);
   }
 
-  // Initialize monitoring for processing photos
   allTimelineItems.forEach(item => {
     if (item.type === "photo") {
       const photo = item.data as server.Image;
@@ -284,14 +280,12 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     }
   });
 
-  // Filter by person
   let filteredItems = allTimelineItems;
   if (state.selectedPerson !== "all") {
     const personId = parseInt(state.selectedPerson);
     filteredItems = filteredItems.filter(item => item.personId === personId);
   }
 
-  // Filter by type
   if (state.selectedType !== "all") {
     filteredItems = filteredItems.filter(item => {
       if (state.selectedType === "milestones") return item.type === "milestone";
@@ -302,7 +296,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     });
   }
 
-  // Filter by tag if selected
   if (state.selectedTagIds.length > 0) {
     filteredItems = filteredItems.filter(item => {
       if (item.type === "milestone") {
@@ -317,14 +310,12 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     });
   }
 
-  // Sort items by date
   const sortedItems = [...filteredItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return state.sortOrder === "newest" ? dateB - dateA : dateA - dateB;
   });
 
-  // Group by year for timeline rendering
   const yearGroups = groupByYear(sortedItems);
   const availableYears = yearGroups.map(g => g.year);
 

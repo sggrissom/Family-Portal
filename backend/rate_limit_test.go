@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// fixedClock returns a clock the test advances by hand, so refill behavior can
-// be asserted without sleeping.
 type fixedClock struct {
 	now time.Time
 }
@@ -66,8 +64,6 @@ func TestRuleForPath(t *testing.T) {
 	}
 }
 
-// Every path the release plan names must be covered by some rule; a path that
-// falls through to "no rule" is the failure this guards against.
 func TestEveryProtectedEndpointHasARule(t *testing.T) {
 	protected := []string{
 		"/api/login",
@@ -120,7 +116,6 @@ func TestRateLimiterRefillsOverTime(t *testing.T) {
 		t.Fatal("Allow() permitted a request past the burst")
 	}
 
-	// Half the window restores half the burst.
 	clock.Advance(30 * time.Second)
 	if allowed, _ := limiter.Allow("client", rule); !allowed {
 		t.Fatal("Allow() denied a request after the bucket refilled")
@@ -140,7 +135,6 @@ func TestRateLimiterRetryAfterIsLongEnough(t *testing.T) {
 		t.Fatal("Allow() permitted a second request against a burst of 1")
 	}
 
-	// A caller that waits exactly as long as it was told must get through.
 	clock.Advance(retryAfter)
 	if allowed, _ := limiter.Allow("client", rule); !allowed {
 		t.Fatalf("Allow() denied a caller that waited the advertised %v", retryAfter)
@@ -170,8 +164,6 @@ func TestRateLimiterSweepsRefilledBuckets(t *testing.T) {
 		t.Fatalf("len(buckets) = %d, want 1", got)
 	}
 
-	// Once the bucket is full again it carries no information, so the next
-	// sweep should drop it.
 	clock.Advance(2 * time.Minute)
 	limiter.Allow("other-client", rule)
 	if _, found := limiter.buckets["test|client"]; found {
@@ -179,8 +171,6 @@ func TestRateLimiterSweepsRefilledBuckets(t *testing.T) {
 	}
 }
 
-// wrapperUnderTest returns a wrapper with rate limiting forced on and a clock
-// the test controls, plus a counter of requests that reached the handler.
 func wrapperUnderTest(t *testing.T) (*RateLimitWrapper, *fixedClock, *int) {
 	t.Helper()
 	reached := 0
@@ -264,8 +254,6 @@ func TestRateLimitWrapperAnswersRPCRequestsWithText(t *testing.T) {
 	}
 }
 
-// The message must not tell a prober which limit it hit or how much budget is
-// left; that belongs in the logs.
 func TestRateLimitMessageRevealsNothing(t *testing.T) {
 	for _, leak := range []string{"login", "signup", "bucket", "token", "burst"} {
 		if strings.Contains(strings.ToLower(rateLimitMessage), leak) {
@@ -274,8 +262,6 @@ func TestRateLimitMessageRevealsNothing(t *testing.T) {
 	}
 }
 
-// The snapshot endpoint hides behind a 404 for unauthorized callers, and a
-// throttled caller must not learn anything the unauthorized one doesn't.
 func TestRateLimitWrapperKeepsSnapshotEndpointHidden(t *testing.T) {
 	wrapper, _, _ := wrapperUnderTest(t)
 
@@ -387,8 +373,6 @@ func TestRateLimitClientKey(t *testing.T) {
 	}
 }
 
-// Two addresses in one IPv6 /64 belong to one subscriber and must share a
-// budget; otherwise the limit is one request per address, which is no limit.
 func TestRateLimitGroupsIPv6Subscribers(t *testing.T) {
 	wrapper, _, _ := wrapperUnderTest(t)
 

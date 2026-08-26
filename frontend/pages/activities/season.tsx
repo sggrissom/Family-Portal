@@ -1,8 +1,3 @@
-// A season's overview: the competitions in it, and later the routines and how
-// each one placed. Everything below a program hangs off this page.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -15,9 +10,6 @@ import { ActivityLabels, labelsFor } from "./labels";
 import "./activities-styles";
 import "./season-styles";
 
-// SeasonPageData is the overview plus the two lists the forms on this page
-// need: who can be rostered, and what the family has typed into these fields
-// before. Fetching them here rather than per-form keeps the page to one load.
 export type SeasonPageData = {
   overview: server.GetSeasonOverviewResponse;
   people: server.Person[];
@@ -69,8 +61,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     return [null, overviewErr || "Failed to load season"];
   }
 
-  // Neither of these is worth failing the page over. A roster picker with no
-  // names or a field with no suggestions is degraded, not broken.
   const [people] = await server.ListPeople({});
   const [vocabulary] = await server.ListActivityVocabulary({
     activityId: overview.activity.id,
@@ -87,10 +77,6 @@ type SeasonState = {
   initialized: boolean;
   seasonId: number;
   events: server.Event[];
-  // Performance counts per event, so a competition row can say whether
-  // anything has been recorded for it yet. Kept as a plain map rebuilt on
-  // load: appearances are only added on the competition page, which is a
-  // separate route, so this never goes stale under us.
   appearanceCounts: Record<number, number>;
 
   addingEvent: boolean;
@@ -98,7 +84,6 @@ type SeasonState = {
   form: EventForm;
 
   entries: server.EntryView[];
-  // Performance counts per entry, same reason as the per-event counts.
   entryAppearanceCounts: Record<number, number>;
   addingEntry: boolean;
   editingEntryId: number;
@@ -183,8 +168,6 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
 
   const overview = data.overview;
   const state = useSeasonState();
-  // The hook outlives a route change between two seasons, so reinitialize
-  // whenever the season under it is a different one.
   if (!state.initialized || state.seasonId !== overview.season.id) {
     const appearances = overview.appearances ?? [];
     state.initialized = true;
@@ -570,9 +553,6 @@ const EntryRow = ({
   );
 };
 
-// Suggestions come from what this family has already typed into the same
-// field. Without them "High Gold" becomes "high gold" and "Hi-Gold", and the
-// season view can no longer even count labels, let alone group them.
 const Suggestions = ({ id, values }: { id: string; values: string[] }) => (
   <datalist id={id}>
     {values.map(value => (
@@ -727,10 +707,6 @@ const EntryFormFields = ({
   </div>
 );
 
-// ── handlers ─────────────────────────────────────────────────────────────────
-
-// Empty date inputs go over as null rather than "": the backend reads a nil
-// pointer as "not known yet" and stores the zero time.
 function dateOrNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
@@ -763,8 +739,6 @@ function onCancelEventForm(state: SeasonState) {
   vlens.scheduleRedraw();
 }
 
-// sortEvents keeps the client list in the order GetSeasonOverview returns:
-// chronological, undated events first, ties broken by id.
 function sortEvents(events: server.Event[]) {
   events.sort((a, b) => {
     if (a.startDate !== b.startDate) return a.startDate < b.startDate ? -1 : 1;
@@ -852,11 +826,6 @@ async function onDeleteEvent(state: SeasonState, event: server.Event, labels: Ac
   vlens.scheduleRedraw();
 }
 
-// ── routine handlers ─────────────────────────────────────────────────────────
-
-// rosterNames resolves ids to names in the order the roster was stored, and
-// drops any it cannot resolve. ListPeople is scoped to what the caller can
-// see, so a routine can name someone this viewer has no access to.
 function rosterNames(people: server.Person[], personIds: number[] | null): string[] {
   return (personIds ?? [])
     .map(id => people.find(person => person.id === id)?.name)
@@ -901,8 +870,6 @@ function onToggleRosterMember(state: SeasonState, personId: number) {
   vlens.scheduleRedraw();
 }
 
-// sortEntries keeps the client list in the order GetSeasonOverview returns:
-// by name, ties broken by id.
 function sortEntries(entries: server.EntryView[]) {
   entries.sort((a, b) => {
     if (a.entry.name !== b.entry.name) return a.entry.name < b.entry.name ? -1 : 1;
@@ -943,9 +910,6 @@ function sameRoster(a: number[], b: number[]): boolean {
   return a.every((id, idx) => id === b[idx]);
 }
 
-// Saving an edit is two calls because the backend splits them: UpdateEntry
-// carries the fields, SetEntryRoster replaces the roster. The roster call is
-// skipped when nothing about it changed, which is the common edit.
 async function onSaveEntry(state: SeasonState, original: server.EntryView) {
   const name = state.entryForm.name.trim();
   if (!name) return;

@@ -1,15 +1,3 @@
-// Structure CRUD for competitive activities: the program, its seasons, the
-// competitions in a season, the routines in a season, and who is in a routine.
-//
-// Results and the aggregate read procs are a separate phase; this file is only
-// the skeleton a season hangs on. See docs/activities-plan.md.
-//
-// Access is split the way the schema is. Activity, Season and Event are
-// family-scoped with no person dimension, so they take plain family access.
-// Entry reaches people through its roster, so reads go through canAccessEntry —
-// which lets a linked household see the group routine its child is in. Writes
-// never take that path: a link is capped at AccessView, so asking for
-// AccessContribute is what keeps every mutation membership-only.
 package backend
 
 import (
@@ -52,10 +40,6 @@ var (
 	ErrPersonNotOnRoster = errors.New("That person is not on this family's roster")
 )
 
-// maxNameLength and maxNotesLength cap what a form can put in a record. Free
-// text is the whole point of the label fields — different competitions use
-// different vocabularies — but unbounded free text is a storage problem rather
-// than a feature.
 const (
 	maxNameLength  = 200
 	maxLabelLength = 100
@@ -70,9 +54,6 @@ func trimField(value string, max int) string {
 	return value
 }
 
-// parseActivityDate reads an optional YYYY-MM-DD. An absent or empty date is
-// the zero time rather than an error: an event whose dates are not known yet is
-// a normal state, and Appearance ordering already falls back when it sees one.
 func parseActivityDate(value *string) (time.Time, error) {
 	if value == nil {
 		return time.Time{}, nil
@@ -88,10 +69,7 @@ func parseActivityDate(value *string) (time.Time, error) {
 	return parsed, nil
 }
 
-// ── activities ────────────────────────────────────────────────────────────────
-
 type ListActivitiesRequest struct {
-	// FamilyId names which family to list; zero means the caller's primary one.
 	FamilyId int `json:"familyId,omitempty"`
 }
 
@@ -124,9 +102,6 @@ type DeleteResponse struct {
 	Success bool `json:"success"`
 }
 
-// normalizeActivityKind keeps Kind to the set the label map knows about.
-// Anything unrecognized becomes generic, which renders neutral vocabulary
-// rather than failing the write — Kind drives wording and nothing else.
 func normalizeActivityKind(kind string) string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case ActivityKindDance:
@@ -191,9 +166,6 @@ func CreateActivity(ctx *vbeam.Context, req CreateActivityRequest) (resp Activit
 	return
 }
 
-// getActivityForUser is the read-then-check every activity proc starts with.
-// The record names its family; the request never carries a second copy that
-// could disagree with it.
 func getActivityForUser(tx *vbolt.Tx, id int, user User, need AccessLevel) (Activity, error) {
 	activity := GetActivityById(tx, id)
 	if activity.Id == 0 {
@@ -253,8 +225,6 @@ func DeleteActivity(ctx *vbeam.Context, req ActivityIdRequest) (resp DeleteRespo
 	return
 }
 
-// ── seasons ───────────────────────────────────────────────────────────────────
-
 type ListSeasonsRequest struct {
 	ActivityId int `json:"activityId"`
 }
@@ -267,8 +237,8 @@ type ListSeasonsResponse struct {
 type CreateSeasonRequest struct {
 	ActivityId int     `json:"activityId"`
 	Name       string  `json:"name"`
-	StartDate  *string `json:"startDate,omitempty"` // YYYY-MM-DD
-	EndDate    *string `json:"endDate,omitempty"`   // YYYY-MM-DD
+	StartDate  *string `json:"startDate,omitempty"`
+	EndDate    *string `json:"endDate,omitempty"`
 	Notes      string  `json:"notes"`
 }
 
@@ -299,8 +269,6 @@ func getSeasonForUser(tx *vbolt.Tx, id int, user User, need AccessLevel) (Season
 	return season, nil
 }
 
-// ListSeasons orders newest first: a season list is almost always consulted to
-// get at the current season.
 func ListSeasons(ctx *vbeam.Context, req ListSeasonsRequest) (resp ListSeasonsResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -347,8 +315,6 @@ func CreateSeason(ctx *vbeam.Context, req CreateSeasonRequest) (resp SeasonRespo
 		return
 	}
 
-	// The parent names the family. A season cannot be created into a family
-	// that does not own the activity it belongs to.
 	activity, err := getActivityForUser(ctx.Tx, req.ActivityId, user, AccessContribute)
 	if err != nil {
 		return
@@ -429,8 +395,6 @@ func DeleteSeason(ctx *vbeam.Context, req SeasonIdRequest) (resp DeleteResponse,
 	resp.Success = true
 	return
 }
-
-// ── events ────────────────────────────────────────────────────────────────────
 
 type CreateEventRequest struct {
 	SeasonId  int     `json:"seasonId"`
@@ -577,8 +541,6 @@ func DeleteEvent(ctx *vbeam.Context, req EventIdRequest) (resp DeleteResponse, e
 	return
 }
 
-// ── entries and rosters ───────────────────────────────────────────────────────
-
 type CreateEntryRequest struct {
 	SeasonId  int    `json:"seasonId"`
 	Name      string `json:"name"`
@@ -590,8 +552,6 @@ type CreateEntryRequest struct {
 	PersonIds []int  `json:"personIds,omitempty"`
 }
 
-// EntryView is an entry with its roster, which is how every caller wants it —
-// an entry without its people cannot be rendered or access-checked.
 type EntryView struct {
 	Entry     Entry `json:"entry"`
 	PersonIds []int `json:"personIds"`
@@ -635,9 +595,6 @@ func entryView(tx *vbolt.Tx, entry Entry) EntryView {
 	return EntryView{Entry: entry, PersonIds: GetEntryPersonIds(tx, entry.Id)}
 }
 
-// applyEntryFields is the shared half of create and update. Everything except
-// Name is free text by design: competitions do not agree on what a division or
-// a level is called, and normalizing here would lose the distinction.
 func applyEntryFields(entry *Entry, name string, format string, style string, division string, level string, notes string) {
 	entry.Name = name
 	entry.Format = trimField(format, maxLabelLength)
@@ -647,13 +604,6 @@ func applyEntryFields(entry *Entry, name string, format string, style string, di
 	entry.Notes = trimField(notes, maxNotesLength)
 }
 
-// setEntryRosterTx replaces the roster wholesale. Rosters are small and always
-// edited as a set — nobody adds one dancer to a routine in isolation — so
-// replace-all is both the honest shape and half the procs of add/remove.
-//
-// Every person must already be on the owning family's roster. A routine can hold
-// children from two households, but only because the other household shared them
-// in; this proc is not a second way to reach a person.
 func setEntryRosterTx(tx *vbolt.Tx, entry Entry, personIds []int) error {
 	desired := make(map[int]struct{}, len(personIds))
 	ordered := make([]int, 0, len(personIds))
@@ -681,8 +631,6 @@ func setEntryRosterTx(tx *vbolt.Tx, entry Entry, personIds []int) error {
 			deleteEntryMemberRowTx(tx, member.Id)
 			continue
 		}
-		// A duplicate row for the same person is a bug elsewhere, but dropping
-		// it here costs nothing and keeps the roster a set.
 		if _, already := existing[member.PersonId]; already {
 			deleteEntryMemberRowTx(tx, member.Id)
 			continue
@@ -740,9 +688,9 @@ func CreateEntry(ctx *vbeam.Context, req CreateEntryRequest) (resp EntryResponse
 			return
 		}
 	}
-	// The view is built before the commit: TxCommit closes the transaction, and
-	// reading a closed one panics rather than returning stale data.
 	resp.Entry = entryView(ctx.Tx, entry)
+	// Build the response before committing: TxCommit closes the tx, and reading a
+	// closed one panics.
 	vbolt.TxCommit(ctx.Tx)
 	return
 }

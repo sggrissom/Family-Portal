@@ -1,22 +1,3 @@
-// The four questions a season gets asked, one proc each, plus the vocabulary
-// that keeps free-text labels from fragmenting.
-//
-// Each proc returns everything its page needs so the frontend makes one call
-// rather than fanning out over ids it just received. That is the whole reason
-// Appearance exists as its own table: "how did this competition go?" and "how
-// has this routine done all season?" are both index walks off it, and neither
-// is privileged over the other. See docs/activities-plan.md.
-//
-// Access splits these in half, and the split is deliberate:
-//
-//   - GetSeasonOverview and GetEventDetail are whole-family views. A season and
-//     a competition have no person dimension — there is no one child they are
-//     "about" — so they take plain family access and a link never reaches them.
-//   - GetEntryHistory and GetPersonSeason resolve through a roster, so a linked
-//     household reading a shared child gets exactly the routines that child is
-//     in. They carry EventSummary and SeasonSummary rather than the full
-//     records: an appearance with no competition name attached is unreadable,
-//     but the notes on that competition are nobody else's business.
 package backend
 
 import (
@@ -39,21 +20,9 @@ func RegisterActivityViewMethods(app *vbeam.Application) {
 
 var ErrPersonNotFound = errors.New("Person not found or not in your family")
 
-// ── shared shapes ─────────────────────────────────────────────────────────────
-
-// SeasonSummary and EventSummary are the parent context a record needs to be
-// readable, and nothing more. They exist because the roster-scoped views cross
-// a link boundary: a household that was shared one child should learn which
-// competition a performance happened at, not what the host family wrote in the
-// notes field about it.
 type SeasonSummary struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
-	// Kind is the owning Activity's kind, carried here because it is what
-	// selects the UI's label pack — "Competition" for dance, "Game" for a
-	// sport. A season crossing a link boundary that arrives without it renders
-	// as "Event", which is the one word the plan's label map exists to avoid.
-	// It leaks nothing: the kind is a vocabulary switch, not family data.
+	Id        int       `json:"id"`
+	Name      string    `json:"name"`
 	Kind      string    `json:"kind"`
 	StartDate time.Time `json:"startDate"`
 	EndDate   time.Time `json:"endDate"`
@@ -68,10 +37,6 @@ type EventSummary struct {
 	EndDate   time.Time `json:"endDate"`
 }
 
-// seasonSummary reads the season's activity for its kind. That is one extra
-// bucket read per season in a response, and a response holds one season on the
-// competition and routine pages and a handful on a person's — small enough that
-// a cache would cost more lines than it saves.
 func seasonSummary(tx *vbolt.Tx, season Season) SeasonSummary {
 	return SeasonSummary{
 		Id: season.Id, Name: season.Name,
@@ -87,11 +52,6 @@ func eventSummary(event Event) EventSummary {
 	}
 }
 
-// AppearanceDetail is one row of either roster-scoped view. It carries both the
-// entry that performed and the competition it happened at, even though each
-// view already knows one of them — the routine view came in through the entry,
-// the competition view through the event. Carrying both means one frontend
-// component renders a performance wherever it appears.
 type AppearanceDetail struct {
 	Appearance Appearance   `json:"appearance"`
 	Results    []Result     `json:"results"`
@@ -100,11 +60,6 @@ type AppearanceDetail struct {
 	Event      EventSummary `json:"event"`
 }
 
-// appearanceOrder sorts performances chronologically. OccurredAt is often zero —
-// "sometime that weekend" is a normal state for a competition schedule — so the
-// event's start date is the fallback, and the id breaks the remaining ties so
-// two performances entered off the same sheet keep the order they were entered
-// in.
 func appearanceOrder(a, b AppearanceDetail) bool {
 	at, bt := a.Appearance.OccurredAt, b.Appearance.OccurredAt
 	if at.IsZero() {
@@ -119,9 +74,6 @@ func appearanceOrder(a, b AppearanceDetail) bool {
 	return a.Appearance.Id < b.Appearance.Id
 }
 
-// eventCache keeps one read per event rather than one per appearance. A routine
-// history spans a dozen competitions; a competition holds a dozen routines. Both
-// walks would otherwise re-read the same parent for every row.
 type eventCache map[int]EventSummary
 
 func (c eventCache) get(tx *vbolt.Tx, eventId int) EventSummary {
@@ -144,17 +96,10 @@ func (c entryCache) get(tx *vbolt.Tx, entryId int) Entry {
 	return entry
 }
 
-// ── season overview ───────────────────────────────────────────────────────────
-
 type GetSeasonOverviewRequest struct {
 	SeasonId int `json:"seasonId"`
 }
 
-// GetSeasonOverviewResponse ships events and entries once each and appearances
-// as the bare hinge, rather than repeating the parents on every row. A full
-// season is a dozen competitions by a dozen routines, so AppearanceDetail here
-// would send each entry a dozen times over; the client joins on EntryId and
-// EventId, which it already has.
 type GetSeasonOverviewResponse struct {
 	Activity    Activity         `json:"activity"`
 	Season      Season           `json:"season"`
@@ -198,9 +143,6 @@ func GetSeasonOverview(ctx *vbeam.Context, req GetSeasonOverviewRequest) (resp G
 		resp.Entries = append(resp.Entries, entryView(ctx.Tx, entry))
 	}
 
-	// Walking the events rather than the family keeps this to the season asked
-	// for. A family with three seasons of history would otherwise pay for all
-	// of them on every load.
 	resp.Appearances = []AppearanceView{}
 	for _, event := range resp.Events {
 		for _, appearance := range GetEventAppearances(ctx.Tx, event.Id) {
@@ -210,23 +152,17 @@ func GetSeasonOverview(ctx *vbeam.Context, req GetSeasonOverviewRequest) (resp G
 	return
 }
 
-// ── competition detail ────────────────────────────────────────────────────────
-
 type GetEventDetailRequest struct {
 	EventId int `json:"eventId"`
 }
 
 type GetEventDetailResponse struct {
-	Event  Event         `json:"event"`
-	Season SeasonSummary `json:"season"`
-	// PhotoIds are the competition's own photos — the weekend shots that are
-	// not of any one routine. A routine's photos travel with its performance.
+	Event       Event              `json:"event"`
+	Season      SeasonSummary      `json:"season"`
 	PhotoIds    []int              `json:"photoIds"`
 	Appearances []AppearanceDetail `json:"appearances"`
 }
 
-// GetEventDetail answers "how did this competition go?" — one walk of
-// AppearanceByEventIndex, no scan.
 func GetEventDetail(ctx *vbeam.Context, req GetEventDetailRequest) (resp GetEventDetailResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -261,8 +197,6 @@ func GetEventDetail(ctx *vbeam.Context, req GetEventDetailRequest) (resp GetEven
 	return
 }
 
-// ── routine history ───────────────────────────────────────────────────────────
-
 type GetEntryHistoryRequest struct {
 	EntryId int `json:"entryId"`
 }
@@ -273,11 +207,6 @@ type GetEntryHistoryResponse struct {
 	Appearances []AppearanceDetail `json:"appearances"`
 }
 
-// GetEntryHistory answers "how has this routine done all season?" — the other
-// direction off the same hinge, walking AppearanceByEntryIndex.
-//
-// This is one of the two procs a linked household can reach, so what it returns
-// about the season and each competition is a summary rather than the record.
 func GetEntryHistory(ctx *vbeam.Context, req GetEntryHistoryRequest) (resp GetEntryHistoryResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -310,34 +239,19 @@ func GetEntryHistory(ctx *vbeam.Context, req GetEntryHistoryRequest) (resp GetEn
 	return
 }
 
-// ── a kid's season ────────────────────────────────────────────────────────────
-
 type GetPersonSeasonRequest struct {
 	PersonId int `json:"personId"`
-	// SeasonId narrows to one season. Zero means every season the person has
-	// ever been in, which is what a linked household needs: it cannot list
-	// seasons — those have no person dimension — so requiring one would leave
-	// it with no way to ask the question at all.
 	SeasonId int `json:"seasonId,omitempty"`
 }
 
 type GetPersonSeasonResponse struct {
-	PersonId int `json:"personId"`
-	SeasonId int `json:"seasonId"`
-	// Seasons holds only the ones the returned entries belong to, in the same
-	// summary form as everywhere else on the link-reachable path.
+	PersonId    int                `json:"personId"`
+	SeasonId    int                `json:"seasonId"`
 	Seasons     []SeasonSummary    `json:"seasons"`
 	Entries     []EntryView        `json:"entries"`
 	Appearances []AppearanceDetail `json:"appearances"`
 }
 
-// GetPersonSeason answers "how is this kid's season going?" by walking
-// EntryMemberByPersonIndex — the index that exists for exactly this question.
-//
-// Access is checked per entry rather than once up front. Being able to see the
-// child is what makes their routines visible, and canAccessEntry is what decides
-// each one; a group routine the child is in is reachable, and so are the
-// co-performers' names on it, which is what a shared routine means.
 func GetPersonSeason(ctx *vbeam.Context, req GetPersonSeasonRequest) (resp GetPersonSeasonResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -367,10 +281,6 @@ func GetPersonSeason(ctx *vbeam.Context, req GetPersonSeasonRequest) (resp GetPe
 		if req.SeasonId != 0 && entry.SeasonId != req.SeasonId {
 			continue
 		}
-		// The person check above says this user may see the child. Whether they
-		// may see a particular routine the child is in is still the entry's
-		// call — an entry can be reached through any of its rostered people,
-		// and only some of them may be shared.
 		if !canAccessEntry(ctx.Tx, user, entry, AccessView) {
 			continue
 		}
@@ -409,36 +319,24 @@ func GetPersonSeason(ctx *vbeam.Context, req GetPersonSeasonRequest) (resp GetPe
 	return
 }
 
-// ── vocabulary ────────────────────────────────────────────────────────────────
-
 type ListActivityVocabularyRequest struct {
 	ActivityId int `json:"activityId"`
 }
 
-// ListActivityVocabularyResponse is one list per free-text field, so a form can
-// autocomplete each one from what this family has already typed.
 type ListActivityVocabularyResponse struct {
 	ActivityId    int      `json:"activityId"`
-	Adjudications []string `json:"adjudications"` // "High Gold", "Diamond"
-	Awards        []string `json:"awards"`        // "Judges' Choice"
-	Categories    []string `json:"categories"`    // "Teen Small Group Jazz"
-	Styles        []string `json:"styles"`        // "Jazz", "Lyrical"
-	Divisions     []string `json:"divisions"`     // "Teen", "Senior"
-	Levels        []string `json:"levels"`        // "Elite", "Rec"
-	Formats       []string `json:"formats"`       // "solo", "group"
-	Hosts         []string `json:"hosts"`         // "Nuvo", "Showstopper"
+	Adjudications []string `json:"adjudications"`
+	Awards        []string `json:"awards"`
+	Categories    []string `json:"categories"`
+	Styles        []string `json:"styles"`
+	Divisions     []string `json:"divisions"`
+	Levels        []string `json:"levels"`
+	Formats       []string `json:"formats"`
+	Hosts         []string `json:"hosts"`
 }
 
-// maxVocabularyEntries bounds each list. A family that has genuinely used two
-// hundred distinct adjudication labels has a data-entry problem that a longer
-// autocomplete list would not fix.
 const maxVocabularyEntries = 200
 
-// vocabulary collects distinct values case-insensitively while keeping the
-// spelling first seen. That is the entire point: without it "High Gold" becomes
-// "high gold" and "Hi-Gold" and the season view cannot even count, let alone
-// rank — adjudication labels are free text by design and nothing normalizes
-// them at write time.
 type vocabulary struct {
 	seen   map[string]struct{}
 	values []string
@@ -460,9 +358,6 @@ func (v *vocabulary) add(value string) {
 	v.values = append(v.values, value)
 }
 
-// sorted returns the list case-insensitively ordered, and never nil — an
-// autocomplete source that is sometimes null is a client-side branch for no
-// reason.
 func (v *vocabulary) sorted() []string {
 	values := v.values
 	if values == nil {
@@ -478,10 +373,6 @@ func (v *vocabulary) sorted() []string {
 	return values
 }
 
-// ListActivityVocabulary is computed per call rather than maintained in an
-// index. It walks the family's entries, competitions, and results once and
-// filters to this activity by season, which at family scale is a few hundred
-// records — cheaper than the writes an index would add to every result saved.
 func ListActivityVocabulary(ctx *vbeam.Context, req ListActivityVocabularyRequest) (resp ListActivityVocabularyResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -495,10 +386,6 @@ func ListActivityVocabulary(ctx *vbeam.Context, req ListActivityVocabularyReques
 	}
 	resp.ActivityId = activity.Id
 
-	// Scoping to the activity is what keeps a soccer season's score labels out
-	// of a dance form's autocomplete. Membership is by season, so the sets are
-	// built top down: seasons of this activity, then entries and events in
-	// those seasons, then the results under those entries' appearances.
 	seasonIds := map[int]struct{}{}
 	for _, season := range GetActivitySeasons(ctx.Tx, activity.Id) {
 		seasonIds[season.Id] = struct{}{}

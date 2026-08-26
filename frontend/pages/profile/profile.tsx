@@ -18,7 +18,7 @@ type ProfileState = {
     photos: boolean;
     performances: boolean;
   };
-  selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
+  selectedAgeFilter: string;
   sortOrder: "newest" | "oldest";
   selectedTagIds: number[];
 };
@@ -49,9 +49,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const [person, personError] = await server.GetPerson({ id: personId });
   if (personError || !person) return [null, personError || "Failed to load person"];
 
-  // Activities have their own sharing scope, so a profile may be visible even
-  // when its performances are not. Treat that case as an empty activity list
-  // rather than making the rest of the profile unavailable.
   const [activities] = await server.GetPersonSeason({ personId, seasonId: 0 });
   return rpc.ok<ProfileData>({
     ...person,
@@ -65,7 +62,7 @@ const formatDate = (dateString: string) => {
   if (dateString.includes("T") && dateString.endsWith("Z")) {
     const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const month = parseInt(dateParts[1]) - 1;
     const day = parseInt(dateParts[2]);
     return new Date(year, month, day).toLocaleDateString();
   }
@@ -178,7 +175,6 @@ const ProfilePage = ({
 
   return (
     <div className="profile-page">
-      {/* Profile Header */}
       <div className="profile-header">
         <div className="profile-header-main">
           <div className="profile-avatar">
@@ -238,7 +234,6 @@ const ProfilePage = ({
         </div>
       </div>
 
-      {/* Type Filter Controls */}
       <div className="profile-filters">
         <div className="filter-section">
           <label className="filter-label">Show:</label>
@@ -288,7 +283,6 @@ const ProfilePage = ({
         </div>
       </div>
 
-      {/* Unified Timeline Content */}
       <div className="profile-content">
         <UnifiedTimeline
           person={person}

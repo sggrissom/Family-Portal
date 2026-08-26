@@ -16,7 +16,7 @@ type AddMilestoneForm = {
   selectedPersonId: string;
   description: string;
   category: string;
-  inputType: string; // 'today' | 'date' | 'age'
+  inputType: string;
   milestoneDate: string;
   ageYears: string;
   ageMonths: string;
@@ -82,7 +82,6 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-milestone/123)
   const personId = getIdFromRoute(route);
   const personIdFromUrl = personId ? personId.toString() : undefined;
 
@@ -109,7 +108,6 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
   form.loading = true;
   form.error = "";
 
-  // Validation
   if (!form.selectedPersonId) {
     form.error = "Please select a family member";
     form.loading = false;
@@ -200,7 +198,6 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps) => {
-  // Filter to show all family members for milestones
   const { children, parents } = splitPeopleByType(people);
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
@@ -226,7 +223,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
         )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
-          {/* Person Selection */}
           <div className="form-group">
             <label htmlFor="person">Family Member</label>
             <select
@@ -249,7 +245,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </select>
           </div>
 
-          {/* Category */}
           <div className="form-group">
             <label htmlFor="category">Category</label>
             <select
@@ -265,7 +260,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </select>
           </div>
 
-          {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description</label>
             <textarea
@@ -281,7 +275,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </small>
           </div>
 
-          {/* Photos */}
           <div className="form-group">
             <label>Photos (optional)</label>
             <PhotoPicker
@@ -297,7 +290,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             />
           </div>
 
-          {/* Tags */}
           {tags.length > 0 && (
             <div className="form-group">
               <span className="form-group-caption" id="tagPickerLabel">
@@ -324,7 +316,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           )}
 
-          {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When did this happen?</label>
             <div className="radio-group">
@@ -364,7 +355,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           </div>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
@@ -379,7 +369,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -410,7 +399,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           )}
 
-          {/* Submit Button */}
           <div className="form-actions">
             <a href="/dashboard" className="btn btn-secondary">
               Cancel

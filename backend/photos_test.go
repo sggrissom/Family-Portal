@@ -17,10 +17,8 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// Helper function to create a test image
 func createTestImage(width, height int) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	// Fill with some test pattern
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			img.Set(x, y, image.Black)
@@ -32,7 +30,6 @@ func createTestImage(width, height int) []byte {
 	return buf.Bytes()
 }
 
-// Helper function to create a multipart file from bytes
 func createMultipartFile(filename string, data []byte) (*multipart.File, *multipart.FileHeader, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
@@ -46,7 +43,7 @@ func createMultipartFile(filename string, data []byte) (*multipart.File, *multip
 	writer.Close()
 
 	reader := multipart.NewReader(&buf, writer.Boundary())
-	form, err := reader.ReadForm(1024 * 1024) // 1MB max
+	form, err := reader.ReadForm(1024 * 1024)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,16 +80,12 @@ func TestPackImage(t *testing.T) {
 		Status:           0,
 	}
 
-	// Test that PackImage function exists and can be called without panic
-	// (actual packing is tested by vbolt internally)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("PackImage panicked: %v", r)
 		}
 	}()
 
-	// PackImage is used by vbolt internally, so we just verify it exists
-	// and the Image struct is properly defined
 	if testImage.Id != 123 {
 		t.Errorf("Expected Id 123, got %d", testImage.Id)
 	}
@@ -114,13 +107,11 @@ func TestGetImageById(t *testing.T) {
 		Title:            "Test Image",
 	}
 
-	// Store image in database
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		vbolt.Write(tx, ImagesBkt, testImage.Id, &testImage)
 		vbolt.TxCommit(tx)
 	})
 
-	// Test retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrieved := GetImageById(tx, testImage.Id)
 
@@ -137,7 +128,6 @@ func TestGetImageById(t *testing.T) {
 		}
 	})
 
-	// Test non-existent image
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrieved := GetImageById(tx, 999)
 		if retrieved.Id != 0 {
@@ -162,14 +152,12 @@ func TestGetPersonImages(t *testing.T) {
 		{Id: 3, FamilyId: familyId, Title: "Other Person Image"},
 	}
 
-	// Store images and create PhotoPerson relationships
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for _, img := range images {
 			vbolt.Write(tx, ImagesBkt, img.Id, &img)
 			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, img.Id, img.FamilyId)
 		}
 
-		// Associate first two images with personId, third with otherPersonId
 		AddPersonToPhoto(tx, 1, personId, familyId)
 		AddPersonToPhoto(tx, 2, personId, familyId)
 		AddPersonToPhoto(tx, 3, otherPersonId, familyId)
@@ -177,7 +165,6 @@ func TestGetPersonImages(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrieved := GetPersonImages(tx, personId)
 
@@ -185,7 +172,6 @@ func TestGetPersonImages(t *testing.T) {
 			t.Errorf("Expected 2 images for person %d, got %d", personId, len(retrieved))
 		}
 
-		// Check that both images are associated with the correct person via PhotoPerson
 		expectedImageIds := map[int]bool{1: true, 2: true}
 		for _, img := range retrieved {
 			if !expectedImageIds[img.Id] {
@@ -194,7 +180,6 @@ func TestGetPersonImages(t *testing.T) {
 		}
 	})
 
-	// Test person with no images
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrieved := GetPersonImages(tx, 999)
 		if len(retrieved) != 0 {
@@ -217,7 +202,6 @@ func TestGetFamilyImages(t *testing.T) {
 		{Id: 3, FamilyId: 2, Title: "Other Family"},
 	}
 
-	// Store images and create index
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for _, img := range images {
 			vbolt.Write(tx, ImagesBkt, img.Id, &img)
@@ -226,7 +210,6 @@ func TestGetFamilyImages(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrieved := GetFamilyImages(tx, familyId)
 
@@ -234,7 +217,6 @@ func TestGetFamilyImages(t *testing.T) {
 			t.Errorf("Expected 2 images for family %d, got %d", familyId, len(retrieved))
 		}
 
-		// Check that both images belong to the correct family
 		for _, img := range retrieved {
 			if img.FamilyId != familyId {
 				t.Errorf("Expected FamilyId %d, got %d", familyId, img.FamilyId)
@@ -253,12 +235,10 @@ func TestGenerateUniqueFilename(t *testing.T) {
 		t.Fatalf("Expected no errors, got %v, %v", err1, err2)
 	}
 
-	// Should be different each time
 	if filename1 == filename2 {
 		t.Error("Expected different filenames, got same value")
 	}
 
-	// Should preserve extension
 	if !strings.HasSuffix(filename1, ".jpg") {
 		t.Errorf("Expected filename to end with .jpg, got %s", filename1)
 	}
@@ -267,7 +247,6 @@ func TestGenerateUniqueFilename(t *testing.T) {
 		t.Errorf("Expected filename to end with .jpg, got %s", filename2)
 	}
 
-	// Should be 32 chars + extension (16 bytes hex-encoded = 32 chars)
 	expectedLength := 32 + len(".jpg")
 	if len(filename1) != expectedLength {
 		t.Errorf("Expected filename length %d, got %d", expectedLength, len(filename1))
@@ -301,10 +280,8 @@ func TestIsValidImageType(t *testing.T) {
 }
 
 func TestGetImageDimensions(t *testing.T) {
-	// Create a test image
 	testImageData := createTestImage(100, 200)
 
-	// Create a multipart file
 	file, _, err := createMultipartFile("test.png", testImageData)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
@@ -327,7 +304,6 @@ func TestGetImageDimensions(t *testing.T) {
 
 func TestExtractExifDate(t *testing.T) {
 	t.Run("Invalid EXIF data", func(t *testing.T) {
-		// Test with non-EXIF data
 		invalidData := []byte("not an image")
 
 		_, err := extractExifDate(invalidData)
@@ -342,7 +318,6 @@ func TestExtractExifDate(t *testing.T) {
 	})
 
 	t.Run("Image without EXIF", func(t *testing.T) {
-		// Create a simple PNG without EXIF
 		testImageData := createTestImage(10, 10)
 
 		_, err := extractExifDate(testImageData)
@@ -365,7 +340,7 @@ func TestGenerateDefaultTitle(t *testing.T) {
 		},
 		{
 			filename:  "vacation.png",
-			photoDate: time.Time{}, // Zero time
+			photoDate: time.Time{},
 			expected:  "vacation",
 		},
 		{
@@ -401,7 +376,6 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Should be close to current time
 		if time.Since(result) > time.Minute {
 			t.Error("Expected result to be close to current time")
 		}
@@ -442,8 +416,6 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Person born 2020-06-15, age 2 years 6 months should be around 2023-12-15
-		// (approximate calculation: 2*365 + 6*30 days)
 		expectedYear := 2022
 		if result.Year() < expectedYear || result.Year() > expectedYear+1 {
 			t.Errorf("Expected year around %d, got %d", expectedYear, result.Year())
@@ -475,7 +447,6 @@ func TestCalculatePhotoDate(t *testing.T) {
 	})
 
 	t.Run("Auto input type fallback", func(t *testing.T) {
-		// Test with invalid image data (no EXIF), should fall back to today
 		invalidImageData := []byte("not an image")
 
 		result, err := calculatePhotoDate("auto", "", nil, nil, testPerson, invalidImageData)
@@ -483,7 +454,6 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error with auto fallback, got %v", err)
 		}
 
-		// Should be close to current time (fallback behavior)
 		if time.Since(result) > time.Minute {
 			t.Error("Expected result to be close to current time for auto fallback")
 		}
@@ -497,7 +467,6 @@ func TestUploadPhotoHandlerValidation(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database
 	appDb = db
 
 	t.Run("Method not allowed", func(t *testing.T) {
@@ -513,7 +482,7 @@ func TestUploadPhotoHandlerValidation(t *testing.T) {
 
 	t.Run("File too large", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/upload-photo", nil)
-		req.ContentLength = 60 << 20 // 60MB (exceeds 50MB limit)
+		req.ContentLength = 60 << 20
 		recorder := httptest.NewRecorder()
 
 		uploadPhotoHandler(recorder, req)
@@ -528,7 +497,6 @@ func TestUploadPhotoHandlerValidation(t *testing.T) {
 	})
 
 	t.Run("Unauthenticated request", func(t *testing.T) {
-		// Create a valid multipart form but no auth
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("personId", "1")
@@ -581,8 +549,6 @@ func TestValidateUpdatePhotoRequest(t *testing.T) {
 		}
 
 		err := validateUpdatePhotoRequest(req)
-		// Note: The actual validation function doesn't check for empty title
-		// It only validates ID and input type requirements
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
@@ -606,7 +572,6 @@ func TestValidateUpdatePhotoRequest(t *testing.T) {
 			Id:        1,
 			Title:     "Valid Title",
 			InputType: "date",
-			// PhotoDate is empty
 		}
 
 		err := validateUpdatePhotoRequest(req)
@@ -620,7 +585,6 @@ func TestValidateUpdatePhotoRequest(t *testing.T) {
 			Id:        1,
 			Title:     "Valid Title",
 			InputType: "age",
-			// AgeYears is nil
 		}
 
 		err := validateUpdatePhotoRequest(req)

@@ -32,8 +32,6 @@ type ExportForm = {
   error: string;
   success: boolean;
   exportMode: "data_only" | "with_photos";
-  // Which family to export. Zero means the primary family. Export covers one
-  // family at a time so a bundle imports back into a single family.
   familyId: number;
 };
 
@@ -120,10 +118,6 @@ const useDeleteAccountForm = vlens.declareHook(
   })
 );
 
-// Push notifications are the one place family content reaches a phone without
-// anybody signing in, so the server withholds message text until it is asked
-// for. These mirror `NotificationPreferences` in backend/notification_preferences.go
-// and apply to the companion app, not to this browser.
 type NotificationForm = {
   chatEnabled: boolean;
   showMessageText: boolean;
@@ -132,9 +126,6 @@ type NotificationForm = {
   saved: boolean;
 };
 
-// What the server falls back to when an account has never saved preferences.
-// Repeated here only so a failed fetch renders the same switches the server
-// would have sent.
 const notificationDefaults: server.NotificationPreferencesResponse = {
   chatEnabled: true,
   showMessageText: false,
@@ -150,9 +141,6 @@ const useNotificationForm = vlens.declareHook(
   })
 );
 
-// Each switch saves on its own rather than behind a Save button: there are two
-// of them, and a notification setting that looks changed but was never sent is
-// the kind of thing somebody only finds out about from a lock screen.
 async function onNotificationPreferenceChanged(
   form: NotificationForm,
   field: "chatEnabled" | "showMessageText",
@@ -173,12 +161,10 @@ async function onNotificationPreferenceChanged(
 
   form.saving = false;
   if (resp) {
-    // Take the saved state back from the server rather than assuming it.
     form.chatEnabled = resp.preferences.chatEnabled;
     form.showMessageText = resp.preferences.showMessageText;
     form.saved = true;
   } else {
-    // Put the switch back, so it never shows a setting that was not stored.
     form[field] = previous;
     form.error = err || "Could not save your notification settings";
   }
@@ -264,7 +250,6 @@ async function copyInviteLink(inviteCode: string) {
   try {
     await navigator.clipboard.writeText(inviteLink);
 
-    // Show temporary success message
     const button = document.querySelector(".copy-button") as HTMLButtonElement;
     if (button) {
       const originalText = button.textContent;
@@ -276,7 +261,6 @@ async function copyInviteLink(inviteCode: string) {
       }, 2000);
     }
   } catch (err) {
-    // Fallback for browsers that don't support clipboard API
     logError("ui", "Failed to copy to clipboard", err);
     alert("Failed to copy link to clipboard");
   }
@@ -299,7 +283,6 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
     form.inviteCode = "";
     form.error = "";
 
-    // Update auth cache and reload the page to show new family info
     setTimeout(() => {
       window.location.reload();
     }, 1500);
@@ -309,10 +292,6 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
   vlens.scheduleRedraw();
 }
 
-// Password change goes through a plain endpoint rather than an RPC because the
-// server has to reissue this browser's session cookies in the response: the
-// change revokes every session the account has, including the one making the
-// request.
 async function onChangePasswordClicked(form: ChangePasswordForm, event: Event) {
   event.preventDefault();
   form.loading = true;
@@ -339,7 +318,6 @@ async function onChangePasswordClicked(form: ChangePasswordForm, event: Event) {
       form.newPassword = "";
       form.confirmPassword = "";
       if (result.token) {
-        // Keep RPC calls working: the old token's session was just revoked.
         rpc.setAuthHeaders({ "x-auth-token": result.token });
         form.success = "Password changed. Other devices have been signed out.";
       } else {
@@ -386,8 +364,6 @@ async function onDeleteAccountClicked(form: DeleteAccountForm, event: Event) {
     const result = await res.json();
 
     if (result.success) {
-      // The account is gone, so there is nothing to log out of — just drop the
-      // cached identity and leave.
       auth.clearAuth();
       window.location.href = "/";
       return;
@@ -402,8 +378,6 @@ async function onDeleteAccountClicked(form: DeleteAccountForm, event: Event) {
   vlens.scheduleRedraw();
 }
 
-// Rotating the code invalidates every invite link already shared, so the
-// confirmation says so rather than treating this as a harmless refresh.
 async function onRotateInviteCode(familyId: number, familyName: string) {
   if (
     !confirm(
@@ -495,7 +469,6 @@ async function onMergePreview(form: MergeForm, people: server.Person[], event: E
   form.loading = true;
   form.error = "";
 
-  // Get person details for preview
   const sourcePerson = people.find(p => p.id === form.sourcePersonId);
   const targetPerson = people.find(p => p.id === form.targetPersonId);
 
@@ -506,7 +479,6 @@ async function onMergePreview(form: MergeForm, people: server.Person[], event: E
     return;
   }
 
-  // Fetch full person data to get counts
   const [sourceData] = await server.GetPerson({ id: form.sourcePersonId });
 
   form.loading = false;
@@ -546,7 +518,6 @@ async function onMergeConfirm(form: MergeForm, event: Event) {
     form.targetPersonId = 0;
     form.previewData = null;
 
-    // Reload page after 2 seconds to show updated people list
     setTimeout(() => {
       window.location.reload();
     }, 2000);
@@ -565,8 +536,6 @@ function onMergeCancel(form: MergeForm) {
 
 const SettingsPage = ({ data }: SettingsPageProps) => {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  // Every family the user belongs to, primary first. Falls back to the
-  // top-level fields, which describe the primary family.
   const families =
     data.familyInfo.families && data.familyInfo.families.length > 0
       ? data.familyInfo.families
@@ -777,7 +746,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         </div>
 
-        {/* Join Another Family (only show if user has a family but wants to join another) */}
         <div className="settings-section">
           <h2>Join Another Family</h2>
           <div className="settings-card">
@@ -819,7 +787,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         </div>
 
-        {/* Family Information - only show if user is in a family */}
         {families.length > 0 && (
           <div className="settings-section">
             <h2>{families.length > 1 ? "Your Families" : "Family Information"}</h2>
@@ -845,10 +812,8 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           />
         )}
 
-        {/* Connections to other households, distinct from membership above */}
         {families.length > 0 && <FamilyLinksSection initialLinks={data.links} />}
 
-        {/* Data Management - only show if user is in a family */}
         {data.familyInfo.id > 0 && (
           <div className="settings-section">
             <h2>Data Management</h2>
@@ -941,7 +906,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {/* Advanced Data Management - only show if user is in a family and has people */}
         {data.familyInfo.id > 0 && data.people.length > 1 && (
           <div className="settings-section">
             <h2>Advanced Data Management</h2>
@@ -1077,7 +1041,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {/* Invite Members - only show if user is in a family */}
         {families.length > 0 && (
           <div className="settings-section">
             <h2>Invite Family Members</h2>

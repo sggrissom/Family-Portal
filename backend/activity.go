@@ -1,15 +1,3 @@
-// Competitive activities: seasons, competitions, routines, and results.
-//
-// The schema is deliberately activity-agnostic. Nothing in this file knows the
-// word "routine" or "performance" — dance vocabulary lives in the frontend
-// label map keyed by Activity.Kind, so a sport label pack is a second entry in
-// that map rather than a second set of tables. See docs/activities-plan.md.
-//
-// The hinge is Appearance: one Entry at one Event. Both of the views this
-// feature exists to serve fall out of it as an index walk rather than a scan —
-// "how did this routine do across competitions?" is AppearanceByEntryIndex, and
-// "how did this competition go?" is AppearanceByEventIndex. Neither is
-// privileged over the other.
 package backend
 
 import (
@@ -20,13 +8,11 @@ import (
 	"go.hasen.dev/vpack"
 )
 
-// Activity is a program a family participates in. Kind drives vocabulary and
-// nothing else — the schema below is identical for dance, soccer, and swim.
 type Activity struct {
 	Id        int       `json:"id"`
 	FamilyId  int       `json:"familyId"`
-	Name      string    `json:"name"` // "Dance"
-	Kind      string    `json:"kind"` // ActivityKind* below
+	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -40,49 +26,39 @@ type Season struct {
 	Id         int       `json:"id"`
 	ActivityId int       `json:"activityId"`
 	FamilyId   int       `json:"familyId"`
-	Name       string    `json:"name"` // "2025-26 Competition Season"
+	Name       string    `json:"name"`
 	StartDate  time.Time `json:"startDate"`
 	EndDate    time.Time `json:"endDate"`
 	Notes      string    `json:"notes"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// Event is one competition (sport: one game, meet, or tournament).
 type Event struct {
 	Id        int       `json:"id"`
 	SeasonId  int       `json:"seasonId"`
 	FamilyId  int       `json:"familyId"`
-	Name      string    `json:"name"`     // "Nuvo Nashville"
-	Host      string    `json:"host"`     // free text: "Nuvo", "Showstopper"
-	Location  string    `json:"location"` //
+	Name      string    `json:"name"`
+	Host      string    `json:"host"`
+	Location  string    `json:"location"`
 	StartDate time.Time `json:"startDate"`
-	EndDate   time.Time `json:"endDate"` // zero for single-day events
+	EndDate   time.Time `json:"endDate"`
 	Notes     string    `json:"notes"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// Entry is the recurring competitive unit within a season — a routine in dance,
-// a team in soccer, an event ("50 Free") in swim.
-//
-// It is season-scoped and has no lineage: a routine's roster, age division, and
-// competitive level are properties of a season, so binding Entry to Season keeps
-// them accurate without a per-season overlay. A group that carries over year to
-// year is re-created rather than reused.
 type Entry struct {
 	Id        int       `json:"id"`
 	SeasonId  int       `json:"seasonId"`
 	FamilyId  int       `json:"familyId"`
-	Name      string    `json:"name"`     // "Rise Up"
-	Format    string    `json:"format"`   // "solo" | "duet" | "trio" | "group" (free text; sport: "team")
-	Style     string    `json:"style"`    // "Jazz", "Lyrical" (sport: position/discipline)
-	Division  string    `json:"division"` // "Teen", "Senior"
-	Level     string    `json:"level"`    // "Elite", "Rec"
+	Name      string    `json:"name"`
+	Format    string    `json:"format"`
+	Style     string    `json:"style"`
+	Division  string    `json:"division"`
+	Level     string    `json:"level"`
 	Notes     string    `json:"notes"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// EntryMember is the roster join. Two siblings in the same group dance are two
-// rows; one child in eight dances is eight rows.
 type EntryMember struct {
 	Id        int       `json:"id"`
 	EntryId   int       `json:"entryId"`
@@ -91,54 +67,39 @@ type EntryMember struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// Appearance is one Entry at one Event.
-//
-// The name is deliberately colorless. The obvious word in dance is
-// "performance", but you do not go see a soccer performance, and this is the one
-// table that has to hold still across every activity. The domain word comes back
-// at the label layer, not here.
 type Appearance struct {
 	Id         int       `json:"id"`
 	EventId    int       `json:"eventId"`
 	EntryId    int       `json:"entryId"`
 	FamilyId   int       `json:"familyId"`
-	OccurredAt time.Time `json:"occurredAt"` // zero if unknown; ordering falls back to Event.StartDate
+	OccurredAt time.Time `json:"occurredAt"`
 	Notes      string    `json:"notes"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// Result is deliberately one flat record with a Kind discriminator rather than
-// four tables. The fields a placement uses (Rank, OutOf, Category) and the ones
-// a score uses (Score) are disjoint, but they are all small, all optional, and
-// all read together — splitting them buys nothing and costs three more buckets.
-//
-// Adjudication labels are free text. A season view can list and count them by
-// exact label, but it cannot rank or trend them; ordering is a later, additive
-// change (a ScaleId/TierRank pair behind a PackResult version bump).
 type Result struct {
 	Id           int       `json:"id"`
 	AppearanceId int       `json:"appearanceId"`
 	FamilyId     int       `json:"familyId"`
-	Kind         string    `json:"kind"`               // ResultKind* below
-	Label        string    `json:"label"`              // "High Gold", "Judges' Choice", "Overall"
-	Rank         *int      `json:"rank,omitempty"`     // placement: 1, 2, 3...
-	OutOf        *int      `json:"outOf,omitempty"`    // placement: "...of 14"
-	Category     string    `json:"category"`           // "Teen Small Group Jazz"
-	Score        *float64  `json:"score,omitempty"`    // numeric score or time
-	PersonId     *int      `json:"personId,omitempty"` // narrows an award to one dancer in a group
+	Kind         string    `json:"kind"`
+	Label        string    `json:"label"`
+	Rank         *int      `json:"rank,omitempty"`
+	OutOf        *int      `json:"outOf,omitempty"`
+	Category     string    `json:"category"`
+	Score        *float64  `json:"score,omitempty"`
+	PersonId     *int      `json:"personId,omitempty"`
 	Notes        string    `json:"notes"`
-	SortOrder    int       `json:"sortOrder"` // display order within an appearance
+	SortOrder    int       `json:"sortOrder"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
 const (
-	ResultKindAdjudication = "adjudication" // "Diamond", "High Gold", "Blown Speaker"
-	ResultKindPlacement    = "placement"    // Rank / OutOf / Category
-	ResultKindAward        = "award"        // judges' award, special award, title
-	ResultKindScore        = "score"        // numeric — sports and scored dance formats
+	ResultKindAdjudication = "adjudication"
+	ResultKindPlacement    = "placement"
+	ResultKindAward        = "award"
+	ResultKindScore        = "score"
 )
 
-// AppearancePhoto joins photos to one routine at one competition.
 type AppearancePhoto struct {
 	Id           int       `json:"id"`
 	AppearanceId int       `json:"appearanceId"`
@@ -147,8 +108,6 @@ type AppearancePhoto struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
-// EventPhoto joins photos to the competition itself — the ones from the weekend
-// that are not of any one routine.
 type EventPhoto struct {
 	Id        int       `json:"id"`
 	EventId   int       `json:"eventId"`
@@ -157,12 +116,6 @@ type EventPhoto struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// ── packing ───────────────────────────────────────────────────────────────────
-
-// packOptionalInt stores a nil-able int as a present flag followed by the value,
-// so "no placement" stays distinguishable from "1st". vpack has no native
-// optional, and a zero sentinel would be wrong for Rank and actively misleading
-// for Score.
 func packOptionalInt(n **int, buf *vpack.Buffer) {
 	if buf.Writing {
 		present := *n != nil
@@ -309,8 +262,6 @@ func PackEventPhoto(self *EventPhoto, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 }
 
-// ── buckets ───────────────────────────────────────────────────────────────────
-
 var ActivityBkt = vbolt.Bucket(&cfg.Info, "activities", vpack.FInt, PackActivity)
 var SeasonBkt = vbolt.Bucket(&cfg.Info, "seasons", vpack.FInt, PackSeason)
 var EventBkt = vbolt.Bucket(&cfg.Info, "activity_events", vpack.FInt, PackEvent)
@@ -321,60 +272,38 @@ var ResultBkt = vbolt.Bucket(&cfg.Info, "activity_results", vpack.FInt, PackResu
 var AppearancePhotoBkt = vbolt.Bucket(&cfg.Info, "appearance_photos", vpack.FInt, PackAppearancePhoto)
 var EventPhotoBkt = vbolt.Bucket(&cfg.Info, "activity_event_photos", vpack.FInt, PackEventPhoto)
 
-// ── indexes ───────────────────────────────────────────────────────────────────
-
-// ActivityByFamilyIndex: term = family_id, target = activity_id
 var ActivityByFamilyIndex = vbolt.Index(&cfg.Info, "activity_by_family", vpack.FInt, vpack.FInt)
 
-// SeasonByActivityIndex: term = activity_id, target = season_id
 var SeasonByActivityIndex = vbolt.Index(&cfg.Info, "season_by_activity", vpack.FInt, vpack.FInt)
 
-// SeasonByFamilyIndex: term = family_id, target = season_id
 var SeasonByFamilyIndex = vbolt.Index(&cfg.Info, "season_by_family", vpack.FInt, vpack.FInt)
 
-// EventBySeasonIndex: term = season_id, target = event_id
 var EventBySeasonIndex = vbolt.Index(&cfg.Info, "activity_event_by_season", vpack.FInt, vpack.FInt)
 
-// EventByFamilyIndex: term = family_id, target = event_id
 var EventByFamilyIndex = vbolt.Index(&cfg.Info, "activity_event_by_family", vpack.FInt, vpack.FInt)
 
-// EntryBySeasonIndex: term = season_id, target = entry_id
 var EntryBySeasonIndex = vbolt.Index(&cfg.Info, "activity_entry_by_season", vpack.FInt, vpack.FInt)
 
-// EntryByFamilyIndex: term = family_id, target = entry_id
 var EntryByFamilyIndex = vbolt.Index(&cfg.Info, "activity_entry_by_family", vpack.FInt, vpack.FInt)
 
-// EntryMemberByEntryIndex: term = entry_id, target = entry_member_id
 var EntryMemberByEntryIndex = vbolt.Index(&cfg.Info, "entry_member_by_entry", vpack.FInt, vpack.FInt)
 
-// EntryMemberByPersonIndex: term = person_id, target = entry_member_id.
-// This is what answers "which routines is this kid in?" without a scan.
 var EntryMemberByPersonIndex = vbolt.Index(&cfg.Info, "entry_member_by_person", vpack.FInt, vpack.FInt)
 
-// EntryMemberByFamilyIndex: term = family_id, target = entry_member_id
 var EntryMemberByFamilyIndex = vbolt.Index(&cfg.Info, "entry_member_by_family", vpack.FInt, vpack.FInt)
 
-// AppearanceByEventIndex: term = event_id, target = appearance_id — competition view.
 var AppearanceByEventIndex = vbolt.Index(&cfg.Info, "appearance_by_event", vpack.FInt, vpack.FInt)
 
-// AppearanceByEntryIndex: term = entry_id, target = appearance_id — routine-across-competitions view.
 var AppearanceByEntryIndex = vbolt.Index(&cfg.Info, "appearance_by_entry", vpack.FInt, vpack.FInt)
 
-// AppearanceByFamilyIndex: term = family_id, target = appearance_id
 var AppearanceByFamilyIndex = vbolt.Index(&cfg.Info, "appearance_by_family", vpack.FInt, vpack.FInt)
 
-// ResultByAppearanceIndex: term = appearance_id, target = result_id
 var ResultByAppearanceIndex = vbolt.Index(&cfg.Info, "activity_result_by_appearance", vpack.FInt, vpack.FInt)
 
-// ResultByPersonIndex: term = person_id, target = result_id. Written only for
-// results that name a person — an award given to one dancer inside a group.
 var ResultByPersonIndex = vbolt.Index(&cfg.Info, "activity_result_by_person", vpack.FInt, vpack.FInt)
 
-// ResultByFamilyIndex: term = family_id, target = result_id
 var ResultByFamilyIndex = vbolt.Index(&cfg.Info, "activity_result_by_family", vpack.FInt, vpack.FInt)
 
-// AppearancePhotoBy*: the by-photo index is not optional — deleting a photo has
-// to clear its joins, exactly as MilestonePhotoByPhotoIndex does today.
 var AppearancePhotoByAppearanceIndex = vbolt.Index(&cfg.Info, "appearance_photo_by_appearance", vpack.FInt, vpack.FInt)
 var AppearancePhotoByPhotoIndex = vbolt.Index(&cfg.Info, "appearance_photo_by_photo", vpack.FInt, vpack.FInt)
 var AppearancePhotoByFamilyIndex = vbolt.Index(&cfg.Info, "appearance_photo_by_family", vpack.FInt, vpack.FInt)
@@ -382,8 +311,6 @@ var AppearancePhotoByFamilyIndex = vbolt.Index(&cfg.Info, "appearance_photo_by_f
 var EventPhotoByEventIndex = vbolt.Index(&cfg.Info, "activity_event_photo_by_event", vpack.FInt, vpack.FInt)
 var EventPhotoByPhotoIndex = vbolt.Index(&cfg.Info, "activity_event_photo_by_photo", vpack.FInt, vpack.FInt)
 var EventPhotoByFamilyIndex = vbolt.Index(&cfg.Info, "activity_event_photo_by_family", vpack.FInt, vpack.FInt)
-
-// ── reads ─────────────────────────────────────────────────────────────────────
 
 func GetActivityById(tx *vbolt.Tx, id int) (activity Activity) {
 	vbolt.Read(tx, ActivityBkt, id, &activity)
@@ -415,9 +342,6 @@ func GetResultById(tx *vbolt.Tx, id int) (result Result) {
 	return
 }
 
-// readByTerm is the ReadTermTargets/ReadSlice pair every list below is made of.
-// vbolt.ReadSlice on an empty id list is avoided the same way milestone.go
-// avoids it.
 func readByTerm[T any](tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], bkt *vbolt.BucketInfo[int, T], term int) []T {
 	items := []T{}
 	var ids []int
@@ -468,8 +392,6 @@ func GetFamilyEntryMembers(tx *vbolt.Tx, familyId int) []EntryMember {
 	return readByTerm(tx, EntryMemberByFamilyIndex, EntryMemberBkt, familyId)
 }
 
-// GetEntryPersonIds is the roster of an entry as plain person ids, which is what
-// every access check wants.
 func GetEntryPersonIds(tx *vbolt.Tx, entryId int) []int {
 	members := GetEntryMembers(tx, entryId)
 	personIds := make([]int, 0, len(members))
@@ -519,12 +441,6 @@ func GetFamilyEventPhotos(tx *vbolt.Tx, familyId int) []EventPhoto {
 	return readByTerm(tx, EventPhotoByFamilyIndex, EventPhotoBkt, familyId)
 }
 
-// ── writes ────────────────────────────────────────────────────────────────────
-//
-// Each write helper owns its record's index entries, and each delete helper
-// clears exactly the same set. Keeping the pair adjacent is what stops an index
-// from outliving the row it points at.
-
 func writeActivityTx(tx *vbolt.Tx, activity *Activity) {
 	vbolt.Write(tx, ActivityBkt, activity.Id, activity)
 	vbolt.SetTargetSingleTerm(tx, ActivityByFamilyIndex, activity.Id, activity.FamilyId)
@@ -562,9 +478,6 @@ func writeAppearanceTx(tx *vbolt.Tx, appearance *Appearance) {
 	vbolt.SetTargetSingleTerm(tx, AppearanceByFamilyIndex, appearance.Id, appearance.FamilyId)
 }
 
-// writeResultTx indexes by person only when the result names one. -1 is vbolt's
-// "no term", so a result that stops naming a person drops out of the index on
-// the next write rather than lingering under the old id.
 func writeResultTx(tx *vbolt.Tx, result *Result) {
 	vbolt.Write(tx, ResultBkt, result.Id, result)
 	vbolt.SetTargetSingleTerm(tx, ResultByAppearanceIndex, result.Id, result.AppearanceId)
@@ -589,11 +502,6 @@ func writeEventPhotoTx(tx *vbolt.Tx, join *EventPhoto) {
 	vbolt.SetTargetSingleTerm(tx, EventPhotoByPhotoIndex, join.Id, join.PhotoId)
 	vbolt.SetTargetSingleTerm(tx, EventPhotoByFamilyIndex, join.Id, join.FamilyId)
 }
-
-// ── row deletion ──────────────────────────────────────────────────────────────
-//
-// These delete one row and its index entries and nothing else. Cascades — an
-// Event taking its Appearances with it — are built on top of these.
 
 func deleteActivityRowTx(tx *vbolt.Tx, id int) {
 	vbolt.Delete(tx, ActivityBkt, id)
@@ -653,18 +561,6 @@ func deleteEventPhotoRowTx(tx *vbolt.Tx, id int) {
 	vbolt.SetTargetSingleTerm(tx, EventPhotoByFamilyIndex, id, -1)
 }
 
-// ── cascades ──────────────────────────────────────────────────────────────────
-//
-// Each of these deletes a record and everything that hangs off it. They are the
-// bottom-up counterpart of the tree in the model: an Appearance takes its
-// Results and photo joins, an Entry takes its roster and its Appearances, and so
-// on up to Activity.
-//
-// A delete that leaves children behind is not a smaller change than one that
-// does not — it is an orphaned row nothing can ever reach or clean up — so these
-// land with the CRUD procs that call them rather than waiting for the deletion
-// phase.
-
 func deleteAppearanceTx(tx *vbolt.Tx, appearanceId int) {
 	for _, result := range GetAppearanceResults(tx, appearanceId) {
 		deleteResultRowTx(tx, result.Id)
@@ -699,9 +595,6 @@ func deleteSeasonTx(tx *vbolt.Tx, seasonId int) {
 	for _, event := range GetSeasonEvents(tx, seasonId) {
 		deleteEventTx(tx, event.Id)
 	}
-	// Entries go after events: an event's cascade already took the appearances
-	// it shares with these entries, so what is left here is entries that never
-	// appeared anywhere.
 	for _, entry := range GetSeasonEntries(tx, seasonId) {
 		deleteEntryTx(tx, entry.Id)
 	}
@@ -715,19 +608,6 @@ func deleteActivityTx(tx *vbolt.Tx, activityId int) {
 	deleteActivityRowTx(tx, activityId)
 }
 
-// removePersonFromActivitiesTx takes a deleted person off every roster and out
-// of every result that named them.
-//
-// This is not covered by deleteFamilyActivitiesTx, and the gap is a real one: a
-// child shared into another household by a link can be rostered in that
-// household's group routine. Sweeping the deleted person's own family leaves
-// those rows behind, pointing at a person who no longer exists — the same shape
-// as the cross-family photo tags deletePersonRecordTx already clears.
-//
-// The roster row goes; the result does not. A routine that placed second still
-// placed second after one of its dancers is deleted, so the result keeps its
-// rank and loses only the name — which is also what the plan asks for, and what
-// makes ResultByPersonIndex safe to walk here.
 func removePersonFromActivitiesTx(tx *vbolt.Tx, personId int) {
 	for _, member := range GetPersonEntryMembers(tx, personId) {
 		deleteEntryMemberRowTx(tx, member.Id)
@@ -738,15 +618,6 @@ func removePersonFromActivitiesTx(tx *vbolt.Tx, personId int) {
 	}
 }
 
-// deleteFamilyActivitiesTx empties all nine buckets for one family.
-//
-// It sweeps each by-family index directly rather than cascading from the
-// activities down, so a row whose parent link is somehow broken still goes.
-// Account deletion is the wrong place to trust the tree.
-//
-// It lands with the schema rather than with the rest of the cascade work
-// because a bucket account deletion does not know about is a data-retention
-// bug, and there is no window in which these buckets may exist unswept.
 func deleteFamilyActivitiesTx(tx *vbolt.Tx, familyId int) {
 	for _, join := range GetFamilyAppearancePhotos(tx, familyId) {
 		deleteAppearancePhotoRowTx(tx, join.Id)
@@ -777,20 +648,6 @@ func deleteFamilyActivitiesTx(tx *vbolt.Tx, familyId int) {
 	}
 }
 
-// ── access ────────────────────────────────────────────────────────────────────
-
-// canAccessEntry allows a member of the owning family, or any user who can
-// reach at least one rostered person through an accepted family link carrying
-// ScopeActivities.
-//
-// The deliberate consequence: a link that shares one child exposes the group
-// routines that child is in, including the co-performers' names. That is what a
-// shared routine means — the routine is the shared object, not any one child —
-// but it is worth stating rather than discovering.
-//
-// An entry with an empty roster is reachable by its own family only. There is no
-// person to resolve through, and defaulting the other way would make a
-// half-filled form visible to every linked household.
 func canAccessEntry(tx *vbolt.Tx, user User, entry Entry, need AccessLevel) bool {
 	if entry.Id == 0 || entry.FamilyId == 0 {
 		return false
@@ -806,8 +663,6 @@ func canAccessEntry(tx *vbolt.Tx, user User, entry Entry, need AccessLevel) bool
 	return false
 }
 
-// canAccessAppearance resolves to the entry and defers to it. An appearance
-// carries no roster of its own — it is the entry that names the people.
 func canAccessAppearance(tx *vbolt.Tx, user User, appearance Appearance, need AccessLevel) bool {
 	if appearance.Id == 0 {
 		return false
@@ -815,8 +670,6 @@ func canAccessAppearance(tx *vbolt.Tx, user User, appearance Appearance, need Ac
 	return canAccessEntry(tx, user, GetEntryById(tx, appearance.EntryId), need)
 }
 
-// canAccessResult resolves through its appearance. Result.PersonId narrows who a
-// result is *about*; it does not widen who may read it.
 func canAccessResult(tx *vbolt.Tx, user User, result Result, need AccessLevel) bool {
 	if result.Id == 0 {
 		return false
@@ -824,9 +677,6 @@ func canAccessResult(tx *vbolt.Tx, user User, result Result, need AccessLevel) b
 	return canAccessAppearance(tx, user, GetAppearanceById(tx, result.AppearanceId), need)
 }
 
-// canAccessSeason and friends have no person dimension, so plain family access
-// answers them. They are named here so call sites read the same way as the
-// roster-backed checks above.
 func canAccessSeason(tx *vbolt.Tx, user User, season Season, need AccessLevel) bool {
 	return season.Id != 0 && CanAccessFamily(tx, user, season.FamilyId, need)
 }

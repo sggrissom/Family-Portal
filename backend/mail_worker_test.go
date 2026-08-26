@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-// mailRecorder captures delivery attempts and lets a test decide what each one
-// returns.
 type mailRecorder struct {
 	mu       sync.Mutex
 	jobs     []MailJob
@@ -17,8 +15,6 @@ type mailRecorder struct {
 	attempts chan int
 }
 
-// newMailRecorder installs a stub deliverer. results supplies the error for
-// each successive attempt; attempts past the end of the slice succeed.
 func newMailRecorder(t *testing.T, results ...error) *mailRecorder {
 	t.Helper()
 
@@ -52,8 +48,6 @@ func (r *mailRecorder) count() int {
 	return len(r.jobs)
 }
 
-// waitForAttempts blocks until n delivery attempts have been made, failing the
-// test rather than hanging if they never arrive.
 func (r *mailRecorder) waitForAttempts(t *testing.T, n int) {
 	t.Helper()
 
@@ -66,8 +60,6 @@ func (r *mailRecorder) waitForAttempts(t *testing.T, n int) {
 	}
 }
 
-// useTestMailWorker installs a running worker with short retry delays so the
-// backoff does not dominate the test runtime.
 func useTestMailWorker(t *testing.T, queueSize int) *MailWorker {
 	t.Helper()
 
@@ -101,7 +93,6 @@ func TestQueueMailSendsInlineWithoutWorker(t *testing.T) {
 		t.Fatalf("QueueMail() error = %v", err)
 	}
 
-	// No worker means the send already happened by the time QueueMail returned.
 	if recorder.count() != 1 {
 		t.Fatalf("delivery attempts = %d, want 1", recorder.count())
 	}
@@ -125,7 +116,6 @@ func TestQueueMailDeliversInBackground(t *testing.T) {
 }
 
 func TestMailWorkerRetriesTransientFailures(t *testing.T) {
-	// A 451 is the server saying "not now", so the message is worth resending.
 	transient := &textproto.Error{Code: 451, Msg: "try again later"}
 	recorder := newMailRecorder(t, transient, transient)
 	useTestMailWorker(t, 4)
@@ -151,7 +141,6 @@ func TestMailWorkerGivesUpAfterMaxAttempts(t *testing.T) {
 
 	recorder.waitForAttempts(t, mailMaxAttempts)
 
-	// Give a fourth attempt a chance to happen so the cap is really tested.
 	time.Sleep(50 * time.Millisecond)
 	if got := recorder.count(); got != mailMaxAttempts {
 		t.Fatalf("delivery attempts = %d, want %d", got, mailMaxAttempts)
@@ -194,8 +183,6 @@ func TestMailWorkerDoesNotRetryUnconfiguredMailer(t *testing.T) {
 func TestQueueMailReportsAFullQueue(t *testing.T) {
 	originalWorker := globalMailWorker
 
-	// A worker that is never started leaves the queue unattended, which is the
-	// only reliable way to fill it.
 	globalMailWorker = &MailWorker{
 		jobQueue: make(chan MailJob, 1),
 	}
@@ -237,8 +224,6 @@ func TestDeliverNowLogsWhenMailIsNotConfigured(t *testing.T) {
 	t.Setenv("EMAIL", "")
 	t.Setenv("APP_PASSWORD", "")
 
-	// Local builds fall back to logging so link-bearing flows stay testable
-	// without a mail server; this must not surface as a failure.
 	if err := deliverNow(MailJob{To: "user@example.com", Subject: "Hi", Body: "body", Kind: "test"}); err != nil {
 		t.Fatalf("deliverNow() error = %v, want nil in a local build", err)
 	}

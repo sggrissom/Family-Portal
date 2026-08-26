@@ -1,11 +1,3 @@
-// Proc-level tests for appearances and results.
-//
-// The schema tests in activity_test.go prove the buckets and indexes behave;
-// these prove the procedures on top of them do — that an appearance cannot be
-// hung between two seasons, that a bad row in a results sheet leaves the old set
-// alone, and that replace-all actually replaces rather than accumulates.
-//
-// Cross-family rejection for the same procs lives in cross_family_isolation_test.go.
 package backend
 
 import (
@@ -17,9 +9,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// resultsFixture is one family with a season, one competition, and a group
-// routine with two kids on it — plus a second season, which is what makes the
-// "entry from another season" case reachable through the procs.
 type resultsFixture struct {
 	db *vbolt.DB
 
@@ -27,14 +16,14 @@ type resultsFixture struct {
 	familyId int
 	alice    Person
 	bob      Person
-	carol    Person // in the family but not on the routine
+	carol    Person
 
 	activity    Activity
 	season      Season
 	otherSeason Season
 	event       Event
 	entry       Entry
-	otherEntry  Entry // belongs to otherSeason
+	otherEntry  Entry
 }
 
 func setupResultsFixture(t *testing.T) resultsFixture {
@@ -68,7 +57,6 @@ func setupResultsFixture(t *testing.T) resultsFixture {
 		vbolt.TxCommit(tx)
 	})
 
-	// Each proc commits its own transaction, so each one gets its own `as`.
 	fx.as(t, func(ctx *vbeam.Context) {
 		resp, err := CreateActivity(ctx, CreateActivityRequest{Name: "Dance", Kind: ActivityKindDance})
 		if err != nil {
@@ -130,8 +118,6 @@ func setupResultsFixture(t *testing.T) resultsFixture {
 	return fx
 }
 
-// as runs fn in a write transaction with the owner authenticated. Procedures
-// commit their own transaction, so fn calls exactly one of them.
 func (fx resultsFixture) as(t *testing.T, fn func(ctx *vbeam.Context)) {
 	t.Helper()
 
@@ -144,7 +130,6 @@ func (fx resultsFixture) as(t *testing.T, fn func(ctx *vbeam.Context)) {
 	})
 }
 
-// newAppearance is the setup line most of the tests below start with.
 func (fx resultsFixture) newAppearance(t *testing.T) Appearance {
 	t.Helper()
 
@@ -160,10 +145,6 @@ func (fx resultsFixture) newAppearance(t *testing.T) Appearance {
 	})
 	return appearance
 }
-
-// The builders below let a test seed a fuller season than the fixture ships
-// with — a second competition, a second routine — without repeating the
-// one-proc-per-transaction dance each time.
 
 func (fx resultsFixture) createEvent(t *testing.T, seasonId int, name string, host string, startDate string) Event {
 	t.Helper()
@@ -196,8 +177,6 @@ func (fx resultsFixture) createEntry(t *testing.T, seasonId int, req CreateEntry
 	return entry
 }
 
-// createAppearance takes occurredAt as a string so a test can pass "" for the
-// "sometime that weekend" case the ordering has to fall back on.
 func (fx resultsFixture) createAppearance(t *testing.T, eventId int, entryId int, occurredAt string) Appearance {
 	t.Helper()
 
@@ -238,8 +217,6 @@ func (fx resultsFixture) resultsOf(t *testing.T, appearanceId int) []Result {
 	return results
 }
 
-// An appearance is one entry at one event, and both parents have to agree on
-// which season that is — otherwise it is a row neither view can explain.
 func TestCreateAppearanceRequiresBothParentsInOneSeason(t *testing.T) {
 	fx := setupResultsFixture(t)
 
@@ -260,8 +237,6 @@ func TestCreateAppearanceRequiresBothParentsInOneSeason(t *testing.T) {
 		}
 	})
 
-	// A routine that dances its category and again in the overall round is two
-	// performances, not one, so the second is allowed.
 	second := fx.newAppearance(t)
 	if second.Id == appearance.Id {
 		t.Error("a second appearance of the same entry at the same event reused the first")
@@ -300,8 +275,6 @@ func TestUpdateAppearanceEditsOnlyItsOwnFields(t *testing.T) {
 	}
 }
 
-// Replace-all has to actually replace. A second call with a shorter set must
-// leave the shorter set, not the union of the two.
 func TestSetAppearanceResultsReplacesTheWholeSet(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -325,8 +298,6 @@ func TestSetAppearanceResultsReplacesTheWholeSet(t *testing.T) {
 	if len(results) != 3 {
 		t.Fatalf("got %d results, want 3", len(results))
 	}
-	// SortOrder is the array position, so the set comes back in the order it
-	// was sent rather than in id order by accident.
 	for i, want := range []string{"High Gold", "Overall", "Judges' Choice"} {
 		if results[i].Label != want {
 			t.Errorf("result %d label = %q, want %q", i, results[i].Label, want)
@@ -366,8 +337,6 @@ func TestSetAppearanceResultsReplacesTheWholeSet(t *testing.T) {
 		t.Fatalf("after replacing, results = %+v, want just Platinum", results)
 	}
 
-	// The dropped rows have to leave every index they were in, not just the
-	// by-appearance one the read above walks.
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if got := len(GetPersonResults(tx, fx.alice.Id)); got != 0 {
 			t.Errorf("GetPersonResults(alice) = %d after the award was dropped, want 0", got)
@@ -377,8 +346,6 @@ func TestSetAppearanceResultsReplacesTheWholeSet(t *testing.T) {
 		}
 	})
 
-	// An empty set is how a mis-entered sheet is cleared, so it is a normal
-	// call rather than an error.
 	fx.as(t, func(ctx *vbeam.Context) {
 		if _, err := SetAppearanceResults(ctx, SetAppearanceResultsRequest{
 			AppearanceId: appearance.Id, Results: []ResultInput{},
@@ -391,7 +358,6 @@ func TestSetAppearanceResultsReplacesTheWholeSet(t *testing.T) {
 	}
 }
 
-// Each kind carries the field it exists for. Everything else stays free text.
 func TestSetAppearanceResultsValidatesEachKind(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -426,8 +392,6 @@ func TestSetAppearanceResultsValidatesEachKind(t *testing.T) {
 		})
 	}
 
-	// A score of zero and a rank of one are both real values, and a person id of
-	// zero means "names nobody" rather than a rejected write.
 	fx.as(t, func(ctx *vbeam.Context) {
 		if _, err := SetAppearanceResults(ctx, SetAppearanceResultsRequest{
 			AppearanceId: appearance.Id,
@@ -452,8 +416,6 @@ func TestSetAppearanceResultsValidatesEachKind(t *testing.T) {
 	}
 }
 
-// Validation runs over the whole sheet before anything is written, so a bad row
-// partway down leaves the appearance holding what it held before.
 func TestSetAppearanceResultsRejectsTheWholeSheetAtomically(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -472,7 +434,7 @@ func TestSetAppearanceResultsRejectsTheWholeSheetAtomically(t *testing.T) {
 			AppearanceId: appearance.Id,
 			Results: []ResultInput{
 				{Kind: ResultKindAdjudication, Label: "Platinum"},
-				{Kind: ResultKindPlacement, Label: "Overall"}, // no rank
+				{Kind: ResultKindPlacement, Label: "Overall"},
 			},
 		})
 		if err != ErrResultRankRequired {
@@ -506,8 +468,6 @@ func TestSetAppearanceResultsCapsTheSheetSize(t *testing.T) {
 	}
 }
 
-// Deleting an appearance takes its results with it. A result nothing can reach
-// is worse than a deleted one.
 func TestDeleteAppearanceTakesItsResults(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -551,8 +511,6 @@ func TestDeleteAppearanceTakesItsResults(t *testing.T) {
 	})
 }
 
-// Deleting the routine has to reach the results two levels down, which is the
-// case an entity-at-a-time cascade is easiest to get wrong.
 func TestDeleteEntryReachesResultsThroughAppearances(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)

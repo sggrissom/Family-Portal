@@ -12,25 +12,12 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// A native client holds its credentials itself: an access token it puts in an
-// Authorization header, and a refresh token it keeps in the Keychain. Neither
-// of those reached the server before this change — procedures read only the
-// authToken cookie or x-auth-token, and refresh and logout read only the
-// refreshToken cookie — so the iOS app authenticated entirely by way of
-// URLSession replaying cookies out of a jar the app does not own.
-//
-// The tests below are about that seam and nothing else. What counts as a valid
-// credential is unchanged and covered elsewhere.
-
 func TestBearerTokenReachesProcedureDispatch(t *testing.T) {
 	_, user, token := accountTestUser(t, "bearer@example.com", "correct-horse")
 
 	req := httptest.NewRequest(http.MethodPost, "/rpc/GetAuthContext", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	// The wrapper's whole job is to make MakeContext see the token, so that is
-	// what the assertion is about — not a round trip through a real proc, which
-	// would test vbeam rather than this.
 	rec := httptest.NewRecorder()
 	var seen string
 	NewBearerTokenWrapper(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -41,7 +28,6 @@ func TestBearerTokenReachesProcedureDispatch(t *testing.T) {
 		t.Fatalf("%s = %q, want the bearer token", AuthTokenHeader, seen)
 	}
 
-	// And the token that arrived is the one that resolves to this user.
 	app := vbeam.Application{DB: appDb}
 	forwarded := req.Clone(req.Context())
 	forwarded.Header.Set(AuthTokenHeader, seen)
@@ -67,10 +53,7 @@ func TestBearerTokenWrapperLeavesOtherRequestsAlone(t *testing.T) {
 		{name: "no authorization header", want: ""},
 		{name: "not a bearer scheme", authHeader: "Basic dXNlcjpwYXNz", want: ""},
 		{name: "bearer with no token", authHeader: "Bearer ", want: ""},
-		// RFC 7235 makes the scheme case-insensitive, and clients do vary.
 		{name: "lowercase scheme", authHeader: "bearer abc123", want: "abc123"},
-		// An explicit x-auth-token is the caller saying which credential it
-		// means; the wrapper must not overrule it.
 		{name: "explicit header wins", authHeader: "Bearer abc123", existing: "xyz789", want: "xyz789"},
 	}
 
@@ -96,8 +79,6 @@ func TestBearerTokenWrapperLeavesOtherRequestsAlone(t *testing.T) {
 	}
 }
 
-// nativeSession creates a user and a refresh token for them, returning the raw
-// token string as a native client would have captured it at login.
 func nativeSession(t *testing.T, email string) (*vbolt.DB, User, string) {
 	t.Helper()
 	db, user, _ := accountTestUser(t, email, "correct-horse")
@@ -145,9 +126,6 @@ func TestRefreshAcceptsTokenInTheBody(t *testing.T) {
 		t.Error("expected a new access token")
 	}
 
-	// A client with no cookie jar cannot read the rotated successor out of
-	// Set-Cookie, so it has to come back in the body or the session dies at the
-	// next refresh.
 	rotated, ok := body["refreshToken"].(string)
 	if !ok || rotated == "" {
 		t.Fatal("expected the rotated refresh token in the response body")
@@ -156,7 +134,6 @@ func TestRefreshAcceptsTokenInTheBody(t *testing.T) {
 		t.Error("refresh returned the same token; rotation did not happen")
 	}
 
-	// And the successor is the one that works from here.
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		if _, ok := ValidateRefreshToken(tx, rotated); !ok {
 			t.Error("rotated token does not validate")
@@ -178,8 +155,6 @@ func TestRefreshWithdrawsTheRotatedTokenFromBrowsers(t *testing.T) {
 
 	var body map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	// The cookie is HttpOnly so that script cannot reach the refresh token.
-	// Echoing it into the response body would undo exactly that.
 	if _, present := body["refreshToken"]; present {
 		t.Error("a cookie-based refresh must not put the refresh token in the response body")
 	}
@@ -198,8 +173,6 @@ func TestRefreshWithdrawsTheRotatedTokenFromBrowsers(t *testing.T) {
 func TestRefreshPrefersTheCookieOverTheBody(t *testing.T) {
 	_, _, cookieToken := nativeSession(t, "both@example.com")
 
-	// A stale value in a body must not be able to displace the session the
-	// browser is actually holding.
 	encoded, _ := json.Marshal(RefreshRequest{RefreshToken: "stale-token-from-somewhere"})
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", bytes.NewReader(encoded))
 	req.AddCookie(&http.Cookie{Name: "refreshToken", Value: cookieToken})
@@ -240,8 +213,6 @@ func TestLogoutRevokesARefreshTokenNamedInTheBody(t *testing.T) {
 		t.Fatalf("logout returned %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Without this the phone cleared its own storage and left a working refresh
-	// token in the database for the rest of its thirty days.
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		if _, ok := ValidateRefreshToken(tx, refreshToken); ok {
 			t.Error("refresh token still validates after logout")

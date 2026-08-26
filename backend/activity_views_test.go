@@ -1,10 +1,3 @@
-// Tests for the four aggregate read procs and the vocabulary proc.
-//
-// Each proc exists so one page is one call, so the assertions are mostly about
-// completeness and order — what came back, and in what sequence a human would
-// read it. The interesting one is the access split: two of these views are
-// whole-family and two resolve through a roster, and a linked household has to
-// land on exactly the second pair.
 package backend
 
 import (
@@ -14,14 +7,11 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// seededSeason is the fixture's season filled out to the shape these views were
-// designed for: two competitions, two routines, and a routine that appears at
-// both — which is the only way the two directions off Appearance differ.
 type seededSeason struct {
 	resultsFixture
 
 	nuvo, showstopper Event
-	solo              Entry // bob alone
+	solo              Entry
 	riseUpAtNuvo      Appearance
 	riseUpAtShowstop  Appearance
 	soloAtNuvo        Appearance
@@ -32,8 +22,6 @@ func seedSeason(t *testing.T) seededSeason {
 
 	fx := seededSeason{resultsFixture: setupResultsFixture(t)}
 
-	// Showstopper is created after Nuvo but happens later, so the views have to
-	// sort rather than trust the order the index hands back.
 	fx.nuvo = fx.event
 	fx.showstopper = fx.createEvent(t, fx.season.Id, "Showstopper Orlando", "Showstopper", "2026-04-18")
 	fx.solo = fx.createEntry(t, fx.season.Id, CreateEntryRequest{
@@ -43,7 +31,7 @@ func seedSeason(t *testing.T) seededSeason {
 
 	fx.riseUpAtShowstop = fx.createAppearance(t, fx.showstopper.Id, fx.entry.Id, "2026-04-18")
 	fx.riseUpAtNuvo = fx.createAppearance(t, fx.nuvo.Id, fx.entry.Id, "2026-02-07")
-	fx.soloAtNuvo = fx.createAppearance(t, fx.nuvo.Id, fx.solo.Id, "") // time unknown
+	fx.soloAtNuvo = fx.createAppearance(t, fx.nuvo.Id, fx.solo.Id, "")
 
 	fx.setResults(t, fx.riseUpAtNuvo.Id, []ResultInput{
 		{Kind: ResultKindAdjudication, Label: "High Gold"},
@@ -55,13 +43,12 @@ func seedSeason(t *testing.T) seededSeason {
 		{Kind: ResultKindAward, Label: "Judges' Choice", PersonId: intPtr(fx.alice.Id)},
 	})
 	fx.setResults(t, fx.soloAtNuvo.Id, []ResultInput{
-		{Kind: ResultKindAdjudication, Label: "high gold"}, // same label, sloppier
+		{Kind: ResultKindAdjudication, Label: "high gold"},
 	})
 
 	return fx
 }
 
-// call runs one proc as the fixture's owner and hands back what it returned.
 func callAs[Req any, Resp any](t *testing.T, fx resultsFixture, proc func(*vbeam.Context, Req) (Resp, error), req Req) (Resp, error) {
 	t.Helper()
 
@@ -73,9 +60,6 @@ func callAs[Req any, Resp any](t *testing.T, fx resultsFixture, proc func(*vbeam
 	return resp, err
 }
 
-// The season overview ships each parent once and the appearances as bare
-// hinges, so the assertions check that the client has everything it needs to
-// join them back up.
 func TestGetSeasonOverviewReturnsTheWholeSeasonAndOnlyIt(t *testing.T) {
 	fx := seedSeason(t)
 
@@ -89,7 +73,6 @@ func TestGetSeasonOverviewReturnsTheWholeSeasonAndOnlyIt(t *testing.T) {
 			resp.Season.Id, resp.Activity.Id, fx.season.Id, fx.activity.Id)
 	}
 
-	// Competitions read in the order they happen, not the order they were typed.
 	if len(resp.Events) != 2 {
 		t.Fatalf("got %d events, want 2", len(resp.Events))
 	}
@@ -100,7 +83,6 @@ func TestGetSeasonOverviewReturnsTheWholeSeasonAndOnlyIt(t *testing.T) {
 	if len(resp.Entries) != 2 {
 		t.Fatalf("got %d entries, want 2", len(resp.Entries))
 	}
-	// "On My Own" before "Rise Up", and each carrying its roster.
 	if resp.Entries[0].Entry.Id != fx.solo.Id || resp.Entries[1].Entry.Id != fx.entry.Id {
 		t.Errorf("entries out of name order: %q then %q",
 			resp.Entries[0].Entry.Name, resp.Entries[1].Entry.Name)
@@ -123,8 +105,6 @@ func TestGetSeasonOverviewReturnsTheWholeSeasonAndOnlyIt(t *testing.T) {
 		t.Errorf("first result = %q, want the adjudication the sheet led with", got)
 	}
 
-	// The other season's routine is in the same family and the same activity,
-	// and must not be here.
 	for _, view := range resp.Entries {
 		if view.Entry.Id == fx.otherEntry.Id {
 			t.Error("a routine from another season showed up in the overview")
@@ -132,8 +112,6 @@ func TestGetSeasonOverviewReturnsTheWholeSeasonAndOnlyIt(t *testing.T) {
 	}
 }
 
-// "How did this competition go?" — one walk of AppearanceByEventIndex, with the
-// entry attached so a row renders on its own.
 func TestGetEventDetailNamesTheRoutineOnEveryRow(t *testing.T) {
 	fx := seedSeason(t)
 
@@ -150,9 +128,6 @@ func TestGetEventDetailNamesTheRoutineOnEveryRow(t *testing.T) {
 		t.Fatalf("got %d performances, want 2", len(resp.Appearances))
 	}
 
-	// Rise Up has a known time; the solo does not and falls back to the event's
-	// start date, which is the same day — so the id breaks the tie and the one
-	// entered first comes first.
 	if resp.Appearances[0].Appearance.Id != fx.riseUpAtNuvo.Id {
 		t.Errorf("first performance = %d, want Rise Up (%d)",
 			resp.Appearances[0].Appearance.Id, fx.riseUpAtNuvo.Id)
@@ -169,7 +144,6 @@ func TestGetEventDetailNamesTheRoutineOnEveryRow(t *testing.T) {
 		t.Errorf("Rise Up's row has %d results, want 2", got)
 	}
 
-	// The other competition's performances belong to the other competition.
 	other, err := callAs(t, fx.resultsFixture, GetEventDetail, GetEventDetailRequest{EventId: fx.showstopper.Id})
 	if err != nil {
 		t.Fatalf("GetEventDetail(showstopper) error = %v", err)
@@ -179,8 +153,6 @@ func TestGetEventDetailNamesTheRoutineOnEveryRow(t *testing.T) {
 	}
 }
 
-// "How has this routine done all season?" — the other direction off the same
-// hinge, and the one a linked household actually uses.
 func TestGetEntryHistoryWalksTheSeasonInOrder(t *testing.T) {
 	fx := seedSeason(t)
 
@@ -210,8 +182,6 @@ func TestGetEntryHistoryWalksTheSeasonInOrder(t *testing.T) {
 	}
 }
 
-// EntryMemberByPersonIndex is the index this proc exists to use, and the
-// seasonId filter is what turns "every routine ever" into "this season".
 func TestGetPersonSeasonFiltersBySeason(t *testing.T) {
 	fx := seedSeason(t)
 
@@ -219,7 +189,6 @@ func TestGetPersonSeasonFiltersBySeason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPersonSeason(all seasons) error = %v", err)
 	}
-	// Alice is in Rise Up this season and Last Year in the other one.
 	if len(all.Entries) != 2 {
 		t.Fatalf("alice is in %d routines across all seasons, want 2", len(all.Entries))
 	}
@@ -242,8 +211,6 @@ func TestGetPersonSeasonFiltersBySeason(t *testing.T) {
 		t.Errorf("got %d performances, want both of Rise Up's", len(scoped.Appearances))
 	}
 
-	// Bob is in the group and the solo; the solo's performance has no time, so
-	// it is the fallback ordering that puts it alongside the group's.
 	bob, err := callAs(t, fx.resultsFixture, GetPersonSeason,
 		GetPersonSeasonRequest{PersonId: fx.bob.Id, SeasonId: fx.season.Id})
 	if err != nil {
@@ -256,8 +223,6 @@ func TestGetPersonSeasonFiltersBySeason(t *testing.T) {
 		t.Errorf("bob has %d performances, want 3", len(bob.Appearances))
 	}
 
-	// Carol is in the family and on nothing, which is an empty answer rather
-	// than an error.
 	carol, err := callAs(t, fx.resultsFixture, GetPersonSeason, GetPersonSeasonRequest{PersonId: fx.carol.Id})
 	if err != nil {
 		t.Fatalf("GetPersonSeason(carol) error = %v", err)
@@ -268,8 +233,6 @@ func TestGetPersonSeasonFiltersBySeason(t *testing.T) {
 	}
 }
 
-// The vocabulary proc exists so "High Gold" does not fragment into "high gold".
-// It has to fold case to do that, and it has to keep one spelling to be useful.
 func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 	fx := seedSeason(t)
 
@@ -279,7 +242,6 @@ func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 		t.Fatalf("ListActivityVocabulary() error = %v", err)
 	}
 
-	// "High Gold" and "high gold" are one label, not two.
 	if len(resp.Adjudications) != 2 {
 		t.Fatalf("adjudications = %v, want High Gold and Platinum folded to two", resp.Adjudications)
 	}
@@ -287,8 +249,6 @@ func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 		t.Errorf("adjudications = %v, want the first spelling of each, sorted", resp.Adjudications)
 	}
 
-	// Kinds do not share a list: an award label is not offered as an
-	// adjudication.
 	if len(resp.Awards) != 1 || resp.Awards[0] != "Judges' Choice" {
 		t.Errorf("awards = %v, want just the judges' award", resp.Awards)
 	}
@@ -312,7 +272,6 @@ func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 	assertHas("hosts", resp.Hosts, "Nuvo")
 	assertHas("hosts", resp.Hosts, "Showstopper")
 
-	// A blank field is not a vocabulary entry.
 	for _, list := range [][]string{resp.Styles, resp.Divisions, resp.Levels, resp.Formats, resp.Hosts} {
 		for _, value := range list {
 			if value == "" {
@@ -321,7 +280,6 @@ func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 		}
 	}
 
-	// A second activity's vocabulary is its own, even in the same family.
 	var soccer Activity
 	fx.as(t, func(ctx *vbeam.Context) {
 		soccerResp, createErr := CreateActivity(ctx, CreateActivityRequest{Name: "Soccer", Kind: ActivityKindSport})
@@ -338,16 +296,11 @@ func TestListActivityVocabularyFoldsCaseAndScopesToTheActivity(t *testing.T) {
 	if len(empty.Adjudications) != 0 || len(empty.Hosts) != 0 || len(empty.Styles) != 0 {
 		t.Errorf("a brand new activity inherited the dance vocabulary: %+v", empty)
 	}
-	// Never nil: an autocomplete source that is sometimes null is a client
-	// branch for no reason.
 	if empty.Adjudications == nil || empty.Hosts == nil {
 		t.Error("empty vocabulary lists came back nil rather than empty")
 	}
 }
 
-// The access split is the point of having four procs instead of one. A linked
-// household lands on the two roster-scoped views and bounces off the two
-// whole-family ones.
 func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -366,7 +319,6 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 		})
 	}
 
-	// Reachable: the group routine alice is in, and alice's season.
 	asUserB(func(ctx *vbeam.Context) {
 		resp, err := GetEntryHistory(ctx, GetEntryHistoryRequest{EntryId: fx.groupEntry.Id})
 		if err != nil {
@@ -378,7 +330,6 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 		if len(resp.Appearances) != 1 || len(resp.Appearances[0].Results) != 2 {
 			t.Errorf("the shared routine's results did not come with it: %+v", resp.Appearances)
 		}
-		// The competition arrives as a summary. Its notes stay with its family.
 		if resp.Appearances[0].Event.Name != fx.event.Name {
 			t.Errorf("event summary = %+v, want %q", resp.Appearances[0].Event, fx.event.Name)
 		}
@@ -392,15 +343,11 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 		if len(resp.Entries) != 1 || resp.Entries[0].Entry.Id != fx.groupEntry.Id {
 			t.Errorf("alice's season = %+v, want the group routine", resp.Entries)
 		}
-		// The kind crosses the link with the season summary. It is the only
-		// thing that tells the grandparents' screen to say "Competition"
-		// rather than "Event", and it is not family data — just a vocabulary.
 		if len(resp.Seasons) != 1 || resp.Seasons[0].Kind != ActivityKindDance {
 			t.Errorf("shared season = %+v, want one dance season", resp.Seasons)
 		}
 	})
 
-	// Out of reach: the routine alice is not in, and the two whole-family views.
 	asUserB(func(ctx *vbeam.Context) {
 		if _, err := GetEntryHistory(ctx, GetEntryHistoryRequest{EntryId: fx.soloEntry.Id}); err == nil {
 			t.Error("a routine with nobody shared in it was readable through the link")
@@ -422,16 +369,12 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 		}
 	})
 
-	// Bob was never shared, so his season is not the grandparents' to read even
-	// though he dances alongside alice.
 	asUserB(func(ctx *vbeam.Context) {
 		if _, err := GetPersonSeason(ctx, GetPersonSeasonRequest{PersonId: fx.bob.Id}); err == nil {
 			t.Error("an unshared child's season was readable through the link")
 		}
 	})
 
-	// A link that does not carry activities reaches none of it, even though it
-	// still shares the child.
 	setLinkScopes(t, fx.familyLinkFixture, fx.linkAB, LinkScopes{People: true})
 	asUserB(func(ctx *vbeam.Context) {
 		if _, err := GetEntryHistory(ctx, GetEntryHistoryRequest{EntryId: fx.groupEntry.Id}); err == nil {
@@ -445,11 +388,6 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 	})
 }
 
-// SeasonSummary carries the owning activity's kind because that is what selects
-// the UI's label pack. It is on the summary rather than only on the full record
-// for the link case at the end of this test: a household reading a shared child
-// never sees an Activity, and without the kind every screen it has falls back
-// to "Event" and "Entry".
 func TestSeasonSummaryCarriesActivityKind(t *testing.T) {
 	fx := seedSeason(t)
 

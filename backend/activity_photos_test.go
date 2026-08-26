@@ -1,8 +1,3 @@
-// Tests for the two photo join tables.
-//
-// The interesting cases are the ones a join table gets wrong: a photo from
-// another family attaching, a deleted photo leaving its joins behind, and a
-// linked household receiving ids for photos it cannot load.
 package backend
 
 import (
@@ -13,8 +8,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// addPhoto puts an image in a family directly. The upload path is a multipart
-// handler with a worker behind it; these tests only need a row with an id.
 func (fx resultsFixture) addPhoto(t *testing.T, familyId int, filename string) Image {
 	t.Helper()
 
@@ -32,7 +25,6 @@ func (fx resultsFixture) addPhoto(t *testing.T, familyId int, filename string) I
 	return photo
 }
 
-// Replace-all, in the order asked for, with duplicates and junk dropped.
 func TestSetAppearancePhotosReplacesTheWholeSet(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -43,8 +35,7 @@ func TestSetAppearancePhotosReplacesTheWholeSet(t *testing.T) {
 
 	resp, err := callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
 		AppearanceId: appearance.Id,
-		// A duplicate and a zero, both of which a half-filled form sends.
-		PhotoIds: []int{second.Id, first.Id, second.Id, 0},
+		PhotoIds:     []int{second.Id, first.Id, second.Id, 0},
 	})
 	if err != nil {
 		t.Fatalf("SetAppearancePhotos() error = %v", err)
@@ -56,7 +47,6 @@ func TestSetAppearancePhotosReplacesTheWholeSet(t *testing.T) {
 		t.Errorf("photoIds = %v, want the order they were listed in", resp.Appearance.PhotoIds)
 	}
 
-	// Replacing means replacing, not accumulating.
 	resp, err = callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
 		AppearanceId: appearance.Id, PhotoIds: []int{third.Id},
 	})
@@ -72,7 +62,6 @@ func TestSetAppearancePhotosReplacesTheWholeSet(t *testing.T) {
 		}
 	})
 
-	// Detaching everything is a normal call.
 	resp, err = callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
 		AppearanceId: appearance.Id, PhotoIds: []int{},
 	})
@@ -82,7 +71,6 @@ func TestSetAppearancePhotosReplacesTheWholeSet(t *testing.T) {
 	if len(resp.Appearance.PhotoIds) != 0 {
 		t.Errorf("photoIds = %v after detaching everything", resp.Appearance.PhotoIds)
 	}
-	// The photos themselves are untouched — detaching is not deleting.
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if GetImageById(tx, third.Id).Id == 0 {
 			t.Error("detaching a photo deleted it")
@@ -122,7 +110,6 @@ func TestSetEventPhotosKeepsTheWeekendSeparateFromTheRoutine(t *testing.T) {
 		t.Errorf("performance photos = %v, want just the onstage shot", got)
 	}
 
-	// And the routine view carries the performance's photos too.
 	history, err := callAs(t, fx, GetEntryHistory, GetEntryHistoryRequest{EntryId: fx.entry.Id})
 	if err != nil {
 		t.Fatalf("GetEntryHistory() error = %v", err)
@@ -132,8 +119,6 @@ func TestSetEventPhotosKeepsTheWeekendSeparateFromTheRoutine(t *testing.T) {
 	}
 }
 
-// Attaching a photo is not a second way to reach one. A photo the caller cannot
-// contribute to is refused, and the refusal leaves the existing set alone.
 func TestSetPhotosRefusesAnotherFamilysPhoto(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -165,7 +150,6 @@ func TestSetPhotosRefusesAnotherFamilysPhoto(t *testing.T) {
 		}
 	})
 
-	// A missing photo id is refused the same way a stranger's is.
 	if _, err := callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
 		AppearanceId: appearance.Id, PhotoIds: []int{999999},
 	}); err == nil {
@@ -188,8 +172,6 @@ func TestSetPhotosCapsOneRequest(t *testing.T) {
 	}
 }
 
-// A join whose photo is gone is a row nothing can reach and nothing will ever
-// clean up, which is the entire reason the by-photo indexes exist.
 func TestDeletingAPhotoClearsBothJoinTables(t *testing.T) {
 	fx := setupResultsFixture(t)
 	appearance := fx.newAppearance(t)
@@ -197,8 +179,6 @@ func TestDeletingAPhotoClearsBothJoinTables(t *testing.T) {
 	shared := fx.addPhoto(t, fx.familyId, "shared.jpg")
 	kept := fx.addPhoto(t, fx.familyId, "kept.jpg")
 
-	// The same photo on both a performance and its competition, which is the
-	// case a single-table cleanup would half-finish.
 	if _, err := callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
 		AppearanceId: appearance.Id, PhotoIds: []int{shared.Id, kept.Id},
 	}); err != nil {
@@ -222,7 +202,6 @@ func TestDeletingAPhotoClearsBothJoinTables(t *testing.T) {
 		if got := GetEventPhotoIds(tx, fx.event.Id); len(got) != 0 {
 			t.Errorf("competition photos = %v, want none", got)
 		}
-		// The join rows themselves, not just what the by-subject reads return.
 		if got := len(GetFamilyAppearancePhotos(tx, fx.familyId)); got != 1 {
 			t.Errorf("%d appearance-photo joins survived, want 1", got)
 		}
@@ -232,9 +211,6 @@ func TestDeletingAPhotoClearsBothJoinTables(t *testing.T) {
 	})
 }
 
-// Reaching a routine through a link is not the same as reaching photos of it —
-// photos need ScopePhotos and somebody tagged. A caller gets ids it can load,
-// and no others.
 func TestLinkedHouseholdOnlyGetsPhotoIdsItCanLoad(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -253,15 +229,12 @@ func TestLinkedHouseholdOnlyGetsPhotoIdsItCanLoad(t *testing.T) {
 		})
 	}
 
-	// The fixture already hangs alicePhoto (tagged with alice) off the group
-	// performance. The owning family sees it.
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if got := GetAppearancePhotoIds(tx, fx.groupAppr.Id); len(got) != 1 {
 			t.Fatalf("the fixture's performance has %d photos, want 1", got)
 		}
 	})
 
-	// Without photos in the link, the routine still reads but its photos do not.
 	asUserB(func(ctx *vbeam.Context) {
 		resp, err := GetEntryHistory(ctx, GetEntryHistoryRequest{EntryId: fx.groupEntry.Id})
 		if err != nil {
@@ -288,7 +261,6 @@ func TestLinkedHouseholdOnlyGetsPhotoIdsItCanLoad(t *testing.T) {
 		}
 	})
 
-	// A link is read-only, so attaching is refused however the scopes read.
 	asUserB(func(ctx *vbeam.Context) {
 		if _, err := SetAppearancePhotos(ctx, SetAppearancePhotosRequest{
 			AppearanceId: fx.groupAppr.Id, PhotoIds: []int{fx.alicePhoto.Id},

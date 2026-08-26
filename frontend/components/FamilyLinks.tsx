@@ -4,8 +4,6 @@ import * as server from "../server";
 import { FamilySelect } from "./FamilySelect";
 import "./family-links-styles";
 
-// SCOPE_LABELS drives both the create form and the per-link editor, so the two
-// can never drift apart on what a link is able to share.
 const SCOPE_LABELS: { key: keyof server.LinkScopes; label: string; hint: string }[] = [
   { key: "people", label: "People", hint: "Required — the people you choose to share" },
   { key: "milestones", label: "Milestones", hint: "Their milestones and the tags on them" },
@@ -28,8 +26,6 @@ type FamilyLinksState = {
   inviteCode: string;
   kind: string;
   scopes: server.LinkScopes;
-  // Pending scope edits per link id, so editing one card does not disturb
-  // another that is mid-change.
   edits: Record<number, server.LinkScopes>;
   error: string;
   busy: boolean;
@@ -59,9 +55,6 @@ async function refresh(state: FamilyLinksState) {
   vlens.scheduleRedraw();
 }
 
-// Sharing people is what every other scope hangs off, so it is implied rather
-// than separately selectable. The backend normalizes the same way; doing it here
-// too keeps the checkboxes honest about what will be saved.
 function withImpliedPeople(scopes: server.LinkScopes): server.LinkScopes {
   const needsPeople = scopes.milestones || scopes.photos || scopes.growth || scopes.activities;
   return { ...scopes, people: scopes.people || needsPeople };
@@ -277,8 +270,6 @@ interface FamilyLinksSectionProps {
   initialLinks: server.FamilyLinkView[];
 }
 
-// FamilyLinksSection is the settings surface for relating one household to
-// another: who we share with, who shares with us, and exactly what travels.
 export const FamilyLinksSection = ({
   initialLinks,
 }: FamilyLinksSectionProps): preact.ComponentChild => {

@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// AIConversionRequest contains the data needed for AI conversion
 type AIConversionRequest struct {
 	UnstructuredText string
 	Model            string
@@ -21,23 +20,13 @@ type AIConversionRequest struct {
 	FamilyID         int
 }
 
-// AIConversionResult contains the result of AI conversion
 type AIConversionResult struct {
 	GeneratedJSON string
 	TokensUsed    int
 	Model         string
-	ResponseTime  int64 // Milliseconds
+	ResponseTime  int64
 }
 
-// withoutRequestURL strips the request URL that net/http attaches to transport
-// errors.
-//
-// These errors reach the browser: ProcessAIImport and ListAIModels put the
-// failure text straight into their response. The credential now travels in a
-// header rather than a query parameter, so the URL no longer carries a secret —
-// but an error string is still no place for the endpoint a request went to, and
-// the underlying cause ("connection refused", "context deadline exceeded") is
-// the part worth showing anyway.
 func withoutRequestURL(err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
@@ -46,12 +35,10 @@ func withoutRequestURL(err error) error {
 	return err
 }
 
-// GetDefaultAIModel returns the default AI model
 func GetDefaultAIModel() string {
 	return "models/gemini-2.5-flash"
 }
 
-// ValidateAIConfiguration checks if the AI provider is properly configured
 func ValidateAIConfiguration() error {
 	if os.Getenv("GEMINI_API_KEY") == "" {
 		return errors.New("GEMINI_API_KEY environment variable not set")
@@ -59,7 +46,6 @@ func ValidateAIConfiguration() error {
 	return nil
 }
 
-// ListAvailableModels returns the list of available Gemini models
 func ListAvailableModels() ([]string, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
@@ -99,7 +85,6 @@ func ListAvailableModels() ([]string, error) {
 
 	var models []string
 	for _, model := range listResponse.Models {
-		// Check if it supports generateContent
 		for _, action := range model.SupportedActions {
 			if action == "generateContent" {
 				models = append(models, model.Name)
@@ -111,8 +96,6 @@ func ListAvailableModels() ([]string, error) {
 	return models, nil
 }
 
-// ConvertToJSON calls the AI API to convert unstructured text to JSON
-// Currently implemented using Gemini
 func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 	startTime := time.Now()
 
@@ -121,7 +104,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, errors.New("Gemini API key not configured")
 	}
 
-	// Prepare Gemini API request
 	geminiRequest := map[string]interface{}{
 		"contents": []map[string]interface{}{
 			{
@@ -144,7 +126,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Make API request
 	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent", request.Model)
 
 	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(jsonBody))
@@ -167,7 +148,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, fmt.Errorf("Gemini API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
 	var geminiResponse struct {
 		Candidates []struct {
 			Content struct {
@@ -190,7 +170,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, errors.New("no response from Gemini")
 	}
 
-	// Check if response was truncated
 	finishReason := geminiResponse.Candidates[0].FinishReason
 	if finishReason == "MAX_TOKENS" {
 		return nil, errors.New("response truncated - increase maxOutputTokens or simplify input")

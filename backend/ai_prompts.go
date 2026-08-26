@@ -1,6 +1,5 @@
 package backend
 
-// GetDefaultPrompt returns the default system prompt for AI conversion
 func GetDefaultPrompt(personContext string, currentDate string) string {
 	return `You are a data extraction assistant for a family tracking application. Your task is to extract height, weight, and milestone information from unstructured text for a SPECIFIC PERSON and convert it into JSON format.
 
@@ -76,7 +75,6 @@ Guidelines:
 Return ONLY valid JSON with no additional text, explanation, or markdown formatting.`
 }
 
-// GetSimplifiedPrompt returns a simplified prompt for local/smaller models
 func GetSimplifiedPrompt() string {
 	return `Extract family information from the text and convert to JSON.
 
@@ -105,7 +103,6 @@ Type: 0=Parent, 1=Child
 Output only JSON, no other text.`
 }
 
-// GetExampleSection returns example input/output for better model understanding
 func GetExampleSection() string {
 	return `
 

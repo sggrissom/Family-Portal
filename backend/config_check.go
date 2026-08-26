@@ -11,35 +11,15 @@ import (
 	"strings"
 )
 
-// Configuration that is only checked at the moment it is used fails in a user's
-// face, hours after a deploy, in whichever corner of the app happened to need
-// it: an unset SITE_ROOT points Google's OAuth redirect at localhost, a
-// half-configured APNs keypair rejects every device registration, and a static
-// directory the service user cannot write turns every upload into a 500. The
-// checks below run once at startup so a release build refuses to serve rather
-// than serving something broken.
-//
-// Two policies are in play. Settings the site cannot work without are required
-// outright in release builds. Settings that belong to an optional subsystem —
-// APNs today — are all-or-nothing: configuring none of them is fine, but
-// configuring some of them is a mistake worth stopping for, because a partially
-// configured subsystem looks enabled and behaves like it is broken.
-
-// ConfigIssue is one problem found in the startup configuration.
 type ConfigIssue struct {
-	// Setting names the environment variable or path at fault.
 	Setting string
-	// Detail says what is wrong with it, without echoing secret values.
-	Detail string
+	Detail  string
 }
 
 func (i ConfigIssue) Error() string {
 	return i.Setting + ": " + i.Detail
 }
 
-// apnsEnvVars are the variables that must be set together for push to work.
-// APNS_ENVIRONMENT is included because push registration compares against it
-// (see validateRegisterPushDeviceRequest); without it every device is refused.
 var apnsEnvVars = []string{
 	"APNS_TEAM_ID",
 	"APNS_KEY_ID",
@@ -48,12 +28,6 @@ var apnsEnvVars = []string{
 	"APNS_ENVIRONMENT",
 }
 
-// CheckProductionConfig reports everything about the current environment that
-// would make a release build unfit to serve. The storage paths are passed in
-// rather than read from cfg so tests can point them at a scratch directory.
-//
-// It never returns a partial answer: callers get the full list so one restart
-// surfaces every problem instead of one per deploy.
 func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 	issues = append(issues, checkSiteRoot()...)
@@ -68,10 +42,6 @@ func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	return issues
 }
 
-// checkSiteRoot validates the public origin. Several call sites fall back to
-// cfg.SiteURL or plain localhost when it is unset, and the OAuth redirect is the
-// one that matters: a release build without SITE_ROOT sends users returning from
-// Google to http://localhost:8666.
 func checkSiteRoot() []ConfigIssue {
 	raw := os.Getenv("SITE_ROOT")
 	if raw == "" {
@@ -99,10 +69,6 @@ func checkSiteRoot() []ConfigIssue {
 	return nil
 }
 
-// checkGoogleOAuth requires both halves of the web credential. The login page
-// offers "Sign in with Google" unconditionally, so a missing credential is a
-// dead button rather than a hidden feature. GOOGLE_IOS_CLIENT_ID stays optional
-// — it belongs to the companion app, which is not part of 1.0.
 func checkGoogleOAuth() []ConfigIssue {
 	var issues []ConfigIssue
 	for _, name := range []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"} {
@@ -113,10 +79,6 @@ func checkGoogleOAuth() []ConfigIssue {
 	return issues
 }
 
-// checkMail requires a usable outbound path. Password reset is the only way a
-// locked-out user gets back in without me, and the backup staleness alert is the
-// only way I learn backups stopped, so unconfigured mail is not a degraded
-// feature — it is two of this release's guarantees quietly gone.
 func checkMail() []ConfigIssue {
 	settings, err := resolveMailSettings()
 	if err != nil {
@@ -131,9 +93,6 @@ func checkMail() []ConfigIssue {
 	return nil
 }
 
-// checkAIProvider requires the Gemini key. The import page exposes AI-assisted
-// import to every user in 1.0, so an unset key is a visible feature that errors
-// on use. AI_MODEL is optional and falls back to GetDefaultAIModel.
 func checkAIProvider() []ConfigIssue {
 	if os.Getenv("GEMINI_API_KEY") == "" {
 		return []ConfigIssue{{Setting: "GEMINI_API_KEY", Detail: "must be set; AI-assisted import is offered in the UI"}}
@@ -141,11 +100,6 @@ func checkAIProvider() []ConfigIssue {
 	return nil
 }
 
-// checkBackupToken requires the snapshot credential. The endpoint the nightly
-// backup pulls from authorizes nobody until this is set, and RegisterBackupHandlers
-// stops a release build that lacks it — but it stops it after this report has
-// already been printed, which is how an operator ends up fixing five settings,
-// restarting, and meeting a sixth. Checking it here puts it in the same list.
 func checkBackupToken() []ConfigIssue {
 	token := os.Getenv("BACKUP_TOKEN")
 	if token == "" {
@@ -163,10 +117,6 @@ func checkBackupToken() []ConfigIssue {
 	return nil
 }
 
-// checkAPNs is the all-or-nothing case. Push belongs to the companion app, so an
-// entirely unconfigured APNs is expected in 1.0; a partially configured one is
-// not, and it fails in the least visible place possible — a device registration
-// the user never sees succeed or fail.
 func checkAPNs() []ConfigIssue {
 	var configured, missing []string
 	for _, name := range apnsEnvVars {
@@ -192,30 +142,17 @@ func checkAPNs() []ConfigIssue {
 	if env := os.Getenv("APNS_ENVIRONMENT"); env != "sandbox" && env != "production" {
 		issues = append(issues, ConfigIssue{Setting: "APNS_ENVIRONMENT", Detail: `must be "sandbox" or "production"`})
 	}
-	// loadAPNsConfig reads and parses the signing key, which is the half of this
-	// configuration that a typo in a path or a wrong key format breaks.
 	if _, err := loadAPNsConfig(); err != nil {
 		issues = append(issues, ConfigIssue{Setting: "APNS_KEY_PATH", Detail: "signing key is unusable: " + err.Error()})
 	}
 	return issues
 }
 
-// metricsEnvVars are the variables that must be set together to consume
-// metrics-server.
 var metricsEnvVars = []string{
 	"METRICS_URL",
 	"METRICS_API_KEY",
 }
 
-// checkMetrics is the second all-or-nothing subsystem, on the APNs pattern.
-// Consuming metrics-server is optional — an unset pair simply hides the host
-// card — but half of it is a mistake that fails invisibly: a URL with no key
-// gets a 401 that the panel degrades quietly past, and a key with no URL does
-// nothing at all.
-//
-// It does not validate that the service answers. That is a runtime condition,
-// reported by the card itself, and a metrics service that is down should never
-// stop the application from starting.
 func checkMetrics() []ConfigIssue {
 	var configured, missing []string
 	for _, name := range metricsEnvVars {
@@ -241,9 +178,6 @@ func checkMetrics() []ConfigIssue {
 	if err != nil || parsed.Host == "" {
 		return []ConfigIssue{{Setting: "METRICS_URL", Detail: "must be a full URL, e.g. http://127.0.0.1:9110/metrics"}}
 	}
-	// metrics-server binds loopback and lives on the same box. Pointing this at
-	// the public hostname makes the request leave the machine and depend on
-	// DNS and TLS to reach a service one hop away.
 	if host := parsed.Hostname(); host != "127.0.0.1" && host != "localhost" && host != "::1" {
 		return []ConfigIssue{{
 			Setting: "METRICS_URL",
@@ -254,14 +188,6 @@ func checkMetrics() []ConfigIssue {
 	return nil
 }
 
-// checkIOSAppID validates the universal-link app identifier when one is set.
-// Unset is a legitimate state — a server with no companion app in the field
-// wants no association file — so this is not a required setting. What it cannot
-// be is wrong: the file is fetched by Apple's CDN and cached on every device
-// that installs the app, so an identifier with a typo in it is a broken
-// association that outlives the deploy that fixed it. The handler refuses to
-// serve a malformed id (see backend/universal_links.go); this is where an
-// operator finds out why the file is 404ing.
 func checkIOSAppID() []ConfigIssue {
 	appID := IOSAppID()
 	if appID == "" {
@@ -276,32 +202,21 @@ func checkIOSAppID() []ConfigIssue {
 	return nil
 }
 
-// checkStoragePaths confirms the process can actually write where it stores
-// things. The paths are compile-time constants, so what is being checked is the
-// deployed filesystem: directory present, owned by a user that can write it.
 func checkStoragePaths(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 
-	// bolt creates the database file but not the directory holding it.
 	if issue := checkWritableDir("DBPath", filepath.Dir(dbPath)); issue != nil {
 		issues = append(issues, *issue)
 	}
 	if issue := checkWritableDir("StaticDir", staticDir); issue != nil {
 		issues = append(issues, *issue)
 	}
-	// The rotating logger creates the directory itself and falls back to stderr
-	// if it cannot, so an unwritable LogDir is not fatal — but it is silent, and
-	// silently losing the logs is exactly the failure the admin panel exists to
-	// investigate.
 	if issue := checkWritableDir("LogDir", logDir); issue != nil {
 		issues = append(issues, *issue)
 	}
 	return issues
 }
 
-// checkWritableDir verifies a directory exists and accepts a new file. Checking
-// the mode bits would answer a different question than the one that matters,
-// which is whether this process, as the user it runs as, can create a file.
 func checkWritableDir(setting, dir string) *ConfigIssue {
 	if dir == "" {
 		return &ConfigIssue{Setting: setting, Detail: "is empty"}
@@ -326,11 +241,6 @@ func checkWritableDir(setting, dir string) *ConfigIssue {
 	return nil
 }
 
-// EnforceProductionConfig checks the startup configuration and decides what to
-// do about it. Release builds stop — a process that keeps running past this
-// point serves the broken behavior instead of reporting it. Local builds log the
-// same list and continue, because a development machine legitimately has no APNs
-// key or Gemini quota.
 func EnforceProductionConfig(dbPath, staticDir, logDir string) {
 	issues := CheckProductionConfig(dbPath, staticDir, logDir)
 	if len(issues) == 0 {
@@ -344,7 +254,6 @@ func EnforceProductionConfig(dbPath, staticDir, logDir string) {
 	log.Printf("configuration would fail a release build (ignored in local builds):\n%s", report)
 }
 
-// FormatConfigIssues renders issues one per line for a startup log.
 func FormatConfigIssues(issues []ConfigIssue) string {
 	lines := make([]string, 0, len(issues))
 	for _, issue := range issues {

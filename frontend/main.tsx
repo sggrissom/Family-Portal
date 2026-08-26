@@ -9,12 +9,9 @@ import { Header, Footer } from "./layout";
 import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
-  // Handle AuthFailure by redirecting to landing page
   if (error === server.ErrAuthFailure) {
-    // Clear auth cache and redirect to landing page
     auth.clearAuth();
 
-    // Use setTimeout to avoid setting route during render
     setTimeout(() => {
       setRoute("/");
     }, 0);
@@ -24,10 +21,6 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
     ]);
   }
 
-  // Everything else gets the shared error screen, which sorts the failure into
-  // a category and surfaces the reference code when the server sent one. The
-  // old version printed the raw error string under "Oops!", which was both
-  // unhelpful to a user and the last place a technical message could leak.
   return (
     <div>
       <Header isHome={false} />
@@ -40,7 +33,6 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
 }
 
 async function main() {
-  // Set up custom error handling
   setErrorView(customErrorView);
 
   vlens.initRoutes([

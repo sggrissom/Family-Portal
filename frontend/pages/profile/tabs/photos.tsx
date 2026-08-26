@@ -24,13 +24,10 @@ export const PhotosTab = ({ person, photos }: PhotosTabProps) => {
   const hasPhotos = photos && photos.length > 0;
   const photoStatus = usePhotoStatus();
 
-  // Initialize monitoring for processing photos (only when we first discover them)
   if (hasPhotos) {
     photos.forEach(photo => {
       const currentStatus = photoStatus.getStatus(photo.id);
 
-      // Only start monitoring if we haven't seen this photo before (Unknown status)
-      // AND the server says it's processing
       if (
         currentStatus === Status.Unknown &&
         photo.status === 1 &&

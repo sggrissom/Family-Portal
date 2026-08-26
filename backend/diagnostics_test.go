@@ -10,13 +10,6 @@ import (
 	"testing"
 )
 
-// One source of truth means exactly that: nothing else may write the version
-// down. app.go used to carry its own "1.0.0" in the startup log, which is how
-// a deployed binary comes to report a version it is not.
-//
-// backend/mobile_version.go is excluded: the versions there are the iOS app's,
-// supplied by clients and stored in the database, and any resemblance to the
-// server's own version is a coincidence this test should not enforce.
 func TestTheVersionIsWrittenDownOnce(t *testing.T) {
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(cfg.Version) {
 		t.Fatalf("cfg.Version = %q, want a major.minor.patch string", cfg.Version)
@@ -64,8 +57,6 @@ func TestTheVersionIsWrittenDownOnce(t *testing.T) {
 	}
 }
 
-// The linker-stamped fields have to be variables, or -X cannot reach them and
-// every build reports "unknown" forever.
 func TestBuildProvenanceIsStampable(t *testing.T) {
 	build := cfg.Build()
 
@@ -75,15 +66,11 @@ func TestBuildProvenanceIsStampable(t *testing.T) {
 	if build.Release != cfg.IsRelease {
 		t.Errorf("Build().Release = %v, want cfg.IsRelease %v", build.Release, cfg.IsRelease)
 	}
-	// An unstamped build — go test is one — says so rather than lying.
 	if build.Commit == "" || build.BuildTime == "" {
 		t.Error("unstamped builds should report a placeholder, not an empty string")
 	}
 }
 
-// The diagnostics view answers "what is running", not "how is it configured".
-// A path or a secret in here would be a leak in the one place an operator is
-// most likely to screenshot.
 func TestDiagnosticsExposeNoConfiguration(t *testing.T) {
 	resp := DiagnosticsResponse{
 		Version:   cfg.Version,

@@ -97,10 +97,6 @@ interface PersonSharingProps {
   personName: string;
 }
 
-// PersonSharingSection puts one person on another household's list. Which
-// households are offered comes from the backend, and is decided by the accepted
-// connections of this person's own family — never by which families the person
-// editing them happens to belong to.
 export const PersonSharingSection = ({
   personId,
   personName,
@@ -117,8 +113,6 @@ export const PersonSharingSection = ({
     return null;
   }
 
-  // Nothing to offer and nothing shared yet: say why, rather than showing an
-  // empty picker that looks broken.
   if (sharing.canShare.length === 0 && sharing.sharedWith.length === 0) {
     return (
       <div className="form-group">

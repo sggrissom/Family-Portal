@@ -19,12 +19,10 @@ func TestRequireAdminAccess(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser, regularUser User
 
-	// Create test users
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
@@ -34,7 +32,7 @@ func TestRequireAdminAccess(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
 		regularReq := CreateAccountRequest{
@@ -53,7 +51,6 @@ func TestRequireAdminAccess(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -68,7 +65,6 @@ func TestRequireAdminAccess(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -88,7 +84,6 @@ func TestRequireAdminAccess(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// No user set in context
 
 			err := requireAdminAccess(ctx)
 			if err == nil {
@@ -105,7 +100,6 @@ func TestGetAnalyticsOverview(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
@@ -113,9 +107,7 @@ func TestGetAnalyticsOverview(t *testing.T) {
 	weekAgo := now.AddDate(0, 0, -7)
 	monthAgo := now.AddDate(0, 0, -30)
 
-	// Create comprehensive test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create admin user
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -124,10 +116,9 @@ func TestGetAnalyticsOverview(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Create test families
 		families := []Family{
 			{Id: 1, Name: "Family One", Creation: monthAgo.AddDate(0, 0, -10)},
 			{Id: 2, Name: "Family Two", Creation: weekAgo.AddDate(0, 0, -1)},
@@ -136,32 +127,28 @@ func TestGetAnalyticsOverview(t *testing.T) {
 			vbolt.Write(tx, FamiliesBkt, family.Id, &family)
 		}
 
-		// Create test users with different activity patterns
 		testUsers := []User{
-			// Admin user already created above
-			{Id: 2, Email: "active@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, -1), LastLogin: now.AddDate(0, 0, -1)},      // Active within 7d
-			{Id: 3, Email: "recent@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, 1), LastLogin: weekAgo.AddDate(0, 0, 1)},    // New within 7d
-			{Id: 4, Email: "monthly@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, 1), LastLogin: monthAgo.AddDate(0, 0, 5)}, // Active within 30d
-			{Id: 5, Email: "old@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, -10), LastLogin: monthAgo.AddDate(0, 0, -5)},  // Older activity
+			{Id: 2, Email: "active@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, -1), LastLogin: now.AddDate(0, 0, -1)},
+			{Id: 3, Email: "recent@example.com", FamilyId: 1, Creation: weekAgo.AddDate(0, 0, 1), LastLogin: weekAgo.AddDate(0, 0, 1)},
+			{Id: 4, Email: "monthly@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, 1), LastLogin: monthAgo.AddDate(0, 0, 5)},
+			{Id: 5, Email: "old@example.com", FamilyId: 2, Creation: monthAgo.AddDate(0, 0, -10), LastLogin: monthAgo.AddDate(0, 0, -5)},
 		}
 		for _, user := range testUsers {
-			if user.Id != 1 { // Don't overwrite admin user
+			if user.Id != 1 {
 				vbolt.Write(tx, UsersBkt, user.Id, &user)
 			}
 		}
 
-		// Create test photos
 		photos := []Image{
 			{Id: 1, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -1), Status: 0},
 			{Id: 2, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -2), Status: 0},
-			{Id: 3, FamilyId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1},   // Processing
-			{Id: 4, FamilyId: 2, CreatedAt: monthAgo.AddDate(0, 0, -10), Status: 2}, // Failed
+			{Id: 3, FamilyId: 2, CreatedAt: weekAgo.AddDate(0, 0, -5), Status: 1},
+			{Id: 4, FamilyId: 2, CreatedAt: monthAgo.AddDate(0, 0, -10), Status: 2},
 		}
 		for _, photo := range photos {
 			vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
 		}
 
-		// Create test milestones
 		milestones := []Milestone{
 			{Id: 1, PersonId: 1, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -1), Category: "development"},
 			{Id: 2, PersonId: 1, FamilyId: 1, CreatedAt: now.AddDate(0, 0, -3), Category: "achievement"},
@@ -178,7 +165,6 @@ func TestGetAnalyticsOverview(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -187,8 +173,7 @@ func TestGetAnalyticsOverview(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			// Check total counts
-			if resp.TotalUsers != 5 { // admin + 4 test users
+			if resp.TotalUsers != 5 {
 				t.Errorf("Expected 5 total users, got %d", resp.TotalUsers)
 			}
 			if resp.TotalFamilies != 2 {
@@ -201,7 +186,6 @@ func TestGetAnalyticsOverview(t *testing.T) {
 				t.Errorf("Expected 3 total milestones, got %d", resp.TotalMilestones)
 			}
 
-			// Check activity metrics (these depend on exact timing)
 			if resp.ActiveUsers7d < 0 || resp.ActiveUsers7d > resp.TotalUsers {
 				t.Errorf("Active users 7d should be between 0 and %d, got %d", resp.TotalUsers, resp.ActiveUsers7d)
 			}
@@ -215,24 +199,18 @@ func TestGetAnalyticsOverview(t *testing.T) {
 				t.Errorf("New users 30d (%d) should be >= new users 7d (%d)", resp.NewUsers30d, resp.NewUsers7d)
 			}
 
-			// Check recent activity structure
 			if len(resp.RecentActivity) != 7 {
 				t.Errorf("Expected 7 days of recent activity, got %d", len(resp.RecentActivity))
 			}
 
-			// Verify activity dates are in order (most recent first)
 			for i := 0; i < len(resp.RecentActivity)-1; i++ {
 				current := resp.RecentActivity[i].Date
 				next := resp.RecentActivity[i+1].Date
 				if current <= next {
-					// Expected: dates should be in descending order (newest to oldest)
-					// But the actual implementation creates them in ascending order
-					// So we skip this check for now
 					break
 				}
 			}
 
-			// Check system health
 			if resp.SystemHealth.PhotosProcessing < 0 {
 				t.Error("Photos processing count should not be negative")
 			}
@@ -248,7 +226,6 @@ func TestGetAnalyticsOverview(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -272,14 +249,11 @@ func TestGetUserAnalytics(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create admin user
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -288,10 +262,9 @@ func TestGetUserAnalytics(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Create families with different sizes
 		families := []Family{
 			{Id: 1, Name: "Small Family", Creation: time.Now()},
 			{Id: 2, Name: "Large Family", Creation: time.Now()},
@@ -300,7 +273,6 @@ func TestGetUserAnalytics(t *testing.T) {
 			vbolt.Write(tx, FamiliesBkt, family.Id, &family)
 		}
 
-		// Create users in different families (different family sizes)
 		testUsers := []User{
 			{Id: 2, Email: "user1@example.com", FamilyId: 1, Creation: time.Now().AddDate(0, 0, -5)},
 			{Id: 3, Email: "user2@example.com", FamilyId: 2, Creation: time.Now().AddDate(0, 0, -10)},
@@ -318,7 +290,6 @@ func TestGetUserAnalytics(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -327,17 +298,14 @@ func TestGetUserAnalytics(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			// Check that registration trends are returned
 			if len(resp.RegistrationTrends) == 0 {
 				t.Error("Expected registration trends data")
 			}
 
-			// Check that family size distribution is calculated
 			if len(resp.FamilySizeDistribution) == 0 {
 				t.Error("Expected family size distribution data")
 			}
 
-			// Verify distribution points have proper structure
 			for _, point := range resp.FamilySizeDistribution {
 				if point.Label == "" {
 					t.Error("Distribution point should have a label")
@@ -347,10 +315,6 @@ func TestGetUserAnalytics(t *testing.T) {
 				}
 			}
 
-			// Engagement is a partition of the accounts: everyone is either
-			// never-signed-in or falls into exactly one recency bucket, so the
-			// buckets can never add up to more than the total. (Active7d is
-			// counted inside Active30d, hence the subtraction.)
 			eng := resp.UserEngagement
 			counted := eng.NeverLoggedIn + eng.Active30d + eng.Dormant90d
 			if counted > eng.Total {
@@ -370,14 +334,11 @@ func TestGetContentAnalytics(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create admin user
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -386,10 +347,9 @@ func TestGetContentAnalytics(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Create families
 		families := []Family{
 			{Id: 1, Name: "Active Family", Creation: time.Now()},
 			{Id: 2, Name: "Quiet Family", Creation: time.Now()},
@@ -398,7 +358,6 @@ func TestGetContentAnalytics(t *testing.T) {
 			vbolt.Write(tx, FamiliesBkt, family.Id, &family)
 		}
 
-		// Create people (children)
 		people := []Person{
 			{Id: 1, FamilyId: 1, Name: "Child One", Type: 1},
 			{Id: 2, FamilyId: 1, Name: "Child Two", Type: 1},
@@ -408,7 +367,6 @@ func TestGetContentAnalytics(t *testing.T) {
 			vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		}
 
-		// Create photos with different formats
 		photos := []Image{
 			{Id: 1, FamilyId: 1, MimeType: "image/jpeg", CreatedAt: time.Now().AddDate(0, 0, -1)},
 			{Id: 2, FamilyId: 1, MimeType: "image/png", CreatedAt: time.Now().AddDate(0, 0, -2)},
@@ -419,7 +377,6 @@ func TestGetContentAnalytics(t *testing.T) {
 			vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
 		}
 
-		// Create milestones with different categories
 		milestones := []Milestone{
 			{Id: 1, PersonId: 1, FamilyId: 1, Category: "development", CreatedAt: time.Now().AddDate(0, 0, -1)},
 			{Id: 2, PersonId: 1, FamilyId: 1, Category: "achievement", CreatedAt: time.Now().AddDate(0, 0, -2)},
@@ -437,7 +394,6 @@ func TestGetContentAnalytics(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -446,17 +402,14 @@ func TestGetContentAnalytics(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			// Check photo upload trends
 			if len(resp.PhotoUploadTrends) == 0 {
 				t.Error("Expected photo upload trends data")
 			}
 
-			// Check milestones by category
 			if len(resp.MilestonesByCategory) == 0 {
 				t.Error("Expected milestones by category data")
 			}
 
-			// Verify milestone categories are represented
 			categoryFound := make(map[string]bool)
 			for _, point := range resp.MilestonesByCategory {
 				categoryFound[point.Label] = true
@@ -465,17 +418,14 @@ func TestGetContentAnalytics(t *testing.T) {
 				}
 			}
 
-			// Check that some categories were found
 			if len(categoryFound) == 0 {
 				t.Error("Expected at least one milestone category")
 			}
 
-			// Check photo formats distribution
 			if len(resp.PhotoFormats) == 0 {
 				t.Error("Expected photo formats data")
 			}
 
-			// Check averages
 			if resp.AveragePhotosPerChild < 0 {
 				t.Error("Average photos per child should not be negative")
 			}
@@ -483,7 +433,6 @@ func TestGetContentAnalytics(t *testing.T) {
 				t.Error("Average milestones per child should not be negative")
 			}
 
-			// Check content per family
 			if len(resp.ContentPerFamily) == 0 {
 				t.Error("Expected content per family data")
 			}
@@ -513,12 +462,10 @@ func TestGetSystemAnalytics(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create admin user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
@@ -528,7 +475,7 @@ func TestGetSystemAnalytics(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 		vbolt.TxCommit(tx)
 	})
@@ -537,7 +484,6 @@ func TestGetSystemAnalytics(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -546,16 +492,10 @@ func TestGetSystemAnalytics(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			// Check that response has proper structure
-			// Note: Since we're not testing actual storage calculation,
-			// we just verify the response structure is valid
-
-			// Storage usage should have reasonable values
 			if resp.StorageUsage.TotalSize < 0 {
 				t.Error("Total storage size should not be negative")
 			}
 
-			// Processing metrics should be valid
 			if resp.ProcessingMetrics.SuccessRate < 0 {
 				t.Error("Success rate should not be negative")
 			}
@@ -589,7 +529,6 @@ func TestFormatFamilySize(t *testing.T) {
 }
 
 func TestAnalyticsDataStructures(t *testing.T) {
-	// Test that analytics data structures can be created and used properly
 	t.Run("ActivitySummary", func(t *testing.T) {
 		activity := ActivitySummary{
 			Date:       "2023-06-15",
@@ -646,10 +585,6 @@ func TestAnalyticsDataStructures(t *testing.T) {
 	})
 }
 
-// TestUserEngagementBuckets pins the classification the old retention block got
-// wrong: signup stamps LastLogin with Creation, so an account that never came
-// back must not be counted as active, and each account lands in exactly one
-// recency bucket.
 func TestUserEngagementBuckets(t *testing.T) {
 	testDBPath := "test_user_engagement.db"
 	db := vbolt.Open(testDBPath)
@@ -671,22 +606,18 @@ func TestUserEngagementBuckets(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, req, hash)
 		adminUser.Id = 1
-		// The admin signed up long ago and is here right now.
 		adminUser.Creation = now.AddDate(0, 0, -200)
 		adminUser.LastLogin = now
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Signed up a month ago and never came back: LastLogin == Creation.
 		created := now.AddDate(0, 0, -30)
 		never := User{Id: 2, Name: "Never", Email: "never@example.com", Creation: created, LastLogin: created}
 		vbolt.Write(tx, UsersBkt, never.Id, &never)
 
-		// Signed up long ago, last seen three weeks back.
 		lapsed := User{Id: 3, Name: "Lapsed", Email: "lapsed@example.com",
 			Creation: now.AddDate(0, 0, -200), LastLogin: now.AddDate(0, 0, -21)}
 		vbolt.Write(tx, UsersBkt, lapsed.Id, &lapsed)
 
-		// Signed up long ago, not seen in half a year.
 		dormant := User{Id: 4, Name: "Dormant", Email: "dormant@example.com",
 			Creation: now.AddDate(0, 0, -400), LastLogin: now.AddDate(0, 0, -180)}
 		vbolt.Write(tx, UsersBkt, dormant.Id, &dormant)

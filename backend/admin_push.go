@@ -8,34 +8,20 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// Push notifications are the least observable thing the server does: a send is
-// queued from chat, handed to APNs on a background goroutine, and either arrives
-// on a phone or does not. Nothing about that is visible from the app. The procs
-// below expose the three questions worth asking when a notification does not
-// show up — is push configured and running, did the device ever register, and
-// what did APNs say about the last few sends — plus a way to trigger a send
-// without arranging for a second person to post to chat while you are offline.
-
-// PushConfigIssue mirrors ConfigIssue for the wire. ConfigIssue's fields carry
-// no JSON tags because it is a startup-log type, so it is restated here rather
-// than tagged in place.
 type PushConfigIssue struct {
 	Setting string `json:"setting"`
 	Detail  string `json:"detail"`
 }
 
 type GetPushStatusResponse struct {
-	Config APNsConfigInfo    `json:"config"`
-	Stats  PushWorkerStats   `json:"stats"`
-	Issues []PushConfigIssue `json:"issues"`
-	// Device counts, so the status card can say whether anything could receive
-	// a notification at all.
-	TotalDevices    int `json:"totalDevices"`
-	ActiveDevices   int `json:"activeDevices"`
-	InactiveDevices int `json:"inactiveDevices"`
+	Config          APNsConfigInfo    `json:"config"`
+	Stats           PushWorkerStats   `json:"stats"`
+	Issues          []PushConfigIssue `json:"issues"`
+	TotalDevices    int               `json:"totalDevices"`
+	ActiveDevices   int               `json:"activeDevices"`
+	InactiveDevices int               `json:"inactiveDevices"`
 }
 
-// GetPushStatus reports configuration, worker state, and recent delivery outcomes.
 func GetPushStatus(ctx *vbeam.Context, req Empty) (resp GetPushStatusResponse, err error) {
 	if _, err = requirePushAdmin(ctx); err != nil {
 		return
@@ -64,30 +50,25 @@ func GetPushStatus(ctx *vbeam.Context, req Empty) (resp GetPushStatusResponse, e
 	return
 }
 
-// AdminPushDevice is one registered device, with the token masked.
 type AdminPushDevice struct {
-	Id          int       `json:"id"`
-	UserId      int       `json:"userId"`
-	UserName    string    `json:"userName"`
-	UserEmail   string    `json:"userEmail"`
-	TokenHint   string    `json:"tokenHint"`
-	Platform    string    `json:"platform"`
-	Environment string    `json:"environment"`
-	BundleId    string    `json:"bundleId"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	IsActive    bool      `json:"isActive"`
-	// EnvironmentMismatch is true when the device registered against a different
-	// APNs environment than the server is now configured for. This is the most
-	// common reason a correctly registered device silently receives nothing.
-	EnvironmentMismatch bool `json:"environmentMismatch"`
+	Id                  int       `json:"id"`
+	UserId              int       `json:"userId"`
+	UserName            string    `json:"userName"`
+	UserEmail           string    `json:"userEmail"`
+	TokenHint           string    `json:"tokenHint"`
+	Platform            string    `json:"platform"`
+	Environment         string    `json:"environment"`
+	BundleId            string    `json:"bundleId"`
+	CreatedAt           time.Time `json:"createdAt"`
+	UpdatedAt           time.Time `json:"updatedAt"`
+	IsActive            bool      `json:"isActive"`
+	EnvironmentMismatch bool      `json:"environmentMismatch"`
 }
 
 type ListPushDevicesResponse struct {
 	Devices []AdminPushDevice `json:"devices"`
 }
 
-// ListPushDevices returns every registered device across all families.
 func ListPushDevices(ctx *vbeam.Context, req Empty) (resp ListPushDevicesResponse, err error) {
 	if _, err = requirePushAdmin(ctx); err != nil {
 		return
@@ -98,17 +79,15 @@ func ListPushDevices(ctx *vbeam.Context, req Empty) (resp ListPushDevicesRespons
 	resp.Devices = []AdminPushDevice{}
 	vbolt.IterateAll(ctx.Tx, PushDeviceTokenBkt, func(key int, token PushDeviceToken) bool {
 		device := AdminPushDevice{
-			Id:          token.Id,
-			UserId:      token.UserId,
-			TokenHint:   maskPushToken(token.Token),
-			Platform:    token.Platform,
-			Environment: token.Environment,
-			BundleId:    token.BundleId,
-			CreatedAt:   token.CreatedAt,
-			UpdatedAt:   token.UpdatedAt,
-			IsActive:    token.IsActive,
-			// Only flag a mismatch when the server has an environment to compare
-			// against; an unset one is a configuration problem reported elsewhere.
+			Id:                  token.Id,
+			UserId:              token.UserId,
+			TokenHint:           maskPushToken(token.Token),
+			Platform:            token.Platform,
+			Environment:         token.Environment,
+			BundleId:            token.BundleId,
+			CreatedAt:           token.CreatedAt,
+			UpdatedAt:           token.UpdatedAt,
+			IsActive:            token.IsActive,
 			EnvironmentMismatch: serverEnv != "" && token.Environment != serverEnv,
 		}
 
@@ -126,24 +105,18 @@ func ListPushDevices(ctx *vbeam.Context, req Empty) (resp ListPushDevicesRespons
 }
 
 type SendTestPushRequest struct {
-	// UserId is who to notify. Zero means the calling admin, which is the case
-	// that matters — you verify against a phone you are holding.
-	UserId int `json:"userId"`
-	// Message overrides the default body. Optional.
+	UserId  int    `json:"userId"`
 	Message string `json:"message"`
 }
 
 type SendTestPushResponse struct {
-	Queued bool `json:"queued"`
-	// DeviceCount is how many active devices the notification was queued for.
-	// Zero with Queued true means the job will find nothing to send to.
+	Queued      bool   `json:"queued"`
 	DeviceCount int    `json:"deviceCount"`
 	TargetName  string `json:"targetName"`
 }
 
 const defaultTestPushMessage = "Test notification from the Family Portal admin panel."
 
-// SendTestPushNotification queues a push to one user's registered devices.
 func SendTestPushNotification(ctx *vbeam.Context, req SendTestPushRequest) (resp SendTestPushResponse, err error) {
 	admin, err := requirePushAdmin(ctx)
 	if err != nil {
@@ -198,8 +171,6 @@ func SendTestPushNotification(ctx *vbeam.Context, req SendTestPushRequest) (resp
 	return
 }
 
-// requirePushAdmin resolves the caller and enforces the admin check shared by
-// every proc in this file.
 func requirePushAdmin(ctx *vbeam.Context) (user User, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return

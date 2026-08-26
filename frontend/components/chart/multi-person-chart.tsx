@@ -139,7 +139,6 @@ export const MultiPersonChart = ({
     );
   }
 
-  // Helper function to calculate age in months
   const calculateAgeInMonths = (birthDate: string, measurementDate: string): number => {
     const birth = new Date(birthDate);
     const measurement = new Date(measurementDate);
@@ -150,7 +149,6 @@ export const MultiPersonChart = ({
 
     let totalMonths = years * 12 + months;
 
-    // If the day hasn't been reached yet in the current month, subtract one month
     if (days < 0) {
       totalMonths--;
     }
@@ -158,7 +156,6 @@ export const MultiPersonChart = ({
     return Math.max(0, totalMonths);
   };
 
-  // Collect all growth data across all people with age calculations
   const allGrowthDataWithAge = peopleData.flatMap(pd =>
     pd.growthData.map(gd => ({
       ...gd,
@@ -180,7 +177,6 @@ export const MultiPersonChart = ({
   const heightData = sortedData.filter(d => d.measurementType === server.Height && showHeight);
   const weightData = sortedData.filter(d => d.measurementType === server.Weight && showWeight);
 
-  // Age range (in months)
   const ageValues = sortedData.map(d => d.ageInMonths);
   const minAge = Math.min(...ageValues);
   const maxAge = Math.max(...ageValues);
@@ -189,7 +185,6 @@ export const MultiPersonChart = ({
   const paddedMaxAge = maxAge + ageRange * 0.05;
   const ageDen = Math.max(1, paddedMaxAge - paddedMinAge);
 
-  // Values
   const hv = heightData.map(d => d.value);
   const wv = weightData.map(d => d.value);
   const hMin = hv.length ? Math.min(...hv) : 0;
@@ -208,12 +203,10 @@ export const MultiPersonChart = ({
   const hDen = Math.max(1e-9, hHi - hLo);
   const wDen = Math.max(1e-9, wHi - wLo);
 
-  // Scales
   const ageToX = (ageMonths: number) => ((ageMonths - paddedMinAge) / ageDen) * innerW;
   const heightToY = (v: number) => innerH - ((v - hLo) / hDen) * innerH;
   const weightToY = (v: number) => innerH - ((v - wLo) / wDen) * innerH;
 
-  // Create paths for each person
   const createPath = (
     data: typeof sortedData,
     yScale: (value: number) => number,
@@ -232,7 +225,6 @@ export const MultiPersonChart = ({
     return s;
   };
 
-  // Zoom helpers
   const constrainZoom = (scale: number) => clamp(scale, 1, 8);
 
   const constrainTranslate = (tx: number, ty: number, scale: number) => {
@@ -263,7 +255,6 @@ export const MultiPersonChart = ({
     return Math.max(2, base * scaleFactor);
   };
 
-  // Touch handlers
   const handleTouchStart = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
     const touches = Array.from(e.touches);
 
@@ -478,7 +469,6 @@ export const MultiPersonChart = ({
     vlens.scheduleRedraw();
   };
 
-  // Point interactions
   const selectPoint = (
     d: (typeof sortedData)[number],
     kind: Kind,
@@ -538,7 +528,6 @@ export const MultiPersonChart = ({
       ? niceTicks(wLo, wHi, 5).filter(v => v >= wMin && v <= wMax)
       : [];
 
-  // Format age for display
   const formatAge = (months: number): string => {
     if (months < 12) {
       return `${Math.round(months)}m`;
@@ -589,7 +578,6 @@ export const MultiPersonChart = ({
               translate(${zoom.translateX}, ${zoom.translateY})
             `}
           >
-            {/* Grid */}
             <g className="grid">
               {xRatios.map(r => (
                 <line
@@ -613,14 +601,12 @@ export const MultiPersonChart = ({
               ))}
             </g>
 
-            {/* Lines for each person */}
             {peopleData.map(personData => {
               const personHeightData = heightData.filter(d => d.personId === personData.person.id);
               const personWeightData = weightData.filter(d => d.personId === personData.person.id);
 
               return (
                 <g key={`person-${personData.person.id}`}>
-                  {/* Height line */}
                   {personHeightData.length > 0 && showHeight && (
                     <path
                       d={createPath(heightData, heightToY, personData.person.id)}
@@ -632,7 +618,6 @@ export const MultiPersonChart = ({
                     />
                   )}
 
-                  {/* Weight line */}
                   {personWeightData.length > 0 && showWeight && (
                     <path
                       d={createPath(weightData, weightToY, personData.person.id)}
@@ -648,14 +633,12 @@ export const MultiPersonChart = ({
               );
             })}
 
-            {/* Data points for all people */}
             {peopleData.map(personData => {
               const personHeightData = heightData.filter(d => d.personId === personData.person.id);
               const personWeightData = weightData.filter(d => d.personId === personData.person.id);
 
               return (
                 <g key={`points-${personData.person.id}`}>
-                  {/* Height points */}
                   {personHeightData.map(d => {
                     const key = {
                       id: d.id as number,
@@ -705,7 +688,6 @@ export const MultiPersonChart = ({
                     );
                   })}
 
-                  {/* Weight points */}
                   {personWeightData.map(d => {
                     const key = {
                       id: d.id as number,
@@ -758,12 +740,10 @@ export const MultiPersonChart = ({
               );
             })}
 
-            {/* Axes */}
             <g className="axes">
               <line x1={0} y1={innerH} x2={innerW} y2={innerH} className="axis-line" />
               <line x1={0} y1={0} x2={0} y2={innerH} className="axis-line" />
 
-              {/* X-axis labels */}
               {xRatios.map((ratio, i) => {
                 const ageMonths = paddedMinAge + ratio * (paddedMaxAge - paddedMinAge);
                 return (
@@ -780,7 +760,6 @@ export const MultiPersonChart = ({
                 );
               })}
 
-              {/* Y-axis labels for height */}
               {showHeight &&
                 heightData.length > 0 &&
                 hTicks.map((v, i) => (
@@ -798,7 +777,6 @@ export const MultiPersonChart = ({
                   </text>
                 ))}
 
-              {/* Y-axis labels for weight */}
               {showWeight &&
                 weightData.length > 0 &&
                 wTicks.map((v, i) => (
@@ -819,7 +797,6 @@ export const MultiPersonChart = ({
           </g>
         </g>
 
-        {/* Legend */}
         <g
           className="legend"
           transform={`translate(${chartWidth - margin.right + 10}, ${margin.top + 20})`}
@@ -859,7 +836,6 @@ export const MultiPersonChart = ({
         </g>
       </svg>
 
-      {/* Data Point Info Panel */}
       {selected.key ? (
         <div className="data-point-info">
           <div className="info-header">

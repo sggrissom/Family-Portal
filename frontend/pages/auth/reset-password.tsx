@@ -42,8 +42,6 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<Data>({ token: "", valid: false });
   }
 
-  // Check the link up front so an expired one is reported before the user
-  // bothers choosing a password.
   let [resp, err] = await server.ValidatePasswordResetToken({ token });
   return rpc.ok<Data>({ token, valid: resp?.valid ?? false });
 }

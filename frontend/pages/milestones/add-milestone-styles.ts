@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Add Milestone Page Styles
 block(`
 .add-milestone-container {
   max-width: 580px;

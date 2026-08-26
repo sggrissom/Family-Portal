@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// snapshotJSON is a metrics-server response in its real shape — Rust field
-// names, serialized as-is. Kept literal rather than built from the Go structs,
-// so a rename on either side shows up as a test failure.
 const snapshotJSON = `{
   "collected_at": "2026-08-22T10:00:00Z",
   "system": {
@@ -24,7 +21,6 @@ const snapshotJSON = `{
   ]
 }`
 
-// resetHostMetricsCache clears the cache so each test fetches for itself.
 func resetHostMetricsCache(t *testing.T) {
 	t.Helper()
 	hostMetrics.mu.Lock()
@@ -64,7 +60,6 @@ func TestFetchHostMetricsReadsTheRealShape(t *testing.T) {
 		t.Errorf("Authorization = %q, want the bearer key", sawAuth)
 	}
 
-	// The app's own slice, not the first one in the list.
 	if resp.App.Name != metricsAppName {
 		t.Errorf("App.Name = %q, want %q", resp.App.Name, metricsAppName)
 	}
@@ -78,16 +73,12 @@ func TestFetchHostMetricsReadsTheRealShape(t *testing.T) {
 		t.Errorf("Cpu.IowaitPct = %v, want 1 — a box slow on disk looks idle by every other measure", resp.System.CPU.IowaitPct)
 	}
 
-	// Cached: the collector only updates every 30s, so polling faster gains
-	// nothing but load on both processes.
 	fetchHostMetrics()
 	if requests != 1 {
 		t.Errorf("made %d requests for two calls; the second should have been cached", requests)
 	}
 }
 
-// TestFetchHostMetricsDegradesQuietly — a metrics service that is down must not
-// take the admin panel with it.
 func TestFetchHostMetricsDegradesQuietly(t *testing.T) {
 	t.Run("unauthorized names the key", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -103,8 +94,6 @@ func TestFetchHostMetricsDegradesQuietly(t *testing.T) {
 		if resp.Available {
 			t.Error("Available = true after a 401")
 		}
-		// A wrong key and a dead service need different fixes, so they get
-		// different messages.
 		if resp.Error != "metrics service rejected METRICS_API_KEY" {
 			t.Errorf("Error = %q", resp.Error)
 		}
@@ -113,7 +102,7 @@ func TestFetchHostMetricsDegradesQuietly(t *testing.T) {
 	t.Run("unreachable is reported, not returned", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 		url := server.URL + "/metrics"
-		server.Close() // nothing is listening now
+		server.Close()
 
 		resetHostMetricsCache(t)
 		t.Setenv("METRICS_URL", url)

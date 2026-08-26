@@ -16,9 +16,7 @@ import (
 	"go.hasen.dev/vbeam"
 )
 
-// getAllowedOrigins returns allowed WebSocket origins based on environment
 func getAllowedOrigins() []string {
-	// Get site root from environment or use default
 	siteRoot := os.Getenv("SITE_ROOT")
 	if siteRoot == "" {
 		siteRoot = cfg.SiteURL
@@ -26,12 +24,10 @@ func getAllowedOrigins() []string {
 
 	allowedOrigins := []string{}
 
-	// Add the configured site URL
 	if siteRoot != "" {
 		allowedOrigins = append(allowedOrigins, siteRoot)
 	}
 
-	// For development, allow localhost with any port
 	if strings.Contains(siteRoot, "localhost") || strings.Contains(cfg.SiteURL, "localhost") {
 		allowedOrigins = append(allowedOrigins,
 			"http://localhost:*",
@@ -48,17 +44,13 @@ func getAllowedOrigins() []string {
 	return allowedOrigins
 }
 
-// createAcceptOptions creates WebSocket accept options with current environment settings
 func createAcceptOptions() *websocket.AcceptOptions {
 	return &websocket.AcceptOptions{
-		// Enable compression
 		CompressionMode: websocket.CompressionNoContextTakeover,
-		// CORS origin check - dynamically set based on environment
-		OriginPatterns: getAllowedOrigins(),
+		OriginPatterns:  getAllowedOrigins(),
 	}
 }
 
-// WebSocket message types
 const (
 	WSMsgTypeNewMessage    = "new_message"
 	WSMsgTypeDeleteMessage = "delete_message"
@@ -69,39 +61,33 @@ const (
 	WSMsgTypeError         = "error"
 )
 
-// WebSocket message structure
 type WSMessage struct {
 	Type      string      `json:"type"`
 	Payload   interface{} `json:"payload"`
 	Timestamp time.Time   `json:"timestamp"`
 }
 
-// Message payload for new chat messages
 type WSNewMessagePayload struct {
 	Message ChatMessage `json:"message"`
 }
 
-// Message payload for deleted messages
 type WSDeleteMessagePayload struct {
 	MessageId int `json:"messageId"`
 	UserId    int `json:"userId"`
 }
 
-// Message payload for typing indicator
 type WSTypingPayload struct {
 	UserId   int    `json:"userId"`
 	UserName string `json:"userName"`
 	IsTyping bool   `json:"isTyping"`
 }
 
-// Message payload for user online status
 type WSUserStatusPayload struct {
 	UserId   int    `json:"userId"`
 	UserName string `json:"userName"`
 	IsOnline bool   `json:"isOnline"`
 }
 
-// Client represents a websocket connection
 type Client struct {
 	hub      *ChatHub
 	conn     *websocket.Conn
@@ -115,39 +101,27 @@ type Client struct {
 	cancel   context.CancelFunc
 }
 
-// ChatHub maintains active connections and broadcasts messages
 type ChatHub struct {
-	// Map of familyId to map of clients
 	families map[int]map[*Client]bool
 
-	// Broadcast channel for sending messages to all clients in a family
 	broadcast chan BroadcastMessage
 
-	// Register requests from clients
 	register chan *Client
 
-	// Unregister requests from clients
 	unregister chan *Client
 
-	// Mutex for thread-safe access to families map
 	mu sync.RWMutex
 
-	// closing is set once shutdown has begun. It stops new upgrades from being
-	// accepted, so a client cannot reconnect into a hub that is on its way out
-	// and be severed a moment later with no close frame.
 	closing atomic.Bool
 }
 
-// BroadcastMessage contains a message and target family
 type BroadcastMessage struct {
 	FamilyId int
 	Message  WSMessage
 }
 
-// Global chat hub instance
 var globalChatHub *ChatHub
 
-// InitializeChatHub creates and starts the global chat hub
 func InitializeChatHub() *ChatHub {
 	hub := &ChatHub{
 		families:   make(map[int]map[*Client]bool),
@@ -159,7 +133,6 @@ func InitializeChatHub() *ChatHub {
 	go hub.run()
 	globalChatHub = hub
 
-	// Start heartbeat checker
 	go hub.heartbeatChecker()
 
 	LogInfo(LogCategorySystem, "Chat hub initialized", map[string]interface{}{
@@ -170,21 +143,10 @@ func InitializeChatHub() *ChatHub {
 	return hub
 }
 
-// GetChatHub returns the global chat hub instance
 func GetChatHub() *ChatHub {
 	return globalChatHub
 }
 
-// Shutdown closes every open chat connection with a Going Away frame and waits
-// for the clients to unregister, up to ctx.
-//
-// This has to happen before http.Server.Shutdown rather than after it. A
-// WebSocket upgrade hijacks its connection, and Shutdown does not track or wait
-// for hijacked connections — so without this the process exits with the sockets
-// simply severed. The browser sees a transport error instead of a close frame
-// and reconnects immediately, against a server that is still going down.
-//
-// Reports whether every client was gone before the deadline.
 func (h *ChatHub) Shutdown(ctx context.Context) bool {
 	h.closing.Store(true)
 
@@ -202,15 +164,8 @@ func (h *ChatHub) Shutdown(ctx context.Context) bool {
 	})
 
 	for _, client := range clients {
-		// Close writes the Going Away frame and then waits for the peer to echo
-		// it. That wait contends with the client's own read pump for the reader,
-		// so it runs on its own goroutine — the frame reaches the wire either
-		// way, and what shutdown actually waits for below is the read pump
-		// noticing the close and unregistering.
 		go func(c *Client) {
 			if err := c.conn.Close(websocket.StatusGoingAway, "server shutting down"); err != nil {
-				// Already gone, or the peer vanished mid-frame. Cancelling the
-				// client's context is what stops its pumps in that case.
 				c.cancel()
 			}
 		}(client)
@@ -233,7 +188,6 @@ func (h *ChatHub) Shutdown(ctx context.Context) bool {
 	}
 }
 
-// connectionCount is the number of clients the hub still holds, across families.
 func (h *ChatHub) connectionCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -245,7 +199,6 @@ func (h *ChatHub) connectionCount() int {
 	return total
 }
 
-// ShutdownChatHub closes the global hub's connections, if there is one.
 func ShutdownChatHub(ctx context.Context) bool {
 	if globalChatHub == nil {
 		return true
@@ -253,14 +206,12 @@ func ShutdownChatHub(ctx context.Context) bool {
 	return globalChatHub.Shutdown(ctx)
 }
 
-// run handles hub operations
 func (h *ChatHub) run() {
 	defer func() {
 		if r := recover(); r != nil {
 			LogErrorSimple(LogCategorySystem, "Chat hub goroutine panic, restarting", map[string]interface{}{
 				"panic": r,
 			})
-			// Restart the hub goroutine
 			go h.run()
 		}
 	}()
@@ -283,7 +234,6 @@ func (h *ChatHub) run() {
 	}
 }
 
-// registerClient adds a client to the hub
 func (h *ChatHub) registerClient(client *Client) {
 	h.mu.Lock()
 	shouldBroadcastOnline := false
@@ -292,7 +242,6 @@ func (h *ChatHub) registerClient(client *Client) {
 		h.families[client.familyId] = make(map[*Client]bool)
 	}
 
-	// Check if user has any other connections before adding this one
 	hasOtherConnections := false
 	for otherClient := range h.families[client.familyId] {
 		if otherClient.userId == client.userId {
@@ -301,10 +250,8 @@ func (h *ChatHub) registerClient(client *Client) {
 		}
 	}
 
-	// Add the new client
 	h.families[client.familyId][client] = true
 
-	// Set flag to broadcast online status outside the lock
 	shouldBroadcastOnline = !hasOtherConnections
 
 	h.mu.Unlock()
@@ -314,7 +261,6 @@ func (h *ChatHub) registerClient(client *Client) {
 		"familyId": client.familyId,
 	})
 
-	// Notify family that user came online (only if this is their first connection)
 	if shouldBroadcastOnline {
 		h.broadcastToFamily(client.familyId, WSMessage{
 			Type: WSMsgTypeUserOnline,
@@ -328,7 +274,6 @@ func (h *ChatHub) registerClient(client *Client) {
 	}
 }
 
-// unregisterClient removes a client from the hub
 func (h *ChatHub) unregisterClient(client *Client) {
 	h.mu.Lock()
 	shouldBroadcastOffline := false
@@ -338,7 +283,6 @@ func (h *ChatHub) unregisterClient(client *Client) {
 			delete(clients, client)
 			close(client.send)
 
-			// Clean up empty family groups
 			if len(clients) == 0 {
 				delete(h.families, client.familyId)
 			}
@@ -348,7 +292,6 @@ func (h *ChatHub) unregisterClient(client *Client) {
 				"familyId": client.familyId,
 			})
 
-			// Check if user has any other connections
 			hasOtherConnections := false
 			for otherClient := range clients {
 				if otherClient.userId == client.userId {
@@ -357,13 +300,11 @@ func (h *ChatHub) unregisterClient(client *Client) {
 				}
 			}
 
-			// Set flag to broadcast offline status outside the lock
 			shouldBroadcastOffline = !hasOtherConnections
 		}
 	}
 	h.mu.Unlock()
 
-	// Broadcast offline status outside mutex to avoid deadlock
 	if shouldBroadcastOffline {
 		h.broadcastToFamily(client.familyId, WSMessage{
 			Type: WSMsgTypeUserOffline,
@@ -377,7 +318,6 @@ func (h *ChatHub) unregisterClient(client *Client) {
 	}
 }
 
-// broadcastToFamily sends a message to all clients in a family
 func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 	h.mu.RLock()
 	clients := h.families[familyId]
@@ -390,7 +330,6 @@ func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 		return
 	}
 
-	// Create a slice of clients to avoid modification during iteration
 	clientList := make([]*Client, 0, len(clients))
 	for client := range clients {
 		clientList = append(clientList, client)
@@ -407,16 +346,12 @@ func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 		return
 	}
 
-	// Track failed clients for cleanup
 	var failedClients []*Client
 
-	// Send to all clients in the family
 	for _, client := range clientList {
 		select {
 		case client.send <- messageBytes:
-			// Message sent successfully
 		default:
-			// Client's send channel is blocked, mark for cleanup
 			failedClients = append(failedClients, client)
 			LogWarn(LogCategoryAPI, "Client send channel blocked, marking for cleanup", map[string]interface{}{
 				"familyId": familyId,
@@ -425,14 +360,11 @@ func (h *ChatHub) broadcastToFamily(familyId int, message WSMessage) {
 		}
 	}
 
-	// Clean up failed clients outside the broadcast loop
 	if len(failedClients) > 0 {
 		h.cleanupFailedClients(familyId, failedClients)
 	}
-
 }
 
-// cleanupFailedClients removes clients that failed to receive messages
 func (h *ChatHub) cleanupFailedClients(familyId int, failedClients []*Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -453,7 +385,6 @@ func (h *ChatHub) cleanupFailedClients(familyId int, failedClients []*Client) {
 		}
 	}
 
-	// Clean up empty family groups
 	if len(clients) == 0 {
 		delete(h.families, familyId)
 		LogInfo(LogCategoryAPI, "Removed empty family group", map[string]interface{}{
@@ -462,7 +393,6 @@ func (h *ChatHub) cleanupFailedClients(familyId int, failedClients []*Client) {
 	}
 }
 
-// BroadcastNewMessage broadcasts a new chat message to family members
 func (h *ChatHub) BroadcastNewMessage(familyId int, message ChatMessage) {
 	if h == nil {
 		LogWarn(LogCategoryAPI, "BroadcastNewMessage called with nil hub", map[string]interface{}{
@@ -498,7 +428,6 @@ func (h *ChatHub) BroadcastNewMessage(familyId int, message ChatMessage) {
 	}
 }
 
-// BroadcastDeleteMessage broadcasts a message deletion to family members
 func (h *ChatHub) BroadcastDeleteMessage(familyId int, messageId int, userId int) {
 	if h == nil {
 		return
@@ -523,7 +452,6 @@ func (h *ChatHub) BroadcastDeleteMessage(familyId int, messageId int, userId int
 	}
 }
 
-// heartbeatChecker periodically checks for stale connections
 func (h *ChatHub) heartbeatChecker() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -542,25 +470,20 @@ func (h *ChatHub) heartbeatChecker() {
 		}
 		h.mu.RUnlock()
 
-		// Disconnect stale clients
 		for _, client := range staleClients {
 			client.conn.Close(websocket.StatusGoingAway, "Connection stale")
 		}
 	}
 }
 
-// WebSocket connection handler
 func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hub := GetChatHub()
 		if hub == nil || hub.closing.Load() {
-			// Refuse the upgrade rather than accept a connection that is about
-			// to be closed from under the client.
 			http.Error(w, "server shutting down", http.StatusServiceUnavailable)
 			return
 		}
 
-		// Authenticate before upgrade
 		user, err := authenticateWebSocketRequest(r, app)
 		if err != nil {
 			LogWarnWithRequest(r, LogCategoryAPI, "WebSocket authentication failed", map[string]interface{}{
@@ -570,7 +493,6 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			return
 		}
 
-		// Accept the WebSocket connection
 		conn, err := websocket.Accept(w, r, createAcceptOptions())
 		if err != nil {
 			LogErrorWithRequest(r, LogCategoryAPI, "WebSocket accept failed", map[string]interface{}{
@@ -580,10 +502,8 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			return
 		}
 
-		// Create context for this connection
 		ctx, cancel := context.WithCancel(context.Background())
 
-		// Create client
 		client := &Client{
 			hub:      hub,
 			conn:     conn,
@@ -596,18 +516,14 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			cancel:   cancel,
 		}
 
-		// Register client with hub
 		client.hub.register <- client
 
-		// Start goroutines for reading and writing
 		go client.writePump()
 		go client.readPump()
 	}
 }
 
-// authenticateWebSocketRequest validates the WebSocket connection request
 func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User, error) {
-	// Use existing authentication logic - relies on authToken cookie sent with request
 	user, err := AuthenticateRequest(r)
 	if err != nil {
 		LogWarn(LogCategoryAPI, "WebSocket authentication failed", map[string]interface{}{
@@ -619,32 +535,27 @@ func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User
 	return user, nil
 }
 
-// readPump handles incoming WebSocket messages
 func (c *Client) readPump() {
 	defer func() {
-		c.cancel() // Cancel context to stop write pump
+		c.cancel()
 		c.hub.unregister <- c
 		c.conn.CloseNow()
 	}()
 
-	// Create context with timeout for reads
 	ctx := c.ctx
-	c.conn.SetReadLimit(64 << 10) // Chat protocol messages are limited to 64 KiB.
+	c.conn.SetReadLimit(64 << 10)
 
 	for {
-		// Set read timeout
 		readCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 
 		var wsMsg WSMessage
 		err := wsjson.Read(readCtx, c.conn, &wsMsg)
-		cancel() // Cancel timeout context
+		cancel()
 
 		if err != nil {
-			// Check if it's a normal close or context cancellation
 			if websocket.CloseStatus(err) == websocket.StatusNormalClosure ||
 				websocket.CloseStatus(err) == websocket.StatusGoingAway ||
 				ctx.Err() != nil {
-				// Normal close or context cancelled
 				break
 			}
 
@@ -660,12 +571,10 @@ func (c *Client) readPump() {
 		c.lastSeen = time.Now()
 		c.mu.Unlock()
 
-		// Handle incoming message based on type
 		c.handleIncomingMessage(wsMsg)
 	}
 }
 
-// writePump handles outgoing WebSocket messages
 func (c *Client) writePump() {
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
@@ -681,7 +590,6 @@ func (c *Client) writePump() {
 			writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 
 			if !ok {
-				// Channel closed
 				cancel()
 				c.conn.Close(websocket.StatusNormalClosure, "")
 				return
@@ -695,7 +603,6 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			// Send ping
 			pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			err := c.conn.Ping(pingCtx)
 			cancel()
@@ -705,21 +612,17 @@ func (c *Client) writePump() {
 			}
 
 		case <-ctx.Done():
-			// Context cancelled, exit
 			return
 		}
 	}
 }
 
-// handleIncomingMessage processes incoming WebSocket messages
 func (c *Client) handleIncomingMessage(wsMsg WSMessage) {
 	switch wsMsg.Type {
 	case WSMsgTypeUserTyping:
-		// Parse incoming typing payload
 		var incomingPayload WSTypingPayload
 		if payloadBytes, err := json.Marshal(wsMsg.Payload); err == nil {
 			if err := json.Unmarshal(payloadBytes, &incomingPayload); err == nil {
-				// Broadcast typing indicator to other family members with real typing state
 				c.hub.broadcastToFamily(c.familyId, WSMessage{
 					Type: WSMsgTypeUserTyping,
 					Payload: WSTypingPayload{
@@ -743,14 +646,12 @@ func (c *Client) handleIncomingMessage(wsMsg WSMessage) {
 		}
 
 	case WSMsgTypeHeartbeat:
-		// Respond to heartbeat with JSON
 		response := WSMessage{
 			Type:      WSMsgTypeHeartbeat,
 			Payload:   "pong",
 			Timestamp: time.Now(),
 		}
 
-		// Use wsjson to write response directly
 		writeCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
 		err := wsjson.Write(writeCtx, c.conn, response)
 		cancel()
@@ -770,7 +671,6 @@ func (c *Client) handleIncomingMessage(wsMsg WSMessage) {
 	}
 }
 
-// GetFamilyConnectionCount returns the number of active connections for a family
 func (h *ChatHub) GetFamilyConnectionCount(familyId int) int {
 	if h == nil {
 		return 0
@@ -785,7 +685,6 @@ func (h *ChatHub) GetFamilyConnectionCount(familyId int) int {
 	return 0
 }
 
-// GetOnlineUsers returns a list of unique users currently online in a family
 func (h *ChatHub) GetOnlineUsers(familyId int) []int {
 	if h == nil {
 		return nil

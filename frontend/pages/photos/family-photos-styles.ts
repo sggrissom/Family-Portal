@@ -1,9 +1,7 @@
 import { block } from "vlens/css";
 
-// Import shared photo styles
 import "./photos-styles";
 
-// Family Photos Page Styles
 block(`
 .family-photos-container {
   padding: 2rem;
@@ -18,7 +16,6 @@ block(`
 }
 `);
 
-// Page Header
 block(`
 .page-header {
   margin-bottom: 2rem;
@@ -62,7 +59,6 @@ block(`
 }
 `);
 
-// Filter Panel
 block(`
 .filter-panel {
   background: var(--surface);
@@ -213,7 +209,6 @@ block(`
 }
 `);
 
-// People Badges Container
 block(`
 .people-badges {
   position: absolute;
@@ -227,7 +222,6 @@ block(`
 }
 `);
 
-// Person Badge on Photos
 block(`
 .person-badge {
   background: rgba(0, 0, 0, 0.8);
@@ -245,7 +239,6 @@ block(`
 }
 `);
 
-// Tag filter
 block(`
 .tags-filter {
   display: flex;
@@ -304,7 +297,6 @@ block(`
 }
 `);
 
-// Tag badges on photo cards
 block(`
 .tag-badges {
   position: absolute;
@@ -327,7 +319,6 @@ block(`
 }
 `);
 
-// Responsive styles
 block(`
 @media (max-width: 768px) {
   .header-content {
@@ -374,7 +365,6 @@ block(`
 }
 `);
 
-// Empty State
 block(`
 .empty-state {
   display: flex;
@@ -414,7 +404,6 @@ block(`
 }
 `);
 
-// Responsive adjustments
 block(`
 @media (max-width: 768px) {
   .family-photos-container {
@@ -464,7 +453,6 @@ block(`
 }
 `);
 
-// Small mobile screens
 block(`
 @media (max-width: 480px) {
   .photos-gallery {

@@ -4,12 +4,9 @@ import "./error-display-styles";
 
 interface ErrorDisplayProps {
   error: DisplayableError;
-  /** Where "try again" should send someone. Defaults to reloading. */
   onRetry?: () => void;
 }
 
-// The shared body of every error screen: a heading, a sentence, the reference
-// code when there is one, and a way out.
 export const ErrorDisplay = ({ error, onRetry }: ErrorDisplayProps) => (
   <div className="error-display" role="alert">
     <h1 className="error-display-title">{error.title}</h1>
@@ -47,8 +44,6 @@ export const ErrorDisplay = ({ error, onRetry }: ErrorDisplayProps) => (
   </div>
 );
 
-// The code is the whole reason the reference exists, so it gets a button rather
-// than an invitation to select twelve characters of hex by hand.
 const ReferenceCode = ({ code }: { code: string }) => (
   <div className="error-reference">
     <span className="error-reference-label">Reference</span>
@@ -70,9 +65,6 @@ async function copyReference(event: Event, code: string) {
     await navigator.clipboard.writeText(code);
     button.textContent = "Copied";
   } catch {
-    // Clipboard access can be refused — an insecure origin, a permission
-    // prompt declined. Selecting the code is the fallback, so say so rather
-    // than leaving the button looking broken.
     button.textContent = "Select it";
   }
   window.setTimeout(() => {

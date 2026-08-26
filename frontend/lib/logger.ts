@@ -1,8 +1,3 @@
-/**
- * Frontend logging utility
- * Provides structured logging that can be extended to send logs to backend
- */
-
 type LogLevel = "debug" | "info" | "warn" | "error";
 type LogCategory = "auth" | "photo" | "admin" | "api" | "ui" | "system";
 
@@ -39,7 +34,6 @@ class FrontendLogger {
       entry.url = window.location.href;
     }
 
-    // For now, use console logging with structured format
     const prefix = `[${entry.timestamp}] [${level.toUpperCase()}] [${category.toUpperCase()}]`;
 
     switch (level) {
@@ -58,14 +52,8 @@ class FrontendLogger {
         console.error(prefix, message, data);
         break;
     }
-
-    // In the future, we could send critical errors to the backend:
-    // if (level === 'error') {
-    //   this.sendToBackend(entry);
-    // }
   }
 
-  // Public logging methods
   debug(category: LogCategory, message: string, data?: any): void {
     this.log("debug", category, message, data);
   }
@@ -82,7 +70,6 @@ class FrontendLogger {
     this.log("error", category, message, data);
   }
 
-  // Convenience methods for common scenarios
   authError(message: string, data?: any): void {
     this.error("auth", message, data);
   }
@@ -102,27 +89,10 @@ class FrontendLogger {
   uiError(message: string, data?: any): void {
     this.error("ui", message, data);
   }
-
-  // Future: Send logs to backend
-  // private async sendToBackend(entry: LogEntry): Promise<void> {
-  //   try {
-  //     await fetch('/api/frontend-logs', {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify(entry),
-  //       credentials: 'include'
-  //     });
-  //   } catch (error) {
-  //     // Fallback to console if backend logging fails
-  //     console.error('Failed to send log to backend:', error);
-  //   }
-  // }
 }
 
-// Export singleton instance
 export const logger = new FrontendLogger();
 
-// Export convenience functions for easier migration
 export const logDebug = (category: LogCategory, message: string, data?: any) =>
   logger.debug(category, message, data);
 

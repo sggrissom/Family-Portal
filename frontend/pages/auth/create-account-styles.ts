@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Create Account Page Styles
 block(`
 .create-account-container {
   max-width: 480px;

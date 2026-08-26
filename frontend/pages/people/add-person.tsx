@@ -13,8 +13,8 @@ type Data = {};
 
 type AddPersonForm = {
   name: string;
-  personType: number; // 0 = Parent, 1 = Child
-  gender: number; // 0 = Male, 1 = Female, 2 = Unknown
+  personType: number;
+  gender: number;
   birthdate: string;
   isPregnancy: boolean;
   familyId: number;
@@ -80,7 +80,6 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
 
     if (resp) {
       form.success = true;
-      // Clear form
       form.name = "";
       form.personType = 0;
       form.gender = 0;

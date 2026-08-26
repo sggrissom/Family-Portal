@@ -6,24 +6,16 @@ export interface ComparisonPoint {
   value: number;
   unit: string;
   date: string;
-  // Target's value minus this point's value, expressed in this point's own unit.
-  // Positive means the target measured more than this point.
   valueDiff: number;
-  // This point's age minus the target's age, in months.
-  // Positive means this point happened when the person was older than the target is now.
   ageDiffMonths: number;
 }
 
 export interface FamilyComparisonEntry {
   person: server.Person;
-  // What this person's measurement was at (approximately) the same age as the target record.
   atSameAge: ComparisonPoint | null;
-  // The age at which this person had (approximately) the same measurement value.
   atSameValue: ComparisonPoint | null;
 }
 
-// Convert a height/weight value to a common metric unit (cm or kg) for comparison purposes only.
-// Display values always use the unit the record was actually saved in.
 function toMetric(value: number, unit: string): number {
   if (unit === "in") return value * 2.54;
   if (unit === "lbs") return value * 0.453592;
@@ -67,12 +59,6 @@ function nearestByValue(records: AgedRecord[], targetValueMetric: number): AgedR
   return best;
 }
 
-// A comparison is only meaningful if the matched record is actually from around the
-// same point: close in age for an age match, close in value for a value match. A
-// record on the far side (much older, or much taller/heavier) is just as irrelevant
-// as one on the near side — e.g. a parent's single adult-height record shouldn't be
-// treated as "at the same age" as a 9-year-old's just because it's technically older,
-// and it shouldn't be treated as "reached this measurement" just because it's taller.
 const AGE_TOLERANCE_RATIO = 0.05;
 const MIN_AGE_TOLERANCE_MONTHS = 0.5;
 const VALUE_TOLERANCE_RATIO = 0.02;
@@ -104,8 +90,6 @@ function toPoint(
   };
 }
 
-// Rounds a diff to 1 decimal place; used both to format magnitudes and to decide
-// whether a diff is small enough to just call "about the same."
 function roundTo1Decimal(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -125,7 +109,6 @@ function formatDurationMonths(absMonths: number): string {
   return `${yrs} yr ${mos} mo`;
 }
 
-/** Describes how a comparison point's value differs from the target's, e.g. "you were 3 in taller at this age". */
 export function describeValueComparison(
   point: ComparisonPoint,
   measurementType: server.MeasurementType
@@ -146,20 +129,12 @@ export function describeValueComparison(
   return `you were ${magnitude} ${comparative} at this age`;
 }
 
-/** Describes how a comparison point's age differs from the target's, e.g. "1 yr 8 mo before you". */
 export function describeAgeComparison(point: ComparisonPoint): string {
   if (Math.round(Math.abs(point.ageDiffMonths)) < 1) return "at about the same age as you";
   const duration = formatDurationMonths(Math.abs(point.ageDiffMonths));
   return point.ageDiffMonths > 0 ? `${duration} after you` : `${duration} before you`;
 }
 
-/**
- * For a given growth measurement, find how every other family member compares:
- * what they measured at the same age, and when they reached the same measurement.
- * Family members without a valid birthday or without any records of the same
- * measurement type are still included (with null comparison points) so the caller
- * can surface "no data yet" for them.
- */
 export function computeFamilyComparisons(
   targetRecord: server.GrowthData,
   targetPerson: server.Person,
@@ -197,8 +172,6 @@ export function computeFamilyComparisons(
     const relevantValueMatch =
       valueMatch && isValueMatchRelevant(valueMatch, targetValueMetric) ? valueMatch : null;
 
-    // Records existed but none were close enough to be a meaningful comparison
-    // (e.g. a toddler sibling with no data anywhere near a six-year-old's data point).
     if (!relevantAgeMatch && !relevantValueMatch) continue;
 
     entries.push({

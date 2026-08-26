@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Add Person Page Styles
 block(`
 .add-person-container {
   max-width: 500px;

@@ -18,7 +18,7 @@ const formatDate = (dateString: string) => {
   if (dateString.includes("T") && dateString.endsWith("Z")) {
     const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const month = parseInt(dateParts[1]) - 1;
     const day = parseInt(dateParts[2]);
     return new Date(year, month, day).toLocaleDateString();
   }
@@ -41,7 +41,6 @@ const handleDeleteGrowthData = async (
       let [resp, err] = await server.DeleteGrowthData({ id });
 
       if (resp && resp.success) {
-        // Refresh the page to update the growth data
         window.location.reload();
       } else {
         alert(err || "Failed to delete growth measurement");
@@ -57,7 +56,6 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
     return type === server.Height ? "Height" : "Weight";
   };
 
-  // Sort growth data by measurement date (newest first) for table
   const sortedGrowthData = (growthData || [])
     .slice()
     .sort((a, b) => new Date(b.measurementDate).getTime() - new Date(a.measurementDate).getTime());

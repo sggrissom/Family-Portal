@@ -25,8 +25,6 @@ type ManageTagsState = {
   editingId: number | null;
   editName: string;
   editColor: string;
-  // Zero means the primary family. Tags are family-scoped, so a user in
-  // several families has to say which one a new tag belongs to.
   newFamilyId: number;
   error: string;
   saving: boolean;
@@ -74,7 +72,6 @@ export function view(
           </div>
         )}
 
-        {/* Create new tag */}
         <FamilySelect
           id="tagFamilyId"
           value={state.newFamilyId}
@@ -115,7 +112,6 @@ export function view(
           </button>
         </div>
 
-        {/* Tag list */}
         {state.tags.length === 0 ? (
           <div className="manage-tags-empty">No tags yet. Create one above.</div>
         ) : (

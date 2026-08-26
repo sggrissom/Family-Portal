@@ -12,33 +12,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Account deletion.
-//
-// What goes and what stays
-// ------------------------
-// The account goes: credentials, sessions, refresh tokens, reset links, push
-// device registrations, and the user record itself. So does the account's own
-// speech — chat messages are deleted, because chat is the one store that holds
-// a person's words under their name, and a request to delete an account is
-// partly a request to stop being present.
-//
-// Family records stay with the family, exactly as they do when somebody merely
-// leaves: people, growth measurements, milestones, photos and tags are about
-// the children, not about whichever adult typed them in, and a household should
-// not lose half its history because one member closed their account.
-//
-// The exception is a family nobody is left in. Once the last membership row is
-// gone there is no route back to that household's content — it would sit on
-// disk forever, unreachable and undeletable. So a family the deletion empties is
-// destroyed with everything in it, including the photo files and the face
-// descriptors derived from them. That is also what makes "delete my account"
-// honest for the single-user case, which is most of them.
 type DeleteAccountRequest struct {
-	// Password is required when the account has one. A Google-only account has
-	// no password to prove; ConfirmEmail carries the whole weight there.
-	Password string `json:"password"`
-	// ConfirmEmail must match the account's address. Typing it is the "are you
-	// sure" gate that a checkbox is not.
+	Password     string `json:"password"`
 	ConfirmEmail string `json:"confirmEmail"`
 }
 
@@ -55,9 +30,6 @@ func respondDeleteAccount(w http.ResponseWriter, status int, resp DeleteAccountR
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// deleteAccountHandler removes the caller's account. Like the password change
-// it is a plain handler rather than a proc, because it has to clear the
-// session cookies it is invalidating.
 func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		vbeam.RespondError(w, errors.New("delete account call must be POST"))
@@ -86,8 +58,6 @@ func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 		passHash = GetPassHash(tx, user.Id)
 	})
 
-	// An account with a password must prove it. One without signs in through
-	// Google, where the live session is the only proof available.
 	if len(passHash) > 0 {
 		if err := bcrypt.CompareHashAndPassword(passHash, []byte(req.Password)); err != nil {
 			LogWarnWithRequest(r, LogCategoryAuth, "Account deletion with incorrect password", map[string]interface{}{
@@ -105,9 +75,6 @@ func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Files come after the commit. The database is the record of what exists;
-	// once it says the photo is gone, a slow or failing filesystem must not be
-	// able to roll that back or hold the write lock while it works.
 	for _, photo := range orphanedPhotos {
 		if err := deletePhotoFiles(photo); err != nil {
 			LogErrorSimple(LogCategoryPhoto, "Failed to delete photo files during account deletion", map[string]interface{}{
@@ -128,9 +95,6 @@ func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 	respondDeleteAccount(w, http.StatusOK, DeleteAccountResponse{Success: true})
 }
 
-// clearAuthCookies expires both session cookies. Logout does the same thing
-// inline; deletion needs it without the rest of the logout path, which assumes
-// the account still exists.
 func clearAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "authToken",
@@ -144,16 +108,9 @@ func clearAuthCookies(w http.ResponseWriter) {
 	clearRefreshTokenCookie(w)
 }
 
-// deleteAccountTx removes the user and every family the removal empties.
-//
-// It returns the photos whose files still need deleting, and the families that
-// were destroyed, because both are things the caller reports on after the
-// transaction has committed.
 func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyedFamilies []int) {
 	familyIds := userFamilyIds(tx, user)
 
-	// Drop every membership first, so "does this family still have members?"
-	// below is asking about the state after the deletion rather than before it.
 	for _, familyId := range familyIds {
 		if membership, found := FindMembership(tx, user.Id, familyId); found {
 			deleteMembershipTx(tx, membership)
@@ -162,8 +119,6 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 
 	for _, familyId := range familyIds {
 		if familyHasOtherMembers(tx, familyId, user.Id) {
-			// Somebody is still here. The household survives with its content,
-			// but must not be left pointing at a departed owner.
 			reassignFamilyOwnerTx(tx, familyId, user.Id)
 			continue
 		}
@@ -185,14 +140,6 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 	return
 }
 
-// familyHasOtherMembers reports whether anybody besides excludeUserId is still
-// in the family.
-//
-// It asks GetFamilyUserIds rather than counting membership rows, because that
-// function unions the membership table with the primary-family index. The two
-// should agree; if they ever disagree, this errs toward keeping a family that
-// might still have somebody in it, and the cost of being wrong the other way is
-// destroying a household's photos.
 func familyHasOtherMembers(tx *vbolt.Tx, familyId int, excludeUserId int) bool {
 	for _, userId := range GetFamilyUserIds(tx, familyId) {
 		if userId != excludeUserId && userId != 0 {
@@ -202,10 +149,6 @@ func familyHasOtherMembers(tx *vbolt.Tx, familyId int, excludeUserId int) bool {
 	return false
 }
 
-// userFamilyIds is every family the user belongs to, including their primary
-// one if a membership row for it somehow went missing. Deletion is the wrong
-// place to trust an invariant: a family skipped here is a family that can never
-// be reached again.
 func userFamilyIds(tx *vbolt.Tx, user User) []int {
 	seen := make(map[int]bool)
 	var familyIds []int
@@ -222,12 +165,8 @@ func userFamilyIds(tx *vbolt.Tx, user User) []int {
 	return familyIds
 }
 
-// deleteFamilyContentTx destroys a family and everything it owns, returning the
-// photos whose files the caller must remove.
-//
-// Order matters only where one store's cleanup reads another: photos go before
-// the people and milestones they join to, so the join rows are removed while
-// both ends still resolve.
+// Photos go before the people and milestones they join to, so the join rows are
+// removed while both ends still resolve.
 func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 	photos = GetFamilyImages(tx, familyId)
 	for _, photo := range photos {
@@ -252,14 +191,10 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 
 	deleteFamilyActivitiesTx(tx, familyId)
 
-	// The family's own people, and with them the face descriptors derived from
-	// their photos.
 	for _, person := range GetFamilyOwnPeople(tx, familyId) {
 		deletePersonRecordTx(tx, person)
 	}
 
-	// Whatever is left on this family's roster belongs to another household —
-	// people shared in by a link. The roster row goes; the person does not.
 	for _, row := range GetFamilyRoster(tx, familyId) {
 		deletePersonFamilyTx(tx, row)
 	}
@@ -277,12 +212,6 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 	return
 }
 
-// deletePersonRecordTx removes a person, their roster rows, any photo tag still
-// pointing at them, and their place on any activity roster. Those joins are
-// normally gone already — the family's photos and activities were deleted first
-// — but a person can be tagged in a photo, or rostered in a routine, owned by a
-// family that is not being deleted, and those rows must not outlive the person
-// they name.
 func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 	for _, photoPerson := range GetPhotoPersonsByPerson(tx, person.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -297,8 +226,6 @@ func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, -1)
 }
 
-// familyLinksTouching returns every link with this family on either end, each
-// one once.
 func familyLinksTouching(tx *vbolt.Tx, familyId int) []FamilyLink {
 	seen := make(map[int]bool)
 	var links []FamilyLink
@@ -318,8 +245,6 @@ func deleteFamilyLinkTx(tx *vbolt.Tx, link FamilyLink) {
 	vbolt.SetTargetSingleTerm(tx, FamilyLinkByToIndex, link.Id, -1)
 }
 
-// deleteUserChatMessagesTx removes everything the user said, in every family,
-// including families that survive the deletion.
 func deleteUserChatMessagesTx(tx *vbolt.Tx, userId int) {
 	var messageIds []int
 	vbolt.ReadTermTargets(tx, ChatMessagesByUserIndex, userId, &messageIds, vbolt.Window{})
@@ -333,10 +258,6 @@ func deleteUserChatMessagesTx(tx *vbolt.Tx, userId int) {
 	}
 }
 
-// deleteUserPushDeviceTokensTx removes every device registered to the account,
-// active or not. Deactivating would be enough to stop notifications, but the
-// row holds an APNs token that identifies a physical device, and deletion is
-// supposed to mean deletion.
 func deleteUserPushDeviceTokensTx(tx *vbolt.Tx, userId int) {
 	var tokenIds []int
 	vbolt.ReadTermTargets(tx, PushDeviceTokenByUserIndex, userId, &tokenIds, vbolt.Window{})

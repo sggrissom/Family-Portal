@@ -12,33 +12,12 @@ import (
 	"go.hasen.dev/vbeam"
 )
 
-// The admin panel stops at the process boundary. It knows its own uptime, its
-// own queues, and its own log file. It knows nothing about the disk it is
-// filling or the traffic Caddy is seeing — and the second of those is the
-// interesting one, because it is measured at the proxy, independently of the
-// app's own logging, and answers "is the site actually erroring for people",
-// a question the panel could not ask at all.
-//
-// metrics-server already collects all of it on a 30-second loop. This consumes
-// it. The types below mirror its JSON exactly (Rust field names, serialized
-// as-is), so the two can be compared side by side when either changes.
-
-// metricsAppName is the app whose slice of the snapshot this panel cares about.
-// metrics-server reports every app under /srv/apps.
 const metricsAppName = "family"
 
-// metricsCacheTTL matches metrics-server's own collection interval. Polling
-// faster than the source updates gains nothing but load on both processes.
 const metricsCacheTTL = 30 * time.Second
 
-// metricsFetchTimeout is short on purpose. This runs inside an admin page load,
-// against a service on loopback; if it is not answering promptly the right
-// outcome is a hidden card, not a hung dashboard.
 const metricsFetchTimeout = 3 * time.Second
 
-// diskWarnPct is where free space stops being somebody else's problem. The
-// shared disk is 20 GB, which backupctl's retention policy already exists to
-// protect; leaving it this late still leaves room to act.
 const diskWarnPct = 85.0
 
 type HostLoadAvg struct {
@@ -58,8 +37,6 @@ type HostCPU struct {
 	UserPct   float64 `json:"user_pct"`
 	SystemPct float64 `json:"system_pct"`
 	IdlePct   float64 `json:"idle_pct"`
-	// IowaitPct is the one worth having: a box that is slow because it is
-	// waiting on the disk looks idle by every other measure.
 	IowaitPct float64 `json:"iowait_pct"`
 }
 
@@ -77,9 +54,6 @@ type HostSystem struct {
 	Disk    HostDisk    `json:"disk"`
 }
 
-// HostTraffic is what Caddy's access log says, over metrics-server's window.
-// This is real traffic measured at the proxy, independent of anything this
-// application logs about itself.
 type HostTraffic struct {
 	WindowSeconds  uint64  `json:"window_seconds"`
 	RequestsTotal  uint64  `json:"requests_total"`
@@ -101,17 +75,10 @@ type hostSnapshot struct {
 	Apps        []HostApp  `json:"apps"`
 }
 
-// HostMetricsResponse is the panel's view of the snapshot: the system block and
-// this app's slice of it.
 type HostMetricsResponse struct {
-	// Configured is false when METRICS_URL is unset, which is a legitimate
-	// state — the card is simply hidden.
-	Configured bool `json:"configured"`
-	// Available is false when the fetch failed. A metrics service that is down
-	// must not take the admin panel with it, so this is reported rather than
-	// returned as an error.
-	Available bool   `json:"available"`
-	Error     string `json:"error"`
+	Configured bool   `json:"configured"`
+	Available  bool   `json:"available"`
+	Error      string `json:"error"`
 
 	CollectedAt time.Time  `json:"collectedAt"`
 	System      HostSystem `json:"system"`
@@ -128,12 +95,10 @@ func RegisterHostMetricsMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetHostMetrics)
 }
 
-// MetricsConfigured reports whether this deployment consumes metrics-server.
 func MetricsConfigured() bool {
 	return os.Getenv("METRICS_URL") != ""
 }
 
-// GetHostMetrics returns the cached host snapshot, refreshing it when stale.
 func GetHostMetrics(ctx *vbeam.Context, req Empty) (resp HostMetricsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -141,9 +106,6 @@ func GetHostMetrics(ctx *vbeam.Context, req Empty) (resp HostMetricsResponse, er
 	return fetchHostMetrics(), nil
 }
 
-// fetchHostMetrics is the cached read. It never returns an error: an absent or
-// failing metrics service is a state to report, not a failure to propagate —
-// the same instinct the /admin fetch already has about diagnostics.
 func fetchHostMetrics() HostMetricsResponse {
 	if !MetricsConfigured() {
 		return HostMetricsResponse{}
@@ -172,8 +134,6 @@ func fetchHostMetrics() HostMetricsResponse {
 		}
 	}
 
-	// Cache failures too, so a service that is down is asked about every 30
-	// seconds rather than on every page load.
 	hostMetrics.fetchedAt = time.Now()
 	hostMetrics.cached = resp
 	return resp
@@ -200,8 +160,6 @@ func requestHostSnapshot() (hostSnapshot, error) {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		// 401 is the one worth naming: it means the key is wrong, not that
-		// the service is down, and those need different fixes.
 		if res.StatusCode == http.StatusUnauthorized {
 			return snapshot, fmt.Errorf("metrics service rejected METRICS_API_KEY")
 		}

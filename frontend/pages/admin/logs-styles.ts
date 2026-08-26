@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Logs page container
 block(`
 .logs-page {
   max-width: 1200px;
@@ -9,7 +8,6 @@ block(`
 }
 `);
 
-// Header section
 block(`
 .logs-header {
   display: flex;
@@ -45,7 +43,6 @@ block(`
 }
 `);
 
-// Statistics section
 block(`
 .logs-stats {
   margin-bottom: 2rem;
@@ -88,7 +85,6 @@ block(`
 }
 `);
 
-// Controls section
 block(`
 .logs-controls {
   background: var(--surface);
@@ -154,8 +150,6 @@ block(`
 }
 `);
 
-// The search box is the widest control and the one most often typed into, so
-// it gets the full row rather than a 200px grid cell.
 block(`
 .filter-group-search {
   grid-column: 1 / -1;
@@ -180,7 +174,6 @@ block(`
 }
 `);
 
-// Pagination
 block(`
 .logs-pagination {
   display: flex;
@@ -233,7 +226,6 @@ block(`
 }
 `);
 
-// Log content table
 block(`
 .logs-content {
   background: var(--surface);
@@ -289,7 +281,6 @@ block(`
 }
 `);
 
-// Column specific styles
 block(`
 .col-timestamp {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -312,7 +303,6 @@ block(`
 }
 `);
 
-// Log badges
 block(`
 .log-badge {
   display: inline-block;
@@ -360,7 +350,6 @@ block(`
 }
 `);
 
-// Category badges
 block(`
 .log-category {
   display: inline-block;
@@ -415,7 +404,6 @@ block(`
 }
 `);
 
-// Log data display
 block(`
 .log-data {
   margin-top: 0.5rem;
@@ -437,7 +425,6 @@ block(`
 }
 `);
 
-// Stack trace display
 block(`
 .log-stack-trace {
   margin-top: 0.5rem;
@@ -460,7 +447,6 @@ block(`
 }
 `);
 
-// State messages
 block(`
 .loading-message,
 .error-message,
@@ -501,7 +487,6 @@ block(`
 }
 `);
 
-// Dark mode support
 block(`
 [data-theme="dark"] .stat-card {
   background: var(--admin-surface);
@@ -579,7 +564,6 @@ block(`
 }
 `);
 
-// Mobile responsive design
 block(`
 @media (max-width: 768px) {
   .logs-header {
@@ -671,8 +655,6 @@ block(`
   }
 }`);
 
-// Reference lookup. It sits above the statistics because when somebody has sent
-// you a code, finding it is the only reason the page is open.
 block(`
 .reference-panel {
   background: var(--surface);
@@ -742,8 +724,6 @@ block(`
 }
 `);
 
-// The match is the answer; the context is there to be read past. Dimming the
-// context is what makes the one row you came for findable at a glance.
 block(`
 .reference-match {
   border-left: 3px solid var(--admin-accent);

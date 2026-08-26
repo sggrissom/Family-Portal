@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Add Photo Page Styles
 block(`
 .add-photo-container {
   max-width: 580px;
@@ -20,7 +19,6 @@ block(`
 }
 `);
 
-// File Upload Area
 block(`
 .file-upload-area {
   border: 2px dashed var(--color-border);
@@ -56,7 +54,6 @@ block(`
 }
 `);
 
-// Upload Prompt
 block(`
 .upload-prompt {
   display: flex;
@@ -103,7 +100,6 @@ block(`
 }
 `);
 
-// File Preview
 block(`
 .file-preview {
   display: flex;
@@ -169,7 +165,6 @@ block(`
 }
 `);
 
-// Photo Preview
 block(`
 .photo-preview {
   margin-top: 30px;
@@ -216,7 +211,6 @@ block(`
 }
 `);
 
-// Tag Picker
 block(`
 .tag-picker {
   display: flex;
@@ -258,9 +252,6 @@ block(`
 }
 `);
 
-// Who is in this photo. These were .checkbox-group / .checkbox-option, which
-// this page never defined — the picker took whatever another page happened to
-// register under those names, or nothing, and the labels ran together inline.
 block(`
 .photo-person-group {
   display: flex;
@@ -299,7 +290,6 @@ block(`
 }
 `);
 
-// Form Enhancements
 block(`
 .add-photo-page textarea {
   resize: vertical;
@@ -318,7 +308,6 @@ block(`
 }
 `);
 
-// Responsive Design
 block(`
 @media (max-width: 580px) {
   .add-photo-container {

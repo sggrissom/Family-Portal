@@ -6,8 +6,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// exportFamilyA builds the bundle the import tests restore from, and the
-// identity mapping that stands in for the people import having run.
 func exportFamilyA(t *testing.T, fx activityFixture) ([]ExportActivity, map[int]int) {
 	t.Helper()
 
@@ -29,8 +27,6 @@ func exportFamilyA(t *testing.T, fx activityFixture) ([]ExportActivity, map[int]
 	}
 }
 
-// The round trip is the whole point: what came out has to go back in, into a
-// family that has none of it.
 func TestActivityImportRestoresTheTreeIntoAnotherFamily(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -74,8 +70,6 @@ func TestActivityImportRestoresTheTreeIntoAnotherFamily(t *testing.T) {
 			t.Fatalf("imported event has %d appearances", len(appearances))
 		}
 
-		// Every imported record has to belong to the family it was imported
-		// into, not the one it came from.
 		for _, appearance := range appearances {
 			if appearance.FamilyId != fx.famB {
 				t.Errorf("appearance %d landed in family %d", appearance.Id, appearance.FamilyId)
@@ -89,8 +83,6 @@ func TestActivityImportRestoresTheTreeIntoAnotherFamily(t *testing.T) {
 	})
 }
 
-// Importing the same bundle twice is a retried import, not a second season.
-// Everything matches by name and nothing is created the second time.
 func TestActivityImportIsIdempotent(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -123,22 +115,17 @@ func TestActivityImportIsIdempotent(t *testing.T) {
 		if got := len(GetFamilyAppearances(tx, fx.famB)); got != 2 {
 			t.Errorf("family B has %d appearances after importing twice", got)
 		}
-		// The results check is the one that matters: a reused performance must
-		// not collect a second copy of its results.
 		if got := len(GetFamilyResults(tx, fx.famB)); got != 2 {
 			t.Errorf("family B has %d results after importing twice", got)
 		}
 	})
 }
 
-// A roster naming somebody the people import did not bring across must not
-// point at a stranger. The person comes off the roster; the routine stays.
 func TestActivityImportDropsUnmappedRosterMembers(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
 
 	activities, _ := exportFamilyA(t, fx)
-	// Only alice came across.
 	partial := map[int]int{fx.alice.Id: fx.alice.Id}
 
 	var warnings []string
@@ -160,8 +147,6 @@ func TestActivityImportDropsUnmappedRosterMembers(t *testing.T) {
 					t.Errorf("%q kept bob on its roster despite him not being imported", entry.Name)
 				}
 			}
-			// The solo was bob's alone, so it comes across with nobody on it
-			// rather than not coming across at all — the routine still ran.
 			if entry.Name == "On My Own" && len(GetEntryPersonIds(tx, entry.Id)) != 0 {
 				t.Error("the solo's roster should be empty")
 			}
@@ -169,15 +154,11 @@ func TestActivityImportDropsUnmappedRosterMembers(t *testing.T) {
 	})
 }
 
-// A result that narrows to one person keeps that person only if they made it
-// onto the imported roster. Otherwise the result survives without them — the
-// routine still placed.
 func TestActivityImportClearsResultsNamingUnimportedPeople(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
 
 	activities, _ := exportFamilyA(t, fx)
-	// alice is the one the award names, and she is the one left behind.
 	partial := map[int]int{fx.bob.Id: fx.bob.Id}
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -195,16 +176,12 @@ func TestActivityImportClearsResultsNamingUnimportedPeople(t *testing.T) {
 				t.Errorf("result %q still names person %d", result.Label, *result.PersonId)
 			}
 		}
-		// And nothing landed in the person index under alice in family B.
 		if got := len(GetPersonResults(tx, fx.alice.Id)); got != 1 {
 			t.Errorf("alice has %d indexed results; the import added one", got)
 		}
 	})
 }
 
-// Rank, OutOf and Score are pointers all the way through import, so a
-// placement comes back as a placement and an adjudication does not become a
-// 0th-place finish.
 func TestActivityImportPreservesOptionalResultFields(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -250,9 +227,6 @@ func TestActivityImportPreservesOptionalResultFields(t *testing.T) {
 	})
 }
 
-// A result whose kind is not one of the four is dropped rather than failing
-// the import. A bundle hand-edited into a bad state should still restore the
-// season around the bad row.
 func TestActivityImportSkipsUnknownResultKinds(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -278,8 +252,6 @@ func TestActivityImportSkipsUnknownResultKinds(t *testing.T) {
 	}
 }
 
-// Every index a read depends on has to be written by the import too, or the
-// restored season is invisible to every view that reads it.
 func TestActivityImportPopulatesTheIndexes(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -310,7 +282,6 @@ func TestActivityImportPopulatesTheIndexes(t *testing.T) {
 			t.Errorf("ResultByFamilyIndex has %d entries", got)
 		}
 
-		// And the two that the views actually walk.
 		activityId := GetFamilyActivities(tx, fx.famB)[0].Id
 		seasonId := GetActivitySeasons(tx, activityId)[0].Id
 		for _, entry := range GetSeasonEntries(tx, seasonId) {
@@ -321,9 +292,6 @@ func TestActivityImportPopulatesTheIndexes(t *testing.T) {
 	})
 }
 
-// The joins only come back when the import path carried photos. The JSON-only
-// path has no photo mapping, and pointing a join at an id from another family's
-// database would be worse than leaving it off.
 func TestActivityImportAttachesPhotosOnlyWithAMapping(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -343,7 +311,6 @@ func TestActivityImportAttachesPhotosOnlyWithAMapping(t *testing.T) {
 		}
 	})
 
-	// With a mapping — as the bundle path supplies — they do come back.
 	photoIdMapping := map[int]int{
 		fx.alicePhoto.Id:    fx.alicePhoto.Id,
 		fx.untaggedPhoto.Id: fx.untaggedPhoto.Id,

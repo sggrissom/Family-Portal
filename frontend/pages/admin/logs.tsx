@@ -30,7 +30,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   }
 
   try {
-    // Fetch log files and stats
     const [filesResults, statsResults] = await Promise.all([
       server.GetLogFiles({}),
       server.GetLogStats({}),
@@ -51,7 +50,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     let initialEntries: server.PublicLogEntry[] = [];
     let initialFile = "";
 
-    // If we have files, select the most recent and load its content
     if (files.length > 0) {
       initialFile = files[0].name;
 
@@ -74,7 +72,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
           logWarn("admin", "Failed to load initial log content", contentErr);
         }
       } catch (contentErr) {
-        // If content loading fails, still show the file list
         logWarn("admin", "Failed to load initial log content", contentErr);
       }
     }
@@ -97,7 +94,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   }
 }
 
-// Component state type for logs page
 interface LogsPageState {
   currentFile: string;
   logEntries: server.PublicLogEntry[];
@@ -108,23 +104,18 @@ interface LogsPageState {
   currentPage: number;
   totalLines: number;
   hasMore: boolean;
-  // Performance filter fields
-  minDurationFilter: string; // In milliseconds for user input
-  sortBy: string; // "time" or "duration"
-  sortDesc: boolean; // Sort descending
-  // Search
+  minDurationFilter: string;
+  sortBy: string;
+  sortDesc: boolean;
   searchText: string;
-  sinceHours: number; // 0 means the whole file
+  sinceHours: number;
   filesSearched: string[];
-  // Reference lookup, which is its own mode: one entry and its context rather
-  // than a filtered list.
   referenceInput: string;
   referenceResult: server.LookupLogReferenceResponse | null;
   referenceLoading: boolean;
   referenceError: string;
 }
 
-// Component state hook for logs page
 const logsPageHook = vlens.declareHook(
   (): LogsPageState => ({
     currentFile: "",
@@ -138,7 +129,6 @@ const logsPageHook = vlens.declareHook(
     hasMore: false,
     minDurationFilter: "",
     sortBy: "time",
-    // Newest first: you open the log viewer because something is wrong now.
     sortDesc: true,
     searchText: "",
     sinceHours: 0,
@@ -150,8 +140,6 @@ const logsPageHook = vlens.declareHook(
   })
 );
 
-// loadLogContent reads the filters off state rather than taking seven
-// positional arguments that every caller passed in the same order anyway.
 async function loadLogContent() {
   const state = logsPageHook();
 
@@ -159,14 +147,11 @@ async function loadLogContent() {
   vlens.scheduleRedraw();
 
   try {
-    // The input is in milliseconds; the backend works in microseconds.
     const minDurationMicros = state.minDurationFilter.trim()
       ? parseInt(state.minDurationFilter) * 1000
       : undefined;
 
     const [result, err] = await server.GetLogContent({
-      // An empty filename searches every file, which is what a search wants:
-      // the reference code someone mailed you is not necessarily in today's.
       filename: state.searchText.trim() ? "" : state.currentFile,
       level: state.levelFilter || "",
       category: state.categoryFilter || "",
@@ -186,11 +171,11 @@ async function loadLogContent() {
       state.filesSearched = result.filesSearched || [];
       state.error = "";
     } else {
-      state.logEntries = []; // Ensure it's always an array
+      state.logEntries = [];
       state.error = err || "Failed to load log content";
     }
   } catch (err) {
-    state.logEntries = []; // Ensure it's always an array
+    state.logEntries = [];
     state.error = String(err);
   } finally {
     state.loading = false;
@@ -198,9 +183,6 @@ async function loadLogContent() {
   }
 }
 
-// lookUpReference is the other half of the error-handling design: ProcError
-// shows someone "Reference: <id>", they send it to you, and this finds the
-// cause it was logged against.
 async function lookUpReference() {
   const state = logsPageHook();
   if (!state.referenceInput.trim()) {
@@ -238,8 +220,6 @@ function clearReference() {
   vlens.scheduleRedraw();
 }
 
-// showRecentErrors is the one-click answer to the question that brings you
-// here: what went wrong today, across every file.
 function showRecentErrors() {
   const state = logsPageHook();
   state.levelFilter = "ERROR";
@@ -274,7 +254,7 @@ function handlePageChange(newPage: number) {
 
   const totalPages = Math.ceil(state.totalLines / entriesPerPage);
   if (newPage < 1 || (totalPages > 0 && newPage > totalPages)) {
-    return; // Don't change if invalid
+    return;
   }
 
   state.currentPage = newPage;
@@ -306,9 +286,9 @@ function formatDuration(durationMicros: number | null | undefined): string {
 function getDurationColor(durationMicros: number | null | undefined): string {
   if (!durationMicros) return "";
 
-  if (durationMicros >= 1000000) return "duration-slow"; // >= 1s
-  if (durationMicros >= 100000) return "duration-medium"; // >= 100ms
-  return "duration-fast"; // < 100ms
+  if (durationMicros >= 1000000) return "duration-slow";
+  if (durationMicros >= 100000) return "duration-medium";
+  return "duration-fast";
 }
 
 function getLevelBadgeClass(level: string): string {
@@ -330,7 +310,6 @@ function getCategoryBadgeClass(category: string): string {
   return `log-category log-category-${category.toLowerCase()}`;
 }
 
-// Performance Statistics Panel Component
 function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | undefined }) {
   if (!stats || stats.totalRequests === 0) {
     return preact.h("div", { className: "performance-panel" }, [
@@ -342,7 +321,6 @@ function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | und
   return preact.h("div", { className: "performance-panel" }, [
     preact.h("h3", {}, "Performance Statistics"),
 
-    // Overall statistics
     preact.h("div", { className: "perf-overview" }, [
       preact.h("div", { className: "perf-stat" }, [
         preact.h("span", { className: "perf-label" }, "Total Requests:"),
@@ -358,7 +336,6 @@ function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | und
       ]),
     ]),
 
-    // Percentiles
     preact.h("div", { className: "perf-percentiles" }, [
       preact.h("h4", {}, "Response Time Percentiles"),
       preact.h("div", { className: "percentile-grid" }, [
@@ -377,7 +354,6 @@ function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | und
       ]),
     ]),
 
-    // Slowest endpoints
     stats.slowestEndpoints.length > 0
       ? preact.h("div", { className: "slowest-endpoints" }, [
           preact.h("h4", {}, "Slowest Endpoints"),
@@ -417,9 +393,6 @@ function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | und
   ]);
 }
 
-// logEntryRow is one row of the log table. The reference lookup renders its
-// match and context with the same component, so the two views cannot drift on
-// how a log line looks.
 function logEntryRow(entry: server.PublicLogEntry, key: string | number, extraClass?: string) {
   return preact.h("div", { key, className: extraClass ? `table-row ${extraClass}` : "table-row" }, [
     preact.h("div", { className: "col-timestamp" }, formatTimestamp(entry.timestamp)),
@@ -494,9 +467,6 @@ const logTableHeader = () =>
     preact.h("div", { className: "col-user" }, "User"),
   ]);
 
-// ReferenceLookupPanel is the search box at the top of the page, and the result
-// of a lookup when there is one. It sits above everything else because it is
-// the reason you have the page open when someone has sent you a code.
 function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
   const result = state.referenceResult;
 
@@ -580,12 +550,8 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
     ]);
   }
 
-  // Initialize state from fetched data
   const state = logsPageHook();
 
-  // A reference code can arrive in the URL — the problems feed on /admin links
-  // each error straight to its own lookup, which is the point of putting the
-  // code in the message in the first place.
   if (!state.referenceInput && !state.referenceResult && !state.referenceLoading) {
     const fromUrl = new URLSearchParams(window.location.search).get("ref");
     if (fromUrl) {
@@ -594,8 +560,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
     }
   }
 
-  // Initialize state on first render if needed. The fetch loaded a page
-  // without knowing the totals, so reload once to fill in pagination.
   if (state.currentFile === "" && data.initialFile) {
     state.currentFile = data.initialFile;
     state.logEntries = data.initialEntries;
@@ -624,7 +588,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
     preact.h(Header, { isHome: false }),
     preact.h("main", { id: "app", className: "page-container" }, [
       preact.h("div", { className: "logs-page" }, [
-        // Header
         preact.h("div", { className: "logs-header" }, [
           preact.h("h1", {}, "System Logs"),
           preact.h(
@@ -634,7 +597,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
           ),
         ]),
 
-        // Error message
         state.error || data.error
           ? preact.h("div", { className: "error-message" }, [
               preact.h("span", { className: "error-icon" }, "⚠️"),
@@ -642,10 +604,8 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             ])
           : null,
 
-        // Reference lookup, first thing on the page.
         preact.h(ReferenceLookupPanel, { state }),
 
-        // Statistics
         data.stats
           ? preact.h(
               "div",
@@ -675,10 +635,8 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             )
           : null,
 
-        // Performance Statistics Panel
         data.stats ? preact.h(PerformanceStatsPanel, { stats: data.stats.performanceStats }) : null,
 
-        // Controls
         preact.h("div", { className: "logs-controls" }, [
           preact.h("div", { className: "logs-filters" }, [
             preact.h("div", { className: "filter-group" }, [
@@ -774,7 +732,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               ),
             ]),
 
-            // Performance filters
             preact.h("div", { className: "filter-group performance-filters" }, [
               preact.h("label", { htmlFor: "duration-filter" }, "Min Duration (ms):"),
               preact.h("input", {
@@ -841,7 +798,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               : null,
           ]),
 
-          // Pagination
           state.currentFile || state.searchText.trim()
             ? (() => {
                 const totalPages =
@@ -885,7 +841,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             : null,
         ]),
 
-        // Loading message
         state.loading
           ? preact.h("div", { className: "loading-message" }, [
               preact.h("span", { className: "loading-spinner" }, "⏳"),
@@ -893,7 +848,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             ])
           : null,
 
-        // Log content
         state.logEntries.length > 0
           ? preact.h(
               "div",
@@ -902,7 +856,6 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             )
           : null,
 
-        // Empty state
         state.currentFile && state.logEntries.length === 0 && !state.loading
           ? preact.h(
               "div",

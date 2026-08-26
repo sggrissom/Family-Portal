@@ -1,11 +1,3 @@
-// Turning a server error string into something worth showing a person.
-//
-// vlens hands the error view whatever text the server produced. Most of those
-// strings are already written for a reader — the backend's declared errors are
-// full sentences — but a few are not, and one of them carries a reference code
-// that a support email needs.
-
-/** Matches the correlation id the backend appends to unexpected failures. */
 const REFERENCE_PATTERN = /Reference:\s*([0-9a-f]{12})/;
 
 export type ErrorKind =
@@ -19,23 +11,12 @@ export type ErrorKind =
 
 export interface DisplayableError {
   kind: ErrorKind;
-  /** Short heading. */
   title: string;
-  /** What happened, in a sentence, with the reference stripped out. */
   message: string;
-  /** The correlation id, when the server sent one. */
   reference: string | null;
-  /** Whether trying the same thing again is worth suggesting. */
   retryable: boolean;
 }
 
-/**
- * classifyError sorts a server error into one of the categories a user can
- * actually act on differently. The distinctions are the point: "you are signed
- * out", "that isn't yours", "that's gone", "slow down", "come back later", and
- * "this one is my fault" call for four different next steps and two different
- * levels of apology.
- */
 export function classifyError(raw: string): DisplayableError {
   const reference = extractReference(raw);
   const message = stripReference(raw).trim();
@@ -116,11 +97,6 @@ export function extractReference(raw: string): string | null {
   return match ? match[1] : null;
 }
 
-/**
- * stripReference removes the reference sentence from a message. The code is
- * shown on its own, next to a copy button, rather than buried in prose the user
- * would have to select by hand.
- */
 export function stripReference(raw: string): string {
   return raw.replace(REFERENCE_PATTERN, "").replace(/\s{2,}/g, " ");
 }

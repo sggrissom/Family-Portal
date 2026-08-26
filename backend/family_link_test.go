@@ -1,8 +1,3 @@
-// Tests for Stage 5 of the multi-family plan: families relate to each other.
-// The three things that must hold are that a linked family sees the content the
-// link names and nothing else, that the relationship is one-directional, and
-// that it never chains — A sharing with B and B sharing with C must not give C
-// anything of A's.
 package backend
 
 import (
@@ -16,15 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// familyLinkFixture is three households.
-//
-//	A (parents)      homes alice and bob, and shares alice with B
-//	B (grandparents) homes robin, and shares robin with C
-//	C (friends)      homes nobody of its own
-//
-// The chain A -> B -> C is deliberate: C holds a full link from B and has one
-// of B's people on its roster, which is exactly the shape that would leak
-// alice if access were transitive.
 type familyLinkFixture struct {
 	db    *vbolt.DB
 	userA User
@@ -34,14 +20,14 @@ type familyLinkFixture struct {
 	famB  int
 	famC  int
 
-	alice Person // homed in A, shared into B
-	bob   Person // homed in A, shared with nobody
-	robin Person // homed in B, shared into C
+	alice Person
+	bob   Person
+	robin Person
 
 	aliceMilestone Milestone
 	aliceGrowth    GrowthData
-	alicePhoto     Image // tagged with alice
-	untaggedPhoto  Image // in A, nobody in it
+	alicePhoto     Image
+	untaggedPhoto  Image
 	tagA           Tag
 
 	linkAB FamilyLink
@@ -123,15 +109,11 @@ func setupFamilyLinkFixture(t *testing.T) (familyLinkFixture, func()) {
 		vbolt.Write(tx, TagBkt, fx.tagA.Id, &fx.tagA)
 		vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, fx.tagA.Id, fx.famA)
 
-		// A shares its people, milestones and photos with B — but not its
-		// measurements, which is the default.
 		fx.linkAB = createFamilyLinkTx(tx, fx.famA, fx.famB, "grandparents", AccessView, DefaultLinkScopes().ToMask())
 		fx.linkAB.Status = LinkAccepted
 		writeFamilyLinkTx(tx, fx.linkAB)
 		EnsurePersonFamilyTx(tx, fx.alice.Id, fx.famB, Child)
 
-		// B shares everything it has with C, and puts robin on C's roster. This
-		// is the second hop that must not reach back to A's people.
 		everything := LinkScopes{People: true, Milestones: true, Photos: true, Growth: true}
 		fx.linkBC = createFamilyLinkTx(tx, fx.famB, fx.famC, "friends", AccessView, everything.ToMask())
 		fx.linkBC.Status = LinkAccepted
@@ -183,8 +165,6 @@ func setLinkStatus(t *testing.T, fx familyLinkFixture, link FamilyLink, status L
 	})
 }
 
-// The grandparents see the shared child and the kinds of record their link
-// names, and nothing else in the family that shared her.
 func TestLinkGrantsOnlyWhatItCarries(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -216,7 +196,6 @@ func TestLinkGrantsOnlyWhatItCarries(t *testing.T) {
 			t.Error("a photo with nobody shared in it leaked through the link")
 		}
 
-		// The unshared sibling and the family itself stay out of reach.
 		if CanAccessPerson(tx, fx.userB, fx.bob, ScopePeople, AccessView) {
 			t.Error("a person who was never shared is reachable")
 		}
@@ -229,12 +208,10 @@ func TestLinkGrantsOnlyWhatItCarries(t *testing.T) {
 	})
 }
 
-// Whatever a link opens up, it opens up for reading only.
 func TestLinkNeverGrantsWrites(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
 
-	// Even a link that asks for more than view gets clamped on the way in.
 	greedy := fx.linkAB
 	greedy.Access = AccessAdmin
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -261,7 +238,6 @@ func TestLinkNeverGrantsWrites(t *testing.T) {
 	})
 }
 
-// The relationship runs one way. B receiving A's child does not let A see B's.
 func TestLinkAccessIsAsymmetric(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -281,14 +257,11 @@ func TestLinkAccessIsAsymmetric(t *testing.T) {
 	})
 }
 
-// A -> B and B -> C must not add up to A -> C, in either direction.
 func TestNoTransitiveAccessLeak(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		// C holds a link carrying everything B has, and one of B's people is on
-		// C's roster — but alice is A's, merely visiting B's roster.
 		for _, scope := range []LinkScope{ScopePeople, ScopeMilestones, ScopePhotos, ScopeGrowth} {
 			if CanAccessPerson(tx, fx.userC, fx.alice, scope, AccessView) {
 				t.Errorf("C reached A's child through B at scope %d", scope)
@@ -301,14 +274,10 @@ func TestNoTransitiveAccessLeak(t *testing.T) {
 			t.Error("C saw A's photo through B")
 		}
 
-		// The one hop C does have still works, so the test is not passing
-		// because nothing works.
 		if !CanAccessPerson(tx, fx.userC, fx.robin, ScopeGrowth, AccessView) {
 			t.Error("C's own link to B stopped working")
 		}
 
-		// Neither can A's people be pushed onward: sharing is authorized by the
-		// home family's own links, and A has none to C.
 		if CanShareIntoFamily(tx, fx.famA, fx.famC) {
 			t.Error("A can share into C without a link to it")
 		}
@@ -321,7 +290,6 @@ func TestNoTransitiveAccessLeak(t *testing.T) {
 	})
 }
 
-// A link that has not been accepted, or that has been revoked, grants nothing.
 func TestPendingAndRevokedLinksGrantNothing(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -339,8 +307,6 @@ func TestPendingAndRevokedLinksGrantNothing(t *testing.T) {
 	}
 }
 
-// Turning a scope on is what makes it readable, so the scope list is doing the
-// work rather than the access level.
 func TestScopesAreIndependentlyGranted(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -359,7 +325,6 @@ func TestScopesAreIndependentlyGranted(t *testing.T) {
 	})
 }
 
-// The list paths a page actually calls have to agree with the point checks.
 func TestSharedPersonShowsUpInListPaths(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -391,8 +356,6 @@ func TestSharedPersonShowsUpInListPaths(t *testing.T) {
 			t.Error("a photo of nobody shared leaked into the photo list")
 		}
 
-		// The sharing family's tags come along, or every shared milestone would
-		// render its labels as blanks.
 		var sawTag bool
 		for _, tag := range getVisibleTags(tx, fx.userB) {
 			sawTag = sawTag || tag.Id == fx.tagA.Id
@@ -410,8 +373,6 @@ func TestSharedPersonShowsUpInListPaths(t *testing.T) {
 	})
 }
 
-// Ending the relationship takes the shared people with it, so no roster is left
-// holding names it can no longer open.
 func TestRevokingALinkUnsharesItsPeople(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -434,21 +395,17 @@ func TestRevokingALinkUnsharesItsPeople(t *testing.T) {
 		if len(GetVisiblePeople(tx, fx.userB)) != 1 {
 			t.Error("the grandparents' roster did not go back to their own person")
 		}
-		// The person record itself survives — sharing never copied them.
 		if person := GetPersonById(tx, fx.alice.Id); person.Id == 0 || person.FamilyId != fx.famA {
 			t.Error("unsharing damaged the person's home family")
 		}
 	})
 }
 
-// Who a person may be shared into is a question about links, not about the
-// acting user's own memberships.
 func TestShareTargetsComeFromLinks(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		// Bob is not shared yet, so B is offered as a target for him.
 		sharing := personSharing(tx, fx.userA, fx.bob)
 		if !sharing.Manageable {
 			t.Fatal("the owning family cannot manage its own person")
@@ -460,7 +417,6 @@ func TestShareTargetsComeFromLinks(t *testing.T) {
 			t.Errorf("bob is not shared with anyone, got %v", sharing.SharedWith)
 		}
 
-		// Alice is already on B's roster, so B is no longer offered.
 		sharing = personSharing(tx, fx.userA, fx.alice)
 		if len(sharing.CanShare) != 0 {
 			t.Errorf("a family already holding the person was offered again: %v", sharing.CanShare)
@@ -469,7 +425,6 @@ func TestShareTargetsComeFromLinks(t *testing.T) {
 			t.Errorf("expected alice shared with B, got %v", sharing.SharedWith)
 		}
 
-		// The receiving family sees the share but cannot manage it.
 		sharing = personSharing(tx, fx.userB, fx.alice)
 		if sharing.Manageable {
 			t.Error("the receiving family can manage a person it does not own")
@@ -480,8 +435,6 @@ func TestShareTargetsComeFromLinks(t *testing.T) {
 	})
 }
 
-// A person is shared, not copied: the roster gains a row and the bucket does
-// not gain a record.
 func TestSharingThroughALinkCreatesNoDuplicatePerson(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -515,8 +468,6 @@ func TestSharingThroughALinkCreatesNoDuplicatePerson(t *testing.T) {
 	})
 }
 
-// A user with no link and no membership reaches nothing, which is the
-// pre-Stage-5 behavior for every family that has not linked to them.
 func TestUnlinkedFamilyIsStillFullyDenied(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -539,13 +490,10 @@ func TestUnlinkedFamilyIsStillFullyDenied(t *testing.T) {
 	})
 }
 
-// The invite/accept/share flow, driven through the procs a client actually
-// calls, so the authorization on each of them is exercised rather than assumed.
 func TestLinkProcFlow(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
 
-	// Family D is a fresh household with no relationship to anyone.
 	var userD User
 	var famD Family
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -561,7 +509,6 @@ func TestLinkProcFlow(t *testing.T) {
 
 	var link FamilyLinkView
 
-	// A offers to share with D, naming D by its invite code.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenA}
 		resp, procErr := CreateFamilyLink(ctx, CreateFamilyLinkRequest{
@@ -572,8 +519,6 @@ func TestLinkProcFlow(t *testing.T) {
 		if procErr != nil || !resp.Success {
 			t.Fatalf("CreateFamilyLink: %v %q", procErr, resp.Error)
 		}
-		// People is implied by milestones, or the shared records would hang off
-		// somebody the other family cannot see.
 		if !resp.Link.Scopes.People {
 			t.Error("people scope was not implied by milestones")
 		}
@@ -583,21 +528,18 @@ func TestLinkProcFlow(t *testing.T) {
 		link = resp.Link
 	})
 
-	// Until D accepts, nothing is shareable into it.
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if CanShareIntoFamily(tx, fx.famA, famD.Id) {
 			t.Error("a pending link already allowed sharing")
 		}
 	})
 
-	// The offering family cannot accept on the other's behalf.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenA}
 		if _, procErr := AcceptFamilyLink(ctx, FamilyLinkIdRequest{Id: link.Id}); procErr == nil {
 			t.Error("the sharing family accepted its own offer")
 		}
 	})
-	// Nor can an unrelated family.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenB}
 		if _, procErr := AcceptFamilyLink(ctx, FamilyLinkIdRequest{Id: link.Id}); procErr == nil {
@@ -613,7 +555,6 @@ func TestLinkProcFlow(t *testing.T) {
 		}
 	})
 
-	// The receiving family cannot widen what it was given.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenD}
 		if _, procErr := UpdateFamilyLink(ctx, UpdateFamilyLinkRequest{
@@ -624,7 +565,6 @@ func TestLinkProcFlow(t *testing.T) {
 		}
 	})
 
-	// Nor can it help itself to a person it was not given.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenD}
 		if _, procErr := SharePersonWithFamily(ctx, SharePersonRequest{
@@ -634,7 +574,6 @@ func TestLinkProcFlow(t *testing.T) {
 		}
 	})
 
-	// The owner shares alice, and only then does D reach her.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenA}
 		resp, procErr := SharePersonWithFamily(ctx, SharePersonRequest{
@@ -669,7 +608,6 @@ func TestLinkProcFlow(t *testing.T) {
 		}
 	})
 
-	// Revoking hands everything back.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenD}
 		resp, procErr := RevokeFamilyLink(ctx, FamilyLinkIdRequest{Id: link.Id})
@@ -697,8 +635,6 @@ func testAuthToken(t *testing.T, user User) string {
 	return token
 }
 
-// A shared person is on the host family's roster but is not theirs to export,
-// to match on import, or to auto-tag: those all ask about ownership.
 func TestOwnPeopleExcludesSharedIn(t *testing.T) {
 	fx, cleanup := setupFamilyLinkFixture(t)
 	defer cleanup()
@@ -719,7 +655,6 @@ func TestOwnPeopleExcludesSharedIn(t *testing.T) {
 			t.Errorf("A still owns both its people, got %d", len(ownedA))
 		}
 
-		// An export of B must not carry A's child out with it.
 		data, err := buildExportData(tx, fx.famB)
 		if err != nil {
 			t.Fatalf("buildExportData: %v", err)
@@ -730,7 +665,6 @@ func TestOwnPeopleExcludesSharedIn(t *testing.T) {
 			}
 		}
 
-		// Import matching against B must not resolve to A's child either.
 		match := findExistingPerson(tx, ImportPerson{
 			Name:     fx.alice.Name,
 			Birthday: fx.alice.Birthday,

@@ -501,7 +501,6 @@ block(`
 }
 `);
 
-// Photo Management Styles
 block(`
 .photo-stats-grid {
   display: grid;
@@ -693,7 +692,6 @@ block(`
 }
 `);
 
-// Additional responsive styles for photo management
 block(`
 @media (max-width: 768px) {
   .photo-stats-grid {
@@ -818,8 +816,6 @@ block(`
 }
 `);
 
-// The problems feed. It sits directly under the diagnostics strip, above the
-// card grid, because "is anything wrong" is the question you arrive with.
 block(`
 .problems {
   background: var(--admin-surface-elevated);
@@ -831,8 +827,6 @@ block(`
 }
 `);
 
-// Clear is deliberately quiet: one line, no heading, no colour competing with
-// the cards. It is an absence of news, and should read like one.
 block(`
 .problems-clear {
   display: flex;
@@ -946,8 +940,6 @@ block(`
 }
 `);
 
-// The reference code is a link into the log viewer's lookup, so it is styled
-// as the actionable thing on the row rather than as incidental metadata.
 block(`
 .problem-error-ref {
   font-family: monospace;

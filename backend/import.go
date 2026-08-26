@@ -16,7 +16,6 @@ func RegisterImportMethods(app *vbeam.Application) {
 	app.HandleFunc("POST /api/import-bundle", AuthMiddleware(importBundleHandler))
 }
 
-// Import data types matching the JSON structure
 type ImportPerson struct {
 	Id       int       `json:"Id"`
 	FamilyId int       `json:"FamilyId"`
@@ -63,57 +62,48 @@ type ImportDataStructure struct {
 	TotalMilestones int               `json:"total_milestones"`
 }
 
-// Request/Response types
 type ImportDataRequest struct {
 	JsonData         string `json:"jsonData"`
-	FilterFamilyIds  []int  `json:"filterFamilyIds,omitempty"`  // Only import people from these family IDs
-	FilterPersonIds  []int  `json:"filterPersonIds,omitempty"`  // Only import these specific person IDs
-	PreviewOnly      bool   `json:"previewOnly,omitempty"`      // If true, just return available data without importing
-	MergeStrategy    string `json:"mergeStrategy,omitempty"`    // "create_all", "merge_people", or "skip_duplicates"
-	ImportMilestones bool   `json:"importMilestones,omitempty"` // Whether to import milestones
-	ImportActivities bool   `json:"importActivities,omitempty"` // Whether to import activities
-	DryRun           bool   `json:"dryRun,omitempty"`           // Preview changes without committing
+	FilterFamilyIds  []int  `json:"filterFamilyIds,omitempty"`
+	FilterPersonIds  []int  `json:"filterPersonIds,omitempty"`
+	PreviewOnly      bool   `json:"previewOnly,omitempty"`
+	MergeStrategy    string `json:"mergeStrategy,omitempty"`
+	ImportMilestones bool   `json:"importMilestones,omitempty"`
+	ImportActivities bool   `json:"importActivities,omitempty"`
+	DryRun           bool   `json:"dryRun,omitempty"`
 	FamilyId         int    `json:"familyId,omitempty"`
 }
 
 type ImportDataResponse struct {
-	ImportedPeople       int `json:"importedPeople"`
-	MergedPeople         int `json:"mergedPeople"`
-	SkippedPeople        int `json:"skippedPeople"`
-	ImportedMeasurements int `json:"importedMeasurements"`
-	SkippedMeasurements  int `json:"skippedMeasurements"`
-	ImportedMilestones   int `json:"importedMilestones"`
-	SkippedMilestones    int `json:"skippedMilestones"`
-	ImportedTags         int `json:"importedTags"`
-	SkippedTags          int `json:"skippedTags"`
-	ImportedPhotos       int `json:"importedPhotos"`
-	SkippedPhotos        int `json:"skippedPhotos"`
-	// ImportedActivities counts one level of the activities tree at a time,
-	// because a single number would not say whether the results came back.
-	ImportedActivities ActivityImportCounts `json:"importedActivities"`
-	Errors             []string             `json:"errors,omitempty"`
-	Warnings           []string             `json:"warnings,omitempty"`
-	PersonIdMapping    map[int]int          `json:"personIdMapping,omitempty"`
-	AvailableFamilyIds []int                `json:"availableFamilyIds,omitempty"`
-	AvailablePeople    []ImportPerson       `json:"availablePeople,omitempty"`
-	MatchedPeople      []PersonMatch        `json:"matchedPeople,omitempty"`
+	ImportedPeople       int                  `json:"importedPeople"`
+	MergedPeople         int                  `json:"mergedPeople"`
+	SkippedPeople        int                  `json:"skippedPeople"`
+	ImportedMeasurements int                  `json:"importedMeasurements"`
+	SkippedMeasurements  int                  `json:"skippedMeasurements"`
+	ImportedMilestones   int                  `json:"importedMilestones"`
+	SkippedMilestones    int                  `json:"skippedMilestones"`
+	ImportedTags         int                  `json:"importedTags"`
+	SkippedTags          int                  `json:"skippedTags"`
+	ImportedPhotos       int                  `json:"importedPhotos"`
+	SkippedPhotos        int                  `json:"skippedPhotos"`
+	ImportedActivities   ActivityImportCounts `json:"importedActivities"`
+	Errors               []string             `json:"errors,omitempty"`
+	Warnings             []string             `json:"warnings,omitempty"`
+	PersonIdMapping      map[int]int          `json:"personIdMapping,omitempty"`
+	AvailableFamilyIds   []int                `json:"availableFamilyIds,omitempty"`
+	AvailablePeople      []ImportPerson       `json:"availablePeople,omitempty"`
+	MatchedPeople        []PersonMatch        `json:"matchedPeople,omitempty"`
 }
 
-// vbeam procedure
 func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Parse JSON data
 	var importData ImportDataStructure
 	if err = json.Unmarshal([]byte(req.JsonData), &importData); err != nil {
-		// The decoder's message names Go types and struct fields, which tells
-		// the user nothing and tells a stranger something. What they can act on
-		// is that the file is not the shape this app exports.
 		LogWarn(LogCategoryAPI, "Import rejected unreadable JSON", map[string]interface{}{
 			"userId": user.Id,
 			"error":  err.Error(),
@@ -122,12 +112,10 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		return
 	}
 
-	// Validate import data
 	if err = validateImportData(importData); err != nil {
 		return
 	}
 
-	// Set default merge strategy if not provided
 	mergeStrategy := req.MergeStrategy
 	if mergeStrategy == "" {
 		mergeStrategy = "create_all"
@@ -138,11 +126,9 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		return
 	}
 
-	// Get available families and people for preview
 	resp.AvailableFamilyIds = getUniqueFamilyIds(importData.People)
 	resp.AvailablePeople = importData.People
 
-	// For preview mode, show potential matches
 	if req.PreviewOnly {
 		filteredPeople := filterPeople(importData.People, req.FilterFamilyIds, req.FilterPersonIds)
 		for _, importPerson := range filteredPeople {
@@ -150,7 +136,6 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			if len(matches) > 0 {
 				resp.MatchedPeople = append(resp.MatchedPeople, matches...)
 			} else {
-				// No matches found
 				resp.MatchedPeople = append(resp.MatchedPeople, PersonMatch{
 					ImportPerson: importPerson,
 					MatchType:    "none",
@@ -161,19 +146,16 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		return
 	}
 
-	// Filter data based on request
 	filteredPeople := filterPeople(importData.People, req.FilterFamilyIds, req.FilterPersonIds)
 	if len(filteredPeople) == 0 {
 		err = errors.New("No people match the specified filters")
 		return
 	}
 
-	// Start write transaction (or dry run)
 	if !req.DryRun {
 		vbeam.UseWriteTx(ctx)
 	}
 
-	// Import people first to establish ID mappings
 	personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(ctx.Tx, filteredPeople, familyId, mergeStrategy)
 	resp.ImportedPeople = importedPeople
 	resp.MergedPeople = mergedPeople
@@ -181,21 +163,17 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	resp.Errors = append(resp.Errors, peopleErrors...)
 	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
-	// Import tags (family-level, independent of person mapping)
 	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, familyId)
 	resp.ImportedTags = importedTags
 	resp.SkippedTags = skippedTags
 
-	// Only proceed with data import if we have people to import to
 	if len(personIdMapping) > 0 {
-		// Import measurements using the person ID mappings (filter by imported people)
 		filteredHeights, filteredWeights := filterMeasurements(importData.Heights, importData.Weights, personIdMapping)
 		importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(ctx.Tx, filteredHeights, filteredWeights, personIdMapping, familyId)
 		resp.ImportedMeasurements = importedMeasurements
 		resp.SkippedMeasurements = skippedMeasurements
 		resp.Errors = append(resp.Errors, measurementErrors...)
 
-		// Import milestones if requested
 		if req.ImportMilestones && len(importData.Milestones) > 0 {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
 			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
@@ -204,8 +182,6 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			resp.Errors = append(resp.Errors, milestoneErrors...)
 		}
 
-		// Import activities if requested. No photo mapping here: this path
-		// takes JSON alone, so there are no photos to attach the joins to.
 		if req.ImportActivities && len(importData.Activities) > 0 {
 			counts, activityWarnings := importActivities(ctx.Tx, importData.Activities, familyId, personIdMapping, nil)
 			resp.ImportedActivities = counts
@@ -213,10 +189,8 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		}
 	}
 
-	// Calculate skipped people
 	resp.SkippedPeople = len(filteredPeople) - resp.ImportedPeople - resp.MergedPeople
 
-	// Commit transaction (unless dry run)
 	if !req.DryRun {
 		vbolt.TxCommit(ctx.Tx)
 	}
@@ -229,14 +203,12 @@ func validateImportData(data ImportDataStructure) error {
 		return errors.New("No people found in import data")
 	}
 
-	// Validate people
 	for i, person := range data.People {
 		if err := validateImportPerson(person, i); err != nil {
 			return err
 		}
 	}
 
-	// Validate measurements
 	personIds := make(map[int]bool)
 	for _, person := range data.People {
 		personIds[person.Id] = true
@@ -254,7 +226,6 @@ func validateImportData(data ImportDataStructure) error {
 		}
 	}
 
-	// Validate milestones
 	for i, milestone := range data.Milestones {
 		if err := validateImportMilestone(milestone, i, personIds); err != nil {
 			return err
@@ -277,24 +248,20 @@ func validateImportPerson(person ImportPerson, index int) error {
 		return errors.New("Person '" + person.Name + "' has invalid birthday")
 	}
 
-	// Check if birthday is reasonable (not in the future, not too far in the past)
 	now := time.Now()
 	if person.Birthday.After(now) {
 		return errors.New("Person '" + person.Name + "' has birthday in the future")
 	}
 
-	// Check if birthday is not more than 150 years ago
 	maxAge := now.AddDate(-150, 0, 0)
 	if person.Birthday.Before(maxAge) {
 		return errors.New("Person '" + person.Name + "' has birthday more than 150 years ago")
 	}
 
-	// Validate gender
 	if person.Gender < 0 || person.Gender > 2 {
 		return errors.New("Person '" + person.Name + "' has invalid gender value")
 	}
 
-	// Validate person type
 	if person.Type < 0 || person.Type > 1 {
 		return errors.New("Person '" + person.Name + "' has invalid person type")
 	}
@@ -307,7 +274,7 @@ func validateImportHeight(height ImportHeight, index int, validPersonIds map[int
 		return errors.New("Height measurement at index " + formatIndex(index) + " references unknown person ID " + formatIndex(height.PersonId))
 	}
 
-	if height.Inches <= 0 || height.Inches > 120 { // 120 inches = 10 feet, reasonable max
+	if height.Inches <= 0 || height.Inches > 120 {
 		return errors.New("Height measurement at index " + formatIndex(index) + " has invalid height value")
 	}
 
@@ -323,7 +290,7 @@ func validateImportWeight(weight ImportWeight, index int, validPersonIds map[int
 		return errors.New("Weight measurement at index " + formatIndex(index) + " references unknown person ID " + formatIndex(weight.PersonId))
 	}
 
-	if weight.Pounds <= 0 || weight.Pounds > 2000 { // 2000 lbs is reasonable max
+	if weight.Pounds <= 0 || weight.Pounds > 2000 {
 		return errors.New("Weight measurement at index " + formatIndex(index) + " has invalid weight value")
 	}
 
@@ -362,20 +329,16 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 	mergedCount := 0
 
 	for _, importPerson := range importPeople {
-		// Check for existing person based on merge strategy
 		var existingPerson *Person
 		if mergeStrategy == "merge_people" || mergeStrategy == "skip_duplicates" {
 			existingPerson = findExistingPerson(tx, importPerson, familyId)
 		}
 
 		if existingPerson != nil {
-			// Found existing person
 			if mergeStrategy == "skip_duplicates" {
-				// Skip this person entirely
 				warnings = append(warnings, "Skipped duplicate person: "+importPerson.Name)
 				continue
 			} else if mergeStrategy == "merge_people" {
-				// Use existing person's ID
 				personIdMapping[importPerson.Id] = existingPerson.Id
 				mergedCount++
 				warnings = append(warnings, "Merged with existing person: "+importPerson.Name)
@@ -383,7 +346,6 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 			}
 		}
 
-		// Create new person (either no match found, or using create_all strategy)
 		var person Person
 		person.Id = vbolt.NextIntId(tx, PeopleBkt)
 		person.FamilyId = familyId
@@ -393,11 +355,9 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 		person.Birthday = importPerson.Birthday
 		person.Age = calculateAge(importPerson.Birthday)
 
-		// Store in database
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		updatePersonIndex(tx, person)
 
-		// Map old ID to new ID
 		personIdMapping[importPerson.Id] = person.Id
 		importedCount++
 	}
@@ -410,7 +370,6 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 	importedCount := 0
 	skippedCount := 0
 
-	// Import heights
 	for _, height := range importHeights {
 		newPersonId, exists := personIdMapping[height.PersonId]
 		if !exists {
@@ -418,13 +377,11 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 			continue
 		}
 
-		// Skip measurements with invalid dates (year 0001)
 		if height.Date.Year() == 1 {
 			skippedCount++
 			continue
 		}
 
-		// Check for duplicate measurement
 		if isDuplicateMeasurement(tx, newPersonId, height.Date, Height, height.Inches) {
 			skippedCount++
 			continue
@@ -445,7 +402,6 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 		importedCount++
 	}
 
-	// Import weights
 	for _, weight := range importWeights {
 		newPersonId, exists := personIdMapping[weight.PersonId]
 		if !exists {
@@ -453,13 +409,11 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 			continue
 		}
 
-		// Skip measurements with invalid dates (year 0001)
 		if weight.Date.Year() == 1 {
 			skippedCount++
 			continue
 		}
 
-		// Check for duplicate measurement
 		if isDuplicateMeasurement(tx, newPersonId, weight.Date, Weight, weight.Pounds) {
 			skippedCount++
 			continue
@@ -497,14 +451,12 @@ func getUniqueFamilyIds(people []ImportPerson) []int {
 }
 
 func filterPeople(people []ImportPerson, filterFamilyIds []int, filterPersonIds []int) []ImportPerson {
-	// If no filters specified, return all people
 	if len(filterFamilyIds) == 0 && len(filterPersonIds) == 0 {
 		return people
 	}
 
 	var filtered []ImportPerson
 
-	// Create lookup maps for efficiency
 	familyIdMap := make(map[int]bool)
 	for _, id := range filterFamilyIds {
 		familyIdMap[id] = true
@@ -516,13 +468,10 @@ func filterPeople(people []ImportPerson, filterFamilyIds []int, filterPersonIds 
 	}
 
 	for _, person := range people {
-		// Include if matches family ID filter (if specified)
 		matchesFamilyFilter := len(filterFamilyIds) == 0 || familyIdMap[person.FamilyId]
 
-		// Include if matches person ID filter (if specified)
 		matchesPersonFilter := len(filterPersonIds) == 0 || personIdMap[person.Id]
 
-		// Include if matches both filters (AND logic)
 		if matchesFamilyFilter && (len(filterPersonIds) == 0 || matchesPersonFilter) {
 			filtered = append(filtered, person)
 		}
@@ -535,7 +484,6 @@ func filterMeasurements(heights []ImportHeight, weights []ImportWeight, personId
 	var filteredHeights []ImportHeight
 	var filteredWeights []ImportWeight
 
-	// Only include measurements for people that were imported
 	for _, height := range heights {
 		if _, exists := personIdMapping[height.PersonId]; exists {
 			filteredHeights = append(filteredHeights, height)
@@ -554,7 +502,6 @@ func filterMeasurements(heights []ImportHeight, weights []ImportWeight, personId
 func filterMilestones(milestones []ExportMilestone, personIdMapping map[int]int) []ExportMilestone {
 	var filteredMilestones []ExportMilestone
 
-	// Only include milestones for people that were imported
 	for _, milestone := range milestones {
 		if _, exists := personIdMapping[milestone.PersonId]; exists {
 			filteredMilestones = append(filteredMilestones, milestone)
@@ -564,23 +511,17 @@ func filterMilestones(milestones []ExportMilestone, personIdMapping map[int]int)
 	return filteredMilestones
 }
 
-// Person matching structure for preview
 type PersonMatch struct {
 	ImportPerson   ImportPerson `json:"importPerson"`
 	ExistingPerson *Person      `json:"existingPerson,omitempty"`
-	MatchType      string       `json:"matchType"` // "exact", "potential", "none"
+	MatchType      string       `json:"matchType"`
 	Confidence     float64      `json:"confidence"`
 }
 
-// Find existing person by matching attributes
 func findExistingPerson(tx *vbolt.Tx, importPerson ImportPerson, familyId int) *Person {
-	// Match against the people this family owns. Matching a person shared in
-	// from elsewhere would attach the imported records to someone another
-	// family owns.
 	familyPeople := GetFamilyOwnPeople(tx, familyId)
 
 	for _, existing := range familyPeople {
-		// Exact match: same name, birthday, and gender
 		if existing.Name == importPerson.Name &&
 			existing.Birthday.Equal(importPerson.Birthday) &&
 			existing.Gender == GenderType(importPerson.Gender) {
@@ -591,14 +532,13 @@ func findExistingPerson(tx *vbolt.Tx, importPerson ImportPerson, familyId int) *
 	return nil
 }
 
-// Find potential matches with confidence scoring
 func findPotentialMatches(tx *vbolt.Tx, importPerson ImportPerson, familyId int) []PersonMatch {
 	var matches []PersonMatch
 	familyPeople := GetFamilyOwnPeople(tx, familyId)
 
 	for _, existing := range familyPeople {
 		confidence := calculateMatchConfidence(importPerson, existing)
-		if confidence > 0.3 { // Only include potential matches above 30% confidence
+		if confidence > 0.3 {
 			matchType := "potential"
 			if confidence >= 0.95 {
 				matchType = "exact"
@@ -616,19 +556,15 @@ func findPotentialMatches(tx *vbolt.Tx, importPerson ImportPerson, familyId int)
 	return matches
 }
 
-// Calculate match confidence between import and existing person
 func calculateMatchConfidence(importPerson ImportPerson, existing Person) float64 {
 	score := 0.0
 	totalFactors := 0.0
 
-	// Name similarity (40% weight)
 	if importPerson.Name == existing.Name {
 		score += 0.4
 	} else if strings.EqualFold(importPerson.Name, existing.Name) {
-		score += 0.35 // Case-insensitive match
+		score += 0.35
 	} else {
-		// Calculate fuzzy string similarity here if needed
-		// For now, just check if names contain each other
 		name1 := strings.ToLower(importPerson.Name)
 		name2 := strings.ToLower(existing.Name)
 		if strings.Contains(name1, name2) || strings.Contains(name2, name1) {
@@ -637,24 +573,21 @@ func calculateMatchConfidence(importPerson ImportPerson, existing Person) float6
 	}
 	totalFactors += 0.4
 
-	// Birthday match (40% weight)
 	if importPerson.Birthday.Equal(existing.Birthday) {
 		score += 0.4
 	} else {
-		// Check if birthdays are close (within a few days)
 		daysDiff := importPerson.Birthday.Sub(existing.Birthday).Hours() / 24
 		if daysDiff < 0 {
 			daysDiff = -daysDiff
 		}
 		if daysDiff <= 3 {
-			score += 0.3 // Close birthday
+			score += 0.3
 		} else if daysDiff <= 7 {
-			score += 0.1 // Nearby birthday
+			score += 0.1
 		}
 	}
 	totalFactors += 0.4
 
-	// Gender match (20% weight)
 	if GenderType(importPerson.Gender) == existing.Gender {
 		score += 0.2
 	}
@@ -663,14 +596,13 @@ func calculateMatchConfidence(importPerson ImportPerson, existing Person) float6
 	return score / totalFactors
 }
 
-// Check if measurement already exists
 func isDuplicateMeasurement(tx *vbolt.Tx, personId int, date time.Time, measurementType MeasurementType, value float64) bool {
 	growthData := GetPersonGrowthDataTx(tx, personId)
 
 	for _, measurement := range growthData {
 		if measurement.MeasurementType == measurementType &&
 			measurement.MeasurementDate.Equal(date) &&
-			abs(measurement.Value-value) < 0.01 { // Allow small floating point differences
+			abs(measurement.Value-value) < 0.01 {
 			return true
 		}
 	}
@@ -678,7 +610,6 @@ func isDuplicateMeasurement(tx *vbolt.Tx, personId int, date time.Time, measurem
 	return false
 }
 
-// Helper function for absolute value of float64
 func abs(x float64) float64 {
 	if x < 0 {
 		return -x
@@ -686,7 +617,6 @@ func abs(x float64) float64 {
 	return x
 }
 
-// Check if milestone already exists
 func isDuplicateMilestone(tx *vbolt.Tx, personId int, date time.Time, description string) bool {
 	milestones := GetPersonMilestonesTx(tx, personId)
 
@@ -700,7 +630,6 @@ func isDuplicateMilestone(tx *vbolt.Tx, personId int, date time.Time, descriptio
 	return false
 }
 
-// Import milestones with deduplication
 func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personIdMapping map[int]int, familyId int, tagNameToId map[string]int) (int, int, []string) {
 	var errors []string
 	importedCount := 0
@@ -713,12 +642,10 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			continue
 		}
 
-		// Skip milestones with invalid dates (year 0001)
 		if milestone.MilestoneDate.Year() == 1 {
 			continue
 		}
 
-		// Check for duplicate milestone
 		if isDuplicateMilestone(tx, newPersonId, milestone.MilestoneDate, milestone.Description) {
 			skippedCount++
 			continue
@@ -735,11 +662,9 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 
 		vbolt.Write(tx, MilestoneBkt, newMilestone.Id, &newMilestone)
 
-		// Update indices
 		vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, newMilestone.Id, newMilestone.PersonId)
 		vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, newMilestone.Id, newMilestone.FamilyId)
 
-		// Apply tags
 		for _, tagName := range milestone.TagNames {
 			if tagId, ok := tagNameToId[strings.ToLower(tagName)]; ok {
 				addTagToMilestone(tx, newMilestone.Id, tagId, familyId)
@@ -752,8 +677,6 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 	return importedCount, skippedCount, errors
 }
 
-// importTags imports exported tags into the family, reusing existing tags by name (case-insensitive).
-// Returns a map of lowercase tag name → tag ID, plus imported and skipped counts.
 func importTags(tx *vbolt.Tx, exportedTags []ExportTag, familyId int) (map[string]int, int, int) {
 	tagNameToId := make(map[string]int, len(exportedTags))
 	importedCount := 0
@@ -762,7 +685,6 @@ func importTags(tx *vbolt.Tx, exportedTags []ExportTag, familyId int) (map[strin
 	for _, exportTag := range exportedTags {
 		lowerName := strings.ToLower(exportTag.Name)
 
-		// Check if a tag with this name already exists
 		existingTags := getTagsByFamily(tx, familyId)
 		var existingId int
 		for _, t := range existingTags {

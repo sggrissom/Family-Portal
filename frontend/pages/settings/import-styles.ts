@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Import Page Styles
 block(`
 .import-container {
   max-width: 800px;
@@ -282,7 +281,6 @@ block(`
 }
 `);
 
-// Filtering Interface Styles
 block(`
 .filtering-interface {
   background: var(--surface);
@@ -451,7 +449,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for import page
 block(`
 @media (max-width: 768px) {
   .import-container {
@@ -517,7 +514,6 @@ block(`
 }
 `);
 
-// Import Options Styles
 block(`
 .import-options {
   display: flex;
@@ -647,7 +643,6 @@ block(`
 }
 `);
 
-// Error styles (in addition to warnings)
 block(`
 .import-errors {
   background: var(--bg);
@@ -682,7 +677,6 @@ block(`
 }
 `);
 
-// AI Import Styles
 block(`
 .import-tabs {
   display: flex;
@@ -801,7 +795,6 @@ block(`
 }
 `);
 
-// Responsive styles for AI import
 block(`
 @media (max-width: 600px) {
   .tab-button {

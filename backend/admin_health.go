@@ -9,92 +9,49 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// The admin panel was organised by subsystem, so noticing a problem meant
-// visiting six pages and knowing what normal looked like on each. For a site
-// with one operator who checks in occasionally that is backwards: the landing
-// page should answer "is anything wrong" without a click, and the subsystem
-// pages should be where you go *after* it says yes.
-//
-// Everything here is already computed somewhere. What was missing was one place
-// that asks all of it at once and stays quiet when the answer is "nothing".
-
 func RegisterAdminHealthMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetSystemHealth)
 }
 
-// ConfigProblem is a ConfigIssue on the wire. ConfigIssue is an error type with
-// unexported-by-convention semantics; this is the flat pair the browser needs.
 type ConfigProblem struct {
 	Setting string `json:"setting"`
 	Detail  string `json:"detail"`
 }
 
-// LogProblems summarises what the log files say about the last day.
 type LogProblems struct {
-	// WindowHours is the window everything below was counted over, stated
-	// rather than assumed — the numbers mean nothing without it.
-	WindowHours int `json:"windowHours"`
-	Errors      int `json:"errors"`
-	// RecentErrors is the tail of them, newest first. Their reference codes
-	// are the join key into the log viewer's lookup.
+	WindowHours  int              `json:"windowHours"`
+	Errors       int              `json:"errors"`
 	RecentErrors []PublicLogEntry `json:"recentErrors"`
-	// Requests4xx and Requests5xx come from the HTTP timing lines. A 5xx is
-	// the app failing; a 4xx in bulk usually means something client-side is
-	// retrying against an endpoint that will never accept it.
-	Requests4xx int `json:"requests4xx"`
-	Requests5xx int `json:"requests5xx"`
-	// Unavailable is set when there are no log files at all, which is itself
-	// worth saying: it means either a fresh deploy or a logger writing nowhere.
-	Unavailable bool `json:"unavailable"`
+	Requests4xx  int              `json:"requests4xx"`
+	Requests5xx  int              `json:"requests5xx"`
+	Unavailable  bool             `json:"unavailable"`
 }
 
-// PhotoProblems counts the photo pipeline's two failure modes.
 type PhotoProblems struct {
-	Failed int `json:"failed"`
-	// Stuck is rows still marked Processing with nothing attending them. The
-	// worker sets that status when it picks a job up, so a row sitting in it an
-	// hour later was interrupted and nothing will move it on its own.
-	Stuck          int `json:"stuck"`
-	AnalysisFailed int `json:"analysisFailed"`
-	// WorkerStopped is separate from a queue depth: a backlog with a running
-	// worker is patience, a backlog without one is a problem.
-	WorkerStopped bool `json:"workerStopped"`
-	QueueLength   int  `json:"queueLength"`
+	Failed         int  `json:"failed"`
+	Stuck          int  `json:"stuck"`
+	AnalysisFailed int  `json:"analysisFailed"`
+	WorkerStopped  bool `json:"workerStopped"`
+	QueueLength    int  `json:"queueLength"`
 }
 
-// PushProblems is the subset of PushWorkerStats worth escalating to the
-// landing page. The push page itself has the rest.
 type PushProblems struct {
 	Failed      int       `json:"failed"`
 	LastError   string    `json:"lastError"`
 	LastErrorAt time.Time `json:"lastErrorAt"`
 }
 
-// HostProblems is what the box says about itself, via metrics-server. Absent
-// when host metrics are not configured or the service is not answering — a
-// metrics service that is down must not take the panel with it.
 type HostProblems struct {
-	Available bool `json:"available"`
-	// DiskUsedPct is the shared 20 GB disk, which backupctl's retention policy
-	// already exists to protect.
-	DiskUsedPct float64 `json:"diskUsedPct"`
-	DiskLow     bool    `json:"diskLow"`
-	// Proxy5xx is measured by Caddy, independently of anything this
-	// application logs about itself. It is the only number here that answers
-	// "is the site erroring for people" rather than "did the app notice".
-	Proxy5xx      int `json:"proxy5xx"`
-	Proxy4xx      int `json:"proxy4xx"`
-	WindowSeconds int `json:"windowSeconds"`
+	Available     bool    `json:"available"`
+	DiskUsedPct   float64 `json:"diskUsedPct"`
+	DiskLow       bool    `json:"diskLow"`
+	Proxy5xx      int     `json:"proxy5xx"`
+	Proxy4xx      int     `json:"proxy4xx"`
+	WindowSeconds int     `json:"windowSeconds"`
 }
 
 type SystemHealthResponse struct {
-	// Healthy is false when anything below is worth looking at. A green page
-	// has to mean something, so this is the one field the UI branches on.
-	Healthy bool `json:"healthy"`
-	// ReleaseBuild says how to read ConfigIssues: a release build refuses to
-	// start with any, so seeing them here means the environment changed under
-	// a running process. A local build logs them and carries on, and a
-	// development machine legitimately has no APNs key.
+	Healthy      bool            `json:"healthy"`
 	ReleaseBuild bool            `json:"releaseBuild"`
 	ConfigIssues []ConfigProblem `json:"configIssues"`
 	Logs         LogProblems     `json:"logs"`
@@ -103,23 +60,12 @@ type SystemHealthResponse struct {
 	Host         HostProblems    `json:"host"`
 }
 
-// healthLogWindow is how far back the landing page looks. A day is the span
-// over which "did something break" is still a question about now.
 const healthLogWindow = 24 * time.Hour
 
-// healthRecentErrors is how many error entries to carry to the page. This is a
-// "go look at this" list, not a log viewer.
 const healthRecentErrors = 5
 
-// stuckPhotoAge is how long a row may sit in Processing before it counts as
-// stranded rather than in progress.
 const stuckPhotoAge = time.Hour
 
-// GetSystemHealth answers "is anything wrong" in one call.
-//
-// It re-runs the startup configuration check live rather than reporting what
-// was true at boot, so an edited .env and a restart are reflected — and so is
-// an .env that changed *without* a restart, which is the case worth catching.
 func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -136,8 +82,6 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	resp.Logs = collectLogProblems()
 	resp.Photos = collectPhotoProblems(ctx.Tx)
 
-	// Host metrics are cached and degrade to Available=false, so this cannot
-	// slow the page down by more than the fetch timeout once every 30s.
 	host := fetchHostMetrics()
 	if host.Available {
 		resp.Host = HostProblems{
@@ -172,11 +116,6 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	return
 }
 
-// collectLogProblems reads the last day out of the log files.
-//
-// Files untouched since the cutoff are skipped entirely rather than scanned and
-// filtered: after §2.1 a day's traffic is one file, so on a normal load this
-// reads one file and stats the rest.
 func collectLogProblems() LogProblems {
 	problems := LogProblems{
 		WindowHours:  int(healthLogWindow / time.Hour),
@@ -225,8 +164,6 @@ func collectLogProblems() LogProblems {
 		}
 	}
 
-	// Files exist but none has been written to today. Nothing is wrong with
-	// the app; nothing is being logged either, which is worth not hiding.
 	if scanned == 0 {
 		problems.Unavailable = true
 		return problems
@@ -238,7 +175,6 @@ func collectLogProblems() LogProblems {
 	return problems
 }
 
-// collectPhotoProblems counts what the photo pipeline has left behind.
 func collectPhotoProblems(tx *vbolt.Tx) PhotoProblems {
 	processing := GetProcessingStats()
 	problems := PhotoProblems{

@@ -22,8 +22,6 @@ export async function fetch(route: string, prefix: string) {
     });
   }
 
-  // Only the overview is fetched up front. The other three tabs load when
-  // they are first selected — see loadTab below.
   return server.GetAnalyticsOverview({});
 }
 
@@ -37,7 +35,6 @@ export function view(
     return;
   }
 
-  // Check if user is admin (ID == 1)
   if (!currentAuth.isAdmin) {
     return (
       <div>
@@ -93,9 +90,6 @@ const useAnalyticsState = vlens.declareHook((): AnalyticsState => {
 const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
   const state = useAnalyticsState();
 
-  // Each tab's data is fetched once, the first time it is opened. The three
-  // procs behind them have existed and been registered all along; nothing was
-  // calling them, so the tabs said "Loading…" forever.
   const loadTab = async (view: AnalyticsView) => {
     if (state.loading[view]) return;
     state.loading[view] = true;
@@ -179,8 +173,6 @@ function tabData(state: AnalyticsState, view: AnalyticsView) {
   return undefined;
 }
 
-// A tab is one of three things: still fetching, failed with something worth
-// reading, or loaded. The old placeholders showed the first of those forever.
 const TabContent = ({
   state,
   view,
@@ -477,7 +469,6 @@ const SystemView = ({ data }: { data: server.SystemAnalyticsResponse }) => {
   );
 };
 
-// Simple chart components (using CSS for visualization)
 const SimpleLineChart = ({ data }: { data: server.DataPoint[] }) => {
   if (!data || data.length === 0) {
     return <div className="chart-placeholder">No data available</div>;

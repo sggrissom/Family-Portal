@@ -1,11 +1,3 @@
-// Cross-family isolation, checked one procedure at a time.
-//
-// The access helpers have their own tests, but those prove the helpers work,
-// not that every procedure calls one. This file goes the other way: it stands
-// up two unrelated families and makes the second family's user call the
-// procedures with the first family's record ids, which is exactly what an
-// attacker with an account would do. A procedure that forgets its check fails
-// here rather than in production.
 package backend
 
 import (
@@ -19,10 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// isolationFixture is two families that have nothing to do with each other.
-// Everything named `theirs` belongs to the owner's family; the outsider has
-// their own family and a person in it, so requests that need an id from both
-// sides can be built.
 type isolationFixture struct {
 	db *vbolt.DB
 
@@ -37,8 +25,8 @@ type isolationFixture struct {
 	photo      Image
 	tag        Tag
 	message    ChatMessage
-	ownPerson  Person // the outsider's own person
-	ownPhotoId int    // a photo in the outsider's family
+	ownPerson  Person
+	ownPhotoId int
 
 	activity   Activity
 	season     Season
@@ -179,9 +167,6 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 	return fx, cleanup
 }
 
-// asOutsider runs fn in a write transaction with the outsider authenticated.
-// A write transaction is used even for reads so that a procedure which mutates
-// despite the missing access would leave evidence the assertions can find.
 func (fx isolationFixture) asOutsider(t *testing.T, fn func(ctx *vbeam.Context)) {
 	t.Helper()
 
@@ -195,8 +180,6 @@ func (fx isolationFixture) asOutsider(t *testing.T, fn func(ctx *vbeam.Context))
 	})
 }
 
-// Every procedure that names a record by id must refuse an id belonging to
-// another family.
 func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -206,7 +189,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		name string
 		call func(ctx *vbeam.Context) error
 	}{
-		// People
 		{"GetPerson", func(ctx *vbeam.Context) error {
 			_, err := GetPerson(ctx, GetPersonRequest{Id: fx.person.Id})
 			return err
@@ -233,7 +215,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			})
 			return err
 		}},
-		// Growth
 		{"AddGrowthData", func(ctx *vbeam.Context) error {
 			_, err := AddGrowthData(ctx, AddGrowthDataRequest{
 				PersonId: fx.person.Id, MeasurementType: "weight", Value: 12, Unit: "kg",
@@ -257,7 +238,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			return err
 		}},
 
-		// Milestones
 		{"AddMilestone", func(ctx *vbeam.Context) error {
 			_, err := AddMilestone(ctx, AddMilestoneRequest{
 				PersonId: fx.person.Id, Description: "Injected", Category: "development",
@@ -291,7 +271,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			return err
 		}},
 
-		// Photos
 		{"GetPhoto", func(ctx *vbeam.Context) error {
 			_, err := GetPhoto(ctx, GetPhotoRequest{Id: fx.photo.Id})
 			return err
@@ -329,7 +308,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			return err
 		}},
 
-		// Tags
 		{"UpdateTag", func(ctx *vbeam.Context) error {
 			_, err := UpdateTag(ctx, UpdateTagRequest{Id: fx.tag.Id, Name: "Stolen", Color: "#000000"})
 			return err
@@ -339,13 +317,11 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			return err
 		}},
 
-		// Chat
 		{"DeleteMessage", func(ctx *vbeam.Context) error {
 			_, err := DeleteMessage(ctx, DeleteMessageRequest{Id: fx.message.Id})
 			return err
 		}},
 
-		// Sharing
 		{"GetPersonSharing", func(ctx *vbeam.Context) error {
 			_, err := GetPersonSharing(ctx, GetPersonSharingRequest{PersonId: fx.person.Id})
 			return err
@@ -363,7 +339,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			return err
 		}},
 
-		// Activities
 		{"UpdateActivity", func(ctx *vbeam.Context) error {
 			_, err := UpdateActivity(ctx, UpdateActivityRequest{Id: fx.activity.Id, Name: "Theirs", Kind: "dance"})
 			return err
@@ -490,8 +465,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 	assertOwnerDataIntact(t, fx)
 }
 
-// Procedures that name a family directly must refuse a family the caller does
-// not belong to, rather than falling back to the caller's own.
 func TestProceduresRefuseAnotherFamilyId(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -584,8 +557,6 @@ func TestProceduresRefuseAnotherFamilyId(t *testing.T) {
 	assertOwnerDataIntact(t, fx)
 }
 
-// The listing procedures take no id at all, so the question is not whether they
-// refuse but whether they return anything they shouldn't.
 func TestListingProceduresShowNothingFromAnotherFamily(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -666,8 +637,6 @@ func TestListingProceduresShowNothingFromAnotherFamily(t *testing.T) {
 	})
 }
 
-// The photo download handler is the one place bytes leave the server outside an
-// RPC, and it must be as closed as the procedures are.
 func TestServePhotoHandlerRefusesAnotherFamilysPhoto(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -694,9 +663,6 @@ func TestServePhotoHandlerRefusesAnotherFamilysPhoto(t *testing.T) {
 	}
 }
 
-// assertOwnerDataIntact confirms that nothing the outsider tried actually
-// landed: a refused call that still wrote is a worse failure than one that
-// returned the wrong error.
 func assertOwnerDataIntact(t *testing.T, fx isolationFixture) {
 	t.Helper()
 
@@ -744,16 +710,12 @@ func assertOwnerDataIntact(t *testing.T, fx isolationFixture) {
 		if event := GetEventById(tx, fx.event.Id); event.Id == 0 || event.Name != fx.event.Name {
 			t.Errorf("competition = %+v, want %q", event, fx.event.Name)
 		}
-		// The roster is the one thing an outsider could plausibly have widened
-		// rather than destroyed, so it is checked for extra rows as well.
 		if roster := GetEntryPersonIds(tx, fx.entry.Id); len(roster) != 1 || roster[0] != fx.person.Id {
 			t.Errorf("entry roster = %v, want just the owner's person", roster)
 		}
 		if appearance := GetAppearanceById(tx, fx.appearance.Id); appearance.Id == 0 {
 			t.Error("performance was deleted by an outsider")
 		}
-		// Results are replace-all, so an accepted write would have wiped the
-		// existing row rather than added to it. Both directions are checked.
 		results := GetAppearanceResults(tx, fx.appearance.Id)
 		if len(results) != 1 || results[0].Label != fx.result.Label {
 			t.Errorf("appearance results = %+v, want just %q", results, fx.result.Label)

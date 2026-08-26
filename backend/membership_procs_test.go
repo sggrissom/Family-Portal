@@ -9,8 +9,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// membershipFixture is one family with an owner and a second member, plus an
-// unrelated user in a family of their own.
 type membershipFixture struct {
 	db *vbolt.DB
 
@@ -46,7 +44,6 @@ func setupMembershipProcFixture(t *testing.T) membershipFixture {
 	return fx
 }
 
-// as runs fn in a write transaction with user authenticated.
 func (fx membershipFixture) as(t *testing.T, user User, fn func(ctx *vbeam.Context)) {
 	t.Helper()
 
@@ -83,7 +80,6 @@ func TestListFamilyMembersNamesTheOwnerAndTheCaller(t *testing.T) {
 	if len(resp.Members) != 2 {
 		t.Fatalf("listed %d members, want 2", len(resp.Members))
 	}
-	// The owner sorts first.
 	if resp.Members[0].UserId != fx.owner.Id || !resp.Members[0].IsOwner {
 		t.Errorf("first member = %+v, want the owner", resp.Members[0])
 	}
@@ -110,7 +106,6 @@ func TestListFamilyMembersRefusesAnOutsider(t *testing.T) {
 func TestLeaveFamilyDropsMembershipAndLeavesContentBehind(t *testing.T) {
 	fx := setupMembershipProcFixture(t)
 
-	// Something the departing member contributed.
 	var person Person
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		var err error
@@ -139,12 +134,10 @@ func TestLeaveFamilyDropsMembershipAndLeavesContentBehind(t *testing.T) {
 		if GetPersonById(tx, person.Id).Id == 0 {
 			t.Error("family content was deleted when a member left")
 		}
-		// Access is gone immediately.
 		updated := GetUser(tx, fx.member.Id)
 		if CanAccessFamily(tx, updated, fx.familyId, AccessView) {
 			t.Error("departed member can still read the family")
 		}
-		// They are not left family-less.
 		if updated.FamilyId == 0 || updated.FamilyId == fx.familyId {
 			t.Errorf("primary family = %d, want a new one", updated.FamilyId)
 		}
@@ -157,7 +150,6 @@ func TestLeaveFamilyDropsMembershipAndLeavesContentBehind(t *testing.T) {
 func TestLeaveFamilyKeepsAnotherFamilyAsPrimary(t *testing.T) {
 	fx := setupMembershipProcFixture(t)
 
-	// The outsider joins the family, so they belong to two.
 	var joined JoinFamilyResponse
 	fx.as(t, fx.outsider, func(ctx *vbeam.Context) {
 		var inviteCode string
@@ -168,11 +160,8 @@ func TestLeaveFamilyKeepsAnotherFamilyAsPrimary(t *testing.T) {
 		t.Fatalf("JoinFamily() success = false, error = %q", joined.Error)
 	}
 
-	// Leaving their own household falls back to the one they joined rather
-	// than minting a third.
 	own := fx.outsider.FamilyId
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		// Give the household another member so the last-member rule allows it.
 		EnsureMembershipTx(tx, fx.owner.Id, own, AccessAdmin)
 		vbolt.TxCommit(tx)
 	})

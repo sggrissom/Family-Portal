@@ -42,7 +42,6 @@ interface UnifiedTimelineProps {
   onToggleTag: (tagId: number) => void;
 }
 
-// Unified timeline item type
 type TimelineItemType = "milestone" | "measurement" | "photo" | "performance";
 
 interface TimelineItem {
@@ -71,7 +70,6 @@ export const UnifiedTimeline = ({
   const tagCache = useTagCache();
   tagCache.loadTags();
 
-  // Initialize monitoring for processing photos
   if (photos && photos.length > 0) {
     photos.forEach(photo => {
       const currentStatus = photoStatus.getStatus(photo.id);
@@ -85,10 +83,8 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Combine all data types into unified timeline items
   const timelineItems: TimelineItem[] = [];
 
-  // Add milestones
   if (visibleTypes.milestones && milestones) {
     milestones.forEach(milestone => {
       timelineItems.push({
@@ -101,7 +97,6 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Add growth measurements
   if (visibleTypes.measurements && growthData) {
     growthData.forEach(measurement => {
       timelineItems.push({
@@ -114,7 +109,6 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Add photos
   if (visibleTypes.photos && photos) {
     photos.forEach(photo => {
       timelineItems.push({
@@ -127,8 +121,6 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // A performance's time is optional; the competition start date is the same
-  // chronological fallback used by the activities views.
   if (visibleTypes.performances && performances) {
     performances.forEach(performance => {
       const date = isRealDate(performance.appearance.occurredAt)
@@ -144,14 +136,12 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Sort timeline items by date
   const sortedItems = [...timelineItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
   });
 
-  // Filter by age if selected
   const ageFilteredItems =
     selectedAgeFilter === "all"
       ? sortedItems
@@ -160,7 +150,6 @@ export const UnifiedTimeline = ({
           return ageInYears.toString() === selectedAgeFilter;
         });
 
-  // Filter by tag if selected
   const filteredItems =
     selectedTagIds.length === 0
       ? ageFilteredItems
@@ -176,7 +165,6 @@ export const UnifiedTimeline = ({
           return false;
         });
 
-  // Extract unique age years for filter options
   const ageYears = new Set<number>();
   sortedItems.forEach(item => {
     const ageInYears = getAgeInYears(item.age);
@@ -184,7 +172,6 @@ export const UnifiedTimeline = ({
   });
   const sortedAgeYears = Array.from(ageYears).sort((a, b) => a - b);
 
-  // Check if there's any data at all
   const hasAnyData = sortedItems.length > 0;
   const hasFilteredData = filteredItems.length > 0;
 
@@ -215,7 +202,6 @@ export const UnifiedTimeline = ({
 
   return (
     <div className="unified-timeline">
-      {/* Age Filter */}
       {sortedAgeYears.length > 1 && (
         <div className="age-filter">
           <button
@@ -236,7 +222,6 @@ export const UnifiedTimeline = ({
         </div>
       )}
 
-      {/* Tag Filter */}
       {tagCache.tags.length > 0 && (
         <div className="age-filter">
           {tagCache.tags.map(tag => (
@@ -255,14 +240,12 @@ export const UnifiedTimeline = ({
         </div>
       )}
 
-      {/* Item count */}
       {(selectedAgeFilter !== "all" || selectedTagIds.length > 0) && hasFilteredData && (
         <div className="filter-info">
           Showing {filteredItems.length} of {sortedItems.length} entries
         </div>
       )}
 
-      {/* Timeline Items */}
       {hasFilteredData ? (
         <div className="timeline-items">
           {filteredItems.map(item => {

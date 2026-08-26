@@ -17,12 +17,8 @@ import (
 )
 
 const (
-	// A reset link is a bearer credential sent over email, so it expires
-	// quickly relative to the refresh tokens it can be used to revoke.
 	passwordResetTokenLifetime = time.Hour
 
-	// Throttles repeat requests for one account so the endpoint cannot be used
-	// to flood somebody's inbox.
 	passwordResetRequestInterval = time.Minute
 )
 
@@ -32,8 +28,6 @@ func RegisterPasswordResetMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ResetPassword)
 }
 
-// PasswordResetToken records an outstanding reset request. Only the hash of the
-// token is stored, so a database copy does not let its holder reset accounts.
 type PasswordResetToken struct {
 	Id        int       `json:"id"`
 	UserId    int       `json:"userId"`
@@ -53,13 +47,10 @@ func PackPasswordResetToken(self *PasswordResetToken, buf *vpack.Buffer) {
 
 var PasswordResetBkt = vbolt.Bucket(&cfg.Info, "password_resets", vpack.FInt, PackPasswordResetToken)
 
-// token hash => token id
 var PasswordResetByHashBkt = vbolt.Bucket(&cfg.Info, "password_resets_by_hash", vpack.StringZ, vpack.Int)
 
-// user id => token ids
 var PasswordResetByUserIndex = vbolt.Index(&cfg.Info, "password_resets_by_user", vpack.FInt, vpack.FInt)
 
-// Request/response types
 type RequestPasswordResetRequest struct {
 	Email string `json:"email"`
 }
@@ -88,16 +79,11 @@ type ResetPasswordResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// hashResetToken derives the lookup key stored for a reset token. SHA-256 is
-// appropriate here rather than bcrypt: the token is 256 bits of entropy from a
-// CSPRNG, so it is not guessable and needs no work factor.
 func hashResetToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
-// createPasswordResetTokenTx issues a token for a user, replacing any tokens
-// already outstanding so a reset link cannot be reused after a newer request.
 func createPasswordResetTokenTx(tx *vbolt.Tx, userId int, now time.Time) (string, error) {
 	tokenString, err := generateToken(32)
 	if err != nil {
@@ -133,8 +119,6 @@ func getPasswordResetTokenTx(tx *vbolt.Tx, tokenString string) (PasswordResetTok
 	return token, token.Id != 0
 }
 
-// validatePasswordResetTokenTx returns the token only when it exists and has
-// not expired.
 func validatePasswordResetTokenTx(tx *vbolt.Tx, tokenString string, now time.Time) (PasswordResetToken, bool) {
 	if tokenString == "" {
 		return PasswordResetToken{}, false
@@ -167,8 +151,6 @@ func deleteUserPasswordResetTokensTx(tx *vbolt.Tx, userId int) {
 	}
 }
 
-// latestPasswordResetTokenTx returns the most recently issued token for a user,
-// which is what the request throttle is measured against.
 func latestPasswordResetTokenTx(tx *vbolt.Tx, userId int) (PasswordResetToken, bool) {
 	var tokenIds []int
 	vbolt.ReadTermTargets(tx, PasswordResetByUserIndex, userId, &tokenIds, vbolt.Window{})
@@ -187,8 +169,6 @@ func latestPasswordResetTokenTx(tx *vbolt.Tx, userId int) (PasswordResetToken, b
 	return newest, newest.Id != 0
 }
 
-// CleanupExpiredPasswordResetTokens removes reset tokens that can no longer be
-// redeemed. The caller supplies the clock so cleanup is deterministic in tests.
 func CleanupExpiredPasswordResetTokens(tx *vbolt.Tx, now time.Time) int {
 	var expired []PasswordResetToken
 	vbolt.IterateAll(tx, PasswordResetBkt, func(_ int, token PasswordResetToken) bool {
@@ -204,8 +184,6 @@ func CleanupExpiredPasswordResetTokens(tx *vbolt.Tx, now time.Time) int {
 	return len(expired)
 }
 
-// passwordResetSender delivers the reset link. It is a variable so tests can
-// capture the message instead of contacting an SMTP server.
 var passwordResetSender = deliverPasswordResetEmail
 
 func passwordResetLink(token string) string {
@@ -244,8 +222,6 @@ func deliverPasswordResetEmail(user User, token string) error {
 	})
 }
 
-// passwordChangedSender delivers the confirmation notice. Like the reset
-// sender it is a variable so tests can observe it without an SMTP server.
 var passwordChangedSender = deliverPasswordChangedEmail
 
 func passwordChangedBody(name string) string {
@@ -260,13 +236,6 @@ device signed in to the account has been signed out.
 `, greeting)
 }
 
-// deliverPasswordChangedEmail tells the account holder their password changed.
-// This is the only signal a user gets that somebody reset their account, so it
-// is sent after every completed reset rather than only suspicious ones.
-//
-// The notice carries no link. Recovery starts from the site, which keeps this
-// message worthless to anyone who intercepts it and keeps its shape distinct
-// from the reset mail people are asked to click.
 func deliverPasswordChangedEmail(user User) error {
 	return QueueMail(MailJob{
 		To:      user.Email,
@@ -276,9 +245,6 @@ func deliverPasswordChangedEmail(user User) error {
 	})
 }
 
-// RequestPasswordReset issues a reset link for the given address. The response
-// never reveals whether the address has an account, so it cannot be used to
-// enumerate registered users.
 func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (resp RequestPasswordResetResponse, err error) {
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
@@ -298,7 +264,6 @@ func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (
 	}
 
 	if user.Id != 0 {
-		// Throttle repeat requests without telling the caller it happened.
 		latest, found := latestPasswordResetTokenTx(ctx.Tx, user.Id)
 		throttled := found && now.Sub(latest.CreatedAt) < passwordResetRequestInterval
 
@@ -309,8 +274,6 @@ func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (
 					"userId": user.Id,
 					"error":  err.Error(),
 				})
-				// Fall through to the generic success response rather than
-				// surfacing an internal failure to an unauthenticated caller.
 				err = nil
 				token = ""
 			} else {
@@ -326,7 +289,6 @@ func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (
 				"error":  sendErr.Error(),
 			})
 		} else {
-			// Delivery happens on the mail worker, which logs its own outcome.
 			LogInfo(LogCategoryAuth, "Password reset email queued", map[string]interface{}{
 				"userId": user.Id,
 			})
@@ -339,16 +301,11 @@ func RequestPasswordReset(ctx *vbeam.Context, req RequestPasswordResetRequest) (
 	return
 }
 
-// ValidatePasswordResetToken lets the reset page tell the user a link is stale
-// before they fill in a new password.
 func ValidatePasswordResetToken(ctx *vbeam.Context, req ValidatePasswordResetTokenRequest) (resp ValidatePasswordResetTokenResponse, err error) {
 	_, resp.Valid = validatePasswordResetTokenTx(ctx.Tx, req.Token, time.Now())
 	return
 }
 
-// ResetPassword consumes a reset token and installs a new password. Every
-// refresh token for the account is revoked, so other sessions must sign in
-// again with the new credentials.
 func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPasswordResponse, err error) {
 	if err := validateNewPassword(req.Password, req.ConfirmPassword); err != nil {
 		resp.Error = err.Error()
@@ -365,7 +322,6 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 
 	user := GetUser(ctx.Tx, token.UserId)
 	if user.Id == 0 {
-		// The account disappeared after the link was issued; retire the token.
 		deletePasswordResetTokenTx(ctx.Tx, token)
 		vbolt.TxCommit(ctx.Tx)
 		resp.Error = "This reset link is invalid or has expired. Please request a new one."
@@ -379,7 +335,6 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 	}
 
 	vbolt.Write(ctx.Tx, PasswdBkt, user.Id, &hash)
-	// Retire every outstanding link, not just the one redeemed.
 	deleteUserPasswordResetTokensTx(ctx.Tx, user.Id)
 	DeleteUserRefreshTokens(ctx.Tx, user.Id)
 	vbolt.TxCommit(ctx.Tx)
@@ -389,9 +344,6 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 		"email":  redactEmail(user.Email),
 	})
 
-	// The reset itself is already durable, so a failure to notify is logged
-	// rather than reported: telling the user their reset failed would be false,
-	// and would push them into requesting another one.
 	if sendErr := passwordChangedSender(user); sendErr != nil {
 		LogErrorSimple(LogCategoryAuth, "Failed to queue password changed notice", map[string]interface{}{
 			"userId": user.Id,
@@ -403,7 +355,6 @@ func ResetPassword(ctx *vbeam.Context, req ResetPasswordRequest) (resp ResetPass
 	return
 }
 
-// validateNewPassword applies the same rules account creation uses.
 func validateNewPassword(password, confirm string) error {
 	if password == "" {
 		return errors.New("Password is required")

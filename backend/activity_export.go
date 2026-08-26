@@ -1,18 +1,3 @@
-// Exporting a family's activities.
-//
-// The bundle nests rather than listing five parallel arrays with cross
-// references. The activities tree is five levels deep (activity → season →
-// competition/routine → performance → result), and flattening it is what makes
-// import.go's milestone handling as long as it is: every flat array needs its
-// own id-remapping pass. Nested, the parent's new id is simply in scope when
-// the child is written.
-//
-// The one place that cannot nest is a performance's routine: a performance
-// belongs to both a competition and a routine, and only one of them can be its
-// parent in a tree. Performances hang under the competition — that is how a
-// results sheet arrives — and carry EntryId to rejoin the routine.
-//
-// See docs/activities-plan.md, phase 7.
 package backend
 
 import (
@@ -40,9 +25,6 @@ type ExportSeason struct {
 	Events    []ExportEvent `json:"events,omitempty"`
 }
 
-// ExportEntry carries PersonNames alongside PersonIds for the same reason
-// ExportMilestone carries PersonName: the ids mean nothing to someone reading
-// the bundle, and nothing on import depends on the names.
 type ExportEntry struct {
 	Id          int       `json:"id"`
 	Name        string    `json:"name"`
@@ -80,10 +62,6 @@ type ExportAppearance struct {
 	Results    []ExportResult `json:"results,omitempty"`
 }
 
-// ExportResult keeps Rank, OutOf, Score and PersonId as pointers so the bundle
-// distinguishes "no placement" from "first" the same way the record does.
-// Marshalling them as zero would quietly turn every award into a 0th-place
-// finish on the way back in.
 type ExportResult struct {
 	Id         int       `json:"id"`
 	Kind       string    `json:"kind"`
@@ -99,9 +77,6 @@ type ExportResult struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// buildActivityExport walks a family's activities top-down. Every read is an
-// index walk from a parent id, so the cost is proportional to what the family
-// actually recorded rather than to the size of the buckets.
 func buildActivityExport(tx *vbolt.Tx, familyId int, personNames map[int]string) []ExportActivity {
 	activities := GetFamilyActivities(tx, familyId)
 	exported := make([]ExportActivity, 0, len(activities))
@@ -121,8 +96,6 @@ func exportSeasons(tx *vbolt.Tx, activityId int, personNames map[int]string) []E
 	seasons := GetActivitySeasons(tx, activityId)
 	exported := make([]ExportSeason, 0, len(seasons))
 	for _, season := range seasons {
-		// Routine names are needed by the performances below, and reading the
-		// routines once here is cheaper than a lookup per performance.
 		entries := GetSeasonEntries(tx, season.Id)
 		entryNames := make(map[int]string, len(entries))
 		exportedEntries := make([]ExportEntry, 0, len(entries))
@@ -231,9 +204,6 @@ func exportResults(tx *vbolt.Tx, appearanceId int, personNames map[int]string) [
 	return exported
 }
 
-// namesFor drops ids it cannot resolve rather than emitting blanks. The names
-// are a reading aid; a roster naming somebody outside this family's own people
-// still round-trips on its ids.
 func namesFor(personIds []int, personNames map[int]string) []string {
 	if len(personIds) == 0 {
 		return nil
@@ -250,9 +220,6 @@ func namesFor(personIds []int, personNames map[int]string) []string {
 	return names
 }
 
-// countExportedActivities counts every record the activities tree holds, so
-// the bundle's totals say whether a season came through rather than only how
-// many programs did.
 func countExportedActivities(activities []ExportActivity) (seasons, events, entries, appearances, results int) {
 	for _, activity := range activities {
 		seasons += len(activity.Seasons)

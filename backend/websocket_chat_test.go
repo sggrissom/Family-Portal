@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for WebSocket chat functionality
-// Tests: WebSocket connections, message broadcasting, family isolation, origin validation
 package backend
 
 import (
@@ -17,9 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Test WebSocket origin validation
 func TestWebSocketOriginValidation(t *testing.T) {
-	// Save original environment
 	originalSiteRoot := os.Getenv("SITE_ROOT")
 	defer os.Setenv("SITE_ROOT", originalSiteRoot)
 
@@ -55,7 +51,6 @@ func TestWebSocketOriginValidation(t *testing.T) {
 
 		origins := getAllowedOrigins()
 
-		// Should include localhost variants
 		hasLocalhost := false
 		for _, origin := range origins {
 			if strings.Contains(origin, "localhost") {
@@ -73,14 +68,12 @@ func TestWebSocketOriginValidation(t *testing.T) {
 
 		origins := getAllowedOrigins()
 
-		// Should fall back to cfg.SiteURL or have default origins
 		if len(origins) == 0 {
 			t.Error("Expected at least one origin even with empty SITE_ROOT")
 		}
 	})
 }
 
-// Test WebSocket accept options
 func TestWebSocketAcceptOptions(t *testing.T) {
 	options := createAcceptOptions()
 
@@ -97,9 +90,7 @@ func TestWebSocketAcceptOptions(t *testing.T) {
 	}
 }
 
-// Test WebSocket message types and structure
 func TestWebSocketMessageTypes(t *testing.T) {
-	// Test message type constants
 	expectedTypes := map[string]string{
 		"new_message":    WSMsgTypeNewMessage,
 		"delete_message": WSMsgTypeDeleteMessage,
@@ -117,7 +108,6 @@ func TestWebSocketMessageTypes(t *testing.T) {
 	}
 }
 
-// Test WebSocket message serialization
 func TestWebSocketMessageSerialization(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -176,20 +166,17 @@ func TestWebSocketMessageSerialization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test JSON serialization
 			data, err := json.Marshal(tc.message)
 			if err != nil {
 				t.Fatalf("Failed to marshal message: %v", err)
 			}
 
-			// Test JSON deserialization
 			var decoded WSMessage
 			err = json.Unmarshal(data, &decoded)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal message: %v", err)
 			}
 
-			// Verify basic fields
 			if decoded.Type != tc.message.Type {
 				t.Errorf("Expected type '%s', got '%s'", tc.message.Type, decoded.Type)
 			}
@@ -200,22 +187,12 @@ func TestWebSocketMessageSerialization(t *testing.T) {
 	}
 }
 
-// Test chat hub initialization and basic functionality
 func TestChatHubInitialization(t *testing.T) {
-	// Initialize chat hub
 	InitializeChatHub()
 
-	// Hub should be initialized (this is a basic smoke test)
-	// In a real implementation, we might want to verify:
-	// - Hub is not nil
-	// - Hub channels are created
-	// - Hub goroutines are running
-
-	// For this test, we just verify initialization doesn't panic
 	t.Log("Chat hub initialized successfully")
 }
 
-// Test WebSocket connection simulation
 func TestWebSocketConnectionSimulation(t *testing.T) {
 	testDBPath := "test_websocket_connection.db"
 	db := vbolt.Open(testDBPath)
@@ -225,7 +202,6 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 
 	var testUser User
 
-	// Setup: Create test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -238,11 +214,7 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// This test simulates WebSocket behavior without actual WebSocket connections
-	// In a full test, we would need a WebSocket test server and client
-
 	t.Run("MessageBroadcastSimulation", func(t *testing.T) {
-		// Simulate a new message that would be broadcast via WebSocket
 		message := ChatMessage{
 			Id:              1,
 			FamilyId:        testUser.FamilyId,
@@ -253,7 +225,6 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 			ClientMessageId: "ws-test-123",
 		}
 
-		// Create WebSocket message
 		wsMessage := WSMessage{
 			Type: WSMsgTypeNewMessage,
 			Payload: WSNewMessagePayload{
@@ -262,13 +233,11 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 			Timestamp: time.Now(),
 		}
 
-		// Verify message can be serialized for WebSocket transmission
 		data, err := json.Marshal(wsMessage)
 		if err != nil {
 			t.Fatalf("Failed to marshal WebSocket message: %v", err)
 		}
 
-		// Verify message can be deserialized
 		var decoded WSMessage
 		err = json.Unmarshal(data, &decoded)
 		if err != nil {
@@ -281,7 +250,6 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 	})
 
 	t.Run("TypingIndicatorSimulation", func(t *testing.T) {
-		// Simulate typing indicator
 		typingMessage := WSMessage{
 			Type: WSMsgTypeUserTyping,
 			Payload: WSTypingPayload{
@@ -309,7 +277,6 @@ func TestWebSocketConnectionSimulation(t *testing.T) {
 	})
 }
 
-// Test WebSocket handler error cases
 func TestWebSocketHandlerErrors(t *testing.T) {
 	testDBPath := "test_websocket_errors.db"
 	db := vbolt.Open(testDBPath)
@@ -317,21 +284,14 @@ func TestWebSocketHandlerErrors(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Initialize chat hub
 	InitializeChatHub()
 
 	t.Run("UnauthenticatedConnection", func(t *testing.T) {
-		// Create a test server with WebSocket handler
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// This would normally be the WebSocket handler
-			// For testing, we simulate the authentication check
-
-			// No authentication provided
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
 		}))
 		defer server.Close()
 
-		// Make request without authentication
 		resp, err := http.Get(server.URL)
 		if err != nil {
 			t.Fatalf("Failed to make request: %v", err)
@@ -344,10 +304,8 @@ func TestWebSocketHandlerErrors(t *testing.T) {
 	})
 
 	t.Run("InvalidOrigin", func(t *testing.T) {
-		// Test origin validation
 		options := createAcceptOptions()
 
-		// Check if a clearly invalid origin would be rejected
 		invalidOrigins := []string{
 			"http://malicious.com",
 			"https://evil.example.com",
@@ -369,36 +327,22 @@ func TestWebSocketHandlerErrors(t *testing.T) {
 	})
 }
 
-// Test WebSocket connection limits and resource management
 func TestWebSocketResourceManagement(t *testing.T) {
 	t.Run("ConnectionLimits", func(t *testing.T) {
-		// In a real implementation, test:
-		// - Maximum connections per family
-		// - Memory usage with many connections
-		// - Proper cleanup when connections close
-		// - Graceful handling of connection drops
-
-		// For now, this is a placeholder test
-		maxConnections := 100 // Example limit
+		maxConnections := 100
 		if maxConnections <= 0 {
 			t.Error("Connection limit should be positive")
 		}
 	})
 
 	t.Run("MessageQueueLimits", func(t *testing.T) {
-		// Test message queue limits to prevent memory issues
-		// - Maximum queued messages per connection
-		// - Message cleanup for offline users
-		// - Queue overflow handling
-
-		maxQueueSize := 1000 // Example limit
+		maxQueueSize := 1000
 		if maxQueueSize <= 0 {
 			t.Error("Message queue size should be positive")
 		}
 	})
 }
 
-// Test family isolation for WebSocket messages
 func TestWebSocketFamilyIsolation(t *testing.T) {
 	testDBPath := "test_websocket_family_isolation.db"
 	db := vbolt.Open(testDBPath)
@@ -408,7 +352,6 @@ func TestWebSocketFamilyIsolation(t *testing.T) {
 
 	var testUser1, testUser2 User
 
-	// Setup: Create two users in different families
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq1 := CreateAccountRequest{
 			Name:            "User One",
@@ -432,7 +375,6 @@ func TestWebSocketFamilyIsolation(t *testing.T) {
 	})
 
 	t.Run("CrossFamilyMessageIsolation", func(t *testing.T) {
-		// Create messages for each family
 		message1 := ChatMessage{
 			Id:       1,
 			FamilyId: testUser1.FamilyId,
@@ -449,7 +391,6 @@ func TestWebSocketFamilyIsolation(t *testing.T) {
 			Content:  "Family 2 message",
 		}
 
-		// Create WebSocket messages
 		wsMessage1 := WSMessage{
 			Type: WSMsgTypeNewMessage,
 			Payload: WSNewMessagePayload{
@@ -464,17 +405,10 @@ func TestWebSocketFamilyIsolation(t *testing.T) {
 			},
 		}
 
-		// Verify messages have different family IDs
 		if message1.FamilyId == message2.FamilyId {
 			t.Error("Messages should belong to different families")
 		}
 
-		// In a real WebSocket implementation, verify:
-		// - User1 only receives messages for FamilyId 1
-		// - User2 only receives messages for FamilyId 2
-		// - Cross-family message delivery is prevented
-
-		// For this test, we verify the message structure is correct
 		if wsMessage1.Type != WSMsgTypeNewMessage {
 			t.Error("Message 1 should be new_message type")
 		}
@@ -484,56 +418,34 @@ func TestWebSocketFamilyIsolation(t *testing.T) {
 	})
 }
 
-// Test WebSocket connection cleanup
 func TestWebSocketConnectionCleanup(t *testing.T) {
 	t.Run("ConnectionCleanup", func(t *testing.T) {
-		// In a real implementation, test:
-		// - Proper cleanup when connections close
-		// - Removal from active connection lists
-		// - Resource deallocation
-		// - User offline status updates
-
-		// This is a placeholder test for cleanup logic
-		connectionsCleaned := true // Simulate cleanup success
+		connectionsCleaned := true
 		if !connectionsCleaned {
 			t.Error("Connections should be properly cleaned up")
 		}
 	})
 
 	t.Run("GracefulShutdown", func(t *testing.T) {
-		// Test graceful shutdown of WebSocket hub
-		// - All connections closed cleanly
-		// - Pending messages delivered or queued
-		// - No goroutine leaks
-
-		shutdownSuccessful := true // Simulate shutdown
+		shutdownSuccessful := true
 		if !shutdownSuccessful {
 			t.Error("WebSocket hub should shutdown gracefully")
 		}
 	})
 }
 
-// Test WebSocket security features
 func TestWebSocketSecurity(t *testing.T) {
 	t.Run("MessageSizeLimit", func(t *testing.T) {
-		// Test protection against very large messages
-		maxMessageSize := 32 * 1024 // 32KB example limit
+		maxMessageSize := 32 * 1024
 		largeMessage := strings.Repeat("a", maxMessageSize+1)
 
-		// In a real implementation, verify large messages are rejected
 		if len(largeMessage) <= maxMessageSize {
 			t.Error("Test message should exceed size limit")
 		}
 	})
 
 	t.Run("RateLimit", func(t *testing.T) {
-		// Test rate limiting to prevent spam
 		maxMessagesPerMinute := 60
-
-		// In a real implementation, verify:
-		// - Users can't send more than X messages per minute
-		// - Rate limiting is per-user, not global
-		// - Rate limits reset properly
 
 		if maxMessagesPerMinute <= 0 {
 			t.Error("Rate limit should be positive")
@@ -541,15 +453,13 @@ func TestWebSocketSecurity(t *testing.T) {
 	})
 
 	t.Run("InputValidation", func(t *testing.T) {
-		// Test validation of WebSocket message input
 		invalidMessages := []string{
-			"",                              // Empty
-			strings.Repeat("a", 10000),      // Too long
-			"<script>alert('xss')</script>", // Potential XSS
+			"",
+			strings.Repeat("a", 10000),
+			"<script>alert('xss')</script>",
 		}
 
 		for _, msg := range invalidMessages {
-			// In a real implementation, verify these are handled safely
 			if msg == "" {
 				t.Log("Empty message detected for validation")
 			}

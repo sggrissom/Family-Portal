@@ -13,10 +13,8 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// Helper function to create test image data
 func createTestImageData(width, height int) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	// Fill with a simple pattern
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			if (x+y)%2 == 0 {
@@ -33,7 +31,6 @@ func createTestImageData(width, height int) []byte {
 }
 
 func TestInitializePhotoWorker(t *testing.T) {
-	// Clean up any existing global worker
 	globalPhotoWorker = nil
 
 	testDBPath := "test_photo_worker_init.db"
@@ -63,19 +60,15 @@ func TestInitializePhotoWorker(t *testing.T) {
 	})
 
 	t.Run("Multiple initialization attempts", func(t *testing.T) {
-		// Save reference to first worker
 		firstWorker := globalPhotoWorker
 
-		// Try to initialize again
 		InitializePhotoWorker(20, db)
 
-		// Should be the same worker (not recreated)
 		if globalPhotoWorker != firstWorker {
 			t.Error("Expected worker not to be recreated on second initialization")
 		}
 	})
 
-	// Clean up
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 		globalPhotoWorker = nil
@@ -83,7 +76,6 @@ func TestInitializePhotoWorker(t *testing.T) {
 }
 
 func TestQueuePhotoProcessing(t *testing.T) {
-	// Clean up any existing global worker
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
@@ -115,7 +107,6 @@ func TestQueuePhotoProcessing(t *testing.T) {
 
 	t.Run("Queue with initialized worker", func(t *testing.T) {
 		InitializePhotoWorker(5, db)
-		// Cleanup after this subtest
 		defer func() {
 			if globalPhotoWorker != nil {
 				globalPhotoWorker.Stop()
@@ -133,14 +124,9 @@ func TestQueuePhotoProcessing(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-
-		// For this test, we expect the job to be queued successfully
-		// Note: The queue length might be 0 if the worker processes it immediately
-		// which is actually correct behavior
 	})
 
 	t.Run("Queue full", func(t *testing.T) {
-		// Create a worker with a very small queue for testing
 		InitializePhotoWorker(2, db)
 		defer func() {
 			if globalPhotoWorker != nil {
@@ -149,12 +135,10 @@ func TestQueuePhotoProcessing(t *testing.T) {
 			}
 		}()
 
-		// Stop the worker immediately to prevent job processing
 		if globalPhotoWorker != nil {
 			globalPhotoWorker.Stop()
 		}
 
-		// Fill the queue (capacity is 2)
 		for i := 1; i <= 2; i++ {
 			job := PhotoProcessingJob{
 				ImageId:  i,
@@ -167,7 +151,6 @@ func TestQueuePhotoProcessing(t *testing.T) {
 			}
 		}
 
-		// Try to add one more (should fail)
 		job := PhotoProcessingJob{
 			ImageId:  3,
 			FilePath: "test.jpg",
@@ -186,7 +169,6 @@ func TestQueuePhotoProcessing(t *testing.T) {
 		}
 	})
 
-	// Clean up
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 		globalPhotoWorker = nil
@@ -194,7 +176,6 @@ func TestQueuePhotoProcessing(t *testing.T) {
 }
 
 func TestGetQueueLength(t *testing.T) {
-	// Clean up any existing global worker
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
@@ -223,18 +204,15 @@ func TestGetQueueLength(t *testing.T) {
 	})
 
 	t.Run("Queue with jobs", func(t *testing.T) {
-		// Stop the worker temporarily to prevent processing during the test
 		if globalPhotoWorker != nil {
 			globalPhotoWorker.Stop()
 		}
 
-		// Re-initialize worker without starting the processing goroutine
 		globalPhotoWorker = &PhotoWorker{
 			jobQueue: make(chan PhotoProcessingJob, 10),
 			db:       db,
 		}
 
-		// Add some jobs
 		for i := 1; i <= 3; i++ {
 			job := PhotoProcessingJob{
 				ImageId:  i,
@@ -250,7 +228,6 @@ func TestGetQueueLength(t *testing.T) {
 		}
 	})
 
-	// Clean up
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 		globalPhotoWorker = nil
@@ -280,7 +257,6 @@ func TestPhotoWorkerStartStop(t *testing.T) {
 			t.Error("Expected worker to be running after start")
 		}
 
-		// Try to start again (should be idempotent)
 		worker.Start()
 		if !worker.isRunning() {
 			t.Error("Expected worker to still be running after second start")
@@ -294,7 +270,6 @@ func TestPhotoWorkerStartStop(t *testing.T) {
 			t.Error("Expected worker to not be running after stop")
 		}
 
-		// Try to stop again (should be idempotent)
 		worker.Stop()
 		if worker.isRunning() {
 			t.Error("Expected worker to still be stopped after second stop")
@@ -311,11 +286,10 @@ func TestUpdatePhotoStatus(t *testing.T) {
 
 	worker := &PhotoWorker{db: db}
 
-	// Create a test image in the database
 	testImage := Image{
 		Id:       1,
 		FamilyId: 1,
-		Status:   0, // Initially active
+		Status:   0,
 	}
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -324,12 +298,11 @@ func TestUpdatePhotoStatus(t *testing.T) {
 	})
 
 	t.Run("Update status successfully", func(t *testing.T) {
-		err := worker.updatePhotoStatus(testImage.Id, 1) // Set to processing
+		err := worker.updatePhotoStatus(testImage.Id, 1)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Verify status was updated
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			updated := GetImageById(tx, testImage.Id)
 			if updated.Status != 1 {
@@ -344,8 +317,6 @@ func TestUpdatePhotoStatus(t *testing.T) {
 			t.Fatal("Expected error for non-existent image")
 		}
 
-		// The sentinel matters, not the wording: processPhotoJob branches on it
-		// to clean up files for a photo that was deleted mid-processing.
 		if !errors.Is(err, errPhotoRecordGone) {
 			t.Errorf("Expected errPhotoRecordGone, got '%v'", err)
 		}
@@ -375,11 +346,10 @@ func TestUpdatePhotoComplete(t *testing.T) {
 
 	worker := &PhotoWorker{db: db}
 
-	// Create a test image in the database
 	testImage := Image{
 		Id:       1,
 		FamilyId: 1,
-		Status:   1, // Processing
+		Status:   1,
 		Width:    0,
 		Height:   0,
 	}
@@ -395,7 +365,6 @@ func TestUpdatePhotoComplete(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Verify status and dimensions were updated
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			updated := GetImageById(tx, testImage.Id)
 			if updated.Status != 0 {
@@ -411,7 +380,6 @@ func TestUpdatePhotoComplete(t *testing.T) {
 	})
 
 	t.Run("Mark as complete with zero dimensions", func(t *testing.T) {
-		// Reset image status
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			testImage.Status = 1
 			testImage.Width = 100
@@ -425,7 +393,6 @@ func TestUpdatePhotoComplete(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Verify status was updated but dimensions unchanged
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			updated := GetImageById(tx, testImage.Id)
 			if updated.Status != 0 {
@@ -442,7 +409,6 @@ func TestUpdatePhotoComplete(t *testing.T) {
 }
 
 func TestGetProcessingStats(t *testing.T) {
-	// Clean up any existing global worker
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
@@ -474,12 +440,10 @@ func TestGetProcessingStats(t *testing.T) {
 			}
 		}()
 
-		// Stop the worker to prevent processing during test setup
 		if globalPhotoWorker != nil {
 			globalPhotoWorker.Stop()
 		}
 
-		// Add jobs while worker is stopped
 		for i := 1; i <= 3; i++ {
 			job := PhotoProcessingJob{
 				ImageId:  i,
@@ -494,13 +458,11 @@ func TestGetProcessingStats(t *testing.T) {
 		if stats.QueueLength != 3 {
 			t.Errorf("Expected queue length 3, got %d", stats.QueueLength)
 		}
-		// Note: IsRunning will be false since we stopped the worker
 		if stats.IsRunning {
 			t.Error("Expected IsRunning to be false after stopping worker")
 		}
 	})
 
-	// Clean up
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 		globalPhotoWorker = nil
@@ -508,14 +470,12 @@ func TestGetProcessingStats(t *testing.T) {
 }
 
 func TestStopPhotoWorker(t *testing.T) {
-	// Clean up any existing global worker
 	if globalPhotoWorker != nil {
 		globalPhotoWorker.Stop()
 	}
 	globalPhotoWorker = nil
 
 	t.Run("Stop when no worker", func(t *testing.T) {
-		// Should not panic
 		StopPhotoWorker()
 	})
 
@@ -547,12 +507,8 @@ func TestSaveImageVariants(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Create a temporary directory for testing
 	tempDir := filepath.Join(os.TempDir(), "test_photos")
 	defer os.RemoveAll(tempDir)
-
-	// Note: cfg.StaticDir is a const, so we test the logic without modifying it
-	// The actual file operations will use the default static directory
 
 	worker := &PhotoWorker{db: db}
 
@@ -573,20 +529,14 @@ func TestSaveImageVariants(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-
-		// Note: File creation depends on cfg.StaticDir which is a constant
-		// and the actual photos directory structure. For this test, we just
-		// verify the function doesn't error, since file paths are handled
-		// by the constant configuration.
 	})
 
 	t.Run("Invalid variant key format", func(t *testing.T) {
 		invalidProcessedImages := map[string][]byte{
 			"invalid_key_format_here": createTestImageData(100, 100),
-			"thumb_webp":              createTestImageData(100, 100), // Valid one
+			"thumb_webp":              createTestImageData(100, 100),
 		}
 
-		// Should still work, just skip the invalid key
 		err := worker.saveImageVariants(job, invalidProcessedImages)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
@@ -595,7 +545,6 @@ func TestSaveImageVariants(t *testing.T) {
 }
 
 func TestPhotoProcessingJobStruct(t *testing.T) {
-	// Test that the PhotoProcessingJob struct can be created and used
 	job := PhotoProcessingJob{
 		ImageId:        123,
 		FilePath:       "/path/to/image.jpg",
@@ -625,9 +574,6 @@ func TestPhotoProcessingJobStruct(t *testing.T) {
 	}
 }
 
-// A queued job whose photo was deleted — most often because the account that
-// owned it was deleted — must write nothing back and must not leave files
-// behind. Without this the worker undoes part of an account deletion.
 func TestProcessPhotoJobDiscardsWorkForADeletedPhoto(t *testing.T) {
 	db := vbolt.Open(t.TempDir() + "/worker_deleted.db")
 	vbolt.InitBuckets(db, &cfg.Info)
@@ -635,7 +581,6 @@ func TestProcessPhotoJobDiscardsWorkForADeletedPhoto(t *testing.T) {
 
 	worker := &PhotoWorker{db: db}
 
-	// Files the upload left on disk before the record was deleted.
 	photosDir := filepath.Join(cfg.StaticDir, "photos")
 	if err := os.MkdirAll(photosDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -646,7 +591,6 @@ func TestProcessPhotoJobDiscardsWorkForADeletedPhoto(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(orphan) })
 
-	// No image row exists for this id: it was deleted after the job was queued.
 	worker.processPhotoJob(PhotoProcessingJob{
 		ImageId:  4242,
 		FamilyId: 1,

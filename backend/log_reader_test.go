@@ -13,7 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// writeLog puts a log file in a scratch directory and returns its path.
 func writeLog(t *testing.T, contents string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "family_record.log")
@@ -35,9 +34,6 @@ func scanAll(t *testing.T, contents string) []logEntry {
 	return entries
 }
 
-// TestScanLogFileParsesEveryShape covers the three shapes a log file actually
-// holds. There used to be two copies of this loop with different parse
-// strategies; this pins the one they were consolidated onto.
 func TestScanLogFileParsesEveryShape(t *testing.T) {
 	entries := scanAll(t, `2026/08/22 10:00:00 {"timestamp":"2026-08-22T10:00:00Z","level":"ERROR","category":"AUTH","message":"Login failed","data":{"requestId":"abc123"}}
 2026/08/22 10:00:01 200 POST /rpc/SendMessage ⎯⎯⎯ 12759µs [12602µs]
@@ -66,7 +62,6 @@ func TestScanLogFileParsesEveryShape(t *testing.T) {
 		t.Errorf("timing entry status = %v, want 200", timing.HTTPStatus)
 	}
 
-	// "FAILED" in the text is how a plain log.Printf gets a level at all.
 	if entries[2].Level != logLevelError {
 		t.Errorf("plain entry level = %s, want ERROR", entries[2].Level)
 	}
@@ -75,8 +70,6 @@ func TestScanLogFileParsesEveryShape(t *testing.T) {
 	}
 }
 
-// TestScanLogFileAttachesStackTraces: continuation lines belong to the entry
-// above them, and must not be mistaken for entries of their own.
 func TestScanLogFileAttachesStackTraces(t *testing.T) {
 	entries := scanAll(t, `2026/08/22 10:00:00 panic: something went wrong
 goroutine 1 [running]:
@@ -96,8 +89,6 @@ goroutine 1 [running]:
 	}
 }
 
-// TestScanLogFileStopsWhenVisitorDoes proves early exit works, which is what
-// lets a caller read a bounded prefix of a large file.
 func TestScanLogFileStopsWhenVisitorDoes(t *testing.T) {
 	seen := 0
 	err := scanLogFile(writeLog(t, `2026/08/22 10:00:00 one
@@ -115,10 +106,6 @@ func TestScanLogFileStopsWhenVisitorDoes(t *testing.T) {
 	}
 }
 
-// TestPerfAccumulatorSeesTimingLines is the regression the consolidation fixes.
-// GetLogStats used a scanner that never tried parseTimingLogLine, so every
-// duration in the file was invisible and the latency percentiles it presented
-// were computed over an always-empty set.
 func TestPerfAccumulatorSeesTimingLines(t *testing.T) {
 	perf := newPerfAccumulator()
 	err := scanLogFile(writeLog(t, `2026/08/22 10:00:00 200 GET /rpc/GetPeople ⎯⎯⎯ 1000µs
@@ -154,7 +141,6 @@ func TestPerfAccumulatorSeesTimingLines(t *testing.T) {
 		t.Errorf("POST error rate = %v, want 100 (its only request was a 500)", post.ErrorRate)
 	}
 
-	// Slowest first, so the table reads the way its heading claims.
 	if len(stats.SlowestEndpoints) != 2 || stats.SlowestEndpoints[0].Path != "/rpc/AddPhoto" {
 		t.Errorf("SlowestEndpoints = %+v", stats.SlowestEndpoints)
 	}
@@ -195,9 +181,6 @@ func TestLogFilePathRejectsEscapes(t *testing.T) {
 	}
 }
 
-// withLogDir puts files into cfg.LogDir for the procs that read the whole
-// directory, and removes exactly what it created. cfg.LogDir is a compile-time
-// constant, so there is nowhere else for them to look.
 func withLogDir(t *testing.T, files map[string]string) {
 	t.Helper()
 
@@ -229,7 +212,6 @@ func withLogDir(t *testing.T, files map[string]string) {
 	})
 }
 
-// adminContext returns a read transaction and token for user 1.
 func adminContext(t *testing.T, db *vbolt.DB) string {
 	t.Helper()
 	appDb = db
@@ -264,10 +246,6 @@ func logTestDB(t *testing.T, name string) *vbolt.DB {
 	return db
 }
 
-// TestLookupLogReferenceFindsTheEntryAndItsContext covers the workflow the
-// error design already assumed existed: ProcError mints an id, logs the real
-// cause against it, and shows the user "Reference: <id>". Until now there was
-// no way to look one up without an SSH session.
 func TestLookupLogReferenceFindsTheEntryAndItsContext(t *testing.T) {
 	withLogDir(t, map[string]string{
 		"reftest_family_record.log": `2026/08/22 10:00:00 {"timestamp":"2026-08-22T10:00:00Z","level":"INFO","category":"API","message":"Before one"}
@@ -296,11 +274,9 @@ func TestLookupLogReferenceFindsTheEntryAndItsContext(t *testing.T) {
 		if resp.File != "reftest_family_record.log" {
 			t.Errorf("File = %q", resp.File)
 		}
-		// The cause, not the sentence the user saw — that is the whole point.
 		if data, ok := resp.Entry.Data.(map[string]interface{}); !ok || data["error"] != "bolt: tx closed" {
 			t.Errorf("Entry.Data = %#v, want the logged cause", resp.Entry.Data)
 		}
-		// Context in file order, so it reads like the log does.
 		if len(resp.Before) != 2 || resp.Before[0].Message != "Before one" || resp.Before[1].Message != "Before two" {
 			t.Errorf("Before = %+v, want the two preceding entries in file order", resp.Before)
 		}
@@ -310,7 +286,6 @@ func TestLookupLogReferenceFindsTheEntryAndItsContext(t *testing.T) {
 	})
 
 	t.Run("whole pasted sentence", func(t *testing.T) {
-		// What someone actually sends you is the message, not the bare code.
 		pasted := "Something went wrong on our end. " + ReferencePrefix + "a1b2c3d4e5f6"
 		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 			resp, err := LookupLogReference(&vbeam.Context{Tx: tx, Token: token},
@@ -360,8 +335,6 @@ func TestLookupLogReferenceFindsTheEntryAndItsContext(t *testing.T) {
 	})
 }
 
-// TestGetLogContentSearchesEveryFile: an empty filename means the whole
-// directory, because the code someone mailed you is not necessarily in today's.
 func TestGetLogContentSearchesEveryFile(t *testing.T) {
 	withLogDir(t, map[string]string{
 		"searchtest_a.log": `2026/08/20 10:00:00 {"timestamp":"2026-08-20T10:00:00Z","level":"ERROR","category":"PHOTO","message":"Old failure","data":{"requestId":"aaaaaaaaaaaa"}}
@@ -383,8 +356,6 @@ func TestGetLogContentSearchesEveryFile(t *testing.T) {
 			if resp.TotalLines != 2 {
 				t.Errorf("TotalLines = %d, want 2 (one match in each file)", resp.TotalLines)
 			}
-			// Newest first is the default now: you open the log because
-			// something is wrong right now.
 			if len(resp.Entries) > 0 && resp.Entries[0].Message != "New failure" {
 				t.Errorf("first entry = %q, want the most recent", resp.Entries[0].Message)
 			}
@@ -434,8 +405,6 @@ func TestGetLogContentSearchesEveryFile(t *testing.T) {
 	})
 }
 
-// TestGetLogContentSinceHours: the viewer is almost always opened because
-// something is wrong now, so "the last N hours" has to be one field.
 func TestGetLogContentSinceHours(t *testing.T) {
 	now := time.Now().UTC()
 	recent := now.Add(-2 * time.Hour).Format(time.RFC3339)

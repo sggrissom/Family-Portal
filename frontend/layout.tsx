@@ -18,10 +18,6 @@ const useHeader = vlens.declareHook((): HeaderData => {
   };
 });
 
-// vlens exposes no route-change callback, and every routed page renders the
-// header, so this is where per-route metadata gets applied. Redraws call it far
-// more often than navigations do, hence the guard: setting the same values
-// again is harmless but pointless.
 let lastMetadataPath = "";
 
 function syncPageMetadata() {
@@ -172,10 +168,6 @@ const logoutClicked = async (event: Event) => {
   await auth.logout();
 };
 
-// Every page renders its content into <main id="app">, which is not focusable,
-// and browsers only move focus to a fragment target that can hold it. Without
-// this the link scrolls but leaves focus in the header, so the next Tab goes
-// back into the nav — exactly what the link exists to skip.
 const skipToContent = (event: Event) => {
   event.preventDefault();
   const main = document.getElementById("app");
@@ -185,11 +177,6 @@ const skipToContent = (event: Event) => {
   main.scrollIntoView();
 };
 
-// The dismissal listeners live here rather than inside menuClicked because the
-// old form built a fresh closure on every toggle and then asked
-// removeEventListener to detach it — a different function object from the one
-// open() had registered, so closing from the button left the previous listener
-// attached for good.
 let detachMenuDismissal: (() => void) | null = null;
 
 const menuClicked = (menuRef: Ref) => {
@@ -213,9 +200,6 @@ const menuClicked = (menuRef: Ref) => {
       }
     };
 
-    // On a phone the open menu covers the page, so a keyboard user who tabs
-    // past its last link lands on content they cannot see. Escape is the way
-    // out, and focus goes back to the control that opened the menu.
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       close();

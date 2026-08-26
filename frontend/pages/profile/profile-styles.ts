@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Profile Page Styles
 block(`
 .profile-container {
   max-width: 1200px;
@@ -161,7 +160,6 @@ block(`
 }
 `);
 
-// Filter Controls (replacing tabs)
 block(`
 .profile-filters {
   display: flex;
@@ -435,7 +433,6 @@ block(`
 }
 `);
 
-// Unified Timeline Styles
 block(`
 .unified-timeline {
   display: flex;
@@ -600,7 +597,6 @@ block(`
 }
 `);
 
-// Photo item specific styles
 block(`
 .photo-item-details {
   display: flex;
@@ -715,7 +711,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for profile page
 block(`
 @media (max-width: 768px) {
   .profile-container {

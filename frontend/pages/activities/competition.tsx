@@ -1,7 +1,3 @@
-// One competition: which routines performed there, and how each did.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -18,22 +14,12 @@ import "./activities-styles";
 import "./season-styles";
 import "./competition-styles";
 
-// CompetitionPageData is the competition plus what the add-performance form
-// needs: the routines in this season, and the names a result can point at.
-//
-// The routines come from GetSeasonOverview because it is the only proc that
-// lists them — GetEventDetail carries an entry per performance, which by
-// definition excludes every routine that has not performed here yet, and those
-// are exactly the ones the form is for.
 export type CompetitionPageData = {
   detail: server.GetEventDetailResponse;
   activity: server.Activity;
   entries: server.EntryView[];
   people: server.Person[];
   vocabulary: server.ListActivityVocabularyResponse;
-  // Every photo the viewer can see, not just the ones of the people on a
-  // roster. A competition weekend produces stage shots that nothing has
-  // tagged, and those are exactly the ones worth attaching.
   photos: server.PhotoWithPeople[];
 };
 
@@ -95,8 +81,6 @@ export async function fetch(
     return [null, detailErr || "Failed to load competition"];
   }
 
-  // None of these is worth failing the page over: without them the competition
-  // still reads, only the forms are short of choices.
   const [overview] = await server.GetSeasonOverview({ seasonId: detail.season.id });
   const [people] = await server.ListPeople({});
   const [vocabulary] = await server.ListActivityVocabulary({
@@ -128,18 +112,10 @@ type CompetitionState = {
   editOccurredAt: string;
   editNotes: string;
 
-  // The performance whose results are open for editing, and the rows being
-  // edited. Only one is open at a time: results are replace-all, so two open
-  // editors would be two pending overwrites of different sets.
   editingResultsFor: number;
   resultRows: ResultRow[];
 
-  // The competition's own photos, which live on the page rather than on any
-  // performance. Held in state because saving them redraws from here.
   eventPhotoIds: number[];
-  // Which photo set is open: the competition's, or one performance's. Same
-  // one-at-a-time discipline as the results editor, and for the same reason —
-  // set-photos is replace-all, so two open pickers are two pending overwrites.
   editingEventPhotos: boolean;
   editingPhotosFor: number;
   photoDraft: number[];
@@ -181,8 +157,6 @@ export function view(
 
   const event = data.detail.event;
   const state = useCompetitionState();
-  // The hook outlives a route change between two competitions, so reinitialize
-  // whenever the competition under it is a different one.
   if (!state.initialized || state.eventId !== event.id) {
     state.initialized = true;
     state.eventId = event.id;
@@ -569,8 +543,6 @@ const EditAppearanceForm = ({
   </div>
 );
 
-// ── handlers ─────────────────────────────────────────────────────────────────
-
 function dateOrNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
@@ -581,9 +553,6 @@ function onShowAddForm(state: CompetitionState, data: CompetitionPageData) {
   state.editingId = 0;
   closePhotoEditors(state);
   state.newEntryId = data.entries.length > 0 ? data.entries[0].entry.id : 0;
-  // Most performances happen on the competition's own dates, and a single-day
-  // competition has only one candidate. Prefilling saves the common case a
-  // click without hiding that the field is optional.
   state.newOccurredAt = toDateInputValue(data.detail.event.startDate);
   state.newNotes = "";
   vlens.scheduleRedraw();
@@ -604,13 +573,6 @@ function onCancelForm(state: CompetitionState) {
   state.editingId = 0;
   vlens.scheduleRedraw();
 }
-
-// ── photo handlers ───────────────────────────────────────────────────────────
-//
-// Both set-photos procs are replace-all, so the picker edits a draft copy and
-// only the Save writes it. Cancelling leaves what was already attached alone,
-// which matters more here than on the other editors: an accidental save of an
-// empty draft would silently detach a weekend's photos.
 
 function closePhotoEditors(state: CompetitionState) {
   state.editingEventPhotos = false;
@@ -662,8 +624,6 @@ async function onSaveEventPhotos(state: CompetitionState) {
   if (err || !resp) {
     state.error = err || "Failed to save photos";
   } else {
-    // The response is the authority on what stuck: a photo the caller cannot
-    // see is not attached, so the draft is not necessarily what came back.
     state.eventPhotoIds = resp.photoIds ?? [];
     closePhotoEditors(state);
   }
@@ -696,11 +656,6 @@ async function onSaveAppearancePhotos(state: CompetitionState, appearanceId: num
   vlens.scheduleRedraw();
 }
 
-// ── result handlers ──────────────────────────────────────────────────────────
-
-// rosterOf finds the people a result on this entry may narrow to. The season
-// overview carries the roster ids; ListPeople carries the names, and drops
-// anyone this viewer cannot see.
 function rosterOf(data: CompetitionPageData, entryId: number): server.Person[] {
   const entryView = data.entries.find(row => row.entry.id === entryId);
   const ids = entryView?.personIds ?? [];
@@ -753,9 +708,6 @@ async function onSaveResults(state: CompetitionState, appearanceId: number) {
   vlens.scheduleRedraw();
 }
 
-// sortAppearances mirrors appearanceOrder on the server: by the performance's
-// own time, falling back to the competition's start date when it has none,
-// ties broken by id so two entered off the same sheet keep their order.
 function sortAppearances(appearances: server.AppearanceDetail[]) {
   appearances.sort((a, b) => {
     const at = isRealDate(a.appearance.occurredAt) ? a.appearance.occurredAt : a.event.startDate;
@@ -783,9 +735,6 @@ async function onCreateAppearance(state: CompetitionState) {
     state.adding = false;
   }
   state.saving = false;
-  // A new performance needs the entry and event rows the list renders, which
-  // the create response does not carry. Reloading is one call and keeps the
-  // ordering the server's.
   if (!err && resp) {
     await reload(state);
     return;

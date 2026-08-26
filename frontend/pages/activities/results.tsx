@@ -1,8 +1,3 @@
-// Rendering a performance's results. Shared by the competition page and the
-// routine history, which show the same rows from opposite directions.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as server from "../../server";
 import "./results-styles";
@@ -34,13 +29,6 @@ function ordinal(n: number): string {
   }
 }
 
-// resultText is the one-line form of a result. The four kinds use disjoint
-// fields, so each reads differently: a placement leads with its rank, a score
-// with its number, and the two label kinds are just the label a judge wrote.
-//
-// The optional fields are `omitempty` pointers on the wire, so a missing rank
-// or field size arrives as undefined rather than null. Hence the loose checks:
-// a placement with no field size reads "1st", not "1st of undefined".
 export function resultText(result: server.Result): string {
   switch (result.kind) {
     case ResultKindPlacement: {
@@ -57,9 +45,6 @@ export function resultText(result: server.Result): string {
   }
 }
 
-// The category and the person a result narrows to are the context that makes
-// "2nd of 14" mean something, but they belong under the result rather than
-// inside it.
 function resultDetail(result: server.Result, personName: string): string {
   return [result.category, personName].filter(part => part).join(" · ");
 }

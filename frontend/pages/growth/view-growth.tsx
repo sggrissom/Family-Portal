@@ -192,8 +192,6 @@ const ViewGrowthPage = ({ growthData, person, familyMembers }: ViewGrowthPagePro
 };
 
 function splitComparisonsByType(entries: FamilyComparisonEntry[], target: server.Person) {
-  // Group relative to the target: people of the same type are "siblings"
-  // (peers), people of the other type are "parents" (the other generation).
   const sameType = entries.filter(e => e.person.type === target.type);
   const otherType = entries.filter(e => e.person.type !== target.type);
   if (target.type === server.Parent) {

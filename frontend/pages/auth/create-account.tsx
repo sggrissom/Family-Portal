@@ -44,7 +44,6 @@ export async function fetch(route: string, prefix: string) {
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const form = useCreateAccountForm();
 
-  // Check for family code in URL parameters and pre-fill if present
   if (typeof window !== "undefined" && !form.familyCode) {
     const urlParams = new URLSearchParams(window.location.search);
     const codeParam = urlParams.get("code");
@@ -92,7 +91,6 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
   }
   vlens.scheduleRedraw();
 
-  // Scroll to error message if there's an error
   if (form.error) {
     setTimeout(() => {
       const errorElement = document.querySelector(".error-message");

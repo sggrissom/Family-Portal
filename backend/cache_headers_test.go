@@ -7,9 +7,6 @@ import (
 	"testing"
 )
 
-// The site is installable, not offline-capable: there is no service worker, and
-// nothing a family owns may sit in a browser's disk cache after they walk away
-// from the machine.
 func TestPrivateEndpointsAreNotCached(t *testing.T) {
 	paths := []string{
 		"/api/export-bundle",
@@ -19,7 +16,6 @@ func TestPrivateEndpointsAreNotCached(t *testing.T) {
 		"/rpc/GetDashboard",
 		"/rpc/GetChatMessages",
 		"/internal/snapshot",
-		// A route nobody has added yet still has to be covered by the rule.
 		"/api/something-invented-next-year",
 	}
 
@@ -35,8 +31,6 @@ func TestPrivateEndpointsAreNotCached(t *testing.T) {
 	}
 }
 
-// The static frontend is content-hashed and public; the default must not reach
-// it, or every page load re-downloads the bundle.
 func TestStaticAssetsKeepTheirOwnCaching(t *testing.T) {
 	for _, path := range []string{"/", "/login", "/main-ABC123.js", "/images/og-image.png", "/manifest.json"} {
 		recorder := httptest.NewRecorder()
@@ -48,8 +42,6 @@ func TestStaticAssetsKeepTheirOwnCaching(t *testing.T) {
 	}
 }
 
-// Photos are the one authenticated response worth caching, and only in the
-// browser that asked for them.
 func TestPhotoCachingIsPrivateAndRevalidated(t *testing.T) {
 	header := photoCacheControl
 

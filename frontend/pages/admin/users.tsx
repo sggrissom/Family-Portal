@@ -25,7 +25,6 @@ export function view(
     return;
   }
 
-  // Check if user is admin (ID == 1)
   if (!currentAuth.isAdmin) {
     return (
       <div>
@@ -60,8 +59,6 @@ interface UserManagementPageProps {
   data: server.ListAllUsersResponse;
 }
 
-// Per-user outcomes, keyed by id, so one revoked account's message does not
-// appear on another's row.
 type UsersPageState = {
   busy: { [userId: number]: boolean };
   results: { [userId: number]: string };
@@ -69,10 +66,6 @@ type UsersPageState = {
 
 const useUsersPageState = vlens.declareHook((): UsersPageState => ({ busy: {}, results: {} }));
 
-// Signing someone out everywhere: for a lost phone, or a session that outlived
-// a JWT secret change. The access token is a short-lived JWT this cannot
-// recall, so the effect lands when it expires — deleting the refresh tokens is
-// what stops it being renewed, and the confirm says so.
 async function revokeSessions(state: UsersPageState, u: server.AdminUserInfo) {
   const confirmed = confirm(
     `Sign ${u.name} out of every device?\n\n` +
@@ -110,7 +103,6 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
 
   return (
     <div className="admin-page">
-      {/* Breadcrumb Navigation */}
       <div className="admin-breadcrumb">
         <a href="/admin">Admin Dashboard</a>
         <span className="breadcrumb-separator">›</span>

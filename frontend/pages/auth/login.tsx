@@ -77,11 +77,8 @@ async function onLoginClicked(form: LoginForm, event: Event) {
     form.loading = false;
 
     if (result.success) {
-      // Set auth token for future RPC calls
       rpc.setAuthHeaders({ "x-auth-token": result.token });
-      // Cache auth data
       auth.setAuth(result.auth);
-      // Redirect to dashboard
       core.setRoute("/dashboard");
     } else {
       form.error = result.error || "Login failed";
@@ -93,7 +90,6 @@ async function onLoginClicked(form: LoginForm, event: Event) {
 
   vlens.scheduleRedraw();
 
-  // Scroll to error if there is one
   if (form.error) {
     setTimeout(() => {
       const errorElement = document.querySelector(".error-message");

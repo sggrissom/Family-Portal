@@ -55,8 +55,6 @@ func TestMaskPushToken(t *testing.T) {
 	}
 }
 
-// A masked token must never be enough to send a notification with, which is the
-// whole reason the admin page shows a hint rather than the token.
 func TestMaskPushTokenDropsMostOfTheToken(t *testing.T) {
 	token := strings.Repeat("ab", 32)
 	masked := maskPushToken(token)
@@ -150,8 +148,6 @@ func TestSendAPNsNotificationRecordsFailureReason(t *testing.T) {
 	if stats.LastError != "Unregistered" {
 		t.Errorf("LastError = %q, want \"Unregistered\"", stats.LastError)
 	}
-	// Unregistered is one of the reasons that retires a token, so the counter
-	// the admin page reads must move with it.
 	if stats.Deactivated != 1 {
 		t.Errorf("Deactivated = %d, want 1", stats.Deactivated)
 	}
@@ -171,9 +167,6 @@ func TestSendAPNsNotificationRecordsFailureReason(t *testing.T) {
 	}
 }
 
-// A transport failure never reaches APNs, so there is no status or reason to
-// report; the attempt still has to be visible or the page shows nothing at all
-// for the most confusing kind of failure.
 func TestSendAPNsNotificationRecordsTransportFailure(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	device := createActivePushDevice(t, db)
@@ -203,8 +196,6 @@ func TestSendAPNsNotificationRecordsTransportFailure(t *testing.T) {
 	}
 }
 
-// The companion app routes on data.type. A test push carrying "chat_message"
-// would send it looking for a message that was never written.
 func TestTestPushUsesDistinctPayloadType(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	device := createActivePushDevice(t, db)
@@ -247,13 +238,11 @@ func TestTestPushUsesDistinctPayloadType(t *testing.T) {
 	if captured.Aps.Alert.Body != "verification ping" {
 		t.Errorf("payload alert body = %q, want the test message verbatim", captured.Aps.Alert.Body)
 	}
-	// A test must not be prefixed with a sender name the way a chat push is.
 	if strings.Contains(captured.Aps.Alert.Body, "Admin") {
 		t.Errorf("payload alert body = %q, want no sender prefix", captured.Aps.Alert.Body)
 	}
 }
 
-// A chat push must keep the payload the companion app already expects.
 func TestChatPushKeepsChatPayloadType(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	device := createActivePushDevice(t, db)
@@ -282,8 +271,6 @@ func TestChatPushKeepsChatPayloadType(t *testing.T) {
 		SenderName: "Dad",
 		Content:    "dinner is ready",
 	}
-	// Previews on, which is the case that reproduces the payload the app shipped
-	// against; the preview-off default has its own test.
 	prefs := defaultNotificationPreferences(device.UserId)
 	prefs.ShowMessageText = true
 	if err := worker.sendAPNsNotification(device, job, prefs); err != nil {
@@ -301,8 +288,6 @@ func TestChatPushKeepsChatPayloadType(t *testing.T) {
 	}
 }
 
-// The history is a debugging aid, not a log: it must stay bounded and keep the
-// newest attempts rather than the first ones seen.
 func TestRecentAttemptsAreBoundedAndNewestFirst(t *testing.T) {
 	worker := &PushWorker{}
 	globalPushWorker = worker
@@ -328,8 +313,6 @@ func TestRecentAttemptsAreBoundedAndNewestFirst(t *testing.T) {
 	}
 }
 
-// The admin page loads whether or not push is configured, so an uninitialized
-// worker has to produce a usable zero snapshot rather than panicking.
 func TestGetPushWorkerStatsWithoutWorker(t *testing.T) {
 	globalPushWorker = nil
 
@@ -345,8 +328,6 @@ func TestGetPushWorkerStatsWithoutWorker(t *testing.T) {
 	}
 }
 
-// Every proc on the push admin page exposes device tokens or can send a
-// notification, so all three must reject a non-admin caller.
 func TestPushAdminProcsRequireAdmin(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	appDb = db
@@ -411,8 +392,6 @@ func TestPushAdminProcsRequireAdmin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetPushStatus() error = %v, want nil", err)
 			}
-			// Issues must be a slice rather than nil so the client can call
-			// .length on it without a guard.
 			if resp.Issues == nil {
 				t.Error("Issues = nil, want an empty slice")
 			}
@@ -420,8 +399,6 @@ func TestPushAdminProcsRequireAdmin(t *testing.T) {
 	})
 }
 
-// An admin should get a clear reason rather than a silent no-op when push is
-// not configured at all, which is the normal state in local development.
 func TestSendTestPushNotificationRequiresRunningWorker(t *testing.T) {
 	db := openPushNotificationTestDB(t)
 	appDb = db

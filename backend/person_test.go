@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for person-related functionality
-// Tests: age calculation functions and edge cases
 package backend
 
 import (
@@ -38,7 +36,7 @@ func TestCalculateAge(t *testing.T) {
 		{
 			name:      "Birthday is tomorrow (hasn't happened yet)",
 			birthdate: time.Date(2023, 1, 16, 0, 0, 0, 0, time.UTC),
-			expected:  "11 months", // 11 months old
+			expected:  "11 months",
 		},
 		{
 			name:      "Birthday was yesterday",
@@ -58,7 +56,7 @@ func TestCalculateAge(t *testing.T) {
 		{
 			name:      "Born in leap year (Feb 29, 2020)",
 			birthdate: time.Date(2020, 2, 29, 0, 0, 0, 0, time.UTC),
-			expected:  "3 years", // Born Feb 29, 2020, should be 3 years old on Jan 15, 2024
+			expected:  "3 years",
 		},
 		{
 			name:      "Born same day different year",
@@ -93,7 +91,6 @@ func TestCalculateAge(t *testing.T) {
 }
 
 func TestCalculateAgeEdgeCases(t *testing.T) {
-	// Test edge cases around leap years and specific dates
 	tests := []struct {
 		name          string
 		birthdate     time.Time
@@ -104,31 +101,31 @@ func TestCalculateAgeEdgeCases(t *testing.T) {
 			name:          "Born Feb 29, reference Feb 28 (non-leap year)",
 			birthdate:     time.Date(2020, 2, 29, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 2, 28, 0, 0, 0, 0, time.UTC),
-			expected:      "2 years", // Birthday hasn't occurred yet in 2023
+			expected:      "2 years",
 		},
 		{
 			name:          "Born Feb 29, reference Mar 1 (non-leap year)",
 			birthdate:     time.Date(2020, 2, 29, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC),
-			expected:      "3 years", // Birthday has passed in 2023
+			expected:      "3 years",
 		},
 		{
 			name:          "Same date different year",
 			birthdate:     time.Date(2020, 5, 10, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC),
-			expected:      "3 years", // Exactly 3 years old
+			expected:      "3 years",
 		},
 		{
 			name:          "Day before birthday",
 			birthdate:     time.Date(2020, 5, 10, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 5, 9, 0, 0, 0, 0, time.UTC),
-			expected:      "2 years", // Still 2, birthday is tomorrow
+			expected:      "2 years",
 		},
 		{
 			name:          "Day after birthday",
 			birthdate:     time.Date(2020, 5, 10, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 5, 11, 0, 0, 0, 0, time.UTC),
-			expected:      "3 years", // Now 3, birthday was yesterday
+			expected:      "3 years",
 		},
 		{
 			name:          "Baby born 3 months ago",
@@ -144,7 +141,7 @@ func TestCalculateAgeEdgeCases(t *testing.T) {
 		},
 		{
 			name:          "Due date in future shows gestational weeks",
-			birthdate:     time.Date(2023, 8, 16, 0, 0, 0, 0, time.UTC), // 14 weeks ahead
+			birthdate:     time.Date(2023, 8, 16, 0, 0, 0, 0, time.UTC),
 			referenceDate: time.Date(2023, 5, 10, 0, 0, 0, 0, time.UTC),
 			expected:      "26 weeks",
 		},
@@ -187,7 +184,6 @@ func TestCalculatePersonAgePregnancyPastDue(t *testing.T) {
 func TestCalculateAgeCurrentTime(t *testing.T) {
 	now := time.Now()
 
-	// Test someone born exactly 20 years ago
 	twentyYearsAgo := now.AddDate(-20, 0, 0)
 	age := calculateAge(twentyYearsAgo)
 	expected := "20 years"
@@ -196,15 +192,12 @@ func TestCalculateAgeCurrentTime(t *testing.T) {
 		t.Errorf("calculateAge for someone born exactly 20 years ago should be %q, got %q", expected, age)
 	}
 
-	// Test someone born 1 day ago (should show months or "< 1 month")
 	oneDayAgo := now.AddDate(0, 0, -1)
 	age = calculateAge(oneDayAgo)
-	// This should be "< 1 month" since it's only been 1 day
 	if age != "< 1 month" {
 		t.Errorf("calculateAge for someone born 1 day ago should be \"< 1 month\", got %q", age)
 	}
 
-	// Test someone born 1 year and 1 day ago (should be 1 year)
 	oneYearOneDayAgo := now.AddDate(-1, 0, -1)
 	age = calculateAge(oneYearOneDayAgo)
 	expected = "1 year"
@@ -224,9 +217,7 @@ func TestGetPersonWithMilestones(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup: Create test user and person
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create user
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
 			Email:           "test@example.com",
@@ -236,11 +227,10 @@ func TestGetPersonWithMilestones(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Create person
 		personReq := AddPersonRequest{
 			Name:       "Test Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-06-15",
 		}
 		var err error
@@ -249,7 +239,6 @@ func TestGetPersonWithMilestones(t *testing.T) {
 			t.Fatalf("Failed to create test person: %v", err)
 		}
 
-		// Add some test milestones
 		milestoneReq1 := AddMilestoneRequest{
 			PersonId:    testPerson.Id,
 			Description: "First words",
@@ -276,7 +265,6 @@ func TestGetPersonWithMilestones(t *testing.T) {
 			t.Fatalf("Failed to add test milestone 2: %v", err)
 		}
 
-		// Add some test growth data
 		growthReq := AddGrowthDataRequest{
 			PersonId:        testPerson.Id,
 			MeasurementType: "height",
@@ -293,27 +281,22 @@ func TestGetPersonWithMilestones(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test GetPersonById with transaction - simulating what GetPerson procedure does
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Get the person
 		person := GetPersonById(tx, testPerson.Id)
 		if person.Id == 0 {
 			t.Fatal("Failed to retrieve person")
 		}
 
-		// Get growth data
 		growthData := GetPersonGrowthDataTx(tx, testPerson.Id)
 		if len(growthData) == 0 {
 			t.Error("Expected at least one growth data record")
 		}
 
-		// Get milestones
 		milestones := GetPersonMilestonesTx(tx, testPerson.Id)
 		if len(milestones) != 2 {
 			t.Errorf("Expected 2 milestones, got %d", len(milestones))
 		}
 
-		// Verify milestone content
 		for _, milestone := range milestones {
 			if milestone.PersonId != testPerson.Id {
 				t.Errorf("Expected milestone PersonId %d, got %d", testPerson.Id, milestone.PersonId)
@@ -331,9 +314,6 @@ func TestGetPersonWithMilestones(t *testing.T) {
 				t.Error("Expected milestone CreatedAt to be set")
 			}
 		}
-
-		// Verify that only milestones for this person are returned
-		// (this is implicitly tested by the PersonId check above, but worth noting)
 	})
 }
 
@@ -348,9 +328,7 @@ func TestMergePeople(t *testing.T) {
 	var sourcePerson Person
 	var targetPerson Person
 
-	// Setup: Create test user and two people with various data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create user
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
 			Email:           "merge@example.com",
@@ -360,11 +338,10 @@ func TestMergePeople(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Create source person (will be merged from)
 		sourceReq := AddPersonRequest{
 			Name:       "Source Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-01-15",
 		}
 		var err error
@@ -373,11 +350,10 @@ func TestMergePeople(t *testing.T) {
 			t.Fatalf("Failed to create source person: %v", err)
 		}
 
-		// Create target person (will be merged into)
 		targetReq := AddPersonRequest{
 			Name:       "Target Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-01-20",
 		}
 		targetPerson, err = AddPersonTx(tx, targetReq, testUser.FamilyId)
@@ -385,7 +361,6 @@ func TestMergePeople(t *testing.T) {
 			t.Fatalf("Failed to create target person: %v", err)
 		}
 
-		// Add milestones to source person
 		milestoneReq1 := AddMilestoneRequest{
 			PersonId:    sourcePerson.Id,
 			Description: "First words from source",
@@ -399,7 +374,6 @@ func TestMergePeople(t *testing.T) {
 			t.Fatalf("Failed to add milestone to source: %v", err)
 		}
 
-		// Add milestone to target person
 		milestoneReq2 := AddMilestoneRequest{
 			PersonId:    targetPerson.Id,
 			Description: "First words from target",
@@ -413,7 +387,6 @@ func TestMergePeople(t *testing.T) {
 			t.Fatalf("Failed to add milestone to target: %v", err)
 		}
 
-		// Add growth data to source person
 		growthReq1 := AddGrowthDataRequest{
 			PersonId:        sourcePerson.Id,
 			MeasurementType: "height",
@@ -427,7 +400,6 @@ func TestMergePeople(t *testing.T) {
 			t.Fatalf("Failed to add growth data to source: %v", err)
 		}
 
-		// Add growth data to target person
 		growthReq2 := AddGrowthDataRequest{
 			PersonId:        targetPerson.Id,
 			MeasurementType: "weight",
@@ -444,7 +416,6 @@ func TestMergePeople(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify initial state
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		sourceMilestones := GetPersonMilestonesTx(tx, sourcePerson.Id)
 		if len(sourceMilestones) != 1 {
@@ -467,10 +438,8 @@ func TestMergePeople(t *testing.T) {
 		}
 	})
 
-	// Perform merge
 	var mergedGrowthCount, mergedMilestones int
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Merge growth data
 		growthData := GetPersonGrowthDataTx(tx, sourcePerson.Id)
 		for _, gd := range growthData {
 			gd.PersonId = targetPerson.Id
@@ -479,7 +448,6 @@ func TestMergePeople(t *testing.T) {
 		}
 		mergedGrowthCount = len(growthData)
 
-		// Merge milestones
 		milestones := GetPersonMilestonesTx(tx, sourcePerson.Id)
 		for _, milestone := range milestones {
 			milestone.PersonId = targetPerson.Id
@@ -488,66 +456,55 @@ func TestMergePeople(t *testing.T) {
 		}
 		mergedMilestones = len(milestones)
 
-		// Delete source person
 		vbolt.Delete(tx, PeopleBkt, sourcePerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PersonIndex, sourcePerson.Id, -1)
 
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify merge results
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Source person should no longer exist
 		sourceFetched := GetPersonById(tx, sourcePerson.Id)
 		if sourceFetched.Id != 0 {
 			t.Error("Source person should be deleted after merge")
 		}
 
-		// Target person should still exist
 		targetFetched := GetPersonById(tx, targetPerson.Id)
 		if targetFetched.Id == 0 {
 			t.Error("Target person should still exist after merge")
 		}
 
-		// Target should now have both milestones
 		targetMilestones := GetPersonMilestonesTx(tx, targetPerson.Id)
 		if len(targetMilestones) != 2 {
 			t.Errorf("Expected 2 milestones after merge, got %d", len(targetMilestones))
 		}
 
-		// Verify all milestones belong to target
 		for _, milestone := range targetMilestones {
 			if milestone.PersonId != targetPerson.Id {
 				t.Errorf("Expected milestone PersonId %d, got %d", targetPerson.Id, milestone.PersonId)
 			}
 		}
 
-		// Target should now have both growth records
 		targetGrowth := GetPersonGrowthDataTx(tx, targetPerson.Id)
 		if len(targetGrowth) != 2 {
 			t.Errorf("Expected 2 growth records after merge, got %d", len(targetGrowth))
 		}
 
-		// Verify all growth data belongs to target
 		for _, gd := range targetGrowth {
 			if gd.PersonId != targetPerson.Id {
 				t.Errorf("Expected growth data PersonId %d, got %d", targetPerson.Id, gd.PersonId)
 			}
 		}
 
-		// Source should have no milestones
 		sourceMilestones := GetPersonMilestonesTx(tx, sourcePerson.Id)
 		if len(sourceMilestones) != 0 {
 			t.Errorf("Expected 0 source milestones after merge, got %d", len(sourceMilestones))
 		}
 
-		// Source should have no growth data
 		sourceGrowth := GetPersonGrowthDataTx(tx, sourcePerson.Id)
 		if len(sourceGrowth) != 0 {
 			t.Errorf("Expected 0 source growth records after merge, got %d", len(sourceGrowth))
 		}
 
-		// Verify merge counts
 		if mergedGrowthCount != 1 {
 			t.Errorf("Expected to merge 1 growth record, got %d", mergedGrowthCount)
 		}
@@ -567,7 +524,6 @@ func TestMergePeopleValidation(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -593,18 +549,14 @@ func TestMergePeopleValidation(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test: Cannot merge person with themselves
 	t.Run("cannot merge with self", func(t *testing.T) {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-			// Attempt to merge person with itself
 			if testPerson.Id == testPerson.Id {
 				t.Log("Correctly identified that source and target are the same")
-				// This would be caught by the validation in MergePeople procedure
 			}
 		})
 	})
 
-	// Test: Cannot merge non-existent person
 	t.Run("cannot merge non-existent person", func(t *testing.T) {
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			nonExistentPerson := GetPersonById(tx, 99999)

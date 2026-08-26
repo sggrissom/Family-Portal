@@ -20,13 +20,11 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// PhotoAnalysisJob represents a photo queued for face analysis
 type PhotoAnalysisJob struct {
 	ImageId  int
 	FamilyId int
 }
 
-// photoAnalysisWorker manages background face recognition processing
 type photoAnalysisWorker struct {
 	workerLifecycle
 	jobQueue chan PhotoAnalysisJob
@@ -36,13 +34,11 @@ type photoAnalysisWorker struct {
 
 var globalAnalysisWorker *photoAnalysisWorker
 
-// AnalysisWorkerStats holds live stats about the face analysis worker.
 type AnalysisWorkerStats struct {
 	QueueLength int  `json:"queueLength"`
 	IsRunning   bool `json:"isRunning"`
 }
 
-// GetAnalysisWorkerStats returns live stats for the analysis worker.
 func GetAnalysisWorkerStats() AnalysisWorkerStats {
 	if globalAnalysisWorker == nil {
 		return AnalysisWorkerStats{}
@@ -53,9 +49,6 @@ func GetAnalysisWorkerStats() AnalysisWorkerStats {
 	}
 }
 
-// InitializeAnalysisWorker starts the background face analysis worker.
-// It is a no-op if face tagging is disabled in config or if the face daemon
-// socket is not reachable.
 func InitializeAnalysisWorker(db *vbolt.DB) {
 	if !cfg.EnableFaceTagging {
 		LogInfo(LogCategoryWorker, "Face tagging disabled, skipping analysis worker initialization")
@@ -67,7 +60,6 @@ func InitializeAnalysisWorker(db *vbolt.DB) {
 		return
 	}
 
-	// Verify the face daemon is reachable
 	conn, err := net.Dial("unix", cfg.FaceAnalysisSocket)
 	if err != nil {
 		LogInfo(LogCategoryWorker, "Face daemon not reachable", map[string]interface{}{
@@ -99,7 +91,6 @@ func InitializeAnalysisWorker(db *vbolt.DB) {
 	})
 }
 
-// QueuePhotoAnalysis enqueues a photo for face recognition analysis.
 func QueuePhotoAnalysis(job PhotoAnalysisJob) {
 	if globalAnalysisWorker == nil {
 		return
@@ -112,8 +103,6 @@ func QueuePhotoAnalysis(job PhotoAnalysisJob) {
 	}
 }
 
-// TriggerPersonFaceUpdate extracts and stores a face embedding from the person's
-// profile photo. Called in a goroutine after SetProfilePhoto commits.
 func TriggerPersonFaceUpdate(personId int) {
 	if globalAnalysisWorker == nil {
 		return
@@ -138,15 +127,6 @@ func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struc
 	}
 }
 
-// StopAnalysisWorker stops the face analysis worker without draining it.
-//
-// This is the one worker whose queue is deliberately abandoned. Every job in it
-// is a round trip to the dlib daemon over a socket, which is the slowest thing
-// the process does, and the output is a *suggested* tag: a photo that misses
-// analysis keeps its pixels, its date, its caption, and every tag a person
-// applied. Nothing is lost that an admin cannot regenerate with "reanalyze all
-// photos", so holding the shutdown open for it would be trading a real cost for
-// a cosmetic one.
 func StopAnalysisWorker(ctx context.Context) bool {
 	if globalAnalysisWorker == nil {
 		return true
@@ -235,7 +215,6 @@ func callEmbed(client *http.Client, imagePath string) ([]float32, error) {
 	return result.Descriptor, nil
 }
 
-// resolveImagePath returns the JPEG path for a given image ID.
 func (aw *photoAnalysisWorker) resolveImagePath(imageId int) string {
 	var imagePath string
 	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
@@ -258,15 +237,9 @@ func (aw *photoAnalysisWorker) resolveImagePath(imageId int) string {
 	return imagePath
 }
 
-// matchAndTagFaces compares detected face descriptors against known person embeddings
-// and creates PhotoPerson records for matches.
 func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptors [][]float32) {
-	// Load family members with known face descriptors
 	var knownPersons []Person
 	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
-		// Own people only. Manual tagging already refuses to join a photo to a
-		// person from another family, and face recognition must not be the one
-		// path that does it silently.
 		all := GetFamilyOwnPeople(tx, job.FamilyId)
 		for _, p := range all {
 			if len(p.FaceDescriptor) == 128 {
@@ -279,7 +252,6 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 		return
 	}
 
-	// Load existing tags to avoid duplicating manually-set tags
 	existingPersonIds := make(map[int]bool)
 	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
 		for _, pp := range GetPhotoPersonsByPhoto(tx, job.ImageId) {
@@ -287,7 +259,6 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 		}
 	})
 
-	// Match each detected face to the closest known person
 	const matchThreshold = 0.6
 	matched := make(map[int]bool)
 
@@ -313,11 +284,6 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 		matched[bestPersonId] = true
 		tagged := false
 		vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
-			// Both ends are re-read inside the write transaction. Everything
-			// above ran against a snapshot taken before the face daemon was
-			// called, and an account deletion in that window would otherwise
-			// have this worker write a join row pointing at a photo and a
-			// person that no longer exist — deleted data, quietly restored.
 			if GetImageById(tx, job.ImageId).Id == 0 || GetPersonById(tx, bestPersonId).Id == 0 {
 				return
 			}
@@ -333,7 +299,6 @@ func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptor
 	}
 }
 
-// addAutoTaggedPersonToPhoto creates a PhotoPerson record marked as auto-tagged.
 func addAutoTaggedPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) {
 	pp := PhotoPerson{
 		Id:         vbolt.NextIntId(tx, PhotoPersonBkt),
@@ -349,7 +314,6 @@ func addAutoTaggedPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyI
 	vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, pp.Id, familyId)
 }
 
-// setAnalysisStatus updates the AnalysisStatus field of an image record.
 func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error {
 	var updateErr error
 	vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
@@ -365,8 +329,6 @@ func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error 
 	return updateErr
 }
 
-// updatePersonEmbedding extracts a face descriptor from the person's profile
-// photo and stores it on the Person record.
 func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) error {
 	var imagePath string
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
@@ -418,7 +380,6 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 	return nil
 }
 
-// faceEuclideanDistance computes the euclidean distance between two face descriptors.
 func faceEuclideanDistance(a, b []float32) float64 {
 	var sum float64
 	for i := range a {

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Photos Tab Styles
 block(`
 .photos-gallery {
   min-height: 300px;
@@ -142,7 +141,6 @@ block(`
 }
 `);
 
-// Responsive Design
 block(`
 @media (max-width: 768px) {
   .photos-gallery {

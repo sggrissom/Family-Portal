@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for chat functionality
-// Tests: message database operations, family isolation, data persistence
 package backend
 
 import (
@@ -15,7 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Test chat message database operations
 func TestChatMessageDatabaseOperations(t *testing.T) {
 	testDBPath := "test_chat_db.db"
 	db := vbolt.Open(testDBPath)
@@ -26,7 +23,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 	var testUser User
 	var familyId int
 
-	// Setup: Create test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -43,7 +39,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 	t.Run("StoreAndRetrieveMessage", func(t *testing.T) {
 		var messageId int
 
-		// Store a message
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			message := ChatMessage{
 				FamilyId:        familyId,
@@ -54,11 +49,9 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 				ClientMessageId: "client-123",
 			}
 
-			// Simulate adding a chat message
 			message.Id = vbolt.NextIntId(tx, ChatMessagesBkt)
 			vbolt.Write(tx, ChatMessagesBkt, message.Id, &message)
 
-			// Update indices
 			vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message.Id, message.FamilyId)
 			vbolt.SetTargetSingleTerm(tx, ChatMessagesByUserIndex, message.Id, message.UserId)
 
@@ -66,7 +59,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 			vbolt.TxCommit(tx)
 		})
 
-		// Retrieve the message
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			storedMessage := GetChatMessageById(tx, messageId)
 
@@ -94,7 +86,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 	t.Run("GetFamilyChatMessages", func(t *testing.T) {
 		var messageIds []int
 
-		// Store multiple messages
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			messages := []string{
 				"First message",
@@ -115,7 +106,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 				message.Id = vbolt.NextIntId(tx, ChatMessagesBkt)
 				vbolt.Write(tx, ChatMessagesBkt, message.Id, &message)
 
-				// Update indices
 				vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message.Id, message.FamilyId)
 				vbolt.SetTargetSingleTerm(tx, ChatMessagesByUserIndex, message.Id, message.UserId)
 
@@ -125,7 +115,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 			vbolt.TxCommit(tx)
 		})
 
-		// Retrieve family messages
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			messages := GetFamilyChatMessages(tx, familyId, 10, 0)
 
@@ -133,7 +122,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 				t.Errorf("Expected at least 3 messages, got %d", len(messages))
 			}
 
-			// Verify messages belong to the correct family
 			for _, message := range messages {
 				if message.FamilyId != familyId {
 					t.Errorf("Message belongs to wrong family: %d vs %d", message.FamilyId, familyId)
@@ -143,7 +131,6 @@ func TestChatMessageDatabaseOperations(t *testing.T) {
 	})
 }
 
-// Test family isolation for chat messages
 func TestChatMessageFamilyIsolation(t *testing.T) {
 	testDBPath := "test_chat_isolation.db"
 	db := vbolt.Open(testDBPath)
@@ -154,7 +141,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 	var testUser1, testUser2 User
 	var family1Id, family2Id int
 
-	// Setup: Create two users in different families
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq1 := CreateAccountRequest{
 			Name:            "User One",
@@ -179,9 +165,7 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Store messages for both families
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Family 1 message
 		message1 := ChatMessage{
 			FamilyId:        family1Id,
 			UserId:          testUser1.Id,
@@ -194,7 +178,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 		vbolt.Write(tx, ChatMessagesBkt, message1.Id, &message1)
 		vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message1.Id, message1.FamilyId)
 
-		// Family 2 message
 		message2 := ChatMessage{
 			FamilyId:        family2Id,
 			UserId:          testUser2.Id,
@@ -210,7 +193,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test family 1 isolation
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		family1Messages := GetFamilyChatMessages(tx, family1Id, 10, 0)
 
@@ -222,7 +204,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 			t.Errorf("Expected 'Family 1 message', got '%s'", family1Messages[0].Content)
 		}
 
-		// Verify no cross-family contamination
 		for _, message := range family1Messages {
 			if message.FamilyId != family1Id {
 				t.Errorf("Family 1 query returned message from family %d", message.FamilyId)
@@ -230,7 +211,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 		}
 	})
 
-	// Test family 2 isolation
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		family2Messages := GetFamilyChatMessages(tx, family2Id, 10, 0)
 
@@ -242,7 +222,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 			t.Errorf("Expected 'Family 2 message', got '%s'", family2Messages[0].Content)
 		}
 
-		// Verify no cross-family contamination
 		for _, message := range family2Messages {
 			if message.FamilyId != family2Id {
 				t.Errorf("Family 2 query returned message from family %d", message.FamilyId)
@@ -251,7 +230,6 @@ func TestChatMessageFamilyIsolation(t *testing.T) {
 	})
 }
 
-// Test chat message data persistence
 func TestChatMessagePersistence(t *testing.T) {
 	testDBPath := "test_chat_persistence.db"
 	db := vbolt.Open(testDBPath)
@@ -263,7 +241,6 @@ func TestChatMessagePersistence(t *testing.T) {
 	var messageId int
 	testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
 
-	// Setup and store message
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -291,12 +268,10 @@ func TestChatMessagePersistence(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Close and reopen database to test persistence
 	db.Close()
 	db = vbolt.Open(testDBPath)
 	vbolt.InitBuckets(db, &cfg.Info)
 
-	// Verify message persisted
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		persistedMessage := GetChatMessageById(tx, messageId)
 
@@ -315,7 +290,6 @@ func TestChatMessagePersistence(t *testing.T) {
 	})
 }
 
-// Test message content validation scenarios
 func TestChatMessageContentValidation(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -363,7 +337,6 @@ func TestChatMessageContentValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Simple validation logic (trim whitespace and check if empty)
 			trimmed := strings.TrimSpace(tc.content)
 			isValid := trimmed != ""
 
@@ -375,7 +348,6 @@ func TestChatMessageContentValidation(t *testing.T) {
 	}
 }
 
-// Test message indexing functionality
 func TestChatMessageIndexing(t *testing.T) {
 	testDBPath := "test_chat_indexing.db"
 	db := vbolt.Open(testDBPath)
@@ -385,7 +357,6 @@ func TestChatMessageIndexing(t *testing.T) {
 
 	var testUser User
 
-	// Setup
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -400,7 +371,6 @@ func TestChatMessageIndexing(t *testing.T) {
 
 	var messageIds []int
 
-	// Store messages and verify indexing
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for i := 0; i < 5; i++ {
 			message := ChatMessage{
@@ -415,7 +385,6 @@ func TestChatMessageIndexing(t *testing.T) {
 			message.Id = vbolt.NextIntId(tx, ChatMessagesBkt)
 			vbolt.Write(tx, ChatMessagesBkt, message.Id, &message)
 
-			// Update indices
 			vbolt.SetTargetSingleTerm(tx, ChatMessagesByFamilyIndex, message.Id, message.FamilyId)
 			vbolt.SetTargetSingleTerm(tx, ChatMessagesByUserIndex, message.Id, message.UserId)
 
@@ -425,7 +394,6 @@ func TestChatMessageIndexing(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test family index
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		var familyMessageIds []int
 		vbolt.ReadTermTargets(tx, ChatMessagesByFamilyIndex, testUser.FamilyId, &familyMessageIds, vbolt.Window{})
@@ -434,7 +402,6 @@ func TestChatMessageIndexing(t *testing.T) {
 			t.Errorf("Expected 5 messages in family index, got %d", len(familyMessageIds))
 		}
 
-		// Verify all stored message IDs are in the index
 		for _, storedId := range messageIds {
 			found := false
 			for _, indexId := range familyMessageIds {
@@ -449,7 +416,6 @@ func TestChatMessageIndexing(t *testing.T) {
 		}
 	})
 
-	// Test user index
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		var userMessageIds []int
 		vbolt.ReadTermTargets(tx, ChatMessagesByUserIndex, testUser.Id, &userMessageIds, vbolt.Window{})
@@ -458,7 +424,6 @@ func TestChatMessageIndexing(t *testing.T) {
 			t.Errorf("Expected 5 messages in user index, got %d", len(userMessageIds))
 		}
 
-		// Verify all stored message IDs are in the index
 		for _, storedId := range messageIds {
 			found := false
 			for _, indexId := range userMessageIds {
@@ -474,8 +439,6 @@ func TestChatMessageIndexing(t *testing.T) {
 	})
 }
 
-// Chat paging reads back from the newest message, so a limit smaller than the
-// history returns the latest page rather than the family's first messages.
 func TestChatMessagePaging(t *testing.T) {
 	testDBPath := "test_chat_paging_db.db"
 	db := vbolt.Open(testDBPath)
@@ -499,7 +462,6 @@ func TestChatMessagePaging(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// 25 messages, "msg-1" oldest through "msg-25" newest.
 	const total = 25
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for i := 1; i <= total; i++ {
@@ -535,8 +497,6 @@ func TestChatMessagePaging(t *testing.T) {
 
 	t.Run("FirstPageIsTheNewestMessages", func(t *testing.T) {
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-			// Oldest-first within the page: the page is cut from the recent end,
-			// but reading order is still chronological.
 			expect(t, GetFamilyChatMessages(tx, familyId, 5, 0),
 				[]string{"msg-21", "msg-22", "msg-23", "msg-24", "msg-25"})
 		})

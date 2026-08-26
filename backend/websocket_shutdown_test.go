@@ -10,8 +10,6 @@ import (
 	"github.com/coder/websocket"
 )
 
-// newShutdownTestHub gives each test its own hub and puts the global back
-// afterwards, since a lot of this package reaches for globalChatHub.
 func newShutdownTestHub(t *testing.T) *ChatHub {
 	t.Helper()
 
@@ -21,8 +19,6 @@ func newShutdownTestHub(t *testing.T) *ChatHub {
 	return hub
 }
 
-// serveTestClient upgrades one connection and registers it with the hub the way
-// HandleWebSocketChat does, minus the authentication the hub itself never sees.
 func serveTestClient(t *testing.T, hub *ChatHub, familyId int) *httptest.Server {
 	t.Helper()
 
@@ -55,9 +51,6 @@ func serveTestClient(t *testing.T, hub *ChatHub, familyId int) *httptest.Server 
 	return server
 }
 
-// A hijacked WebSocket is invisible to http.Server.Shutdown, so without the
-// hub's own close pass the process exits with the socket simply severed. The
-// client should see a Going Away close frame instead.
 func TestShutdownClosesChatConnectionsWithGoingAway(t *testing.T) {
 	hub := newShutdownTestHub(t)
 	server := serveTestClient(t, hub, 42)
@@ -73,16 +66,11 @@ func TestShutdownClosesChatConnectionsWithGoingAway(t *testing.T) {
 
 	waitForHubClients(t, hub, 1)
 
-	// Read on its own goroutine, the way a browser does. A peer that is not
-	// reading cannot echo the close frame, and the handshake — and so the
-	// unregister the hub is waiting for — stalls until the budget runs out.
 	readErrs := make(chan error, 1)
 	go func() {
 		readCtx, cancelRead := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelRead()
 		for {
-			// The hub sends presence messages of its own; keep reading until
-			// the connection actually ends.
 			if _, _, err := conn.Read(readCtx); err != nil {
 				readErrs <- err
 				return
@@ -107,8 +95,6 @@ func TestShutdownClosesChatConnectionsWithGoingAway(t *testing.T) {
 	}
 }
 
-// Once shutdown has begun, a client that reconnects must be refused rather than
-// accepted into a hub that is on its way out.
 func TestShutdownRefusesNewConnections(t *testing.T) {
 	hub := newShutdownTestHub(t)
 	server := serveTestClient(t, hub, 42)
@@ -129,8 +115,6 @@ func TestShutdownRefusesNewConnections(t *testing.T) {
 	}
 }
 
-// Shutting down with nothing connected must return immediately rather than
-// spend the budget waiting for clients that do not exist.
 func TestShutdownOnAnIdleHubIsImmediate(t *testing.T) {
 	hub := newShutdownTestHub(t)
 
@@ -146,8 +130,6 @@ func TestShutdownOnAnIdleHubIsImmediate(t *testing.T) {
 	}
 }
 
-// ShutdownChatHub is what the server calls, and it must tolerate a process that
-// never initialized a hub at all.
 func TestShutdownChatHubWithoutAHub(t *testing.T) {
 	previous := globalChatHub
 	globalChatHub = nil

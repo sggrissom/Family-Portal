@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Analytics-specific color variables (extending admin theme)
 block(`
 :root {
   --analytics-primary: #6366f1;
@@ -33,7 +32,6 @@ block(`
 }
 `);
 
-// Main analytics container
 block(`
 .analytics-container {
   max-width: 1400px;
@@ -51,7 +49,6 @@ block(`
 }
 `);
 
-// Analytics header
 block(`
 .analytics-header {
   background: linear-gradient(135deg, var(--analytics-primary) 0%, var(--analytics-secondary) 100%);
@@ -102,7 +99,6 @@ block(`
 }
 `);
 
-// Analytics controls
 block(`
 .analytics-controls {
   display: flex;
@@ -166,7 +162,6 @@ block(`
 }
 `);
 
-// Analytics content area
 block(`
 .analytics-content {
   display: flex;
@@ -175,7 +170,6 @@ block(`
 }
 `);
 
-// Metrics grid
 block(`
 .metrics-grid {
   display: grid;
@@ -248,7 +242,6 @@ block(`
 }
 `);
 
-// Charts grid
 block(`
 .charts-grid {
   display: grid;
@@ -278,7 +271,6 @@ block(`
 }
 `);
 
-// Simple chart implementations
 block(`
 .chart-placeholder {
   display: flex;
@@ -583,7 +575,6 @@ block(`
 }
 `);
 
-// Health indicators
 block(`
 .health-indicators {
   display: flex;
@@ -635,7 +626,6 @@ block(`
 }
 `);
 
-// Retention metrics
 block(`
 .retention-metrics {
   display: grid;
@@ -677,7 +667,6 @@ block(`
 }
 `);
 
-// Table card
 block(`
 .table-card {
   background: var(--surface);
@@ -758,7 +747,6 @@ block(`
 }
 `);
 
-// Family content list
 block(`
 .family-content-list {
   display: flex;
@@ -793,7 +781,6 @@ block(`
 }
 `);
 
-// Error analysis
 block(`
 .error-summary {
   background: var(--bg);
@@ -886,7 +873,6 @@ block(`
 }
 `);
 
-// Responsive design
 block(`
 @media (max-width: 1200px) {
   .charts-grid {

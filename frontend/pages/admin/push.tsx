@@ -8,13 +8,9 @@ import { logWarn } from "../../lib/logger";
 import "./admin-styles";
 import "./push-styles";
 
-// The last N delivery attempts the server keeps in memory. Mirrors
-// maxRecentPushAttempts in push_worker.go; used only for the note above the table.
 const RECENT_ATTEMPT_LIMIT = 50;
 
 type PushPageState = {
-  // status starts null and is replaced by each poll, so the counters and
-  // delivery history stay live while you wait for a test push to land.
   status: server.GetPushStatusResponse | null;
   devices: server.AdminPushDevice[] | null;
   isSending: boolean;
@@ -113,8 +109,6 @@ export function view(
   );
 }
 
-// Go's zero time serializes as year 1; treat anything at or before it as "never
-// happened" rather than rendering a 1-1-1 date.
 function formatTimestamp(value: string): string {
   if (!value) return "Never";
   const date = new Date(value);
@@ -160,8 +154,6 @@ const PushPage = ({ data }: PushPageProps) => {
   if (!state.pollingStarted) {
     state.pollingStarted = true;
     loadDevices();
-    // A test send lands asynchronously, so the counters and history below only
-    // become useful if they refresh on their own while you watch the phone.
     setInterval(() => {
       loadStatus();
       loadDevices();

@@ -7,13 +7,6 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import "./admin-styles";
 import "./app-versions-styles";
 
-// The companion app asks /api/mobile-version before it shows a login screen, and
-// acts on the answer: below the minimum it refuses to continue and sends the
-// person to the store URL set here. Until this page existed those values could
-// only be set by calling the proc by hand, which meant nobody could see what was
-// live — and a minimum version raised past the newest build locks every install
-// out at once.
-
 const emptyVersions: server.AdminGetMobileVersionsResponse = { platforms: [] };
 
 export async function fetch(route: string, prefix: string) {
@@ -134,9 +127,6 @@ const useVersionForm = vlens.declareHook(
   })
 );
 
-// The server validates all of this again, and is the authority. Saving is
-// deliberately one button per platform rather than per field: a URL and a
-// minimum version only make sense together.
 async function onSave(platform: string, form: VersionForm, event: Event) {
   event.preventDefault();
 
@@ -167,8 +157,6 @@ const platformLabels: Record<string, string> = {
   android: "Android",
 };
 
-// "a, b, or c" — the allowlist is three hosts long for iOS, and joining it with
-// bare "or" reads like a run-on.
 function hostList(hosts: string[]): string {
   if (hosts.length < 2) {
     return hosts[0] || "";
@@ -188,8 +176,6 @@ const PlatformForm = ({ platform }: { platform: server.AdminMobileVersionPlatfor
     platform.updateMessage
   );
   const label = platformLabels[platform.platform] || platform.platform;
-  // The page's data was fetched before any save on it, so a row written just now
-  // would otherwise still read "no policy" underneath the fields that set it.
   const configured = platform.configured || form.saved;
 
   return (

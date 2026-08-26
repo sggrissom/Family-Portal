@@ -29,7 +29,6 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// familyId names the family to import into; absent or blank means primary.
 	var requestedFamilyId int
 	if familyIdStr := r.FormValue("familyId"); familyIdStr != "" {
 		parsed, convErr := strconv.Atoi(familyIdStr)
@@ -59,7 +58,6 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find and parse data.json
 	var importData ImportDataStructure
 	found := false
 	for _, zf := range zipReader.File {
@@ -113,7 +111,6 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		resp.ImportedTags = importedTags
 		resp.SkippedTags = skippedTags
 
-		// Build old tag ID → new tag ID mapping
 		tagIdMapping := make(map[int]int)
 		for _, exportTag := range importData.Tags {
 			lowerName := strings.ToLower(exportTag.Name)
@@ -145,7 +142,6 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			resp.SkippedPhotos = skipped
 			photoIdMapping = mapping
 
-			// Restore profile photos
 			for _, importPerson := range importData.People {
 				if importPerson.ImageId == 0 {
 					continue
@@ -168,9 +164,6 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Activities go in after photos, so the photo joins have a mapping to
-		// resolve against. A bundle exported with photos and restored without
-		// them still restores the season; only the joins are missing.
 		if len(importData.Activities) > 0 {
 			counts, activityWarnings := importActivities(tx, importData.Activities, familyId, personIdMapping, photoIdMapping)
 			resp.ImportedActivities = counts
@@ -201,7 +194,6 @@ func importPhotos(
 	zipReader *zip.Reader,
 ) (imported, skipped int, photoIdMapping map[int]int) {
 	photoIdMapping = make(map[int]int)
-	// Build a lookup map for ZIP entries
 	zipFiles := make(map[string]*zip.File, len(zipReader.File))
 	for _, zf := range zipReader.File {
 		zipFiles[zf.Name] = zf
@@ -214,7 +206,6 @@ func importPhotos(
 			continue
 		}
 
-		// Derive FilePath by stripping _original suffix
 		fileName := filepath.Base(photo.ZipPath)
 		ext := filepath.Ext(fileName)
 		base := strings.TrimSuffix(fileName, ext)
@@ -223,7 +214,6 @@ func importPhotos(
 
 		mimeType := zipExtToMime(ext)
 
-		// Write photo file to disk
 		diskPath := filepath.Join(cfg.StaticDir, photo.ZipPath)
 		if err := writeZipEntryToDisk(zf, diskPath); err != nil {
 			log.Printf("[IMPORT] Failed to write photo %s: %v", diskPath, err)
@@ -231,7 +221,6 @@ func importPhotos(
 			continue
 		}
 
-		// Remap tag IDs
 		var newTagIds []int
 		for _, oldTagId := range photo.TagIds {
 			if newId, ok := tagIdMapping[oldTagId]; ok {
@@ -239,7 +228,6 @@ func importPhotos(
 			}
 		}
 
-		// Create Image record
 		var image Image
 		image.Id = vbolt.NextIntId(tx, ImagesBkt)
 		image.FamilyId = familyId
@@ -256,12 +244,10 @@ func importPhotos(
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		photoIdMapping[photo.Id] = image.Id
 
-		// Apply tags
 		for _, tagId := range newTagIds {
 			addTagToPhoto(tx, image.Id, tagId, familyId)
 		}
 
-		// Link people
 		for _, oldPersonId := range photo.PersonIds {
 			if newPersonId, ok := personIdMapping[oldPersonId]; ok {
 				AddPersonToPhoto(tx, image.Id, newPersonId, familyId)

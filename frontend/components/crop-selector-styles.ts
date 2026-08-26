@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Modal overlay
 block(`
 .crop-selector-modal {
   position: fixed;
@@ -18,7 +17,6 @@ block(`
 }
 `);
 
-// Modal content
 block(`
 .crop-selector-content {
   background: var(--surface);
@@ -31,7 +29,6 @@ block(`
 }
 `);
 
-// Header
 block(`
 .crop-selector-header {
   padding: 1.5rem;
@@ -56,7 +53,6 @@ block(`
 }
 `);
 
-// Body
 block(`
 .crop-selector-body {
   padding: 1.5rem;
@@ -66,7 +62,6 @@ block(`
 }
 `);
 
-// Crop container
 block(`
 .crop-container {
   position: relative;
@@ -111,7 +106,6 @@ block(`
 }
 `);
 
-// Overlay with circular cutout
 block(`
 .crop-overlay {
   position: absolute;
@@ -136,7 +130,6 @@ block(`
 }
 `);
 
-// Preview section
 block(`
 .crop-preview-section {
   display: flex;
@@ -165,7 +158,6 @@ block(`
 }
 `);
 
-// Controls
 block(`
 .crop-controls {
   padding: 0 1.5rem;
@@ -204,7 +196,6 @@ block(`
 }
 `);
 
-// Action buttons
 block(`
 .crop-selector-actions {
   padding: 1.5rem;
@@ -240,7 +231,6 @@ block(`
 }
 `);
 
-// Responsive
 block(`
 @media (max-width: 480px) {
   .crop-selector-content {

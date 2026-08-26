@@ -86,8 +86,6 @@ const ForgotPasswordPage = ({ form }: ForgotPasswordPageProps) => (
   </div>
 );
 
-// The confirmation deliberately does not say whether an account exists, so the
-// page cannot be used to discover which addresses are registered.
 const ResetRequested = ({ email }: { email: string }) => (
   <div>
     <div className="auth-header">

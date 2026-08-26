@@ -1,8 +1,3 @@
-// Tests for Stage 4 of the multi-family plan: person identity is split from
-// family roster. The three things that must hold are that one Person record can
-// appear on two rosters with a different role on each, that sharing creates no
-// duplicate person, and that the backfill puts every existing person on their
-// home family's roster without doing it twice.
 package backend
 
 import (
@@ -17,9 +12,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// personFamilyFixture is one person whose home family is A, also placed on
-// family B's roster with a different role. `both` is a member of A and B with A
-// primary; `soloB` belongs only to B.
 type personFamilyFixture struct {
 	db     *vbolt.DB
 	both   User
@@ -35,8 +27,6 @@ func setupPersonFamilyFixture(t *testing.T) (personFamilyFixture, func()) {
 	testDBPath := "test_person_family.db"
 	db := vbolt.Open(testDBPath)
 	vbolt.InitBuckets(db, &cfg.Info)
-	// Proc-level tests mint a JWT, and generateAuthJwt writes its refresh token
-	// through the package-level handle.
 	previousDb := appDb
 	appDb = db
 	cleanup := func() {
@@ -58,14 +48,12 @@ func setupPersonFamilyFixture(t *testing.T) (personFamilyFixture, func()) {
 		EnsureMembershipTx(tx, fx.both.Id, fx.famB, AccessAdmin)
 
 		var err error
-		// A parent in their own household...
 		fx.shared, err = AddPersonTx(tx, AddPersonRequest{
 			Name: "Dana", PersonType: int(Parent), Gender: 1, Birthdate: "1990-04-20",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx: %v", err)
 		}
-		// ...and a child on their own parents' roster.
 		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
 
 		vbolt.TxCommit(tx)
@@ -85,7 +73,6 @@ func countPeople(t *testing.T, db *vbolt.DB) (count int) {
 	return
 }
 
-// The headline exit criterion: one record, two rosters, two roles.
 func TestPersonAppearsOnTwoRostersWithDifferentRoles(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -111,7 +98,6 @@ func TestPersonAppearsOnTwoRostersWithDifferentRoles(t *testing.T) {
 			t.Errorf("extended roster role = %v, want Child", rosterB[0].Type)
 		}
 
-		// The home family is derived from Person.FamilyId, never stored twice.
 		if rosterB[0].FamilyId != fx.famA {
 			t.Errorf("extended roster changed the home family to %d, want %d",
 				rosterB[0].FamilyId, fx.famA)
@@ -119,7 +105,6 @@ func TestPersonAppearsOnTwoRostersWithDifferentRoles(t *testing.T) {
 	})
 }
 
-// Sharing is a roster row, not a copy of the person.
 func TestSharingCreatesNoDuplicatePerson(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -128,7 +113,6 @@ func TestSharingCreatesNoDuplicatePerson(t *testing.T) {
 		t.Fatalf("expected 1 person record after sharing, got %d", got)
 	}
 
-	// Re-sharing is idempotent: no second roster row, and still no second person.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
 		vbolt.TxCommit(tx)
@@ -144,8 +128,6 @@ func TestSharingCreatesNoDuplicatePerson(t *testing.T) {
 	})
 }
 
-// A user who can see both rosters sees the person once, with the role from
-// their own household rather than an arbitrary one.
 func TestVisiblePeopleDeduplicatesSharedPerson(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -159,8 +141,6 @@ func TestVisiblePeopleDeduplicatesSharedPerson(t *testing.T) {
 			t.Errorf("role = %v, want the primary family's Parent", people[0].Type)
 		}
 
-		// The other member reaches the same person through family B only, and so
-		// sees the role that family holds them in.
 		soloPeople := GetVisiblePeople(tx, fx.soloB)
 		if len(soloPeople) != 1 {
 			t.Fatalf("family B member saw %d people, want 1", len(soloPeople))
@@ -171,7 +151,6 @@ func TestVisiblePeopleDeduplicatesSharedPerson(t *testing.T) {
 	})
 }
 
-// A shared person stays visible only to families they are actually on.
 func TestRosterDoesNotLeakToUnrelatedFamily(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -190,8 +169,6 @@ func TestRosterDoesNotLeakToUnrelatedFamily(t *testing.T) {
 	})
 }
 
-// Removing an extended roster row is allowed; removing the home one is not,
-// because it is the ownership chain every leaf record resolves through.
 func TestHomeRosterCannotBeRemoved(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -219,7 +196,6 @@ func TestHomeRosterCannotBeRemoved(t *testing.T) {
 	})
 }
 
-// Roles are per-roster: setting one must not disturb the other.
 func TestSetRoleIsScopedToOneRoster(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -240,7 +216,6 @@ func TestSetRoleIsScopedToOneRoster(t *testing.T) {
 		}
 	})
 
-	// Ensure never downgrades or overwrites an existing role.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
 		vbolt.TxCommit(tx)
@@ -253,7 +228,6 @@ func TestSetRoleIsScopedToOneRoster(t *testing.T) {
 	})
 }
 
-// Editing a person sets the role on their own household's roster only.
 func TestUpdatePersonRoleTracksHomeRoster(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -273,15 +247,11 @@ func TestUpdatePersonRoleTracksHomeRoster(t *testing.T) {
 		}
 		rowB, _ := FindPersonFamily(tx, fx.shared.Id, fx.famB)
 		if rowB.Role != Child {
-			// famB was seeded as Child, so this asserts it stayed put rather
-			// than that it moved.
 			t.Errorf("extended role = %v, want the untouched Child", rowB.Role)
 		}
 	})
 }
 
-// The backfill puts every pre-Stage-4 person on their home roster, and running
-// it twice changes nothing.
 func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 	testDBPath := "test_person_family_backfill.db"
 	db := vbolt.Open(testDBPath)
@@ -291,8 +261,6 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 		os.Remove(testDBPath)
 	}()
 
-	// Write people the way they existed before this stage: a person record and a
-	// home-family index entry, with no roster row.
 	var legacyIds []int
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for i, spec := range []struct {
@@ -316,16 +284,12 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 			legacyIds = append(legacyIds, person.Id)
 		}
 
-		// A person with no family is the sentinel case and must be skipped
-		// rather than landed on family 0's roster.
 		orphan := Person{Id: vbolt.NextIntId(tx, PeopleBkt), Name: "No Family"}
 		vbolt.Write(tx, PeopleBkt, orphan.Id, &orphan)
 
 		vbolt.TxCommit(tx)
 	})
 
-	// Before the backfill the roster is empty — this is what makes the
-	// migration load-bearing rather than decorative.
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		if people := GetFamilyPeople(tx, 7); len(people) != 0 {
 			t.Fatalf("roster was non-empty before backfill: %d", len(people))
@@ -368,7 +332,6 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 			t.Error("backfill placed a person on the family-0 sentinel roster")
 		}
 
-		// Every person with a family has exactly one home roster row.
 		for _, personId := range legacyIds {
 			person := GetPersonById(tx, personId)
 			rows := GetPersonFamilies(tx, personId)
@@ -384,10 +347,6 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 	})
 }
 
-// Merging is refused across home families: it would rewrite the FamilyId on
-// every leaf record it touches, silently stripping provenance from the family
-// that is losing the person. Stage 3's membership made this reachable, since a
-// user can now hold admin in two families at once.
 func TestMergeRefusesDifferentHomeFamilies(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
@@ -419,14 +378,10 @@ func TestMergeRefusesDifferentHomeFamilies(t *testing.T) {
 	}
 }
 
-// A same-family merge carries the source's extended rosters onto the survivor,
-// so a family that could see the source does not silently lose the person.
 func TestMergeUnionsRosters(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
 
-	// A duplicate of the shared person, also in family A, that has been placed
-	// on family B's roster while the target has not.
 	var duplicate Person
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		if err := RemovePersonFromFamilyTx(tx, fx.shared.Id, fx.famB); err != nil {
@@ -467,8 +422,6 @@ func TestMergeUnionsRosters(t *testing.T) {
 	})
 }
 
-// callMergePeople drives the proc rather than reimplementing it, since the
-// guard under test lives in the proc.
 func callMergePeople(t *testing.T, db *vbolt.DB, user User, req MergePeopleRequest) (err error) {
 	t.Helper()
 	token, tokenErr := generateAuthJwt(user, httptest.NewRecorder())
@@ -482,8 +435,6 @@ func callMergePeople(t *testing.T, db *vbolt.DB, user User, req MergePeopleReque
 	return
 }
 
-// Every person created through the normal paths lands on their home roster, so
-// the backfill is a one-time catch-up rather than an ongoing repair.
 func TestEveryPersonHasHomeRoster(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()

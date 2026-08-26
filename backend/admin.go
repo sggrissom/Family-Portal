@@ -12,14 +12,8 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// AdminUserId is the account that owns the admin panel. One operator, so
-// membership is a fixed id rather than a role — but it is named here rather
-// than being a bare 1 in sixteen conditions.
 const AdminUserId = 1
 
-// requireAdminAccess is the admin gate for every admin proc. Callers return
-// its error unchanged; it is a declared public error so the text reaches the
-// browser instead of a reference code.
 func requireAdminAccess(ctx *vbeam.Context) error {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -63,25 +57,21 @@ type ListAllUsersResponse struct {
 	Users []AdminUserInfo `json:"users"`
 }
 
-// Admin-only procedure to list all registered users
 func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Log admin action
 	LogInfo(LogCategoryAdmin, "Admin accessed user list", map[string]interface{}{
 		"adminUserId": AdminUserId,
 	})
 
-	// Get all users using IterateAll
 	var users []User
 	vbolt.IterateAll(ctx.Tx, UsersBkt, func(key int, user User) bool {
 		users = append(users, user)
-		return true // Continue iteration
+		return true
 	})
 
-	// Convert to AdminUserInfo with family names
 	resp.Users = make([]AdminUserInfo, 0, len(users))
 	for _, u := range users {
 		familyName := ""
@@ -98,7 +88,7 @@ func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err
 			LastLogin:  u.LastLogin,
 			FamilyId:   u.FamilyId,
 			FamilyName: familyName,
-			IsAdmin:    u.Id == 1, // Admin check
+			IsAdmin:    u.Id == 1,
 		}
 		resp.Users = append(resp.Users, adminUser)
 	}
@@ -106,15 +96,12 @@ func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err
 	return
 }
 
-// Photo Management Types and Procedures
-
 type GetPhotoStatsRequest struct{}
 
 type GetPhotoStatsResponse struct {
-	TotalPhotos     int `json:"totalPhotos"`
-	ProcessedPhotos int `json:"processedPhotos"`
-	PendingPhotos   int `json:"pendingPhotos"`
-	// Face analysis
+	TotalPhotos       int `json:"totalPhotos"`
+	ProcessedPhotos   int `json:"processedPhotos"`
+	PendingPhotos     int `json:"pendingPhotos"`
 	AnalysisPending   int `json:"analysisPending"`
 	AnalysisAnalyzing int `json:"analysisAnalyzing"`
 	AnalysisDone      int `json:"analysisDone"`
@@ -129,13 +116,11 @@ type ReprocessAllPhotosResponse struct {
 	Queued int `json:"queued"`
 }
 
-// Get photo statistics for admin dashboard
 func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoStatsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Count all photos
 	var allPhotos []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
 		allPhotos = append(allPhotos, image)
@@ -144,7 +129,6 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 
 	resp.TotalPhotos = len(allPhotos)
 
-	// Count processed photos (those with modern format variants) and analysis status counts
 	processedCount := 0
 	for _, photo := range allPhotos {
 		if isPhotoProcessed(photo) {
@@ -165,7 +149,6 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	resp.ProcessedPhotos = processedCount
 	resp.PendingPhotos = resp.TotalPhotos - resp.ProcessedPhotos
 
-	// Count auto-tagged PhotoPerson records
 	vbolt.IterateAll(ctx.Tx, PhotoPersonBkt, func(key int, pp PhotoPerson) bool {
 		if pp.AutoTagged {
 			resp.AutoTaggedCount++
@@ -173,7 +156,6 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 		return true
 	})
 
-	// Count persons with a stored face descriptor
 	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, p Person) bool {
 		if len(p.FaceDescriptor) == 128 {
 			resp.PersonsWithFace++
@@ -184,25 +166,11 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	return
 }
 
-// ReprocessAllPhotos queues every unprocessed photo for the photo worker.
-//
-// This used to decode and re-encode every photo inline, at seven sizes in two
-// formats each, inside an open write transaction. bolt allows one writer, so
-// for the length of that loop every upload, chat message and milestone save in
-// the application blocked — and the two-minute RPC write timeout severed the
-// response long before a real backlog finished, leaving rows stuck in
-// Processing with nothing that would ever move them.
-//
-// It queues now, the same shape ReanalyzeAllPhotos already used, and returns a
-// count immediately. Progress is the worker queue depth, which the diagnostics
-// strip and this page already poll.
 func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp ReprocessAllPhotosResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Queueing into a worker that is not running would report a confident
-	// count of photos nothing will ever pick up.
 	pw := activePhotoWorker()
 	if pw == nil {
 		err = ErrPhotoWorkerUnavailable
@@ -231,13 +199,10 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 	return
 }
 
-// Helper function to check if a photo has been processed with modern formats
 func isPhotoProcessed(photo Image) bool {
-	// Check if modern format files exist
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
 	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
-	// Check for at least one AVIF or WebP variant
 	modernFormats := []string{".avif", ".webp"}
 	sizes := []string{"", "_small", "_thumb", "_medium", "_large", "_xlarge", "_xxlarge"}
 
@@ -251,7 +216,7 @@ func isPhotoProcessed(photo Image) bool {
 			}
 
 			if _, err := os.Stat(fileName); err == nil {
-				return true // Found at least one modern format variant
+				return true
 			}
 		}
 	}
@@ -259,7 +224,6 @@ func isPhotoProcessed(photo Image) bool {
 	return false
 }
 
-// Helper function to get the original photo path
 func getOriginalPhotoPath(photo Image) string {
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
 	ext := filepath.Ext(basePath)
@@ -267,9 +231,7 @@ func getOriginalPhotoPath(photo Image) string {
 	return base + "_original" + ext
 }
 
-// Helper function to clean up old format variants
 func cleanupOldVariants(baseFilename string) {
-	// Remove old JPEG variants (except original)
 	oldVariants := []string{
 		baseFilename + ".jpg",
 		baseFilename + "_thumb.jpg",
@@ -280,22 +242,19 @@ func cleanupOldVariants(baseFilename string) {
 	}
 
 	for _, variant := range oldVariants {
-		os.Remove(variant) // Ignore errors - files may not exist
+		os.Remove(variant)
 	}
 }
 
-// GetPhotoProcessingStats returns statistics about photo processing queue
 func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStats, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Get processing statistics from photo worker
 	resp = GetProcessingStats()
 	return
 }
 
-// GetAnalysisStats returns live stats from the face analysis worker
 func GetAnalysisStats(ctx *vbeam.Context, req Empty) (resp AnalysisWorkerStats, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -311,22 +270,16 @@ type ReanalyzeAllPhotosResponse struct {
 	Skipped int `json:"skipped"`
 }
 
-// ReanalyzeAllPhotos queues all pending/failed photos for face analysis
 func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp ReanalyzeAllPhotosResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
-	// Face analysis is optional and often absent — a local build has no worker
-	// at all, and a release build skips it when the daemon socket is not
-	// reachable. Queueing into nothing used to report a confident count of
-	// photos that would never be looked at, so say so instead.
 	if !GetAnalysisWorkerStats().IsRunning {
 		err = ErrFaceAnalysisUnavailable
 		return
 	}
 
-	// Collect images that need (re)analysis
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
 		if image.AnalysisStatus == 0 || image.AnalysisStatus == 3 {
@@ -337,7 +290,6 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 		return true
 	})
 
-	// For failed photos reset status to pending so stats stay consistent
 	if len(toQueue) > 0 {
 		vbeam.UseWriteTx(ctx)
 		for _, image := range toQueue {
@@ -357,8 +309,6 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 	return
 }
 
-// Log-related types and structures
-
 type LogFileInfo struct {
 	Name       string    `json:"name"`
 	Size       int64     `json:"size"`
@@ -372,50 +322,42 @@ type GetLogFilesResponse struct {
 }
 
 type GetLogContentRequest struct {
-	// Filename selects one log file. Empty means every file in the log
-	// directory, which is what a search wants: the reference code someone
-	// mailed you is not necessarily in today's.
 	Filename    string `json:"filename"`
-	Level       string `json:"level,omitempty"`       // Filter by log level
-	Category    string `json:"category,omitempty"`    // Filter by category
-	Search      string `json:"search,omitempty"`      // Case-insensitive text match
-	SinceHours  int    `json:"sinceHours,omitempty"`  // Only entries from the last N hours
-	Limit       int    `json:"limit,omitempty"`       // Limit number of entries (default 1000)
-	Offset      int    `json:"offset,omitempty"`      // Skip entries (for pagination)
-	MinDuration *int   `json:"minDuration,omitempty"` // Minimum duration in microseconds
-	SortBy      string `json:"sortBy,omitempty"`      // Sort by: "time" or "duration"
-	SortDesc    *bool  `json:"sortDesc,omitempty"`    // Sort descending (default: newest first)
+	Level       string `json:"level,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Search      string `json:"search,omitempty"`
+	SinceHours  int    `json:"sinceHours,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+	MinDuration *int   `json:"minDuration,omitempty"`
+	SortBy      string `json:"sortBy,omitempty"`
+	SortDesc    *bool  `json:"sortDesc,omitempty"`
 }
 
 type GetLogContentResponse struct {
-	Entries    []PublicLogEntry `json:"entries"`
-	TotalLines int              `json:"totalLines"`
-	HasMore    bool             `json:"hasMore"`
-	// FilesSearched names the files the entries came from, so a cross-file
-	// search can say where it looked.
-	FilesSearched []string `json:"filesSearched"`
+	Entries       []PublicLogEntry `json:"entries"`
+	TotalLines    int              `json:"totalLines"`
+	HasMore       bool             `json:"hasMore"`
+	FilesSearched []string         `json:"filesSearched"`
 }
 
-// Public log entry for API responses
 type PublicLogEntry struct {
-	Timestamp string      `json:"timestamp"`
-	Level     string      `json:"level"`
-	Category  string      `json:"category"`
-	Message   string      `json:"message"`
-	Data      interface{} `json:"data,omitempty"`
-	UserID    *int        `json:"userId,omitempty"`
-	IP        string      `json:"ip,omitempty"`
-	UserAgent string      `json:"userAgent,omitempty"`
-	// HTTP timing fields for performance analysis
-	Duration        *int   `json:"duration,omitempty"`        // Total duration in microseconds
-	HandlerDuration *int   `json:"handlerDuration,omitempty"` // Handler duration in microseconds
-	HTTPMethod      string `json:"httpMethod,omitempty"`      // HTTP method (GET, POST, etc.)
-	HTTPPath        string `json:"httpPath,omitempty"`        // HTTP path
-	HTTPStatus      *int   `json:"httpStatus,omitempty"`      // HTTP status code
-	StackTrace      string `json:"stackTrace,omitempty"`
+	Timestamp       string      `json:"timestamp"`
+	Level           string      `json:"level"`
+	Category        string      `json:"category"`
+	Message         string      `json:"message"`
+	Data            interface{} `json:"data,omitempty"`
+	UserID          *int        `json:"userId,omitempty"`
+	IP              string      `json:"ip,omitempty"`
+	UserAgent       string      `json:"userAgent,omitempty"`
+	Duration        *int        `json:"duration,omitempty"`
+	HandlerDuration *int        `json:"handlerDuration,omitempty"`
+	HTTPMethod      string      `json:"httpMethod,omitempty"`
+	HTTPPath        string      `json:"httpPath,omitempty"`
+	HTTPStatus      *int        `json:"httpStatus,omitempty"`
+	StackTrace      string      `json:"stackTrace,omitempty"`
 }
 
-// convertToPublicLogEntry converts internal logEntry to public API format
 func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
 	return PublicLogEntry{
 		Timestamp:       entry.Timestamp.Format(time.RFC3339),
@@ -436,42 +378,40 @@ func convertToPublicLogEntry(entry logEntry) PublicLogEntry {
 }
 
 type LogStats struct {
-	TotalFiles int              `json:"totalFiles"`
-	TotalSize  int64            `json:"totalSize"`
-	ByLevel    map[string]int   `json:"byLevel"`
-	ByCategory map[string]int   `json:"byCategory"`
-	Recent     []PublicLogEntry `json:"recent"` // Last 10 entries
-	Errors     []PublicLogEntry `json:"errors"` // Recent errors
-	// Performance statistics
+	TotalFiles       int              `json:"totalFiles"`
+	TotalSize        int64            `json:"totalSize"`
+	ByLevel          map[string]int   `json:"byLevel"`
+	ByCategory       map[string]int   `json:"byCategory"`
+	Recent           []PublicLogEntry `json:"recent"`
+	Errors           []PublicLogEntry `json:"errors"`
 	PerformanceStats PerformanceStats `json:"performanceStats"`
 }
 
 type PerformanceStats struct {
 	TotalRequests    int                      `json:"totalRequests"`
-	AverageResponse  int                      `json:"averageResponse"`  // In microseconds
-	MedianResponse   int                      `json:"medianResponse"`   // In microseconds
-	P90Response      int                      `json:"p90Response"`      // In microseconds
-	P95Response      int                      `json:"p95Response"`      // In microseconds
-	P99Response      int                      `json:"p99Response"`      // In microseconds
-	SlowestEndpoints []EndpointStats          `json:"slowestEndpoints"` // Top 10 slowest
-	EndpointStats    map[string]EndpointStats `json:"endpointStats"`    // Stats by endpoint
+	AverageResponse  int                      `json:"averageResponse"`
+	MedianResponse   int                      `json:"medianResponse"`
+	P90Response      int                      `json:"p90Response"`
+	P95Response      int                      `json:"p95Response"`
+	P99Response      int                      `json:"p99Response"`
+	SlowestEndpoints []EndpointStats          `json:"slowestEndpoints"`
+	EndpointStats    map[string]EndpointStats `json:"endpointStats"`
 }
 
 type EndpointStats struct {
 	Path            string  `json:"path"`
 	Method          string  `json:"method"`
 	Count           int     `json:"count"`
-	AverageResponse int     `json:"averageResponse"` // In microseconds
-	MinResponse     int     `json:"minResponse"`     // In microseconds
-	MaxResponse     int     `json:"maxResponse"`     // In microseconds
-	ErrorRate       float64 `json:"errorRate"`       // Percentage
+	AverageResponse int     `json:"averageResponse"`
+	MinResponse     int     `json:"minResponse"`
+	MaxResponse     int     `json:"maxResponse"`
+	ErrorRate       float64 `json:"errorRate"`
 }
 
 type GetLogStatsResponse struct {
 	Stats LogStats `json:"stats"`
 }
 
-// GetLogFiles returns list of available log files
 func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -486,13 +426,6 @@ func GetLogFiles(ctx *vbeam.Context, req Empty) (resp GetLogFilesResponse, err e
 	return
 }
 
-// GetLogContent returns filtered log content.
-//
-// With no Filename it reads every log file, which is what Search is for: the
-// whole error design converges on someone sending you a reference code, and
-// there was previously no way to find one in the panel at all — the request had
-// Level, Category, Limit, Offset, MinDuration and SortBy, and no text search,
-// so the workflow ended in an SSH session and a grep.
 func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogContentResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -512,16 +445,12 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 
 	var matched []logEntry
 	for _, path := range paths {
-		// A read failure names the path it tried, which is a directory layout
-		// nobody outside the box needs; ProcError trades it for a reference code.
 		if scanErr := scanLogFile(path, func(entry logEntry) bool {
 			if filter.keep(entry) {
 				matched = append(matched, entry)
 			}
 			return true
 		}); scanErr != nil {
-			// Searching every file should not fail because one is unreadable,
-			// but asking for one specific file should.
 			if req.Filename != "" {
 				err = ProcError(scanErr)
 				return
@@ -553,42 +482,24 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 
 type LookupLogReferenceRequest struct {
 	Reference string `json:"reference"`
-	// Context is how many entries either side of the match to return.
-	Context int `json:"context,omitempty"`
+	Context   int    `json:"context,omitempty"`
 }
 
 type LookupLogReferenceResponse struct {
-	Found bool `json:"found"`
-	// File names the log file the match was in.
-	File string `json:"file"`
-	// Entry is the entry the reference was minted for.
-	Entry PublicLogEntry `json:"entry"`
-	// Before and After are the surrounding entries, in file order. What was
-	// happening either side of a failure is usually more of the answer than
-	// the failure line itself.
-	Before []PublicLogEntry `json:"before"`
-	After  []PublicLogEntry `json:"after"`
-	// FilesSearched says where it looked, so "not found" is a fact about a
-	// known set of files rather than an unqualified shrug.
-	FilesSearched []string `json:"filesSearched"`
+	Found         bool             `json:"found"`
+	File          string           `json:"file"`
+	Entry         PublicLogEntry   `json:"entry"`
+	Before        []PublicLogEntry `json:"before"`
+	After         []PublicLogEntry `json:"after"`
+	FilesSearched []string         `json:"filesSearched"`
 }
 
-// LookupLogReference finds the single entry a reference code was minted for.
-//
-// ProcError logs the real cause against a fresh id and hands the user
-// "Something went wrong on our end. Reference: <id>". The intended workflow is
-// that they send you the code and you find the cause; this is the half of it
-// that was missing. The id is in the entry's data.requestId, so this matches on
-// that field rather than on the message text, and falls back to a plain
-// substring match for the other places a code can appear (a stack trace, or the
-// user-facing sentence itself if it was ever logged).
 func LookupLogReference(ctx *vbeam.Context, req LookupLogReferenceRequest) (resp LookupLogReferenceResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
 
 	reference := strings.TrimSpace(req.Reference)
-	// Accept the whole sentence pasted out of the UI, not just the bare code.
 	if idx := strings.Index(reference, ReferencePrefix); idx >= 0 {
 		reference = strings.TrimSpace(reference[idx+len(ReferencePrefix):])
 	}
@@ -612,8 +523,6 @@ func LookupLogReference(ctx *vbeam.Context, req LookupLogReferenceRequest) (resp
 	}
 	resp.FilesSearched = names
 
-	// Newest file first (resolveLogTargets preserves listLogFiles' order), so a
-	// recent code is found without reading the archive.
 	for i, path := range paths {
 		before := newEntryRing(context)
 		var match *logEntry
@@ -647,7 +556,6 @@ func LookupLogReference(ctx *vbeam.Context, req LookupLogReferenceRequest) (resp
 		resp.Found = true
 		resp.File = names[i]
 		resp.Entry = convertToPublicLogEntry(*match)
-		// The ring hands back newest-first; context reads better in file order.
 		preceding := before.newestFirst()
 		for j := len(preceding) - 1; j >= 0; j-- {
 			resp.Before = append(resp.Before, convertToPublicLogEntry(preceding[j]))
@@ -661,11 +569,6 @@ func LookupLogReference(ctx *vbeam.Context, req LookupLogReferenceRequest) (resp
 	return
 }
 
-// sortLogEntries applies the request's ordering.
-//
-// The default is newest first. The viewer used to open chronologically from the
-// start of the file, which is the wrong end: you open it because something is
-// wrong *now*.
 func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
 	desc := true
 	if sortDesc != nil {
@@ -675,11 +578,9 @@ func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
 	switch sortBy {
 	case "duration":
 		if sortDesc == nil {
-			desc = true // slowest first, for the same reason
+			desc = true
 		}
 		sort.SliceStable(entries, func(i, j int) bool {
-			// Entries with no duration are not slow or fast; they sort last
-			// either way rather than clustering at whichever end zero is.
 			a, b := entries[i].Duration, entries[j].Duration
 			if a == nil || b == nil {
 				return a != nil && b == nil
@@ -699,14 +600,6 @@ func sortLogEntries(entries []logEntry, sortBy string, sortDesc *bool) {
 	}
 }
 
-// GetLogStats returns summary statistics about logs.
-//
-// Every statistic here used to be derived from the last 50 lines of each file:
-// the level and category histograms, the error list, the request count, and the
-// p50/p90/p95/p99 latency percentiles. On a normal day that is well under a
-// minute of traffic, presented as a performance summary. It reads the files
-// through now — this is an admin page loaded by one person, and §2.1 keeps a
-// day's traffic in one file.
 func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -729,9 +622,6 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 		return
 	}
 
-	// Recent entries and the error list are the tail of the whole corpus, so
-	// they are collected in ring buffers rather than by materialising every
-	// entry in every file and sorting it.
 	recent := newEntryRing(statsRecentEntries)
 	recentErrors := newEntryRing(statsRecentErrors)
 	perf := newPerfAccumulator()
@@ -751,7 +641,6 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 			return true
 		})
 		if scanErr != nil {
-			// One unreadable file should not blank the whole page.
 			LogErrorSimple(LogCategoryAdmin, "Could not read a log file for stats", map[string]interface{}{
 				"file":  file.Name,
 				"error": scanErr.Error(),
@@ -761,7 +650,6 @@ func GetLogStats(ctx *vbeam.Context, req Empty) (resp GetLogStatsResponse, err e
 
 	stats.PerformanceStats = perf.result()
 
-	// Newest first: when this list is short, it is the last thing that happened.
 	for _, entry := range recent.newestFirst() {
 		stats.Recent = append(stats.Recent, convertToPublicLogEntry(entry))
 	}

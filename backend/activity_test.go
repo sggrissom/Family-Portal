@@ -1,7 +1,3 @@
-// Schema-level tests for competitive activities: that every record survives a
-// round trip through vpack, that each write helper puts the row in every index
-// the reads depend on and each delete helper takes it back out, and that a
-// linked family sees a routine when and only when the link carries activities.
 package backend
 
 import (
@@ -14,7 +10,6 @@ import (
 
 func float64Ptr(v float64) *float64 { return &v }
 
-// roundTrip packs and unpacks one record, failing the test if vpack rejects it.
 func roundTrip[T any](t *testing.T, name string, value *T, fn vpack.PackFn[T]) *T {
 	t.Helper()
 	data := vpack.ToBytes(value, fn)
@@ -79,8 +74,6 @@ func TestActivityRecordsRoundTrip(t *testing.T) {
 	}
 }
 
-// The optional fields are the whole reason Result needs its own test: a zero
-// Rank means "did not place" only if it is distinguishable from a nil one.
 func TestResultRoundTripPreservesOptionalFields(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
@@ -110,7 +103,6 @@ func TestResultRoundTripPreservesOptionalFields(t *testing.T) {
 		t.Errorf("Result scalars round tripped wrong: %+v", *got)
 	}
 
-	// A zero-valued optional is not the same as an absent one.
 	zeroed := filled
 	zeroed.Rank = intPtr(0)
 	zeroed.Score = float64Ptr(0)
@@ -132,22 +124,18 @@ func TestResultRoundTripPreservesOptionalFields(t *testing.T) {
 	}
 }
 
-// activityFixture hangs a season's worth of records off the three-household
-// link fixture: a group routine alice is in, and a solo bob has to himself.
-// Alice is the child shared into family B, so the group routine is the one that
-// a link carrying activities should reach and the solo is the one it must not.
 type activityFixture struct {
 	familyLinkFixture
 
 	activity   Activity
 	season     Season
 	event      Event
-	groupEntry Entry // alice + bob
-	soloEntry  Entry // bob only
+	groupEntry Entry
+	soloEntry  Entry
 	groupAppr  Appearance
 	soloAppr   Appearance
-	adjudicate Result // on the group appearance, names nobody
-	aliceAward Result // on the group appearance, names alice
+	adjudicate Result
+	aliceAward Result
 }
 
 func setupActivityFixture(t *testing.T) (activityFixture, func()) {
@@ -246,8 +234,6 @@ func setupActivityFixture(t *testing.T) (activityFixture, func()) {
 	return fx, cleanup
 }
 
-// Every read the feature depends on is an index walk, so every index has to be
-// written by the helper that writes the row.
 func TestActivityWritesPopulateEveryIndex(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -272,7 +258,6 @@ func TestActivityWritesPopulateEveryIndex(t *testing.T) {
 			t.Errorf("GetEntryMembers(group) = %d, want 2", got)
 		}
 
-		// "Which routines is this kid in?" without a scan.
 		if got := len(GetPersonEntryMembers(tx, fx.bob.Id)); got != 2 {
 			t.Errorf("GetPersonEntryMembers(bob) = %d, want 2", got)
 		}
@@ -280,7 +265,6 @@ func TestActivityWritesPopulateEveryIndex(t *testing.T) {
 			t.Errorf("GetPersonEntryMembers(alice) = %d, want 1", got)
 		}
 
-		// The two views the whole schema exists to serve.
 		if got := len(GetEventAppearances(tx, fx.event.Id)); got != 2 {
 			t.Errorf("GetEventAppearances = %d, want 2", got)
 		}
@@ -303,8 +287,6 @@ func TestActivityWritesPopulateEveryIndex(t *testing.T) {
 	})
 }
 
-// ResultByPersonIndex is written only for results that name a person, and stops
-// being written the moment one stops naming one.
 func TestResultPersonIndexFollowsThePointer(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -319,8 +301,6 @@ func TestResultPersonIndexFollowsThePointer(t *testing.T) {
 		}
 	})
 
-	// Clearing PersonId — what person deletion does, rather than deleting the
-	// result, because the routine still placed.
 	cleared := fx.aliceAward
 	cleared.PersonId = nil
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -338,9 +318,6 @@ func TestResultPersonIndexFollowsThePointer(t *testing.T) {
 	})
 }
 
-// A bucket account deletion does not know about is a data-retention bug, so the
-// sweep has to leave all nine empty — indexes included, which is what the
-// re-reads below actually check.
 func TestDeleteFamilyActivitiesLeavesNoOrphans(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
@@ -390,17 +367,10 @@ func TestDeleteFamilyActivitiesLeavesNoOrphans(t *testing.T) {
 	})
 }
 
-// A person deleted in their own household can still be rostered in another
-// household's group routine, shared in by a link. Sweeping the deleted person's
-// family leaves those rows pointing at somebody who no longer exists.
-//
-// The roster row goes; the result does not. A routine that placed second still
-// placed second after one of its dancers is deleted.
 func TestDeletingAPersonClearsTheirActivityJoinsEverywhere(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
 
-	// Alice is on the group routine and is the one the judges' award names.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		removePersonFromActivitiesTx(tx, fx.alice.Id)
 		vbolt.TxCommit(tx)
@@ -417,7 +387,6 @@ func TestDeletingAPersonClearsTheirActivityJoinsEverywhere(t *testing.T) {
 			t.Errorf("%d results still name alice", got)
 		}
 
-		// Both results survive — including the one that used to name her.
 		results := GetAppearanceResults(tx, fx.groupAppr.Id)
 		if len(results) != 2 {
 			t.Fatalf("got %d results, want both to survive", len(results))
@@ -431,22 +400,17 @@ func TestDeletingAPersonClearsTheirActivityJoinsEverywhere(t *testing.T) {
 			}
 		}
 
-		// Bob was not deleted and keeps everything.
 		if got := len(GetPersonEntryMembers(tx, fx.bob.Id)); got != 2 {
 			t.Errorf("bob is on %d rosters, want 2", got)
 		}
 	})
 }
 
-// Activities is not in DefaultLinkScopes and is the highest bit, so no link that
-// predates the feature can read back as sharing it.
 func TestActivitiesScopeIsOptInAndAdditive(t *testing.T) {
 	if DefaultLinkScopes().Activities {
 		t.Error("new links share activities by default")
 	}
 
-	// Bits 0-4 are what existing masks hold. Every one of them must decode with
-	// Activities off.
 	legacyMask := ScopePeople.bit() | ScopeMilestones.bit() | ScopePhotos.bit() | ScopeGrowth.bit()
 	if linkScopesFromMask(legacyMask).Activities {
 		t.Error("a mask written before the feature existed decodes as sharing activities")
@@ -457,20 +421,15 @@ func TestActivitiesScopeIsOptInAndAdditive(t *testing.T) {
 		t.Errorf("mask round trip = %+v, want %+v", got, scopes)
 	}
 
-	// Activity reads resolve through a rostered person, so activities without
-	// people is as incoherent as milestones without people.
 	if !normalizeLinkScopes(LinkScopes{Activities: true}).People {
 		t.Error("activities did not imply people")
 	}
 }
 
-// The routine is the shared object. A link that shares one child reaches the
-// group routines that child is in — and nothing she is not in.
 func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()
 
-	// Default scopes carry no activities, so nothing is reachable yet.
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if canAccessEntry(tx, fx.userB, fx.groupEntry, AccessView) {
 			t.Error("a routine was readable through a link that does not share activities")
@@ -481,7 +440,6 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 		if canAccessResult(tx, fx.userB, fx.adjudicate, AccessView) {
 			t.Error("a result was readable through a link that does not share activities")
 		}
-		// The owning family is unaffected by any of this.
 		if !canAccessEntry(tx, fx.userA, fx.soloEntry, AccessContribute) {
 			t.Error("the owning family lost access to its own routine")
 		}
@@ -500,7 +458,6 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 			t.Error("that appearance's result was denied")
 		}
 
-		// Bob was never shared, and the solo has only him on its roster.
 		if canAccessEntry(tx, fx.userB, fx.soloEntry, AccessView) {
 			t.Error("a routine with nobody shared in it leaked through the link")
 		}
@@ -508,7 +465,6 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 			t.Error("the unshared routine's appearance leaked through the link")
 		}
 
-		// A link is read-only, and it is not membership.
 		if canAccessEntry(tx, fx.userB, fx.groupEntry, AccessContribute) {
 			t.Error("a link granted writes on a shared routine")
 		}
@@ -522,15 +478,12 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 			t.Error("a link reached the activity, which has no person dimension")
 		}
 
-		// A -> B and B -> C still do not add up to A -> C.
 		if canAccessEntry(tx, fx.userC, fx.groupEntry, AccessView) {
 			t.Error("C reached A's routine through B")
 		}
 	})
 }
 
-// An entry nobody is rostered on has no person to resolve through, so it stays
-// with its own family rather than defaulting open.
 func TestEntryWithEmptyRosterStaysPrivate(t *testing.T) {
 	fx, cleanup := setupActivityFixture(t)
 	defer cleanup()

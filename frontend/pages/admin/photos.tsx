@@ -68,7 +68,6 @@ export function view(
     return;
   }
 
-  // Check if user is admin (ID == 1)
   if (!currentAuth.isAdmin) {
     return (
       <div>
@@ -102,10 +101,6 @@ interface PhotoManagementPageProps {
   data: server.GetPhotoStatsResponse;
 }
 
-// The photo worker, in the shape the push page already uses: counters, the last
-// error, and a short history with measured durations. Photo processing failure
-// is the most common real problem this site has, and until now the worker
-// reported a queue length and a boolean.
 const WorkerPanel = ({
   stats,
   onRequeue,
@@ -150,7 +145,6 @@ const WorkerPanel = ({
           <div className="stat-content">
             <h3>Last Processed</h3>
             <div className="stat-value">{shortWhen(stats.lastProcessedAt)}</div>
-            {/* A quiet worker and a stalled one look identical without this. */}
             <div className="stat-label">Most recent success</div>
           </div>
         </div>
@@ -198,7 +192,6 @@ const WorkerPanel = ({
   );
 };
 
-// Short relative time. These are read at a glance next to a counter.
 function shortWhen(timestamp: string): string {
   const then = new Date(timestamp).getTime();
   if (!Number.isFinite(then) || then <= 0) return "never";
@@ -239,14 +232,13 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     }
   };
 
-  // Load stats initially and set up periodic refresh
   if (!state.processingStats) {
     loadProcessingStats();
     loadAnalysisStats();
     setInterval(() => {
       loadProcessingStats();
       loadAnalysisStats();
-    }, 3000); // Poll every 3 seconds
+    }, 3000);
   }
 
   const startReprocessing = async () => {
@@ -266,8 +258,6 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
       if (error) {
         logWarn("admin", "Reprocessing failed", error);
-        // The server refuses outright when the worker is not running, rather
-        // than reporting a queue nothing will read. Show what it said.
         state.reprocessError = error;
       } else if (result) {
         state.reprocessQueued = result.queued;
@@ -298,8 +288,6 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
       if (error) {
         logWarn("admin", "Reanalysis failed", error);
-        // The server refuses outright when the daemon is absent, rather than
-        // reporting a queue that nothing will ever read. Show what it said.
         state.reanalysisError = error;
       } else if (result) {
         state.reanalysisError = "";
@@ -316,8 +304,6 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
     vlens.scheduleRedraw();
   };
 
-  // Rows stranded in Processing are the failure mode nothing retries: the queue
-  // is in-memory, so the job that owned the row died with the process.
   const requeueStuck = async () => {
     state.isRequeueing = true;
     state.requeueError = "";

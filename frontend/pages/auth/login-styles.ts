@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Login Page Styles
 block(`
 .login-container {
   max-width: 420px;

@@ -26,10 +26,7 @@ type ImportForm = {
   importMilestones: boolean;
   importActivities: boolean;
   dryRun: boolean;
-  // The family to import into. Zero means the primary family. Distinct from
-  // selectedFamilyIds, which filters which people to take from the file.
   targetFamilyId: number;
-  // AI Import fields
   activeTab: "json" | "ai";
   selectedPersonId: number | null;
   peopleList: server.Person[];
@@ -55,7 +52,6 @@ const useImportForm = vlens.declareHook(
     importActivities: true,
     dryRun: false,
     targetFamilyId: 0,
-    // AI Import fields
     activeTab: "json",
     selectedPersonId: null,
     peopleList: [],
@@ -107,7 +103,6 @@ const ImportPage = ({ form }: ImportPageProps) => {
         return;
       }
 
-      // Read file content for JSON
       const reader = new FileReader();
       reader.onload = e => {
         const result = e.target?.result;
@@ -167,7 +162,6 @@ const ImportPage = ({ form }: ImportPageProps) => {
   };
 
   const handleJSONPaste = (event: ClipboardEvent) => {
-    // Explicitly handle paste events for JSON textarea
     const clipboardData = event.clipboardData;
     if (clipboardData) {
       const pastedText = clipboardData.getData("text");
@@ -185,7 +179,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
   const loadPeopleList = async () => {
     if (form.peopleList.length > 0) {
-      return; // Already loaded
+      return;
     }
 
     try {
@@ -206,7 +200,6 @@ const ImportPage = ({ form }: ImportPageProps) => {
       return;
     }
 
-    // Basic JSON validation
     try {
       JSON.parse(form.jsonData);
     } catch (e) {
@@ -303,12 +296,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
   };
 
   const handleAIPaste = (event: ClipboardEvent) => {
-    // Explicitly handle paste events
     const clipboardData = event.clipboardData;
     if (clipboardData) {
       const pastedText = clipboardData.getData("text");
       if (pastedText) {
-        // Let the default paste happen, then update via onInput
         setTimeout(() => {
           const target = event.target as HTMLTextAreaElement;
           form.unstructuredText = target.value;
@@ -346,13 +337,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
       form.aiProcessing = false;
 
       if (resp && resp.success) {
-        // Set the generated JSON in the main form
         form.jsonData = resp.generatedJSON;
 
-        // Switch to JSON tab to show result
         form.activeTab = "json";
 
-        // Show any validation warnings
         if (resp.validationWarnings && resp.validationWarnings.length > 0) {
           form.error =
             "AI processing succeeded with warnings: " + resp.validationWarnings.join(", ");
@@ -386,11 +374,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.importMilestones = true;
     form.importActivities = true;
     form.dryRun = false;
-    // AI fields
     form.selectedPersonId = null;
     form.unstructuredText = "";
     form.aiProcessing = false;
-    // Clear file input by resetting the form
     const fileInput = document.getElementById("json-file") as HTMLInputElement;
     if (fileInput) {
       fileInput.value = "";
@@ -878,8 +864,6 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
   };
 
   const getMeasurementCounts = (personId: number) => {
-    // This would require parsing the JSON data to count measurements
-    // For now, return placeholder counts
     return { heights: "?", weights: "?" };
   };
 

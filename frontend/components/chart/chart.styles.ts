@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Chart-specific styles
 block(`
 .growth-chart-container {
   background: var(--bg);

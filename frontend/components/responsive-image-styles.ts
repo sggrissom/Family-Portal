@@ -63,7 +63,6 @@ block(`
 }
 `);
 
-// Profile image crop container styles
 block(`
 .profile-image-crop-container {
   position: relative;

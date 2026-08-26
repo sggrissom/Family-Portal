@@ -1,9 +1,3 @@
-// One routine across the whole season: every competition it went to, and how
-// it did at each. The other direction off the same hinge as the competition
-// page — same performances, read entry-first instead of event-first.
-//
-// See docs/activities-plan.md, phase 6.
-
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -19,9 +13,6 @@ import "./activities-styles";
 import "./season-styles";
 import "./routine-styles";
 
-// RoutinePageData is the history plus the names a roster and a
-// narrowed-to-one-person result need. There is no vocabulary here: this page
-// has no form on it.
 export type RoutinePageData = {
   history: server.GetEntryHistoryResponse;
   people: server.Person[];
@@ -59,15 +50,10 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     return [null, historyErr || "Failed to load routine"];
   }
 
-  // Names are decoration here, not the page. A viewer who reached this routine
-  // through a link may not see every person on it.
   const [people] = await server.ListPeople({});
   return rpc.ok<RoutinePageData>({ history, people: people?.people ?? [] });
 }
 
-// countLabels is what free-text adjudications allow and no more: an exact
-// count per label. "3× Diamond, 5× High Gold" is honest; ranking them is not,
-// because Diamond and Gold are strings and every host uses its own scale.
 function countLabels(appearances: server.AppearanceDetail[]): { label: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const detail of appearances) {
@@ -88,9 +74,6 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
   if (!currentAuth) return;
 
   const entry = data.history.entry.entry;
-  // SeasonSummary carries the activity's kind so this page can name things the
-  // way the rest of the UI does — nothing here should say "competition" when
-  // the season is soccer.
   const labels = labelsForKind(data.history.season.kind);
   const appearances = data.history.appearances ?? [];
   const traits = [entry.format, entry.style, entry.division, entry.level]
@@ -174,8 +157,6 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
   );
 }
 
-// appearanceWhen prefers the performance's own time and falls back to the
-// competition's dates, which is the same fallback the server sorts on.
 function appearanceWhen(detail: server.AppearanceDetail): string {
   if (isRealDate(detail.appearance.occurredAt)) {
     return formatDate(detail.appearance.occurredAt);

@@ -11,8 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// captureResetEmails swaps the delivery function for the duration of a test and
-// records what would have been sent.
 type sentReset struct {
 	User  User
 	Token string
@@ -31,7 +29,6 @@ func captureResetEmails(t *testing.T, sendErr error) *[]sentReset {
 	return &sent
 }
 
-// createResetTestUser registers an account the reset flow can act on.
 func createResetTestUser(t *testing.T, app *vbeam.Application, email, password string) User {
 	t.Helper()
 
@@ -80,7 +77,6 @@ func TestRequestPasswordReset(t *testing.T) {
 			t.Errorf("emailed user %d, want %d", (*sent)[0].User.Id, user.Id)
 		}
 
-		// The stored record must hold only the hash of the emailed token.
 		token := (*sent)[0].Token
 		vbolt.WithReadTx(app.DB, func(tx *vbolt.Tx) {
 			stored, found := getPasswordResetTokenTx(tx, token)
@@ -489,7 +485,6 @@ func TestResetPassword(t *testing.T) {
 					t.Error("no error message for a rejected password")
 				}
 
-				// A rejected attempt must leave the link usable.
 				vbolt.WithReadTx(app.DB, func(tx *vbolt.Tx) {
 					if _, valid := validatePasswordResetTokenTx(tx, token, time.Now()); !valid {
 						t.Error("token was consumed by a failed attempt")
@@ -509,7 +504,6 @@ func TestCleanupExpiredPasswordResetTokens(t *testing.T) {
 
 	var live string
 	vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
-		// Issued long ago, so already expired.
 		if _, err := createPasswordResetTokenTx(tx, user.Id, now.Add(-2*passwordResetTokenLifetime)); err != nil {
 			t.Fatalf("createPasswordResetTokenTx() error = %v", err)
 		}
@@ -563,7 +557,6 @@ func TestPasswordResetBodyIncludesLink(t *testing.T) {
 	}
 }
 
-// capturePasswordChangedEmails records the confirmation notices a test causes.
 func capturePasswordChangedEmails(t *testing.T, sendErr error) *[]User {
 	t.Helper()
 
@@ -652,8 +645,6 @@ func TestResetPasswordNotifiesTheAccountHolder(t *testing.T) {
 		app, cleanup := setupTestApp(t)
 		defer cleanup()
 
-		// The password is already changed by the time the notice is attempted,
-		// so a mail failure must not be reported as a failed reset.
 		capturePasswordChangedEmails(t, errors.New("smtp unavailable"))
 		user := createResetTestUser(t, app, "mailfail@example.com", oldPassword)
 
@@ -701,8 +692,6 @@ func TestPasswordChangedBodyNotifiesWithoutALink(t *testing.T) {
 	if !strings.Contains(body, "changed") {
 		t.Error("confirmation body does not say the password changed")
 	}
-	// This message is a notification, not a call to action: it must not train
-	// people to click links in mail about their password.
 	if strings.Contains(body, "http://") || strings.Contains(body, "https://") {
 		t.Errorf("confirmation body contains a link:\n%s", body)
 	}

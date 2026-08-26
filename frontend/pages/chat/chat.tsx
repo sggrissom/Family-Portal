@@ -19,8 +19,6 @@ import {
 } from "../../hooks/useChatWebsocket";
 import "./chat-styles";
 
-// Use ChatMessage type from server bindings
-
 type MessageForm = {
   message: string;
   sending: boolean;
@@ -54,9 +52,6 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.GetChatMessagesResponse>({ messages: [] });
   }
 
-  // Chat stays on the primary family: the websocket hub subscribes each client
-  // to one room, so reading another family's history here would leave that
-  // conversation without live updates. Unblocked by the Stage 6 fan-out work.
   return server.GetChatMessages({ limit: null, offset: null, familyId: 0 });
 }
 
@@ -82,7 +77,7 @@ export function view(
 }
 
 interface ChatPageProps {
-  user: any; // AuthCache type
+  user: any;
   data: server.GetChatMessagesResponse;
 }
 
@@ -91,27 +86,22 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   const chatState = useChatState();
   const wsState = useChatWebsocket();
 
-  // Initialize chat state with data from server (only once)
   if (data.messages && !chatState.initialized) {
     chatState.messages = data.messages;
     chatState.initialized = true;
   }
 
-  // WebSocket event handlers
   const wsHandlers: WebSocketEventHandlers = {
     onNewMessage: (message: server.ChatMessage) => {
-      // Skip messages that this tab sent (prevents race condition duplicates)
       if (message.clientMessageId && chatState.sentClientMessageIds.has(message.clientMessageId)) {
         return;
       }
 
-      // Add message if not already present (supports multi-tab for same user)
       const exists = chatState.messages.some(m => m.id === message.id);
       if (!exists) {
         chatState.messages = [message, ...chatState.messages];
         vlens.scheduleRedraw();
 
-        // Keep the newest message visible at the top of the feed
         setTimeout(() => {
           const messagesContainer = document.querySelector(".chat-messages");
           if (messagesContainer) {
@@ -122,10 +112,8 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     },
 
     onDeleteMessage: (messageId: number, userId: number) => {
-      // Remove message from state
       const messageToDelete = chatState.messages.find(m => m.id === messageId);
       chatState.messages = chatState.messages.filter(m => m.id !== messageId);
-      // Clean up tracking Set
       if (messageToDelete?.clientMessageId) {
         chatState.sentClientMessageIds.delete(messageToDelete.clientMessageId);
       }
@@ -133,7 +121,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     },
 
     onUserTyping: (userId: number, userName: string, isTyping: boolean) => {
-      // Handle typing indicators (could be implemented later)
       logInfo("ui", "User typing", { userId, userName, isTyping });
     },
 
@@ -154,7 +141,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     },
   };
 
-  // Connect websocket on component initialization
   if (
     isWebSocketSupported() &&
     wsState.connectionState === "disconnected" &&
@@ -163,7 +149,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     connectWebSocket(wsState, wsHandlers);
   }
 
-  // Set up lifecycle management once per component instance
   if (wsState.socket && !chatState.lifecycleInitialized && window.addEventListener) {
     chatState.lifecycleInitialized = true;
 
@@ -171,17 +156,13 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       destroyWebSocket(wsState);
     };
 
-    // Monitor route changes to destroy WebSocket when leaving chat page
     const handleRouteChange = () => {
-      // Check if current route is still /chat
       if (!window.location.pathname.startsWith("/chat")) {
         destroyWebSocket(wsState);
-        // Clean up listeners
         cleanup();
       }
     };
 
-    // More aggressive cleanup - check periodically if we're still on chat page
     const routeChecker = setInterval(() => {
       if (!window.location.pathname.startsWith("/chat") && !wsState.isDestroyed) {
         destroyWebSocket(wsState);
@@ -198,15 +179,12 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       delete (window as any).chatWebSocketCleanup;
     };
 
-    // Listen to multiple navigation events
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("popstate", handleRouteChange);
     window.addEventListener("hashchange", handleRouteChange);
 
-    // Store cleanup function for manual cleanup if needed
     (window as any).chatWebSocketCleanup = cleanup;
 
-    // Check route immediately in case of direct navigation
     if (!window.location.pathname.startsWith("/chat")) {
       setTimeout(() => {
         if (!window.location.pathname.startsWith("/chat")) {
@@ -225,18 +203,15 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     }
 
     const messageContent = messageForm.message.trim();
-    // Generate unique client message ID
     const clientMessageId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     messageForm.sending = true;
-    messageForm.message = ""; // Clear input immediately
+    messageForm.message = "";
 
-    // Track that this tab sent this message (prevents WebSocket duplicate)
     chatState.sentClientMessageIds.add(clientMessageId);
 
-    // Create optimistic message for immediate UI feedback
     const optimisticMessage: server.ChatMessage = {
-      id: -Date.now(), // Negative ID to indicate pending
+      id: -Date.now(),
       familyId: user.familyId,
       userId: user.id,
       userName: user.name,
@@ -245,11 +220,9 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       clientMessageId: clientMessageId,
     };
 
-    // Add optimistic message to UI immediately
     chatState.messages = [optimisticMessage, ...chatState.messages];
     vlens.scheduleRedraw();
 
-    // Keep the optimistic newest message visible at the top immediately
     setTimeout(() => {
       const messagesContainer = document.querySelector(".chat-messages");
       if (messagesContainer) {
@@ -258,7 +231,6 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     }, 50);
 
     try {
-      // Send message to server
       const [result, error] = await server.SendMessage({
         content: messageContent,
         clientMessageId: clientMessageId,
@@ -266,28 +238,21 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       });
 
       if (result && !error) {
-        // Replace optimistic message with real message from server
         chatState.messages = chatState.messages.map(msg =>
           msg.id === optimisticMessage.id ? result.message : msg
         );
       } else {
-        // Remove optimistic message on error
         chatState.messages = chatState.messages.filter(msg => msg.id !== optimisticMessage.id);
-        // Remove from tracking set on error
         chatState.sentClientMessageIds.delete(clientMessageId);
 
-        // Restore message to input for retry
         messageForm.message = messageContent;
 
         console.error("Failed to send message:", error);
       }
     } catch (error) {
-      // Remove optimistic message on error
       chatState.messages = chatState.messages.filter(msg => msg.id !== optimisticMessage.id);
-      // Remove from tracking set on error
       chatState.sentClientMessageIds.delete(clientMessageId);
 
-      // Restore message to input for retry
       messageForm.message = messageContent;
 
       console.error("Failed to send message:", error);
@@ -304,10 +269,8 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       });
 
       if (result && !error && result.success) {
-        // Remove message from UI immediately (WebSocket will also handle this)
         const messageToDelete = chatState.messages.find(msg => msg.id === messageId);
         chatState.messages = chatState.messages.filter(msg => msg.id !== messageId);
-        // Clean up tracking Set
         if (messageToDelete?.clientMessageId) {
           chatState.sentClientMessageIds.delete(messageToDelete.clientMessageId);
         }
@@ -394,15 +357,13 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   };
 
   const getAvatarIcon = (userName: string) => {
-    // Simple avatar logic based on name
-    // Could be enhanced to use actual profile photos in the future
     const firstChar = userName.charAt(0).toUpperCase();
     return firstChar;
   };
 
   const renderMessage = (msg: server.ChatMessage) => {
     const isCurrentUser = msg.userId === user.id;
-    const isPending = msg.id < 0; // Negative IDs indicate pending messages
+    const isPending = msg.id < 0;
     return (
       <div
         key={msg.id}
