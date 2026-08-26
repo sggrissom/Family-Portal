@@ -1046,6 +1046,23 @@ export interface VerifyBackupPathResponse {
     cached: boolean
 }
 
+export interface CheckPhotoConsistencyRequest {
+}
+
+export interface PhotoConsistencyReport {
+    checkedAt: string
+    durationMs: number
+    totalImages: number
+    presentCount: number
+    missingCount: number
+    orphanCount: number
+    orphanBytes: number
+    missing: MissingOriginal[]
+    orphans: OrphanOriginal[]
+    listLimit: number
+    orphanScanErr: string
+}
+
 export interface DiagnosticsResponse {
     version: string
     commit: string
@@ -1590,6 +1607,20 @@ export interface HostApp {
     name: string
     disk_kb: number
     traffic: HostTraffic
+}
+
+export interface MissingOriginal {
+    imageId: number
+    familyId: number
+    status: number
+    filePath: string
+    createdAt: string
+}
+
+export interface OrphanOriginal {
+    name: string
+    sizeBytes: number
+    modTime: string
 }
 
 export interface AdminMobileVersionPlatform {
@@ -2144,6 +2175,10 @@ export async function RevokeUserSessions(data: RevokeUserSessionsRequest): Promi
 
 export async function VerifyBackupPath(data: VerifyBackupPathRequest): Promise<rpc.Response<VerifyBackupPathResponse>> {
     return await rpc.call<VerifyBackupPathResponse>('VerifyBackupPath', JSON.stringify(data));
+}
+
+export async function CheckPhotoConsistency(data: CheckPhotoConsistencyRequest): Promise<rpc.Response<PhotoConsistencyReport>> {
+    return await rpc.call<PhotoConsistencyReport>('CheckPhotoConsistency', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

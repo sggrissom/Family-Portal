@@ -5,6 +5,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch } from "../../lib/authHelpers";
 import { adminView } from "../../components/AdminGuard";
+import { formatBytes } from "../../lib/formatBytes";
 import "./analytics-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -378,29 +379,16 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
 };
 
 const SystemView = ({ data }: { data: server.SystemAnalyticsResponse }) => {
-  const formatFileSize = (bytes: number) => {
-    const units = ["B", "KB", "MB", "GB"];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
-  };
-
   return (
     <div className="analytics-content">
       <div className="metrics-grid">
         <div className="metric-card">
-          <div className="metric-value">{formatFileSize(data.storageUsage.totalSize)}</div>
+          <div className="metric-value">{formatBytes(data.storageUsage.totalSize)}</div>
           <div className="metric-label">Total Storage Used</div>
         </div>
 
         <div className="metric-card">
-          <div className="metric-value">{formatFileSize(data.storageUsage.averageFileSize)}</div>
+          <div className="metric-value">{formatBytes(data.storageUsage.averageFileSize)}</div>
           <div className="metric-label">Average File Size</div>
         </div>
 

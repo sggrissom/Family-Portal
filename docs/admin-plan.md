@@ -434,10 +434,15 @@ in rough order of how often they'd be used:
    127.0.0.1, and an exhausted budget is disguised as a 404 — the same answer a
    stale token gets. Hence a ten-minute cooldown on the check, and a 404 that
    names both causes rather than guessing between them.
-4. **Photo/disk consistency check.** `Image` rows whose files are missing, and
-   files with no `Image` row. `cmd/verifydb` already computes exactly this
-   cross-check offline for the restore drill; the same logic behind a proc turns
-   it into something you can check any time rather than only after a restore.
+4. ~~**Photo/disk consistency check.**~~ **Done** — `CheckPhotoConsistency`,
+   a button on `/admin/photos`. `cmd/verifydb` no longer has its own copy of the
+   cross-check: both call `ScanPhotoConsistency`, so the drill and the panel can
+   never disagree about what "consistent" means. The proc caps each list at 50
+   while reporting the true counts, and sorts orphans largest-first, since the
+   reason to look at them is the space they take. One thing the plan did not
+   anticipate: an unreadable `photos/` directory has to be a reported field
+   rather than an error, because the row-to-disk direction — the one that finds
+   actual data loss — still works without it.
 5. **Resend a password reset** for a user who never got the mail — the mail
    worker's failures are otherwise entirely invisible.
 
@@ -475,6 +480,10 @@ Not urgent, but it's what makes the above cheaper to build.
   also treats a zero-value time as absent rather than rendering it as two
   thousand years ago. `chat.tsx` has a fourth variant, left alone because its
   wording and its seven-day cutoff are deliberately different.
+- ~~**Three copies of a byte formatter.**~~ **Done** — `lib/formatBytes.ts`.
+  `admin.tsx` and `analytics.tsx` each had one, differing only in that the
+  analytics copy always printed a decimal ("512.0 B"); the shared one drops it
+  above ten units and for bare bytes.
 
 ---
 
@@ -499,7 +508,8 @@ Not urgent, but it's what makes the above cheaper to build.
 7. ~~**§6** — the `AdminGuard` wrapper and the date-formatting duplication.~~
    **Done.** What remains of §6 is the styles merge and moving photo
    maintenance out of `admin.go`.
-8. Everything else as it becomes annoying. In rough order of appeal: §5.4
-   (photo/disk consistency, the logic already exists in `cmd/verifydb`), §5.5
+8. ~~**§5.4** — photo/disk consistency.~~ **Done**, sharing one scan with
+   `cmd/verifydb`.
+9. Everything else as it becomes annoying. In rough order of appeal: §5.5
    (resend a password reset), §3.4 (weekly usage digest), then §4.2 and §4.3,
    which are both work in `tiny-server-helper` first.

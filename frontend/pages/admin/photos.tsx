@@ -6,7 +6,8 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch } from "../../lib/authHelpers";
 import { adminView } from "../../components/AdminGuard";
-import { formatRelativeTime } from "../../lib/dateUtils";
+import { formatDateTime, formatRelativeTime } from "../../lib/dateUtils";
+import { formatBytes } from "../../lib/formatBytes";
 import { logWarn } from "../../lib/logger";
 import "./admin-styles";
 
@@ -23,6 +24,9 @@ type PhotoManagementState = {
   isRequeueing: boolean;
   requeueResult: string;
   requeueError: string;
+  isChecking: boolean;
+  consistency: server.PhotoConsistencyReport | null;
+  consistencyError: string;
 };
 
 const usePhotoManagementState = vlens.declareHook(
@@ -39,6 +43,9 @@ const usePhotoManagementState = vlens.declareHook(
     isRequeueing: false,
     requeueResult: "",
     requeueError: "",
+    isChecking: false,
+    consistency: null,
+    consistencyError: "",
   })
 );
 
@@ -174,6 +181,165 @@ const WorkerPanel = ({
   );
 };
 
+const ConsistencyPanel = ({ state, onRun }: { state: PhotoManagementState; onRun: () => void }) => {
+  const report = state.consistency;
+
+  return (
+    <div className="admin-section">
+      <h2>Storage Consistency</h2>
+      <p>
+        Cross-checks every photo row against the originals on disk, in both directions. A row with
+        no original is unrecoverable — the original is the only photo file the backup carries, and
+        every other variant is regenerated from it. An original with no row only wastes space in the
+        archive.
+      </p>
+
+      <div className="admin-actions">
+        <button
+          className="admin-btn admin-btn-secondary"
+          onClick={onRun}
+          disabled={state.isChecking}
+        >
+          {state.isChecking ? "Checking…" : "Run consistency check"}
+        </button>
+        {report && (
+          <span className="last-reprocess">
+            Checked {formatRelativeTime(report.checkedAt)} in {report.durationMs}ms
+          </span>
+        )}
+      </div>
+
+      {state.consistencyError && (
+        <div className="admin-notice">
+          <strong>The check could not run</strong> — {state.consistencyError}
+        </div>
+      )}
+
+      {report && <ConsistencyResult report={report} />}
+    </div>
+  );
+};
+
+const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }) => (
+  <div>
+    {report.missingCount === 0 ? (
+      <div className="admin-notice admin-notice-ok">
+        <strong>All {report.totalImages.toLocaleString()} originals present.</strong>
+      </div>
+    ) : (
+      <div className="admin-notice">
+        <strong>
+          {report.missingCount.toLocaleString()} of {report.totalImages.toLocaleString()} photo rows
+          have no original on disk.
+        </strong>{" "}
+        These cannot be reprocessed and are not in the backup. Check the restore drill in
+        docs/restore.md before deleting anything.
+      </div>
+    )}
+
+    {report.orphanScanErr && (
+      <div className="admin-notice">
+        <strong>The photo directory could not be scanned</strong> — {report.orphanScanErr}. Only the
+        row-to-disk direction was checked.
+      </div>
+    )}
+
+    <div className="photo-stats-grid">
+      <div className="stat-card">
+        <div className="stat-icon">✅</div>
+        <div className="stat-content">
+          <h3>Originals Present</h3>
+          <div className="stat-value">{report.presentCount.toLocaleString()}</div>
+          <div className="stat-label">of {report.totalImages.toLocaleString()} photo rows</div>
+        </div>
+      </div>
+
+      <div className="stat-card">
+        <div className="stat-icon">{report.missingCount > 0 ? "❌" : "✅"}</div>
+        <div className="stat-content">
+          <h3>Missing Originals</h3>
+          <div className="stat-value">{report.missingCount.toLocaleString()}</div>
+          <div className="stat-label">Rows whose file is gone</div>
+        </div>
+      </div>
+
+      <div className="stat-card">
+        <div className="stat-icon">🗑️</div>
+        <div className="stat-content">
+          <h3>Orphaned Files</h3>
+          <div className="stat-value">{report.orphanCount.toLocaleString()}</div>
+          <div className="stat-label">{formatBytes(report.orphanBytes)} with no row</div>
+        </div>
+      </div>
+    </div>
+
+    {report.missing.length > 0 && (
+      <div className="admin-card error-card">
+        <div className="card-header">
+          <div className="card-icon">⚠️</div>
+          <h3>Photo Rows With No Original</h3>
+        </div>
+        <div className="card-content">
+          <ul className="error-list">
+            {report.missing.map(row => (
+              <li key={row.imageId}>
+                Photo #{row.imageId} · family {row.familyId} · status {row.status} ·{" "}
+                {formatDateTime(row.createdAt)} · {row.filePath}
+              </li>
+            ))}
+          </ul>
+          <TruncationNote
+            shown={report.missing.length}
+            total={report.missingCount}
+            limit={report.listLimit}
+          />
+        </div>
+      </div>
+    )}
+
+    {report.orphans.length > 0 && (
+      <div className="admin-card">
+        <div className="card-header">
+          <div className="card-icon">📦</div>
+          <h3>Originals With No Photo Row</h3>
+        </div>
+        <div className="card-content">
+          <ul className="error-list">
+            {report.orphans.map(orphan => (
+              <li key={orphan.name}>
+                {orphan.name} · {formatBytes(orphan.sizeBytes)} ·{" "}
+                {formatRelativeTime(orphan.modTime, "unknown")}
+              </li>
+            ))}
+          </ul>
+          <TruncationNote
+            shown={report.orphans.length}
+            total={report.orphanCount}
+            limit={report.listLimit}
+          />
+        </div>
+      </div>
+    )}
+  </div>
+);
+
+const TruncationNote = ({
+  shown,
+  total,
+  limit,
+}: {
+  shown: number;
+  total: number;
+  limit: number;
+}) => {
+  if (total <= shown) return null;
+  return (
+    <p className="last-reprocess">
+      Showing {limit.toLocaleString()} of {total.toLocaleString()}.
+    </p>
+  );
+};
+
 const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
   const state = usePhotoManagementState();
 
@@ -289,6 +455,22 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         result.queued > 0
           ? `Requeued ${result.queued} photo${result.queued === 1 ? "" : "s"}.`
           : "Nothing was stuck.";
+    }
+    vlens.scheduleRedraw();
+  };
+
+  const runConsistencyCheck = async () => {
+    state.isChecking = true;
+    state.consistencyError = "";
+    vlens.scheduleRedraw();
+
+    const [result, error] = await server.CheckPhotoConsistency({});
+    state.isChecking = false;
+    if (error) {
+      logWarn("admin", "Photo consistency check failed", error);
+      state.consistencyError = error;
+    } else if (result) {
+      state.consistency = result;
     }
     vlens.scheduleRedraw();
   };
@@ -530,6 +712,8 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           <div className="card-content">{state.reprocessError}</div>
         </div>
       )}
+
+      <ConsistencyPanel state={state} onRun={runConsistencyCheck} />
 
       <div className="admin-section">
         <h2>Photo Processing Information</h2>

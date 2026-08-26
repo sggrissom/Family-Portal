@@ -17,6 +17,7 @@ func RegisterAdminActionMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, RequeueStuckPhotos)
 	vbeam.RegisterProc(app, RevokeUserSessions)
 	vbeam.RegisterProc(app, VerifyBackupPath)
+	vbeam.RegisterProc(app, CheckPhotoConsistency)
 }
 
 type RequeueStuckPhotosRequest struct{}

@@ -225,10 +225,7 @@ func isPhotoProcessed(photo Image) bool {
 }
 
 func getOriginalPhotoPath(photo Image) string {
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	ext := filepath.Ext(basePath)
-	base := strings.TrimSuffix(basePath, ext)
-	return base + "_original" + ext
+	return originalPathIn(cfg.StaticDir, photo.FilePath)
 }
 
 func cleanupOldVariants(baseFilename string) {

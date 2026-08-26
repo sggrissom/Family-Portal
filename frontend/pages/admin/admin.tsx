@@ -7,6 +7,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch } from "../../lib/authHelpers";
 import { adminView } from "../../components/AdminGuard";
+import { formatBytes } from "../../lib/formatBytes";
 import { formatRelativeTime } from "../../lib/dateUtils";
 import "./admin-styles";
 
@@ -224,17 +225,6 @@ const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) =
     )}
   </div>
 );
-
-function formatBytes(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB"];
-  let size = bytes;
-  let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit++;
-  }
-  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
 
 const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
   if (health.healthy) {
