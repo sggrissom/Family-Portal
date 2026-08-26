@@ -1024,6 +1024,20 @@ export interface SystemHealthResponse {
     push: PushProblems
     mail: MailProblems
     host: HostProblems
+    backups: BackupProblems
+}
+
+export interface WeeklyDigestResponse {
+    since: string
+    windowDays: number
+    photos: number
+    milestones: number
+    measurements: number
+    messages: number
+    people: DigestPerson[]
+    accounts: number
+    absent: number
+    quiet: boolean
 }
 
 export interface HostMetricsResponse {
@@ -1644,6 +1658,24 @@ export interface HostProblems {
     windowSeconds: number
 }
 
+export interface BackupProblems {
+    available: boolean
+    registered: boolean
+    neverRun: boolean
+    stale: boolean
+    lastSuccess: string
+    sizeKb: number
+}
+
+export interface DigestPerson {
+    name: string
+    signedIn: boolean
+    lastLogin: string
+    joined: boolean
+    photos: number
+    messages: number
+}
+
 export interface HostSystem {
     load_avg: HostLoadAvg
     memory: HostMemory
@@ -1655,6 +1687,8 @@ export interface HostApp {
     name: string
     disk_kb: number
     traffic: HostTraffic
+    backups: HostBackups
+    releases: HostRelease[]
 }
 
 export interface MailAttempt {
@@ -1789,6 +1823,20 @@ export interface HostTraffic {
     error_4xx: number
     error_5xx: number
     error_pct: number
+}
+
+export interface HostBackups {
+    registered: boolean
+    last_success: string
+    age_seconds: number
+    size_kb: number
+}
+
+export interface HostRelease {
+    name: string
+    sha: string
+    deployed_at: string
+    current: boolean
 }
 
 export interface EndpointStats {
@@ -2207,6 +2255,10 @@ export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<Syst
 
 export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
     return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function GetWeeklyDigest(data: Empty): Promise<rpc.Response<WeeklyDigestResponse>> {
+    return await rpc.call<WeeklyDigestResponse>('GetWeeklyDigest', JSON.stringify(data));
 }
 
 export async function GetHostMetrics(data: Empty): Promise<rpc.Response<HostMetricsResponse>> {

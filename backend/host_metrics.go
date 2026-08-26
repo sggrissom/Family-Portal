@@ -20,6 +20,10 @@ const metricsFetchTimeout = 3 * time.Second
 
 const diskWarnPct = 85.0
 
+// A backup older than this is stale. backupctl's own alert threshold, so the
+// panel and the nightly mail agree about when to start worrying.
+const backupStaleAge = 48 * time.Hour
+
 type HostLoadAvg struct {
 	One     float64 `json:"one"`
 	Five    float64 `json:"five"`
@@ -63,10 +67,26 @@ type HostTraffic struct {
 	ErrorPct       float64 `json:"error_pct"`
 }
 
+type HostBackups struct {
+	Registered  bool      `json:"registered"`
+	LastSuccess time.Time `json:"last_success"`
+	AgeSeconds  uint64    `json:"age_seconds"`
+	SizeKb      uint64    `json:"size_kb"`
+}
+
+type HostRelease struct {
+	Name       string    `json:"name"`
+	Sha        string    `json:"sha"`
+	DeployedAt time.Time `json:"deployed_at"`
+	Current    bool      `json:"current"`
+}
+
 type HostApp struct {
-	Name    string      `json:"name"`
-	DiskKb  uint64      `json:"disk_kb"`
-	Traffic HostTraffic `json:"traffic"`
+	Name     string        `json:"name"`
+	DiskKb   uint64        `json:"disk_kb"`
+	Traffic  HostTraffic   `json:"traffic"`
+	Backups  HostBackups   `json:"backups"`
+	Releases []HostRelease `json:"releases"`
 }
 
 type hostSnapshot struct {

@@ -155,3 +155,60 @@ func TestGetSystemHealthFlagsMissingLogs(t *testing.T) {
 		}
 	})
 }
+
+func TestBackupProblemsSeparatesNeverFromStale(t *testing.T) {
+	tests := []struct {
+		name    string
+		backups HostBackups
+		want    BackupProblems
+		trouble bool
+	}{
+		{
+			name:    "unregistered is its own alarm",
+			backups: HostBackups{Registered: false},
+			want:    BackupProblems{Available: true},
+			trouble: true,
+		},
+		{
+			name:    "registered and never once run",
+			backups: HostBackups{Registered: true},
+			want:    BackupProblems{Available: true, Registered: true, NeverRun: true},
+			trouble: true,
+		},
+		{
+			name:    "registered and stale",
+			backups: HostBackups{Registered: true, LastSuccess: time.Now().Add(-72 * time.Hour), SizeKb: 100},
+			want:    BackupProblems{Available: true, Registered: true, Stale: true, SizeKb: 100},
+			trouble: true,
+		},
+		{
+			name:    "registered and fresh",
+			backups: HostBackups{Registered: true, LastSuccess: time.Now().Add(-9 * time.Hour), SizeKb: 100},
+			want:    BackupProblems{Available: true, Registered: true, SizeKb: 100},
+			trouble: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := backupProblems(test.backups)
+			if got.Registered != test.want.Registered ||
+				got.NeverRun != test.want.NeverRun ||
+				got.Stale != test.want.Stale ||
+				got.SizeKb != test.want.SizeKb {
+				t.Errorf("backupProblems() = %+v, want %+v", got, test.want)
+			}
+			if backupTrouble(got) != test.trouble {
+				t.Errorf("backupTrouble() = %v, want %v", backupTrouble(got), test.trouble)
+			}
+		})
+	}
+}
+
+func TestBackupTroubleStaysQuietWithoutMetrics(t *testing.T) {
+	// No metrics service means no opinion about backups. Reporting "not
+	// registered" here would put a permanent alarm on every development box.
+	if backupTrouble(BackupProblems{}) {
+		t.Error("backupTrouble() = true with no metrics service; unknown is not the same as broken")
+	}
+}

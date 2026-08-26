@@ -17,7 +17,12 @@ const snapshotJSON = `{
   },
   "apps": [
     {"name": "chess", "disk_kb": 1000, "traffic": {"window_seconds": 900, "requests_total": 5, "requests_per_min": 0.3, "error_4xx": 0, "error_5xx": 0, "error_pct": 0.0}},
-    {"name": "family", "disk_kb": 4200000, "traffic": {"window_seconds": 900, "requests_total": 120, "requests_per_min": 8.0, "error_4xx": 3, "error_5xx": 2, "error_pct": 4.17}}
+    {"name": "family", "disk_kb": 4200000, "traffic": {"window_seconds": 900, "requests_total": 120, "requests_per_min": 8.0, "error_4xx": 3, "error_5xx": 2, "error_pct": 4.17},
+     "backups": {"registered": true, "last_success": "2026-08-22T03:12:00Z", "age_seconds": 24480, "size_kb": 148402},
+     "releases": [
+       {"name": "2026-08-21_204500_0bab4d9", "sha": "0bab4d9", "deployed_at": "2026-08-21T20:45:03Z", "current": true},
+       {"name": "2026-08-19_101200_197bfa0", "sha": "197bfa0", "deployed_at": "2026-08-19T10:12:07Z", "current": false}
+     ]}
   ]
 }`
 
@@ -71,6 +76,19 @@ func TestFetchHostMetricsReadsTheRealShape(t *testing.T) {
 	}
 	if resp.System.CPU.IowaitPct != 1.0 {
 		t.Errorf("Cpu.IowaitPct = %v, want 1 — a box slow on disk looks idle by every other measure", resp.System.CPU.IowaitPct)
+	}
+
+	if !resp.App.Backups.Registered || resp.App.Backups.SizeKb != 148402 {
+		t.Errorf("backups = %+v, want a registered app with a size", resp.App.Backups)
+	}
+	if resp.App.Backups.LastSuccess.IsZero() {
+		t.Error("Backups.LastSuccess is zero; a never-run backup and a backup that ran must not look alike")
+	}
+	if len(resp.App.Releases) != 2 || !resp.App.Releases[0].Current {
+		t.Fatalf("releases = %+v, want two, newest first, with the newest current", resp.App.Releases)
+	}
+	if resp.App.Releases[0].Sha != "0bab4d9" {
+		t.Errorf("Releases[0].Sha = %q, want 0bab4d9", resp.App.Releases[0].Sha)
 	}
 
 	fetchHostMetrics()

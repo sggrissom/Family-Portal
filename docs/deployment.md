@@ -252,6 +252,36 @@ say. A metrics service that is down never takes the panel with it — the fetch
 has a three-second timeout, the result is cached for 30 seconds either way, and
 a failure renders as one line naming the reason.
 
+### Backup age and deploy history
+
+The same fetch carries two more blocks per app, and both need a `metrics-server`
+built from a checkout that has them:
+
+- **`releases`** — the last five release directories, newest first, with the
+  short SHA and the time the directory was created *on the box*. Not the
+  timestamp in the release name: `bin/deploy` builds that from the deploying
+  machine's clock, in whatever zone that machine happens to be in. Rendered as
+  the deploy strip under the diagnostics row, so "this started after Tuesday's
+  deploy" is visible rather than reconstructed.
+- **`backups`** — whether `/srv/apps/family/shared/backup.conf` exists, and,
+  from the status file `backupctl` publishes, when the last run succeeded and
+  how large the repository is. Three states reach the problems feed: not
+  registered at all, registered but never once successful, and older than two
+  nightly windows.
+
+`backupctl` writes that status file to
+`/var/lib/tiny-server-helper/status/backup-<app>.json`, mode 644, only after
+restic reports success. Its own cache under
+`/var/lib/tiny-server-helper/backup/` stays mode 700 — it stages plaintext
+database snapshots — so the published file is what an unprivileged reader gets.
+`metrics-server` runs as `apps` and reads it there. This application never
+reads either: it only sees what the metrics fetch hands it, which is the whole
+reason backup state is not this repo's problem.
+
+An older `metrics-server` simply omits both blocks. The deploy strip disappears
+and the backup line reads as never registered, so redeploy `metrics-server` in
+the same pass as anything that depends on them.
+
 ## Universal links
 
 `/.well-known/apple-app-site-association` is what makes a `familyrecord.app`

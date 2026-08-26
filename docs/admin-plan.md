@@ -246,7 +246,7 @@ a card.
 While there: `checkAPNs`'s all-or-nothing pattern is the right model for the new
 optional subsystem in §4.1.
 
-### 3.2 A "recent problems" feed on `/admin` — **done** (except backup age, §4.2)
+### 3.2 A "recent problems" feed on `/admin` — **done**
 
 One panel, above the fold, aggregating what is already available:
 
@@ -258,7 +258,7 @@ One panel, above the fold, aggregating what is already available:
 - `AnalysisStatus = 3` (failed) face analysis count
 - push `LastError` / `LastErrorAt` and the failure count from `PushWorkerStats`
 - config issues from §3.1
-- backup age, once §4.2 lands
+- backup age, which arrived with §4.2
 
 Silent when everything is clean. The point is that a green page means something.
 
@@ -286,7 +286,7 @@ or a give-up, and a message dropped by a full queue — which never reaches the
 worker at all, so nothing downstream would otherwise know it existed.
 `GetMailQueueLength` is left alone; the diagnostics strip still uses it.
 
-### 3.4 A usage feed instead of retention percentages
+### 3.4 A usage feed instead of retention percentages — **done**
 
 "General usage patterns" for a family site with a handful of accounts is not a
 retention curve. It's: who logged in this week, what got uploaded, what got
@@ -294,6 +294,22 @@ created, and did anything unusual happen. `GetAnalyticsOverview` already builds
 a 7-day photo/milestone/login summary — surface it as a readable weekly digest
 on `/admin` rather than as input to a chart, and drop the metrics that need a
 larger population to mean anything (§1.6).
+
+`GetWeeklyDigest` in `backend/admin_digest.go` is its own proc rather than a
+second reader of `GetAnalyticsOverview`, because the digest needs names and the
+overview only ever produced counts. Totals for photos, milestones, growth
+measurements and chat, then one line per person, then how many accounts did
+nothing at all.
+
+Two things the plan did not anticipate. First, "who logged in this week" is not
+the same question as "who used the site this week": `User.LastLogin` is written
+only where a session is *created*, and the refresh path at `auth.go:429`
+deliberately does not touch it, so a phone that has stayed signed in for months
+shows a stale login beside a week of uploads. The per-person list is therefore
+the union of "signed in" and "added something", and says which of the two it
+was rather than picking one and being wrong. Second, a milestone records no
+author, so milestones count in the totals and appear against nobody; inventing
+an author from the family would have been §1.5's mistake again.
 
 ---
 
@@ -343,7 +359,7 @@ The app must degrade quietly if the fetch fails, the same way face analysis does
 existing `/admin` fetch already has this instinct (`diagnostics ?? null`, with a
 comment explaining why); follow it.
 
-### 4.2 Surface backup state — via `metrics-server`, not directly
+### 4.2 Surface backup state — via `metrics-server`, not directly — **done**
 
 `backupctl` writes `/var/lib/tiny-server-helper/backup/<app>.last` after a
 verified successful run, and its README is emphatic that the failure mode that
@@ -372,7 +388,33 @@ If `metrics-server` shouldn't grow privileges for this, the alternative is for
 `backupctl` to write a mode-644 JSON status file that `metrics-server` reads —
 same result, and the registry stays the filesystem, as that repo insists.
 
-### 4.3 Release history next to the error history
+That alternative is the one that shipped, and it was not optional: `STATE_DIR`
+is mode **700**, not just root-owned, because `stage/` inside it holds a
+plaintext database snapshot while a run is in flight. A process running as
+`apps` cannot traverse into it to read `<app>.last` at all, and relaxing the
+mode would trade a backup timestamp for a readable database. So `backupctl`
+gained `publish_status`, writing `/var/lib/tiny-server-helper/status/backup-<app>.json`
+at mode 644 from the one place `<app>.last` is written — after restic reported
+success, and nowhere else, so the two can never disagree. Nothing in that repo
+reads it back; it is output, not state, and CLAUDE.md now says so.
+
+`registered` is *not* in that file. `metrics-server` derives it by stat-ing
+`shared/backup.conf` itself, which keeps the filesystem as the registry rather
+than caching the registry into the status file, and makes "registered, never
+succeeded" — the alarm class this section is about — representable as the
+absence of a file rather than a flag someone has to remember to clear.
+
+Two things the plan did not anticipate. `size_kb` needs `restic stats`, which
+needs the repository password, so it can only be computed by root at run time
+and is best-effort for the same reason the `status` column is: a cosmetic
+number must never be what turns a successful backup into a failed unit. And
+"not registered at all" turned out to deserve its own entry in the problems feed
+next to "never succeeded" and "stale" — an app nobody ever wrote a `backup.conf`
+for is the quietest way to have no backups. All three are silent when the
+metrics service is unreachable: unknown is not the same as broken, or every
+development machine would carry a permanent alarm.
+
+### 4.3 Release history next to the error history — **done**
 
 The diagnostics strip already shows version, commit, build time, and uptime from
 the linker stamps — most of what you want. The gap is *history*: "what was the
@@ -388,6 +430,19 @@ Tuesday deploy" a thing you can see instead of a thing you reconstruct.
 This also finally makes the `family.caddy` hand-edit visible in principle — see
 deployment.md's note that `appctl domain` would silently drop the `www` block on
 its next run.
+
+It was indeed a handful of lines. One correction to the shape: the timestamp
+does not come from the release *name*. `bin/deploy` builds that name with
+`date +%Y-%m-%d_%H%M%S` on the **deploying** machine, in whatever zone that
+machine is in, so reading it as an instant would misdate every deploy made from
+a laptop in another timezone. The directory's mtime is a real instant, recorded
+on the box, and is what the strip shows; the name still supplies the short SHA.
+Sorting stays lexical on the name, which is chronological regardless.
+
+While in `apps.rs`: `disk_usage_kb` followed the `current` symlink and counted
+the running release twice. `file_type()` does not follow links, so the "This
+app" figure on the Host card is now the size of the app rather than the size of
+the app plus its newest release.
 
 ### 4.4 The site isn't being monitored
 
@@ -493,9 +548,34 @@ Not urgent, but it's what makes the above cheaper to build.
   signed-out visitor and the denial page for a signed-in non-admin. The denial
   now reuses the existing `ErrorPage` component, and every page links back to
   `/dashboard` rather than to `/admin`, which a non-admin cannot open either.
-- **`admin-styles.ts` is 813 lines and `analytics-styles.ts` is 979** — 1792
+- ~~**`admin-styles.ts` is 813 lines and `analytics-styles.ts` is 979** — 1792
   lines of CSS for seven pages, more than the pages themselves. The two files
-  overlap heavily (cards, tables, badges, breadcrumbs). Worth one merge pass.
+  overlap heavily (cards, tables, badges, breadcrumbs). Worth one merge pass.~~
+  **Partly done, and the premise was wrong in an interesting way.** The two
+  files share exactly *one* class name (`.family-name`); the "overlap" is
+  parallel vocabulary under different names — `.admin-container` beside
+  `.analytics-container`, `.stat-card` beside `.metric-card` — so merging them
+  means renaming classes across the pages, not deduplicating rules. Across all
+  five admin stylesheets there are 24 byte-identical declaration blocks, worth
+  perhaps a hundred lines. Not nothing, but not where the 3,000 lines are.
+
+  What the pass did find is a real bug. `analytics-styles.ts` used
+  `--admin-text-on-accent` and `logs-styles.ts` used `--admin-accent`,
+  `--admin-border` and `--admin-surface`, but those variables were defined in
+  `admin-styles.ts`, which neither page imports — and pages are lazy-loaded
+  chunks, so `chunk-EQHNNXUN.js` (the one carrying the `:root` block) never
+  reached either. Loading `/admin/analytics` or `/admin/logs` directly, rather
+  than clicking through from `/admin`, left those variables undefined: white
+  header text fell back to inherited dark text on an indigo gradient. The nine
+  admin tokens and their dark-theme overrides now live in `admin-tokens.ts`,
+  which all five stylesheets import, and the built chunk graph confirms every
+  admin page pulls it.
+
+  Also deleted: seven rules nothing referenced any more — `.time-selector`
+  (§1.2), `.error-categories`/`.error-category` (§1.5), `.progress-bar`,
+  `.progress-fill`, `.card-placeholder` and `.admin-btn-danger`. What remains of
+  this bullet is the class-renaming half, which is a visual-diff refactor and
+  should be done when someone can look at the pages.
 - ~~**`admin.tsx` and `users.tsx` duplicate date formatting**~~ **Done** — the
   file is `lib/dateUtils.ts`, and it gained `formatDateTime` (users.tsx's local
   copy) and `formatRelativeTime` (identical `formatWhen`/`shortWhen` in
@@ -537,6 +617,16 @@ Not urgent, but it's what makes the above cheaper to build.
 9. ~~**§5.5** — resend a password reset.~~ **Done**, with the mail-worker half
    of §3.3 and the mail entry in the problems feed, and §6's photo-maintenance
    move alongside it.
-10. Everything else as it becomes annoying. In rough order of appeal: §3.4
+10. ~~Everything else as it becomes annoying. In rough order of appeal: §3.4
     (weekly usage digest), the §6 styles merge, then §4.2 and §4.3, which are
-    both work in `tiny-server-helper` first.
+    both work in `tiny-server-helper` first.~~ **Done**, except the class-
+    renaming half of the §6 styles merge. §4.2 and §4.3 needed
+    `metrics-server` to grow a `backups` and a `releases` block per app, and
+    §4.2 needed `backupctl` to publish a status file a non-root reader can
+    see; both are in `tiny-server-helper` and **neither reaches production
+    until `metrics-server` is redeployed and `backupctl` reinstalled on the
+    box** — until then the app simply sees neither block, the deploy strip
+    stays hidden, and the backup line reads as never registered.
+
+What is left in this document: §1.9 (bucket scans, explicitly not work to do),
+the class-renaming half of §6, and whatever §5 candidates become annoying.

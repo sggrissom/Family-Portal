@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "./admin-tokens";
 
 block(`
 .logs-page {

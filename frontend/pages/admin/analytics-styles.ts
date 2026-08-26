@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "./admin-tokens";
 
 block(`
 :root {
@@ -147,18 +148,6 @@ block(`
 .view-btn.active {
   background: var(--analytics-primary);
   color: white;
-}
-`);
-
-block(`
-.time-selector select {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.875rem;
-  cursor: pointer;
 }
 `);
 
@@ -815,27 +804,6 @@ block(`
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--analytics-error);
-}
-`);
-
-block(`
-.error-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-`);
-
-block(`
-.error-category {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.875rem;
 }
 `);
 

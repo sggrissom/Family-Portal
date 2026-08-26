@@ -57,6 +57,15 @@ type HostProblems struct {
 	WindowSeconds int     `json:"windowSeconds"`
 }
 
+type BackupProblems struct {
+	Available   bool      `json:"available"`
+	Registered  bool      `json:"registered"`
+	NeverRun    bool      `json:"neverRun"`
+	Stale       bool      `json:"stale"`
+	LastSuccess time.Time `json:"lastSuccess"`
+	SizeKb      int       `json:"sizeKb"`
+}
+
 type SystemHealthResponse struct {
 	Healthy      bool            `json:"healthy"`
 	ReleaseBuild bool            `json:"releaseBuild"`
@@ -66,6 +75,7 @@ type SystemHealthResponse struct {
 	Push         PushProblems    `json:"push"`
 	Mail         MailProblems    `json:"mail"`
 	Host         HostProblems    `json:"host"`
+	Backups      BackupProblems  `json:"backups"`
 }
 
 const healthLogWindow = 24 * time.Hour
@@ -100,6 +110,7 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 			Proxy4xx:      int(host.App.Traffic.Error4xx),
 			WindowSeconds: int(host.App.Traffic.WindowSeconds),
 		}
+		resp.Backups = backupProblems(host.App.Backups)
 	}
 
 	push := GetPushWorkerStats()
@@ -128,9 +139,35 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 		resp.Push.LastError == "" &&
 		resp.Mail.LastError == "" &&
 		!resp.Host.DiskLow &&
-		resp.Host.Proxy5xx == 0
+		resp.Host.Proxy5xx == 0 &&
+		!backupTrouble(resp.Backups)
 
 	return
+}
+
+// A backup nobody is watching is backupctl's own stated failure mode, so the
+// three states worth surfacing are "not registered at all", "registered and
+// never once succeeded", and "succeeded, but not lately".
+func backupProblems(backups HostBackups) BackupProblems {
+	problems := BackupProblems{
+		Available:   true,
+		Registered:  backups.Registered,
+		LastSuccess: backups.LastSuccess,
+		SizeKb:      int(backups.SizeKb),
+	}
+	if !backups.Registered {
+		return problems
+	}
+	if backups.LastSuccess.IsZero() {
+		problems.NeverRun = true
+		return problems
+	}
+	problems.Stale = time.Since(backups.LastSuccess) > backupStaleAge
+	return problems
+}
+
+func backupTrouble(problems BackupProblems) bool {
+	return problems.Available && (!problems.Registered || problems.NeverRun || problems.Stale)
 }
 
 func collectLogProblems() LogProblems {

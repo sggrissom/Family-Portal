@@ -15,22 +15,25 @@ type Data = {
   diagnostics: server.DiagnosticsResponse | null;
   health: server.SystemHealthResponse | null;
   host: server.HostMetricsResponse | null;
+  digest: server.WeeklyDigestResponse | null;
 };
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<Data>({ diagnostics: null, health: null, host: null });
+    return rpc.ok<Data>({ diagnostics: null, health: null, host: null, digest: null });
   }
 
-  const [[diagnostics], [health], [host]] = await Promise.all([
+  const [[diagnostics], [health], [host], [digest]] = await Promise.all([
     server.GetDiagnostics({}),
     server.GetSystemHealth({}),
     server.GetHostMetrics({}),
+    server.GetWeeklyDigest({}),
   ]);
   return rpc.ok<Data>({
     diagnostics: diagnostics ?? null,
     health: health ?? null,
     host: host ?? null,
+    digest: digest ?? null,
   });
 }
 
@@ -45,6 +48,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
             diagnostics={data.diagnostics}
             health={data.health}
             host={data.host}
+            digest={data.digest}
           />
         </main>
         <Footer />
@@ -58,9 +62,10 @@ interface AdminPageProps {
   diagnostics: server.DiagnosticsResponse | null;
   health: server.SystemHealthResponse | null;
   host: server.HostMetricsResponse | null;
+  digest: server.WeeklyDigestResponse | null;
 }
 
-const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
+const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) => {
   return (
     <div className="admin-page">
       <div className="admin-header">
@@ -73,8 +78,10 @@ const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
       </div>
 
       {diagnostics && <Diagnostics info={diagnostics} />}
+      {host && host.available && <Releases releases={host.app.releases} />}
       {health && <Problems health={health} />}
       {host && host.configured && <Host metrics={host} />}
+      {digest && <Digest digest={digest} />}
 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
@@ -146,7 +153,7 @@ const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
         </a>
       </div>
 
-      <Backups />
+      <Backups state={health ? health.backups : null} />
     </div>
   );
 };
@@ -161,7 +168,7 @@ const useBackupState = vlens.declareHook(
   (): BackupState => ({ checking: false, result: null, error: "" })
 );
 
-const Backups = () => {
+const Backups = ({ state: reported }: { state: server.BackupProblems | null }) => {
   const state = useBackupState();
 
   const verify = async () => {
@@ -182,6 +189,7 @@ const Backups = () => {
   return (
     <div className="admin-section">
       <h2>Backups</h2>
+      {reported && reported.available && <BackupState state={reported} />}
       <p className="problem-note">
         Every night backupctl fetches a database snapshot over loopback, and the only evidence it
         worked is a file on a box this application cannot read. This sends the same request with the
@@ -205,6 +213,31 @@ const Backups = () => {
       )}
       {state.result && <BackupResult result={state.result} />}
     </div>
+  );
+};
+
+const BackupState = ({ state }: { state: server.BackupProblems }) => {
+  if (!state.registered) {
+    return (
+      <p className="problem-note">
+        This app is not registered for backup on the host — there is no{" "}
+        <code>shared/backup.conf</code>, so backupctl has never been asked to archive it.
+      </p>
+    );
+  }
+  if (state.neverRun) {
+    return (
+      <p className="problem-note">
+        Registered for backup, but no run has ever succeeded. Nothing has been archived.
+      </p>
+    );
+  }
+  return (
+    <p className="problem-note">
+      Last backup {formatRelativeTime(state.lastSuccess)}
+      {state.sizeKb > 0 && `, ${formatKb(state.sizeKb)} in the repository`}.
+      {state.stale && " That is more than two nightly windows ago."}
+    </p>
   );
 };
 
@@ -244,6 +277,7 @@ const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
       <h2 className="problems-title">Needs a look</h2>
 
       <ConfigIssues health={health} />
+      <BackupIssues backups={health.backups} />
       <HostIssues host={health.host} />
       <LogIssues logs={health.logs} />
       <PhotoIssues photos={health.photos} />
@@ -270,6 +304,32 @@ const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
             <code>{issue.setting}</code> {issue.detail}
           </li>
         ))}
+      </ul>
+    </div>
+  );
+};
+
+const BackupIssues = ({ backups }: { backups: server.BackupProblems }) => {
+  if (!backups.available) return null;
+  if (backups.registered && !backups.neverRun && !backups.stale) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Backups</h3>
+      <ul className="problem-list">
+        {!backups.registered && (
+          <li>
+            This app is not registered for backup — no <code>shared/backup.conf</code> on the host,
+            so nothing is being archived
+          </li>
+        )}
+        {backups.neverRun && <li>Registered for backup, but no run has ever succeeded</li>}
+        {backups.stale && (
+          <li>
+            Last successful backup was {formatRelativeTime(backups.lastSuccess)}, more than two
+            nightly windows ago
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -434,6 +494,102 @@ const MailIssues = ({ mail }: { mail: server.MailProblems }) => {
     </div>
   );
 };
+
+const Releases = ({ releases }: { releases: server.HostRelease[] }) => {
+  if (releases.length === 0) return null;
+
+  return (
+    <div className="releases">
+      <h3 className="releases-title">Recent deploys</h3>
+      <ol className="releases-list">
+        {releases.map(release => (
+          <li
+            key={release.name}
+            className={release.current ? "release release-current" : "release"}
+          >
+            <code className="release-sha">{release.sha}</code>
+            <span className="release-when">
+              {formatRelativeTime(release.deployed_at, "unknown")}
+            </span>
+            {release.current && <span className="release-tag">running</span>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+};
+
+const Digest = ({ digest }: { digest: server.WeeklyDigestResponse }) => {
+  if (digest.quiet) {
+    return (
+      <div className="admin-section">
+        <h2>The last {digest.windowDays} days</h2>
+        <p className="problem-note">
+          Nobody signed in, and nothing was added. All {digest.accounts} accounts were quiet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-section">
+      <h2>The last {digest.windowDays} days</h2>
+
+      <dl className="diagnostics-grid">
+        <DiagnosticItem label="Photos" value={countOf(digest.photos, "photo", "photos")} />
+        <DiagnosticItem
+          label="Milestones"
+          value={countOf(digest.milestones, "milestone", "milestones")}
+        />
+        <DiagnosticItem
+          label="Measurements"
+          value={countOf(digest.measurements, "measurement", "measurements")}
+        />
+        <DiagnosticItem label="Chat" value={countOf(digest.messages, "message", "messages")} />
+      </dl>
+
+      {digest.people.length > 0 && (
+        <ul className="digest-people">
+          {digest.people.map(person => (
+            <DigestPerson key={person.name} person={person} />
+          ))}
+        </ul>
+      )}
+
+      {digest.absent > 0 && (
+        <p className="problem-note">
+          {digest.absent} of {digest.accounts} accounts neither signed in nor added anything.
+        </p>
+      )}
+    </div>
+  );
+};
+
+const DigestPerson = ({ person }: { person: server.DigestPerson }) => {
+  const added: string[] = [];
+  if (person.photos > 0) added.push(countOf(person.photos, "photo", "photos"));
+  if (person.messages > 0) added.push(countOf(person.messages, "message", "messages"));
+
+  return (
+    <li className="digest-person">
+      <span className="digest-person-name">{person.name}</span>
+      <span className="digest-person-what">
+        {added.length > 0 ? added.join(", ") : "nothing added"}
+      </span>
+      <span className="digest-person-when">
+        {person.joined
+          ? "joined this week"
+          : person.signedIn
+            ? `signed in ${formatRelativeTime(person.lastLogin)}`
+            : "no sign-in this week"}
+      </span>
+    </li>
+  );
+};
+
+function countOf(value: number, one: string, many: string): string {
+  return `${value} ${value === 1 ? one : many}`;
+}
 
 const Host = ({ metrics }: { metrics: server.HostMetricsResponse }) => {
   if (!metrics.available) {
