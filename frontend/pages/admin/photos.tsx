@@ -4,7 +4,9 @@ import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
+import { formatRelativeTime } from "../../lib/dateUtils";
 import { logWarn } from "../../lib/logger";
 import "./admin-styles";
 
@@ -63,38 +65,17 @@ export function view(
   prefix: string,
   data: server.GetPhotoStatsResponse
 ): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(() => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/admin" className="btn btn-primary">
-              Return to Admin Dashboard
-            </a>
-          </div>
+        <main id="app" className="admin-container">
+          <PhotoManagementPage data={data} />
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="admin-container">
-        <PhotoManagementPage data={data} />
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 interface PhotoManagementPageProps {
@@ -144,7 +125,7 @@ const WorkerPanel = ({
           <div className="stat-icon">🕒</div>
           <div className="stat-content">
             <h3>Last Processed</h3>
-            <div className="stat-value">{shortWhen(stats.lastProcessedAt)}</div>
+            <div className="stat-value">{formatRelativeTime(stats.lastProcessedAt, "never")}</div>
             <div className="stat-label">Most recent success</div>
           </div>
         </div>
@@ -152,7 +133,8 @@ const WorkerPanel = ({
 
       {stats.lastError && (
         <div className="admin-notice">
-          <strong>Last error</strong> ({shortWhen(stats.lastErrorAt)}): {stats.lastError}
+          <strong>Last error</strong> ({formatRelativeTime(stats.lastErrorAt, "never")}):{" "}
+          {stats.lastError}
         </div>
       )}
 
@@ -168,7 +150,7 @@ const WorkerPanel = ({
                 <li key={`${attempt.imageId}-${attempt.time}`}>
                   {attempt.success ? "✅" : "❌"} Photo #{attempt.imageId}
                   {attempt.reprocess ? " (reprocess)" : ""} · {attempt.durationMs}ms ·{" "}
-                  {shortWhen(attempt.time)}
+                  {formatRelativeTime(attempt.time, "never")}
                   {attempt.reason && ` · ${attempt.reason}`}
                 </li>
               ))}
@@ -191,19 +173,6 @@ const WorkerPanel = ({
     </div>
   );
 };
-
-function shortWhen(timestamp: string): string {
-  const then = new Date(timestamp).getTime();
-  if (!Number.isFinite(then) || then <= 0) return "never";
-
-  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
   const state = usePhotoManagementState();

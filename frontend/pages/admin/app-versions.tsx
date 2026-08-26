@@ -3,7 +3,8 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
 import "./admin-styles";
 import "./app-versions-styles";
 
@@ -22,81 +23,61 @@ export function view(
   prefix: string,
   data: server.AdminGetMobileVersionsResponse
 ): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(() => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/admin" className="btn btn-primary">
-              Return to Admin Dashboard
-            </a>
+        <main id="app" className="admin-container">
+          <div className="admin-page">
+            <div className="admin-breadcrumb">
+              <a href="/admin">Admin Dashboard</a>
+              <span className="breadcrumb-separator">›</span>
+              <span>App Versions</span>
+            </div>
+
+            <div className="admin-header">
+              <div className="admin-badge">
+                <span className="admin-icon">📱</span>
+                <span>App Versions</span>
+              </div>
+              <h1>App Versions</h1>
+              <p>
+                What the companion app is told about itself before anybody signs in: the oldest
+                build still allowed to run, the build to suggest, and where to send someone to
+                update.
+              </p>
+            </div>
+
+            <div className="version-explainer">
+              <dl>
+                <div>
+                  <dt>Minimum version</dt>
+                  <dd>
+                    Anything below it is refused outright — the app shows the message and the store
+                    link, and will not continue. Never raise it past a build that is actually
+                    available.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Latest version</dt>
+                  <dd>Anything below it is offered an update it can dismiss.</dd>
+                </div>
+                <div>
+                  <dt>Leave both blank</dt>
+                  <dd>Every build is accepted. This is the state a platform starts in.</dd>
+                </div>
+              </dl>
+            </div>
+
+            {data.platforms.map(platform => (
+              <PlatformForm key={platform.platform} platform={platform} />
+            ))}
           </div>
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="admin-container">
-        <div className="admin-page">
-          <div className="admin-breadcrumb">
-            <a href="/admin">Admin Dashboard</a>
-            <span className="breadcrumb-separator">›</span>
-            <span>App Versions</span>
-          </div>
-
-          <div className="admin-header">
-            <div className="admin-badge">
-              <span className="admin-icon">📱</span>
-              <span>App Versions</span>
-            </div>
-            <h1>App Versions</h1>
-            <p>
-              What the companion app is told about itself before anybody signs in: the oldest build
-              still allowed to run, the build to suggest, and where to send someone to update.
-            </p>
-          </div>
-
-          <div className="version-explainer">
-            <dl>
-              <div>
-                <dt>Minimum version</dt>
-                <dd>
-                  Anything below it is refused outright — the app shows the message and the store
-                  link, and will not continue. Never raise it past a build that is actually
-                  available.
-                </dd>
-              </div>
-              <div>
-                <dt>Latest version</dt>
-                <dd>Anything below it is offered an update it can dismiss.</dd>
-              </div>
-              <div>
-                <dt>Leave both blank</dt>
-                <dd>Every build is accepted. This is the state a platform starts in.</dd>
-              </div>
-            </dl>
-          </div>
-
-          {data.platforms.map(platform => (
-            <PlatformForm key={platform.platform} platform={platform} />
-          ))}
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 type VersionForm = {

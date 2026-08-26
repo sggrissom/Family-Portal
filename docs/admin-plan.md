@@ -457,14 +457,24 @@ Not urgent, but it's what makes the above cheaper to build.
   `AdminUserId` constant in place of the magic number.
 - **`admin.go` is 656 lines** after §2.4 extracted the log parser, down from
   1286. Photo maintenance still belongs next to the photo worker.
-- **Every admin page reimplements the same "Access Denied" block** — six
-  near-identical copies of a `Header`/`error-page`/`Footer` tree. One
-  `<AdminGuard>` wrapper.
+- ~~**Every admin page reimplements the same "Access Denied" block** — six
+  near-identical copies of a `Header`/`error-page`/`Footer` tree.~~ **Done** —
+  seven copies, in fact. `components/AdminGuard.tsx` exports `adminView`, which
+  takes the page body as a callback and owns both gates: the redirect for a
+  signed-out visitor and the denial page for a signed-in non-admin. The denial
+  now reuses the existing `ErrorPage` component, and every page links back to
+  `/dashboard` rather than to `/admin`, which a non-admin cannot open either.
 - **`admin-styles.ts` is 813 lines and `analytics-styles.ts` is 979** — 1792
   lines of CSS for seven pages, more than the pages themselves. The two files
   overlap heavily (cards, tables, badges, breadcrumbs). Worth one merge pass.
-- **`admin.tsx` and `users.tsx` duplicate date formatting** that `lib/dates`
-  presumably already handles.
+- ~~**`admin.tsx` and `users.tsx` duplicate date formatting**~~ **Done** — the
+  file is `lib/dateUtils.ts`, and it gained `formatDateTime` (users.tsx's local
+  copy) and `formatRelativeTime` (identical `formatWhen`/`shortWhen` in
+  admin.tsx and photos.tsx). The two differed only in what they showed for an
+  unparseable timestamp, now an optional `fallback` argument; the shared one
+  also treats a zero-value time as absent rather than rendering it as two
+  thousand years ago. `chat.tsx` has a fourth variant, left alone because its
+  wording and its seven-day cutoff are deliberately different.
 
 ---
 
@@ -483,6 +493,13 @@ Not urgent, but it's what makes the above cheaper to build.
 5. ~~**§4.1** — `metrics-server`.~~ **Done** on this side: `GetHostMetrics`,
    the Host card, and disk + proxy 5xx in the problems feed. Needs
    `METRICS_URL` and `METRICS_API_KEY` in `shared/.env` (see deployment.md).
-6. **§4.4** — add the site to `monitor-tui`. Trivial, and arguably should be
-   done first since it costs one line.
-7. Everything else as it becomes annoying.
+6. ~~**§4.4** — add the site to `monitor-tui`.~~ **Done** in that repo:
+   `familyrecord.app/readyz`, with the per-site
+   `consecutive_failures = 1` override the section argued for.
+7. ~~**§6** — the `AdminGuard` wrapper and the date-formatting duplication.~~
+   **Done.** What remains of §6 is the styles merge and moving photo
+   maintenance out of `admin.go`.
+8. Everything else as it becomes annoying. In rough order of appeal: §5.4
+   (photo/disk consistency, the logic already exists in `cmd/verifydb`), §5.5
+   (resend a password reset), §3.4 (weekly usage digest), then §4.2 and §4.3,
+   which are both work in `tiny-server-helper` first.

@@ -3,7 +3,8 @@ import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
 import "./analytics-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -30,38 +31,17 @@ export function view(
   prefix: string,
   data: server.AnalyticsOverviewResponse
 ): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(() => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/dashboard" className="btn btn-primary">
-              Return to Dashboard
-            </a>
-          </div>
+        <main id="app" className="analytics-container">
+          <AnalyticsPage overviewData={data} />
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="analytics-container">
-        <AnalyticsPage overviewData={data} />
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 interface AnalyticsPageProps {

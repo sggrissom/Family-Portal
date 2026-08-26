@@ -3,7 +3,8 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
 import { logWarn } from "../../lib/logger";
 import "./admin-styles";
 import "./push-styles";
@@ -75,38 +76,17 @@ export function view(
   prefix: string,
   data: server.GetPushStatusResponse
 ): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(() => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/admin" className="btn btn-primary">
-              Return to Admin Dashboard
-            </a>
-          </div>
+        <main id="app" className="admin-container">
+          <PushPage data={data} />
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="admin-container">
-        <PushPage data={data} />
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 function formatTimestamp(value: string): string {

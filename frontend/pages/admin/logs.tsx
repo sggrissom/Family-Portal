@@ -4,7 +4,8 @@ import * as vlens from "vlens";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
 import { logWarn } from "../../lib/logger";
 import "./logs-styles";
 
@@ -536,335 +537,325 @@ function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
 }
 
 export function view(route: string, prefix: string, data: LogsPageData): preact.ComponentChild {
-  const userAuth = requireAuthInView();
-  if (!userAuth || !userAuth.isAdmin) {
+  return adminView(() => {
+    const state = logsPageHook();
+
+    if (!state.referenceInput && !state.referenceResult && !state.referenceLoading) {
+      const fromUrl = new URLSearchParams(window.location.search).get("ref");
+      if (fromUrl) {
+        state.referenceInput = fromUrl;
+        setTimeout(lookUpReference, 0);
+      }
+    }
+
+    if (state.currentFile === "" && data.initialFile) {
+      state.currentFile = data.initialFile;
+      state.logEntries = data.initialEntries;
+      if (data.initialEntries.length > 0) {
+        setTimeout(loadLogContent, 0);
+      }
+    }
+
+    const fileSelectOptions = [
+      preact.h("option", { value: "" }, "Select a log file..."),
+      ...data.files.map(file =>
+        preact.h(
+          "option",
+          {
+            key: file.name,
+            value: file.name,
+          },
+          `${file.name} (${file.sizeString}) ${file.isToday ? "📍" : ""}`
+        )
+      ),
+    ];
+
+    const logRows = state.logEntries.map((entry, index) => logEntryRow(entry, index));
+
     return preact.h("div", {}, [
       preact.h(Header, { isHome: false }),
       preact.h("main", { id: "app", className: "page-container" }, [
-        preact.h("div", { className: "error-page" }, [
-          preact.h("h1", {}, "Access Denied"),
-          preact.h("p", {}, "Admin access required"),
+        preact.h("div", { className: "logs-page" }, [
+          preact.h("div", { className: "logs-header" }, [
+            preact.h("h1", {}, "System Logs"),
+            preact.h(
+              "div",
+              { className: "logs-nav" },
+              preact.h("a", { href: "/admin", className: "back-link" }, "← Back to Admin")
+            ),
+          ]),
+
+          state.error || data.error
+            ? preact.h("div", { className: "error-message" }, [
+                preact.h("span", { className: "error-icon" }, "⚠️"),
+                preact.h("span", {}, state.error || data.error),
+              ])
+            : null,
+
+          preact.h(ReferenceLookupPanel, { state }),
+
+          data.stats
+            ? preact.h(
+                "div",
+                { className: "logs-stats" },
+                preact.h("div", { className: "stats-grid" }, [
+                  preact.h("div", { className: "stat-card" }, [
+                    preact.h("div", { className: "stat-number" }, data.stats.totalFiles),
+                    preact.h("div", { className: "stat-label" }, "Log Files"),
+                  ]),
+                  preact.h("div", { className: "stat-card" }, [
+                    preact.h(
+                      "div",
+                      { className: "stat-number" },
+                      Math.round(data.stats.totalSize / 1024) + "KB"
+                    ),
+                    preact.h("div", { className: "stat-label" }, "Total Size"),
+                  ]),
+                  preact.h("div", { className: "stat-card" }, [
+                    preact.h("div", { className: "stat-number" }, data.stats.byLevel["ERROR"] || 0),
+                    preact.h("div", { className: "stat-label" }, "Errors"),
+                  ]),
+                  preact.h("div", { className: "stat-card" }, [
+                    preact.h("div", { className: "stat-number" }, (data.stats.recent || []).length),
+                    preact.h("div", { className: "stat-label" }, "Recent Entries"),
+                  ]),
+                ])
+              )
+            : null,
+
+          data.stats
+            ? preact.h(PerformanceStatsPanel, { stats: data.stats.performanceStats })
+            : null,
+
+          preact.h("div", { className: "logs-controls" }, [
+            preact.h("div", { className: "logs-filters" }, [
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "file-select" }, "Log File:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "file-select",
+                    value: state.currentFile,
+                    onChange: (e: any) => handleFileChange(e.currentTarget.value),
+                  },
+                  fileSelectOptions
+                ),
+              ]),
+              preact.h("div", { className: "filter-group filter-group-search" }, [
+                preact.h("label", { htmlFor: "log-search" }, "Search:"),
+                preact.h("input", {
+                  id: "log-search",
+                  type: "search",
+                  placeholder: "text, path, or reference code — searches every file",
+                  value: state.searchText,
+                  onInput: (e: any) => {
+                    state.searchText = e.currentTarget.value;
+                  },
+                  onKeyDown: (e: any) => {
+                    if (e.key === "Enter") handleFilterChange();
+                  },
+                  onChange: () => handleFilterChange(),
+                }),
+              ]),
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "since-filter" }, "Time range:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "since-filter",
+                    value: String(state.sinceHours),
+                    onChange: (e: any) => {
+                      state.sinceHours = parseInt(e.currentTarget.value, 10);
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "0" }, "Everything"),
+                    preact.h("option", { value: "1" }, "Last hour"),
+                    preact.h("option", { value: "24" }, "Last 24 hours"),
+                    preact.h("option", { value: "168" }, "Last 7 days"),
+                  ]
+                ),
+              ]),
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "level-filter" }, "Level:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "level-filter",
+                    value: state.levelFilter,
+                    onChange: (e: any) => {
+                      state.levelFilter = e.currentTarget.value;
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "" }, "All Levels"),
+                    preact.h("option", { value: "ERROR" }, "Errors"),
+                    preact.h("option", { value: "WARN" }, "Warnings"),
+                    preact.h("option", { value: "INFO" }, "Info"),
+                    preact.h("option", { value: "DEBUG" }, "Debug"),
+                  ]
+                ),
+              ]),
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "category-filter" }, "Category:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "category-filter",
+                    value: state.categoryFilter,
+                    onChange: (e: any) => {
+                      state.categoryFilter = e.currentTarget.value;
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "" }, "All Categories"),
+                    preact.h("option", { value: "AUTH" }, "Authentication"),
+                    preact.h("option", { value: "PHOTO" }, "Photos"),
+                    preact.h("option", { value: "ADMIN" }, "Admin"),
+                    preact.h("option", { value: "API" }, "API"),
+                    preact.h("option", { value: "WORKER" }, "Background Jobs"),
+                    preact.h("option", { value: "SYSTEM" }, "System"),
+                  ]
+                ),
+              ]),
+
+              preact.h("div", { className: "filter-group performance-filters" }, [
+                preact.h("label", { htmlFor: "duration-filter" }, "Min Duration (ms):"),
+                preact.h("input", {
+                  id: "duration-filter",
+                  type: "number",
+                  placeholder: "e.g. 100",
+                  value: state.minDurationFilter,
+                  onChange: (e: any) => {
+                    state.minDurationFilter = e.currentTarget.value;
+                    handleFilterChange();
+                  },
+                }),
+              ]),
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "sort-filter" }, "Sort By:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "sort-filter",
+                    value: state.sortBy,
+                    onChange: (e: any) => {
+                      state.sortBy = e.currentTarget.value;
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "time" }, "Time"),
+                    preact.h("option", { value: "duration" }, "Duration"),
+                  ]
+                ),
+              ]),
+              preact.h("div", { className: "filter-group" }, [
+                preact.h("label", { htmlFor: "sort-order" }, "Order:"),
+                preact.h(
+                  "select",
+                  {
+                    id: "sort-order",
+                    value: state.sortDesc ? "desc" : "asc",
+                    onChange: (e: any) => {
+                      state.sortDesc = e.currentTarget.value === "desc";
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "asc" }, "Ascending"),
+                    preact.h("option", { value: "desc" }, "Descending"),
+                  ]
+                ),
+              ]),
+            ]),
+
+            preact.h("div", { className: "logs-presets" }, [
+              preact.h(
+                "button",
+                { className: "pagination-btn", onClick: showRecentErrors },
+                "Errors in the last 24h"
+              ),
+              state.searchText.trim() && state.filesSearched.length > 0
+                ? preact.h(
+                    "span",
+                    { className: "pagination-info" },
+                    `Searched ${state.filesSearched.length} file${state.filesSearched.length === 1 ? "" : "s"}`
+                  )
+                : null,
+            ]),
+
+            state.currentFile || state.searchText.trim()
+              ? (() => {
+                  const totalPages =
+                    state.totalLines > 0 ? Math.ceil(state.totalLines / entriesPerPage) : 0;
+                  const showPagination = totalPages > 1 || state.totalLines > entriesPerPage;
+
+                  return showPagination
+                    ? preact.h("div", { className: "logs-pagination" }, [
+                        preact.h(
+                          "span",
+                          { className: "pagination-info" },
+                          totalPages > 0
+                            ? `Page ${state.currentPage} of ${totalPages} (${state.totalLines} total entries)`
+                            : `${state.totalLines} total entries`
+                        ),
+                        totalPages > 1
+                          ? preact.h("div", { className: "pagination-controls" }, [
+                              preact.h(
+                                "button",
+                                {
+                                  onClick: () => handlePageChange(state.currentPage - 1),
+                                  disabled: state.currentPage <= 1,
+                                  className: "pagination-btn",
+                                },
+                                "Previous"
+                              ),
+                              preact.h(
+                                "button",
+                                {
+                                  onClick: () => handlePageChange(state.currentPage + 1),
+                                  disabled: state.currentPage >= totalPages,
+                                  className: "pagination-btn",
+                                },
+                                "Next"
+                              ),
+                            ])
+                          : null,
+                      ])
+                    : null;
+                })()
+              : null,
+          ]),
+
+          state.loading
+            ? preact.h("div", { className: "loading-message" }, [
+                preact.h("span", { className: "loading-spinner" }, "⏳"),
+                preact.h("span", {}, "Loading logs..."),
+              ])
+            : null,
+
+          state.logEntries.length > 0
+            ? preact.h(
+                "div",
+                { className: "logs-content" },
+                preact.h("div", { className: "logs-table" }, [logTableHeader(), ...logRows])
+              )
+            : null,
+
+          state.currentFile && state.logEntries.length === 0 && !state.loading
+            ? preact.h(
+                "div",
+                { className: "empty-logs" },
+                preact.h("p", {}, "No log entries found matching the current filters.")
+              )
+            : null,
         ]),
       ]),
       preact.h(Footer, {}),
     ]);
-  }
-
-  const state = logsPageHook();
-
-  if (!state.referenceInput && !state.referenceResult && !state.referenceLoading) {
-    const fromUrl = new URLSearchParams(window.location.search).get("ref");
-    if (fromUrl) {
-      state.referenceInput = fromUrl;
-      setTimeout(lookUpReference, 0);
-    }
-  }
-
-  if (state.currentFile === "" && data.initialFile) {
-    state.currentFile = data.initialFile;
-    state.logEntries = data.initialEntries;
-    if (data.initialEntries.length > 0) {
-      setTimeout(loadLogContent, 0);
-    }
-  }
-
-  const fileSelectOptions = [
-    preact.h("option", { value: "" }, "Select a log file..."),
-    ...data.files.map(file =>
-      preact.h(
-        "option",
-        {
-          key: file.name,
-          value: file.name,
-        },
-        `${file.name} (${file.sizeString}) ${file.isToday ? "📍" : ""}`
-      )
-    ),
-  ];
-
-  const logRows = state.logEntries.map((entry, index) => logEntryRow(entry, index));
-
-  return preact.h("div", {}, [
-    preact.h(Header, { isHome: false }),
-    preact.h("main", { id: "app", className: "page-container" }, [
-      preact.h("div", { className: "logs-page" }, [
-        preact.h("div", { className: "logs-header" }, [
-          preact.h("h1", {}, "System Logs"),
-          preact.h(
-            "div",
-            { className: "logs-nav" },
-            preact.h("a", { href: "/admin", className: "back-link" }, "← Back to Admin")
-          ),
-        ]),
-
-        state.error || data.error
-          ? preact.h("div", { className: "error-message" }, [
-              preact.h("span", { className: "error-icon" }, "⚠️"),
-              preact.h("span", {}, state.error || data.error),
-            ])
-          : null,
-
-        preact.h(ReferenceLookupPanel, { state }),
-
-        data.stats
-          ? preact.h(
-              "div",
-              { className: "logs-stats" },
-              preact.h("div", { className: "stats-grid" }, [
-                preact.h("div", { className: "stat-card" }, [
-                  preact.h("div", { className: "stat-number" }, data.stats.totalFiles),
-                  preact.h("div", { className: "stat-label" }, "Log Files"),
-                ]),
-                preact.h("div", { className: "stat-card" }, [
-                  preact.h(
-                    "div",
-                    { className: "stat-number" },
-                    Math.round(data.stats.totalSize / 1024) + "KB"
-                  ),
-                  preact.h("div", { className: "stat-label" }, "Total Size"),
-                ]),
-                preact.h("div", { className: "stat-card" }, [
-                  preact.h("div", { className: "stat-number" }, data.stats.byLevel["ERROR"] || 0),
-                  preact.h("div", { className: "stat-label" }, "Errors"),
-                ]),
-                preact.h("div", { className: "stat-card" }, [
-                  preact.h("div", { className: "stat-number" }, (data.stats.recent || []).length),
-                  preact.h("div", { className: "stat-label" }, "Recent Entries"),
-                ]),
-              ])
-            )
-          : null,
-
-        data.stats ? preact.h(PerformanceStatsPanel, { stats: data.stats.performanceStats }) : null,
-
-        preact.h("div", { className: "logs-controls" }, [
-          preact.h("div", { className: "logs-filters" }, [
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "file-select" }, "Log File:"),
-              preact.h(
-                "select",
-                {
-                  id: "file-select",
-                  value: state.currentFile,
-                  onChange: (e: any) => handleFileChange(e.currentTarget.value),
-                },
-                fileSelectOptions
-              ),
-            ]),
-            preact.h("div", { className: "filter-group filter-group-search" }, [
-              preact.h("label", { htmlFor: "log-search" }, "Search:"),
-              preact.h("input", {
-                id: "log-search",
-                type: "search",
-                placeholder: "text, path, or reference code — searches every file",
-                value: state.searchText,
-                onInput: (e: any) => {
-                  state.searchText = e.currentTarget.value;
-                },
-                onKeyDown: (e: any) => {
-                  if (e.key === "Enter") handleFilterChange();
-                },
-                onChange: () => handleFilterChange(),
-              }),
-            ]),
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "since-filter" }, "Time range:"),
-              preact.h(
-                "select",
-                {
-                  id: "since-filter",
-                  value: String(state.sinceHours),
-                  onChange: (e: any) => {
-                    state.sinceHours = parseInt(e.currentTarget.value, 10);
-                    handleFilterChange();
-                  },
-                },
-                [
-                  preact.h("option", { value: "0" }, "Everything"),
-                  preact.h("option", { value: "1" }, "Last hour"),
-                  preact.h("option", { value: "24" }, "Last 24 hours"),
-                  preact.h("option", { value: "168" }, "Last 7 days"),
-                ]
-              ),
-            ]),
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "level-filter" }, "Level:"),
-              preact.h(
-                "select",
-                {
-                  id: "level-filter",
-                  value: state.levelFilter,
-                  onChange: (e: any) => {
-                    state.levelFilter = e.currentTarget.value;
-                    handleFilterChange();
-                  },
-                },
-                [
-                  preact.h("option", { value: "" }, "All Levels"),
-                  preact.h("option", { value: "ERROR" }, "Errors"),
-                  preact.h("option", { value: "WARN" }, "Warnings"),
-                  preact.h("option", { value: "INFO" }, "Info"),
-                  preact.h("option", { value: "DEBUG" }, "Debug"),
-                ]
-              ),
-            ]),
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "category-filter" }, "Category:"),
-              preact.h(
-                "select",
-                {
-                  id: "category-filter",
-                  value: state.categoryFilter,
-                  onChange: (e: any) => {
-                    state.categoryFilter = e.currentTarget.value;
-                    handleFilterChange();
-                  },
-                },
-                [
-                  preact.h("option", { value: "" }, "All Categories"),
-                  preact.h("option", { value: "AUTH" }, "Authentication"),
-                  preact.h("option", { value: "PHOTO" }, "Photos"),
-                  preact.h("option", { value: "ADMIN" }, "Admin"),
-                  preact.h("option", { value: "API" }, "API"),
-                  preact.h("option", { value: "WORKER" }, "Background Jobs"),
-                  preact.h("option", { value: "SYSTEM" }, "System"),
-                ]
-              ),
-            ]),
-
-            preact.h("div", { className: "filter-group performance-filters" }, [
-              preact.h("label", { htmlFor: "duration-filter" }, "Min Duration (ms):"),
-              preact.h("input", {
-                id: "duration-filter",
-                type: "number",
-                placeholder: "e.g. 100",
-                value: state.minDurationFilter,
-                onChange: (e: any) => {
-                  state.minDurationFilter = e.currentTarget.value;
-                  handleFilterChange();
-                },
-              }),
-            ]),
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "sort-filter" }, "Sort By:"),
-              preact.h(
-                "select",
-                {
-                  id: "sort-filter",
-                  value: state.sortBy,
-                  onChange: (e: any) => {
-                    state.sortBy = e.currentTarget.value;
-                    handleFilterChange();
-                  },
-                },
-                [
-                  preact.h("option", { value: "time" }, "Time"),
-                  preact.h("option", { value: "duration" }, "Duration"),
-                ]
-              ),
-            ]),
-            preact.h("div", { className: "filter-group" }, [
-              preact.h("label", { htmlFor: "sort-order" }, "Order:"),
-              preact.h(
-                "select",
-                {
-                  id: "sort-order",
-                  value: state.sortDesc ? "desc" : "asc",
-                  onChange: (e: any) => {
-                    state.sortDesc = e.currentTarget.value === "desc";
-                    handleFilterChange();
-                  },
-                },
-                [
-                  preact.h("option", { value: "asc" }, "Ascending"),
-                  preact.h("option", { value: "desc" }, "Descending"),
-                ]
-              ),
-            ]),
-          ]),
-
-          preact.h("div", { className: "logs-presets" }, [
-            preact.h(
-              "button",
-              { className: "pagination-btn", onClick: showRecentErrors },
-              "Errors in the last 24h"
-            ),
-            state.searchText.trim() && state.filesSearched.length > 0
-              ? preact.h(
-                  "span",
-                  { className: "pagination-info" },
-                  `Searched ${state.filesSearched.length} file${state.filesSearched.length === 1 ? "" : "s"}`
-                )
-              : null,
-          ]),
-
-          state.currentFile || state.searchText.trim()
-            ? (() => {
-                const totalPages =
-                  state.totalLines > 0 ? Math.ceil(state.totalLines / entriesPerPage) : 0;
-                const showPagination = totalPages > 1 || state.totalLines > entriesPerPage;
-
-                return showPagination
-                  ? preact.h("div", { className: "logs-pagination" }, [
-                      preact.h(
-                        "span",
-                        { className: "pagination-info" },
-                        totalPages > 0
-                          ? `Page ${state.currentPage} of ${totalPages} (${state.totalLines} total entries)`
-                          : `${state.totalLines} total entries`
-                      ),
-                      totalPages > 1
-                        ? preact.h("div", { className: "pagination-controls" }, [
-                            preact.h(
-                              "button",
-                              {
-                                onClick: () => handlePageChange(state.currentPage - 1),
-                                disabled: state.currentPage <= 1,
-                                className: "pagination-btn",
-                              },
-                              "Previous"
-                            ),
-                            preact.h(
-                              "button",
-                              {
-                                onClick: () => handlePageChange(state.currentPage + 1),
-                                disabled: state.currentPage >= totalPages,
-                                className: "pagination-btn",
-                              },
-                              "Next"
-                            ),
-                          ])
-                        : null,
-                    ])
-                  : null;
-              })()
-            : null,
-        ]),
-
-        state.loading
-          ? preact.h("div", { className: "loading-message" }, [
-              preact.h("span", { className: "loading-spinner" }, "⏳"),
-              preact.h("span", {}, "Loading logs..."),
-            ])
-          : null,
-
-        state.logEntries.length > 0
-          ? preact.h(
-              "div",
-              { className: "logs-content" },
-              preact.h("div", { className: "logs-table" }, [logTableHeader(), ...logRows])
-            )
-          : null,
-
-        state.currentFile && state.logEntries.length === 0 && !state.loading
-          ? preact.h(
-              "div",
-              { className: "empty-logs" },
-              preact.h("p", {}, "No log entries found matching the current filters.")
-            )
-          : null,
-      ]),
-    ]),
-    preact.h(Footer, {}),
-  ]);
+  });
 }

@@ -71,3 +71,29 @@ export const formatDateRange = (startDate: string, endDate: string): string => {
   if (start && end && start !== end) return `${start} – ${end}`;
   return start || end;
 };
+
+export const formatDateTime = (dateString: string): string => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return (
+    date.toLocaleDateString() +
+    " " +
+    date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+};
+
+export const formatRelativeTime = (timestamp: string, fallback?: string): string => {
+  const then = new Date(timestamp).getTime();
+  if (!Number.isFinite(then) || then <= 0) return fallback ?? timestamp;
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  return `${Math.floor(hours / 24)}d ago`;
+};

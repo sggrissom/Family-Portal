@@ -5,7 +5,9 @@ import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
+import { formatRelativeTime } from "../../lib/dateUtils";
 import "./admin-styles";
 
 type Data = {
@@ -32,43 +34,22 @@ export async function fetch(route: string, prefix: string) {
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(currentAuth => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/dashboard" className="btn btn-primary">
-              Return to Dashboard
-            </a>
-          </div>
+        <main id="app" className="admin-container">
+          <AdminPage
+            user={currentAuth}
+            diagnostics={data.diagnostics}
+            health={data.health}
+            host={data.host}
+          />
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="admin-container">
-        <AdminPage
-          user={currentAuth}
-          diagnostics={data.diagnostics}
-          health={data.health}
-          host={data.host}
-        />
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 interface AdminPageProps {
@@ -236,8 +217,8 @@ const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) =
     )}
     {result.cached && (
       <p className="problem-note">
-        Checked {formatWhen(result.checkedAt)}. The snapshot endpoint allows ten requests an hour
-        and the nightly backup spends from the same budget, so a result stands for ten minutes
+        Checked {formatRelativeTime(result.checkedAt)}. The snapshot endpoint allows ten requests an
+        hour and the nightly backup spends from the same budget, so a result stands for ten minutes
         before another check runs.
       </p>
     )}
@@ -376,7 +357,7 @@ const ErrorLine = ({ entry }: { entry: server.PublicLogEntry }) => {
 
   return (
     <div className="problem-error">
-      <span className="problem-error-time">{formatWhen(entry.timestamp)}</span>
+      <span className="problem-error-time">{formatRelativeTime(entry.timestamp)}</span>
       <span className="problem-error-message">{entry.message}</span>
       {reference && (
         <a className="problem-error-ref" href={`/admin/logs?ref=${encodeURIComponent(reference)}`}>
@@ -432,7 +413,7 @@ const PushIssues = ({ push }: { push: server.PushProblems }) => {
       <h3>Push notifications</h3>
       <ul className="problem-list">
         <li>
-          Last error {formatWhen(push.lastErrorAt)}: {push.lastError}
+          Last error {formatRelativeTime(push.lastErrorAt)}: {push.lastError}
         </li>
         {push.failed > 0 && <li>{push.failed} failed since this process started</li>}
       </ul>
@@ -442,22 +423,6 @@ const PushIssues = ({ push }: { push: server.PushProblems }) => {
     </div>
   );
 };
-
-function formatWhen(timestamp: string): string {
-  const then = new Date(timestamp).getTime();
-  if (!Number.isFinite(then)) return timestamp;
-
-  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (seconds < 60) return "just now";
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 const Host = ({ metrics }: { metrics: server.HostMetricsResponse }) => {
   if (!metrics.available) {

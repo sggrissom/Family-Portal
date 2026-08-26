@@ -4,7 +4,9 @@ import * as vlens from "vlens";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { ensureAuthInFetch } from "../../lib/authHelpers";
+import { adminView } from "../../components/AdminGuard";
+import { formatDateTime } from "../../lib/dateUtils";
 import "./admin-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -20,38 +22,17 @@ export function view(
   prefix: string,
   data: server.ListAllUsersResponse
 ): preact.ComponentChild {
-  const currentAuth = requireAuthInView();
-  if (!currentAuth) {
-    return;
-  }
-
-  if (!currentAuth.isAdmin) {
+  return adminView(currentAuth => {
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="page-container">
-          <div className="error-page">
-            <h1>Access Denied</h1>
-            <p>You do not have permission to access this page.</p>
-            <a href="/admin" className="btn btn-primary">
-              Return to Admin Dashboard
-            </a>
-          </div>
+        <main id="app" className="admin-container">
+          <UserManagementPage user={currentAuth} data={data} />
         </main>
         <Footer />
       </div>
     );
-  }
-
-  return (
-    <div>
-      <Header isHome={false} />
-      <main id="app" className="admin-container">
-        <UserManagementPage user={currentAuth} data={data} />
-      </main>
-      <Footer />
-    </div>
-  );
+  });
 }
 
 interface UserManagementPageProps {
@@ -91,15 +72,6 @@ async function revokeSessions(state: UsersPageState, u: server.AdminUserInfo) {
 const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
   const users = data.users || [];
   const state = useUsersPageState();
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return (
-      date.toLocaleDateString() +
-      " " +
-      date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    );
-  };
 
   return (
     <div className="admin-page">
@@ -151,9 +123,9 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                         <span className="no-family">No family</span>
                       )}
                     </td>
-                    <td className="user-created">{formatDate(u.creation)}</td>
+                    <td className="user-created">{formatDateTime(u.creation)}</td>
                     <td className="user-login">
-                      {u.lastLogin ? formatDate(u.lastLogin) : "Never"}
+                      {u.lastLogin ? formatDateTime(u.lastLogin) : "Never"}
                     </td>
                     <td className="user-role">
                       {u.isAdmin ? (
