@@ -18,7 +18,6 @@ import (
 	"family/cfg"
 )
 
-const Port = 8666
 const Domain = "family.localhost"
 const FEDist = ".serve/frontend"
 
@@ -34,7 +33,7 @@ func StartLocalServer() {
 	// Security headers, request size limits, and rate limiting
 	handler := family.WrapApplication(app)
 
-	var addr = fmt.Sprintf(":%d", Port)
+	var addr = fmt.Sprintf(":%d", cfg.Port)
 	var appServer = family.NewHTTPServer(addr, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -77,7 +76,7 @@ func main() {
 
 	var args local_ui.LocalServerArgs
 	args.Domain = Domain
-	args.Port = Port
+	args.Port = cfg.Port
 	args.FEOpts = FEOpts
 	args.FEWatchDirs = FEWatchDirs
 	args.StartServer = StartLocalServer

@@ -21,8 +21,6 @@ import (
 //go:embed dist
 var embedded embed.FS
 
-const Port = 8666
-
 func main() {
 	// run returns rather than calling log.Fatal so that the deferred shutdown
 	// in RunHTTPServer actually runs; the exit status is set here instead.
@@ -50,7 +48,7 @@ func run() error {
 	// Security headers, request size limits, and rate limiting
 	handler := family.WrapApplication(app)
 
-	addr := fmt.Sprintf(":%d", Port)
+	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("listening on %s\n", addr)
 	var appServer = family.NewHTTPServer(addr, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -114,6 +114,16 @@ backup carries, and therefore the only one whose absence is unrecoverable.
 Finally, log in and look at a family: people, growth entries, milestones, tags,
 chat history, and photos should all be present.
 
+While you are logged in, press **Verify backup path** on `/admin`. It sends the
+application the same request `backupctl` sends — loopback, bearer token, whole
+body read — and says whether a complete snapshot came back. That is worth doing
+after a restore in particular, because `BACKUP_TOKEN` was just retyped by hand
+into a fresh `.env`, and a token the running process does not hold fails as a
+404 that says nothing about why. The check names both causes of that 404.
+
+It shares the endpoint's budget of ten requests an hour with the nightly backup,
+so a result stands for ten minutes before another check will actually run.
+
 ## 5. Photo variants come back missing, and that is fine
 
 The archive holds `*_original.*` only. Thumbnails and the WebP/AVIF variants are

@@ -1,4 +1,5 @@
 import * as preact from "preact";
+import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
@@ -165,9 +166,107 @@ const AdminPage = ({ user, diagnostics, health, host }: AdminPageProps) => {
           </div>
         </a>
       </div>
+
+      <Backups />
     </div>
   );
 };
+
+// The backup path, on a button.
+//
+// restore.md's open question is whether the snapshot endpoint actually works,
+// because nothing exercises it from this side: backupctl fetches it at night
+// and the only evidence is a file on a box this application cannot read. When
+// it does fail it fails as a 404 — the same answer an unauthorized caller gets
+// — so the panel is the only place that can say which cause it was.
+type BackupState = {
+  checking: boolean;
+  result: server.VerifyBackupPathResponse | null;
+  error: string;
+};
+
+const useBackupState = vlens.declareHook(
+  (): BackupState => ({ checking: false, result: null, error: "" })
+);
+
+const Backups = () => {
+  const state = useBackupState();
+
+  const verify = async () => {
+    state.checking = true;
+    state.error = "";
+    vlens.scheduleRedraw();
+
+    const [result, error] = await server.VerifyBackupPath({});
+    state.checking = false;
+    if (error) {
+      state.error = error;
+    } else if (result) {
+      state.result = result;
+    }
+    vlens.scheduleRedraw();
+  };
+
+  return (
+    <div className="admin-section">
+      <h2>Backups</h2>
+      <p className="problem-note">
+        Every night backupctl fetches a database snapshot over loopback, and the only evidence it
+        worked is a file on a box this application cannot read. This sends the same request with the
+        token this process would accept, reads the whole snapshot, and throws it away.
+      </p>
+
+      <div className="admin-actions">
+        <button
+          className="admin-btn admin-btn-secondary"
+          onClick={verify}
+          disabled={state.checking}
+        >
+          {state.checking ? "Checking…" : "Verify backup path"}
+        </button>
+      </div>
+
+      {state.error && (
+        <div className="admin-notice">
+          <strong>The check could not run</strong> — {state.error}
+        </div>
+      )}
+      {state.result && <BackupResult result={state.result} />}
+    </div>
+  );
+};
+
+const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) => (
+  <div className={result.ok ? "admin-notice admin-notice-ok" : "admin-notice"}>
+    <strong>{result.ok ? "Verified" : "Not verified"}</strong> — {result.detail}
+    {result.ok && (
+      <p className="problem-note">
+        {formatBytes(result.receivedBytes)} in {(result.durationMs / 1000).toFixed(1)}s.
+      </p>
+    )}
+    {/* A replayed pass after an edited .env would be the most misleading thing
+        on this page, so a cached result says so and says how old it is. */}
+    {result.cached && (
+      <p className="problem-note">
+        Checked {formatWhen(result.checkedAt)}. The snapshot endpoint allows ten requests an hour
+        and the nightly backup spends from the same budget, so a result stands for ten minutes
+        before another check runs.
+      </p>
+    )}
+  </div>
+);
+
+// The snapshot is the whole database, so this is megabytes at best.
+function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 // The problems feed. Everything in it was already available somewhere in the
 // panel; what was missing was one place that asks all of it at once. It stays
