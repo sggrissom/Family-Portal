@@ -985,3 +985,11 @@ block(`
   color: var(--muted);
 }
 `);
+
+block(`
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+`);

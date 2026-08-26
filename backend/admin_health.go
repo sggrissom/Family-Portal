@@ -41,6 +41,13 @@ type PushProblems struct {
 	LastErrorAt time.Time `json:"lastErrorAt"`
 }
 
+type MailProblems struct {
+	Failed      int       `json:"failed"`
+	LastError   string    `json:"lastError"`
+	LastErrorAt time.Time `json:"lastErrorAt"`
+	QueueLength int       `json:"queueLength"`
+}
+
 type HostProblems struct {
 	Available     bool    `json:"available"`
 	DiskUsedPct   float64 `json:"diskUsedPct"`
@@ -57,6 +64,7 @@ type SystemHealthResponse struct {
 	Logs         LogProblems     `json:"logs"`
 	Photos       PhotoProblems   `json:"photos"`
 	Push         PushProblems    `json:"push"`
+	Mail         MailProblems    `json:"mail"`
 	Host         HostProblems    `json:"host"`
 }
 
@@ -101,6 +109,14 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 		LastErrorAt: push.LastErrorAt,
 	}
 
+	mail := GetMailWorkerStats()
+	resp.Mail = MailProblems{
+		Failed:      mail.Failed,
+		LastError:   mail.LastError,
+		LastErrorAt: mail.LastErrorAt,
+		QueueLength: mail.QueueLength,
+	}
+
 	resp.Healthy = len(resp.ConfigIssues) == 0 &&
 		resp.Logs.Errors == 0 &&
 		resp.Logs.Requests5xx == 0 &&
@@ -110,6 +126,7 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 		resp.Photos.AnalysisFailed == 0 &&
 		!resp.Photos.WorkerStopped &&
 		resp.Push.LastError == "" &&
+		resp.Mail.LastError == "" &&
 		!resp.Host.DiskLow &&
 		resp.Host.Proxy5xx == 0
 

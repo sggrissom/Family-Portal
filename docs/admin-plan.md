@@ -262,7 +262,7 @@ One panel, above the fold, aggregating what is already available:
 
 Silent when everything is clean. The point is that a green page means something.
 
-### 3.3 Even out worker observability — **done** (photo worker)
+### 3.3 Even out worker observability — **done**
 
 `PushWorkerStats` carries `Sent`, `Failed`, `Deactivated`, `Suppressed`,
 `LastSentAt`, `LastError`, `LastErrorAt`, and `RecentAttempts`. That is why the
@@ -276,6 +276,15 @@ least visible one. Give the photo worker the same shape as the push worker —
 processed/failed counters, last error, and a small ring of recent attempts with
 their durations. The durations also replace the fabricated number in §1.5 with a
 measured one.
+
+The mail worker now carries the same shape, and it arrived with §5.5 rather than
+with the photo worker, because a resend button that can only report "handed to
+the worker" is not worth having. Three things get recorded that the queue length
+alone could never show: the attempt count behind a success (a message that took
+three tries is a mail server that is struggling), whether a failure was permanent
+or a give-up, and a message dropped by a full queue — which never reaches the
+worker at all, so nothing downstream would otherwise know it existed.
+`GetMailQueueLength` is left alone; the diagnostics strip still uses it.
 
 ### 3.4 A usage feed instead of retention percentages
 
@@ -443,8 +452,17 @@ in rough order of how often they'd be used:
    anticipate: an unreadable `photos/` directory has to be a reported field
    rather than an error, because the row-to-disk direction — the one that finds
    actual data loss — still works without it.
-5. **Resend a password reset** for a user who never got the mail — the mail
-   worker's failures are otherwise entirely invisible.
+5. ~~**Resend a password reset**~~ **Done** — `ResendPasswordReset`, one button
+   per row on `/admin/users`, next to the revoke button. It deliberately skips
+   the one-minute throttle on the public endpoint, which exists to stop account
+   enumeration by a stranger and has no bearing on an operator acting on a known
+   account. Two things the plan did not anticipate. First, minting a link
+   invalidates any link the user is already holding — `createPasswordResetTokenTx`
+   deletes the previous token — so the response says whether that happened and
+   the confirm dialog warns before it does. Second, "the mail worker's failures
+   are otherwise entirely invisible" turned out to be the harder half: queued is
+   not sent, so the button is paired with the mail worker stats from §3.3, on the
+   same page, and `LastError` feeds the problems feed the way push already did.
 
 Deliberately not on the list: maintenance mode, cache clearing, and user data
 export as an admin action. The first two have no mechanism behind them, and
@@ -460,8 +478,14 @@ Not urgent, but it's what makes the above cheaper to build.
   `"Unauthorized: Admin access required"`.**~~ **Done** — one
   `requireAdminAccess` helper, one exported `ErrAdminRequired`, and an
   `AdminUserId` constant in place of the magic number.
-- **`admin.go` is 656 lines** after §2.4 extracted the log parser, down from
-  1286. Photo maintenance still belongs next to the photo worker.
+- ~~**`admin.go` is 656 lines** after §2.4 extracted the log parser, down from
+  1286. Photo maintenance still belongs next to the photo worker.~~ **Done** —
+  `backend/photo_maintenance.go` now holds the photo procs and the §5.4 scan, and
+  `admin.go` is 444 lines of users and logs. `RegisterAdminMethods` calls
+  `RegisterPhotoMaintenanceMethods` in place of the five procs, the way it
+  already called `RegisterAnalyticsMethods` — registering from `app.go` instead
+  would have reordered every proc after it in the generated `server.ts` for no
+  gain.
 - ~~**Every admin page reimplements the same "Access Denied" block** — six
   near-identical copies of a `Header`/`error-page`/`Footer` tree.~~ **Done** —
   seven copies, in fact. `components/AdminGuard.tsx` exports `adminView`, which
@@ -510,6 +534,9 @@ Not urgent, but it's what makes the above cheaper to build.
    maintenance out of `admin.go`.
 8. ~~**§5.4** — photo/disk consistency.~~ **Done**, sharing one scan with
    `cmd/verifydb`.
-9. Everything else as it becomes annoying. In rough order of appeal: §5.5
-   (resend a password reset), §3.4 (weekly usage digest), then §4.2 and §4.3,
-   which are both work in `tiny-server-helper` first.
+9. ~~**§5.5** — resend a password reset.~~ **Done**, with the mail-worker half
+   of §3.3 and the mail entry in the problems feed, and §6's photo-maintenance
+   move alongside it.
+10. Everything else as it becomes annoying. In rough order of appeal: §3.4
+    (weekly usage digest), the §6 styles merge, then §4.2 and §4.3, which are
+    both work in `tiny-server-helper` first.

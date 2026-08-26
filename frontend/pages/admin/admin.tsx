@@ -248,6 +248,7 @@ const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
       <LogIssues logs={health.logs} />
       <PhotoIssues photos={health.photos} />
       <PushIssues push={health.push} />
+      <MailIssues mail={health.mail} />
     </div>
   );
 };
@@ -409,6 +410,26 @@ const PushIssues = ({ push }: { push: server.PushProblems }) => {
       </ul>
       <a className="problem-action" href="/admin/push">
         Open push notifications →
+      </a>
+    </div>
+  );
+};
+
+const MailIssues = ({ mail }: { mail: server.MailProblems }) => {
+  if (!mail.lastError) return null;
+
+  return (
+    <div className="problem-group">
+      <h3>Email</h3>
+      <ul className="problem-list">
+        <li>
+          Last error {formatRelativeTime(mail.lastErrorAt)}: {mail.lastError}
+        </li>
+        {mail.failed > 0 && <li>{mail.failed} failed since this process started</li>}
+        {mail.queueLength > 0 && <li>{mail.queueLength} still waiting in the queue</li>}
+      </ul>
+      <a className="problem-action" href="/admin/users">
+        Open mail delivery →
       </a>
     </div>
   );

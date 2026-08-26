@@ -896,6 +896,23 @@ export interface ReanalyzeAllPhotosResponse {
     skipped: number
 }
 
+export interface CheckPhotoConsistencyRequest {
+}
+
+export interface PhotoConsistencyReport {
+    checkedAt: string
+    durationMs: number
+    totalImages: number
+    presentCount: number
+    missingCount: number
+    orphanCount: number
+    orphanBytes: number
+    missing: MissingOriginal[]
+    orphans: OrphanOriginal[]
+    listLimit: number
+    orphanScanErr: string
+}
+
 export interface GetLogFilesResponse {
     files: LogFileInfo[]
 }
@@ -1005,6 +1022,7 @@ export interface SystemHealthResponse {
     logs: LogProblems
     photos: PhotoProblems
     push: PushProblems
+    mail: MailProblems
     host: HostProblems
 }
 
@@ -1046,21 +1064,30 @@ export interface VerifyBackupPathResponse {
     cached: boolean
 }
 
-export interface CheckPhotoConsistencyRequest {
+export interface GetMailStatsRequest {
 }
 
-export interface PhotoConsistencyReport {
-    checkedAt: string
-    durationMs: number
-    totalImages: number
-    presentCount: number
-    missingCount: number
-    orphanCount: number
-    orphanBytes: number
-    missing: MissingOriginal[]
-    orphans: OrphanOriginal[]
-    listLimit: number
-    orphanScanErr: string
+export interface MailWorkerStats {
+    queueLength: number
+    isRunning: boolean
+    sent: number
+    failed: number
+    lastSentAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: MailAttempt[]
+}
+
+export interface ResendPasswordResetRequest {
+    userId: number
+}
+
+export interface ResendPasswordResetResponse {
+    email: string
+    queued: boolean
+    detail: string
+    invalidatedPrevious: boolean
+    expiresAt: string
 }
 
 export interface DiagnosticsResponse {
@@ -1415,6 +1442,20 @@ export interface PhotoAttempt {
     reason: string
 }
 
+export interface MissingOriginal {
+    imageId: number
+    familyId: number
+    status: number
+    filePath: string
+    createdAt: string
+}
+
+export interface OrphanOriginal {
+    name: string
+    sizeBytes: number
+    modTime: string
+}
+
 export interface LogFileInfo {
     name: string
     size: number
@@ -1587,6 +1628,13 @@ export interface PushProblems {
     lastErrorAt: string
 }
 
+export interface MailProblems {
+    failed: number
+    lastError: string
+    lastErrorAt: string
+    queueLength: number
+}
+
 export interface HostProblems {
     available: boolean
     diskUsedPct: number
@@ -1609,18 +1657,14 @@ export interface HostApp {
     traffic: HostTraffic
 }
 
-export interface MissingOriginal {
-    imageId: number
-    familyId: number
-    status: number
-    filePath: string
-    createdAt: string
-}
-
-export interface OrphanOriginal {
-    name: string
-    sizeBytes: number
-    modTime: string
+export interface MailAttempt {
+    time: string
+    kind: string
+    to: string
+    success: boolean
+    attempts: number
+    permanent: boolean
+    error: string
 }
 
 export interface AdminMobileVersionPlatform {
@@ -2113,6 +2157,10 @@ export async function ReanalyzeAllPhotos(data: ReanalyzeAllPhotosRequest): Promi
     return await rpc.call<ReanalyzeAllPhotosResponse>('ReanalyzeAllPhotos', JSON.stringify(data));
 }
 
+export async function CheckPhotoConsistency(data: CheckPhotoConsistencyRequest): Promise<rpc.Response<PhotoConsistencyReport>> {
+    return await rpc.call<PhotoConsistencyReport>('CheckPhotoConsistency', JSON.stringify(data));
+}
+
 export async function GetLogFiles(data: Empty): Promise<rpc.Response<GetLogFilesResponse>> {
     return await rpc.call<GetLogFilesResponse>('GetLogFiles', JSON.stringify(data));
 }
@@ -2177,8 +2225,12 @@ export async function VerifyBackupPath(data: VerifyBackupPathRequest): Promise<r
     return await rpc.call<VerifyBackupPathResponse>('VerifyBackupPath', JSON.stringify(data));
 }
 
-export async function CheckPhotoConsistency(data: CheckPhotoConsistencyRequest): Promise<rpc.Response<PhotoConsistencyReport>> {
-    return await rpc.call<PhotoConsistencyReport>('CheckPhotoConsistency', JSON.stringify(data));
+export async function GetMailStats(data: GetMailStatsRequest): Promise<rpc.Response<MailWorkerStats>> {
+    return await rpc.call<MailWorkerStats>('GetMailStats', JSON.stringify(data));
+}
+
+export async function ResendPasswordReset(data: ResendPasswordResetRequest): Promise<rpc.Response<ResendPasswordResetResponse>> {
+    return await rpc.call<ResendPasswordResetResponse>('ResendPasswordReset', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {
