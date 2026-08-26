@@ -426,12 +426,14 @@ in rough order of how often they'd be used:
    disk, and a photo whose original is genuinely gone fails once, visibly.
 2. ~~**Revoke a user's sessions.**~~ **Done** — `RevokeUserSessions`, one button
    per row on `/admin/users`.
-3. **Verify the backup path end-to-end.** Hit `/internal/snapshot` with the
-   configured token, confirm the response starts and the declared
-   `Content-Length` matches `tx.Size()`, and discard the body. That proves the
-   token is right and the endpoint works, which is precisely the failure
-   `backupctl` reports as an ambiguous 404. Cheap, read-only, and it answers a
-   question restore.md says is still unproven.
+3. ~~**Verify the backup path end-to-end.**~~ **Done** — `VerifyBackupPath`,
+   on `/admin`. It fetches a snapshot over loopback with the token this process
+   would accept and reads the whole body, so a truncated stream fails rather
+   than passing. Two things the plan did not anticipate: the check shares the
+   endpoint's ten-per-hour budget with `backupctl`, because both call from
+   127.0.0.1, and an exhausted budget is disguised as a 404 — the same answer a
+   stale token gets. Hence a ten-minute cooldown on the check, and a 404 that
+   names both causes rather than guessing between them.
 4. **Photo/disk consistency check.** `Image` rows whose files are missing, and
    files with no `Image` row. `cmd/verifydb` already computes exactly this
    cross-check offline for the restore drill; the same logic behind a proc turns

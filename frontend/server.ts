@@ -1032,6 +1032,20 @@ export interface RevokeUserSessionsResponse {
     revoked: number
 }
 
+export interface VerifyBackupPathRequest {
+}
+
+export interface VerifyBackupPathResponse {
+    ok: boolean
+    detail: string
+    status: number
+    declaredBytes: number
+    receivedBytes: number
+    durationMs: number
+    checkedAt: string
+    cached: boolean
+}
+
 export interface DiagnosticsResponse {
     version: string
     commit: string
@@ -2126,6 +2140,10 @@ export async function RequeueStuckPhotos(data: RequeueStuckPhotosRequest): Promi
 
 export async function RevokeUserSessions(data: RevokeUserSessionsRequest): Promise<rpc.Response<RevokeUserSessionsResponse>> {
     return await rpc.call<RevokeUserSessionsResponse>('RevokeUserSessions', JSON.stringify(data));
+}
+
+export async function VerifyBackupPath(data: VerifyBackupPathRequest): Promise<rpc.Response<VerifyBackupPathResponse>> {
+    return await rpc.call<VerifyBackupPathResponse>('VerifyBackupPath', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

@@ -1,7 +1,10 @@
 package backend
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -201,4 +204,249 @@ func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 	if attempt.Reason == "" {
 		t.Error("attempt has no reason; the whole point is saying why")
 	}
+}
+
+// TestVerifyBackupPath covers the check restore.md says is still unproven: the
+// snapshot endpoint, exercised over the path the nightly backup uses. Each
+// subtest is a real failure backupctl has reported or could report, and the
+// point of every one of them is that the panel names the cause rather than
+// leaving an operator to guess which of them a 404 meant.
+func TestVerifyBackupPath(t *testing.T) {
+	const token = "a-token-that-is-long-enough-to-be-real"
+
+	t.Run("a complete snapshot passes", func(t *testing.T) {
+		body := []byte("bolt file contents")
+		var sawAuth string
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sawAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, token)
+
+		if !result.OK {
+			t.Fatalf("OK = false, want true: %s", result.Detail)
+		}
+		if sawAuth != "Bearer "+token {
+			t.Errorf("Authorization = %q, want the bearer token backupctl sends", sawAuth)
+		}
+		if result.ReceivedBytes != int64(len(body)) || result.DeclaredBytes != int64(len(body)) {
+			t.Errorf("declared %d, received %d, want %d of each", result.DeclaredBytes, result.ReceivedBytes, len(body))
+		}
+	})
+
+	t.Run("a truncated stream fails", func(t *testing.T) {
+		// The failure that matters most: backupctl stores whatever body it
+		// receives, so a short stream is a backup that looks successful.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", "4096")
+			_, _ = w.Write([]byte("only this much"))
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, token)
+
+		if result.OK {
+			t.Fatal("OK = true for a stream that stopped short of its declared length")
+		}
+		if result.ReceivedBytes >= result.DeclaredBytes {
+			t.Errorf("received %d of a declared %d, want fewer", result.ReceivedBytes, result.DeclaredBytes)
+		}
+	})
+
+	t.Run("a snapshot with no declared length fails", func(t *testing.T) {
+		// Without Content-Length nothing downstream can tell a complete
+		// snapshot from a truncated one, which is the whole check.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("first"))
+			w.(http.Flusher).Flush()
+			_, _ = w.Write([]byte("second"))
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, token)
+
+		if result.OK {
+			t.Fatal("OK = true for a response that declared no length")
+		}
+		if !strings.Contains(result.Detail, "Content-Length") {
+			t.Errorf("Detail = %q, want it to name the missing header", result.Detail)
+		}
+	})
+
+	t.Run("404 names both of its causes", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, token)
+
+		if result.OK || result.Status != http.StatusNotFound {
+			t.Fatalf("OK = %v, Status = %d, want false and 404", result.OK, result.Status)
+		}
+		// backupctl reports this as a hard failure and cannot say which cause
+		// it was. Saying both is the entire value of the button.
+		if !strings.Contains(result.Detail, "BACKUP_TOKEN") || !strings.Contains(result.Detail, "rate-limited") {
+			t.Errorf("Detail = %q, want the stale-token and spent-budget causes both named", result.Detail)
+		}
+	})
+
+	t.Run("409 is inconclusive rather than a failure", func(t *testing.T) {
+		// A nightly backup that happens to be running is not a broken backup.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "snapshot already in progress", http.StatusConflict)
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, token)
+
+		if result.OK || result.Status != http.StatusConflict {
+			t.Fatalf("OK = %v, Status = %d, want false and 409", result.OK, result.Status)
+		}
+		if !strings.Contains(result.Detail, "proves nothing") {
+			t.Errorf("Detail = %q, want it to say the check was inconclusive", result.Detail)
+		}
+	})
+
+	t.Run("an unset token is reported without a request", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+		}))
+		defer server.Close()
+
+		result := runBackupVerification(server.URL, "")
+
+		if result.OK {
+			t.Fatal("OK = true with no token configured")
+		}
+		if requests != 0 {
+			t.Errorf("sent %d requests with no token to send", requests)
+		}
+	})
+
+	t.Run("a dead endpoint is a result, not an error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		url := server.URL
+		server.Close()
+
+		result := runBackupVerification(url, token)
+
+		if result.OK || result.Detail == "" {
+			t.Fatalf("OK = %v, Detail = %q, want false and a sentence", result.OK, result.Detail)
+		}
+	})
+}
+
+// TestVerifyBackupPathCooldown: the snapshot endpoint allows ten requests an
+// hour and backupctl fetches from the same loopback address, so a row of
+// impatient presses could spend the nightly backup's budget — and an exhausted
+// budget answers 404, the symptom this check exists to explain.
+func TestVerifyBackupPathCooldown(t *testing.T) {
+	db := logTestDB(t, "test_verify_backup.db")
+	adminToken := adminContext(t, db)
+
+	seeded := VerifyBackupPathResponse{
+		OK:        true,
+		Detail:    "a complete snapshot came back over the path the nightly backup uses.",
+		Status:    http.StatusOK,
+		CheckedAt: time.Now(),
+	}
+	backupVerify.mu.Lock()
+	backupVerify.last = seeded
+	backupVerify.mu.Unlock()
+	t.Cleanup(func() {
+		backupVerify.mu.Lock()
+		backupVerify.last = VerifyBackupPathResponse{}
+		backupVerify.mu.Unlock()
+	})
+
+	t.Run("replays the last result within the cooldown", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			resp, err := VerifyBackupPath(&vbeam.Context{Tx: tx, Token: adminToken}, VerifyBackupPathRequest{})
+			if err != nil {
+				t.Fatalf("VerifyBackupPath() error = %v", err)
+			}
+			if !resp.Cached {
+				t.Error("Cached = false; a replayed result that does not say so is the most misleading thing on the page")
+			}
+			if !resp.OK || resp.CheckedAt != seeded.CheckedAt {
+				t.Errorf("resp = %+v, want the seeded result replayed", resp)
+			}
+		})
+	})
+
+	t.Run("non-admin is refused", func(t *testing.T) {
+		regular, _ := generateAuthJwt(User{Id: 2, Email: "regular@example.com"}, httptest.NewRecorder())
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			if _, err := VerifyBackupPath(&vbeam.Context{Tx: tx, Token: regular}, VerifyBackupPathRequest{}); err != ErrAdminRequired {
+				t.Errorf("Expected ErrAdminRequired, got %v", err)
+			}
+		})
+	})
+}
+
+// TestVerifyBackupPathAgainstTheRealEndpoint runs the check against the actual
+// snapshot handler behind the actual rate limiter, rather than against a stand
+// -in that answers however the test likes. The stand-in tests above say the
+// check reads a response correctly; this one says it agrees with the endpoint
+// it will really be pointed at.
+func TestVerifyBackupPathAgainstTheRealEndpoint(t *testing.T) {
+	const token = "a-backup-token-of-at-least-32-characters"
+
+	db := logTestDB(t, "test_snapshot_endpoint.db")
+
+	// The limiter is constructed per wrapper, so this test owns its own budget
+	// and cannot spend anyone else's.
+	t.Setenv("RATE_LIMIT_DISABLED", "")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+SnapshotPath, SnapshotHandler(db, token))
+	server := httptest.NewServer(NewRequestIDWrapper(NewRateLimitWrapper(NewRequestTimeoutWrapper(mux))))
+	defer server.Close()
+
+	t.Run("a real snapshot passes", func(t *testing.T) {
+		result := runBackupVerification(server.URL, token)
+
+		if !result.OK {
+			t.Fatalf("OK = false against the real endpoint: %s", result.Detail)
+		}
+		if result.ReceivedBytes == 0 || result.ReceivedBytes != result.DeclaredBytes {
+			t.Errorf("received %d of a declared %d bytes", result.ReceivedBytes, result.DeclaredBytes)
+		}
+	})
+
+	t.Run("a token the endpoint does not hold is refused", func(t *testing.T) {
+		// What an .env edited since startup looks like from here.
+		result := runBackupVerification(server.URL, "a-different-token-of-at-least-32-chars")
+
+		if result.OK || result.Status != http.StatusNotFound {
+			t.Fatalf("OK = %v, Status = %d, want false and 404", result.OK, result.Status)
+		}
+	})
+
+	t.Run("a spent budget looks exactly like a bad token", func(t *testing.T) {
+		// This is why the check has a cooldown: the endpoint disguises a rate
+		// limit as a 404, so pressing the button often enough to exhaust the
+		// budget would break the nightly backup *and* report the failure as a
+		// token problem.
+		var last VerifyBackupPathResponse
+		for i := 0; i < 12; i++ {
+			last = runBackupVerification(server.URL, token)
+			if !last.OK {
+				break
+			}
+		}
+
+		if last.OK {
+			t.Fatal("twelve snapshots in a row all succeeded; the snapshot rate limit is not being applied")
+		}
+		if last.Status != http.StatusNotFound {
+			t.Errorf("Status = %d, want 404 — a rate-limited caller is turned away with the same answer as an unauthorized one", last.Status)
+		}
+	})
 }
