@@ -16,7 +16,6 @@ var configEnvVars = []string{
 	"APP_PASSWORD",
 	"SMTP_HOST",
 	"SMTP_PORT",
-	"GEMINI_API_KEY",
 	"BACKUP_TOKEN",
 	"APNS_TEAM_ID",
 	"APNS_KEY_ID",
@@ -36,7 +35,6 @@ func validConfigEnv() map[string]string {
 	env["GOOGLE_CLIENT_ID"] = "client-id"
 	env["GOOGLE_CLIENT_SECRET"] = "client-secret"
 	env["MAIL_FROM"] = "noreply@familyrecord.app"
-	env["GEMINI_API_KEY"] = "gemini-key"
 	env["BACKUP_TOKEN"] = strings.Repeat("b", minimumBackupTokenLength)
 	return env
 }
@@ -94,7 +92,6 @@ func TestCheckProductionConfigRequiresEverySetting(t *testing.T) {
 		"GOOGLE_CLIENT_ID",
 		"GOOGLE_CLIENT_SECRET",
 		"MAIL_FROM",
-		"GEMINI_API_KEY",
 		"BACKUP_TOKEN",
 	}
 
@@ -129,7 +126,7 @@ func TestCheckProductionConfigReportsEveryProblemAtOnce(t *testing.T) {
 	env := validConfigEnv()
 	env["SITE_ROOT"] = ""
 	env["GOOGLE_CLIENT_ID"] = ""
-	env["GEMINI_API_KEY"] = ""
+	env["BACKUP_TOKEN"] = ""
 	applyEnv(t, env)
 	dbPath, staticDir, logDir := storageDirs(t)
 

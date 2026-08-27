@@ -232,7 +232,6 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterImportMethods(app)
 	backend.RegisterExportMethods(app)
-	backend.RegisterAIImportMethods(app)
 	backend.RegisterAdminMethods(app)
 	backend.RegisterAdminHealthMethods(app)
 	backend.RegisterAdminDigestMethods(app)

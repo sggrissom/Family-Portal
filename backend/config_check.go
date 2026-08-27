@@ -33,7 +33,6 @@ func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	issues = append(issues, checkSiteRoot()...)
 	issues = append(issues, checkGoogleOAuth()...)
 	issues = append(issues, checkMail()...)
-	issues = append(issues, checkAIProvider()...)
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkIOSAppID()...)
@@ -89,13 +88,6 @@ func checkMail() []ConfigIssue {
 	}
 	if _, err := mail.ParseAddress(settings.From); err != nil {
 		return []ConfigIssue{{Setting: "MAIL_FROM", Detail: "is not a valid email address"}}
-	}
-	return nil
-}
-
-func checkAIProvider() []ConfigIssue {
-	if os.Getenv("GEMINI_API_KEY") == "" {
-		return []ConfigIssue{{Setting: "GEMINI_API_KEY", Detail: "must be set; AI-assisted import is offered in the UI"}}
 	}
 	return nil
 }

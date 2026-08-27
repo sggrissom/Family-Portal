@@ -1,13 +1,13 @@
 # When an optional dependency is down
 
-Three subsystems talk to something outside the process: face analysis (the dlib
-daemon over a unix socket), AI import (Gemini over the internet), and push
-notifications (APNs). All three are optional, all three will be unavailable
-sometimes, and none of them may take primary user data with them.
+Two subsystems talk to something outside the process: face analysis (the dlib
+daemon over a unix socket) and push notifications (APNs). Both are optional,
+both will be unavailable sometimes, and neither may take primary user data with
+them.
 
 "Primary user data" means the record a person created: the account, the person,
 the measurement, the milestone, the photo and its file, the chat message. Those
-are what a family would notice losing. Everything the three subsystems produce —
+are what a family would notice losing. Everything the two subsystems produce —
 a suggested face tag, an AI-drafted set of records, a lock-screen notification —
 is derived, regenerable, or merely convenient.
 
@@ -32,19 +32,6 @@ The upload path never waits on analysis: `QueuePhotoAnalysis` is called *after*
 the photo worker has already marked the photo complete, and it neither blocks
 nor returns an error. `make e2e` covers this — the end-to-end run has no face
 daemon, and a photo upload still has to finish.
-
-## AI import
-
-| condition | behavior |
-| --- | --- |
-| `GEMINI_API_KEY` unset | `ProcessAIImport` returns "AI not configured" in `resp.Error`. No records are written. |
-| Gemini unreachable or slow | The 60-second client timeout fires and the transport error is returned in `resp.Error`, with the request URL stripped so no endpoint or credential reaches the browser. |
-| Gemini returns nonsense | Parsing fails and the error is returned. Nothing is written. |
-
-AI import is a *drafting* step: it converts text into records the user then
-reviews and imports. A failure costs the draft, and the source text is still in
-the box the user pasted it into. No other request path calls Gemini, so an
-outage there cannot affect a login, a photo, or a measurement.
 
 ## Push notifications
 

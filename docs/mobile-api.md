@@ -532,7 +532,6 @@ header; there is no faster path.
 | password-reset | 5 | 15 min | request, validate, reset |
 | invite-code | 10 | 15 min | `JoinFamily`, `AcceptFamilyLink` |
 | refresh | 30 | 5 min | `/api/refresh` |
-| ai | 10 | 1 hour | AI import |
 | import | 5 | 1 hour | `ImportData`, `/api/import-bundle` |
 | upload | 120 | 10 min | `/api/upload-photo` |
 | websocket | 30 | 5 min | `/ws/chat` connects |

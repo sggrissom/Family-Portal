@@ -49,14 +49,6 @@ func TestAFullPhotoQueueRefusesInsteadOfBlocking(t *testing.T) {
 	}
 }
 
-func TestAIImportWithoutAKeyReportsInTheResponse(t *testing.T) {
-	t.Setenv("GEMINI_API_KEY", "")
-
-	if err := ValidateAIConfiguration(); err == nil {
-		t.Fatal("ValidateAIConfiguration accepted an empty key")
-	}
-}
-
 func TestChatMessageSurvivesAnUnavailablePushWorker(t *testing.T) {
 	dbPath := "test_degraded_chat.db"
 	db := vbolt.Open(dbPath)

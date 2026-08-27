@@ -32,7 +32,6 @@ var (
 	rateRulePasswordReset = RateLimitRule{Name: "password-reset", Burst: 5, Window: 15 * time.Minute}
 	rateRuleInviteCode    = RateLimitRule{Name: "invite-code", Burst: 10, Window: 15 * time.Minute}
 	rateRuleRefresh       = RateLimitRule{Name: "refresh", Burst: 30, Window: 5 * time.Minute}
-	rateRuleAI            = RateLimitRule{Name: "ai", Burst: 10, Window: time.Hour}
 	rateRuleImport        = RateLimitRule{Name: "import", Burst: 5, Window: time.Hour}
 	rateRuleUpload        = RateLimitRule{Name: "upload", Burst: 120, Window: 10 * time.Minute}
 	rateRuleWebSocket     = RateLimitRule{Name: "websocket", Burst: 30, Window: 5 * time.Minute}
@@ -60,8 +59,6 @@ var exactPathRules = map[string]RateLimitRule{
 	"/rpc/ResetPassword":              rateRulePasswordReset,
 	"/rpc/JoinFamily":                 rateRuleInviteCode,
 	"/rpc/AcceptFamilyLink":           rateRuleInviteCode,
-	"/rpc/ProcessAIImport":            rateRuleAI,
-	"/rpc/ListAIModels":               rateRuleAI,
 	"/rpc/ImportData":                 rateRuleImport,
 }
 

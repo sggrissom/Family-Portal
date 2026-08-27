@@ -754,7 +754,6 @@ func (h *harness) serverEnv() ([]string, error) {
 		// which is the point of asserting they are only placeholders.
 		"GOOGLE_CLIENT_ID=e2e-google-client-id",
 		"GOOGLE_CLIENT_SECRET=e2e-google-client-secret",
-		"GEMINI_API_KEY=e2e-gemini-key",
 		"MAIL_FROM=e2e@family-portal.invalid",
 	}, nil
 }
