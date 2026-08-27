@@ -19,7 +19,7 @@ block(`
 `);
 
 block(`
-.form-actions {
+.add-person-container .form-actions {
   display: flex;
   gap: 16px;
   margin-top: 8px;

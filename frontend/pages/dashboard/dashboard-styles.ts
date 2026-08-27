@@ -186,7 +186,7 @@ block(`
 `);
 
 block(`
-.person-details {
+.dashboard-container .person-details {
   font-size: 1.2rem;
   color: var(--muted);
   margin: 0;
@@ -208,7 +208,7 @@ block(`
   margin: 4px 0 0;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -288,7 +288,7 @@ block(`
 `);
 
 block(`
-.empty-state {
+.dashboard-container .empty-state {
   text-align: center;
   padding: 80px 20px;
   background: var(--surface);

@@ -54,7 +54,7 @@ block(`
   height: 100%;
   object-fit: contain;
   display: block;
-  background: var(--color-border);
+  background: var(--border);
   cursor: pointer;
   transition: opacity 0.2s ease;
   /* Ensure height is maintained during loading */
@@ -63,32 +63,16 @@ block(`
 `);
 
 block(`
-.profile-photo-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: var(--primary-accent);
-  color: var(--button-text);
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-}
-`);
-
-block(`
-.photo-info {
+.photo-card .photo-info {
   padding: 12px 16px;
 }
 `);
 
 block(`
-.photo-title {
+.photo-card .photo-title {
   font-weight: 600;
   font-size: 14px;
-  color: var(--color-text-emphasis);
+  color: var(--text);
   margin: 0 0 6px 0;
   line-height: 1.3;
   overflow: hidden;
@@ -100,15 +84,15 @@ block(`
 block(`
 .photo-date {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--muted);
   margin: 0 0 4px 0;
 }
 `);
 
 block(`
-.photo-description {
+.photo-card .photo-description {
   font-size: 12px;
-  color: var(--color-text);
+  color: var(--muted);
   margin: 0;
   line-height: 1.4;
   overflow: hidden;
@@ -130,7 +114,7 @@ block(`
 block(`
 .photos-count {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 `);
 

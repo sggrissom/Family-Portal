@@ -333,21 +333,6 @@ block(`
 `);
 
 block(`
-.btn-danger {
-  background: var(--error, #dc3545);
-  color: white;
-  border: 1px solid var(--error, #dc3545);
-}
-`);
-
-block(`
-.btn-danger:hover:not(:disabled) {
-  background: rgba(220, 53, 69, 0.8);
-  border-color: rgba(220, 53, 69, 0.8);
-}
-`);
-
-block(`
 .export-mode-group {
   display: flex;
   flex-direction: column;

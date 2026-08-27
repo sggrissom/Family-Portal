@@ -63,35 +63,6 @@ block(`
 `);
 
 block(`
-.btn-large {
-  padding: 16px 32px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  border: none;
-  min-width: 140px;
-}
-`);
-
-block(`
-.btn-secondary {
-  background: transparent;
-  color: var(--text);
-  border: 2px solid var(--border);
-}
-`);
-
-block(`
-.btn-secondary:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-  transform: translateY(-2px);
-}
-`);
-
-block(`
 .btn-primary.btn-large:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(105, 219, 124, 0.3);

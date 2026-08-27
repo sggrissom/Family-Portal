@@ -95,7 +95,7 @@ block(`
 `);
 
 block(`
-.checkbox-label {
+.login-container .checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;

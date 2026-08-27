@@ -1,7 +1,7 @@
 import { block } from "vlens/css";
 
 block(`
-.back-link {
+.activities-container .back-link {
   display: inline-block;
   margin-bottom: 1rem;
   color: var(--muted);
@@ -11,7 +11,7 @@ block(`
 `);
 
 block(`
-.back-link:hover {
+.activities-container .back-link:hover {
   color: var(--text);
 }
 `);

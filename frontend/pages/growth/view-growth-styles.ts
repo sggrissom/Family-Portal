@@ -24,7 +24,7 @@ block(`
 `);
 
 block(`
-.back-link {
+.view-growth-container .back-link {
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
@@ -32,7 +32,7 @@ block(`
 `);
 
 block(`
-.back-link:hover {
+.view-growth-container .back-link:hover {
   text-decoration: underline;
 }
 `);
@@ -101,10 +101,10 @@ block(`
 `);
 
 block(`
-.percentile-badge {
-  display: inline-block;
+.view-growth-container .percentile-badge {
   background: var(--hover-bg);
   color: var(--accent);
+  border: none;
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 0.8rem;

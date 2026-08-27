@@ -69,13 +69,6 @@ block(`
 `);
 
 block(`
-.btn-small {
-  padding: 0.35rem 0.75rem;
-  font-size: 0.875rem;
-}
-`);
-
-block(`
 .family-member-leave {
   display: flex;
   justify-content: flex-start;

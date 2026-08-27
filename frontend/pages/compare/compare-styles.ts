@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "../../styles/timeline-item";
 
 block(`
 .compare-page {
@@ -48,7 +49,7 @@ block(`
 `);
 
 block(`
-.person-checkboxes {
+.compare-page .person-checkboxes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
@@ -117,7 +118,7 @@ block(`
 `);
 
 block(`
-.filter-group {
+.compare-page .filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -143,7 +144,7 @@ block(`
 `);
 
 block(`
-.filter-btn {
+.compare-page .filter-btn {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -156,7 +157,7 @@ block(`
 `);
 
 block(`
-.filter-btn:hover {
+.compare-page .filter-btn:hover {
   background: var(--hover-bg);
   border-color: var(--primary-accent);
 }
@@ -259,14 +260,6 @@ block(`
 `);
 
 block(`
-.timeline-items {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-`);
-
-block(`
 .compare-empty-state {
   text-align: center;
   padding: 3rem 1rem;
@@ -337,13 +330,5 @@ block(`
     flex: 1;
     min-width: 80px;
   }
-}
-`);
-
-block(`
-.photo-thumbnail {
-  display: block;
-  color: inherit;
-  text-decoration: none;
 }
 `);

@@ -301,9 +301,17 @@ to the analytics page, not a refactor. That is a design decision, not cleanup.
   `calculateStorageGrowthTrend` then re-walks the photo slice once per day for
   thirty days. Fine at today's size and will stay fine for a long time. Recorded
   so it isn't a surprise later, not as work to do.
-- **Class-name collisions outside the admin folder.** Roughly sixty class names
-  are defined in more than one non-admin stylesheet — `.timeline-item-*` across
-  profile and family-timeline, `.tag-color-dot` across seven files,
-  `.empty-state` across six including `global.ts`. Same lazy-chunk hazard as
-  above; the admin folder is clean, the rest of the frontend is not. Not admin
-  work, but it is the same bug.
+~~- **Class-name collisions outside the admin folder.**~~ **Done**, and it was
+  worse than the count suggested. The sixty duplicate names were the visible
+  half; the other half was thirty-eight classes a page *used* with no rule
+  reachable from its own chunk — `.auth-card` and the rest of the form-card
+  vocabulary lived only in `create-account-styles.ts`, so Add Person rendered
+  unstyled unless you had visited Create Account first, and `.error-page` lived
+  only in three page stylesheets, so `ErrorPage` — the component `AdminGuard`
+  renders for a signed-in non-admin — was unstyled on fourteen routes including
+  every admin one. Twenty-five CSS variables were undefined everywhere:
+  `--color-text-muted` and its family were a second, never-defined naming scheme
+  parallel to `--muted`. Shared vocabulary now lives in `global.ts` and
+  `styles/timeline-item.ts`; page-local rules that reused a shared name are
+  scoped under their page container, so a chunk can no longer restyle a page it
+  is not on.

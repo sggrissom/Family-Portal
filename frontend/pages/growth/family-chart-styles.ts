@@ -68,7 +68,7 @@ block(`
 `);
 
 block(`
-.person-checkboxes {
+.family-chart-page .person-checkboxes {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -77,7 +77,7 @@ block(`
 `);
 
 block(`
-.person-checkbox {
+.family-chart-page .person-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -89,7 +89,7 @@ block(`
 `);
 
 block(`
-.person-checkbox:hover {
+.family-chart-page .person-checkbox:hover {
   background: var(--hover-bg);
 }
 `);
@@ -104,7 +104,7 @@ block(`
 `);
 
 block(`
-.checkbox-label {
+.family-chart-page .checkbox-label {
   font-size: 1rem;
   color: var(--text);
   user-select: none;
@@ -140,7 +140,7 @@ block(`
 `);
 
 block(`
-.filter-toggle {
+.family-chart-page .filter-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -152,7 +152,7 @@ block(`
 `);
 
 block(`
-.filter-toggle:hover {
+.family-chart-page .filter-toggle:hover {
   background: var(--hover-bg);
 }
 `);
@@ -196,7 +196,7 @@ block(`
 `);
 
 block(`
-.loading-state {
+.family-chart-page .loading-state {
   text-align: center;
   color: var(--muted);
   font-size: 1.1rem;
@@ -212,7 +212,7 @@ block(`
 `);
 
 block(`
-.empty-state {
+.family-chart-page .empty-state {
   text-align: center;
   color: var(--muted);
   font-size: 1.1rem;

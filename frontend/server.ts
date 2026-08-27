@@ -26,20 +26,20 @@ export const Weight: MeasurementType = 1;
 
 // Errors
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
 export const ErrUserNotFound = "No such user";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrPersonNotFound = "Person not found or not in your family";
 
 export interface CreateAccountRequest {
     name: string

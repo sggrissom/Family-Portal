@@ -17,14 +17,6 @@ block(`
 `);
 
 block(`
-.page-header {
-  margin-bottom: 2rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 1.5rem;
-}
-`);
-
-block(`
 .header-content {
   display: flex;
   justify-content: space-between;
@@ -34,16 +26,7 @@ block(`
 `);
 
 block(`
-.page-header h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-}
-`);
-
-block(`
-.photos-count {
+.family-photos-container .photos-count {
   color: var(--muted);
   font-size: 0.875rem;
   font-weight: 500;
@@ -71,13 +54,13 @@ block(`
 `);
 
 block(`
-.filter-section {
+.family-photos-container .filter-section {
   margin-bottom: 1.5rem;
 }
 `);
 
 block(`
-.filter-section:last-of-type {
+.family-photos-container .filter-section:last-of-type {
   margin-bottom: 0;
 }
 `);
@@ -100,7 +83,7 @@ block(`
 `);
 
 block(`
-.person-checkbox {
+.family-photos-container .person-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -115,7 +98,7 @@ block(`
 `);
 
 block(`
-.person-checkbox:hover {
+.family-photos-container .person-checkbox:hover {
   background: var(--hover-bg);
   border-color: var(--primary-accent);
 }
@@ -195,13 +178,13 @@ block(`
 `);
 
 block(`
-.filter-toggle {
+.family-photos-container .filter-toggle {
   white-space: nowrap;
 }
 `);
 
 block(`
-.loading-state {
+.family-photos-container .loading-state {
   padding: 1rem;
   text-align: center;
   color: var(--muted);
@@ -366,7 +349,7 @@ block(`
 `);
 
 block(`
-.empty-state {
+.family-photos-container .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;

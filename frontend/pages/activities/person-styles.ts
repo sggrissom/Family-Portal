@@ -58,7 +58,7 @@ block(`
 
 block(`
 a.person-entry-chip:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 `);
 

@@ -6,9 +6,9 @@ block(`
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--color-card-bg);
+  background: var(--surface);
   max-height: 240px;
   overflow-y: auto;
 }
@@ -16,7 +16,7 @@ block(`
 
 block(`
 .photo-picker-empty {
-  color: var(--color-text-muted);
+  color: var(--muted);
   font-size: 14px;
   padding: 4px;
   margin: 0;
@@ -40,7 +40,7 @@ block(`
 
 block(`
 .photo-picker-item.selected {
-  border-color: var(--color-primary);
+  border-color: var(--accent);
 }
 `);
 
@@ -67,7 +67,7 @@ block(`
   right: 4px;
   width: 18px;
   height: 18px;
-  background: var(--color-primary);
+  background: var(--accent);
   border-radius: 50%;
   display: flex;
   align-items: center;

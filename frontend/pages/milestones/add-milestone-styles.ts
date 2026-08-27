@@ -5,7 +5,7 @@ block(`
   max-width: 580px;
   padding: 40px 20px;
   margin: 0 auto;
-  background: var(--color-bg);
+  background: var(--bg);
   min-height: calc(100vh - 200px);
   display: flex;
   align-items: center;
@@ -23,15 +23,15 @@ block(`
 .milestone-preview {
   margin-top: 30px;
   padding: 20px;
-  background: var(--color-card-bg);
+  background: var(--surface);
   border-radius: 12px;
-  border: 2px solid var(--color-primary);
+  border: 2px solid var(--accent);
 }
 `);
 block(`
 .milestone-preview h3 {
   margin: 0 0 12px 0;
-  color: var(--color-primary);
+  color: var(--accent);
   font-size: 16px;
   font-weight: 600;
 }
@@ -39,13 +39,13 @@ block(`
 block(`
 .milestone-preview p {
   margin: 0;
-  color: var(--color-text);
+  color: var(--text);
   line-height: 1.5;
 }
 `);
 block(`
 .milestone-preview strong {
-  color: var(--color-text-emphasis);
+  color: var(--text);
 }
 `);
 
@@ -60,7 +60,7 @@ block(`
 .add-milestone-page .form-hint {
   display: block;
   margin-top: 6px;
-  color: var(--color-text-muted);
+  color: var(--muted);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -69,9 +69,9 @@ block(`
 block(`
 .photo-upload {
   padding: 12px;
-  border: 1px dashed var(--color-border);
+  border: 1px dashed var(--border);
   border-radius: 12px;
-  background: var(--color-card-bg);
+  background: var(--surface);
 }
 `);
 
@@ -79,9 +79,9 @@ block(`
 .photo-select {
   padding: 12px;
   margin-bottom: 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--color-card-bg);
+  background: var(--surface);
 }
 `);
 
@@ -90,7 +90,7 @@ block(`
   display: block;
   margin-bottom: 6px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text);
 }
 `);
 
@@ -100,9 +100,9 @@ block(`
   width: 100%;
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
 }
 `);
 
@@ -112,15 +112,15 @@ block(`
   width: 100%;
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  border: 1px solid var(--border);
+  background: var(--bg);
 }
 `);
 
 block(`
 .photo-upload-hint {
   margin: 8px 0 0;
-  color: var(--color-text-muted);
+  color: var(--muted);
   font-size: 14px;
   line-height: 1.4;
 }

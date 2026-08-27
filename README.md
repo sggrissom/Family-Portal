@@ -145,6 +145,8 @@ if any check modified a tracked file.
 - [`docs/mobile-api.md`](docs/mobile-api.md) — the contract the iOS companion
   app is built against: what a shipped build may rely on, and what changing it
   would break.
+- [`docs/permissions.md`](docs/permissions.md) — who can see what: household
+  membership, and the family links that share one person with another household.
 
 Pushing to `main` builds and deploys to the VPS, then runs the smoke check.
 

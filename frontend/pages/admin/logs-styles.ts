@@ -430,9 +430,9 @@ block(`
 .log-stack-trace {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: var(--surface-secondary, rgba(0,0,0,0.15));
+  background: var(--bg, rgba(0,0,0,0.15));
   border-radius: 4px;
-  border-left: 3px solid var(--error-color, #dc2626);
+  border-left: 3px solid var(--danger, #dc2626);
   overflow-x: auto;
 }
 `);
@@ -442,7 +442,7 @@ block(`
   margin: 0;
   font-family: monospace;
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: var(--muted);
   white-space: pre;
   word-break: normal;
 }
