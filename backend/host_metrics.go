@@ -152,6 +152,9 @@ func fetchHostMetrics() HostMetricsResponse {
 				break
 			}
 		}
+		if resp.App.Releases == nil {
+			resp.App.Releases = []HostRelease{}
+		}
 	}
 
 	hostMetrics.fetchedAt = time.Now()

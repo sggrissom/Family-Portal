@@ -288,7 +288,8 @@ const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
 };
 
 const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
-  if (health.configIssues.length === 0) return null;
+  const issues = health.configIssues ?? [];
+  if (issues.length === 0) return null;
 
   return (
     <div className="problem-group">
@@ -299,7 +300,7 @@ const ConfigIssues = ({ health }: { health: server.SystemHealthResponse }) => {
           : "These would fail a release build. A development machine legitimately has no APNs key."}
       </p>
       <ul className="problem-list">
-        {health.configIssues.map(issue => (
+        {issues.map(issue => (
           <li key={issue.setting}>
             <code>{issue.setting}</code> {issue.detail}
           </li>
@@ -388,9 +389,9 @@ const LogIssues = ({ logs }: { logs: server.LogProblems }) => {
         )}
       </ul>
 
-      {logs.recentErrors.length > 0 && (
+      {(logs.recentErrors ?? []).length > 0 && (
         <div className="problem-errors">
-          {logs.recentErrors.map((entry, index) => (
+          {(logs.recentErrors ?? []).map((entry, index) => (
             <ErrorLine key={index} entry={entry} />
           ))}
         </div>
@@ -496,13 +497,14 @@ const MailIssues = ({ mail }: { mail: server.MailProblems }) => {
 };
 
 const Releases = ({ releases }: { releases: server.HostRelease[] }) => {
-  if (releases.length === 0) return null;
+  const list = releases ?? [];
+  if (list.length === 0) return null;
 
   return (
     <div className="releases">
       <h3 className="releases-title">Recent deploys</h3>
       <ol className="releases-list">
-        {releases.map(release => (
+        {list.map(release => (
           <li
             key={release.name}
             className={release.current ? "release release-current" : "release"}
@@ -548,9 +550,9 @@ const Digest = ({ digest }: { digest: server.WeeklyDigestResponse }) => {
         <DiagnosticItem label="Chat" value={countOf(digest.messages, "message", "messages")} />
       </dl>
 
-      {digest.people.length > 0 && (
+      {(digest.people ?? []).length > 0 && (
         <ul className="digest-people">
-          {digest.people.map(person => (
+          {(digest.people ?? []).map(person => (
             <DigestPerson key={person.name} person={person} />
           ))}
         </ul>

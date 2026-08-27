@@ -90,6 +90,7 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	}
 
 	resp.ReleaseBuild = cfg.IsRelease
+	resp.ConfigIssues = []ConfigProblem{}
 	for _, issue := range CheckProductionConfig(cfg.DBPath, cfg.StaticDir, cfg.LogDir) {
 		resp.ConfigIssues = append(resp.ConfigIssues, ConfigProblem{
 			Setting: issue.Setting,
