@@ -134,7 +134,7 @@ block(`
 `);
 
 block(`
-.card-icon {
+.admin-card-icon {
   font-size: 2rem;
   width: 3rem;
   height: 3rem;
@@ -343,7 +343,7 @@ block(`
 `);
 
 block(`
-.family-name {
+.admin-family-badge {
   background: var(--admin-accent);
   color: var(--admin-text-on-accent);
   padding: 0.25rem 0.5rem;
@@ -396,7 +396,7 @@ block(`
 `);
 
 block(`
-.empty-state {
+.admin-empty-state {
   padding: 2rem;
   text-align: center;
   color: var(--muted);
@@ -456,7 +456,7 @@ block(`
 `);
 
 block(`
-.stat-card {
+.admin-stat-card {
   background: var(--admin-surface-elevated);
   border: 1px solid var(--admin-border);
   border-radius: 0.75rem;
@@ -467,14 +467,14 @@ block(`
 `);
 
 block(`
-.stat-card:hover {
+.admin-stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 `);
 
 block(`
-.stat-icon {
+.admin-stat-icon {
   font-size: 2rem;
   margin-bottom: 0.5rem;
   opacity: 0.8;
@@ -482,7 +482,7 @@ block(`
 `);
 
 block(`
-.stat-value {
+.admin-stat-value {
   font-size: 2rem;
   font-weight: 700;
   color: var(--admin-accent);
@@ -491,7 +491,7 @@ block(`
 `);
 
 block(`
-.stat-label {
+.admin-stat-label {
   font-size: 0.875rem;
   color: var(--muted);
   margin-top: 0.25rem;
@@ -625,11 +625,11 @@ block(`
     gap: 1rem;
   }
 
-  .stat-card {
+  .admin-stat-card {
     padding: 1rem;
   }
 
-  .stat-value {
+  .admin-stat-value {
     font-size: 1.5rem;
   }
 

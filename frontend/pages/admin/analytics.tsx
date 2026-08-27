@@ -6,6 +6,7 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch } from "../../lib/authHelpers";
 import { adminView } from "../../components/AdminGuard";
 import { formatBytes } from "../../lib/formatBytes";
+import "./admin-styles";
 import "./analytics-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -36,7 +37,7 @@ export function view(
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="analytics-container">
+        <main id="app" className="admin-container analytics-container">
           <AnalyticsPage overviewData={data} />
         </main>
         <Footer />
@@ -108,10 +109,10 @@ const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
   const view = state.selectedView;
 
   return (
-    <div className="analytics-page">
-      <div className="analytics-header">
-        <div className="analytics-badge">
-          <span className="analytics-icon">📊</span>
+    <div className="admin-page">
+      <div className="admin-header analytics-header">
+        <div className="admin-badge">
+          <span className="admin-icon">📊</span>
           <span>Analytics Dashboard</span>
         </div>
         <h1>Site Analytics</h1>
@@ -167,7 +168,7 @@ const TabContent = ({
   if (error) {
     return (
       <div className="analytics-content">
-        <div className="chart-placeholder large">
+        <div className="analytics-chart-placeholder large">
           <div>
             <h3>{viewLabels[view]} Analytics</h3>
             <p>{error}</p>
@@ -186,7 +187,7 @@ const TabContent = ({
 
   return (
     <div className="analytics-content">
-      <div className="chart-placeholder large">
+      <div className="analytics-chart-placeholder large">
         <div>
           <h3>{viewLabels[view]} Analytics</h3>
           <p>Loading…</p>
@@ -313,7 +314,7 @@ const UsersView = ({ data }: { data: server.UserAnalyticsResponse }) => {
         <div className="families-table">
           {data.topActiveFamilies.slice(0, 10).map((family, index) => (
             <div key={index} className="family-row">
-              <span className="family-name">{family.familyName}</span>
+              <span className="analytics-family-name">{family.familyName}</span>
               <span className="family-stats">
                 {family.totalPhotos} photos, {family.totalMilestones} milestones
               </span>
@@ -363,7 +364,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
           <div className="family-content-list">
             {data.contentPerFamily.slice(0, 8).map((family, index) => (
               <div key={index} className="family-content-item">
-                <span className="family-name">{family.familyName}</span>
+                <span className="analytics-family-name">{family.familyName}</span>
                 <div className="family-content-stats">
                   <span>{family.photos} photos</span>
                   <span>{family.milestones} milestones</span>
@@ -439,7 +440,7 @@ const SystemView = ({ data }: { data: server.SystemAnalyticsResponse }) => {
 
 const SimpleLineChart = ({ data }: { data: server.DataPoint[] }) => {
   if (!data || data.length === 0) {
-    return <div className="chart-placeholder">No data available</div>;
+    return <div className="analytics-chart-placeholder">No data available</div>;
   }
 
   const maxValue = Math.max(...data.map(d => d.value));
@@ -476,7 +477,7 @@ const SimpleLineChart = ({ data }: { data: server.DataPoint[] }) => {
 
 const StackedBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
   if (!data || data.length === 0) {
-    return <div className="chart-placeholder">No data available</div>;
+    return <div className="analytics-chart-placeholder">No data available</div>;
   }
 
   const maxTotal = Math.max(...data.map(d => d.photos + d.milestones + d.logins));
@@ -541,7 +542,7 @@ const StackedBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
 
 const SimpleBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
   if (!data || data.length === 0) {
-    return <div className="chart-placeholder">No data available</div>;
+    return <div className="analytics-chart-placeholder">No data available</div>;
   }
 
   const maxTotal = Math.max(...data.map(d => d.photos + d.milestones + d.logins));
@@ -569,7 +570,7 @@ const SimpleBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
 
 const SimplePieChart = ({ data }: { data: server.DistributionPoint[] }) => {
   if (!data || data.length === 0) {
-    return <div className="chart-placeholder">No data available</div>;
+    return <div className="analytics-chart-placeholder">No data available</div>;
   }
 
   const total = data.reduce((sum, item) => sum + item.value, 0);

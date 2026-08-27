@@ -193,7 +193,7 @@ const PushPage = ({ data }: PushPageProps) => {
       {status.issues.length > 0 && (
         <div className="admin-card error-card">
           <div className="card-header">
-            <div className="card-icon">⚠️</div>
+            <div className="admin-card-icon">⚠️</div>
             <h3>Configuration Problems</h3>
           </div>
           <div className="card-content">
@@ -209,68 +209,68 @@ const PushPage = ({ data }: PushPageProps) => {
       )}
 
       <div className="photo-stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon">{stats.enabled ? "🟢" : "🔴"}</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">{stats.enabled ? "🟢" : "🔴"}</div>
           <div className="stat-content">
             <h3>Worker</h3>
-            <div className="stat-value">{stats.enabled ? "Running" : "Off"}</div>
-            <div className="stat-label">
+            <div className="admin-stat-value">{stats.enabled ? "Running" : "Off"}</div>
+            <div className="admin-stat-label">
               {stats.enabled ? "Accepting notifications" : "APNs not configured"}
             </div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">📮</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">📮</div>
           <div className="stat-content">
             <h3>Queue</h3>
-            <div className="stat-value">{stats.queueLength}</div>
-            <div className="stat-label">Jobs awaiting send</div>
+            <div className="admin-stat-value">{stats.queueLength}</div>
+            <div className="admin-stat-label">Jobs awaiting send</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">✅</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">✅</div>
           <div className="stat-content">
             <h3>Delivered</h3>
-            <div className="stat-value">{stats.sent.toLocaleString()}</div>
-            <div className="stat-label">Accepted by APNs since restart</div>
+            <div className="admin-stat-value">{stats.sent.toLocaleString()}</div>
+            <div className="admin-stat-label">Accepted by APNs since restart</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">❌</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">❌</div>
           <div className="stat-content">
             <h3>Failed</h3>
-            <div className="stat-value">{stats.failed.toLocaleString()}</div>
-            <div className="stat-label">Rejected or unreachable</div>
+            <div className="admin-stat-value">{stats.failed.toLocaleString()}</div>
+            <div className="admin-stat-label">Rejected or unreachable</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">📱</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">📱</div>
           <div className="stat-content">
             <h3>Active Devices</h3>
-            <div className="stat-value">{status.activeDevices.toLocaleString()}</div>
-            <div className="stat-label">{status.inactiveDevices} inactive</div>
+            <div className="admin-stat-value">{status.activeDevices.toLocaleString()}</div>
+            <div className="admin-stat-label">{status.inactiveDevices} inactive</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">🚫</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">🚫</div>
           <div className="stat-content">
             <h3>Auto-Deactivated</h3>
-            <div className="stat-value">{stats.deactivated.toLocaleString()}</div>
-            <div className="stat-label">Tokens APNs rejected</div>
+            <div className="admin-stat-value">{stats.deactivated.toLocaleString()}</div>
+            <div className="admin-stat-label">Tokens APNs rejected</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">🔕</div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon">🔕</div>
           <div className="stat-content">
             <h3>Suppressed</h3>
-            <div className="stat-value">{stats.suppressed.toLocaleString()}</div>
-            <div className="stat-label">Recipients who turned this off</div>
+            <div className="admin-stat-value">{stats.suppressed.toLocaleString()}</div>
+            <div className="admin-stat-label">Recipients who turned this off</div>
           </div>
         </div>
       </div>
@@ -341,7 +341,7 @@ const PushPage = ({ data }: PushPageProps) => {
 
       <div className="admin-card">
         <div className="card-header">
-          <div className="card-icon">🧪</div>
+          <div className="admin-card-icon">🧪</div>
           <h3>Send Test Notification</h3>
         </div>
         <div className="card-content">
@@ -387,7 +387,7 @@ const PushPage = ({ data }: PushPageProps) => {
         <h2>Registered Devices ({devices.length})</h2>
         <div className="users-table-container">
           {devices.length === 0 ? (
-            <div className="empty-state">
+            <div className="admin-empty-state">
               <p>No devices have registered for push notifications.</p>
             </div>
           ) : (
@@ -457,7 +457,7 @@ const PushPage = ({ data }: PushPageProps) => {
         </p>
         <div className="users-table-container">
           {stats.recentAttempts.length === 0 ? (
-            <div className="empty-state">
+            <div className="admin-empty-state">
               <p>No delivery attempts since the server started.</p>
             </div>
           ) : (

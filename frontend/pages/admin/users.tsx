@@ -144,7 +144,7 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
 
       <div className="users-table-container">
         {users.length === 0 ? (
-          <div className="empty-state">
+          <div className="admin-empty-state">
             <p>No users found.</p>
           </div>
         ) : (
@@ -170,7 +170,7 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                     <td className="user-email">{u.email}</td>
                     <td className="user-family">
                       {u.familyName ? (
-                        <span className="family-name">{u.familyName}</span>
+                        <span className="admin-family-badge">{u.familyName}</span>
                       ) : (
                         <span className="no-family">No family</span>
                       )}
@@ -254,30 +254,32 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
 
       {stats && (
         <div className="photo-stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon">📤</div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">📤</div>
             <div className="stat-content">
               <h3>Sent</h3>
-              <div className="stat-value">{stats.sent.toLocaleString()}</div>
-              <div className="stat-label">Since this process started</div>
+              <div className="admin-stat-value">{stats.sent.toLocaleString()}</div>
+              <div className="admin-stat-label">Since this process started</div>
             </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-icon">{stats.failed > 0 ? "❌" : "✅"}</div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">{stats.failed > 0 ? "❌" : "✅"}</div>
             <div className="stat-content">
               <h3>Failed</h3>
-              <div className="stat-value">{stats.failed.toLocaleString()}</div>
-              <div className="stat-label">Gave up or was dropped</div>
+              <div className="admin-stat-value">{stats.failed.toLocaleString()}</div>
+              <div className="admin-stat-label">Gave up or was dropped</div>
             </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-icon">🕒</div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">🕒</div>
             <div className="stat-content">
               <h3>Last Sent</h3>
-              <div className="stat-value">{formatRelativeTime(stats.lastSentAt, "never")}</div>
-              <div className="stat-label">{stats.queueLength} waiting in the queue</div>
+              <div className="admin-stat-value">
+                {formatRelativeTime(stats.lastSentAt, "never")}
+              </div>
+              <div className="admin-stat-label">{stats.queueLength} waiting in the queue</div>
             </div>
           </div>
         </div>
@@ -286,7 +288,7 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
       {stats && stats.recentAttempts.length > 0 && (
         <div className="admin-card">
           <div className="card-header">
-            <div className="card-icon">📜</div>
+            <div className="admin-card-icon">📜</div>
             <h3>Recent Attempts</h3>
           </div>
           <div className="card-content">

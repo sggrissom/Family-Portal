@@ -162,7 +162,7 @@ const PlatformForm = ({ platform }: { platform: server.AdminMobileVersionPlatfor
   return (
     <div className="admin-card">
       <div className="card-header">
-        <div className="card-icon">{platform.platform === "ios" ? "🍎" : "🤖"}</div>
+        <div className="admin-card-icon">{platform.platform === "ios" ? "🍎" : "🤖"}</div>
         <h3>{label}</h3>
         <span className={configured ? "version-state-set" : "version-state-unset"}>
           {configured ? "Policy set" : "No policy — every build accepted"}

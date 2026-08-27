@@ -29,7 +29,7 @@ block(`
 `);
 
 block(`
-.back-link {
+.logs-back-link {
   color: var(--admin-accent);
   text-decoration: none;
   font-weight: 500;
@@ -38,7 +38,7 @@ block(`
 `);
 
 block(`
-.back-link:hover {
+.logs-back-link:hover {
   color: var(--primary-accent);
   text-decoration: underline;
 }
@@ -51,7 +51,7 @@ block(`
 `);
 
 block(`
-.stats-grid {
+.logs-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1rem;
@@ -59,7 +59,7 @@ block(`
 `);
 
 block(`
-.stat-card {
+.logs-stat-card {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
@@ -69,7 +69,7 @@ block(`
 `);
 
 block(`
-.stat-number {
+.logs-stat-number {
   font-size: 1.5rem;
   font-weight: bold;
   color: var(--admin-accent);
@@ -78,7 +78,7 @@ block(`
 `);
 
 block(`
-.stat-label {
+.logs-stat-label {
   font-size: 0.875rem;
   color: var(--muted);
   text-transform: uppercase;
@@ -106,7 +106,7 @@ block(`
 `);
 
 block(`
-.filter-group {
+.logs-filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -114,7 +114,7 @@ block(`
 `);
 
 block(`
-.filter-group label {
+.logs-filter-group label {
   font-weight: 500;
   color: var(--text);
   font-size: 0.875rem;
@@ -122,7 +122,7 @@ block(`
 `);
 
 block(`
-.filter-group select {
+.logs-filter-group select {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -133,7 +133,7 @@ block(`
 `);
 
 block(`
-.filter-group input {
+.logs-filter-group input {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -144,7 +144,7 @@ block(`
 `);
 
 block(`
-.filter-group input:focus {
+.logs-filter-group input:focus {
   outline: none;
   border-color: var(--admin-accent);
   box-shadow: 0 0 0 2px var(--admin-accent)20;
@@ -152,7 +152,7 @@ block(`
 `);
 
 block(`
-.filter-group-search {
+.logs-filter-group-search {
   grid-column: 1 / -1;
 }
 `);
@@ -168,7 +168,7 @@ block(`
 `);
 
 block(`
-.filter-group select:focus {
+.logs-filter-group select:focus {
   outline: none;
   border-color: var(--admin-accent);
   box-shadow: 0 0 0 2px var(--admin-accent)20;
@@ -450,7 +450,7 @@ block(`
 
 block(`
 .loading-message,
-.error-message,
+.logs-error-message,
 .empty-logs {
   text-align: center;
   padding: 2rem;
@@ -459,7 +459,7 @@ block(`
 `);
 
 block(`
-.error-message {
+.logs-error-message {
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
@@ -489,7 +489,7 @@ block(`
 `);
 
 block(`
-[data-theme="dark"] .stat-card {
+[data-theme="dark"] .logs-stat-card {
   background: var(--admin-surface);
   border-color: var(--admin-border);
 }
@@ -573,7 +573,7 @@ block(`
     gap: 1rem;
   }
 
-  .stats-grid {
+  .logs-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -641,7 +641,7 @@ block(`
     padding: 1rem 0.5rem;
   }
 
-  .stats-grid {
+  .logs-stats-grid {
     grid-template-columns: 1fr;
   }
 

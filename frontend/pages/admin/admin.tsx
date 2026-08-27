@@ -86,7 +86,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">📊</div>
+            <div className="admin-card-icon">📊</div>
             <h3>Site Analytics</h3>
           </div>
           <div className="card-content">
@@ -97,7 +97,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/users" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">👥</div>
+            <div className="admin-card-icon">👥</div>
             <h3>User Management</h3>
           </div>
           <div className="card-content">
@@ -108,7 +108,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/photos" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">🖼️</div>
+            <div className="admin-card-icon">🖼️</div>
             <h3>Photo Management</h3>
           </div>
           <div className="card-content">
@@ -119,7 +119,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/push" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">🔔</div>
+            <div className="admin-card-icon">🔔</div>
             <h3>Push Notifications</h3>
           </div>
           <div className="card-content">
@@ -130,7 +130,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/app-versions" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">📱</div>
+            <div className="admin-card-icon">📱</div>
             <h3>App Versions</h3>
           </div>
           <div className="card-content">
@@ -143,7 +143,7 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="card-icon">📋</div>
+            <div className="admin-card-icon">📋</div>
             <h3>System Logs</h3>
           </div>
           <div className="card-content">

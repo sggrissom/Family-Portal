@@ -502,7 +502,7 @@ function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
     ]),
 
     state.referenceError
-      ? preact.h("div", { className: "error-message" }, [
+      ? preact.h("div", { className: "logs-error-message" }, [
           preact.h("span", { className: "error-icon" }, "⚠️"),
           preact.h("span", {}, state.referenceError),
         ])
@@ -581,12 +581,12 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             preact.h(
               "div",
               { className: "logs-nav" },
-              preact.h("a", { href: "/admin", className: "back-link" }, "← Back to Admin")
+              preact.h("a", { href: "/admin", className: "logs-back-link" }, "← Back to Admin")
             ),
           ]),
 
           state.error || data.error
-            ? preact.h("div", { className: "error-message" }, [
+            ? preact.h("div", { className: "logs-error-message" }, [
                 preact.h("span", { className: "error-icon" }, "⚠️"),
                 preact.h("span", {}, state.error || data.error),
               ])
@@ -598,26 +598,34 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             ? preact.h(
                 "div",
                 { className: "logs-stats" },
-                preact.h("div", { className: "stats-grid" }, [
-                  preact.h("div", { className: "stat-card" }, [
-                    preact.h("div", { className: "stat-number" }, data.stats.totalFiles),
-                    preact.h("div", { className: "stat-label" }, "Log Files"),
+                preact.h("div", { className: "logs-stats-grid" }, [
+                  preact.h("div", { className: "logs-stat-card" }, [
+                    preact.h("div", { className: "logs-stat-number" }, data.stats.totalFiles),
+                    preact.h("div", { className: "logs-stat-label" }, "Log Files"),
                   ]),
-                  preact.h("div", { className: "stat-card" }, [
+                  preact.h("div", { className: "logs-stat-card" }, [
                     preact.h(
                       "div",
-                      { className: "stat-number" },
+                      { className: "logs-stat-number" },
                       Math.round(data.stats.totalSize / 1024) + "KB"
                     ),
-                    preact.h("div", { className: "stat-label" }, "Total Size"),
+                    preact.h("div", { className: "logs-stat-label" }, "Total Size"),
                   ]),
-                  preact.h("div", { className: "stat-card" }, [
-                    preact.h("div", { className: "stat-number" }, data.stats.byLevel["ERROR"] || 0),
-                    preact.h("div", { className: "stat-label" }, "Errors"),
+                  preact.h("div", { className: "logs-stat-card" }, [
+                    preact.h(
+                      "div",
+                      { className: "logs-stat-number" },
+                      data.stats.byLevel["ERROR"] || 0
+                    ),
+                    preact.h("div", { className: "logs-stat-label" }, "Errors"),
                   ]),
-                  preact.h("div", { className: "stat-card" }, [
-                    preact.h("div", { className: "stat-number" }, (data.stats.recent || []).length),
-                    preact.h("div", { className: "stat-label" }, "Recent Entries"),
+                  preact.h("div", { className: "logs-stat-card" }, [
+                    preact.h(
+                      "div",
+                      { className: "logs-stat-number" },
+                      (data.stats.recent || []).length
+                    ),
+                    preact.h("div", { className: "logs-stat-label" }, "Recent Entries"),
                   ]),
                 ])
               )
@@ -629,7 +637,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
 
           preact.h("div", { className: "logs-controls" }, [
             preact.h("div", { className: "logs-filters" }, [
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "file-select" }, "Log File:"),
                 preact.h(
                   "select",
@@ -641,7 +649,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   fileSelectOptions
                 ),
               ]),
-              preact.h("div", { className: "filter-group filter-group-search" }, [
+              preact.h("div", { className: "logs-filter-group logs-filter-group-search" }, [
                 preact.h("label", { htmlFor: "log-search" }, "Search:"),
                 preact.h("input", {
                   id: "log-search",
@@ -657,7 +665,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   onChange: () => handleFilterChange(),
                 }),
               ]),
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "since-filter" }, "Time range:"),
                 preact.h(
                   "select",
@@ -677,7 +685,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   ]
                 ),
               ]),
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "level-filter" }, "Level:"),
                 preact.h(
                   "select",
@@ -698,7 +706,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   ]
                 ),
               ]),
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "category-filter" }, "Category:"),
                 preact.h(
                   "select",
@@ -722,7 +730,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                 ),
               ]),
 
-              preact.h("div", { className: "filter-group performance-filters" }, [
+              preact.h("div", { className: "logs-filter-group performance-filters" }, [
                 preact.h("label", { htmlFor: "duration-filter" }, "Min Duration (ms):"),
                 preact.h("input", {
                   id: "duration-filter",
@@ -735,7 +743,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   },
                 }),
               ]),
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "sort-filter" }, "Sort By:"),
                 preact.h(
                   "select",
@@ -753,7 +761,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   ]
                 ),
               ]),
-              preact.h("div", { className: "filter-group" }, [
+              preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "sort-order" }, "Order:"),
                 preact.h(
                   "select",
