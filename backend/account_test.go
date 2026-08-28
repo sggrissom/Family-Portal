@@ -218,8 +218,8 @@ func TestChangePasswordRejectsAnAccountWithNoPassword(t *testing.T) {
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
-	if resp := decodeChangePassword(t, recorder); resp.Success || resp.Error != googleOnlyAccountMessage {
-		t.Errorf("response = %+v, want failure with %q", resp, googleOnlyAccountMessage)
+	if resp := decodeChangePassword(t, recorder); resp.Success || resp.Error != noPasswordAccountMessage {
+		t.Errorf("response = %+v, want failure with %q", resp, noPasswordAccountMessage)
 	}
 }
 

@@ -32,6 +32,7 @@ func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 	issues = append(issues, checkSiteRoot()...)
 	issues = append(issues, checkGoogleOAuth()...)
+	issues = append(issues, checkAppleOAuth()...)
 	issues = append(issues, checkMail()...)
 	issues = append(issues, checkBackupToken()...)
 	issues = append(issues, checkAPNs()...)
@@ -76,6 +77,43 @@ func checkGoogleOAuth() []ConfigIssue {
 		}
 	}
 	return issues
+}
+
+// Apple Sign In is all-or-nothing and optional. A deployment without an Apple
+// developer team is a normal one, but a half-set credential is a button that
+// hands users to Apple and fails on the way back.
+var appleEnvVars = []string{
+	"APPLE_CLIENT_ID",
+	"APPLE_TEAM_ID",
+	"APPLE_KEY_ID",
+	"APPLE_KEY_PATH",
+}
+
+func checkAppleOAuth() []ConfigIssue {
+	var configured, missing []string
+	for _, name := range appleEnvVars {
+		if os.Getenv(name) == "" {
+			missing = append(missing, name)
+		} else {
+			configured = append(configured, name)
+		}
+	}
+
+	if len(configured) == 0 {
+		return nil
+	}
+
+	if len(missing) > 0 {
+		return []ConfigIssue{{
+			Setting: strings.Join(missing, ", "),
+			Detail:  "must be set because Apple Sign In is partially configured (" + strings.Join(configured, ", ") + " present)",
+		}}
+	}
+
+	if _, err := loadApplePrivateKey(os.Getenv("APPLE_KEY_PATH")); err != nil {
+		return []ConfigIssue{{Setting: "APPLE_KEY_PATH", Detail: "signing key is unusable: " + err.Error()}}
+	}
+	return nil
 }
 
 func checkMail() []ConfigIssue {

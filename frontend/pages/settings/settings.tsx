@@ -1157,7 +1157,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   {...vlens.attrsBindInput(vlens.ref(deleteForm, "password"))}
                   disabled={deleteForm.loading}
                 />
-                <small>Leave blank if you sign in with Google.</small>
+                <small>Leave blank if you sign in with Google or Apple.</small>
               </div>
 
               <div className="form-group">

@@ -29,7 +29,7 @@ type ChangePasswordResponse struct {
 
 const incorrectPasswordMessage = "Current password is incorrect"
 
-const googleOnlyAccountMessage = "This account signs in with Google. Use the forgot-password link to set a password."
+const noPasswordAccountMessage = "This account signs in with Google or Apple. Use the forgot-password link to set a password."
 
 func respondChangePassword(w http.ResponseWriter, status int, resp ChangePasswordResponse) {
 	w.Header().Set("Content-Type", "application/json")
@@ -61,7 +61,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if len(passHash) == 0 {
-		respondChangePassword(w, http.StatusBadRequest, ChangePasswordResponse{Error: googleOnlyAccountMessage})
+		respondChangePassword(w, http.StatusBadRequest, ChangePasswordResponse{Error: noPasswordAccountMessage})
 		return
 	}
 
