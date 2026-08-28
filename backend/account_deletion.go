@@ -24,6 +24,8 @@ type DeleteAccountResponse struct {
 
 const confirmEmailMismatchMessage = "Type your account's email address exactly to confirm"
 
+const adminUndeletableMessage = "The administrator account cannot be deleted."
+
 func respondDeleteAccount(w http.ResponseWriter, status int, resp DeleteAccountResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -39,6 +41,13 @@ func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 	user, authErr := AuthenticateRequest(r)
 	if authErr != nil {
 		RespondAuthError(w, r, "Authentication required")
+		return
+	}
+
+	// Deleting user 1 locks everyone out of /admin and silently stops the health
+	// alerts, which address this account.
+	if user.Id == AdminUserId {
+		respondDeleteAccount(w, http.StatusForbidden, DeleteAccountResponse{Error: adminUndeletableMessage})
 		return
 	}
 
@@ -131,6 +140,7 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 	deleteNotificationPreferencesTx(tx, user.Id)
 	DeleteUserRefreshTokens(tx, user.Id)
 	deleteUserPasswordResetTokensTx(tx, user.Id)
+	deleteUserVerificationTokensTx(tx, user.Id)
 
 	vbolt.Delete(tx, PasswdBkt, user.Id)
 	vbolt.Delete(tx, EmailBkt, user.Email)

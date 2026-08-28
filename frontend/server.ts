@@ -25,21 +25,21 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
-export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
-export const ErrAdminRequired = "Unauthorized: Admin access required";
-export const ErrUserNotFound = "No such user";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
+export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
+export const ErrAdminRequired = "Unauthorized: Admin access required";
+export const ErrUserNotFound = "No such user";
 
 export interface CreateAccountRequest {
     name: string
@@ -67,6 +67,7 @@ export interface AuthResponse {
     name: string
     email: string
     isAdmin: boolean
+    emailVerified: boolean
     familyId: number
     families: FamilyRef[]
 }
@@ -1076,6 +1077,20 @@ export interface ResendPasswordResetResponse {
     detail: string
     invalidatedPrevious: boolean
     expiresAt: string
+}
+
+export interface VerifyEmailRequest {
+    token: string
+}
+
+export interface VerifyEmailResponse {
+    success: boolean
+    error: string
+}
+
+export interface ResendVerificationResponse {
+    success: boolean
+    error: string
 }
 
 export interface DiagnosticsResponse {
@@ -2249,6 +2264,14 @@ export async function GetMailStats(data: GetMailStatsRequest): Promise<rpc.Respo
 
 export async function ResendPasswordReset(data: ResendPasswordResetRequest): Promise<rpc.Response<ResendPasswordResetResponse>> {
     return await rpc.call<ResendPasswordResetResponse>('ResendPasswordReset', JSON.stringify(data));
+}
+
+export async function VerifyEmail(data: VerifyEmailRequest): Promise<rpc.Response<VerifyEmailResponse>> {
+    return await rpc.call<VerifyEmailResponse>('VerifyEmail', JSON.stringify(data));
+}
+
+export async function ResendVerificationEmail(data: Empty): Promise<rpc.Response<ResendVerificationResponse>> {
+    return await rpc.call<ResendVerificationResponse>('ResendVerificationEmail', JSON.stringify(data));
 }
 
 export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {

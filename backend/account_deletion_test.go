@@ -49,6 +49,9 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		var err error
+		// User 1 is the site admin and cannot be deleted, so these tests need
+		// their subject to be anyone else.
+		AddUserTx(tx, CreateAccountRequest{Name: "Site Admin", Email: "site-admin@example.com"}, hash)
 		fx.owner = AddUserTx(tx, CreateAccountRequest{Name: "Owner", Email: "owner@example.com"}, hash)
 		fx.familyId = fx.owner.FamilyId
 		fx.outsider = AddUserTx(tx, CreateAccountRequest{Name: "Outsider", Email: "outsider@example.com"}, hash)
@@ -298,8 +301,8 @@ func TestDeleteAccountClearsEveryStore(t *testing.T) {
 		}
 	})
 
-	if got := countRows(t, fx.db, UsersBkt); got != 1 {
-		t.Errorf("users remaining = %d, want 1 (the outsider)", got)
+	if got := countRows(t, fx.db, UsersBkt); got != 2 {
+		t.Errorf("users remaining = %d, want 2 (the site admin and the outsider)", got)
 	}
 	if got := countRows(t, fx.db, PeopleBkt); got != 1 {
 		t.Errorf("people remaining = %d, want 1 (the outsider's)", got)
@@ -531,6 +534,7 @@ func TestDeleteAccountWithoutAPasswordOnFile(t *testing.T) {
 
 	var user User
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		AddUserTx(tx, CreateAccountRequest{Name: "Site Admin", Email: "site-admin@example.com"}, nil)
 		user = AddUserTx(tx, CreateAccountRequest{Name: "Googler", Email: "googler@example.com"}, nil)
 		vbolt.TxCommit(tx)
 	})
@@ -648,6 +652,38 @@ func TestDeleteAccountDoesNotTouchALinkedFamily(t *testing.T) {
 		vbolt.Read(tx, FamilyLinkBkt, linkId, &link)
 		if link.Id != 0 {
 			t.Error("a link to the destroyed family survived it")
+		}
+	})
+}
+
+func TestDeleteAccountRefusesTheAdminAccount(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/deletion_admin.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("deletion-test-secret-key-at-least-32")
+
+	var admin User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		admin = AddUserTx(tx, CreateAccountRequest{Name: "Admin", Email: "admin@example.com"}, nil)
+		vbolt.TxCommit(tx)
+	})
+	if admin.Id != AdminUserId {
+		t.Fatalf("first account is id %d, want %d", admin.Id, AdminUserId)
+	}
+
+	token, err := generateJwtTokenString(admin)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+
+	recorder := deleteAccountRequest(t, token, `{"confirmEmail":"admin@example.com"}`)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusForbidden, recorder.Body.String())
+	}
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		if GetUser(tx, admin.Id).Id == 0 {
+			t.Error("the admin account was deleted despite the guard")
 		}
 	})
 }

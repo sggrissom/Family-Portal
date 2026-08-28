@@ -49,12 +49,13 @@ type LoginResponse struct {
 }
 
 type AuthResponse struct {
-	Id       int         `json:"id"`
-	Name     string      `json:"name"`
-	Email    string      `json:"email"`
-	IsAdmin  bool        `json:"isAdmin"`
-	FamilyId int         `json:"familyId,omitempty"`
-	Families []FamilyRef `json:"families"`
+	Id            int         `json:"id"`
+	Name          string      `json:"name"`
+	Email         string      `json:"email"`
+	IsAdmin       bool        `json:"isAdmin"`
+	EmailVerified bool        `json:"emailVerified"`
+	FamilyId      int         `json:"familyId,omitempty"`
+	Families      []FamilyRef `json:"families"`
 }
 
 type FamilyRef struct {
@@ -90,12 +91,13 @@ type JoinFamilyResponse struct {
 }
 
 type User struct {
-	Id        int       `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Creation  time.Time `json:"creation"`
-	LastLogin time.Time `json:"lastLogin"`
-	FamilyId  int       `json:"familyId"`
+	Id            int       `json:"id"`
+	Name          string    `json:"name"`
+	Email         string    `json:"email"`
+	Creation      time.Time `json:"creation"`
+	LastLogin     time.Time `json:"lastLogin"`
+	FamilyId      int       `json:"familyId"`
+	EmailVerified bool      `json:"emailVerified"`
 }
 
 type Family struct {
@@ -107,13 +109,16 @@ type Family struct {
 }
 
 func PackUser(self *User, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.String(&self.Name, buf)
 	vpack.String(&self.Email, buf)
 	vpack.Time(&self.Creation, buf)
 	vpack.Time(&self.LastLogin, buf)
 	vpack.Int(&self.FamilyId, buf)
+	if version >= 2 {
+		vpack.Bool(&self.EmailVerified, buf)
+	}
 }
 
 func PackFamily(self *Family, buf *vpack.Buffer) {
@@ -270,12 +275,13 @@ func AddInitialPersonForAccountTx(tx *vbolt.Tx, req CreateAccountRequest, family
 
 func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
 	resp := AuthResponse{
-		Id:       user.Id,
-		Name:     user.Name,
-		Email:    user.Email,
-		IsAdmin:  user.Id == AdminUserId,
-		FamilyId: user.FamilyId,
-		Families: []FamilyRef{},
+		Id:            user.Id,
+		Name:          user.Name,
+		Email:         user.Email,
+		IsAdmin:       user.Id == AdminUserId,
+		EmailVerified: user.EmailVerified,
+		FamilyId:      user.FamilyId,
+		Families:      []FamilyRef{},
 	}
 	if tx == nil {
 		return resp
@@ -337,6 +343,7 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 			return
 		}
 	}
+	sendVerificationEmailTx(ctx.Tx, user, time.Now())
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 

@@ -1,11 +1,13 @@
 import * as vlens from "vlens";
-import { setRoute, setErrorView } from "vlens/core";
+import { setRoute, setErrorView, type RouteHandler } from "vlens/core";
 import * as preact from "preact";
 import * as server from "./server";
 import * as auth from "./lib/authCache";
 import { classifyError } from "./lib/errorDisplay";
 import { ErrorDisplay } from "./components/ErrorDisplay";
 import { Header, Footer } from "./layout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { installGlobalErrorHandlers } from "./lib/clientErrors";
 import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
@@ -32,53 +34,66 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
   );
 }
 
+// Keyed by route so a crash on one page does not leave the boundary latched
+// after navigating away.
+function guarded<Data>(prefix: string, load: () => Promise<RouteHandler<Data>>) {
+  return vlens.routeHandler<Data>(prefix, async () => {
+    const mod = await load();
+    return {
+      fetch: mod.fetch,
+      view: (route: string, viewPrefix: string, data: Data) => (
+        <ErrorBoundary key={route}>{mod.view(route, viewPrefix, data)}</ErrorBoundary>
+      ),
+    };
+  });
+}
+
 async function main() {
   setErrorView(customErrorView);
+  installGlobalErrorHandlers();
 
   vlens.initRoutes([
-    vlens.routeHandler("/profile/", () => import("@app/pages/profile/profile")),
-    vlens.routeHandler("/create-account", () => import("@app/pages/auth/create-account")),
-    vlens.routeHandler("/login", () => import("@app/pages/auth/login")),
-    vlens.routeHandler("/forgot-password", () => import("@app/pages/auth/forgot-password")),
-    vlens.routeHandler("/reset-password", () => import("@app/pages/auth/reset-password")),
-    vlens.routeHandler("/dashboard", () => import("@app/pages/dashboard/dashboard")),
-    vlens.routeHandler("/compare", () => import("@app/pages/compare/compare")),
-    vlens.routeHandler(
-      "/family-timeline",
-      () => import("@app/pages/family-timeline/family-timeline")
-    ),
-    vlens.routeHandler("/chat", () => import("@app/pages/chat/chat")),
-    vlens.routeHandler("/settings", () => import("@app/pages/settings/settings")),
-    vlens.routeHandler("/add-person", () => import("@app/pages/people/add-person")),
-    vlens.routeHandler("/edit-person/", () => import("@app/pages/people/edit-person")),
-    vlens.routeHandler("/add-growth", () => import("@app/pages/growth/add-growth")),
-    vlens.routeHandler("/edit-growth", () => import("@app/pages/growth/edit-growth")),
-    vlens.routeHandler("/view-growth", () => import("@app/pages/growth/view-growth")),
-    vlens.routeHandler("/family-chart", () => import("@app/pages/growth/family-chart")),
-    vlens.routeHandler("/add-milestone", () => import("@app/pages/milestones/add-milestone")),
-    vlens.routeHandler("/edit-milestone", () => import("@app/pages/milestones/edit-milestone")),
-    vlens.routeHandler("/photos", () => import("@app/pages/photos/family-photos")),
-    vlens.routeHandler("/add-photo", () => import("@app/pages/photos/add-photo")),
-    vlens.routeHandler("/view-photo", () => import("@app/pages/photos/view-photo")),
-    vlens.routeHandler("/edit-photo", () => import("@app/pages/photos/edit-photo")),
-    vlens.routeHandler("/season/", () => import("@app/pages/activities/season")),
-    vlens.routeHandler("/competition/", () => import("@app/pages/activities/competition")),
-    vlens.routeHandler("/routine/", () => import("@app/pages/activities/routine")),
-    vlens.routeHandler("/person-activities/", () => import("@app/pages/activities/person")),
-    vlens.routeHandler("/activities", () => import("@app/pages/activities/activities")),
-    vlens.routeHandler("/manage-tags", () => import("@app/pages/tags/manage-tags")),
-    vlens.routeHandler("/import", () => import("@app/pages/settings/import")),
-    vlens.routeHandler("/admin/users", () => import("@app/pages/admin/users")),
-    vlens.routeHandler("/admin/photos", () => import("@app/pages/admin/photos")),
-    vlens.routeHandler("/admin/logs", () => import("@app/pages/admin/logs")),
-    vlens.routeHandler("/admin/analytics", () => import("@app/pages/admin/analytics")),
-    vlens.routeHandler("/admin/push", () => import("@app/pages/admin/push")),
-    vlens.routeHandler("/admin/app-versions", () => import("@app/pages/admin/app-versions")),
-    vlens.routeHandler("/admin", () => import("@app/pages/admin/admin")),
-    vlens.routeHandler("/privacy", () => import("@app/pages/legal/privacy")),
-    vlens.routeHandler("/terms", () => import("@app/pages/legal/terms")),
-    vlens.routeHandler("/support", () => import("@app/pages/legal/support")),
-    vlens.routeHandler("/", () => import("@app/pages/home/home")),
+    guarded("/profile/", () => import("@app/pages/profile/profile")),
+    guarded("/create-account", () => import("@app/pages/auth/create-account")),
+    guarded("/login", () => import("@app/pages/auth/login")),
+    guarded("/forgot-password", () => import("@app/pages/auth/forgot-password")),
+    guarded("/reset-password", () => import("@app/pages/auth/reset-password")),
+    guarded("/verify-email", () => import("@app/pages/auth/verify-email")),
+    guarded("/dashboard", () => import("@app/pages/dashboard/dashboard")),
+    guarded("/compare", () => import("@app/pages/compare/compare")),
+    guarded("/family-timeline", () => import("@app/pages/family-timeline/family-timeline")),
+    guarded("/chat", () => import("@app/pages/chat/chat")),
+    guarded("/settings", () => import("@app/pages/settings/settings")),
+    guarded("/add-person", () => import("@app/pages/people/add-person")),
+    guarded("/edit-person/", () => import("@app/pages/people/edit-person")),
+    guarded("/add-growth", () => import("@app/pages/growth/add-growth")),
+    guarded("/edit-growth", () => import("@app/pages/growth/edit-growth")),
+    guarded("/view-growth", () => import("@app/pages/growth/view-growth")),
+    guarded("/family-chart", () => import("@app/pages/growth/family-chart")),
+    guarded("/add-milestone", () => import("@app/pages/milestones/add-milestone")),
+    guarded("/edit-milestone", () => import("@app/pages/milestones/edit-milestone")),
+    guarded("/photos", () => import("@app/pages/photos/family-photos")),
+    guarded("/add-photo", () => import("@app/pages/photos/add-photo")),
+    guarded("/view-photo", () => import("@app/pages/photos/view-photo")),
+    guarded("/edit-photo", () => import("@app/pages/photos/edit-photo")),
+    guarded("/season/", () => import("@app/pages/activities/season")),
+    guarded("/competition/", () => import("@app/pages/activities/competition")),
+    guarded("/routine/", () => import("@app/pages/activities/routine")),
+    guarded("/person-activities/", () => import("@app/pages/activities/person")),
+    guarded("/activities", () => import("@app/pages/activities/activities")),
+    guarded("/manage-tags", () => import("@app/pages/tags/manage-tags")),
+    guarded("/import", () => import("@app/pages/settings/import")),
+    guarded("/admin/users", () => import("@app/pages/admin/users")),
+    guarded("/admin/photos", () => import("@app/pages/admin/photos")),
+    guarded("/admin/logs", () => import("@app/pages/admin/logs")),
+    guarded("/admin/analytics", () => import("@app/pages/admin/analytics")),
+    guarded("/admin/push", () => import("@app/pages/admin/push")),
+    guarded("/admin/app-versions", () => import("@app/pages/admin/app-versions")),
+    guarded("/admin", () => import("@app/pages/admin/admin")),
+    guarded("/privacy", () => import("@app/pages/legal/privacy")),
+    guarded("/terms", () => import("@app/pages/legal/terms")),
+    guarded("/support", () => import("@app/pages/legal/support")),
+    guarded("/", () => import("@app/pages/home/home")),
   ]);
 }
 
