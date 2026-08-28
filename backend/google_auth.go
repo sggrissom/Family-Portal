@@ -138,6 +138,12 @@ func googleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if userId > 0 {
+		if userInfo.VerifiedEmail {
+			vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+				markEmailVerifiedTx(tx, userId)
+				vbolt.TxCommit(tx)
+			})
+		}
 		err = authenticateForUser(userId, w)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Authentication failed: %s", err.Error()), http.StatusInternalServerError)
@@ -154,6 +160,13 @@ func googleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		var user User
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 			user = AddUserTx(tx, createAccountRequest, []byte{})
+			// Google asserts the address; a confirmation round trip would ask the
+			// user to prove something the identity provider already proved.
+			if userInfo.VerifiedEmail {
+				user = markEmailVerifiedTx(tx, user.Id)
+			} else {
+				sendVerificationEmailTx(tx, user, time.Now())
+			}
 			vbolt.TxCommit(tx)
 		})
 
@@ -259,6 +272,12 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var user User
 	if userId > 0 {
+		if tokenInfo.EmailVerified == "true" {
+			vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+				markEmailVerifiedTx(tx, userId)
+				vbolt.TxCommit(tx)
+			})
+		}
 		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 			user = GetUser(tx, userId)
 		})
@@ -272,6 +291,11 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 			user = AddUserTx(tx, createAccountRequest, []byte{})
+			if tokenInfo.EmailVerified == "true" {
+				user = markEmailVerifiedTx(tx, user.Id)
+			} else {
+				sendVerificationEmailTx(tx, user, time.Now())
+			}
 			vbolt.TxCommit(tx)
 		})
 

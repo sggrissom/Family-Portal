@@ -27,6 +27,7 @@ const (
 	logCategoryWorker logCategory = "WORKER"
 	logCategorySystem logCategory = "SYSTEM"
 	logCategoryImport logCategory = "IMPORT"
+	logCategoryClient logCategory = "CLIENT"
 )
 
 type logEntry struct {
@@ -80,6 +81,7 @@ const (
 	LogCategoryAPI    = "API"
 	LogCategoryWorker = "WORKER"
 	LogCategorySystem = "SYSTEM"
+	LogCategoryClient = "CLIENT"
 )
 
 func LogInfo(category string, message string, data ...interface{}) {

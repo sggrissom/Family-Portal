@@ -37,6 +37,7 @@ var (
 	rateRuleWebSocket     = RateLimitRule{Name: "websocket", Burst: 30, Window: 5 * time.Minute}
 	rateRulePhotoRead     = RateLimitRule{Name: "photo-read", Burst: 600, Window: 5 * time.Minute}
 	rateRuleSnapshot      = RateLimitRule{Name: "snapshot", Burst: 10, Window: time.Hour}
+	rateRuleClientError   = RateLimitRule{Name: "client-error", Burst: 20, Window: 5 * time.Minute}
 	rateRuleDefault       = RateLimitRule{Name: "default", Burst: 300, Window: time.Minute}
 )
 
@@ -52,11 +53,14 @@ var exactPathRules = map[string]RateLimitRule{
 	"/api/import-bundle":      rateRuleImport,
 	"/ws/chat":                rateRuleWebSocket,
 	SnapshotPath:              rateRuleSnapshot,
+	ClientErrorPath:           rateRuleClientError,
 
 	"/rpc/CreateAccount":              rateRuleSignup,
 	"/rpc/RequestPasswordReset":       rateRulePasswordReset,
 	"/rpc/ValidatePasswordResetToken": rateRulePasswordReset,
 	"/rpc/ResetPassword":              rateRulePasswordReset,
+	"/rpc/VerifyEmail":                rateRulePasswordReset,
+	"/rpc/ResendVerificationEmail":    rateRulePasswordReset,
 	"/rpc/JoinFamily":                 rateRuleInviteCode,
 	"/rpc/AcceptFamilyLink":           rateRuleInviteCode,
 	"/rpc/ImportData":                 rateRuleImport,

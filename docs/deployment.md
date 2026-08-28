@@ -328,6 +328,53 @@ unauthenticated for exactly this reason; something outside the box has to poll
 them. That belongs in `tiny-server-helper` or an external uptime service, not
 here.
 
+## Email confirmation
+
+New accounts are created unverified and are sent a confirmation link that
+expires in seven days. **Nothing is gated on it.** An unconfirmed account can do
+everything a confirmed one can; the only difference is a dismissible banner. The
+point is to catch a mistyped address while the owner is still around to fix it,
+rather than years later when they need a password reset and cannot get one.
+
+Google sign-in never asks. Google asserts `verified_email` (or `email_verified`
+on the ID-token path), and re-proving an address the identity provider already
+proved is a round trip for nothing. An existing unverified account is upgraded
+the first time its owner signs in with Google.
+
+Failing to send does not fail the signup. The account is still good, and
+`ResendVerificationEmail` issues a fresh link — which also invalidates the
+previous one, so only the newest link in an inbox works.
+
+Existing accounts from before this shipped decode as unverified, which is
+accurate: those addresses were never confirmed. They will see the banner until
+they confirm.
+
+## Client-side error reporting
+
+`POST /api/client-error` takes a JSON report from the browser and writes it to
+the ordinary log under the `CLIENT` category. Three things feed it: a Preact
+error boundary wrapping every route, `window.onerror`, and `unhandledrejection`.
+Without it a render crash is a blank page that nobody outside the affected
+browser ever hears about.
+
+It is **unauthenticated on purpose** — the errors most worth seeing are the ones
+that break the page before anyone can sign in. What bounds it instead:
+
+- the rate limiter (20 per 5 minutes per IP)
+- per-field caps, and a body cap under `MaxBytesReader`
+- a client-side cap of 5 reports per page load, de-duplicated by message
+
+Reports are logged at **WARN**, not ERROR. `collectSystemHealth` counts ERROR
+entries toward the health verdict, so logging them at error level would let one
+person's broken browser extension turn the site red and mail the admin.
+
+## The admin account
+
+User 1 (`AdminUserId`) is the only account that can reach `/admin`, and it is
+where health alerts are sent. `deleteAccountHandler` refuses to delete it: doing
+so would lock everyone out of the admin panel and silently stop alerting, with
+no way back short of editing the database.
+
 ## Universal links
 
 `/.well-known/apple-app-site-association` is what makes a `familyrecord.app`

@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
 import { applyPageMetadata } from "./lib/pageMetadata";
+import { VerifyEmailBanner } from "./components/VerifyEmailBanner";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -144,6 +145,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
           )}
         </ul>
       </nav>
+      <VerifyEmailBanner />
     </header>
   );
 };

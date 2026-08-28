@@ -248,6 +248,7 @@ func RunTokenCleanup(ctx context.Context, db *vbolt.DB) {
 			now := time.Now()
 			CleanupExpiredRefreshTokens(tx, now)
 			CleanupExpiredPasswordResetTokens(tx, now)
+			CleanupExpiredVerificationTokens(tx, now)
 			vbolt.TxCommit(tx)
 		})
 	}
