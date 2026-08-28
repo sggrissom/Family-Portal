@@ -264,6 +264,9 @@ func MakeApplication() *vbeam.Application {
 	// Initialize background outbound mail worker
 	backend.InitializeMailWorker(100) // Queue size of 100 messages
 
+	// Periodic health evaluation that emails the admin when something breaks
+	backend.InitializeHealthMonitor(app.DB)
+
 	return app
 }
 

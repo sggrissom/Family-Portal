@@ -622,6 +622,12 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Before the file lands on disk: a later rejection leaves orphaned bytes.
+		if quotaErr := CheckStorageAccepts(tx, familyId, fileHeader.Size); quotaErr != nil {
+			uploadErr = quotaErr
+			return
+		}
+
 		if len(personIds) > 0 {
 			validPersons = make([]Person, 0, len(personIds))
 			for _, personId := range personIds {

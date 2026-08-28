@@ -282,6 +282,52 @@ An older `metrics-server` simply omits both blocks. The deploy strip disappears
 and the backup line reads as never registered, so redeploy `metrics-server` in
 the same pass as anything that depends on them.
 
+## Storage limits
+
+Two limits keep uploads from filling the disk the database sits on. Both are
+compile-time constants in `cfg/`, alongside the storage paths, and both are
+enforced in `backend/storage_quota.go`.
+
+| constant | default | what it stops |
+| --- | --- | --- |
+| `FamilyStorageQuotaBytes` | 10 GiB | one account costing an unbounded amount. Signup is open and accounts are free, so without it the only limit is the upload rate rule. |
+| `MinFreeDiskBytes` | 1 GiB | the machine running out. Per-family quotas multiply by the number of families, so they cannot promise this on their own. |
+
+The quota counts photo **originals**, which is what the `Image` row records.
+Derived variants roughly triple what actually lands on disk, so the quota is
+deliberately set well under the disk rather than close to it — raising it means
+checking the real `shared/static/` size first, not just the free space.
+
+Both the upload handler and the bundle importer check. Going over on an import
+stops the photo loop and returns a warning rather than failing the whole
+import: the people and measurements in that transaction are worth keeping.
+
+A family over quota gets a message naming its usage and `cfg.SupportEmail`. A
+breach of the disk floor is a 503 — the uploader is not the one who can fix it,
+and it is logged at error level so it reaches the health check below.
+
+If `Statfs` fails, the write is allowed. Refusing every upload because the
+filesystem could not be measured trades a rare problem for a total one.
+
+## Health alerting
+
+`backend/health_monitor.go` evaluates the same `collectSystemHealth` the `/admin`
+panel uses, every 15 minutes, and emails the admin account when the verdict
+flips from green to red. It re-sends at most once every 24 hours while a problem
+persists, and sends once more on recovery. The first check after a restart only
+establishes a baseline unless it is already broken, so a restart does not
+generate an alert for a problem that predates the process.
+
+The recipient is the email on user 1 (`AdminUserId`) — there is no separate
+variable to configure or forget. Alerts go through the ordinary mail worker, so
+unconfigured mail means no alerts.
+
+**This does not tell you the site is down.** A process that has died cannot
+report that it died, and neither can it send mail. `/healthz` and `/readyz` are
+unauthenticated for exactly this reason; something outside the box has to poll
+them. That belongs in `tiny-server-helper` or an external uptime service, not
+here.
+
 ## Universal links
 
 `/.well-known/apple-app-site-association` is what makes a `familyrecord.app`

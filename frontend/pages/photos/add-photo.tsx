@@ -89,6 +89,19 @@ export function view(route: string, prefix: string, data: AddPhotoData): preact.
   );
 }
 
+async function uploadErrorMessage(response: Response): Promise<string> {
+  const fallback = `Upload failed with status ${response.status}`;
+  const body = await response.text();
+  if (!body) return fallback;
+
+  try {
+    const parsed = JSON.parse(body);
+    return parsed?.error?.message || fallback;
+  } catch {
+    return body;
+  }
+}
+
 async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event: Event) {
   event.preventDefault();
   form.loading = true;
@@ -152,8 +165,7 @@ async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event:
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `Upload failed with status ${response.status}`);
+      throw new Error(await uploadErrorMessage(response));
     }
 
     const responseData = await response.json();

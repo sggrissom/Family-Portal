@@ -33,6 +33,10 @@ func ShutdownWorkers(ctx context.Context) bool {
 		LogWarn(LogCategoryWorker, "Push worker still had queued notifications at shutdown", nil)
 		clean = false
 	}
+	if !StopHealthMonitor(ctx) {
+		LogWarn(LogCategoryWorker, "Health monitor did not stop before the deadline", nil)
+		clean = false
+	}
 	if !StopAnalysisWorker(ctx) {
 		LogWarn(LogCategoryWorker, "Face analysis worker did not stop before the deadline", nil)
 		clean = false

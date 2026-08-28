@@ -88,7 +88,12 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	if err = requireAdminAccess(ctx); err != nil {
 		return
 	}
+	return collectSystemHealth(ctx.Tx), nil
+}
 
+// Shared with the health monitor so an alert and the admin panel cannot disagree
+// about what "healthy" means.
+func collectSystemHealth(tx *vbolt.Tx) (resp SystemHealthResponse) {
 	resp.ReleaseBuild = cfg.IsRelease
 	resp.ConfigIssues = []ConfigProblem{}
 	for _, issue := range CheckProductionConfig(cfg.DBPath, cfg.StaticDir, cfg.LogDir) {
@@ -99,7 +104,7 @@ func GetSystemHealth(ctx *vbeam.Context, req Empty) (resp SystemHealthResponse, 
 	}
 
 	resp.Logs = collectLogProblems()
-	resp.Photos = collectPhotoProblems(ctx.Tx)
+	resp.Photos = collectPhotoProblems(tx)
 
 	host := fetchHostMetrics()
 	if host.Available {

@@ -162,5 +162,4 @@ frontend/           Preact/vlens SPA; server.ts is generated — do not edit
 local/              development server entry point
 release/            production server entry point and embedded dist
 scripts/            build-time checks
-plan.md             the 1.0 release plan
 ```

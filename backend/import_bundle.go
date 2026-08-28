@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"family/cfg"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -137,10 +138,11 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 		var photoIdMapping map[int]int
 		if len(importData.Photos) > 0 {
-			imported, skipped, mapping := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
+			imported, skipped, mapping, photoWarnings := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
 			resp.ImportedPhotos = imported
 			resp.SkippedPhotos = skipped
 			photoIdMapping = mapping
+			resp.Warnings = append(resp.Warnings, photoWarnings...)
 
 			for _, importPerson := range importData.People {
 				if importPerson.ImageId == 0 {
@@ -192,11 +194,27 @@ func importPhotos(
 	personIdMapping map[int]int,
 	tagIdMapping map[int]int,
 	zipReader *zip.Reader,
-) (imported, skipped int, photoIdMapping map[int]int) {
+) (imported, skipped int, photoIdMapping map[int]int, warnings []string) {
 	photoIdMapping = make(map[int]int)
 	zipFiles := make(map[string]*zip.File, len(zipReader.File))
 	for _, zf := range zipReader.File {
 		zipFiles[zf.Name] = zf
+	}
+
+	// Going over stops the photo loop rather than failing the import: the people
+	// and measurements already written in this transaction are worth keeping.
+	used := FamilyStorageUsage(tx, familyId)
+	quotaReached := false
+	quotaSkipped := 0
+
+	var incoming int64
+	for _, zf := range zipReader.File {
+		incoming += int64(zf.UncompressedSize64)
+	}
+	if diskErr := CheckDiskHeadroom(cfg.StaticDir, incoming, cfg.MinFreeDiskBytes); diskErr != nil {
+		return 0, len(photos), photoIdMapping, []string{
+			"The server is low on storage, so no photos were imported. Everything else in the bundle was.",
+		}
 	}
 
 	for _, photo := range photos {
@@ -205,6 +223,22 @@ func importPhotos(
 			skipped++
 			continue
 		}
+
+		if quotaReached {
+			skipped++
+			quotaSkipped++
+			continue
+		}
+
+		// Tracked locally; re-reading usage per photo would be quadratic.
+		size := int64(zf.UncompressedSize64)
+		if cfg.FamilyStorageQuotaBytes > 0 && used+size > cfg.FamilyStorageQuotaBytes {
+			quotaReached = true
+			skipped++
+			quotaSkipped++
+			continue
+		}
+		used += size
 
 		fileName := filepath.Base(photo.ZipPath)
 		ext := filepath.Ext(fileName)
@@ -234,6 +268,7 @@ func importPhotos(
 		image.OwnerUserId = ownerUserId
 		image.FilePath = filePath
 		image.MimeType = mimeType
+		image.FileSize = int(size)
 		image.Title = photo.Title
 		image.Description = photo.Description
 		image.PhotoDate = photo.PhotoDate
@@ -255,6 +290,13 @@ func importPhotos(
 		}
 
 		imported++
+	}
+
+	if quotaReached {
+		warnings = append(warnings, fmt.Sprintf(
+			"Storage quota reached: %d photo(s) were not imported. Everything else in the bundle was.",
+			quotaSkipped,
+		))
 	}
 	return
 }
