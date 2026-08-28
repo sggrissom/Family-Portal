@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import "./login-styles";
 
@@ -26,6 +27,14 @@ export async function fetch(route: string, prefix: string) {
       success: false,
       error: "That confirmation could not be completed. Try the link again.",
     });
+  }
+
+  if (resp.success) {
+    // Refresh the cached auth so the banner stops asking in this browser.
+    const [authResp, authErr] = await server.GetAuthContext({});
+    if (!authErr && authResp && authResp.id > 0) {
+      auth.setAuth(authResp);
+    }
   }
 
   return rpc.ok<Data>({ success: resp.success, error: resp.error ?? "" });

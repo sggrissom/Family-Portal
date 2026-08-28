@@ -6,6 +6,22 @@ import "./verify-banner-styles";
 
 const DISMISS_KEY = "verify-banner-dismissed";
 
+// The cached auth is only written at login, so a stale copy outlives both
+// confirming the address and this field being added. Re-read it once per page
+// load rather than nagging somebody who has already confirmed.
+let revalidated = false;
+
+async function revalidateAuth() {
+  if (revalidated) return;
+  revalidated = true;
+
+  const [resp, err] = await server.GetAuthContext({});
+  if (!err && resp && resp.id > 0) {
+    auth.setAuth(resp);
+    vlens.scheduleRedraw();
+  }
+}
+
 type BannerState = {
   dismissed: boolean;
   sending: boolean;
@@ -63,7 +79,15 @@ function dismissClicked(state: BannerState, event: Event) {
 // way after one dismissal per browser session.
 export const VerifyEmailBanner = (): preact.ComponentChild => {
   const currentAuth = auth.getAuth();
-  if (!currentAuth || currentAuth.id <= 0 || currentAuth.emailVerified !== false) {
+  if (!currentAuth || currentAuth.id <= 0) {
+    return null;
+  }
+
+  if (currentAuth.emailVerified !== true) {
+    revalidateAuth();
+  }
+
+  if (currentAuth.emailVerified !== false) {
     return null;
   }
 
