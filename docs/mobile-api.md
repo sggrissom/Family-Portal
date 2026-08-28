@@ -65,7 +65,7 @@ Two things answer before authentication, and only two:
 | --- | --- | --- |
 | What | HS256 JWT, subject is the email address | 32-byte random, stored hashed |
 | Lifetime | 24 hours (`setAuthJwtCookie`) | 30 days from **login**, not from last use |
-| Sent as | `Authorization: Bearer <token>` | request body (§2.2), or cookie |
+| Sent as | `Authorization: Bearer <token>` | request body (§2.3), or cookie |
 | Rotates | on every refresh | on every refresh |
 
 The refresh lifetime is a hard ceiling. `refreshTokenLifetime` is inherited by
@@ -109,11 +109,48 @@ refreshToken=…`, and a native client has to read it off that header and put it
 in the Keychain. This is the one place the cookie is load-bearing for the app.
 
 A failed login is `{"success": false, "error": "Invalid credentials"}` — the
-same string for a wrong password, an unknown address, and a Google-only account,
+same string for a wrong password, an unknown address, and an account that only
+signs in with Google or Apple,
 at the same cost in time. Do not try to distinguish them in the UI, and do not
 say "no account with that address."
 
-### 2.2 Refreshing
+### 2.2 Signing in with Apple
+
+`ASAuthorizationAppleIDProvider` hands the app an identity token. Post it and
+get the same envelope §2.1 returns.
+
+```http
+POST /api/login/apple/token
+Content-Type: application/json
+
+{"idToken": "<credential.identityToken as UTF-8>", "name": "Ada Lovelace"}
+```
+
+The server verifies the signature against Apple's published keys, requires the
+issuer to be `https://appleid.apple.com`, and requires the audience to equal
+`APPLE_IOS_CLIENT_ID` — the app's bundle ID. A token minted for any other
+relying party is refused.
+
+Two things about `name`:
+
+- Apple releases `credential.fullName` **only in the response to the very first
+  authorization**, and never again. Send it when you have it. The server uses it
+  only when it is creating the account, so a later sign-in that omits it does
+  not blank out the stored name.
+- If the account is new and no name arrives, the server falls back to the local
+  part of the address, or to a placeholder when the user chose "Hide My Email".
+  The user can change it in settings.
+
+The account is matched on the email in the token, the same key the password and
+Google paths use. A user who picks "Hide My Email" gets a
+`@privaterelay.appleid.com` address that is stable for this app — but it is a
+*different* address than the one their Google or password account uses, so
+signing in the two ways lands them in two separate accounts. There is nothing
+the app can do about that; do not present them as one.
+
+A failed verification is `{"success": false, "error": "Invalid Apple token"}`.
+
+### 2.3 Refreshing
 
 ```http
 POST /api/refresh
@@ -141,7 +178,7 @@ concurrent case (two tabs, a resumed app), so a client that serializes its
 refreshes never sees this. A client that fires two refreshes a minute apart with
 the same token signs the user out.
 
-### 2.3 Signing out
+### 2.4 Signing out
 
 ```http
 POST /api/logout
@@ -156,11 +193,11 @@ account that is no longer signed in on it.
 Call this **while the session is still valid.** Clearing local state first
 leaves nothing to authenticate with.
 
-### 2.4 What invalidates a session out from under you
+### 2.5 What invalidates a session out from under you
 
 - A password change revokes every refresh token for the account.
 - Account deletion removes sessions, refresh tokens, and device tokens.
-- Refresh-token reuse revokes the family (§2.2).
+- Refresh-token reuse revokes the family (§2.3).
 - The 30-day ceiling.
 
 All of these surface the same way: a 401 on refresh. The only correct response
@@ -527,7 +564,7 @@ header; there is no faster path.
 
 | Bucket | Burst | Refills over | Covers |
 | --- | --- | --- | --- |
-| login | 10 | 5 min | login, Google login, password change, delete account |
+| login | 10 | 5 min | login, Google login, Apple login, password change, delete account |
 | signup | 5 | 1 hour | `CreateAccount` |
 | password-reset | 5 | 15 min | request, validate, reset |
 | invite-code | 10 | 15 min | `JoinFamily`, `AcceptFamilyLink` |

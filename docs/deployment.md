@@ -375,6 +375,41 @@ where health alerts are sent. `deleteAccountHandler` refuses to delete it: doing
 so would lock everyone out of the admin panel and silently stop alerting, with
 no way back short of editing the database.
 
+## Sign in with Apple
+
+Optional, and all-or-nothing: `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`,
+`APPLE_KEY_ID`, and `APPLE_KEY_PATH` in `shared/.env`, or none of them. Set some
+and the app refuses to start (`checkAppleOAuth` in `backend/config_check.go`),
+because a half-set credential is a login button that hands users to Apple and
+fails on the way back. Unset, `/api/auth/providers` reports Apple off and the
+login page draws no Apple button.
+
+Two things are easy to get wrong:
+
+- `APPLE_CLIENT_ID` is the **Services ID**, not the app's bundle ID, and its
+  return URL must be registered with Apple as `$SITE_ROOT/api/apple/callback`
+  exactly. Apple compares it verbatim.
+- `APPLE_KEY_PATH` is a Sign in with Apple `.p8`, a **different key** from the
+  APNs one under `shared/apns/`. Both download once and cannot be retrieved
+  again. Keep it mode 600 alongside the APNs key; it is not backed up, so losing
+  the host means generating a new key in the developer portal.
+
+Apple issues no static client secret. The server signs a short-lived one per
+code exchange from the team ID, key ID, and key, which is why all four values
+have to be present and consistent.
+
+The browser flow cannot be tested on a development machine at all: Apple
+requires an https return URL and rejects `localhost`. The companion app's flow
+(`POST /api/login/apple/token`, see `docs/mobile-api.md` §2.2) can be, since it
+only needs `APPLE_IOS_CLIENT_ID` to match the bundle ID in the identity token.
+
+A user who chooses "Hide My Email" arrives with a `@privaterelay.appleid.com`
+address. That address is stable and the account works normally, but mail sent to
+it is delivered only if the sending domain is registered with Apple's private
+email relay service. Apple sign-in never triggers a verification mail — the
+identity token already asserts the address — but password resets and health
+digests to such an address will bounce until that registration is done.
+
 ## Universal links
 
 `/.well-known/apple-app-site-association` is what makes a `familyrecord.app`

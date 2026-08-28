@@ -8,7 +8,14 @@ import { Header, Footer } from "../../layout";
 import { ensureNoAuthInFetch } from "../../lib/authHelpers";
 import "./login-styles";
 
-type Data = {};
+type AuthProviders = {
+  google: boolean;
+  apple: boolean;
+};
+
+type Data = {
+  providers: AuthProviders;
+};
 
 type LoginForm = {
   email: string;
@@ -28,12 +35,32 @@ const useLoginForm = vlens.declareHook(
   })
 );
 
+// Google is always configured in release; Apple Sign In is optional, so the
+// server is the only thing that knows whether its button leads anywhere.
+const allProvidersOff: AuthProviders = { google: false, apple: false };
+
+async function loadProviders(): Promise<AuthProviders> {
+  try {
+    const res = await window.fetch("/api/auth/providers");
+    if (!res.ok) {
+      return allProvidersOff;
+    }
+    const providers = await res.json();
+    return {
+      google: providers.google === true,
+      apple: providers.apple === true,
+    };
+  } catch {
+    return allProvidersOff;
+  }
+}
+
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureNoAuthInFetch())) {
-    return rpc.ok<Data>({});
+    return rpc.ok<Data>({ providers: allProvidersOff });
   }
 
-  return rpc.ok<Data>({});
+  return rpc.ok<Data>({ providers: await loadProviders() });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -47,7 +74,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     <div>
       <Header isHome={false} />
       <main id="app" className="login-container">
-        <LoginPage form={form} />
+        <LoginPage form={form} providers={data.providers} />
       </main>
       <Footer />
     </div>
@@ -102,9 +129,10 @@ async function onLoginClicked(form: LoginForm, event: Event) {
 
 interface LoginPageProps {
   form: LoginForm;
+  providers: AuthProviders;
 }
 
-const LoginPage = ({ form }: LoginPageProps) => (
+const LoginPage = ({ form, providers }: LoginPageProps) => (
   <div className="login-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -119,18 +147,33 @@ const LoginPage = ({ form }: LoginPageProps) => (
       )}
 
       <div className="auth-methods">
-        <button
-          className="btn btn-google"
-          disabled={form.loading}
-          onClick={() => (window.location.href = "/api/login/google")}
-        >
-          <GoogleIcon />
-          Continue with Google
-        </button>
+        {providers.google && (
+          <button
+            className="btn btn-oauth btn-google"
+            disabled={form.loading}
+            onClick={() => (window.location.href = "/api/login/google")}
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
+        )}
 
-        <div className="auth-divider">
-          <span>or</span>
-        </div>
+        {providers.apple && (
+          <button
+            className="btn btn-oauth btn-apple"
+            disabled={form.loading}
+            onClick={() => (window.location.href = "/api/login/apple")}
+          >
+            <AppleIcon />
+            Continue with Apple
+          </button>
+        )}
+
+        {(providers.google || providers.apple) && (
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onLoginClicked, form)}>
           <div className="form-group">
@@ -191,6 +234,12 @@ const LoginPage = ({ form }: LoginPageProps) => (
       </div>
     </div>
   </div>
+);
+
+const AppleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M17.05 12.54c-.02-2.2 1.79-3.26 1.87-3.31-1.02-1.49-2.6-1.7-3.17-1.72-1.35-.14-2.63.79-3.32.79-.68 0-1.74-.77-2.86-.75-1.47.02-2.83.85-3.58 2.16-1.53 2.65-.39 6.57 1.1 8.72.73 1.05 1.6 2.23 2.74 2.19 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.87.69 1.19-.02 1.94-1.07 2.66-2.13.84-1.22 1.19-2.4 1.21-2.46-.03-.01-2.32-.89-2.34-3.52zM14.88 5.9c.6-.74 1.01-1.75.9-2.77-.87.04-1.93.59-2.56 1.32-.56.64-1.05 1.68-.92 2.67.97.08 1.97-.49 2.58-1.22z" />
+  </svg>
 );
 
 const GoogleIcon = () => (

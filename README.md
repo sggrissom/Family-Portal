@@ -93,7 +93,9 @@ Local builds are deliberately forgiving: every required variable is logged as
 missing and startup continues, and a throwaway JWT signing key is generated if
 `JWT_SECRET_KEY` is unset. Only the features you actually configure will work —
 Google sign-in needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, password reset
-needs mail. A **release** build refuses to
+needs mail. Apple sign-in needs `APPLE_CLIENT_ID`/`APPLE_TEAM_ID`/
+`APPLE_KEY_ID`/`APPLE_KEY_PATH`, and cannot be exercised locally at all —
+Apple refuses to redirect to a `localhost` return URL. A **release** build refuses to
 start when any required variable is missing (`backend/config_check.go`).
 
 `.env.example` documents every variable and what breaks without it.

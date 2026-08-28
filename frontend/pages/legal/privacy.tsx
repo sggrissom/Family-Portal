@@ -150,6 +150,14 @@ const PrivacyPage = () => (
       Google, and the site gets no access to your Gmail, Drive, contacts, or anything else.
     </p>
 
+    <h3>Sign in with Apple</h3>
+    <p>
+      If you sign in with Apple, Apple tells the site your email address and verification status,
+      and your name the first time only. That is what is used to find or create your account.
+      Choosing "Hide My Email" gives the site a relay address instead of your real one, which works
+      the same way everywhere else on the site; nothing is written back to Apple.
+    </p>
+
     <h3>Push notifications</h3>
     <p>
       If you use the companion app and enable notifications, notification text is delivered through

@@ -83,10 +83,22 @@ func SetupAuth(app *vbeam.Application) {
 	app.HandleFunc("/api/google/callback", googleCallbackHandler)
 	app.HandleFunc("/api/login/google/token", googleTokenLoginHandler)
 
+	app.HandleFunc("/api/login/apple", appleLoginHandler)
+	app.HandleFunc("/api/apple/callback", appleCallbackHandler)
+	app.HandleFunc("/api/login/apple/token", appleTokenLoginHandler)
+
+	app.HandleFunc("/api/auth/providers", authProvidersHandler)
+
 	err = SetupGoogleOAuth()
 	if err != nil {
 		log.Printf("Google OAuth setup failed: %v", err)
 		log.Println("Google login will not be available. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable.")
+	}
+
+	err = SetupAppleOAuth()
+	if err != nil {
+		log.Printf("Apple Sign In setup failed: %v", err)
+		log.Println("Apple login will not be available. Set APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_KEY_PATH to enable.")
 	}
 
 	appDb = app.DB
