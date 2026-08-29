@@ -228,10 +228,9 @@ func TestGetPersonWithMilestones(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Test Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-06-15",
+			Name:      "Test Child",
+			Gender:    0,
+			Birthdate: "2020-06-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
@@ -339,10 +338,9 @@ func TestMergePeople(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		sourceReq := AddPersonRequest{
-			Name:       "Source Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-01-15",
+			Name:      "Source Child",
+			Gender:    0,
+			Birthdate: "2020-01-15",
 		}
 		var err error
 		sourcePerson, err = AddPersonTx(tx, sourceReq, testUser.FamilyId)
@@ -351,10 +349,9 @@ func TestMergePeople(t *testing.T) {
 		}
 
 		targetReq := AddPersonRequest{
-			Name:       "Target Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-01-20",
+			Name:      "Target Child",
+			Gender:    0,
+			Birthdate: "2020-01-20",
 		}
 		targetPerson, err = AddPersonTx(tx, targetReq, testUser.FamilyId)
 		if err != nil {
@@ -535,10 +532,9 @@ func TestMergePeopleValidation(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Test Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-01-15",
+			Name:      "Test Child",
+			Gender:    0,
+			Birthdate: "2020-01-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)

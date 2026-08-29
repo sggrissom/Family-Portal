@@ -2,7 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
 import * as server from "../../server";
-import { splitPeopleByType } from "../../lib/routeHelpers";
+import { personSubtitle } from "../../lib/routeHelpers";
 
 type GrowthFormData = {
   selectedPersonId: string;
@@ -250,23 +250,11 @@ export const GrowthForm = ({
                 disabled={form.loading}
               >
                 <option value="">Select a family member</option>
-                {(() => {
-                  const { children, parents } = splitPeopleByType(people);
-                  return (
-                    <>
-                      {children.map(person => (
-                        <option key={person.id} value={person.id}>
-                          {person.name} (Age {person.age})
-                        </option>
-                      ))}
-                      {parents.map(person => (
-                        <option key={person.id} value={person.id}>
-                          {person.name} (Parent)
-                        </option>
-                      ))}
-                    </>
-                  );
-                })()}
+                {people.map(person => (
+                  <option key={person.id} value={person.id}>
+                    {person.name} ({personSubtitle(person)})
+                  </option>
+                ))}
               </select>
             </div>
           )}

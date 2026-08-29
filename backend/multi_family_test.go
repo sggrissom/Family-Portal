@@ -64,13 +64,13 @@ func setupMultiFamilyFixture(t *testing.T) (multiFamilyFixture, func()) {
 
 		var err error
 		fx.personA, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Kid A", PersonType: 1, Gender: 0, Birthdate: "2020-06-15",
+			Name: "Kid A", Gender: 0, Birthdate: "2020-06-15",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx famA: %v", err)
 		}
 		fx.personB, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Kid B", PersonType: 1, Gender: 1, Birthdate: "2019-03-02",
+			Name: "Kid B", Gender: 1, Birthdate: "2019-03-02",
 		}, fx.famB)
 		if err != nil {
 			t.Fatalf("AddPersonTx famB: %v", err)
@@ -255,7 +255,7 @@ func TestWritesLandInTheNamedFamily(t *testing.T) {
 			t.Fatalf("ResolveActingFamily: %v", err)
 		}
 		person, err := AddPersonTx(tx, AddPersonRequest{
-			Name: "Kid B2", PersonType: 1, Gender: 2, Birthdate: "2022-01-10",
+			Name: "Kid B2", Gender: 2, Birthdate: "2022-01-10",
 		}, familyId)
 		if err != nil {
 			t.Fatalf("AddPersonTx: %v", err)

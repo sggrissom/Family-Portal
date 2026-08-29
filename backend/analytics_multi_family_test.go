@@ -59,26 +59,26 @@ func setupAnalyticsFixture(t *testing.T) (analyticsFixture, func()) {
 
 		var err error
 		fx.sharedKid, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Shared Kid", PersonType: int(Child), Gender: 0, Birthdate: "2020-06-15",
+			Name: "Shared Kid", Gender: 0, Birthdate: "2020-06-15",
 		}, fx.famParents)
 		if err != nil {
 			t.Fatalf("AddPersonTx sharedKid: %v", err)
 		}
 		fx.homeKid, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Home Kid", PersonType: int(Child), Gender: 1, Birthdate: "2018-01-20",
+			Name: "Home Kid", Gender: 1, Birthdate: "2018-01-20",
 		}, fx.famParents)
 		if err != nil {
 			t.Fatalf("AddPersonTx homeKid: %v", err)
 		}
 		fx.quietKid, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Quiet Kid", PersonType: int(Child), Gender: 0, Birthdate: "2021-09-09",
+			Name: "Quiet Kid", Gender: 0, Birthdate: "2021-09-09",
 		}, fx.famQuiet)
 		if err != nil {
 			t.Fatalf("AddPersonTx quietKid: %v", err)
 		}
 
 		if _, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "A Parent", PersonType: int(Parent), Gender: 1, Birthdate: "1988-04-04",
+			Name: "A Parent", Gender: 1, Birthdate: "1988-04-04",
 		}, fx.famParents); err != nil {
 			t.Fatalf("AddPersonTx parent: %v", err)
 		}
@@ -96,7 +96,7 @@ func setupAnalyticsFixture(t *testing.T) (analyticsFixture, func()) {
 		vbolt.Write(tx, FamilyLinkBkt, link.Id, &link)
 		vbolt.SetTargetSingleTerm(tx, FamilyLinkByFromIndex, link.Id, link.FromFamilyId)
 		vbolt.SetTargetSingleTerm(tx, FamilyLinkByToIndex, link.Id, link.ToFamilyId)
-		EnsurePersonFamilyTx(tx, fx.sharedKid.Id, fx.famGrand, Child)
+		EnsurePersonFamilyTx(tx, fx.sharedKid.Id, fx.famGrand)
 
 		photos := []Image{
 			{FamilyId: fx.famParents, MimeType: "image/jpeg"},
@@ -200,7 +200,7 @@ func TestFamilySizeCountsAUserInEveryFamilyTheyJoin(t *testing.T) {
 	})
 }
 
-func TestChildCountUsesHomeRosterNotSharedRoster(t *testing.T) {
+func TestPersonCountUsesHomeFamilyNotSharedRoster(t *testing.T) {
 	fx, cleanup := setupAnalyticsFixture(t)
 	defer cleanup()
 
@@ -220,46 +220,25 @@ func TestChildCountUsesHomeRosterNotSharedRoster(t *testing.T) {
 			t.Fatalf("GetContentAnalytics: %v", err)
 		}
 
-		parents := statsForFamily(t, resp, "Admin's Family")
-		if parents.Children != 2 {
-			t.Errorf("expected the owning family to count 2 children, got %d", parents.Children)
+		owning := statsForFamily(t, resp, "Admin's Family")
+		if owning.People != 3 {
+			t.Errorf("expected the owning family to count 3 people, got %d", owning.People)
 		}
 
 		grand := statsForFamily(t, resp, "Grandparents")
-		if grand.Children != 0 {
-			t.Errorf("expected the hosting family to count 0 children, got %d", grand.Children)
+		if grand.People != 0 {
+			t.Errorf("expected the hosting family to count 0 of its own people, got %d", grand.People)
 		}
 		if grand.Photos != 1 {
 			t.Errorf("expected the hosting family's own photo to be counted, got %d", grand.Photos)
 		}
-		if grand.PhotosPerChild != 0 {
-			t.Errorf("expected no per-child ratio for a family with no children, got %f", grand.PhotosPerChild)
+		if grand.PhotosPerPerson != 0 {
+			t.Errorf("expected no per-person ratio for a family with no people, got %f", grand.PhotosPerPerson)
 		}
 	})
 }
 
-func TestChildCountFollowsTheHomeRosterRole(t *testing.T) {
-	fx, cleanup := setupAnalyticsFixture(t)
-	defer cleanup()
-
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		SetPersonFamilyRoleTx(tx, fx.homeKid.Id, fx.famParents, Parent)
-		vbolt.TxCommit(tx)
-	})
-
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		resp, err := GetContentAnalytics(fx.adminCtx(t, tx), Empty{})
-		if err != nil {
-			t.Fatalf("GetContentAnalytics: %v", err)
-		}
-		parents := statsForFamily(t, resp, "Admin's Family")
-		if parents.Children != 1 {
-			t.Errorf("expected the role change to drop the count to 1, got %d", parents.Children)
-		}
-	})
-}
-
-func TestPerChildAveragesUseEveryChildExactlyOnce(t *testing.T) {
+func TestPerPersonAveragesCountEveryPersonExactlyOnce(t *testing.T) {
 	fx, cleanup := setupAnalyticsFixture(t)
 	defer cleanup()
 
@@ -275,17 +254,17 @@ func TestPerChildAveragesUseEveryChildExactlyOnce(t *testing.T) {
 			}
 		}
 
-		const totalChildren = 3
-		wantPhotos := 4.0 / totalChildren
-		wantMilestones := 2.0 / totalChildren
+		const totalPeople = 4
+		wantPhotos := 4.0 / totalPeople
+		wantMilestones := 2.0 / totalPeople
 
-		if !nearlyEqual(resp.AveragePhotosPerChild, wantPhotos) {
-			t.Errorf("AveragePhotosPerChild = %f, want %f (4 photos / %d children)",
-				resp.AveragePhotosPerChild, wantPhotos, totalChildren)
+		if !nearlyEqual(resp.AveragePhotosPerPerson, wantPhotos) {
+			t.Errorf("AveragePhotosPerPerson = %f, want %f (4 photos / %d people)",
+				resp.AveragePhotosPerPerson, wantPhotos, totalPeople)
 		}
-		if !nearlyEqual(resp.AverageMilestonesPerChild, wantMilestones) {
-			t.Errorf("AverageMilestonesPerChild = %f, want %f (2 milestones / %d children)",
-				resp.AverageMilestonesPerChild, wantMilestones, totalChildren)
+		if !nearlyEqual(resp.AverageMilestonesPerPerson, wantMilestones) {
+			t.Errorf("AverageMilestonesPerPerson = %f, want %f (2 milestones / %d people)",
+				resp.AverageMilestonesPerPerson, wantMilestones, totalPeople)
 		}
 	})
 }

@@ -3,7 +3,7 @@ import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
-import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
+import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate } from "../../lib/dateUtils";
 import { ErrorPage } from "../../components/ErrorPage";
 import { handleDeleteGrowthData } from "../../lib/timelineHelpers";
@@ -26,6 +26,7 @@ type ViewGrowthData = {
   growthData: server.GrowthData | null;
   targetPerson: server.Person | null;
   familyMembers: server.FamilyTimelineItem[];
+  relationGroups: Map<number, string>;
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewGrowthData>> {
@@ -41,7 +42,15 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const targetPerson =
     familyMembers.find(item => item.person.id === growthData?.personId)?.person ?? null;
 
-  return [{ growthData, targetPerson, familyMembers }, ""];
+  const relationGroups = new Map<number, string>();
+  if (targetPerson) {
+    const [labelResp] = await server.GetRelationLabels({ subjectId: targetPerson.id });
+    for (const entry of labelResp?.labels ?? []) {
+      relationGroups.set(entry.personId, entry.group);
+    }
+  }
+
+  return [{ growthData, targetPerson, familyMembers, relationGroups }, ""];
 }
 
 export function view(route: string, prefix: string, data: ViewGrowthData): preact.ComponentChild {
@@ -68,6 +77,7 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
           growthData={data.growthData}
           person={data.targetPerson}
           familyMembers={data.familyMembers}
+          relationGroups={data.relationGroups}
         />
       </main>
       <Footer />
@@ -79,12 +89,18 @@ interface ViewGrowthPageProps {
   growthData: server.GrowthData;
   person: server.Person;
   familyMembers: server.FamilyTimelineItem[];
+  relationGroups: Map<number, string>;
 }
 
 const getMeasurementTypeLabel = (type: server.MeasurementType) =>
   type === server.Height ? "Height" : "Weight";
 
-const ViewGrowthPage = ({ growthData, person, familyMembers }: ViewGrowthPageProps) => {
+const ViewGrowthPage = ({
+  growthData,
+  person,
+  familyMembers,
+  relationGroups,
+}: ViewGrowthPageProps) => {
   const hasBirthday = isValidBirthday(person.birthday);
   const ageMonths = hasBirthday ? ageInMonths(person.birthday, growthData.measurementDate) : null;
   const ageLabel = ageMonths !== null ? formatAgeAtMeasurement(ageMonths) : null;
@@ -105,10 +121,7 @@ const ViewGrowthPage = ({ growthData, person, familyMembers }: ViewGrowthPagePro
     familyMembers.map(item => ({ person: item.person, growthData: item.growthData }))
   );
 
-  const { children: siblingComparisons, parents: parentComparisons } = splitComparisonsByType(
-    comparisons,
-    person
-  );
+  const { siblings, parents, others } = splitComparisonsByRelation(comparisons, relationGroups);
 
   return (
     <div className="view-growth-page">
@@ -169,17 +182,24 @@ const ViewGrowthPage = ({ growthData, person, familyMembers }: ViewGrowthPagePro
             </div>
           ) : (
             <>
-              {siblingComparisons.length > 0 && (
+              {siblings.length > 0 && (
                 <ComparisonGroup
                   title="Siblings"
-                  entries={siblingComparisons}
+                  entries={siblings}
                   measurementType={growthData.measurementType}
                 />
               )}
-              {parentComparisons.length > 0 && (
+              {parents.length > 0 && (
                 <ComparisonGroup
                   title="Parents"
-                  entries={parentComparisons}
+                  entries={parents}
+                  measurementType={growthData.measurementType}
+                />
+              )}
+              {others.length > 0 && (
+                <ComparisonGroup
+                  title="Rest of the family"
+                  entries={others}
                   measurementType={growthData.measurementType}
                 />
               )}
@@ -191,13 +211,15 @@ const ViewGrowthPage = ({ growthData, person, familyMembers }: ViewGrowthPagePro
   );
 };
 
-function splitComparisonsByType(entries: FamilyComparisonEntry[], target: server.Person) {
-  const sameType = entries.filter(e => e.person.type === target.type);
-  const otherType = entries.filter(e => e.person.type !== target.type);
-  if (target.type === server.Parent) {
-    return { children: otherType, parents: sameType };
-  }
-  return { children: sameType, parents: otherType };
+function splitComparisonsByRelation(entries: FamilyComparisonEntry[], groups: Map<number, string>) {
+  return {
+    siblings: entries.filter(e => groups.get(e.person.id) === "sibling"),
+    parents: entries.filter(e => groups.get(e.person.id) === "parent"),
+    others: entries.filter(e => {
+      const group = groups.get(e.person.id);
+      return group !== "sibling" && group !== "parent";
+    }),
+  };
 }
 
 interface ComparisonGroupProps {

@@ -1,5 +1,12 @@
 import * as rpc from "vlens/rpc"
 
+export type StatedRelation = number;
+export const StatedNone: StatedRelation = 0;
+export const StatedChild: StatedRelation = 1;
+export const StatedParent: StatedRelation = 2;
+export const StatedSibling: StatedRelation = 3;
+export const StatedPartner: StatedRelation = 4;
+
 export type AccessLevel = number;
 export const AccessNone: AccessLevel = 0;
 export const AccessView: AccessLevel = 1;
@@ -11,10 +18,6 @@ export const LinkPending: LinkStatus = 0;
 export const LinkAccepted: LinkStatus = 1;
 export const LinkRevoked: LinkStatus = 2;
 
-export type PersonType = number;
-export const Parent: PersonType = 0;
-export const Child: PersonType = 1;
-
 export type GenderType = number;
 export const Male: GenderType = 0;
 export const Female: GenderType = 1;
@@ -25,21 +28,22 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
 export const ErrUserNotFound = "No such user";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 
 export interface CreateAccountRequest {
     name: string
@@ -69,6 +73,7 @@ export interface AuthResponse {
     isAdmin: boolean
     emailVerified: boolean
     familyId: number
+    personId: number
     families: FamilyRef[]
 }
 
@@ -207,7 +212,6 @@ export interface GetPersonSharingResponse {
 export interface SharePersonRequest {
     personId: number
     familyId: number
-    role: number
     relationship: string
 }
 
@@ -224,11 +228,12 @@ export interface UnsharePersonRequest {
 
 export interface AddPersonRequest {
     name: string
-    personType: number
     gender: number
     birthdate: string
     isPregnancy: boolean
     familyId: number
+    stated: StatedRelation
+    anchorId: number
 }
 
 export interface GetPersonResponse {
@@ -257,7 +262,6 @@ export interface ComparePeopleResponse {
 export interface UpdatePersonRequest {
     id: number
     name: string
-    personType: number
     gender: number
     birthdate: string
     isPregnancy: boolean
@@ -293,6 +297,41 @@ export interface GetFamilyTimelineRequest {
 
 export interface GetFamilyTimelineResponse {
     people: FamilyTimelineItem[]
+}
+
+export interface GetPersonRelationsRequest {
+    personId: number
+}
+
+export interface GetPersonRelationsResponse {
+    personId: number
+    relations: RelationView[]
+    manageable: boolean
+}
+
+export interface GetRelationLabelsRequest {
+    subjectId: number
+}
+
+export interface GetRelationLabelsResponse {
+    subjectId: number
+    labels: RelationLabelEntry[]
+}
+
+export interface AddRelationRequest {
+    personId: number
+    anchorId: number
+    stated: StatedRelation
+}
+
+export interface RelationActionResponse {
+    success: boolean
+    error: string
+    relations: GetPersonRelationsResponse
+}
+
+export interface RemoveRelationRequest {
+    relationId: number
 }
 
 export interface AddGrowthDataRequest {
@@ -980,8 +1019,8 @@ export interface ContentAnalyticsResponse {
     milestonesByCategory: DistributionPoint[]
     contentPerFamily: FamilyContentStats[]
     photoFormats: DistributionPoint[]
-    averagePhotosPerChild: number
-    averageMilestonesPerChild: number
+    averagePhotosPerPerson: number
+    averageMilestonesPerPerson: number
 }
 
 export interface SystemAnalyticsResponse {
@@ -1222,7 +1261,6 @@ export interface LinkScopes {
 export interface SharedRosterRef {
     familyId: number
     familyName: string
-    role: PersonType
     relationship: string
 }
 
@@ -1236,7 +1274,6 @@ export interface Person {
     id: number
     familyId: number
     name: string
-    type: PersonType
     gender: GenderType
     birthday: string
     age: string
@@ -1245,6 +1282,7 @@ export interface Person {
     profileCropY: number
     profileCropScale: number
     isPregnancy: boolean
+    relationship: string
 }
 
 export interface GrowthData {
@@ -1301,6 +1339,19 @@ export interface FamilyTimelineItem {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+}
+
+export interface RelationView {
+    id: number
+    personId: number
+    personName: string
+    label: string
+}
+
+export interface RelationLabelEntry {
+    personId: number
+    label: string
+    group: string
 }
 
 export interface Activity {
@@ -1581,9 +1632,9 @@ export interface FamilyContentStats {
     familyName: string
     photos: number
     milestones: number
-    children: number
-    photosPerChild: number
-    milestonesPerChild: number
+    people: number
+    photosPerPerson: number
+    milestonesPerPerson: number
 }
 
 export interface StorageMetrics {
@@ -1944,6 +1995,22 @@ export async function MergePeople(data: MergePeopleRequest): Promise<rpc.Respons
 
 export async function GetFamilyTimeline(data: GetFamilyTimelineRequest): Promise<rpc.Response<GetFamilyTimelineResponse>> {
     return await rpc.call<GetFamilyTimelineResponse>('GetFamilyTimeline', JSON.stringify(data));
+}
+
+export async function GetPersonRelations(data: GetPersonRelationsRequest): Promise<rpc.Response<GetPersonRelationsResponse>> {
+    return await rpc.call<GetPersonRelationsResponse>('GetPersonRelations', JSON.stringify(data));
+}
+
+export async function GetRelationLabels(data: GetRelationLabelsRequest): Promise<rpc.Response<GetRelationLabelsResponse>> {
+    return await rpc.call<GetRelationLabelsResponse>('GetRelationLabels', JSON.stringify(data));
+}
+
+export async function AddRelation(data: AddRelationRequest): Promise<rpc.Response<RelationActionResponse>> {
+    return await rpc.call<RelationActionResponse>('AddRelation', JSON.stringify(data));
+}
+
+export async function RemoveRelation(data: RemoveRelationRequest): Promise<rpc.Response<RelationActionResponse>> {
+    return await rpc.call<RelationActionResponse>('RemoveRelation', JSON.stringify(data));
 }
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {

@@ -75,21 +75,21 @@ type FamilyActivity struct {
 }
 
 type ContentAnalyticsResponse struct {
-	PhotoUploadTrends         []DataPoint          `json:"photoUploadTrends"`
-	MilestonesByCategory      []DistributionPoint  `json:"milestonesByCategory"`
-	ContentPerFamily          []FamilyContentStats `json:"contentPerFamily"`
-	PhotoFormats              []DistributionPoint  `json:"photoFormats"`
-	AveragePhotosPerChild     float64              `json:"averagePhotosPerChild"`
-	AverageMilestonesPerChild float64              `json:"averageMilestonesPerChild"`
+	PhotoUploadTrends          []DataPoint          `json:"photoUploadTrends"`
+	MilestonesByCategory       []DistributionPoint  `json:"milestonesByCategory"`
+	ContentPerFamily           []FamilyContentStats `json:"contentPerFamily"`
+	PhotoFormats               []DistributionPoint  `json:"photoFormats"`
+	AveragePhotosPerPerson     float64              `json:"averagePhotosPerPerson"`
+	AverageMilestonesPerPerson float64              `json:"averageMilestonesPerPerson"`
 }
 
 type FamilyContentStats struct {
-	FamilyName         string  `json:"familyName"`
-	Photos             int     `json:"photos"`
-	Milestones         int     `json:"milestones"`
-	Children           int     `json:"children"`
-	PhotosPerChild     float64 `json:"photosPerChild"`
-	MilestonesPerChild float64 `json:"milestonesPerChild"`
+	FamilyName          string  `json:"familyName"`
+	Photos              int     `json:"photos"`
+	Milestones          int     `json:"milestones"`
+	People              int     `json:"people"`
+	PhotosPerPerson     float64 `json:"photosPerPerson"`
+	MilestonesPerPerson float64 `json:"milestonesPerPerson"`
 }
 
 type SystemAnalyticsResponse struct {
@@ -438,25 +438,19 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		return true
 	})
 
-	homeChildren := make(map[int]int)
+	homePeople := make(map[int]int)
 	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, person Person) bool {
 		if person.FamilyId == 0 {
 			return true
 		}
-		role := person.Type
-		if row, found := FindPersonFamily(ctx.Tx, person.Id, person.FamilyId); found {
-			role = row.Role
-		}
-		if role == Child {
-			homeChildren[person.FamilyId]++
-		}
+		homePeople[person.FamilyId]++
 		return true
 	})
 
 	for _, family := range families {
 		stats := FamilyContentStats{
 			FamilyName: family.Name,
-			Children:   homeChildren[family.Id],
+			People:     homePeople[family.Id],
 		}
 
 		for _, photo := range photos {
@@ -471,9 +465,9 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 			}
 		}
 
-		if stats.Children > 0 {
-			stats.PhotosPerChild = float64(stats.Photos) / float64(stats.Children)
-			stats.MilestonesPerChild = float64(stats.Milestones) / float64(stats.Children)
+		if stats.People > 0 {
+			stats.PhotosPerPerson = float64(stats.Photos) / float64(stats.People)
+			stats.MilestonesPerPerson = float64(stats.Milestones) / float64(stats.People)
 		}
 
 		if stats.Photos > 0 || stats.Milestones > 0 {
@@ -481,14 +475,14 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		}
 	}
 
-	totalChildren := 0
-	for _, count := range homeChildren {
-		totalChildren += count
+	totalPeople := 0
+	for _, count := range homePeople {
+		totalPeople += count
 	}
 
-	if totalChildren > 0 {
-		resp.AveragePhotosPerChild = float64(len(photos)) / float64(totalChildren)
-		resp.AverageMilestonesPerChild = float64(len(milestones)) / float64(totalChildren)
+	if totalPeople > 0 {
+		resp.AveragePhotosPerPerson = float64(len(photos)) / float64(totalPeople)
+		resp.AverageMilestonesPerPerson = float64(len(milestones)) / float64(totalPeople)
 	}
 
 	LogInfo(LogCategoryAdmin, "Content analytics accessed", nil)

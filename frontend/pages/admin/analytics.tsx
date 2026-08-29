@@ -333,13 +333,13 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
     <div className="analytics-content">
       <div className="metrics-grid">
         <div className="metric-card">
-          <div className="metric-value">{data.averagePhotosPerChild.toFixed(1)}</div>
-          <div className="metric-label">Avg Photos per Child</div>
+          <div className="metric-value">{data.averagePhotosPerPerson.toFixed(1)}</div>
+          <div className="metric-label">Avg Photos per Person</div>
         </div>
 
         <div className="metric-card">
-          <div className="metric-value">{data.averageMilestonesPerChild.toFixed(1)}</div>
-          <div className="metric-label">Avg Milestones per Child</div>
+          <div className="metric-value">{data.averageMilestonesPerPerson.toFixed(1)}</div>
+          <div className="metric-label">Avg Milestones per Person</div>
         </div>
       </div>
 
@@ -368,7 +368,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
                 <div className="family-content-stats">
                   <span>{family.photos} photos</span>
                   <span>{family.milestones} milestones</span>
-                  <span>{family.children} children</span>
+                  <span>{family.people} people</span>
                 </div>
               </div>
             ))}

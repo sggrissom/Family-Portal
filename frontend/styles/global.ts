@@ -1559,3 +1559,26 @@ block(`
   }
 }
 `);
+
+block(`
+.relation-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+`);
+
+block(`
+.form-group .relation-row select {
+  min-width: 0;
+  width: 100%;
+}
+`);
+
+block(`
+.relation-joiner {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+`);

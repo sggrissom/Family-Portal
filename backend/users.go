@@ -55,6 +55,7 @@ type AuthResponse struct {
 	IsAdmin       bool        `json:"isAdmin"`
 	EmailVerified bool        `json:"emailVerified"`
 	FamilyId      int         `json:"familyId,omitempty"`
+	PersonId      int         `json:"personId,omitempty"`
 	Families      []FamilyRef `json:"families"`
 }
 
@@ -98,6 +99,7 @@ type User struct {
 	LastLogin     time.Time `json:"lastLogin"`
 	FamilyId      int       `json:"familyId"`
 	EmailVerified bool      `json:"emailVerified"`
+	PersonId      int       `json:"personId"`
 }
 
 type Family struct {
@@ -109,7 +111,7 @@ type Family struct {
 }
 
 func PackUser(self *User, buf *vpack.Buffer) {
-	version := vpack.Version(2, buf)
+	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.String(&self.Name, buf)
 	vpack.String(&self.Email, buf)
@@ -118,6 +120,9 @@ func PackUser(self *User, buf *vpack.Buffer) {
 	vpack.Int(&self.FamilyId, buf)
 	if version >= 2 {
 		vpack.Bool(&self.EmailVerified, buf)
+	}
+	if version >= 3 {
+		vpack.Int(&self.PersonId, buf)
 	}
 }
 
@@ -266,11 +271,29 @@ func initialPersonName(req CreateAccountRequest) string {
 
 func AddInitialPersonForAccountTx(tx *vbolt.Tx, req CreateAccountRequest, familyId int) (Person, error) {
 	return AddPersonTx(tx, AddPersonRequest{
-		Name:       initialPersonName(req),
-		PersonType: int(Parent),
-		Gender:     req.InitialPersonGender,
-		Birthdate:  req.InitialPersonBirthdate,
+		Name:      initialPersonName(req),
+		Gender:    req.InitialPersonGender,
+		Birthdate: req.InitialPersonBirthdate,
 	}, familyId)
+}
+
+func BackfillUserPersonIds(tx *vbolt.Tx) (linked int) {
+	vbolt.IterateAll(tx, UsersBkt, func(userId int, user User) bool {
+		if user.PersonId != 0 || user.FamilyId == 0 {
+			return true
+		}
+		for _, person := range GetFamilyOwnPeople(tx, user.FamilyId) {
+			if person.Name != user.Name {
+				continue
+			}
+			user.PersonId = person.Id
+			vbolt.Write(tx, UsersBkt, user.Id, &user)
+			linked++
+			break
+		}
+		return true
+	})
+	return
 }
 
 func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
@@ -281,6 +304,7 @@ func GetAuthResponseFromUser(tx *vbolt.Tx, user User) AuthResponse {
 		IsAdmin:       user.Id == AdminUserId,
 		EmailVerified: user.EmailVerified,
 		FamilyId:      user.FamilyId,
+		PersonId:      user.PersonId,
 		Families:      []FamilyRef{},
 	}
 	if tx == nil {
@@ -336,12 +360,14 @@ func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAcc
 	vbeam.UseWriteTx(ctx)
 	user := AddUserTx(ctx.Tx, req, hash)
 	if req.InitialPersonBirthdate != "" {
-		_, personErr := AddInitialPersonForAccountTx(ctx.Tx, req, user.FamilyId)
+		person, personErr := AddInitialPersonForAccountTx(ctx.Tx, req, user.FamilyId)
 		if personErr != nil {
 			resp.Success = false
 			resp.Error = personErr.Error()
 			return
 		}
+		user.PersonId = person.Id
+		vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
 	}
 	sendVerificationEmailTx(ctx.Tx, user, time.Now())
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
@@ -460,10 +486,9 @@ func validateCreateAccountRequest(req CreateAccountRequest) error {
 	}
 	if req.InitialPersonBirthdate != "" {
 		if err := validateAddPersonRequest(AddPersonRequest{
-			Name:       initialPersonName(req),
-			PersonType: int(Parent),
-			Gender:     req.InitialPersonGender,
-			Birthdate:  req.InitialPersonBirthdate,
+			Name:      initialPersonName(req),
+			Gender:    req.InitialPersonGender,
+			Birthdate: req.InitialPersonBirthdate,
 		}); err != nil {
 			return err
 		}

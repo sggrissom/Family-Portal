@@ -7,7 +7,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
-import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
+import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import "./add-photo-styles";
 
@@ -287,8 +287,6 @@ interface AddPhotoPageProps {
 }
 
 const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
-  const { children, parents } = splitPeopleByType(people);
-
   const selectedPersonIds = new Set(form.selectedPersonIds.map(id => parseInt(id)));
 
   return (
@@ -308,50 +306,26 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
           <div className="form-group">
             <label>Who's in this photo? (Optional)</label>
-            <p className="field-hint">
+            <p className="form-hint">
               Select family members who appear in this photo. Leave unchecked for general family
               photos.
             </p>
 
-            {children.length > 0 && (
-              <div className="person-group">
-                <h4>Children</h4>
-                <div className="photo-person-group">
-                  {children.map(person => (
-                    <label key={person.id} className="photo-person-option">
-                      <input
-                        type="checkbox"
-                        checked={selectedPersonIds.has(person.id)}
-                        onChange={() => onPersonToggle(form, person.id.toString())}
-                        disabled={form.loading}
-                      />
-                      <span>
-                        {person.name} (Age {person.age})
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {parents.length > 0 && (
-              <div className="person-group">
-                <h4>Parents</h4>
-                <div className="photo-person-group">
-                  {parents.map(person => (
-                    <label key={person.id} className="photo-person-option">
-                      <input
-                        type="checkbox"
-                        checked={selectedPersonIds.has(person.id)}
-                        onChange={() => onPersonToggle(form, person.id.toString())}
-                        disabled={form.loading}
-                      />
-                      <span>{person.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="photo-person-group">
+              {people.map(person => (
+                <label key={person.id} className="photo-person-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedPersonIds.has(person.id)}
+                    onChange={() => onPersonToggle(form, person.id.toString())}
+                    disabled={form.loading}
+                  />
+                  <span>
+                    {person.name} ({personSubtitle(person)})
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="form-group">

@@ -48,7 +48,7 @@ func setupResultsFixture(t *testing.T) resultsFixture {
 			into *Person
 		}{{"Alice", &fx.alice}, {"Bob", &fx.bob}, {"Carol", &fx.carol}} {
 			*seed.into, err = AddPersonTx(tx, AddPersonRequest{
-				Name: seed.name, PersonType: 1, Gender: 0, Birthdate: "2014-03-02",
+				Name: seed.name, Gender: 0, Birthdate: "2014-03-02",
 			}, fx.familyId)
 			if err != nil {
 				t.Fatalf("AddPersonTx(%s) error = %v", seed.name, err)

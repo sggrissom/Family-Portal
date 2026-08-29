@@ -58,13 +58,13 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 		fx.outsiderFamily = fx.outsider.FamilyId
 
 		fx.person, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Kid", PersonType: 1, Gender: 0, Birthdate: "2020-06-15",
+			Name: "Kid", Gender: 0, Birthdate: "2020-06-15",
 		}, fx.familyId)
 		if err != nil {
 			t.Fatalf("AddPersonTx() error = %v", err)
 		}
 		fx.outsiderPerson, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Their Kid", PersonType: 1, Gender: 1, Birthdate: "2021-01-05",
+			Name: "Their Kid", Gender: 1, Birthdate: "2021-01-05",
 		}, fx.outsiderFamily)
 		if err != nil {
 			t.Fatalf("AddPersonTx(outsider) error = %v", err)
@@ -560,7 +560,7 @@ func TestDeleteAccountClearsActivityJoinsInASurvivingFamily(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		createFamilyLinkTx(tx, fx.familyId, fx.outsiderFamily, "Grandparents",
 			AccessView, ScopePeople.bit()|ScopeActivities.bit())
-		EnsurePersonFamilyTx(tx, fx.person.Id, fx.outsiderFamily, fx.person.Type)
+		EnsurePersonFamilyTx(tx, fx.person.Id, fx.outsiderFamily)
 		seedFamilyActivities(tx, fx.outsiderFamily, fx.person.Id, fx.photo.Id)
 		vbolt.TxCommit(tx)
 	})
@@ -631,7 +631,7 @@ func TestDeleteAccountDoesNotTouchALinkedFamily(t *testing.T) {
 		link := createFamilyLinkTx(tx, fx.outsiderFamily, fx.familyId, "Grandparents",
 			AccessView, ScopePeople.bit()|ScopePhotos.bit())
 		linkId = link.Id
-		EnsurePersonFamilyTx(tx, fx.outsiderPerson.Id, fx.familyId, fx.outsiderPerson.Type)
+		EnsurePersonFamilyTx(tx, fx.outsiderPerson.Id, fx.familyId)
 		vbolt.TxCommit(tx)
 	})
 

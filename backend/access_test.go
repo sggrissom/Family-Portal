@@ -45,10 +45,9 @@ func setupAccessFixture(t *testing.T) (accessFixture, func()) {
 		famA := fx.userA.FamilyId
 
 		person, err := AddPersonTx(tx, AddPersonRequest{
-			Name:       "Child A",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-06-15",
+			Name:      "Child A",
+			Gender:    0,
+			Birthdate: "2020-06-15",
 		}, famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx: %v", err)

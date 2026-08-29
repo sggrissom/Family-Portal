@@ -7,7 +7,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
-import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
+import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
@@ -198,8 +198,6 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps) => {
-  const { children, parents } = splitPeopleByType(people);
-
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 
   const selectedPersonIdNum = parseInt(form.selectedPersonId) || 0;
@@ -232,14 +230,9 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
               disabled={form.loading}
             >
               <option value="">Select a family member</option>
-              {children.map(person => (
+              {people.map(person => (
                 <option key={person.id} value={person.id}>
-                  {person.name} (Age {person.age})
-                </option>
-              ))}
-              {parents.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} (Parent)
+                  {person.name} ({personSubtitle(person)})
                 </option>
               ))}
             </select>

@@ -31,10 +31,9 @@ func TestAddMilestone(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Test Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-06-15",
+			Name:      "Test Child",
+			Gender:    0,
+			Birthdate: "2020-06-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
@@ -180,10 +179,9 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Photo Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-06-15",
+			Name:      "Photo Child",
+			Gender:    0,
+			Birthdate: "2020-06-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
@@ -538,10 +536,9 @@ func TestMultipleMilestones(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Test Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-01-01",
+			Name:      "Test Child",
+			Gender:    0,
+			Birthdate: "2020-01-01",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)

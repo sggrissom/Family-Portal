@@ -10,12 +10,11 @@ import (
 )
 
 type PersonFamily struct {
-	Id           int        `json:"id"`
-	PersonId     int        `json:"personId"`
-	FamilyId     int        `json:"familyId"`
-	Role         PersonType `json:"role"`
-	Relationship string     `json:"relationship,omitempty"`
-	AddedAt      time.Time  `json:"addedAt"`
+	Id           int       `json:"id"`
+	PersonId     int       `json:"personId"`
+	FamilyId     int       `json:"familyId"`
+	Relationship string    `json:"relationship,omitempty"`
+	AddedAt      time.Time `json:"addedAt"`
 }
 
 func PackPersonFamily(self *PersonFamily, buf *vpack.Buffer) {
@@ -23,7 +22,9 @@ func PackPersonFamily(self *PersonFamily, buf *vpack.Buffer) {
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
-	vpack.IntEnum(&self.Role, buf)
+	// Retired parent/child roster enum: read past it so existing records decode.
+	var legacyRole int
+	vpack.IntEnum(&legacyRole, buf)
 	vpack.String(&self.Relationship, buf)
 	vpack.Time(&self.AddedAt, buf)
 }
@@ -59,12 +60,11 @@ func FindPersonFamily(tx *vbolt.Tx, personId int, familyId int) (PersonFamily, b
 	return PersonFamily{}, false
 }
 
-func addPersonFamilyTx(tx *vbolt.Tx, personId int, familyId int, role PersonType, relationship string, addedAt time.Time) PersonFamily {
+func addPersonFamilyTx(tx *vbolt.Tx, personId int, familyId int, relationship string, addedAt time.Time) PersonFamily {
 	row := PersonFamily{
 		Id:           vbolt.NextIntId(tx, PersonFamilyBkt),
 		PersonId:     personId,
 		FamilyId:     familyId,
-		Role:         role,
 		Relationship: relationship,
 		AddedAt:      addedAt,
 	}
@@ -80,32 +80,27 @@ func deletePersonFamilyTx(tx *vbolt.Tx, row PersonFamily) {
 	vbolt.SetTargetSingleTerm(tx, PersonFamilyByFamilyIndex, row.Id, -1)
 }
 
-func EnsurePersonFamilyTx(tx *vbolt.Tx, personId int, familyId int, role PersonType) PersonFamily {
-	return ensurePersonFamilyTx(tx, personId, familyId, role, time.Now())
+func EnsurePersonFamilyTx(tx *vbolt.Tx, personId int, familyId int) PersonFamily {
+	return ensurePersonFamilyTx(tx, personId, familyId, time.Now())
 }
 
-func ensurePersonFamilyTx(tx *vbolt.Tx, personId int, familyId int, role PersonType, addedAt time.Time) PersonFamily {
+func ensurePersonFamilyTx(tx *vbolt.Tx, personId int, familyId int, addedAt time.Time) PersonFamily {
 	if personId == 0 || familyId == 0 {
 		return PersonFamily{}
 	}
 	if existing, found := FindPersonFamily(tx, personId, familyId); found {
 		return existing
 	}
-	return addPersonFamilyTx(tx, personId, familyId, role, "", addedAt)
+	return addPersonFamilyTx(tx, personId, familyId, "", addedAt)
 }
 
-func SetPersonFamilyRoleTx(tx *vbolt.Tx, personId int, familyId int, role PersonType) PersonFamily {
-	if personId == 0 || familyId == 0 {
-		return PersonFamily{}
-	}
+func SetPersonFamilyRelationshipTx(tx *vbolt.Tx, personId int, familyId int, relationship string) PersonFamily {
 	row, found := FindPersonFamily(tx, personId, familyId)
-	if !found {
-		return addPersonFamilyTx(tx, personId, familyId, role, "", time.Now())
+	if !found || row.Relationship == relationship {
+		return row
 	}
-	if row.Role != role {
-		row.Role = role
-		vbolt.Write(tx, PersonFamilyBkt, row.Id, &row)
-	}
+	row.Relationship = relationship
+	vbolt.Write(tx, PersonFamilyBkt, row.Id, &row)
 	return row
 }
 
@@ -139,7 +134,7 @@ func BackfillPersonFamilies(tx *vbolt.Tx) (created int) {
 		if _, found := FindPersonFamily(tx, person.Id, person.FamilyId); found {
 			return true
 		}
-		addPersonFamilyTx(tx, person.Id, person.FamilyId, person.Type, "", time.Time{})
+		addPersonFamilyTx(tx, person.Id, person.FamilyId, "", time.Time{})
 		created++
 		return true
 	})
