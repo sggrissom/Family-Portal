@@ -44,6 +44,13 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
       </a>
       <nav className="nav" aria-label="Main navigation">
         <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
+          <svg className="brand-mark" viewBox="132 82 248 348" aria-hidden="true">
+            <g stroke="currentColor" stroke-width="44" stroke-linecap="round" fill="none">
+              <path d="M156 106 V406" />
+              <path d="M156 166 H356" />
+              <path d="M156 286 H286" />
+            </g>
+          </svg>
           Family Record
         </a>
         <button

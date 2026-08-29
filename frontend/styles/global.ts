@@ -164,11 +164,23 @@ block(`
 
 block(`
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text);
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.3px;
   white-space: nowrap;
+}
+`);
+
+block(`
+.brand-mark {
+  height: 20px;
+  width: auto;
+  flex-shrink: 0;
+  color: var(--accent);
 }
 `);
 
@@ -525,6 +537,10 @@ block(`
 
   .brand {
     font-size: 16px;
+  }
+
+  .brand-mark {
+    height: 18px;
   }
 
   .hero {
