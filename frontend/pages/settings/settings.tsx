@@ -1,17 +1,23 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
+import * as rpc from "vlens/rpc";
+import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logError } from "../../lib/logger";
 import { FamilySelect } from "../../components/FamilySelect";
 import { FamilyLinksSection } from "../../components/FamilyLinks";
+import { FamilyMembersSection } from "../../components/FamilyMembers";
 import "./settings-styles";
 
 type Data = {
   familyInfo: server.FamilyInfoResponse;
   people: server.Person[];
   links: server.FamilyLinkView[];
+  members: server.FamilyMemberView[];
+  callerIsOwner: boolean;
+  notifications: server.NotificationPreferencesResponse;
 };
 
 type JoinFamilyForm = {
@@ -26,8 +32,6 @@ type ExportForm = {
   error: string;
   success: boolean;
   exportMode: "data_only" | "with_photos";
-  // Which family to export. Zero means the primary family. Export covers one
-  // family at a time so a bundle imports back into a single family.
   familyId: number;
 };
 
@@ -78,6 +82,95 @@ const useMergeForm = vlens.declareHook(
   })
 );
 
+type ChangePasswordForm = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  error: string;
+  success: string;
+  loading: boolean;
+};
+
+const useChangePasswordForm = vlens.declareHook(
+  (): ChangePasswordForm => ({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+    error: "",
+    success: "",
+    loading: false,
+  })
+);
+
+type DeleteAccountForm = {
+  password: string;
+  confirmEmail: string;
+  error: string;
+  loading: boolean;
+};
+
+const useDeleteAccountForm = vlens.declareHook(
+  (): DeleteAccountForm => ({
+    password: "",
+    confirmEmail: "",
+    error: "",
+    loading: false,
+  })
+);
+
+type NotificationForm = {
+  chatEnabled: boolean;
+  showMessageText: boolean;
+  saving: boolean;
+  error: string;
+  saved: boolean;
+};
+
+const notificationDefaults: server.NotificationPreferencesResponse = {
+  chatEnabled: true,
+  showMessageText: false,
+};
+
+const useNotificationForm = vlens.declareHook(
+  (chatEnabled: boolean, showMessageText: boolean): NotificationForm => ({
+    chatEnabled,
+    showMessageText,
+    saving: false,
+    error: "",
+    saved: false,
+  })
+);
+
+async function onNotificationPreferenceChanged(
+  form: NotificationForm,
+  field: "chatEnabled" | "showMessageText",
+  event: Event
+) {
+  const checked = (event.target as HTMLInputElement).checked;
+  const previous = form[field];
+  form[field] = checked;
+  form.saving = true;
+  form.error = "";
+  form.saved = false;
+  vlens.scheduleRedraw();
+
+  const [resp, err] = await server.UpdateNotificationPreferences({
+    chatEnabled: form.chatEnabled,
+    showMessageText: form.showMessageText,
+  });
+
+  form.saving = false;
+  if (resp) {
+    form.chatEnabled = resp.preferences.chatEnabled;
+    form.showMessageText = resp.preferences.showMessageText;
+    form.saved = true;
+  } else {
+    form[field] = previous;
+    form.error = err || "Could not save your notification settings";
+  }
+  vlens.scheduleRedraw();
+}
+
 type AppearanceSettings = {
   theme: "light" | "dark";
 };
@@ -107,17 +200,25 @@ export async function fetch(route: string, prefix: string) {
       familyInfo: { id: 0, name: "", inviteCode: "", families: [] },
       people: [],
       links: [],
+      members: [],
+      callerIsOwner: false,
+      notifications: notificationDefaults,
     });
   }
 
   const [familyInfo] = await server.GetFamilyInfo({});
   const [peopleResp] = await server.ListPeople({});
   const [linksResp] = await server.ListFamilyLinks({ familyId: 0 });
+  const [membersResp] = await server.ListFamilyMembers({ familyId: 0 });
+  const [notificationsResp] = await server.GetNotificationPreferences({});
 
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
     people: peopleResp?.people || [],
     links: linksResp?.links || [],
+    members: membersResp?.members || [],
+    callerIsOwner: membersResp?.callerIsOwner || false,
+    notifications: notificationsResp || notificationDefaults,
   });
 }
 
@@ -149,7 +250,6 @@ async function copyInviteLink(inviteCode: string) {
   try {
     await navigator.clipboard.writeText(inviteLink);
 
-    // Show temporary success message
     const button = document.querySelector(".copy-button") as HTMLButtonElement;
     if (button) {
       const originalText = button.textContent;
@@ -161,7 +261,6 @@ async function copyInviteLink(inviteCode: string) {
       }, 2000);
     }
   } catch (err) {
-    // Fallback for browsers that don't support clipboard API
     logError("ui", "Failed to copy to clipboard", err);
     alert("Failed to copy link to clipboard");
   }
@@ -184,7 +283,6 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
     form.inviteCode = "";
     form.error = "";
 
-    // Update auth cache and reload the page to show new family info
     setTimeout(() => {
       window.location.reload();
     }, 1500);
@@ -192,6 +290,109 @@ async function onJoinFamilyClicked(form: JoinFamilyForm, event: Event) {
     form.error = resp?.error || err || "Failed to join family";
   }
   vlens.scheduleRedraw();
+}
+
+async function onChangePasswordClicked(form: ChangePasswordForm, event: Event) {
+  event.preventDefault();
+  form.loading = true;
+  form.error = "";
+  form.success = "";
+  vlens.scheduleRedraw();
+
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch("/api/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
+      }),
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      form.currentPassword = "";
+      form.newPassword = "";
+      form.confirmPassword = "";
+      if (result.token) {
+        rpc.setAuthHeaders({ "x-auth-token": result.token });
+        form.success = "Password changed. Other devices have been signed out.";
+      } else {
+        form.success = result.error || "Password changed. Please sign in again.";
+      }
+    } else {
+      form.error = result.error || "Failed to change password";
+    }
+  } catch (e) {
+    logError("ui", "Password change failed", e);
+    form.error = "Network error. Please try again.";
+  }
+
+  form.loading = false;
+  vlens.scheduleRedraw();
+}
+
+async function onDeleteAccountClicked(form: DeleteAccountForm, event: Event) {
+  event.preventDefault();
+
+  if (
+    !confirm(
+      "Delete your account? This cannot be undone. Any family you are the only member of is deleted with everything in it — people, photos, measurements and milestones."
+    )
+  ) {
+    return;
+  }
+
+  form.loading = true;
+  form.error = "";
+  vlens.scheduleRedraw();
+
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch("/api/delete-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        password: form.password,
+        confirmEmail: form.confirmEmail,
+      }),
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      auth.clearAuth();
+      window.location.href = "/";
+      return;
+    }
+    form.error = result.error || "Could not delete your account";
+  } catch (e) {
+    logError("ui", "Account deletion failed", e);
+    form.error = "Network error. Please try again.";
+  }
+
+  form.loading = false;
+  vlens.scheduleRedraw();
+}
+
+async function onRotateInviteCode(familyId: number, familyName: string) {
+  if (
+    !confirm(
+      `Generate a new invite code for ${familyName}? Any link or code you have already shared stops working, and anyone still waiting to join will need the new one.`
+    )
+  ) {
+    return;
+  }
+
+  const [resp, err] = await server.RotateInviteCode({ familyId });
+  if (resp && resp.success) {
+    window.location.reload();
+    return;
+  }
+  alert(resp?.error || err || "Could not generate a new invite code");
 }
 
 async function onExportDataClicked(exportForm: ExportForm) {
@@ -268,7 +469,6 @@ async function onMergePreview(form: MergeForm, people: server.Person[], event: E
   form.loading = true;
   form.error = "";
 
-  // Get person details for preview
   const sourcePerson = people.find(p => p.id === form.sourcePersonId);
   const targetPerson = people.find(p => p.id === form.targetPersonId);
 
@@ -279,7 +479,6 @@ async function onMergePreview(form: MergeForm, people: server.Person[], event: E
     return;
   }
 
-  // Fetch full person data to get counts
   const [sourceData] = await server.GetPerson({ id: form.sourcePersonId });
 
   form.loading = false;
@@ -319,7 +518,6 @@ async function onMergeConfirm(form: MergeForm, event: Event) {
     form.targetPersonId = 0;
     form.previewData = null;
 
-    // Reload page after 2 seconds to show updated people list
     setTimeout(() => {
       window.location.reload();
     }, 2000);
@@ -338,8 +536,6 @@ function onMergeCancel(form: MergeForm) {
 
 const SettingsPage = ({ data }: SettingsPageProps) => {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  // Every family the user belongs to, primary first. Falls back to the
-  // top-level fields, which describe the primary family.
   const families =
     data.familyInfo.families && data.familyInfo.families.length > 0
       ? data.familyInfo.families
@@ -357,7 +553,14 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
+  const passwordForm = useChangePasswordForm();
+  const deleteForm = useDeleteAccountForm();
   const appearance = useAppearanceSettings();
+  const notifications = useNotificationForm(
+    data.notifications.chatEnabled,
+    data.notifications.showMessageText
+  );
+  const accountEmail = auth.getAuth()?.email ?? "";
 
   return (
     <div className="settings-page">
@@ -410,7 +613,139 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         </div>
 
-        {/* Join Another Family (only show if user has a family but wants to join another) */}
+        <div className="settings-section">
+          <h2>Notifications</h2>
+          <div className="settings-card">
+            <p className="section-description">
+              These control push notifications on the Family Portal app for iPhone. They follow your
+              account, not the phone, so they apply to every device you sign in on.
+            </p>
+
+            {notifications.saved && (
+              <div className="success-message">Notification settings saved.</div>
+            )}
+            {notifications.error && (
+              <div className="error-message" role="alert">
+                {notifications.error}
+              </div>
+            )}
+
+            <div className="notification-options">
+              <label className="notification-option">
+                <input
+                  type="checkbox"
+                  checked={notifications.chatEnabled}
+                  disabled={notifications.saving}
+                  onChange={vlens.cachePartial(
+                    onNotificationPreferenceChanged,
+                    notifications,
+                    "chatEnabled"
+                  )}
+                />
+                <span>
+                  <strong>Chat messages</strong>
+                  <small>
+                    Notify me when someone in my family sends a message while I am away from the
+                    app.
+                  </small>
+                </span>
+              </label>
+
+              <label className="notification-option">
+                <input
+                  type="checkbox"
+                  checked={notifications.showMessageText}
+                  disabled={notifications.saving}
+                  onChange={vlens.cachePartial(
+                    onNotificationPreferenceChanged,
+                    notifications,
+                    "showMessageText"
+                  )}
+                />
+                <span>
+                  <strong>Show message text on the lock screen</strong>
+                  <small>
+                    Off by default: a notification says only that a message arrived, and you see who
+                    sent it and what it says after unlocking. Turn this on to show the sender and
+                    the message itself on the lock screen.
+                  </small>
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h2>Security</h2>
+          <div className="settings-card">
+            <h3>Change password</h3>
+            <p className="section-description">
+              Changing your password signs out every other device you are signed in on. This device
+              stays signed in.
+            </p>
+
+            {passwordForm.success && <div className="success-message">{passwordForm.success}</div>}
+            {passwordForm.error && (
+              <div className="error-message" role="alert">
+                {passwordForm.error}
+              </div>
+            )}
+
+            <form onSubmit={vlens.cachePartial(onChangePasswordClicked, passwordForm)}>
+              <div className="form-group">
+                <label htmlFor="currentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="currentPassword"
+                  autoComplete="current-password"
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "currentPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="newPassword">New password</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  autoComplete="new-password"
+                  minLength={8}
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "newPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmNewPassword">Confirm new password</label>
+                <input
+                  type="password"
+                  id="confirmNewPassword"
+                  autoComplete="new-password"
+                  minLength={8}
+                  {...vlens.attrsBindInput(vlens.ref(passwordForm, "confirmPassword"))}
+                  disabled={passwordForm.loading}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  passwordForm.loading ||
+                  !passwordForm.currentPassword ||
+                  !passwordForm.newPassword ||
+                  !passwordForm.confirmPassword
+                }
+              >
+                {passwordForm.loading ? "Changing..." : "Change Password"}
+              </button>
+            </form>
+          </div>
+        </div>
+
         <div className="settings-section">
           <h2>Join Another Family</h2>
           <div className="settings-card">
@@ -422,7 +757,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="success-message">Successfully joined family! Reloading page...</div>
             )}
 
-            {joinForm.error && <div className="error-message">{joinForm.error}</div>}
+            {joinForm.error && (
+              <div className="error-message" role="alert">
+                {joinForm.error}
+              </div>
+            )}
 
             <form onSubmit={vlens.cachePartial(onJoinFamilyClicked, joinForm)}>
               <div className="form-group">
@@ -448,7 +787,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         </div>
 
-        {/* Family Information - only show if user is in a family */}
         {families.length > 0 && (
           <div className="settings-section">
             <h2>{families.length > 1 ? "Your Families" : "Family Information"}</h2>
@@ -466,10 +804,16 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {/* Connections to other households, distinct from membership above */}
+        {families.length > 0 && (
+          <FamilyMembersSection
+            initialMembers={data.members}
+            initialCallerIsOwner={data.callerIsOwner}
+            familyName={families[0].name}
+          />
+        )}
+
         {families.length > 0 && <FamilyLinksSection initialLinks={data.links} />}
 
-        {/* Data Management - only show if user is in a family */}
         {data.familyInfo.id > 0 && (
           <div className="settings-section">
             <h2>Data Management</h2>
@@ -487,7 +831,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     <div className="success-message">Data exported successfully!</div>
                   )}
 
-                  {exportForm.error && <div className="error-message">{exportForm.error}</div>}
+                  {exportForm.error && (
+                    <div className="error-message" role="alert">
+                      {exportForm.error}
+                    </div>
+                  )}
 
                   <FamilySelect
                     id="exportFamilyId"
@@ -558,7 +906,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {/* Advanced Data Management - only show if user is in a family and has people */}
         {data.familyInfo.id > 0 && data.people.length > 1 && (
           <div className="settings-section">
             <h2>Advanced Data Management</h2>
@@ -578,7 +925,11 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                 <div className="success-message">People merged successfully! Reloading page...</div>
               )}
 
-              {mergeForm.error && <div className="error-message">{mergeForm.error}</div>}
+              {mergeForm.error && (
+                <div className="error-message" role="alert">
+                  {mergeForm.error}
+                </div>
+              )}
 
               {!mergeForm.showConfirmation && (
                 <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, data.people)}>
@@ -690,7 +1041,6 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {/* Invite Members - only show if user is in a family */}
         {families.length > 0 && (
           <div className="settings-section">
             <h2>Invite Family Members</h2>
@@ -708,14 +1058,22 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     </label>
                     <div className="invite-code-display">
                       <span className="invite-code">{family.inviteCode}</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() => onRotateInviteCode(family.id, family.name)}
+                      >
+                        Generate new code
+                      </button>
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label>Invite Link</label>
+                    <label htmlFor={`inviteLink-${family.id}`}>Invite Link</label>
                     <div className="invite-link-display">
                       <input
                         type="text"
+                        id={`inviteLink-${family.id}`}
                         value={`${baseUrl}/create-account?code=${family.inviteCode}`}
                         readOnly
                         className="invite-link-input"
@@ -752,6 +1110,80 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             </div>
           </div>
         )}
+
+        <div className="settings-section">
+          <h2>Policies &amp; Support</h2>
+          <div className="settings-card">
+            <p className="section-description">
+              What is stored, what leaves the server, how long it is kept, and where to write when
+              something is wrong.
+            </p>
+            <div className="policy-links">
+              <a href="/privacy">Privacy</a>
+              <a href="/terms">Terms of use</a>
+              <a href="/support">Support</a>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h2>Delete Account</h2>
+          <div className="settings-card">
+            <div className="warning-banner">
+              <strong>⚠️ Warning:</strong> This cannot be undone.
+            </div>
+
+            <p className="section-description">
+              Deleting your account removes your sign-in, your sessions, your registered devices and
+              your chat messages. Records stay with any family that still has another member in it.
+              A family you are the only member of is deleted along with everything in it — people,
+              photos, measurements and milestones. Export your data first if you want to keep it.{" "}
+              <a href="/privacy">The privacy page</a> lists exactly what goes and what stays.
+            </p>
+
+            {deleteForm.error && (
+              <div className="error-message" role="alert">
+                {deleteForm.error}
+              </div>
+            )}
+
+            <form onSubmit={vlens.cachePartial(onDeleteAccountClicked, deleteForm)}>
+              <div className="form-group">
+                <label htmlFor="deletePassword">Password</label>
+                <input
+                  type="password"
+                  id="deletePassword"
+                  autoComplete="current-password"
+                  {...vlens.attrsBindInput(vlens.ref(deleteForm, "password"))}
+                  disabled={deleteForm.loading}
+                />
+                <small>Leave blank if you sign in with Google or Apple.</small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="deleteConfirmEmail">
+                  Type <strong>{accountEmail}</strong> to confirm
+                </label>
+                <input
+                  type="email"
+                  id="deleteConfirmEmail"
+                  autoComplete="off"
+                  {...vlens.attrsBindInput(vlens.ref(deleteForm, "confirmEmail"))}
+                  disabled={deleteForm.loading}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-danger"
+                disabled={deleteForm.loading || !deleteForm.confirmEmail}
+              >
+                {deleteForm.loading ? "Deleting..." : "Delete My Account"}
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 {
   "name": "Family Record - Track Your Family's Growth & Milestones",
   "short_name": "Family Record",
-  "description": "A private family portal to track children's growth, milestones, and memories",
+  "description": "A private family portal for growth, milestones, and photos. Installable; requires a connection.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f5f7",
   "theme_color": "#10b981",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "scope": "/",
   "categories": ["lifestyle", "utilities"],
   "icons": [

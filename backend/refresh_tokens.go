@@ -3,7 +3,9 @@ package backend
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"family/cfg"
 	"time"
 
@@ -13,39 +15,48 @@ import (
 
 const refreshTokenCleanupInterval = 24 * time.Hour
 
-// RefreshToken represents a long-lived token for persistent login
+const refreshTokenReuseGrace = time.Minute
+
+var (
+	ErrRefreshTokenInvalid = errors.New("refresh token is invalid")
+	ErrRefreshTokenReused  = errors.New("refresh token was reused")
+)
+
 type RefreshToken struct {
 	Id         int       `json:"id"`
 	UserId     int       `json:"userId"`
-	Token      string    `json:"token"`
+	TokenHash  string    `json:"-"`
+	SessionId  int       `json:"sessionId"`
 	ExpiresAt  time.Time `json:"expiresAt"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastUsedAt time.Time `json:"lastUsedAt"`
+	RotatedAt  time.Time `json:"rotatedAt"`
 }
 
-// PackRefreshToken serializes a RefreshToken for vbolt storage
 func PackRefreshToken(self *RefreshToken, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.UserId, buf)
-	vpack.String(&self.Token, buf)
+	vpack.String(&self.TokenHash, buf)
 	vpack.Time(&self.ExpiresAt, buf)
 	vpack.Time(&self.CreatedAt, buf)
 	vpack.Time(&self.LastUsedAt, buf)
+	if version >= 2 {
+		vpack.Int(&self.SessionId, buf)
+		vpack.Time(&self.RotatedAt, buf)
+	}
 }
 
-// Buckets for refresh token storage
 var RefreshTokenBkt = vbolt.Bucket(&cfg.Info, "refresh_tokens", vpack.FInt, PackRefreshToken)
 
-// token string => token id
 var RefreshTokenByTokenBkt = vbolt.Bucket(&cfg.Info, "refresh_tokens_by_token", vpack.StringZ, vpack.Int)
 
-// user id => token ids (for tracking user's tokens)
 var RefreshTokenByUserIndex = vbolt.Index(&cfg.Info, "refresh_tokens_by_user", vpack.FInt, vpack.FInt)
 
-// generateRefreshToken creates a cryptographically secure random token string
+var RefreshTokenBySessionIndex = vbolt.Index(&cfg.Info, "refresh_tokens_by_session", vpack.FInt, vpack.FInt)
+
 func generateRefreshToken() (string, error) {
-	b := make([]byte, 32) // 32 bytes = 64 hex characters
+	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
 		return "", err
@@ -53,34 +64,49 @@ func generateRefreshToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// CreateRefreshToken generates and stores a new refresh token for a user
-func CreateRefreshToken(tx *vbolt.Tx, userId int, expiryDuration time.Duration) (RefreshToken, error) {
+func hashRefreshToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func CreateRefreshToken(tx *vbolt.Tx, userId int, expiryDuration time.Duration) (RefreshToken, string, error) {
 	tokenString, err := generateRefreshToken()
 	if err != nil {
-		return RefreshToken{}, err
+		return RefreshToken{}, "", err
 	}
 
+	now := time.Now()
 	token := RefreshToken{
 		Id:         vbolt.NextIntId(tx, RefreshTokenBkt),
 		UserId:     userId,
-		Token:      tokenString,
-		ExpiresAt:  time.Now().Add(expiryDuration),
-		CreatedAt:  time.Now(),
-		LastUsedAt: time.Now(),
+		TokenHash:  hashRefreshToken(tokenString),
+		ExpiresAt:  now.Add(expiryDuration),
+		CreatedAt:  now,
+		LastUsedAt: now,
 	}
+	token.SessionId = token.Id
 
-	// Store token in database
-	vbolt.Write(tx, RefreshTokenBkt, token.Id, &token)
-	vbolt.Write(tx, RefreshTokenByTokenBkt, token.Token, &token.Id)
-	vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, token.UserId)
-
-	return token, nil
+	writeRefreshToken(tx, token)
+	return token, tokenString, nil
 }
 
-// GetRefreshTokenByToken retrieves a refresh token by its token string
+func writeRefreshToken(tx *vbolt.Tx, token RefreshToken) {
+	vbolt.Write(tx, RefreshTokenBkt, token.Id, &token)
+	vbolt.Write(tx, RefreshTokenByTokenBkt, token.TokenHash, &token.Id)
+	vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, token.UserId)
+	vbolt.SetTargetSingleTerm(tx, RefreshTokenBySessionIndex, token.Id, token.SessionId)
+}
+
+func deleteRefreshTokenRecord(tx *vbolt.Tx, token RefreshToken) {
+	vbolt.Delete(tx, RefreshTokenBkt, token.Id)
+	vbolt.Delete(tx, RefreshTokenByTokenBkt, token.TokenHash)
+	vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+	vbolt.SetTargetSingleTerm(tx, RefreshTokenBySessionIndex, token.Id, -1)
+}
+
 func GetRefreshTokenByToken(tx *vbolt.Tx, tokenString string) (RefreshToken, bool) {
 	var tokenId int
-	vbolt.Read(tx, RefreshTokenByTokenBkt, tokenString, &tokenId)
+	vbolt.Read(tx, RefreshTokenByTokenBkt, hashRefreshToken(tokenString), &tokenId)
 	if tokenId == 0 {
 		return RefreshToken{}, false
 	}
@@ -90,7 +116,6 @@ func GetRefreshTokenByToken(tx *vbolt.Tx, tokenString string) (RefreshToken, boo
 	return token, token.Id != 0
 }
 
-// UpdateRefreshTokenLastUsed updates the LastUsedAt timestamp for a token
 func UpdateRefreshTokenLastUsed(tx *vbolt.Tx, tokenId int) {
 	var token RefreshToken
 	vbolt.Read(tx, RefreshTokenBkt, tokenId, &token)
@@ -102,29 +127,93 @@ func UpdateRefreshTokenLastUsed(tx *vbolt.Tx, tokenId int) {
 	vbolt.Write(tx, RefreshTokenBkt, token.Id, &token)
 }
 
-// DeleteRefreshToken removes a refresh token from the database
-func DeleteRefreshToken(tx *vbolt.Tx, tokenString string) {
-	var tokenId int
-	vbolt.Read(tx, RefreshTokenByTokenBkt, tokenString, &tokenId)
-	if tokenId == 0 {
-		return
+func RotateRefreshToken(tx *vbolt.Tx, presented string, now time.Time) (RefreshToken, string, error) {
+	token, found := GetRefreshTokenByToken(tx, presented)
+	if !found {
+		return RefreshToken{}, "", ErrRefreshTokenInvalid
 	}
 
-	var token RefreshToken
-	vbolt.Read(tx, RefreshTokenBkt, tokenId, &token)
-	if token.Id == 0 {
-		return
+	if !token.ExpiresAt.After(now) {
+		return RefreshToken{}, "", ErrRefreshTokenInvalid
 	}
 
-	// Remove from all buckets and indexes
-	vbolt.Delete(tx, RefreshTokenBkt, token.Id)
-	vbolt.Delete(tx, RefreshTokenByTokenBkt, token.Token)
-	vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+	if token.RotatedAt.IsZero() {
+		return rotateFrom(tx, token, now)
+	}
+
+	if now.Sub(token.RotatedAt) <= refreshTokenReuseGrace {
+		if head, ok := activeSessionToken(tx, token.SessionId, now); ok {
+			return rotateFrom(tx, head, now)
+		}
+	}
+
+	DeleteRefreshTokenSession(tx, token.SessionId)
+	return RefreshToken{}, "", ErrRefreshTokenReused
 }
 
-// DeleteUserRefreshTokens removes all refresh tokens for a user
+func rotateFrom(tx *vbolt.Tx, token RefreshToken, now time.Time) (RefreshToken, string, error) {
+	tokenString, err := generateRefreshToken()
+	if err != nil {
+		return RefreshToken{}, "", err
+	}
+
+	token.RotatedAt = now
+	token.LastUsedAt = now
+	vbolt.Write(tx, RefreshTokenBkt, token.Id, &token)
+
+	successor := RefreshToken{
+		Id:         vbolt.NextIntId(tx, RefreshTokenBkt),
+		UserId:     token.UserId,
+		TokenHash:  hashRefreshToken(tokenString),
+		SessionId:  token.SessionId,
+		ExpiresAt:  token.ExpiresAt,
+		CreatedAt:  now,
+		LastUsedAt: now,
+	}
+	writeRefreshToken(tx, successor)
+
+	return successor, tokenString, nil
+}
+
+func activeSessionToken(tx *vbolt.Tx, sessionId int, now time.Time) (RefreshToken, bool) {
+	for _, token := range sessionTokens(tx, sessionId) {
+		if token.RotatedAt.IsZero() && token.ExpiresAt.After(now) {
+			return token, true
+		}
+	}
+	return RefreshToken{}, false
+}
+
+func sessionTokens(tx *vbolt.Tx, sessionId int) []RefreshToken {
+	var tokenIds []int
+	vbolt.ReadTermTargets(tx, RefreshTokenBySessionIndex, sessionId, &tokenIds, vbolt.Window{})
+
+	tokens := make([]RefreshToken, 0, len(tokenIds))
+	for _, tokenId := range tokenIds {
+		var token RefreshToken
+		vbolt.Read(tx, RefreshTokenBkt, tokenId, &token)
+		if token.Id != 0 {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens
+}
+
+func DeleteRefreshTokenSession(tx *vbolt.Tx, sessionId int) {
+	for _, token := range sessionTokens(tx, sessionId) {
+		deleteRefreshTokenRecord(tx, token)
+	}
+}
+
+func DeleteRefreshToken(tx *vbolt.Tx, tokenString string) {
+	token, found := GetRefreshTokenByToken(tx, tokenString)
+	if !found {
+		return
+	}
+	DeleteRefreshTokenSession(tx, token.SessionId)
+}
+
 func DeleteUserRefreshTokens(tx *vbolt.Tx, userId int) {
-	// Get all token IDs for this user
 	var tokenIds []int
 	vbolt.ReadTermTargets(tx, RefreshTokenByUserIndex, userId, &tokenIds, vbolt.Window{})
 
@@ -134,17 +223,10 @@ func DeleteUserRefreshTokens(tx *vbolt.Tx, userId int) {
 		if token.Id == 0 {
 			continue
 		}
-
-		// Remove from all buckets and indexes
-		vbolt.Delete(tx, RefreshTokenBkt, token.Id)
-		vbolt.Delete(tx, RefreshTokenByTokenBkt, token.Token)
-		vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+		deleteRefreshTokenRecord(tx, token)
 	}
 }
 
-// CleanupExpiredRefreshTokens removes expired token records and their lookup
-// entries. The caller supplies the clock value so cleanup is deterministic in
-// tests and every token in a run is evaluated against the same instant.
 func CleanupExpiredRefreshTokens(tx *vbolt.Tx, now time.Time) int {
 	var expired []RefreshToken
 	vbolt.IterateAll(tx, RefreshTokenBkt, func(_ int, token RefreshToken) bool {
@@ -155,22 +237,18 @@ func CleanupExpiredRefreshTokens(tx *vbolt.Tx, now time.Time) int {
 	})
 
 	for _, token := range expired {
-		vbolt.Delete(tx, RefreshTokenBkt, token.Id)
-		vbolt.Delete(tx, RefreshTokenByTokenBkt, token.Token)
-		vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, token.Id, -1)
+		deleteRefreshTokenRecord(tx, token)
 	}
 	return len(expired)
 }
 
-// RunTokenCleanup purges expired refresh and password reset tokens
-// immediately and then at a daily interval until the application context is
-// canceled.
 func RunTokenCleanup(ctx context.Context, db *vbolt.DB) {
 	cleanup := func() {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			now := time.Now()
 			CleanupExpiredRefreshTokens(tx, now)
 			CleanupExpiredPasswordResetTokens(tx, now)
+			CleanupExpiredVerificationTokens(tx, now)
 			vbolt.TxCommit(tx)
 		})
 	}
@@ -188,17 +266,39 @@ func RunTokenCleanup(ctx context.Context, db *vbolt.DB) {
 	}
 }
 
-// ValidateRefreshToken checks if a token is valid (exists and not expired)
 func ValidateRefreshToken(tx *vbolt.Tx, tokenString string) (RefreshToken, bool) {
 	token, found := GetRefreshTokenByToken(tx, tokenString)
 	if !found {
 		return RefreshToken{}, false
 	}
 
-	// Check if expired
 	if token.ExpiresAt.Before(time.Now()) {
 		return RefreshToken{}, false
 	}
 
+	if !token.RotatedAt.IsZero() {
+		return RefreshToken{}, false
+	}
+
 	return token, true
+}
+
+func HashStoredRefreshTokens(tx *vbolt.Tx) int {
+	var legacy []RefreshToken
+	vbolt.IterateAll(tx, RefreshTokenBkt, func(_ int, token RefreshToken) bool {
+		if token.SessionId == 0 {
+			legacy = append(legacy, token)
+		}
+		return true
+	})
+
+	for _, token := range legacy {
+		raw := token.TokenHash
+		vbolt.Delete(tx, RefreshTokenByTokenBkt, raw)
+
+		token.TokenHash = hashRefreshToken(raw)
+		token.SessionId = token.Id
+		writeRefreshToken(tx, token)
+	}
+	return len(legacy)
 }

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Modal overlay
 block(`
 .crop-selector-modal {
   position: fixed;
@@ -14,10 +13,10 @@ block(`
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
+  overscroll-behavior: contain;
 }
 `);
 
-// Modal content
 block(`
 .crop-selector-content {
   background: var(--surface);
@@ -30,11 +29,10 @@ block(`
 }
 `);
 
-// Header
 block(`
 .crop-selector-header {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border);
   text-align: center;
 }
 `);
@@ -43,19 +41,18 @@ block(`
 .crop-selector-header h2 {
   margin: 0 0 0.5rem 0;
   font-size: 1.5rem;
-  color: var(--color-text-emphasis);
+  color: var(--text);
 }
 `);
 
 block(`
 .crop-selector-header p {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--muted);
   font-size: 0.9rem;
 }
 `);
 
-// Body
 block(`
 .crop-selector-body {
   padding: 1.5rem;
@@ -65,7 +62,6 @@ block(`
 }
 `);
 
-// Crop container
 block(`
 .crop-container {
   position: relative;
@@ -75,6 +71,7 @@ block(`
   border-radius: 8px;
   background: #000;
   cursor: grab;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -109,7 +106,6 @@ block(`
 }
 `);
 
-// Overlay with circular cutout
 block(`
 .crop-overlay {
   position: absolute;
@@ -134,7 +130,6 @@ block(`
 }
 `);
 
-// Preview section
 block(`
 .crop-preview-section {
   display: flex;
@@ -148,7 +143,7 @@ block(`
 .crop-preview-section h4 {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 `);
 
@@ -158,31 +153,11 @@ block(`
   height: 100px;
   border-radius: 50%;
   overflow: hidden;
-  border: 3px solid var(--color-border);
+  border: 3px solid var(--border);
   background: #000;
 }
 `);
 
-block(`
-.crop-preview-image-wrapper {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-`);
-
-block(`
-.crop-preview-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-}
-`);
-
-// Controls
 block(`
 .crop-controls {
   padding: 0 1.5rem;
@@ -199,7 +174,7 @@ block(`
   gap: 1rem;
   flex: 1;
   font-size: 0.9rem;
-  color: var(--color-text);
+  color: var(--text);
 }
 `);
 
@@ -214,17 +189,17 @@ block(`
   flex: 1;
   height: 8px;
   border-radius: 4px;
-  background: var(--color-border);
+  background: var(--border);
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--accent);
+  touch-action: none;
 }
 `);
 
-// Action buttons
 block(`
 .crop-selector-actions {
   padding: 1.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
@@ -244,19 +219,18 @@ block(`
 block(`
 .crop-selector-actions .btn-outline {
   background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 `);
 
 block(`
 .crop-selector-actions .btn-outline:hover {
-  background: var(--color-background-subtle);
-  border-color: var(--color-text-muted);
+  background: var(--hover-bg);
+  border-color: var(--muted);
 }
 `);
 
-// Responsive
 block(`
 @media (max-width: 480px) {
   .crop-selector-content {

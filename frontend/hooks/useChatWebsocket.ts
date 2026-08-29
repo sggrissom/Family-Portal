@@ -2,7 +2,6 @@ import * as vlens from "vlens";
 import * as server from "../server";
 import { logInfo, logWarn, logError } from "../lib/logger";
 
-// WebSocket message types (matching backend)
 export const WS_MSG_TYPES = {
   NEW_MESSAGE: "new_message",
   DELETE_MESSAGE: "delete_message",
@@ -13,7 +12,6 @@ export const WS_MSG_TYPES = {
   ERROR: "error",
 } as const;
 
-// Connection states
 export type ConnectionState =
   | "disconnected"
   | "connecting"
@@ -22,14 +20,12 @@ export type ConnectionState =
   | "error"
   | "failed";
 
-// WebSocket message structure
 export interface WSMessage {
   type: string;
   payload: any;
   timestamp: string;
 }
 
-// Message payloads
 export interface WSNewMessagePayload {
   message: server.ChatMessage;
 }
@@ -51,7 +47,6 @@ export interface WSUserStatusPayload {
   isOnline: boolean;
 }
 
-// Queued message for offline sending
 export interface QueuedMessage {
   id: string;
   type: string;
@@ -60,7 +55,6 @@ export interface QueuedMessage {
   retries: number;
 }
 
-// Event handlers
 export interface WebSocketEventHandlers {
   onNewMessage?: (message: server.ChatMessage) => void;
   onDeleteMessage?: (messageId: number, userId: number) => void;
@@ -71,7 +65,6 @@ export interface WebSocketEventHandlers {
   onError?: (error: string) => void;
 }
 
-// WebSocket state
 export interface WebSocketState {
   socket: WebSocket | null;
   connectionState: ConnectionState;
@@ -93,15 +86,14 @@ export interface WebSocketState {
   watchdogTimeout: number;
 }
 
-// Create the hook
 export const useChatWebsocket = vlens.declareHook(
   (): WebSocketState => ({
     socket: null,
     connectionState: "disconnected",
     reconnectAttempts: 0,
     maxReconnectAttempts: 10,
-    reconnectDelay: 1000, // Start with 1 second
-    maxReconnectDelay: 30000, // Max 30 seconds
+    reconnectDelay: 1000,
+    maxReconnectDelay: 30000,
     messageQueue: [],
     lastHeartbeat: 0,
     heartbeatInterval: null,
@@ -113,11 +105,10 @@ export const useChatWebsocket = vlens.declareHook(
     reconnectTimeout: null,
     lastActivityTime: 0,
     watchdogInterval: null,
-    watchdogTimeout: 90000, // 90 seconds
+    watchdogTimeout: 90000,
   })
 );
 
-// Connect to WebSocket
 export function connectWebSocket(
   state: WebSocketState,
   handlers: WebSocketEventHandlers = {}
@@ -130,44 +121,36 @@ export function connectWebSocket(
     return;
   }
 
-  // Store event handlers
   state.eventHandlers = handlers;
   setConnectionState(state, "connecting");
 
   try {
-    // Determine WebSocket URL (no token needed - cookies sent automatically)
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws/chat`;
 
-    // Create WebSocket connection
     const socket = new WebSocket(wsUrl);
     state.socket = socket;
 
-    // Connection opened
     socket.onopen = () => {
       setConnectionState(state, "connected");
       state.reconnectAttempts = 0;
-      state.reconnectDelay = 1000; // Reset delay
+      state.reconnectDelay = 1000;
       state.lastActivityTime = Date.now();
 
-      // Start heartbeat and watchdog
       startHeartbeat(state);
       startWatchdog(state);
 
-      // Process queued messages
       processMessageQueue(state);
 
       vlens.scheduleRedraw();
     };
 
-    // Message received
     socket.onmessage = event => {
       try {
         const wsMessage: WSMessage = JSON.parse(event.data);
         handleIncomingMessage(state, wsMessage);
 
-        // Update activity and heartbeat time
         state.lastHeartbeat = Date.now();
         state.lastActivityTime = Date.now();
       } catch (error) {
@@ -176,9 +159,7 @@ export function connectWebSocket(
       }
     };
 
-    // Connection closed
     socket.onclose = event => {
-      // Only log if not a normal close
       if (event.code !== 1000) {
         logInfo("ui", "WebSocket connection closed", {
           code: event.code,
@@ -187,7 +168,6 @@ export function connectWebSocket(
 
       cleanup(state);
 
-      // Attempt reconnection if not destroyed and auto-reconnect is enabled
       if (!state.isDestroyed && state.autoReconnect && event.code !== 1000) {
         attemptReconnect(state);
       } else {
@@ -197,7 +177,6 @@ export function connectWebSocket(
       vlens.scheduleRedraw();
     };
 
-    // Connection error
     socket.onerror = error => {
       logError("ui", "WebSocket error", { error });
 
@@ -216,7 +195,6 @@ export function connectWebSocket(
   }
 }
 
-// Disconnect WebSocket
 export function disconnectWebSocket(state: WebSocketState): void {
   state.autoReconnect = false;
 
@@ -229,12 +207,10 @@ export function disconnectWebSocket(state: WebSocketState): void {
   vlens.scheduleRedraw();
 }
 
-// Destroy WebSocket (cleanup on component unmount)
 export function destroyWebSocket(state: WebSocketState): void {
   state.isDestroyed = true;
   state.autoReconnect = false;
 
-  // Clear any pending reconnection attempts
   clearAllTimeouts();
 
   if (state.socket) {
@@ -245,7 +221,6 @@ export function destroyWebSocket(state: WebSocketState): void {
   vlens.scheduleRedraw();
 }
 
-// Send message through WebSocket
 export function sendWebSocketMessage(state: WebSocketState, type: string, payload: any): void {
   const message: QueuedMessage = {
     id: generateMessageId(),
@@ -270,21 +245,16 @@ export function sendWebSocketMessage(state: WebSocketState, type: string, payloa
       queueMessage(state, message);
     }
   } else {
-    // Queue message for later sending
     queueMessage(state, message);
   }
 }
 
-// Send typing indicator
 export function sendTypingIndicator(state: WebSocketState, isTyping: boolean): void {
   if (state.connectionState === "connected") {
     sendWebSocketMessage(state, WS_MSG_TYPES.USER_TYPING, { isTyping });
   }
 }
 
-// Private helper functions
-
-// Global timeout tracking for aggressive cleanup
 let allTimeouts: Set<number> = new Set();
 
 function trackTimeout(timeoutId: number): void {
@@ -346,7 +316,6 @@ function handleIncomingMessage(state: WebSocketState, wsMessage: WSMessage): voi
       break;
 
     case WS_MSG_TYPES.HEARTBEAT:
-      // Heartbeat response, no action needed
       break;
 
     case WS_MSG_TYPES.ERROR:
@@ -407,7 +376,7 @@ function startHeartbeat(state: WebSocketState): void {
     if (state.socket && state.socket.readyState === WebSocket.OPEN) {
       sendWebSocketMessage(state, WS_MSG_TYPES.HEARTBEAT, "ping");
     }
-  }, 30000); // Send heartbeat every 30 seconds
+  }, 30000);
 }
 
 function startWatchdog(state: WebSocketState): void {
@@ -430,12 +399,11 @@ function startWatchdog(state: WebSocketState): void {
         connectionState: state.connectionState,
       });
 
-      // Force close the connection to trigger reconnect
       if (state.socket && state.socket.readyState === WebSocket.OPEN) {
         state.socket.close(1000, "Watchdog timeout");
       }
     }
-  }, 30000); // Check every 30 seconds
+  }, 30000);
 }
 
 function cleanup(state: WebSocketState): void {
@@ -460,9 +428,8 @@ function cleanup(state: WebSocketState): void {
 }
 
 function queueMessage(state: WebSocketState, message: QueuedMessage): void {
-  // Limit queue size to prevent memory issues
   if (state.messageQueue.length > 100) {
-    state.messageQueue.shift(); // Remove oldest message
+    state.messageQueue.shift();
   }
 
   state.messageQueue.push(message);
@@ -491,7 +458,6 @@ function processMessageQueue(state: WebSocketState): void {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      // Re-queue with retry limit
       if (message.retries < 3) {
         message.retries++;
         queueMessage(state, message);
@@ -504,12 +470,10 @@ function generateMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-// Utility function to check WebSocket support
 export function isWebSocketSupported(): boolean {
   return "WebSocket" in window && window.WebSocket !== undefined;
 }
 
-// Get connection state display text
 export function getConnectionStateText(state: ConnectionState): string {
   switch (state) {
     case "connected":
@@ -529,20 +493,19 @@ export function getConnectionStateText(state: ConnectionState): string {
   }
 }
 
-// Get connection state color for UI
 export function getConnectionStateColor(state: ConnectionState): string {
   switch (state) {
     case "connected":
-      return "#4ade80"; // green
+      return "#4ade80";
     case "connecting":
     case "reconnecting":
-      return "#fbbf24"; // yellow
+      return "#fbbf24";
     case "disconnected":
-      return "#9ca3af"; // gray
+      return "#9ca3af";
     case "error":
     case "failed":
-      return "#ef4444"; // red
+      return "#ef4444";
     default:
-      return "#9ca3af"; // gray
+      return "#9ca3af";
   }
 }

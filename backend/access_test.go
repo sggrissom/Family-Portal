@@ -1,5 +1,3 @@
-// Tests for the centralized family authorization check.
-// Every entity type that carries a FamilyId must be denied to a foreign family.
 package backend
 
 import (
@@ -12,13 +10,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// accessFixture is two unrelated families, each with a user, plus one record of
-// every FamilyId-carrying entity type owned by family A.
 type accessFixture struct {
-	db    *vbolt.DB
-	userA User
-	userB User
-	// familyIds keyed by entity type name, all belonging to userA's family
+	db      *vbolt.DB
+	userA   User
+	userB   User
 	records map[string]int
 }
 
@@ -38,7 +33,6 @@ func setupAccessFixture(t *testing.T) (accessFixture, func()) {
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
-		// Two users with no invite code each get their own new family.
 		fx.userA = AddUserTx(tx, CreateAccountRequest{
 			Name:  "User A",
 			Email: "a@example.com",
@@ -152,8 +146,6 @@ func setupAccessFixture(t *testing.T) (accessFixture, func()) {
 	return fx, cleanup
 }
 
-// Every entity type carrying a FamilyId must be denied to a user of another
-// family, at every level of the ladder.
 func TestCanAccessFamilyDeniesForeignFamily(t *testing.T) {
 	fx, cleanup := setupAccessFixture(t)
 	defer cleanup()
@@ -188,7 +180,6 @@ func TestCanAccessFamilyDeniesForeignFamily(t *testing.T) {
 	})
 }
 
-// Family 0 is the "no family" sentinel: it neither grants nor receives access.
 func TestCanAccessFamilyRejectsZeroFamily(t *testing.T) {
 	fx, cleanup := setupAccessFixture(t)
 	defer cleanup()
@@ -220,7 +211,6 @@ func TestRequireFamilyAccess(t *testing.T) {
 			t.Error("foreign family should be refused")
 		}
 
-		// Active-family form, used by the Tx helpers that carry a family context.
 		if err := RequireFamilyAccessFrom(tx, fx.userA.FamilyId, fx.userA.FamilyId, AccessAdmin); err != nil {
 			t.Errorf("same family should be permitted, got %v", err)
 		}
@@ -230,7 +220,6 @@ func TestRequireFamilyAccess(t *testing.T) {
 	})
 }
 
-// familiesVisibleTo is the resolver every list/read path scopes through.
 func TestFamiliesVisibleTo(t *testing.T) {
 	fx, cleanup := setupAccessFixture(t)
 	defer cleanup()
@@ -253,7 +242,6 @@ func TestFamiliesVisibleTo(t *testing.T) {
 	})
 }
 
-// The converted read/write helpers must refuse a foreign family context.
 func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 	fx, cleanup := setupAccessFixture(t)
 	defer cleanup()
@@ -288,7 +276,6 @@ func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 			t.Error("GetChatMessageByIdAndFamily allowed a foreign family")
 		}
 
-		// Lists scoped through the resolver must not leak across families.
 		if people := GetVisiblePeople(tx, fx.userB); len(people) != 0 {
 			t.Errorf("GetVisiblePeople leaked %d people to a foreign family", len(people))
 		}
@@ -298,14 +285,11 @@ func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 		if tags := getVisibleTags(tx, fx.userB); len(tags) != 0 {
 			t.Errorf("getVisibleTags leaked %d tags to a foreign family", len(tags))
 		}
-		// Chat is one room per family, so it is read by family rather than
-		// through the resolver; the denial is on the family, not the list.
 		if _, err := GetChatMessageForUser(tx, messageIds[0], fx.userB, AccessView); err == nil {
 			t.Error("GetChatMessageForUser allowed a foreign family")
 		}
 	})
 
-	// Writes into a foreign family must be refused too.
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		people := GetFamilyPeople(tx, fx.userA.FamilyId)
 		if len(people) == 0 {

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Login Page Styles
 block(`
 .login-container {
   max-width: 420px;
@@ -28,7 +27,7 @@ block(`
 `);
 
 block(`
-.btn-google {
+.btn-oauth {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,11 +46,27 @@ block(`
 `);
 
 block(`
-.btn-google:hover {
+.btn-oauth:hover {
   background: var(--hover-bg);
   border-color: var(--muted);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+`);
+
+block(`
+.btn-apple {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+`);
+
+block(`
+.btn-apple:hover {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
 }
 `);
 
@@ -96,7 +111,7 @@ block(`
 `);
 
 block(`
-.checkbox-label {
+.login-container .checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -132,7 +147,7 @@ block(`
     align-items: flex-start;
   }
 
-  .btn-google {
+  .btn-oauth {
     font-size: 0.95rem;
     padding: 14px 24px;
   }

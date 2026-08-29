@@ -13,12 +13,7 @@ func TestRegisterSEOHandlers(t *testing.T) {
 	defer cleanup()
 	RegisterSEOHandlers(app)
 
-	// Test that handlers are registered (we can't directly test registration,
-	// but we can test that the routes work)
 	t.Run("Handlers registered successfully", func(t *testing.T) {
-		// This test mainly ensures no panic occurs during registration
-		// The actual functionality is tested in individual handler tests
-		// Note: manifest.json is now served as a static file, not via handler
 	})
 }
 
@@ -50,24 +45,40 @@ func TestRobotsHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("Content includes required directives", func(t *testing.T) {
+	t.Run("Denies everything by default", func(t *testing.T) {
 		body := recorder.Body.String()
 
-		expectedContent := []string{
+		required := []string{
 			"User-agent: *",
-			"Disallow: /admin/",
-			"Disallow: /static/",
-			"Disallow: /api/",
-			"Disallow: /dashboard",
-			"Disallow: /auth/",
-			"Allow: /",
+			"Disallow: /",
 			"Sitemap: " + cfg.SiteURL + "/sitemap.xml",
 			"Crawl-delay: 10",
 		}
-
-		for _, expected := range expectedContent {
+		for _, expected := range required {
 			if !strings.Contains(body, expected) {
-				t.Errorf("Expected robots.txt to contain '%s', but got: %s", expected, body)
+				t.Errorf("robots.txt is missing %q:\n%s", expected, body)
+			}
+		}
+
+		for _, line := range strings.Split(body, "\n") {
+			if strings.TrimSpace(line) == "Allow: /" {
+				t.Errorf("robots.txt re-allows the whole site:\n%s", body)
+			}
+		}
+	})
+
+	t.Run("Allows exactly the public pages", func(t *testing.T) {
+		body := recorder.Body.String()
+
+		for _, public := range []string{"/$", "/login", "/create-account", "/forgot-password", "/privacy", "/terms", "/support"} {
+			if !strings.Contains(body, "Allow: "+public) {
+				t.Errorf("robots.txt does not allow the public page %q:\n%s", public, body)
+			}
+		}
+
+		for _, private := range []string{"/dashboard", "/settings", "/photos", "/profile", "/chat", "/admin"} {
+			if strings.Contains(body, "Allow: "+private) {
+				t.Errorf("robots.txt allows the private path %q:\n%s", private, body)
 			}
 		}
 	})
@@ -113,6 +124,9 @@ func TestSitemapHandler(t *testing.T) {
 			`<priority>1.0</priority>`,
 			`<loc>` + cfg.SiteURL + `/login</loc>`,
 			`<loc>` + cfg.SiteURL + `/create-account</loc>`,
+			`<loc>` + cfg.SiteURL + `/privacy</loc>`,
+			`<loc>` + cfg.SiteURL + `/terms</loc>`,
+			`<loc>` + cfg.SiteURL + `/support</loc>`,
 			`</urlset>`,
 		}
 
@@ -126,22 +140,17 @@ func TestSitemapHandler(t *testing.T) {
 	t.Run("Contains current date", func(t *testing.T) {
 		body := recorder.Body.String()
 
-		// Check that lastmod contains a date in YYYY-MM-DD format
 		if !strings.Contains(body, "<lastmod>") {
 			t.Error("Expected sitemap.xml to contain lastmod tags")
 		}
 
-		// Check that the date format is reasonable (contains dashes)
 		if !strings.Contains(body, "-") {
 			t.Error("Expected sitemap.xml to contain properly formatted dates")
 		}
 	})
 }
 
-// TestManifestHandler removed - manifest.json is now served as a static file from frontend/manifest.json
-
 func TestSEOHandlersIntegration(t *testing.T) {
-	// Test that all SEO handlers work when registered with a real vbeam app
 	app, cleanup := setupTestApp(t)
 	defer cleanup()
 	RegisterSEOHandlers(app)
@@ -154,7 +163,6 @@ func TestSEOHandlersIntegration(t *testing.T) {
 	}{
 		{"Robots.txt", "/robots.txt", http.StatusOK, "text/plain"},
 		{"Sitemap.xml", "/sitemap.xml", http.StatusOK, "application/xml"},
-		// Manifest.json is now served as a static file, not via handler
 	}
 
 	for _, tt := range tests {
@@ -173,7 +181,6 @@ func TestSEOHandlersIntegration(t *testing.T) {
 				t.Errorf("Expected Content-Type '%s', got '%s' for %s", tt.expectedContentType, contentType, tt.path)
 			}
 
-			// Verify all responses have cache headers
 			cacheControl := recorder.Header().Get("Cache-Control")
 			if cacheControl != "public, max-age=86400" {
 				t.Errorf("Expected proper cache headers for %s", tt.path)

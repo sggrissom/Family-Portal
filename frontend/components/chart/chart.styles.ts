@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Chart-specific styles
 block(`
 .growth-chart-container {
   background: var(--bg);
@@ -379,19 +378,6 @@ block(`
   color: var(--muted);
   font-weight: 500;
   margin-top: 2px;
-}
-`);
-
-block(`
-.percentile-badge {
-  display: inline-block;
-  padding: 2px 7px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
 }
 `);
 

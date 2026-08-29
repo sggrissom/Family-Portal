@@ -14,7 +14,7 @@ block(`
 `);
 
 block(`
-.filter-btn {
+.profile-container .filter-btn {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border);
   background: var(--bg);
@@ -28,7 +28,7 @@ block(`
 `);
 
 block(`
-.filter-btn:hover {
+.profile-container .filter-btn:hover {
   background: var(--hover-bg);
   border-color: var(--accent);
 }
@@ -62,7 +62,7 @@ block(`
 `);
 
 block(`
-.milestone-item {
+.profile-container .milestone-item {
   display: flex;
   gap: 1rem;
   padding: 1rem;
@@ -74,7 +74,7 @@ block(`
 `);
 
 block(`
-.milestone-item:hover {
+.profile-container .milestone-item:hover {
   background: var(--hover-bg);
   border-color: var(--accent);
 }
@@ -112,7 +112,7 @@ block(`
 `);
 
 block(`
-.milestone-category {
+.profile-container .milestone-category {
   font-weight: 600;
   color: var(--accent);
   font-size: 0.9rem;
@@ -133,14 +133,14 @@ block(`
   font-size: 0.8rem;
   font-weight: 500;
   padding: 0.15rem 0.5rem;
-  background: var(--accent-bg);
+  background: var(--hover-bg);
   border-radius: 4px;
   flex-shrink: 0;
 }
 `);
 
 block(`
-.milestone-description {
+.profile-container .milestone-description {
   color: var(--text);
   line-height: 1.4;
   white-space: pre-wrap;
@@ -155,7 +155,7 @@ block(`
 `);
 
 block(`
-.milestone-photos {
+.profile-container .milestone-photos {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -164,12 +164,45 @@ block(`
 `);
 
 block(`
-.milestone-photo-thumb {
+.milestone-photo-link {
+  display: inline-flex;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+`);
+
+block(`
+.profile-container .milestone-photo-thumb {
   width: 72px;
   height: 72px;
   object-fit: cover;
   border-radius: 6px;
   cursor: pointer;
+}
+`);
+
+block(`
+.performance-title {
+  font-weight: 600;
+}
+`);
+
+block(`
+.performance-meta,
+.performance-notes {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+`);
+
+block(`
+.performance-results {
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
 }
 `);
 
@@ -189,7 +222,7 @@ block(`
     font-size: 0.85rem;
   }
 
-  .milestone-item {
+  .profile-container .milestone-item {
     gap: 0.75rem;
     padding: 0.75rem;
   }

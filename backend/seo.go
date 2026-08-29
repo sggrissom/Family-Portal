@@ -9,32 +9,31 @@ import (
 )
 
 func RegisterSEOHandlers(app *vbeam.Application) {
-	// Register robots.txt handler
 	app.HandleFunc("/robots.txt", robotsHandler)
 
-	// Register sitemap.xml handler
 	app.HandleFunc("/sitemap.xml", sitemapHandler)
-
 }
 
 func robotsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 
 	robotsContent := `User-agent: *
-Disallow: /admin/
-Disallow: /static/
-Disallow: /api/
-Disallow: /dashboard
-Disallow: /auth/
-Allow: /
+Disallow: /
 
-# Since this is a private family portal, we disallow indexing of sensitive areas
-# but allow the home page for potential public information
+Allow: /$
+Allow: /login
+Allow: /create-account
+Allow: /forgot-password
+Allow: /privacy
+Allow: /terms
+Allow: /support
+Allow: /images/
+Allow: /manifest.json
 
 Sitemap: ` + cfg.SiteURL + `/sitemap.xml
 
-# Crawl delay to be respectful of server resources
+# Be gentle: this is one small server.
 Crawl-delay: 10`
 
 	w.Write([]byte(robotsContent))
@@ -42,7 +41,7 @@ Crawl-delay: 10`
 
 func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 
 	sitemapContent := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -63,6 +62,24 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
     <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/privacy</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/terms</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>` + cfg.SiteURL + `/support</loc>
+    <lastmod>` + time.Now().Format("2006-01-02") + `</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>`
 

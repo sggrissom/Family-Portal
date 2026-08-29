@@ -1,7 +1,7 @@
 import * as preact from "preact";
-import * as core from "vlens/core";
 import * as server from "../../../server";
-import { calculateAge, formatDate } from "../../../lib/dateUtils";
+import { calculateAge, formatDate, isRealDate } from "../../../lib/dateUtils";
+import { labelsForKind } from "../../activities/labels";
 import {
   getCategoryIcon,
   getCategoryLabel,
@@ -27,10 +27,13 @@ interface UnifiedTimelineProps {
   milestones: server.Milestone[];
   growthData: server.GrowthData[];
   photos: server.Image[];
+  performances: server.AppearanceDetail[];
+  activitySeasons: server.SeasonSummary[];
   visibleTypes: {
     milestones: boolean;
     measurements: boolean;
     photos: boolean;
+    performances: boolean;
   };
   selectedAgeFilter: string;
   sortOrder: "newest" | "oldest";
@@ -39,15 +42,14 @@ interface UnifiedTimelineProps {
   onToggleTag: (tagId: number) => void;
 }
 
-// Unified timeline item type
-type TimelineItemType = "milestone" | "measurement" | "photo";
+type TimelineItemType = "milestone" | "measurement" | "photo" | "performance";
 
 interface TimelineItem {
   id: number;
   type: TimelineItemType;
   date: string;
   age: string;
-  data: server.Milestone | server.GrowthData | server.Image;
+  data: server.Milestone | server.GrowthData | server.Image | server.AppearanceDetail;
 }
 
 export const UnifiedTimeline = ({
@@ -55,6 +57,8 @@ export const UnifiedTimeline = ({
   milestones,
   growthData,
   photos,
+  performances,
+  activitySeasons,
   visibleTypes,
   selectedAgeFilter,
   sortOrder,
@@ -66,7 +70,6 @@ export const UnifiedTimeline = ({
   const tagCache = useTagCache();
   tagCache.loadTags();
 
-  // Initialize monitoring for processing photos
   if (photos && photos.length > 0) {
     photos.forEach(photo => {
       const currentStatus = photoStatus.getStatus(photo.id);
@@ -80,10 +83,8 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Combine all data types into unified timeline items
   const timelineItems: TimelineItem[] = [];
 
-  // Add milestones
   if (visibleTypes.milestones && milestones) {
     milestones.forEach(milestone => {
       timelineItems.push({
@@ -96,7 +97,6 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Add growth measurements
   if (visibleTypes.measurements && growthData) {
     growthData.forEach(measurement => {
       timelineItems.push({
@@ -109,7 +109,6 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Add photos
   if (visibleTypes.photos && photos) {
     photos.forEach(photo => {
       timelineItems.push({
@@ -122,14 +121,27 @@ export const UnifiedTimeline = ({
     });
   }
 
-  // Sort timeline items by date
+  if (visibleTypes.performances && performances) {
+    performances.forEach(performance => {
+      const date = isRealDate(performance.appearance.occurredAt)
+        ? performance.appearance.occurredAt
+        : performance.event.startDate;
+      timelineItems.push({
+        id: performance.appearance.id,
+        type: "performance",
+        date,
+        age: calculateAge(person.birthday, date),
+        data: performance,
+      });
+    });
+  }
+
   const sortedItems = [...timelineItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
   });
 
-  // Filter by age if selected
   const ageFilteredItems =
     selectedAgeFilter === "all"
       ? sortedItems
@@ -138,7 +150,6 @@ export const UnifiedTimeline = ({
           return ageInYears.toString() === selectedAgeFilter;
         });
 
-  // Filter by tag if selected
   const filteredItems =
     selectedTagIds.length === 0
       ? ageFilteredItems
@@ -154,7 +165,6 @@ export const UnifiedTimeline = ({
           return false;
         });
 
-  // Extract unique age years for filter options
   const ageYears = new Set<number>();
   sortedItems.forEach(item => {
     const ageInYears = getAgeInYears(item.age);
@@ -162,7 +172,6 @@ export const UnifiedTimeline = ({
   });
   const sortedAgeYears = Array.from(ageYears).sort((a, b) => a - b);
 
-  // Check if there's any data at all
   const hasAnyData = sortedItems.length > 0;
   const hasFilteredData = filteredItems.length > 0;
 
@@ -171,7 +180,10 @@ export const UnifiedTimeline = ({
       <div className="unified-timeline">
         <div className="empty-state">
           <h3>No entries yet</h3>
-          <p>Start building {person.name}'s story by adding milestones, measurements, or photos.</p>
+          <p>
+            Start building {person.name}'s story by adding milestones, measurements, photos, or
+            performances.
+          </p>
           <div className="empty-state-actions">
             <a href={`/add-milestone/${person.id}`} className="btn btn-primary">
               📝 Add Milestone
@@ -190,7 +202,6 @@ export const UnifiedTimeline = ({
 
   return (
     <div className="unified-timeline">
-      {/* Age Filter */}
       {sortedAgeYears.length > 1 && (
         <div className="age-filter">
           <button
@@ -211,7 +222,6 @@ export const UnifiedTimeline = ({
         </div>
       )}
 
-      {/* Tag Filter */}
       {tagCache.tags.length > 0 && (
         <div className="age-filter">
           {tagCache.tags.map(tag => (
@@ -230,14 +240,12 @@ export const UnifiedTimeline = ({
         </div>
       )}
 
-      {/* Item count */}
       {(selectedAgeFilter !== "all" || selectedTagIds.length > 0) && hasFilteredData && (
         <div className="filter-info">
           Showing {filteredItems.length} of {sortedItems.length} entries
         </div>
       )}
 
-      {/* Timeline Items */}
       {hasFilteredData ? (
         <div className="timeline-items">
           {filteredItems.map(item => {
@@ -259,13 +267,18 @@ export const UnifiedTimeline = ({
                       {milestone.photoIds && milestone.photoIds.length > 0 && (
                         <div className="milestone-photos">
                           {milestone.photoIds.map(photoId => (
-                            <ThumbnailImage
+                            <a
                               key={photoId}
-                              photoId={photoId}
-                              alt=""
-                              className="milestone-photo-thumb"
-                              onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                            />
+                              className="milestone-photo-link"
+                              href={`/view-photo/${photoId}`}
+                              aria-label="View photo"
+                            >
+                              <ThumbnailImage
+                                photoId={photoId}
+                                alt=""
+                                className="milestone-photo-thumb"
+                              />
+                            </a>
                           ))}
                         </div>
                       )}
@@ -292,12 +305,14 @@ export const UnifiedTimeline = ({
                         href={`/edit-milestone/${milestone.id}`}
                         className="btn-action btn-edit"
                         title="Edit"
+                        aria-label="Edit milestone"
                       >
                         ✏️
                       </a>
                       <button
                         className="btn-action btn-delete"
                         title="Delete"
+                        aria-label="Delete milestone"
                         onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
                       >
                         🗑️
@@ -343,6 +358,7 @@ export const UnifiedTimeline = ({
                         href={`/view-growth/${measurement.id}`}
                         className="btn-action btn-view"
                         title="View"
+                        aria-label="View measurement"
                       >
                         👁️
                       </a>
@@ -350,12 +366,14 @@ export const UnifiedTimeline = ({
                         href={`/edit-growth/${measurement.id}`}
                         className="btn-action btn-edit"
                         title="Edit"
+                        aria-label="Edit measurement"
                       >
                         ✏️
                       </a>
                       <button
                         className="btn-action btn-delete"
                         title="Delete"
+                        aria-label="Delete measurement"
                         onClick={() =>
                           handleDeleteGrowthData(
                             measurement.id,
@@ -384,9 +402,10 @@ export const UnifiedTimeline = ({
                         <span className="timeline-item-date">{formatDate(item.date)}</span>
                       </div>
                       <div className="photo-item-details">
-                        <div
+                        <a
                           className="photo-thumbnail"
-                          onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                          href={`/view-photo/${photo.id}`}
+                          aria-label={`View photo: ${photo.title}`}
                         >
                           <ThumbnailImage
                             photoId={photo.id}
@@ -399,7 +418,7 @@ export const UnifiedTimeline = ({
                           {person.profilePhotoId === photo.id && (
                             <div className="profile-photo-badge">👤 Profile</div>
                           )}
-                        </div>
+                        </a>
                         <div className="photo-info">
                           <div className="photo-title">{photo.title}</div>
                           {photo.description && (
@@ -430,6 +449,77 @@ export const UnifiedTimeline = ({
                         href={`/view-photo/${photo.id}`}
                         className="btn-action btn-view"
                         title="View"
+                        aria-label="View photo"
+                      >
+                        👁️
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
+              case "performance": {
+                const performance = item.data as server.AppearanceDetail;
+                const season = activitySeasons.find(
+                  candidate => candidate.id === performance.entry.seasonId
+                );
+                const labels = labelsForKind(season?.kind ?? "generic");
+                const resultLabels = (performance.results ?? [])
+                  .map(result => result.label)
+                  .filter(label => label.trim());
+                return (
+                  <div key={`performance-${item.id}`} className="timeline-item performance-item">
+                    <div className="timeline-item-icon">🏆</div>
+                    <div className="timeline-item-content">
+                      <div className="timeline-item-header">
+                        <span className="timeline-item-type performance-type">
+                          {labels.appearance}
+                        </span>
+                        {item.age && <span className="timeline-item-age">{item.age}</span>}
+                        <span className="timeline-item-date">{formatDate(item.date)}</span>
+                      </div>
+                      <div className="timeline-item-description performance-title">
+                        {performance.entry.name} at {performance.event.name}
+                      </div>
+                      {[performance.event.host, performance.event.location].filter(Boolean).length >
+                        0 && (
+                        <div className="performance-meta">
+                          {[performance.event.host, performance.event.location]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      )}
+                      {resultLabels.length > 0 && (
+                        <div className="performance-results">{resultLabels.join(" · ")}</div>
+                      )}
+                      {performance.appearance.notes && (
+                        <div className="performance-notes">{performance.appearance.notes}</div>
+                      )}
+                      {performance.photoIds?.length > 0 && (
+                        <div className="milestone-photos">
+                          {performance.photoIds.map(photoId => (
+                            <a
+                              key={photoId}
+                              className="milestone-photo-link"
+                              href={`/view-photo/${photoId}`}
+                              aria-label="View photo"
+                            >
+                              <ThumbnailImage
+                                photoId={photoId}
+                                alt=""
+                                className="milestone-photo-thumb"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="timeline-item-actions">
+                      <a
+                        href={`/routine/${performance.entry.id}`}
+                        className="btn-action btn-view"
+                        title={`View ${labels.entry.toLowerCase()}`}
+                        aria-label={`View ${labels.entry.toLowerCase()}`}
                       >
                         👁️
                       </a>

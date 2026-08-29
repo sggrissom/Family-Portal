@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for growth data functionality
-// Tests: adding measurements, date parsing, validation, multiple measurements
 package backend
 
 import (
@@ -22,9 +20,7 @@ func TestAddGrowthData(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup: Create test user and person
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create user
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
 			Email:           "test@example.com",
@@ -34,11 +30,10 @@ func TestAddGrowthData(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Create person
 		personReq := AddPersonRequest{
 			Name:       "Test Child",
-			PersonType: 1, // Child
-			Gender:     0, // Male
+			PersonType: 1,
+			Gender:     0,
 			Birthdate:  "2020-06-15",
 		}
 		var err error
@@ -49,7 +44,6 @@ func TestAddGrowthData(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test valid growth data requests
 	validRequests := []AddGrowthDataRequest{
 		{
 			PersonId:        testPerson.Id,
@@ -87,7 +81,6 @@ func TestAddGrowthData(t *testing.T) {
 		},
 	}
 
-	// Test adding valid growth data
 	var addedGrowthData []GrowthData
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		for _, req := range validRequests {
@@ -97,7 +90,6 @@ func TestAddGrowthData(t *testing.T) {
 			}
 			addedGrowthData = append(addedGrowthData, growthData)
 
-			// Verify basic fields
 			if growthData.PersonId != req.PersonId {
 				t.Errorf("Expected PersonId %d, got %d", req.PersonId, growthData.PersonId)
 			}
@@ -114,14 +106,13 @@ func TestAddGrowthData(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test invalid growth data requests - database level checks
 	databaseInvalidRequests := []struct {
 		request     AddGrowthDataRequest
 		description string
 	}{
 		{
 			request: AddGrowthDataRequest{
-				PersonId:        99999, // Non-existent person
+				PersonId:        99999,
 				MeasurementType: "height",
 				Value:           90.5,
 				Unit:            "cm",
@@ -133,7 +124,7 @@ func TestAddGrowthData(t *testing.T) {
 		{
 			request: AddGrowthDataRequest{
 				PersonId:        testPerson.Id,
-				MeasurementType: "invalid", // Invalid measurement type
+				MeasurementType: "invalid",
 				Value:           90.5,
 				Unit:            "cm",
 				InputType:       "date",
@@ -143,23 +134,20 @@ func TestAddGrowthData(t *testing.T) {
 		},
 	}
 
-	// Test requests that should fail at database level
 	for _, test := range databaseInvalidRequests {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 			_, err := AddGrowthDataTx(tx, test.request, testUser.FamilyId)
 			if err == nil {
 				t.Errorf("Expected error for %s, but got none", test.description)
 			}
-			// Don't commit invalid transactions
 		})
 	}
 
-	// Test validation-level failures (these should be caught by validateAddGrowthDataRequest)
 	validationInvalidRequests := []AddGrowthDataRequest{
 		{
 			PersonId:        testPerson.Id,
 			MeasurementType: "height",
-			Value:           -10.5, // Negative value
+			Value:           -10.5,
 			Unit:            "cm",
 			InputType:       "date",
 			MeasurementDate: stringPtr("2023-06-15"),
@@ -168,13 +156,12 @@ func TestAddGrowthData(t *testing.T) {
 			PersonId:        testPerson.Id,
 			MeasurementType: "height",
 			Value:           90.5,
-			Unit:            "invalid", // Invalid unit
+			Unit:            "invalid",
 			InputType:       "date",
 			MeasurementDate: stringPtr("2023-06-15"),
 		},
 	}
 
-	// Test validation failures
 	for _, req := range validationInvalidRequests {
 		err := validateAddGrowthDataRequest(req)
 		if err == nil {
@@ -182,14 +169,12 @@ func TestAddGrowthData(t *testing.T) {
 		}
 	}
 
-	// Verify data retrieval
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrievedGrowthData := GetPersonGrowthDataTx(tx, testPerson.Id)
 		if len(retrievedGrowthData) != len(addedGrowthData) {
 			t.Errorf("Expected %d growth data records, got %d", len(addedGrowthData), len(retrievedGrowthData))
 		}
 
-		// Verify each record can be retrieved by ID
 		for _, original := range addedGrowthData {
 			retrieved := GetGrowthDataById(tx, original.Id)
 			if retrieved.Id == 0 {
@@ -209,7 +194,6 @@ func TestParseMeasurementDate(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Test person birthday
 	birthday := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -276,7 +260,7 @@ func TestParseMeasurementDate(t *testing.T) {
 			request: AddGrowthDataRequest{
 				InputType: "age",
 				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(15), // > 11
+				AgeMonths: intPtr(15),
 			},
 			shouldError: true,
 		},
@@ -429,7 +413,7 @@ func TestGrowthDataValidation(t *testing.T) {
 				PersonId:        1,
 				MeasurementType: "height",
 				Value:           90.5,
-				Unit:            "kg", // Wrong unit for height
+				Unit:            "kg",
 				InputType:       "date",
 				MeasurementDate: stringPtr("2023-06-15"),
 			},
@@ -441,7 +425,7 @@ func TestGrowthDataValidation(t *testing.T) {
 				PersonId:        1,
 				MeasurementType: "weight",
 				Value:           25.3,
-				Unit:            "cm", // Wrong unit for weight
+				Unit:            "cm",
 				InputType:       "date",
 				MeasurementDate: stringPtr("2023-06-15"),
 			},
@@ -483,7 +467,6 @@ func TestMultipleGrowthMeasurements(t *testing.T) {
 	var testUser User
 	var testPerson Person
 
-	// Setup
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -508,7 +491,6 @@ func TestMultipleGrowthMeasurements(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Add multiple measurements over time
 	measurements := []AddGrowthDataRequest{
 		{
 			PersonId:        testPerson.Id,
@@ -556,14 +538,12 @@ func TestMultipleGrowthMeasurements(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify all measurements are retrievable
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		retrievedData := GetPersonGrowthDataTx(tx, testPerson.Id)
 		if len(retrievedData) != len(measurements) {
 			t.Errorf("Expected %d measurements, got %d", len(measurements), len(retrievedData))
 		}
 
-		// Count by type
 		heightCount := 0
 		weightCount := 0
 		for _, data := range retrievedData {
@@ -583,7 +563,6 @@ func TestMultipleGrowthMeasurements(t *testing.T) {
 	})
 }
 
-// Helper functions
 func stringPtr(s string) *string {
 	return &s
 }

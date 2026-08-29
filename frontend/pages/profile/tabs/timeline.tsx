@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
 import * as server from "../../../server";
 import { calculateAge, formatDate } from "../../../lib/dateUtils";
 import { getCategoryIcon, getCategoryLabel } from "../../../lib/milestoneHelpers";
@@ -14,7 +13,7 @@ interface TimelineTabProps {
 }
 
 type TimelineState = {
-  selectedAgeFilter: string; // "all" or year number as string like "0", "1", "2"
+  selectedAgeFilter: string;
 };
 
 const useTimelineState = vlens.declareHook(
@@ -31,7 +30,6 @@ const setAgeFilter = (state: TimelineState, filter: string) => {
 export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
   const state = useTimelineState();
 
-  // Sort milestones by date (newest first)
   const milestonesArray = milestones || [];
   const sortedMilestones = [...milestonesArray].sort(
     (a, b) => new Date(b.milestoneDate).getTime() - new Date(a.milestoneDate).getTime()
@@ -53,7 +51,6 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
     );
   }
 
-  // Extract unique age years from milestones for filter options
   const ageYears = new Set<number>();
   sortedMilestones.forEach(milestone => {
     const age = calculateAge(person.birthday, milestone.milestoneDate);
@@ -62,7 +59,6 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
   });
   const sortedAgeYears = Array.from(ageYears).sort((a, b) => a - b);
 
-  // Filter milestones based on selected age
   const filteredMilestones =
     state.selectedAgeFilter === "all"
       ? sortedMilestones
@@ -76,7 +72,6 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
     <div className="timeline-tab">
       <h2>Timeline for {person.name}</h2>
       <div className="timeline-content">
-        {/* Age Filter */}
         <div className="age-filter">
           <button
             className={`filter-btn ${state.selectedAgeFilter === "all" ? "active" : ""}`}
@@ -95,7 +90,6 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
           ))}
         </div>
 
-        {/* Milestone count */}
         {state.selectedAgeFilter !== "all" && (
           <div className="filter-info">
             Showing {filteredMilestones.length} of {sortedMilestones.length} milestones
@@ -120,13 +114,18 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
                   {milestone.photoIds && milestone.photoIds.length > 0 && (
                     <div className="milestone-photos">
                       {milestone.photoIds.map(photoId => (
-                        <ThumbnailImage
+                        <a
                           key={photoId}
-                          photoId={photoId}
-                          alt=""
-                          className="milestone-photo-thumb"
-                          onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                        />
+                          className="milestone-photo-link"
+                          href={`/view-photo/${photoId}`}
+                          aria-label="View photo"
+                        >
+                          <ThumbnailImage
+                            photoId={photoId}
+                            alt=""
+                            className="milestone-photo-thumb"
+                          />
+                        </a>
                       ))}
                     </div>
                   )}
@@ -136,12 +135,14 @@ export const TimelineTab = ({ person, milestones }: TimelineTabProps) => {
                     href={`/edit-milestone/${milestone.id}`}
                     className="btn-action btn-edit"
                     title="Edit"
+                    aria-label="Edit milestone"
                   >
                     ✏️
                   </a>
                   <button
                     className="btn-action btn-delete"
                     title="Delete"
+                    aria-label="Delete milestone"
                     onClick={() => handleDeleteMilestone(milestone.id, milestone.description)}
                   >
                     🗑️

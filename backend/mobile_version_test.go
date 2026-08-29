@@ -5,8 +5,10 @@ import (
 	"family/cfg"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
@@ -120,7 +122,7 @@ func TestEvaluateMobileVersion(t *testing.T) {
 		Platform:       "ios",
 		MinimumVersion: "2.1.0",
 		LatestVersion:  "2.3.0",
-		UpdateUrl:      "https://example.com/app",
+		UpdateUrl:      "https://apps.apple.com/app/id123456789",
 		UpdateMessage:  "A newer version is available.",
 	}
 	testCases := []struct {
@@ -166,7 +168,7 @@ func TestMobileVersionPolicyHandler(t *testing.T) {
 			Platform:       "ios",
 			MinimumVersion: "2.0.0",
 			LatestVersion:  "2.1.0",
-			UpdateUrl:      "https://example.com/app",
+			UpdateUrl:      "https://apps.apple.com/app/id123456789",
 		}
 		vbolt.Write(tx, MobileVersionBkt, config.Id, &config)
 		vbolt.TxCommit(tx)
@@ -205,5 +207,323 @@ func TestMobileVersionPolicyHandlerRejectsInvalidRequest(t *testing.T) {
 		if recorder.Code != http.StatusBadRequest {
 			t.Errorf("%s status = %d, want %d", target, recorder.Code, http.StatusBadRequest)
 		}
+	}
+}
+
+func TestValidateStoreUrl(t *testing.T) {
+	testCases := []struct {
+		name     string
+		platform string
+		url      string
+		wantErr  bool
+	}{
+		{name: "App Store listing", platform: "ios", url: "https://apps.apple.com/us/app/family-portal/id123456789"},
+		{name: "legacy iTunes host", platform: "ios", url: "https://itunes.apple.com/app/id123456789"},
+		{name: "TestFlight invite", platform: "ios", url: "https://testflight.apple.com/join/abcdef"},
+		{name: "Play Store listing", platform: "android", url: "https://play.google.com/store/apps/details?id=app.familyrecord"},
+		{name: "host casing ignored", platform: "ios", url: "https://APPS.Apple.COM/app/id123456789"},
+		{name: "plain http rejected", platform: "ios", url: "http://apps.apple.com/app/id123456789", wantErr: true},
+		{name: "arbitrary host rejected", platform: "ios", url: "https://example.com/app", wantErr: true},
+		{name: "lookalike host rejected", platform: "ios", url: "https://apps.apple.com.evil.test/app", wantErr: true},
+		{name: "credentials rejected", platform: "ios", url: "https://apps.apple.com@evil.test/app", wantErr: true},
+		{name: "javascript scheme rejected", platform: "ios", url: "javascript:alert(1)", wantErr: true},
+		{name: "wrong platform's store rejected", platform: "ios", url: "https://play.google.com/store/apps/details?id=app.familyrecord", wantErr: true},
+		{name: "unknown platform rejected", platform: "web", url: "https://apps.apple.com/app/id123456789", wantErr: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateStoreUrl(tc.platform, tc.url)
+			if tc.wantErr && err == nil {
+				t.Errorf("validateStoreUrl(%q, %q) = nil, want an error", tc.platform, tc.url)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("validateStoreUrl(%q, %q) = %v, want nil", tc.platform, tc.url, err)
+			}
+		})
+	}
+}
+
+func TestValidateUpdateMessage(t *testing.T) {
+	testCases := []struct {
+		name    string
+		message string
+		wantErr bool
+	}{
+		{name: "empty is allowed", message: ""},
+		{name: "one line of prose", message: "This version is no longer supported. Please update."},
+		{name: "accented text", message: "Une nouvelle version est disponible."},
+		{name: "newline rejected", message: "Update now.\nOr else.", wantErr: true},
+		{name: "carriage return rejected", message: "Update now.\rOr else.", wantErr: true},
+		{name: "delete character rejected", message: "Update now.\x7f", wantErr: true},
+		{name: "embedded link rejected", message: "Download from https://evil.test/app", wantErr: true},
+		{name: "over length rejected", message: strings.Repeat("a", maxUpdateMessageLength+1), wantErr: true},
+		{name: "at length allowed", message: strings.Repeat("a", maxUpdateMessageLength)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateUpdateMessage(tc.message)
+			if tc.wantErr && err == nil {
+				t.Errorf("validateUpdateMessage(%q) = nil, want an error", tc.message)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("validateUpdateMessage(%q) = %v, want nil", tc.message, err)
+			}
+		})
+	}
+}
+
+func TestEvaluateMobileVersionWithholdsUnsafeGuidance(t *testing.T) {
+	config := MobileVersionConfig{
+		Id:             platformId("ios"),
+		Platform:       "ios",
+		MinimumVersion: "2.0.0",
+		UpdateUrl:      "https://phish.test/family-portal",
+		UpdateMessage:  "Sign in here:\nhttps://phish.test",
+	}
+
+	got := evaluateMobileVersion("1.0.0", config)
+
+	if got.Status != "update_required" {
+		t.Errorf("status = %q, want update_required — the policy itself still applies", got.Status)
+	}
+	if got.UpdateUrl != "" {
+		t.Errorf("UpdateUrl = %q, want it withheld", got.UpdateUrl)
+	}
+	if got.UpdateMessage != "" {
+		t.Errorf("UpdateMessage = %q, want it withheld", got.UpdateMessage)
+	}
+}
+
+type mobileVersionFixture struct {
+	db      *vbolt.DB
+	admin   User
+	regular User
+}
+
+func setupMobileVersionFixture(t *testing.T) mobileVersionFixture {
+	t.Helper()
+
+	db := vbolt.Open(t.TempDir() + "/mobile-version-procs.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("mobile-version-test-secret-key-at-least-32")
+
+	fx := mobileVersionFixture{db: db}
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		fx.admin = AddUserTx(tx, CreateAccountRequest{Name: "Admin", Email: "admin@example.com"}, []byte("hash"))
+		fx.regular = AddUserTx(tx, CreateAccountRequest{Name: "Parent", Email: "parent@example.com"}, []byte("hash"))
+		vbolt.TxCommit(tx)
+	})
+	if fx.admin.Id != 1 {
+		t.Fatalf("admin user id = %d, want 1 — the admin procs authorize on that id", fx.admin.Id)
+	}
+	return fx
+}
+
+func (fx mobileVersionFixture) as(t *testing.T, user User, fn func(ctx *vbeam.Context)) {
+	t.Helper()
+
+	token, err := generateJwtTokenString(user)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		fn(&vbeam.Context{Tx: tx, Token: token})
+	})
+}
+
+func (fx mobileVersionFixture) platform(t *testing.T, name string) AdminMobileVersionPlatform {
+	t.Helper()
+
+	var found AdminMobileVersionPlatform
+	fx.as(t, fx.admin, func(ctx *vbeam.Context) {
+		resp, err := AdminGetMobileVersions(ctx, Empty{})
+		if err != nil {
+			t.Fatalf("AdminGetMobileVersions() error = %v", err)
+		}
+		if len(resp.Platforms) != 2 {
+			t.Fatalf("platforms = %d, want both ios and android so neither can be forgotten", len(resp.Platforms))
+		}
+		for _, entry := range resp.Platforms {
+			if entry.Platform == name {
+				found = entry
+			}
+		}
+	})
+	if found.Platform != name {
+		t.Fatalf("platform %q missing from AdminGetMobileVersions", name)
+	}
+	return found
+}
+
+func TestAdminSetMobileVersionStoresPolicy(t *testing.T) {
+	fx := setupMobileVersionFixture(t)
+
+	fx.as(t, fx.admin, func(ctx *vbeam.Context) {
+		_, err := AdminSetMobileVersion(ctx, AdminSetMobileVersionRequest{
+			Platform:       "ios",
+			MinimumVersion: " 1.2.0 ",
+			LatestVersion:  "1.4.0",
+			UpdateUrl:      " https://apps.apple.com/us/app/family-portal/id123456789 ",
+			UpdateMessage:  "  Please update to keep using Family Portal.  ",
+		})
+		if err != nil {
+			t.Fatalf("AdminSetMobileVersion() error = %v", err)
+		}
+	})
+
+	ios := fx.platform(t, "ios")
+	if !ios.Configured {
+		t.Error("Configured = false after a successful save")
+	}
+	if ios.MinimumVersion != "1.2.0" || ios.LatestVersion != "1.4.0" {
+		t.Errorf("versions = %q/%q, want them trimmed to 1.2.0/1.4.0", ios.MinimumVersion, ios.LatestVersion)
+	}
+	if ios.UpdateUrl != "https://apps.apple.com/us/app/family-portal/id123456789" {
+		t.Errorf("UpdateUrl = %q, want it trimmed", ios.UpdateUrl)
+	}
+	if ios.UpdateMessage != "Please update to keep using Family Portal." {
+		t.Errorf("UpdateMessage = %q, want it trimmed", ios.UpdateMessage)
+	}
+	if len(ios.Warnings) != 0 {
+		t.Errorf("Warnings = %v, want none for a policy that just passed validation", ios.Warnings)
+	}
+
+	android := fx.platform(t, "android")
+	if android.Configured {
+		t.Error("android Configured = true, want false — only ios was set")
+	}
+}
+
+func TestAdminSetMobileVersionRejectsUnsafeGuidance(t *testing.T) {
+	testCases := []struct {
+		name string
+		req  AdminSetMobileVersionRequest
+	}{
+		{
+			name: "URL outside the store allowlist",
+			req:  AdminSetMobileVersionRequest{Platform: "ios", MinimumVersion: "1.0.0", UpdateUrl: "https://phish.test/family-portal"},
+		},
+		{
+			name: "plain http store URL",
+			req:  AdminSetMobileVersionRequest{Platform: "ios", MinimumVersion: "1.0.0", UpdateUrl: "http://apps.apple.com/app/id123456789"},
+		},
+		{
+			name: "the other platform's store",
+			req:  AdminSetMobileVersionRequest{Platform: "ios", MinimumVersion: "1.0.0", UpdateUrl: "https://play.google.com/store/apps/details?id=app.familyrecord"},
+		},
+		{
+			name: "forced update with nowhere to go",
+			req:  AdminSetMobileVersionRequest{Platform: "ios", MinimumVersion: "1.0.0"},
+		},
+		{
+			name: "message carrying its own link",
+			req: AdminSetMobileVersionRequest{
+				Platform:      "ios",
+				LatestVersion: "1.4.0",
+				UpdateUrl:     "https://apps.apple.com/app/id123456789",
+				UpdateMessage: "Update at https://phish.test",
+			},
+		},
+		{
+			name: "multi-line message",
+			req: AdminSetMobileVersionRequest{
+				Platform:      "ios",
+				LatestVersion: "1.4.0",
+				UpdateUrl:     "https://apps.apple.com/app/id123456789",
+				UpdateMessage: "Update now.\nAccount suspended.",
+			},
+		},
+		{
+			name: "minimum above latest",
+			req: AdminSetMobileVersionRequest{
+				Platform:       "ios",
+				MinimumVersion: "2.0.0",
+				LatestVersion:  "1.4.0",
+				UpdateUrl:      "https://apps.apple.com/app/id123456789",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := setupMobileVersionFixture(t)
+
+			fx.as(t, fx.admin, func(ctx *vbeam.Context) {
+				if _, err := AdminSetMobileVersion(ctx, tc.req); err == nil {
+					t.Fatal("AdminSetMobileVersion() error = nil, want a validation error")
+				}
+			})
+
+			if ios := fx.platform(t, "ios"); ios.Configured {
+				t.Error("the rejected policy was stored anyway")
+			}
+		})
+	}
+}
+
+func TestAdminGetMobileVersionsWarnsAboutStoredGuidance(t *testing.T) {
+	fx := setupMobileVersionFixture(t)
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		legacy := MobileVersionConfig{
+			Id:             platformId("ios"),
+			Platform:       "ios",
+			MinimumVersion: "1.0.0",
+			UpdateUrl:      "https://example.com/download",
+			UpdateMessage:  "Reactivate your account:\nhttps://phish.test",
+		}
+		vbolt.Write(tx, MobileVersionBkt, legacy.Id, &legacy)
+		vbolt.TxCommit(tx)
+	})
+
+	ios := fx.platform(t, "ios")
+	if len(ios.Warnings) != 2 {
+		t.Fatalf("Warnings = %v, want one for the URL and one for the message", ios.Warnings)
+	}
+	if ios.UpdateUrl != "https://example.com/download" {
+		t.Errorf("UpdateUrl = %q, want the stored value shown to the operator who has to fix it", ios.UpdateUrl)
+	}
+	if len(ios.AllowedHosts) == 0 {
+		t.Error("AllowedHosts is empty, so the page cannot say what a valid URL looks like")
+	}
+}
+
+func TestMobileVersionAdminProcsRequireAdmin(t *testing.T) {
+	fx := setupMobileVersionFixture(t)
+
+	procs := map[string]func(*vbeam.Context) error{
+		"AdminGetMobileVersions": func(ctx *vbeam.Context) error {
+			_, err := AdminGetMobileVersions(ctx, Empty{})
+			return err
+		},
+		"AdminSetMobileVersion": func(ctx *vbeam.Context) error {
+			_, err := AdminSetMobileVersion(ctx, AdminSetMobileVersionRequest{
+				Platform:       "ios",
+				MinimumVersion: "9.0.0",
+				UpdateUrl:      "https://apps.apple.com/app/id123456789",
+			})
+			return err
+		},
+	}
+
+	for name, call := range procs {
+		t.Run(name+" denies a non-admin", func(t *testing.T) {
+			fx.as(t, fx.regular, func(ctx *vbeam.Context) {
+				if err := call(ctx); err == nil {
+					t.Fatal("error = nil, want an authorization error")
+				}
+			})
+		})
+		t.Run(name+" denies an anonymous caller", func(t *testing.T) {
+			vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+				if err := call(&vbeam.Context{Tx: tx}); err == nil {
+					t.Fatal("error = nil, want an authentication error")
+				}
+			})
+		})
 	}
 }

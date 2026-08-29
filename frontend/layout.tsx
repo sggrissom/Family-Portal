@@ -1,6 +1,8 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
+import { applyPageMetadata } from "./lib/pageMetadata";
+import { VerifyEmailBanner } from "./components/VerifyEmailBanner";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -17,7 +19,19 @@ const useHeader = vlens.declareHook((): HeaderData => {
   };
 });
 
+let lastMetadataPath = "";
+
+function syncPageMetadata() {
+  const path = window.location.pathname;
+  if (path === lastMetadataPath) {
+    return;
+  }
+  lastMetadataPath = path;
+  applyPageMetadata(path);
+}
+
 export const Header = ({ isHome }: { isHome: boolean }) => {
+  syncPageMetadata();
   const headerData = useHeader();
   const menuRef = vlens.ref(headerData, "isMenuOpen");
   const currentAuth = auth.getAuth();
@@ -25,6 +39,9 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
 
   return (
     <header className="site-header">
+      <a className="skip-link" href="#app" onClick={skipToContent}>
+        Skip to main content
+      </a>
       <nav className="nav" aria-label="Main navigation">
         <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
           <svg className="brand-mark" viewBox="132 82 248 348" aria-hidden="true">
@@ -101,6 +118,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
                   <a href="/photos">🖼️ Photos</a>
                   <a href="/family-chart">📈 Growth chart</a>
                   <a href="/chat">💬 Family chat</a>
+                  <a href="/activities">🏆 Activities</a>
                   <a href="/settings">⚙️ Settings</a>
                 </div>
               </li>
@@ -134,15 +152,19 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
           )}
         </ul>
       </nav>
+      <VerifyEmailBanner />
     </header>
   );
 };
 
 export const Footer = () => (
   <footer className="site-footer">
-    <p>
-      © <span id="year">2025</span> Family Record. All rights reserved.
-    </p>
+    <nav className="footer-links" aria-label="Policies and support">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/support">Support</a>
+    </nav>
+    <p>© {new Date().getFullYear()} Family Record. All rights reserved.</p>
   </footer>
 );
 
@@ -155,22 +177,52 @@ const logoutClicked = async (event: Event) => {
   await auth.logout();
 };
 
+const skipToContent = (event: Event) => {
+  event.preventDefault();
+  const main = document.getElementById("app");
+  if (!main) return;
+  main.tabIndex = -1;
+  main.focus();
+  main.scrollIntoView();
+};
+
+let detachMenuDismissal: (() => void) | null = null;
+
 const menuClicked = (menuRef: Ref) => {
-  const handleClickOutside = (event: MouseEvent) => {
-    const nav = document.querySelector(".nav");
-    if (event.target instanceof Node && nav && !nav.contains(event.target)) {
-      document.removeEventListener("mousedown", handleClickOutside);
+  const isOpen = !vlens.refGet(menuRef);
+
+  detachMenuDismissal?.();
+  detachMenuDismissal = null;
+
+  if (isOpen) {
+    const close = () => {
+      detachMenuDismissal?.();
+      detachMenuDismissal = null;
       vlens.refSet(menuRef, false);
       vlens.scheduleRedraw();
-    }
-  };
+    };
 
-  const isOpen = !vlens.refGet(menuRef);
-  if (isOpen) {
+    const handleClickOutside = (event: MouseEvent) => {
+      const nav = document.querySelector(".nav");
+      if (event.target instanceof Node && nav && !nav.contains(event.target)) {
+        close();
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      close();
+      document.getElementById("navToggle")?.focus();
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-  } else {
-    document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    detachMenuDismissal = () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }
+
   vlens.refSet(menuRef, isOpen);
   vlens.scheduleRedraw();
 };

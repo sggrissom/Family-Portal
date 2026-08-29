@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Edit Photo Page Container
 block(`
 .edit-photo-container {
   max-width: 600px;
@@ -19,7 +18,6 @@ block(`
 }
 `);
 
-// Ensure auth-card doesn't restrict content
 block(`
 .edit-photo-page .auth-card {
   max-height: none;
@@ -28,9 +26,8 @@ block(`
 }
 `);
 
-// Photo preview section
 block(`
-.photo-preview {
+.edit-photo-container .photo-preview {
   display: flex;
   gap: 1.5rem;
   align-items: flex-start;
@@ -52,7 +49,7 @@ block(`
 `);
 
 block(`
-.photo-info {
+.edit-photo-page .photo-info {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -63,14 +60,13 @@ block(`
 `);
 
 block(`
-.photo-info strong {
+.edit-photo-page .photo-info strong {
   color: var(--text);
 }
 `);
 
-// Form actions
 block(`
-.form-actions {
+.edit-photo-container .form-actions {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
@@ -83,31 +79,6 @@ block(`
 }
 `);
 
-// Remove duplicate button styles - use global styles from styles.ts instead
-
-// Error page
-block(`
-.error-page {
-  text-align: center;
-  padding: 3rem 1rem;
-}
-`);
-
-block(`
-.error-page h1 {
-  color: var(--text);
-  margin-bottom: 1rem;
-}
-`);
-
-block(`
-.error-page p {
-  color: var(--muted);
-  margin-bottom: 2rem;
-}
-`);
-
-// Tag picker
 block(`
 .tag-picker {
   display: flex;
@@ -119,6 +90,8 @@ block(`
 block(`
 .tag-pill {
   display: inline-flex;
+  font-family: inherit;
+  color: inherit;
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0.75rem;
@@ -147,7 +120,6 @@ block(`
 }
 `);
 
-// Responsive design
 block(`
 @media (max-width: 768px) {
   .edit-photo-container {

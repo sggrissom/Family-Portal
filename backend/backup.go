@@ -17,14 +17,10 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// SnapshotPath is the route that streams a consistent copy of the database.
 const SnapshotPath = "/internal/snapshot"
 
 const minimumBackupTokenLength = 32
 
-// resolveBackupToken reads the shared secret that guards the snapshot endpoint.
-// Release builds must configure one: an endpoint that silently 404s because the
-// token was never set is a backup that silently never runs.
 func resolveBackupToken() (string, error) {
 	token := os.Getenv("BACKUP_TOKEN")
 	if token == "" {
@@ -41,9 +37,6 @@ func resolveBackupToken() (string, error) {
 	return token, nil
 }
 
-// presentedBackupToken extracts the bearer credential from a request. Anything
-// that is not a well-formed `Authorization: Bearer <token>` header yields the
-// empty string, which never matches a configured token.
 func presentedBackupToken(r *http.Request) string {
 	header := r.Header.Get("Authorization")
 	const prefix = "Bearer "
@@ -53,9 +46,6 @@ func presentedBackupToken(r *http.Request) string {
 	return header[len(prefix):]
 }
 
-// backupTokenAuthorized compares the presented credential in constant time.
-// An unconfigured token authorizes nobody, including callers that present an
-// empty bearer value.
 func backupTokenAuthorized(configured string, r *http.Request) bool {
 	if configured == "" {
 		return false
@@ -63,20 +53,7 @@ func backupTokenAuthorized(configured string, r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(configured), []byte(presentedBackupToken(r))) == 1
 }
 
-// SnapshotHandler streams a point-in-time copy of the bolt database.
-//
-// bolt holds an exclusive flock on the database file, so no outside process can
-// read it while the server runs, and copying the live file risks capturing a
-// torn meta page mid-commit. tx.WriteTo inside a read transaction is the only
-// no-downtime way to get a consistent copy, and it has to run in this process.
-//
-// Requests without a valid token get 404 rather than 401 so the endpoint is not
-// discoverable. Caddy proxies the whole public domain to localhost, so every
-// request arrives from 127.0.0.1 and a loopback check would buy nothing.
 func SnapshotHandler(db *vbolt.DB, token string) http.HandlerFunc {
-	// A snapshot holds a read tx for its whole duration, and bolt cannot
-	// reclaim freed pages while one is open. Two overlapping snapshots are how
-	// the file doubles, so the second caller is turned away rather than queued.
 	var inFlight sync.Mutex
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -118,12 +95,11 @@ func SnapshotHandler(db *vbolt.DB, token string) http.HandlerFunc {
 		w.Header().Set("Content-Length", strconv.FormatInt(expected, 10))
 		w.Header().Set("Content-Disposition", `attachment; filename="db.bolt"`)
 
+		// WriteTo inside a read transaction is the only consistent snapshot: bolt
+		// would otherwise stream a meta page torn mid-commit.
 		written, err := tx.WriteTo(w)
 		duration := time.Since(start)
 		if err != nil {
-			// Headers are already out, so the only way to signal failure is to
-			// stop short of the declared Content-Length; net/http then drops
-			// the connection and the client sees a truncated response.
 			LogErrorSimple(LogCategorySystem, "Database snapshot failed", map[string]interface{}{
 				"error":        err.Error(),
 				"writtenBytes": written,
@@ -139,8 +115,6 @@ func SnapshotHandler(db *vbolt.DB, token string) http.HandlerFunc {
 	}
 }
 
-// RegisterBackupHandlers wires the snapshot endpoint. Release builds abort
-// startup when BACKUP_TOKEN is unusable, the same treatment JWT_SECRET_KEY gets.
 func RegisterBackupHandlers(app *vbeam.Application) {
 	token, err := resolveBackupToken()
 	if err != nil {

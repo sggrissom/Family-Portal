@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Import Page Styles
 block(`
 .import-container {
   max-width: 800px;
@@ -35,15 +34,16 @@ block(`
 `);
 
 block(`
-.form-section {
-  display: flex;
-  flex-direction: column;
+.import-form .form-section {
+  border: none;
+  border-radius: 0;
+  padding: 0;
   gap: 12px;
 }
 `);
 
 block(`
-.form-section h3 {
+.import-form .form-section h3 {
   margin: 0;
   font-size: 1.2rem;
   color: var(--text);
@@ -282,7 +282,6 @@ block(`
 }
 `);
 
-// Filtering Interface Styles
 block(`
 .filtering-interface {
   background: var(--surface);
@@ -337,7 +336,8 @@ block(`
 `);
 
 block(`
-.family-checkbox, .person-checkbox {
+.family-checkbox,
+.import-container .person-checkbox {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -352,13 +352,6 @@ block(`
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
-}
-`);
-
-block(`
-.btn-small {
-  padding: 6px 12px;
-  font-size: 0.85rem;
 }
 `);
 
@@ -389,14 +382,14 @@ block(`
 `);
 
 block(`
-.person-checkbox {
+.import-container .person-checkbox {
   font-weight: normal;
   width: 100%;
 }
 `);
 
 block(`
-.person-details {
+.import-container .person-details {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -451,7 +444,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for import page
 block(`
 @media (max-width: 768px) {
   .import-container {
@@ -517,7 +509,6 @@ block(`
 }
 `);
 
-// Import Options Styles
 block(`
 .import-options {
   display: flex;
@@ -543,7 +534,7 @@ block(`
 `);
 
 block(`
-.radio-group {
+.import-container .radio-group {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -552,7 +543,7 @@ block(`
 `);
 
 block(`
-.radio-option {
+.import-container .radio-option {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -566,7 +557,7 @@ block(`
 `);
 
 block(`
-.radio-option:hover {
+.import-container .radio-option:hover {
   background: var(--hover-bg);
   border-color: var(--accent);
 }
@@ -647,7 +638,6 @@ block(`
 }
 `);
 
-// Error styles (in addition to warnings)
 block(`
 .import-errors {
   background: var(--bg);
@@ -682,135 +672,13 @@ block(`
 }
 `);
 
-// AI Import Styles
 block(`
-.import-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 2px solid var(--border);
-}
-`);
-
-block(`
-.tab-button {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  padding: 12px 24px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-}
-`);
-
-block(`
-.tab-button:hover {
-  color: var(--text);
-  background: var(--hover-bg);
-}
-`);
-
-block(`
-.tab-button.active {
-  color: var(--primary-accent);
-  border-bottom-color: var(--primary-accent);
-  font-weight: 600;
-}
-`);
-
-block(`
-.ai-import-form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-`);
-
-block(`
-.unstructured-textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: monospace;
-  font-size: 0.95rem;
-  resize: vertical;
-  transition: border-color 0.2s ease;
-}
-`);
-
-block(`
-.unstructured-textarea:hover {
-  border-color: var(--primary-accent);
-}
-`);
-
-block(`
-.unstructured-textarea:focus {
-  outline: none;
-  border-color: var(--primary-accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
-}
-`);
-
-block(`
-.ai-help {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 24px;
-  color: white;
-  margin-top: 24px;
-}
-`);
-
-block(`
-.ai-help h3 {
-  margin: 0 0 16px;
-  font-size: 1.1rem;
-}
-`);
-
-block(`
-.ai-help ul {
-  margin: 0;
-  padding-left: 20px;
-}
-`);
-
-block(`
-.ai-help li {
-  margin-bottom: 8px;
-  font-size: 0.95rem;
-  opacity: 0.95;
-}
-`);
-
-block(`
-.success-message {
+.import-container .success-message {
   padding: 12px 16px;
   background: #10b981;
   color: white;
   border-radius: 8px;
   font-size: 0.95rem;
   margin-top: 12px;
-}
-`);
-
-// Responsive styles for AI import
-block(`
-@media (max-width: 600px) {
-  .tab-button {
-    padding: 10px 16px;
-    font-size: 0.9rem;
-  }
-
-  .unstructured-textarea {
-    font-size: 0.85rem;
-  }
 }
 `);

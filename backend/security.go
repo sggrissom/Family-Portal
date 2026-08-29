@@ -8,14 +8,11 @@ import (
 )
 
 const (
-	maxJSONRequestBytes   int64 = 1 << 20   // 1 MiB
-	maxPhotoRequestBytes  int64 = 52 << 20  // 50 MiB file plus multipart metadata
-	maxImportRequestBytes int64 = 512 << 20 // Full-family archives can contain photos.
+	maxJSONRequestBytes   int64 = 1 << 20
+	maxPhotoRequestBytes  int64 = 52 << 20
+	maxImportRequestBytes int64 = 512 << 20
 )
 
-// RequestSizeLimitWrapper applies endpoint-aware body limits before requests
-// reach parsers. MaxBytesReader also protects requests that use chunked
-// transfer encoding and therefore have no Content-Length header.
 type RequestSizeLimitWrapper struct {
 	next http.Handler
 }
@@ -49,12 +46,10 @@ func (rw *RequestSizeLimitWrapper) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	rw.next.ServeHTTP(w, r)
 }
 
-// SecurityWrapper wraps the vbeam.Application with security headers
 type SecurityWrapper struct {
 	app *vbeam.Application
 }
 
-// NewSecurityWrapper creates a new security wrapper around the vbeam application
 func NewSecurityWrapper(app *vbeam.Application) *SecurityWrapper {
 	return &SecurityWrapper{app: app}
 }
@@ -73,28 +68,33 @@ func isWebSocketRequest(r *http.Request) bool {
 	return true
 }
 
-// ServeHTTP implements http.Handler and adds security headers to all responses
 func (sw *SecurityWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Handle WebSocket requests for /ws/chat before adding any headers
 	if isWebSocketRequest(r) && r.URL.Path == "/ws/chat" {
 		HandleWebSocketChat(sw.app)(w, r)
 		return
 	}
 
-	// Add security headers to non-WebSocket responses
 	addSecurityHeaders(w)
+	addCacheDefaults(w, r)
 	sw.app.ServeHTTP(w, r)
 }
 
+func addCacheDefaults(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/api/"),
+		strings.HasPrefix(r.URL.Path, "/rpc/"),
+		strings.HasPrefix(r.URL.Path, "/internal/"):
+		w.Header().Set("Cache-Control", "no-store")
+	}
+}
+
 func addSecurityHeaders(w http.ResponseWriter) {
-	// Security headers
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
-	// Content Security Policy - restrictive but allows inline styles and WebSocket connections
 	csp := "default-src 'self'; " +
 		"script-src 'self' 'unsafe-inline'; " +
 		"style-src 'self' 'unsafe-inline'; " +

@@ -17,7 +17,7 @@ import "./compare-styles";
 
 type CompareState = {
   selectedPersonIds: Set<number>;
-  selectedAgeFilter: string; // "all" or year number as string
+  selectedAgeFilter: string;
   visibleTypes: {
     milestones: boolean;
     measurements: boolean;
@@ -38,7 +38,6 @@ const useCompareState = vlens.declareHook(
 );
 
 export async function fetch(route: string, prefix: string) {
-  // Fetch list of all people for selection
   return server.ListPeople({});
 }
 
@@ -59,7 +58,6 @@ const togglePersonSelection = (
     state.selectedPersonIds.add(personId);
   }
   vlens.scheduleRedraw();
-  // Trigger comparison load
   loadComparison(state, loadState);
 };
 
@@ -144,7 +142,6 @@ const ComparePage = ({ people }: ComparePageProps) => {
   const loadState = useComparisonLoad();
   const photoStatus = usePhotoStatus();
 
-  // Calculate available age filters from all selected people's data
   const ageYears = new Set<number>();
   if (loadState.data) {
     loadState.data.people.forEach((personData: server.PersonComparisonData) => {
@@ -180,38 +177,33 @@ const ComparePage = ({ people }: ComparePageProps) => {
 
   return (
     <div>
-      {/* Header */}
       <div className="compare-header">
         <h1>Compare People</h1>
         <p>Select 2-5 people to compare their timelines, milestones, and photos at similar ages</p>
       </div>
 
-      {/* Person Selector */}
       <div className="person-selector">
         <h2>Select People to Compare</h2>
         <div className="person-checkboxes">
           {people.map(person => (
-            <div
+            <label
               key={person.id}
               className={`person-checkbox-item ${state.selectedPersonIds.has(person.id) ? "selected" : ""}`}
-              onClick={() => togglePersonSelection(state, loadState, person.id)}
             >
               <input
                 type="checkbox"
                 checked={state.selectedPersonIds.has(person.id)}
                 onChange={() => togglePersonSelection(state, loadState, person.id)}
               />
-              <label>{person.name}</label>
-            </div>
+              <span className="person-checkbox-name">{person.name}</span>
+            </label>
           ))}
         </div>
       </div>
 
-      {/* Show filters only if people are selected */}
       {state.selectedPersonIds.size > 0 && (
         <div className="compare-filters">
           <div className="filter-row">
-            {/* Content Type Filter */}
             <div className="filter-group">
               <label>Show:</label>
               <div className="filter-buttons">
@@ -236,7 +228,6 @@ const ComparePage = ({ people }: ComparePageProps) => {
               </div>
             </div>
 
-            {/* Age Filter */}
             {sortedAgeYears.length > 0 && (
               <div className="filter-group">
                 <label>Age:</label>
@@ -263,14 +254,12 @@ const ComparePage = ({ people }: ComparePageProps) => {
         </div>
       )}
 
-      {/* Loading State */}
       {loadState.loading && (
         <div className="compare-empty-state">
           <h3>Loading comparison data...</h3>
         </div>
       )}
 
-      {/* Error State */}
       {loadState.error && (
         <div className="compare-empty-state">
           <h3>Error</h3>
@@ -278,7 +267,6 @@ const ComparePage = ({ people }: ComparePageProps) => {
         </div>
       )}
 
-      {/* Empty State */}
       {!loadState.loading && !loadState.error && state.selectedPersonIds.size === 0 && (
         <div className="compare-empty-state">
           <h3>No people selected</h3>
@@ -286,7 +274,6 @@ const ComparePage = ({ people }: ComparePageProps) => {
         </div>
       )}
 
-      {/* Comparison Grid */}
       {!loadState.loading &&
         !loadState.error &&
         loadState.data &&
@@ -336,7 +323,6 @@ const PersonColumn = ({
 }: PersonColumnProps) => {
   const { person, milestones, growthData, photos } = personData;
 
-  // Build unified timeline items
   type TimelineItem = {
     id: number;
     type: "milestone" | "measurement" | "photo";
@@ -383,7 +369,6 @@ const PersonColumn = ({
     });
   }
 
-  // Filter by age if selected
   const filteredItems =
     selectedAgeFilter === "all"
       ? timelineItems
@@ -392,7 +377,6 @@ const PersonColumn = ({
           return ageInYears.toString() === selectedAgeFilter;
         });
 
-  // Sort by date (newest first)
   const sortedItems = [...filteredItems].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
@@ -483,9 +467,10 @@ const PersonColumn = ({
                           <span className="timeline-item-date">{formatDate(item.date)}</span>
                         </div>
                         <div className="photo-item-details">
-                          <div
+                          <a
                             className="photo-thumbnail"
-                            onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                            href={`/view-photo/${photo.id}`}
+                            aria-label={`View photo: ${photo.title}`}
                           >
                             <ThumbnailImage
                               photoId={photo.id}
@@ -495,7 +480,7 @@ const PersonColumn = ({
                               fetchpriority="auto"
                               status={photoStatus.getStatus(photo.id)}
                             />
-                          </div>
+                          </a>
                           <div className="photo-info">
                             <div className="photo-title">{photo.title}</div>
                             {photo.description && (

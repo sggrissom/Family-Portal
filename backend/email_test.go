@@ -1,7 +1,11 @@
 package backend
 
 import (
+	"bytes"
 	"errors"
+	"family/cfg"
+	"log"
+	"os"
 	"strings"
 	"testing"
 )
@@ -113,8 +117,6 @@ func TestSendMailRejectsHeaderInjection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// A rejection happens before any network call, so this never
-			// contacts an SMTP server.
 			if err := SendMail(tt.to, tt.subject, "body"); err == nil {
 				t.Error("SendMail() accepted a message that could forge headers")
 			}
@@ -133,5 +135,29 @@ func TestBuildMessageUsesCRLF(t *testing.T) {
 	}
 	if strings.Contains(strings.ReplaceAll(message, "\r\n", ""), "\n") {
 		t.Error("message contains bare newlines")
+	}
+}
+
+func TestLogMailFallbackKeepsBodiesOutOfReleaseLogs(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	const link = "https://familyrecord.app/reset-password?token=secrettokenvalue"
+	logMailFallback("member@example.com", "Reset your password", "Open this link:\n"+link)
+
+	output := buf.String()
+	if cfg.IsRelease {
+		if strings.Contains(output, link) {
+			t.Error("release build logged the message body")
+		}
+		if strings.Contains(output, "member@example.com") {
+			t.Error("release build logged the full recipient address")
+		}
+		return
+	}
+
+	if !strings.Contains(output, link) {
+		t.Error("local build did not print the reset link")
 	}
 }

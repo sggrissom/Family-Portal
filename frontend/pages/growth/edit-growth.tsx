@@ -9,7 +9,6 @@ import { GrowthForm } from "./GrowthForm";
 import "./growth-styles";
 
 export async function fetch(route: string, prefix: string) {
-  // Extract growth record ID from URL (e.g., /edit-growth/123)
   const growthId = getIdFromRoute(route);
 
   if (!growthId) {

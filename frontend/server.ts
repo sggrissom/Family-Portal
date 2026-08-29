@@ -25,15 +25,21 @@ export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
 // Errors
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
+export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
+export const ErrAdminRequired = "Unauthorized: Admin access required";
+export const ErrUserNotFound = "No such user";
 
 export interface CreateAccountRequest {
     name: string
@@ -61,6 +67,7 @@ export interface AuthResponse {
     name: string
     email: string
     isAdmin: boolean
+    emailVerified: boolean
     familyId: number
     families: FamilyRef[]
 }
@@ -80,6 +87,44 @@ export interface JoinFamilyResponse {
     success: boolean
     error: string
     auth: AuthResponse
+}
+
+export interface ListFamilyMembersRequest {
+    familyId: number
+}
+
+export interface ListFamilyMembersResponse {
+    familyId: number
+    members: FamilyMemberView[]
+    callerIsOwner: boolean
+}
+
+export interface FamilyIdRequest {
+    familyId: number
+}
+
+export interface LeaveFamilyResponse {
+    success: boolean
+    error: string
+    auth: AuthResponse
+}
+
+export interface RemoveFamilyMemberRequest {
+    familyId: number
+    userId: number
+}
+
+export interface RemoveFamilyMemberResponse {
+    success: boolean
+    error: string
+    members: FamilyMemberView[]
+}
+
+export interface RotateInviteCodeResponse {
+    success: boolean
+    error: string
+    familyId: number
+    inviteCode: string
 }
 
 export interface RequestPasswordResetRequest {
@@ -368,6 +413,237 @@ export interface UpdateMilestoneTagsRequest {
 export interface UpdateMilestoneTagsResponse {
 }
 
+export interface ListActivitiesRequest {
+    familyId: number
+}
+
+export interface ListActivitiesResponse {
+    familyId: number
+    activities: Activity[]
+}
+
+export interface CreateActivityRequest {
+    familyId: number
+    name: string
+    kind: string
+}
+
+export interface ActivityResponse {
+    activity: Activity
+}
+
+export interface UpdateActivityRequest {
+    id: number
+    name: string
+    kind: string
+}
+
+export interface ActivityIdRequest {
+    id: number
+}
+
+export interface DeleteResponse {
+    success: boolean
+}
+
+export interface ListSeasonsRequest {
+    activityId: number
+}
+
+export interface ListSeasonsResponse {
+    activityId: number
+    seasons: Season[]
+}
+
+export interface CreateSeasonRequest {
+    activityId: number
+    name: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface SeasonResponse {
+    season: Season
+}
+
+export interface UpdateSeasonRequest {
+    id: number
+    name: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface SeasonIdRequest {
+    id: number
+}
+
+export interface CreateEventRequest {
+    seasonId: number
+    name: string
+    host: string
+    location: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface EventResponse {
+    event: Event
+}
+
+export interface UpdateEventRequest {
+    id: number
+    name: string
+    host: string
+    location: string
+    startDate: string | null
+    endDate: string | null
+    notes: string
+}
+
+export interface EventIdRequest {
+    id: number
+}
+
+export interface CreateEntryRequest {
+    seasonId: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+    personIds: number[]
+}
+
+export interface EntryResponse {
+    entry: EntryView
+}
+
+export interface UpdateEntryRequest {
+    id: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+}
+
+export interface EntryIdRequest {
+    id: number
+}
+
+export interface SetEntryRosterRequest {
+    entryId: number
+    personIds: number[]
+}
+
+export interface CreateAppearanceRequest {
+    eventId: number
+    entryId: number
+    occurredAt: string | null
+    notes: string
+}
+
+export interface AppearanceResponse {
+    appearance: AppearanceView
+}
+
+export interface UpdateAppearanceRequest {
+    id: number
+    occurredAt: string | null
+    notes: string
+}
+
+export interface AppearanceIdRequest {
+    id: number
+}
+
+export interface SetAppearanceResultsRequest {
+    appearanceId: number
+    results: ResultInput[]
+}
+
+export interface GetSeasonOverviewRequest {
+    seasonId: number
+}
+
+export interface GetSeasonOverviewResponse {
+    activity: Activity
+    season: Season
+    events: Event[]
+    entries: EntryView[]
+    appearances: AppearanceView[]
+}
+
+export interface GetEventDetailRequest {
+    eventId: number
+}
+
+export interface GetEventDetailResponse {
+    event: Event
+    season: SeasonSummary
+    photoIds: number[]
+    appearances: AppearanceDetail[]
+}
+
+export interface GetEntryHistoryRequest {
+    entryId: number
+}
+
+export interface GetEntryHistoryResponse {
+    entry: EntryView
+    season: SeasonSummary
+    appearances: AppearanceDetail[]
+}
+
+export interface GetPersonSeasonRequest {
+    personId: number
+    seasonId: number
+}
+
+export interface GetPersonSeasonResponse {
+    personId: number
+    seasonId: number
+    seasons: SeasonSummary[]
+    entries: EntryView[]
+    appearances: AppearanceDetail[]
+}
+
+export interface ListActivityVocabularyRequest {
+    activityId: number
+}
+
+export interface ListActivityVocabularyResponse {
+    activityId: number
+    adjudications: string[]
+    awards: string[]
+    categories: string[]
+    styles: string[]
+    divisions: string[]
+    levels: string[]
+    formats: string[]
+    hosts: string[]
+}
+
+export interface SetAppearancePhotosRequest {
+    appearanceId: number
+    photoIds: number[]
+}
+
+export interface SetEventPhotosRequest {
+    eventId: number
+    photoIds: number[]
+}
+
+export interface SetEventPhotosResponse {
+    eventId: number
+    photoIds: number[]
+}
+
 export interface CreateTagRequest {
     name: string
     color: string
@@ -511,6 +787,7 @@ export interface ImportDataRequest {
     previewOnly: boolean
     mergeStrategy: string
     importMilestones: boolean
+    importActivities: boolean
     dryRun: boolean
     familyId: number
 }
@@ -527,6 +804,7 @@ export interface ImportDataResponse {
     skippedTags: number
     importedPhotos: number
     skippedPhotos: number
+    importedActivities: ActivityImportCounts
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
@@ -541,32 +819,6 @@ export interface ExportDataRequest {
 
 export interface ExportDataResponse {
     jsonData: string
-}
-
-export interface ProcessAIImportRequest {
-    personId: number
-    unstructuredText: string
-    generateFile: boolean
-}
-
-export interface ProcessAIImportResponse {
-    success: boolean
-    generatedJSON: string
-    filePath: string
-    processingTime: number
-    tokensUsed: number
-    modelUsed: string
-    providerUsed: string
-    error: string
-    validationWarnings: string[]
-}
-
-export interface ListAIModelsRequest {
-}
-
-export interface ListAIModelsResponse {
-    models: string[]
-    error: string
 }
 
 export interface ListAllUsersResponse {
@@ -592,15 +844,18 @@ export interface ReprocessAllPhotosRequest {
 }
 
 export interface ReprocessAllPhotosResponse {
-    processed: number
-    failed: number
-    errors: string[]
-    totalTime: string
+    queued: number
 }
 
 export interface ProcessingStats {
     queueLength: number
     isRunning: boolean
+    processed: number
+    failed: number
+    lastProcessedAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: PhotoAttempt[]
 }
 
 export interface AnalysisWorkerStats {
@@ -616,6 +871,23 @@ export interface ReanalyzeAllPhotosResponse {
     skipped: number
 }
 
+export interface CheckPhotoConsistencyRequest {
+}
+
+export interface PhotoConsistencyReport {
+    checkedAt: string
+    durationMs: number
+    totalImages: number
+    presentCount: number
+    missingCount: number
+    orphanCount: number
+    orphanBytes: number
+    missing: MissingOriginal[]
+    orphans: OrphanOriginal[]
+    listLimit: number
+    orphanScanErr: string
+}
+
 export interface GetLogFilesResponse {
     files: LogFileInfo[]
 }
@@ -624,6 +896,8 @@ export interface GetLogContentRequest {
     filename: string
     level: string
     category: string
+    search: string
+    sinceHours: number
     limit: number
     offset: number
     minDuration: number | null
@@ -635,10 +909,49 @@ export interface GetLogContentResponse {
     entries: PublicLogEntry[]
     totalLines: number
     hasMore: boolean
+    filesSearched: string[]
+}
+
+export interface LookupLogReferenceRequest {
+    reference: string
+    context: number
+}
+
+export interface LookupLogReferenceResponse {
+    found: boolean
+    file: string
+    entry: PublicLogEntry
+    before: PublicLogEntry[]
+    after: PublicLogEntry[]
+    filesSearched: string[]
 }
 
 export interface GetLogStatsResponse {
     stats: LogStats
+}
+
+export interface GetPushStatusResponse {
+    config: APNsConfigInfo
+    stats: PushWorkerStats
+    issues: PushConfigIssue[]
+    totalDevices: number
+    activeDevices: number
+    inactiveDevices: number
+}
+
+export interface ListPushDevicesResponse {
+    devices: AdminPushDevice[]
+}
+
+export interface SendTestPushRequest {
+    userId: number
+    message: string
+}
+
+export interface SendTestPushResponse {
+    queued: boolean
+    deviceCount: number
+    targetName: string
 }
 
 export interface AnalyticsOverviewResponse {
@@ -658,7 +971,7 @@ export interface UserAnalyticsResponse {
     registrationTrends: DataPoint[]
     loginActivityTrends: DataPoint[]
     familySizeDistribution: DistributionPoint[]
-    userRetention: RetentionMetrics
+    userEngagement: EngagementMetrics
     topActiveFamilies: FamilyActivity[]
 }
 
@@ -674,8 +987,126 @@ export interface ContentAnalyticsResponse {
 export interface SystemAnalyticsResponse {
     storageUsage: StorageMetrics
     processingMetrics: ProcessingMetrics
-    errorAnalysis: ErrorAnalysis
-    apiRequestTrends: DataPoint[]
+    photoFailures: PhotoFailureReport
+}
+
+export interface SystemHealthResponse {
+    healthy: boolean
+    releaseBuild: boolean
+    configIssues: ConfigProblem[]
+    logs: LogProblems
+    photos: PhotoProblems
+    push: PushProblems
+    mail: MailProblems
+    host: HostProblems
+    backups: BackupProblems
+}
+
+export interface WeeklyDigestResponse {
+    since: string
+    windowDays: number
+    photos: number
+    milestones: number
+    measurements: number
+    messages: number
+    people: DigestPerson[]
+    accounts: number
+    absent: number
+    quiet: boolean
+}
+
+export interface HostMetricsResponse {
+    configured: boolean
+    available: boolean
+    error: string
+    collectedAt: string
+    system: HostSystem
+    app: HostApp
+}
+
+export interface RequeueStuckPhotosRequest {
+}
+
+export interface RequeueStuckPhotosResponse {
+    queued: number
+}
+
+export interface RevokeUserSessionsRequest {
+    userId: number
+}
+
+export interface RevokeUserSessionsResponse {
+    revoked: number
+}
+
+export interface VerifyBackupPathRequest {
+}
+
+export interface VerifyBackupPathResponse {
+    ok: boolean
+    detail: string
+    status: number
+    declaredBytes: number
+    receivedBytes: number
+    durationMs: number
+    checkedAt: string
+    cached: boolean
+}
+
+export interface GetMailStatsRequest {
+}
+
+export interface MailWorkerStats {
+    queueLength: number
+    isRunning: boolean
+    sent: number
+    failed: number
+    lastSentAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: MailAttempt[]
+}
+
+export interface ResendPasswordResetRequest {
+    userId: number
+}
+
+export interface ResendPasswordResetResponse {
+    email: string
+    queued: boolean
+    detail: string
+    invalidatedPrevious: boolean
+    expiresAt: string
+}
+
+export interface VerifyEmailRequest {
+    token: string
+}
+
+export interface VerifyEmailResponse {
+    success: boolean
+    error: string
+}
+
+export interface ResendVerificationResponse {
+    success: boolean
+    error: string
+}
+
+export interface DiagnosticsResponse {
+    version: string
+    commit: string
+    buildTime: string
+    release: boolean
+    goVersion: string
+    startedAt: string
+    uptimeSeconds: number
+    photoQueue: number
+    photoRunning: boolean
+    analysisQueue: number
+    analysisFaces: boolean
+    mailQueue: number
+    pushConfigured: boolean
 }
 
 export interface RegisterPushDeviceRequest {
@@ -697,6 +1128,20 @@ export interface UnregisterPushDeviceResponse {
     success: boolean
 }
 
+export interface NotificationPreferencesResponse {
+    chatEnabled: boolean
+    showMessageText: boolean
+}
+
+export interface UpdateNotificationPreferencesRequest {
+    chatEnabled: boolean
+    showMessageText: boolean
+}
+
+export interface UpdateNotificationPreferencesResponse {
+    preferences: NotificationPreferencesResponse
+}
+
 export interface CheckMobileVersionRequest {
     platform: string
     appVersion: string
@@ -708,6 +1153,10 @@ export interface CheckMobileVersionResponse {
     latestVersion: string
     updateUrl: string
     updateMessage: string
+}
+
+export interface AdminGetMobileVersionsResponse {
+    platforms: AdminMobileVersionPlatform[]
 }
 
 export interface AdminSetMobileVersionRequest {
@@ -737,6 +1186,16 @@ export interface FamilyInfo {
     isPrimary: boolean
 }
 
+export interface FamilyMemberView {
+    userId: number
+    name: string
+    email: string
+    role: AccessLevel
+    joinedAt: string
+    isOwner: boolean
+    isSelf: boolean
+}
+
 export interface FamilyLinkView {
     id: number
     fromFamilyId: number
@@ -757,6 +1216,7 @@ export interface LinkScopes {
     milestones: boolean
     photos: boolean
     growth: boolean
+    activities: boolean
 }
 
 export interface SharedRosterRef {
@@ -843,6 +1303,76 @@ export interface FamilyTimelineItem {
     photos: Image[]
 }
 
+export interface Activity {
+    id: number
+    familyId: number
+    name: string
+    kind: string
+    createdAt: string
+}
+
+export interface Season {
+    id: number
+    activityId: number
+    familyId: number
+    name: string
+    startDate: string
+    endDate: string
+    notes: string
+    createdAt: string
+}
+
+export interface Event {
+    id: number
+    seasonId: number
+    familyId: number
+    name: string
+    host: string
+    location: string
+    startDate: string
+    endDate: string
+    notes: string
+    createdAt: string
+}
+
+export interface EntryView {
+    entry: Entry
+    personIds: number[]
+}
+
+export interface AppearanceView {
+    appearance: Appearance
+    results: Result[]
+    photoIds: number[]
+}
+
+export interface ResultInput {
+    kind: string
+    label: string
+    rank: number | null
+    outOf: number | null
+    category: string
+    score: number | null
+    personId: number | null
+    notes: string
+}
+
+export interface SeasonSummary {
+    id: number
+    name: string
+    kind: string
+    startDate: string
+    endDate: string
+}
+
+export interface AppearanceDetail {
+    appearance: Appearance
+    results: Result[]
+    photoIds: number[]
+    entry: Entry
+    event: EventSummary
+}
+
 export interface Tag {
     id: number
     familyId: number
@@ -864,6 +1394,17 @@ export interface ChatMessage {
 export interface PhotoWithPeople {
     image: Image
     people: Person[]
+}
+
+export interface ActivityImportCounts {
+    activities: number
+    seasons: number
+    events: number
+    entries: number
+    appearances: number
+    results: number
+    reused: number
+    skipped: number
 }
 
 export interface ImportPerson {
@@ -893,6 +1434,29 @@ export interface AdminUserInfo {
     familyId: number
     familyName: string
     isAdmin: boolean
+}
+
+export interface PhotoAttempt {
+    time: string
+    imageId: number
+    reprocess: boolean
+    success: boolean
+    durationMs: number
+    reason: string
+}
+
+export interface MissingOriginal {
+    imageId: number
+    familyId: number
+    status: number
+    filePath: string
+    createdAt: string
+}
+
+export interface OrphanOriginal {
+    name: string
+    sizeBytes: number
+    modTime: string
 }
 
 export interface LogFileInfo {
@@ -930,6 +1494,51 @@ export interface LogStats {
     performanceStats: PerformanceStats
 }
 
+export interface APNsConfigInfo {
+    configured: boolean
+    teamId: string
+    keyId: string
+    bundleId: string
+    keyPath: string
+    environment: string
+    keyLoaded: boolean
+    loadError: string
+}
+
+export interface PushWorkerStats {
+    enabled: boolean
+    isRunning: boolean
+    queueLength: number
+    sent: number
+    failed: number
+    deactivated: number
+    suppressed: number
+    lastSentAt: string
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: PushAttempt[]
+}
+
+export interface PushConfigIssue {
+    setting: string
+    detail: string
+}
+
+export interface AdminPushDevice {
+    id: number
+    userId: number
+    userName: string
+    userEmail: string
+    tokenHint: string
+    platform: string
+    environment: string
+    bundleId: string
+    createdAt: string
+    updatedAt: string
+    isActive: boolean
+    environmentMismatch: boolean
+}
+
 export interface ActivitySummary {
     date: string
     photos: number
@@ -952,11 +1561,12 @@ export interface DistributionPoint {
     value: number
 }
 
-export interface RetentionMetrics {
-    day1: number
-    day7: number
-    day30: number
-    day90: number
+export interface EngagementMetrics {
+    total: number
+    neverLoggedIn: number
+    active7d: number
+    active30d: number
+    dormant90d: number
 }
 
 export interface FamilyActivity {
@@ -984,15 +1594,159 @@ export interface StorageMetrics {
 
 export interface ProcessingMetrics {
     successRate: number
-    averageProcessTime: number
     queueLength: number
 }
 
-export interface ErrorAnalysis {
-    totalErrors: number
-    errorsByCategory: DistributionPoint[]
-    errorsByLevel: DistributionPoint[]
-    recentErrors: string[]
+export interface PhotoFailureReport {
+    failed: number
+    stuck: number
+    recentFailures: FailedPhoto[]
+}
+
+export interface ConfigProblem {
+    setting: string
+    detail: string
+}
+
+export interface LogProblems {
+    windowHours: number
+    errors: number
+    recentErrors: PublicLogEntry[]
+    requests4xx: number
+    requests5xx: number
+    unavailable: boolean
+}
+
+export interface PhotoProblems {
+    failed: number
+    stuck: number
+    analysisFailed: number
+    workerStopped: boolean
+    queueLength: number
+}
+
+export interface PushProblems {
+    failed: number
+    lastError: string
+    lastErrorAt: string
+}
+
+export interface MailProblems {
+    failed: number
+    lastError: string
+    lastErrorAt: string
+    queueLength: number
+}
+
+export interface HostProblems {
+    available: boolean
+    diskUsedPct: number
+    diskLow: boolean
+    proxy5xx: number
+    proxy4xx: number
+    windowSeconds: number
+}
+
+export interface BackupProblems {
+    available: boolean
+    registered: boolean
+    neverRun: boolean
+    stale: boolean
+    lastSuccess: string
+    sizeKb: number
+}
+
+export interface DigestPerson {
+    name: string
+    signedIn: boolean
+    lastLogin: string
+    joined: boolean
+    photos: number
+    messages: number
+}
+
+export interface HostSystem {
+    load_avg: HostLoadAvg
+    memory: HostMemory
+    cpu: HostCPU
+    disk: HostDisk
+}
+
+export interface HostApp {
+    name: string
+    disk_kb: number
+    traffic: HostTraffic
+    backups: HostBackups
+    releases: HostRelease[]
+}
+
+export interface MailAttempt {
+    time: string
+    kind: string
+    to: string
+    success: boolean
+    attempts: number
+    permanent: boolean
+    error: string
+}
+
+export interface AdminMobileVersionPlatform {
+    platform: string
+    configured: boolean
+    minimumVersion: string
+    latestVersion: string
+    updateUrl: string
+    updateMessage: string
+    allowedHosts: string[]
+    warnings: string[]
+}
+
+export interface Entry {
+    id: number
+    seasonId: number
+    familyId: number
+    name: string
+    format: string
+    style: string
+    division: string
+    level: string
+    notes: string
+    createdAt: string
+}
+
+export interface Appearance {
+    id: number
+    eventId: number
+    entryId: number
+    familyId: number
+    occurredAt: string
+    notes: string
+    createdAt: string
+}
+
+export interface Result {
+    id: number
+    appearanceId: number
+    familyId: number
+    kind: string
+    label: string
+    rank: number | null
+    outOf: number | null
+    category: string
+    score: number | null
+    personId: number | null
+    notes: string
+    sortOrder: number
+    createdAt: string
+}
+
+export interface EventSummary {
+    id: number
+    name: string
+    host: string
+    location: string
+    startDate: string
+    endDate: string
 }
 
 export interface PerformanceStats {
@@ -1004,6 +1758,74 @@ export interface PerformanceStats {
     p99Response: number
     slowestEndpoints: EndpointStats[]
     endpointStats: Record<string, EndpointStats>
+}
+
+export interface PushAttempt {
+    time: string
+    userId: number
+    tokenId: number
+    tokenHint: string
+    kind: string
+    success: boolean
+    statusCode: number
+    reason: string
+    apnsId: string
+}
+
+export interface FailedPhoto {
+    id: number
+    filePath: string
+    createdAt: string
+}
+
+export interface HostLoadAvg {
+    one: number
+    five: number
+    fifteen: number
+}
+
+export interface HostMemory {
+    total_kb: number
+    available_kb: number
+    used_kb: number
+    used_pct: number
+}
+
+export interface HostCPU {
+    user_pct: number
+    system_pct: number
+    idle_pct: number
+    iowait_pct: number
+}
+
+export interface HostDisk {
+    total_kb: number
+    used_kb: number
+    free_kb: number
+    used_pct: number
+}
+
+export interface HostTraffic {
+    window_seconds: number
+    requests_total: number
+    requests_per_min: number
+    error_4xx: number
+    error_5xx: number
+    error_pct: number
+}
+
+export interface HostBackups {
+    registered: boolean
+    last_success: string
+    age_seconds: number
+    size_kb: number
+}
+
+export interface HostRelease {
+    name: string
+    sha: string
+    deployed_at: string
+    current: boolean
 }
 
 export interface EndpointStats {
@@ -1030,6 +1852,22 @@ export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInf
 
 export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
     return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
+}
+
+export async function ListFamilyMembers(data: ListFamilyMembersRequest): Promise<rpc.Response<ListFamilyMembersResponse>> {
+    return await rpc.call<ListFamilyMembersResponse>('ListFamilyMembers', JSON.stringify(data));
+}
+
+export async function LeaveFamily(data: FamilyIdRequest): Promise<rpc.Response<LeaveFamilyResponse>> {
+    return await rpc.call<LeaveFamilyResponse>('LeaveFamily', JSON.stringify(data));
+}
+
+export async function RemoveFamilyMember(data: RemoveFamilyMemberRequest): Promise<rpc.Response<RemoveFamilyMemberResponse>> {
+    return await rpc.call<RemoveFamilyMemberResponse>('RemoveFamilyMember', JSON.stringify(data));
+}
+
+export async function RotateInviteCode(data: FamilyIdRequest): Promise<rpc.Response<RotateInviteCodeResponse>> {
+    return await rpc.call<RotateInviteCodeResponse>('RotateInviteCode', JSON.stringify(data));
 }
 
 export async function RequestPasswordReset(data: RequestPasswordResetRequest): Promise<rpc.Response<RequestPasswordResetResponse>> {
@@ -1152,6 +1990,110 @@ export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Pro
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
 }
 
+export async function ListActivities(data: ListActivitiesRequest): Promise<rpc.Response<ListActivitiesResponse>> {
+    return await rpc.call<ListActivitiesResponse>('ListActivities', JSON.stringify(data));
+}
+
+export async function CreateActivity(data: CreateActivityRequest): Promise<rpc.Response<ActivityResponse>> {
+    return await rpc.call<ActivityResponse>('CreateActivity', JSON.stringify(data));
+}
+
+export async function UpdateActivity(data: UpdateActivityRequest): Promise<rpc.Response<ActivityResponse>> {
+    return await rpc.call<ActivityResponse>('UpdateActivity', JSON.stringify(data));
+}
+
+export async function DeleteActivity(data: ActivityIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteActivity', JSON.stringify(data));
+}
+
+export async function ListSeasons(data: ListSeasonsRequest): Promise<rpc.Response<ListSeasonsResponse>> {
+    return await rpc.call<ListSeasonsResponse>('ListSeasons', JSON.stringify(data));
+}
+
+export async function CreateSeason(data: CreateSeasonRequest): Promise<rpc.Response<SeasonResponse>> {
+    return await rpc.call<SeasonResponse>('CreateSeason', JSON.stringify(data));
+}
+
+export async function UpdateSeason(data: UpdateSeasonRequest): Promise<rpc.Response<SeasonResponse>> {
+    return await rpc.call<SeasonResponse>('UpdateSeason', JSON.stringify(data));
+}
+
+export async function DeleteSeason(data: SeasonIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteSeason', JSON.stringify(data));
+}
+
+export async function CreateEvent(data: CreateEventRequest): Promise<rpc.Response<EventResponse>> {
+    return await rpc.call<EventResponse>('CreateEvent', JSON.stringify(data));
+}
+
+export async function UpdateEvent(data: UpdateEventRequest): Promise<rpc.Response<EventResponse>> {
+    return await rpc.call<EventResponse>('UpdateEvent', JSON.stringify(data));
+}
+
+export async function DeleteEvent(data: EventIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteEvent', JSON.stringify(data));
+}
+
+export async function CreateEntry(data: CreateEntryRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('CreateEntry', JSON.stringify(data));
+}
+
+export async function UpdateEntry(data: UpdateEntryRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('UpdateEntry', JSON.stringify(data));
+}
+
+export async function DeleteEntry(data: EntryIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteEntry', JSON.stringify(data));
+}
+
+export async function SetEntryRoster(data: SetEntryRosterRequest): Promise<rpc.Response<EntryResponse>> {
+    return await rpc.call<EntryResponse>('SetEntryRoster', JSON.stringify(data));
+}
+
+export async function CreateAppearance(data: CreateAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('CreateAppearance', JSON.stringify(data));
+}
+
+export async function UpdateAppearance(data: UpdateAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('UpdateAppearance', JSON.stringify(data));
+}
+
+export async function DeleteAppearance(data: AppearanceIdRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('DeleteAppearance', JSON.stringify(data));
+}
+
+export async function SetAppearanceResults(data: SetAppearanceResultsRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SetAppearanceResults', JSON.stringify(data));
+}
+
+export async function GetSeasonOverview(data: GetSeasonOverviewRequest): Promise<rpc.Response<GetSeasonOverviewResponse>> {
+    return await rpc.call<GetSeasonOverviewResponse>('GetSeasonOverview', JSON.stringify(data));
+}
+
+export async function GetEventDetail(data: GetEventDetailRequest): Promise<rpc.Response<GetEventDetailResponse>> {
+    return await rpc.call<GetEventDetailResponse>('GetEventDetail', JSON.stringify(data));
+}
+
+export async function GetEntryHistory(data: GetEntryHistoryRequest): Promise<rpc.Response<GetEntryHistoryResponse>> {
+    return await rpc.call<GetEntryHistoryResponse>('GetEntryHistory', JSON.stringify(data));
+}
+
+export async function GetPersonSeason(data: GetPersonSeasonRequest): Promise<rpc.Response<GetPersonSeasonResponse>> {
+    return await rpc.call<GetPersonSeasonResponse>('GetPersonSeason', JSON.stringify(data));
+}
+
+export async function ListActivityVocabulary(data: ListActivityVocabularyRequest): Promise<rpc.Response<ListActivityVocabularyResponse>> {
+    return await rpc.call<ListActivityVocabularyResponse>('ListActivityVocabulary', JSON.stringify(data));
+}
+
+export async function SetAppearancePhotos(data: SetAppearancePhotosRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SetAppearancePhotos', JSON.stringify(data));
+}
+
+export async function SetEventPhotos(data: SetEventPhotosRequest): Promise<rpc.Response<SetEventPhotosResponse>> {
+    return await rpc.call<SetEventPhotosResponse>('SetEventPhotos', JSON.stringify(data));
+}
+
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
     return await rpc.call<CreateTagResponse>('CreateTag', JSON.stringify(data));
 }
@@ -1220,14 +2162,6 @@ export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
 }
 
-export async function ProcessAIImport(data: ProcessAIImportRequest): Promise<rpc.Response<ProcessAIImportResponse>> {
-    return await rpc.call<ProcessAIImportResponse>('ProcessAIImport', JSON.stringify(data));
-}
-
-export async function ListAIModels(data: ListAIModelsRequest): Promise<rpc.Response<ListAIModelsResponse>> {
-    return await rpc.call<ListAIModelsResponse>('ListAIModels', JSON.stringify(data));
-}
-
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {
     return await rpc.call<ListAllUsersResponse>('ListAllUsers', JSON.stringify(data));
 }
@@ -1252,6 +2186,10 @@ export async function ReanalyzeAllPhotos(data: ReanalyzeAllPhotosRequest): Promi
     return await rpc.call<ReanalyzeAllPhotosResponse>('ReanalyzeAllPhotos', JSON.stringify(data));
 }
 
+export async function CheckPhotoConsistency(data: CheckPhotoConsistencyRequest): Promise<rpc.Response<PhotoConsistencyReport>> {
+    return await rpc.call<PhotoConsistencyReport>('CheckPhotoConsistency', JSON.stringify(data));
+}
+
 export async function GetLogFiles(data: Empty): Promise<rpc.Response<GetLogFilesResponse>> {
     return await rpc.call<GetLogFilesResponse>('GetLogFiles', JSON.stringify(data));
 }
@@ -1260,8 +2198,24 @@ export async function GetLogContent(data: GetLogContentRequest): Promise<rpc.Res
     return await rpc.call<GetLogContentResponse>('GetLogContent', JSON.stringify(data));
 }
 
+export async function LookupLogReference(data: LookupLogReferenceRequest): Promise<rpc.Response<LookupLogReferenceResponse>> {
+    return await rpc.call<LookupLogReferenceResponse>('LookupLogReference', JSON.stringify(data));
+}
+
 export async function GetLogStats(data: Empty): Promise<rpc.Response<GetLogStatsResponse>> {
     return await rpc.call<GetLogStatsResponse>('GetLogStats', JSON.stringify(data));
+}
+
+export async function GetPushStatus(data: Empty): Promise<rpc.Response<GetPushStatusResponse>> {
+    return await rpc.call<GetPushStatusResponse>('GetPushStatus', JSON.stringify(data));
+}
+
+export async function ListPushDevices(data: Empty): Promise<rpc.Response<ListPushDevicesResponse>> {
+    return await rpc.call<ListPushDevicesResponse>('ListPushDevices', JSON.stringify(data));
+}
+
+export async function SendTestPushNotification(data: SendTestPushRequest): Promise<rpc.Response<SendTestPushResponse>> {
+    return await rpc.call<SendTestPushResponse>('SendTestPushNotification', JSON.stringify(data));
 }
 
 export async function GetAnalyticsOverview(data: Empty): Promise<rpc.Response<AnalyticsOverviewResponse>> {
@@ -1280,6 +2234,50 @@ export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<Syst
     return await rpc.call<SystemAnalyticsResponse>('GetSystemAnalytics', JSON.stringify(data));
 }
 
+export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
+    return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function GetWeeklyDigest(data: Empty): Promise<rpc.Response<WeeklyDigestResponse>> {
+    return await rpc.call<WeeklyDigestResponse>('GetWeeklyDigest', JSON.stringify(data));
+}
+
+export async function GetHostMetrics(data: Empty): Promise<rpc.Response<HostMetricsResponse>> {
+    return await rpc.call<HostMetricsResponse>('GetHostMetrics', JSON.stringify(data));
+}
+
+export async function RequeueStuckPhotos(data: RequeueStuckPhotosRequest): Promise<rpc.Response<RequeueStuckPhotosResponse>> {
+    return await rpc.call<RequeueStuckPhotosResponse>('RequeueStuckPhotos', JSON.stringify(data));
+}
+
+export async function RevokeUserSessions(data: RevokeUserSessionsRequest): Promise<rpc.Response<RevokeUserSessionsResponse>> {
+    return await rpc.call<RevokeUserSessionsResponse>('RevokeUserSessions', JSON.stringify(data));
+}
+
+export async function VerifyBackupPath(data: VerifyBackupPathRequest): Promise<rpc.Response<VerifyBackupPathResponse>> {
+    return await rpc.call<VerifyBackupPathResponse>('VerifyBackupPath', JSON.stringify(data));
+}
+
+export async function GetMailStats(data: GetMailStatsRequest): Promise<rpc.Response<MailWorkerStats>> {
+    return await rpc.call<MailWorkerStats>('GetMailStats', JSON.stringify(data));
+}
+
+export async function ResendPasswordReset(data: ResendPasswordResetRequest): Promise<rpc.Response<ResendPasswordResetResponse>> {
+    return await rpc.call<ResendPasswordResetResponse>('ResendPasswordReset', JSON.stringify(data));
+}
+
+export async function VerifyEmail(data: VerifyEmailRequest): Promise<rpc.Response<VerifyEmailResponse>> {
+    return await rpc.call<VerifyEmailResponse>('VerifyEmail', JSON.stringify(data));
+}
+
+export async function ResendVerificationEmail(data: Empty): Promise<rpc.Response<ResendVerificationResponse>> {
+    return await rpc.call<ResendVerificationResponse>('ResendVerificationEmail', JSON.stringify(data));
+}
+
+export async function GetDiagnostics(data: Empty): Promise<rpc.Response<DiagnosticsResponse>> {
+    return await rpc.call<DiagnosticsResponse>('GetDiagnostics', JSON.stringify(data));
+}
+
 export async function RegisterPushDevice(data: RegisterPushDeviceRequest): Promise<rpc.Response<RegisterPushDeviceResponse>> {
     return await rpc.call<RegisterPushDeviceResponse>('RegisterPushDevice', JSON.stringify(data));
 }
@@ -1288,8 +2286,20 @@ export async function UnregisterPushDevice(data: UnregisterPushDeviceRequest): P
     return await rpc.call<UnregisterPushDeviceResponse>('UnregisterPushDevice', JSON.stringify(data));
 }
 
+export async function GetNotificationPreferences(data: Empty): Promise<rpc.Response<NotificationPreferencesResponse>> {
+    return await rpc.call<NotificationPreferencesResponse>('GetNotificationPreferences', JSON.stringify(data));
+}
+
+export async function UpdateNotificationPreferences(data: UpdateNotificationPreferencesRequest): Promise<rpc.Response<UpdateNotificationPreferencesResponse>> {
+    return await rpc.call<UpdateNotificationPreferencesResponse>('UpdateNotificationPreferences', JSON.stringify(data));
+}
+
 export async function CheckMobileVersion(data: CheckMobileVersionRequest): Promise<rpc.Response<CheckMobileVersionResponse>> {
     return await rpc.call<CheckMobileVersionResponse>('CheckMobileVersion', JSON.stringify(data));
+}
+
+export async function AdminGetMobileVersions(data: Empty): Promise<rpc.Response<AdminGetMobileVersionsResponse>> {
+    return await rpc.call<AdminGetMobileVersionsResponse>('AdminGetMobileVersions', JSON.stringify(data));
 }
 
 export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {

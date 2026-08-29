@@ -1,7 +1,3 @@
-// Tests for the FamilyMembership table. Account creation still produces exactly
-// one membership matching User.FamilyId — the invariant Stage 2 established and
-// Stage 3 relies on for the primary-family default. Joining a second family is
-// what adds rows beyond it; see TestJoiningAddsMembershipWithoutDroppingPrior.
 package backend
 
 import (
@@ -35,8 +31,6 @@ func addTestUser(t *testing.T, tx *vbolt.Tx, name, email, familyCode string) Use
 	}, hash)
 }
 
-// assertSingleMembership is the Stage 2 invariant: one row per user, matching
-// the user's primary family.
 func assertSingleMembership(t *testing.T, tx *vbolt.Tx, user User) FamilyMembership {
 	t.Helper()
 	memberships := GetUserMemberships(tx, user.Id)
@@ -71,7 +65,6 @@ func TestAddUserRecordsMembership(t *testing.T) {
 		}
 		assertSingleMembership(t, tx, userB)
 
-		// The family-side index must resolve too, and must not cross families.
 		byFamily := GetFamilyMemberships(tx, userA.FamilyId)
 		if len(byFamily) != 1 || byFamily[0].UserId != userA.Id {
 			t.Errorf("MembershipByFamilyIndex: expected only user %d, got %v", userA.Id, byFamily)
@@ -83,8 +76,6 @@ func TestAddUserRecordsMembership(t *testing.T) {
 	})
 }
 
-// A user created with a valid invite code joins the existing family rather than
-// getting a new one; the membership must follow.
 func TestAddUserWithInviteCodeRecordsMembership(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()
@@ -113,8 +104,6 @@ func TestAddUserWithInviteCodeRecordsMembership(t *testing.T) {
 	})
 }
 
-// EnsureMembershipTx is what the backfill and the create paths rely on to be
-// safe to call twice.
 func TestEnsureMembershipIsIdempotent(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()
@@ -131,7 +120,6 @@ func TestEnsureMembershipIsIdempotent(t *testing.T) {
 	})
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// A lower role must not downgrade the existing row.
 		again := EnsureMembershipTx(tx, user.Id, user.FamilyId, AccessView)
 		if again.Id != first.Id {
 			t.Errorf("expected the existing membership %d, got %d", first.Id, again.Id)
@@ -147,9 +135,6 @@ func TestEnsureMembershipIsIdempotent(t *testing.T) {
 	})
 }
 
-// Stage 3 made joining additive: the new family is recorded alongside the
-// primary rather than replacing it, and the primary keeps naming the user's
-// own household.
 func TestJoiningAddsMembershipWithoutDroppingPrior(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()
@@ -184,7 +169,6 @@ func TestJoiningAddsMembershipWithoutDroppingPrior(t *testing.T) {
 			t.Errorf("primary family changed to %d, expected %d", user.FamilyId, originalFamilyId)
 		}
 
-		// Both families must reach the user from the family side too.
 		for _, familyId := range []int{originalFamilyId, otherFamilyId} {
 			found := false
 			for _, membership := range GetFamilyMemberships(tx, familyId) {
@@ -199,13 +183,10 @@ func TestJoiningAddsMembershipWithoutDroppingPrior(t *testing.T) {
 	})
 }
 
-// The backfill must produce the Stage 2 invariant for pre-existing users and
-// must be safe to run again.
 func TestBackfillFamilyMembershipsIsIdempotent(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()
 
-	// Simulate pre-migration data: users with a family but no membership rows.
 	var users []User
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		users = append(users,
@@ -221,7 +202,6 @@ func TestBackfillFamilyMembershipsIsIdempotent(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// A user with no family at all must be skipped rather than given family 0.
 	familyless := User{Id: 9001, Name: "Orphan", Email: "orphan@example.com"}
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		vbolt.Write(tx, UsersBkt, familyless.Id, &familyless)
@@ -262,8 +242,6 @@ func TestBackfillFamilyMembershipsIsIdempotent(t *testing.T) {
 	})
 }
 
-// Every user in the database must satisfy the Stage 2 invariant regardless of
-// how they were created — this is the exit criterion, checked in aggregate.
 func TestEveryUserHasExactlyOneMatchingMembership(t *testing.T) {
 	db, cleanup := setupMembershipDB(t)
 	defer cleanup()

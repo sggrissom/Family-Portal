@@ -12,16 +12,14 @@ import (
 	"go.hasen.dev/vpack"
 )
 
-// Tag struct
 type Tag struct {
 	Id        int       `json:"id"`
 	FamilyId  int       `json:"familyId"`
 	Name      string    `json:"name"`
-	Color     string    `json:"color"` // hex string, e.g. "#4A90D9"
+	Color     string    `json:"color"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// Pack function for vbolt serialization
 func PackTag(self *Tag, buf *vpack.Buffer) {
 	vpack.Version(1, buf)
 	vpack.Int(&self.Id, buf)
@@ -31,11 +29,9 @@ func PackTag(self *Tag, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 }
 
-// Buckets and indexes
 var TagBkt = vbolt.Bucket(&cfg.Info, "tags", vpack.FInt, PackTag)
 var TagByFamilyIndex = vbolt.Index(&cfg.Info, "tags_by_family", vpack.FInt, vpack.FInt)
 
-// Request/Response types
 type CreateTagRequest struct {
 	Name     string `json:"name"`
 	Color    string `json:"color"`
@@ -68,7 +64,6 @@ type ListTagsResponse struct {
 	Tags []Tag `json:"tags"`
 }
 
-// Tx helpers
 func getTagById(tx *vbolt.Tx, id int) (tag Tag) {
 	vbolt.Read(tx, TagBkt, id, &tag)
 	return
@@ -85,11 +80,6 @@ func getTagsByFamily(tx *vbolt.Tx, familyId int) []Tag {
 	return tags
 }
 
-// getVisibleTags returns the tags of every family the user belongs to, plus the
-// tags of families that have shared people into one of them. A tag is a family's
-// own vocabulary, but it is also the label on shared milestones and photos: an
-// unresolvable tag id renders as nothing, so the tags come along with the
-// records that carry them.
 func getVisibleTags(tx *vbolt.Tx, user User) []Tag {
 	tags := []Tag{}
 	seen := make(map[int]bool)
@@ -127,7 +117,6 @@ func tagNameExistsInFamily(tx *vbolt.Tx, name string, familyId int, excludeId in
 	return false
 }
 
-// RPC procedures
 func CreateTag(ctx *vbeam.Context, req CreateTagRequest) (resp CreateTagResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -207,7 +196,6 @@ func UpdateTag(ctx *vbeam.Context, req UpdateTagRequest) (resp UpdateTagResponse
 		return
 	}
 
-	// Names are unique within the tag's own family, not the user's primary one.
 	if tagNameExistsInFamily(ctx.Tx, name, tag.FamilyId, tag.Id) {
 		err = errors.New("A tag with this name already exists")
 		return
@@ -242,12 +230,16 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 		return
 	}
 
-	removeMilestoneTagsByTag(ctx.Tx, tag.Id)
-	removePhotoTagsByTag(ctx.Tx, tag.Id)
-	vbolt.SetTargetSingleTerm(ctx.Tx, TagByFamilyIndex, tag.Id, -1)
-	vbolt.Delete(ctx.Tx, TagBkt, tag.Id)
+	deleteTagTx(ctx.Tx, tag)
 	vbolt.TxCommit(ctx.Tx)
 	return
+}
+
+func deleteTagTx(tx *vbolt.Tx, tag Tag) {
+	removeMilestoneTagsByTag(tx, tag.Id)
+	removePhotoTagsByTag(tx, tag.Id)
+	vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, tag.Id, -1)
+	vbolt.Delete(tx, TagBkt, tag.Id)
 }
 
 func ListTags(ctx *vbeam.Context, req ListTagsRequest) (resp ListTagsResponse, err error) {

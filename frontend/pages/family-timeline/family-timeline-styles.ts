@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "../../styles/timeline-item";
 
 block(`
 .family-timeline-container {
@@ -18,6 +19,16 @@ block(`
 .timeline-header {
   text-align: center;
   margin-bottom: 2rem;
+}
+`);
+
+block(`
+.timeline-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 `);
 
@@ -86,7 +97,7 @@ block(`
 `);
 
 block(`
-.milestone-category {
+.family-timeline-container .milestone-category {
   display: inline-block;
   padding: 0.125rem 0.5rem;
   border-radius: 4px;
@@ -100,7 +111,7 @@ block(`
 `);
 
 block(`
-.milestone-description {
+.family-timeline-container .milestone-description {
   color: var(--text);
   font-size: 1rem;
   line-height: 1.5;
@@ -109,7 +120,7 @@ block(`
 `);
 
 block(`
-.milestone-item .timeline-item-header {
+.family-timeline-container .milestone-item .timeline-item-header {
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
@@ -118,7 +129,7 @@ block(`
 `);
 
 block(`
-.milestone-item .timeline-item-meta {
+.family-timeline-container .milestone-item .timeline-item-meta {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -140,7 +151,7 @@ block(`
 `);
 
 block(`
-.filter-group {
+.family-timeline-container .filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -150,7 +161,8 @@ block(`
 `);
 
 block(`
-.filter-group label {
+.filter-group label,
+.filter-group-caption {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
@@ -185,8 +197,6 @@ block(`
 }
 `);
 
-/* ── Year jump navigation (Phase 3) ── */
-
 block(`
 .year-jump-nav {
   display: flex;
@@ -219,19 +229,16 @@ block(`
 }
 `);
 
-/* ── Timeline spine + year groups (Phase 1) ── */
-
 block(`
-.timeline-items {
-  display: flex;
-  flex-direction: column;
+.family-timeline-container .timeline-items {
+  gap: 0;
   position: relative;
   padding-left: 2rem;
 }
 `);
 
 block(`
-.timeline-items::before {
+.family-timeline-container .timeline-items::before {
   content: '';
   position: absolute;
   left: 0.75rem;
@@ -242,8 +249,6 @@ block(`
   border-radius: 1px;
 }
 `);
-
-/* Year banner */
 
 block(`
 .year-banner {
@@ -256,7 +261,7 @@ block(`
 `);
 
 block(`
-.timeline-item + .year-banner {
+.family-timeline-container .timeline-item + .year-banner {
   margin-top: 2rem;
 }
 `);
@@ -283,12 +288,11 @@ block(`
 }
 `);
 
-/* Timeline items */
-
 block(`
-.timeline-item {
+.family-timeline-container .timeline-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
+  align-items: stretch;
   gap: 1rem;
   padding: 1rem;
   background: var(--surface);
@@ -301,7 +305,7 @@ block(`
 `);
 
 block(`
-.timeline-item::before {
+.family-timeline-container .timeline-item::before {
   content: '';
   position: absolute;
   left: -1.25rem;
@@ -316,23 +320,28 @@ block(`
 `);
 
 block(`
-.timeline-item:hover {
+.family-timeline-container .timeline-item:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-color: var(--accent);
 }
 `);
 
 block(`
-.timeline-item-icon {
+.family-timeline-container .timeline-item .timeline-item-icon {
   font-size: 1.5rem;
   display: flex;
   align-items: flex-start;
+  justify-content: flex-start;
+  width: auto;
+  height: auto;
   padding-top: 0.25rem;
+  border-radius: 0;
+  background: none;
 }
 `);
 
 block(`
-.timeline-item-content {
+.family-timeline-container .timeline-item-content {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -341,7 +350,7 @@ block(`
 `);
 
 block(`
-.timeline-item-header {
+.family-timeline-container .timeline-item-header {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -351,7 +360,7 @@ block(`
 `);
 
 block(`
-.timeline-item-person {
+.family-timeline-container .timeline-item-person {
   font-weight: 700;
   color: var(--primary-accent);
   font-size: 0.875rem;
@@ -359,37 +368,36 @@ block(`
 `);
 
 block(`
-.timeline-item-type {
+.family-timeline-container .timeline-item-type {
   padding: 0.125rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: normal;
   text-transform: uppercase;
 }
 `);
 
 block(`
-.milestone-type {
+.family-timeline-container .milestone-type {
   background: rgba(139, 92, 246, 0.1);
   color: rgb(139, 92, 246);
 }
 `);
 
 block(`
-.measurement-type {
+.family-timeline-container .measurement-type {
   background: rgba(34, 197, 94, 0.1);
   color: rgb(34, 197, 94);
 }
 `);
 
 block(`
-.photo-type {
+.family-timeline-container .photo-type {
   background: rgba(59, 130, 246, 0.1);
   color: rgb(59, 130, 246);
 }
 `);
-
-/* Birthday item (Phase 2) */
 
 block(`
 .birthday-item {
@@ -412,14 +420,15 @@ block(`
 `);
 
 block(`
-.timeline-item-age {
+.family-timeline-container .timeline-item-age {
   color: var(--muted);
   font-size: 0.875rem;
+  font-weight: 400;
 }
 `);
 
 block(`
-.timeline-item-date {
+.family-timeline-container .timeline-item-date {
   color: var(--muted);
   font-size: 0.875rem;
   margin-left: auto;
@@ -427,77 +436,66 @@ block(`
 `);
 
 block(`
-.timeline-item-description {
+.family-timeline-container .timeline-item-description {
   color: var(--text);
   font-size: 1rem;
   line-height: 1.5;
+  white-space: normal;
   word-wrap: break-word;
 }
 `);
 
 block(`
-.measurement-value {
+.family-timeline-container .measurement-value {
   font-weight: 600;
   font-size: 1.125rem;
+  color: inherit;
 }
 `);
 
 block(`
-.photo-item-details {
+.family-timeline-container .photo-item-details {
   display: flex;
   gap: 1rem;
+  align-items: stretch;
   margin-top: 0.5rem;
 }
 `);
 
 block(`
-.photo-thumbnail {
-  flex-shrink: 0;
-  width: 120px;
-  height: 120px;
-  cursor: pointer;
+.family-timeline-container .photo-thumbnail {
   border-radius: 6px;
-  overflow: hidden;
   border: 1px solid var(--border);
+  transition: none;
 }
 `);
 
 block(`
-.timeline-photo-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.family-timeline-container .photo-thumbnail:hover {
+  transform: none;
 }
 `);
 
 block(`
-.photo-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.family-timeline-container .photo-info {
   gap: 0.25rem;
-  min-width: 0;
 }
 `);
 
 block(`
-.photo-title {
-  font-weight: 600;
-  color: var(--text);
+.family-timeline-container .photo-title {
   font-size: 0.9375rem;
 }
 `);
 
 block(`
-.photo-description {
-  color: var(--muted);
+.family-timeline-container .photo-description {
   font-size: 0.875rem;
-  line-height: 1.5;
 }
 `);
 
 block(`
-.milestone-photos {
+.family-timeline-container .milestone-photos {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -506,7 +504,16 @@ block(`
 `);
 
 block(`
-.milestone-photo-thumb {
+.milestone-photo-link {
+  display: inline-flex;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+`);
+
+block(`
+.family-timeline-container .milestone-photo-thumb {
   width: 72px;
   height: 72px;
   object-fit: cover;
@@ -561,7 +568,7 @@ block(`
 `);
 
 block(`
-.timeline-item-actions {
+.family-timeline-container .timeline-item-actions {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
@@ -569,25 +576,22 @@ block(`
 `);
 
 block(`
-.btn-action {
-  background: none;
-  border: none;
+.family-timeline-container .btn-action {
+  width: auto;
+  height: auto;
   font-size: 1.25rem;
-  cursor: pointer;
   padding: 0.25rem;
-  text-decoration: none;
-  transition: transform 0.2s ease;
 }
 `);
 
 block(`
-.btn-action:hover {
-  transform: scale(1.1);
+.family-timeline-container .btn-action:hover {
+  background: transparent;
 }
 `);
 
 block(`
-.empty-state {
+.family-timeline-container .empty-state {
   text-align: center;
   padding: 3rem 1rem;
   color: var(--muted);
@@ -610,7 +614,7 @@ block(`
 `);
 
 block(`
-.empty-state-actions {
+.family-timeline-container .empty-state-actions {
   display: flex;
   gap: 1rem;
   justify-content: center;

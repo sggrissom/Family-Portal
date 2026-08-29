@@ -1,6 +1,6 @@
 import { block } from "vlens/css";
+import "../../styles/timeline-item";
 
-// Compare page container
 block(`
 .compare-page {
   max-width: 1400px;
@@ -30,7 +30,6 @@ block(`
 }
 `);
 
-// Person selector section
 block(`
 .person-selector {
   background: var(--surface);
@@ -50,7 +49,7 @@ block(`
 `);
 
 block(`
-.person-checkboxes {
+.compare-page .person-checkboxes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
@@ -92,14 +91,13 @@ block(`
 `);
 
 block(`
-.person-checkbox-item label {
+.person-checkbox-item .person-checkbox-name {
   cursor: pointer;
   flex: 1;
   font-weight: 500;
 }
 `);
 
-// Filter controls
 block(`
 .compare-filters {
   background: var(--surface);
@@ -120,7 +118,7 @@ block(`
 `);
 
 block(`
-.filter-group {
+.compare-page .filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -146,7 +144,7 @@ block(`
 `);
 
 block(`
-.filter-btn {
+.compare-page .filter-btn {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -159,7 +157,7 @@ block(`
 `);
 
 block(`
-.filter-btn:hover {
+.compare-page .filter-btn:hover {
   background: var(--hover-bg);
   border-color: var(--primary-accent);
 }
@@ -173,7 +171,6 @@ block(`
 }
 `);
 
-// Comparison grid
 block(`
 .comparison-grid {
   display: grid;
@@ -205,7 +202,6 @@ block(`
 }
 `);
 
-// Person comparison column
 block(`
 .person-column {
   background: var(--surface);
@@ -264,15 +260,6 @@ block(`
 `);
 
 block(`
-.timeline-items {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-`);
-
-// Empty states
-block(`
 .compare-empty-state {
   text-align: center;
   padding: 3rem 1rem;
@@ -297,7 +284,6 @@ block(`
 }
 `);
 
-// Mobile responsive
 block(`
 @media (max-width: 900px) {
   .comparison-grid.two-column,

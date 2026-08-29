@@ -42,8 +42,6 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<Data>({ token: "", valid: false });
   }
 
-  // Check the link up front so an expired one is reported before the user
-  // bothers choosing a password.
   let [resp, err] = await server.ValidatePasswordResetToken({ token });
   return rpc.ok<Data>({ token, valid: resp?.valid ?? false });
 }
@@ -142,7 +140,11 @@ const ResetForm = ({ data, form }: ResetPasswordPageProps) => (
       <p>Pick something at least 8 characters long</p>
     </div>
 
-    {form.error && <div className="error-message">{form.error}</div>}
+    {form.error && (
+      <div className="error-message" role="alert">
+        {form.error}
+      </div>
+    )}
 
     <form className="auth-form" onSubmit={vlens.cachePartial(onResetPasswordClicked, data, form)}>
       <div className="form-group">

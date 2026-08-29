@@ -11,6 +11,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -29,12 +31,19 @@ type Claims struct {
 }
 
 type LogoutRequest struct {
-	DeviceToken string `json:"deviceToken"`
+	DeviceToken  string `json:"deviceToken"`
+	RefreshToken string `json:"refreshToken"`
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refreshToken"`
 }
 
 var appDb *vbolt.DB
 
 const minimumJWTSecretLength = 32
+
+const refreshTokenLifetime = 30 * 24 * time.Hour
 
 func resolveJWTSecret() (string, error) {
 	jwtSecret := os.Getenv("JWT_SECRET_KEY")
@@ -66,24 +75,57 @@ func SetupAuth(app *vbeam.Application) {
 
 	jwtKey = []byte(jwtSecret)
 
-	// Register essential auth API endpoints
 	app.HandleFunc("/api/login", loginHandler)
 	app.HandleFunc("/api/logout", logoutHandler)
 	app.HandleFunc("/api/refresh", refreshTokenHandler)
 
-	// Register Google OAuth endpoints
 	app.HandleFunc("/api/login/google", googleLoginHandler)
 	app.HandleFunc("/api/google/callback", googleCallbackHandler)
 	app.HandleFunc("/api/login/google/token", googleTokenLoginHandler)
 
-	// Setup Google OAuth configuration
+	app.HandleFunc("/api/login/apple", appleLoginHandler)
+	app.HandleFunc("/api/apple/callback", appleCallbackHandler)
+	app.HandleFunc("/api/login/apple/token", appleTokenLoginHandler)
+
+	app.HandleFunc("/api/auth/providers", authProvidersHandler)
+
 	err = SetupGoogleOAuth()
 	if err != nil {
 		log.Printf("Google OAuth setup failed: %v", err)
 		log.Println("Google login will not be available. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable.")
 	}
 
+	err = SetupAppleOAuth()
+	if err != nil {
+		log.Printf("Apple Sign In setup failed: %v", err)
+		log.Println("Apple login will not be available. Set APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_KEY_PATH to enable.")
+	}
+
 	appDb = app.DB
+}
+
+const invalidCredentialsMessage = "Invalid credentials"
+
+var decoyPasswordHash = sync.OnceValue(func() []byte {
+	secret, err := generateToken(32)
+	if err != nil {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	if err != nil {
+		return nil
+	}
+	return hash
+})
+
+// Burns the same bcrypt work a real check would, so a missing account and a
+// wrong password take the same time. The result can never match, hence discarded.
+func compareAgainstDecoyPassword(password string) {
+	hash := decoyPasswordHash()
+	if hash == nil {
+		return
+	}
+	_ = bcrypt.CompareHashAndPassword(hash, []byte(password))
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -112,11 +154,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		passHash = GetPassHash(tx, userId)
 	})
 
-	if user.Id == 0 {
-		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with unknown email", map[string]interface{}{
-			"email": credentials.Email,
+	if user.Id == 0 || len(passHash) == 0 {
+		compareAgainstDecoyPassword(credentials.Password)
+		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with no usable password on file", map[string]interface{}{
+			"email":        redactEmail(credentials.Email),
+			"accountFound": user.Id != 0,
 		})
-		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
+		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: invalidCredentialsMessage})
 		return
 	}
 
@@ -124,9 +168,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		LogWarnWithRequest(r, LogCategoryAuth, "Login attempt with invalid password", map[string]interface{}{
 			"userId": user.Id,
-			"email":  user.Email,
+			"email":  redactEmail(user.Email),
 		})
-		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Invalid credentials"})
+		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: invalidCredentialsMessage})
 		return
 	}
 
@@ -140,10 +184,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log successful login
 	LogInfoWithRequest(r, LogCategoryAuth, "User login successful", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	resp := GetAuthResponseForUser(user)
@@ -156,12 +199,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try to get user info before clearing the cookie
 	user, _ := AuthenticateRequest(r)
 
-	// Native clients can identify the device that is signing out so it no
-	// longer receives notifications for this account. An empty body remains
-	// valid for browser clients, which do not register a push device token.
 	var logoutRequest LogoutRequest
 	if r.Body != nil {
 		decoder := json.NewDecoder(r.Body)
@@ -171,25 +210,21 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Delete refresh token from database if present
-	if cookie, err := r.Cookie("refreshToken"); err == nil && cookie.Value != "" {
+	if presented, _ := presentedRefreshToken(r, logoutRequest.RefreshToken); presented != "" {
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-			DeleteRefreshToken(tx, cookie.Value)
+			DeleteRefreshToken(tx, presented)
 			vbolt.TxCommit(tx)
 		})
 	}
 
 	if user.Id != 0 && logoutRequest.DeviceToken != "" {
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-			// Do not disclose whether an arbitrary token exists or belongs to a
-			// different user. Logout should still succeed and clear the session.
 			if err := deactivatePushDeviceToken(tx, user.Id, logoutRequest.DeviceToken); err == nil {
 				vbolt.TxCommit(tx)
 			}
 		})
 	}
 
-	// Clear auth token cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "authToken",
 		Value:    "",
@@ -200,22 +235,12 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(0, 0),
 	})
 
-	// Clear refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refreshToken",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Unix(0, 0),
-	})
+	clearRefreshTokenCookie(w)
 
-	// Log logout event
 	if user.Id != 0 {
 		LogInfoWithRequest(r, LogCategoryAuth, "User logout", map[string]interface{}{
 			"userId": user.Id,
-			"email":  user.Email,
+			"email":  redactEmail(user.Email),
 		})
 	}
 
@@ -232,9 +257,8 @@ func generateToken(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// setAuthJwtCookie generates a JWT token and sets it as a cookie
 func setAuthJwtCookie(user User, w http.ResponseWriter) (tokenString string, err error) {
-	expirationTime := time.Now().Add(24 * time.Hour) // 24 hour expiry
+	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -254,7 +278,7 @@ func setAuthJwtCookie(user User, w http.ResponseWriter) (tokenString string, err
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		MaxAge:   60 * 60 * 24, // 24 hours
+		MaxAge:   60 * 60 * 24,
 	})
 	return
 }
@@ -265,15 +289,13 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		return
 	}
 
-	// Create and set refresh token (30 days)
-	var refreshToken RefreshToken
+	var refreshTokenString string
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		refreshToken, err = CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
+		_, refreshTokenString, err = CreateRefreshToken(tx, user.Id, refreshTokenLifetime)
 		if err != nil {
 			return
 		}
 
-		// Update last login
 		user.LastLogin = time.Now()
 		vbolt.Write(tx, UsersBkt, user.Id, &user)
 		vbolt.TxCommit(tx)
@@ -283,18 +305,33 @@ func generateAuthJwt(user User, w http.ResponseWriter) (tokenString string, err 
 		return
 	}
 
-	// Set refresh token cookie (30 days)
+	setRefreshTokenCookie(w, refreshTokenString)
+
+	return
+}
+
+func setRefreshTokenCookie(w http.ResponseWriter, tokenString string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refreshToken",
-		Value:    refreshToken.Token,
+		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   60 * 60 * 24 * 30, // 30 days
+		MaxAge:   int(refreshTokenLifetime.Seconds()),
 	})
+}
 
-	return
+func clearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refreshToken",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+	})
 }
 
 func generateJwtTokenString(user User) (string, error) {
@@ -335,9 +372,21 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get refresh token from cookie
-	cookie, err := r.Cookie("refreshToken")
-	if err != nil || cookie.Value == "" {
+	var refreshRequest RefreshRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&refreshRequest); err != nil && !errors.Is(err, io.EOF) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Invalid refresh request",
+			})
+			return
+		}
+	}
+
+	presented, viaCookie := presentedRefreshToken(r, refreshRequest.RefreshToken)
+
+	if presented == "" {
 		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt without token", nil)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -348,21 +397,26 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user User
-	var validToken RefreshToken
-
-	// Validate refresh token and get user
-	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-		var valid bool
-		validToken, valid = ValidateRefreshToken(tx, cookie.Value)
-		if !valid {
+	var rotated RefreshToken
+	var newTokenString string
+	var rotateErr error
+	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		rotated, newTokenString, rotateErr = RotateRefreshToken(tx, presented, time.Now())
+		if rotateErr != nil {
+			vbolt.TxCommit(tx)
 			return
 		}
 
-		user = GetUser(tx, validToken.UserId)
+		user = GetUser(tx, rotated.UserId)
+		if user.Id == 0 {
+			return
+		}
+		vbolt.TxCommit(tx)
 	})
 
-	if user.Id == 0 {
-		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt with invalid token", nil)
+	if errors.Is(rotateErr, ErrRefreshTokenReused) {
+		LogWarnWithRequest(r, LogCategoryAuth, "Refresh token reuse detected; session revoked", nil)
+		clearRefreshTokenCookie(w)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -371,13 +425,19 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update last used timestamp
-	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
-		UpdateRefreshTokenLastUsed(tx, validToken.Id)
-		vbolt.TxCommit(tx)
-	})
+	if rotateErr != nil || user.Id == 0 {
+		LogWarnWithRequest(r, LogCategoryAuth, "Refresh attempt with invalid token", nil)
+		clearRefreshTokenCookie(w)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid or expired refresh token",
+		})
+		return
+	}
 
-	// Generate new JWT (uses helper function that doesn't create new refresh token)
+	setRefreshTokenCookie(w, newTokenString)
+
 	token, err := setAuthJwtCookie(user, w)
 	if err != nil {
 		LogErrorWithRequest(r, LogCategoryAuth, "Failed to generate JWT during refresh", map[string]interface{}{
@@ -392,17 +452,27 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log successful refresh
 	LogInfoWithRequest(r, LogCategoryAuth, "Token refresh successful", map[string]interface{}{
 		"userId": user.Id,
-		"email":  user.Email,
+		"email":  redactEmail(user.Email),
 	})
 
 	w.Header().Set("Content-Type", "application/json")
 	resp := GetAuthResponseForUser(user)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	body := map[string]interface{}{
 		"success": true,
 		"token":   token,
 		"auth":    resp,
-	})
+	}
+	if !viaCookie {
+		body["refreshToken"] = newTokenString
+	}
+	json.NewEncoder(w).Encode(body)
+}
+
+func presentedRefreshToken(r *http.Request, fromBody string) (token string, viaCookie bool) {
+	if cookie, err := r.Cookie("refreshToken"); err == nil && cookie.Value != "" {
+		return cookie.Value, true
+	}
+	return strings.TrimSpace(fromBody), false
 }

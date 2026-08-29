@@ -9,13 +9,14 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute, splitPeopleByType } from "../../lib/routeHelpers";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
+import { PhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
 
 type AddMilestoneForm = {
   selectedPersonId: string;
   description: string;
   category: string;
-  inputType: string; // 'today' | 'date' | 'age'
+  inputType: string;
   milestoneDate: string;
   ageYears: string;
   ageMonths: string;
@@ -81,7 +82,6 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-milestone/123)
   const personId = getIdFromRoute(route);
   const personIdFromUrl = personId ? personId.toString() : undefined;
 
@@ -108,7 +108,6 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
   form.loading = true;
   form.error = "";
 
-  // Validation
   if (!form.selectedPersonId) {
     form.error = "Please select a family member";
     form.loading = false;
@@ -199,7 +198,6 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps) => {
-  // Filter to show all family members for milestones
   const { children, parents } = splitPeopleByType(people);
 
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
@@ -218,10 +216,13 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
           <p>Capture special moments and developmental milestones</p>
         </div>
 
-        {form.error && <div className="error-message">{form.error}</div>}
+        {form.error && (
+          <div className="error-message" role="alert">
+            {form.error}
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
-          {/* Person Selection */}
           <div className="form-group">
             <label htmlFor="person">Family Member</label>
             <select
@@ -244,7 +245,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </select>
           </div>
 
-          {/* Category */}
           <div className="form-group">
             <label htmlFor="category">Category</label>
             <select
@@ -260,7 +260,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </select>
           </div>
 
-          {/* Description */}
           <div className="form-group">
             <label htmlFor="description">Description</label>
             <textarea
@@ -276,67 +275,47 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </small>
           </div>
 
-          {/* Photos */}
           <div className="form-group">
             <label>Photos (optional)</label>
-            <div className="milestone-photo-picker">
-              {personPhotos.length === 0 ? (
-                <p className="milestone-photo-picker-empty">
-                  {selectedPersonIdNum > 0
-                    ? "No photos found for this person"
-                    : "Select a family member to see their photos"}
-                </p>
-              ) : (
-                personPhotos.map(p => {
-                  const isSelected = form.photoIds.includes(p.image.id);
-                  return (
-                    <div
-                      key={p.image.id}
-                      className={`milestone-photo-picker-item${isSelected ? " selected" : ""}`}
-                      onClick={
-                        form.loading
-                          ? undefined
-                          : vlens.cachePartial(onTogglePhoto, form, p.image.id)
-                      }
-                    >
-                      <img
-                        src={`/api/photo/${p.image.id}/thumb`}
-                        className="milestone-photo-picker-img"
-                        alt=""
-                        loading="lazy"
-                      />
-                      {isSelected && <div className="milestone-photo-picker-check">✓</div>}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <PhotoPicker
+              photos={personPhotos}
+              selectedIds={form.photoIds}
+              onToggle={photoId => onTogglePhoto(form, photoId)}
+              disabled={form.loading}
+              emptyText={
+                selectedPersonIdNum > 0
+                  ? "No photos found for this person"
+                  : "Select a family member to see their photos"
+              }
+            />
           </div>
 
-          {/* Tags */}
           {tags.length > 0 && (
             <div className="form-group">
-              <label>Tags</label>
-              <div className="tag-picker">
+              <span className="form-group-caption" id="tagPickerLabel">
+                Tags
+              </span>
+              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
                 {tags.map(tag => {
                   const selected = form.tagIds.includes(tag.id);
                   return (
-                    <div
+                    <button
                       key={tag.id}
+                      type="button"
                       className={`tag-pill${selected ? " selected" : ""}`}
                       style={{ borderColor: tag.color }}
+                      aria-pressed={selected}
                       onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
                     >
                       <span className="tag-color-dot" style={{ background: tag.color }} />
                       {tag.name}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* Date or Age Toggle */}
           <div className="form-group">
             <label>When did this happen?</label>
             <div className="radio-group">
@@ -376,7 +355,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           </div>
 
-          {/* Date Input */}
           {form.inputType === "date" && (
             <div className="form-group">
               <label htmlFor="date">Date</label>
@@ -391,7 +369,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           )}
 
-          {/* Age Input */}
           {form.inputType === "age" && (
             <div className="form-row">
               <div className="form-group flex-2">
@@ -422,7 +399,6 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
             </div>
           )}
 
-          {/* Submit Button */}
           <div className="form-actions">
             <a href="/dashboard" className="btn btn-secondary">
               Cancel

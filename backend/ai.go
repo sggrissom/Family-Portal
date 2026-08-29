@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
 
-// AIConversionRequest contains the data needed for AI conversion
 type AIConversionRequest struct {
 	UnstructuredText string
 	Model            string
@@ -20,20 +20,25 @@ type AIConversionRequest struct {
 	FamilyID         int
 }
 
-// AIConversionResult contains the result of AI conversion
 type AIConversionResult struct {
 	GeneratedJSON string
 	TokensUsed    int
 	Model         string
-	ResponseTime  int64 // Milliseconds
+	ResponseTime  int64
 }
 
-// GetDefaultAIModel returns the default AI model
+func withoutRequestURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
+}
+
 func GetDefaultAIModel() string {
 	return "models/gemini-2.5-flash"
 }
 
-// ValidateAIConfiguration checks if the AI provider is properly configured
 func ValidateAIConfiguration() error {
 	if os.Getenv("GEMINI_API_KEY") == "" {
 		return errors.New("GEMINI_API_KEY environment variable not set")
@@ -41,24 +46,22 @@ func ValidateAIConfiguration() error {
 	return nil
 }
 
-// ListAvailableModels returns the list of available Gemini models
 func ListAvailableModels() ([]string, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return nil, errors.New("Gemini API key not configured")
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
-
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", "https://generativelanguage.googleapis.com/v1beta/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("X-Goog-Api-Key", apiKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
+		return nil, fmt.Errorf("API request failed: %w", withoutRequestURL(err))
 	}
 	defer resp.Body.Close()
 
@@ -82,7 +85,6 @@ func ListAvailableModels() ([]string, error) {
 
 	var models []string
 	for _, model := range listResponse.Models {
-		// Check if it supports generateContent
 		for _, action := range model.SupportedActions {
 			if action == "generateContent" {
 				models = append(models, model.Name)
@@ -94,8 +96,6 @@ func ListAvailableModels() ([]string, error) {
 	return models, nil
 }
 
-// ConvertToJSON calls the AI API to convert unstructured text to JSON
-// Currently implemented using Gemini
 func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 	startTime := time.Now()
 
@@ -104,7 +104,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, errors.New("Gemini API key not configured")
 	}
 
-	// Prepare Gemini API request
 	geminiRequest := map[string]interface{}{
 		"contents": []map[string]interface{}{
 			{
@@ -127,21 +126,20 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Make API request
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent?key=%s",
-		request.Model, apiKey)
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent", request.Model)
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Goog-Api-Key", apiKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
+		return nil, fmt.Errorf("API request failed: %w", withoutRequestURL(err))
 	}
 	defer resp.Body.Close()
 
@@ -150,7 +148,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, fmt.Errorf("Gemini API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
 	var geminiResponse struct {
 		Candidates []struct {
 			Content struct {
@@ -173,7 +170,6 @@ func ConvertToJSON(request AIConversionRequest) (*AIConversionResult, error) {
 		return nil, errors.New("no response from Gemini")
 	}
 
-	// Check if response was truncated
 	finishReason := geminiResponse.Candidates[0].FinishReason
 	if finishReason == "MAX_TOKENS" {
 		return nil, errors.New("response truncated - increase maxOutputTokens or simplify input")

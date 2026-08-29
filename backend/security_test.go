@@ -162,7 +162,6 @@ func TestAddSecurityHeaders(t *testing.T) {
 	t.Run("Content-Security-Policy", func(t *testing.T) {
 		actual := headers.Get("Content-Security-Policy")
 
-		// Check that CSP contains expected directives
 		expectedDirectives := []string{
 			"default-src 'self'",
 			"script-src 'self' 'unsafe-inline'",
@@ -182,7 +181,6 @@ func TestAddSecurityHeaders(t *testing.T) {
 }
 
 func TestSecurityWrapperServeHTTP(t *testing.T) {
-	// Create a simple test handler that writes a response
 	testApp, cleanup := setupTestApp(t)
 	defer cleanup()
 	testApp.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +190,6 @@ func TestSecurityWrapperServeHTTP(t *testing.T) {
 
 	wrapper := NewSecurityWrapper(testApp)
 
-	// Test request
 	req := httptest.NewRequest("GET", "/test", nil)
 	recorder := httptest.NewRecorder()
 
@@ -212,7 +209,6 @@ func TestSecurityWrapperServeHTTP(t *testing.T) {
 	t.Run("Security headers are applied", func(t *testing.T) {
 		headers := recorder.Header()
 
-		// Verify key security headers are present
 		if headers.Get("X-Content-Type-Options") != "nosniff" {
 			t.Error("Expected X-Content-Type-Options header to be set")
 		}
@@ -264,11 +260,9 @@ func TestSecurityWrapperWithDifferentRoutes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a fresh app for each test case to avoid route conflicts
 			testApp, cleanup := setupTestApp(t)
 			defer cleanup()
 
-			// Setup the specific route for this test
 			tt.setupRoute(testApp)
 
 			wrapper := NewSecurityWrapper(testApp)
@@ -287,7 +281,6 @@ func TestSecurityWrapperWithDifferentRoutes(t *testing.T) {
 				t.Errorf("Expected body '%s', got '%s'", tt.expectedBody, body)
 			}
 
-			// Verify security headers are always present
 			headers := recorder.Header()
 			if headers.Get("X-Frame-Options") != "DENY" {
 				t.Error("Expected X-Frame-Options header to be set on all routes")
@@ -297,7 +290,6 @@ func TestSecurityWrapperWithDifferentRoutes(t *testing.T) {
 }
 
 func TestSecurityHeadersWithCustomHeaders(t *testing.T) {
-	// Test that security headers don't interfere with custom application headers
 	testApp, cleanup := setupTestApp(t)
 	defer cleanup()
 	testApp.HandleFunc("/custom", func(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +308,6 @@ func TestSecurityHeadersWithCustomHeaders(t *testing.T) {
 
 	headers := recorder.Header()
 
-	// Verify custom headers are preserved
 	if headers.Get("Custom-Header") != "custom-value" {
 		t.Error("Expected custom header to be preserved")
 	}
@@ -325,13 +316,11 @@ func TestSecurityHeadersWithCustomHeaders(t *testing.T) {
 		t.Error("Expected Content-Type header to be preserved")
 	}
 
-	// Verify security headers are still added
 	if headers.Get("X-Content-Type-Options") != "nosniff" {
 		t.Error("Expected security headers to be added alongside custom headers")
 	}
 }
 
-// Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && findSubstring(s, substr)
 }

@@ -1,7 +1,7 @@
 package backend
 
 import (
-	"errors"
+	"sort"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -15,7 +15,6 @@ func RegisterAnalyticsMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetSystemAnalytics)
 }
 
-// Analytics Overview
 type AnalyticsOverviewResponse struct {
 	TotalUsers      int                 `json:"totalUsers"`
 	TotalFamilies   int                 `json:"totalFamilies"`
@@ -41,12 +40,11 @@ type SystemHealthSummary struct {
 	PhotosFailed     int `json:"photosFailed"`
 }
 
-// User Analytics
 type UserAnalyticsResponse struct {
 	RegistrationTrends     []DataPoint         `json:"registrationTrends"`
 	LoginActivityTrends    []DataPoint         `json:"loginActivityTrends"`
 	FamilySizeDistribution []DistributionPoint `json:"familySizeDistribution"`
-	UserRetention          RetentionMetrics    `json:"userRetention"`
+	UserEngagement         EngagementMetrics   `json:"userEngagement"`
 	TopActiveFamilies      []FamilyActivity    `json:"topActiveFamilies"`
 }
 
@@ -60,11 +58,12 @@ type DistributionPoint struct {
 	Value int    `json:"value"`
 }
 
-type RetentionMetrics struct {
-	Day1  float64 `json:"day1"`
-	Day7  float64 `json:"day7"`
-	Day30 float64 `json:"day30"`
-	Day90 float64 `json:"day90"`
+type EngagementMetrics struct {
+	Total         int `json:"total"`
+	NeverLoggedIn int `json:"neverLoggedIn"`
+	Active7d      int `json:"active7d"`
+	Active30d     int `json:"active30d"`
+	Dormant90d    int `json:"dormant90d"`
 }
 
 type FamilyActivity struct {
@@ -75,7 +74,6 @@ type FamilyActivity struct {
 	Score           int    `json:"score"`
 }
 
-// Content Analytics
 type ContentAnalyticsResponse struct {
 	PhotoUploadTrends         []DataPoint          `json:"photoUploadTrends"`
 	MilestonesByCategory      []DistributionPoint  `json:"milestonesByCategory"`
@@ -94,12 +92,10 @@ type FamilyContentStats struct {
 	MilestonesPerChild float64 `json:"milestonesPerChild"`
 }
 
-// System Analytics
 type SystemAnalyticsResponse struct {
-	StorageUsage      StorageMetrics    `json:"storageUsage"`
-	ProcessingMetrics ProcessingMetrics `json:"processingMetrics"`
-	ErrorAnalysis     ErrorAnalysis     `json:"errorAnalysis"`
-	APIRequestTrends  []DataPoint       `json:"apiRequestTrends"`
+	StorageUsage      StorageMetrics     `json:"storageUsage"`
+	ProcessingMetrics ProcessingMetrics  `json:"processingMetrics"`
+	PhotoFailures     PhotoFailureReport `json:"photoFailures"`
 }
 
 type StorageMetrics struct {
@@ -109,31 +105,22 @@ type StorageMetrics struct {
 }
 
 type ProcessingMetrics struct {
-	SuccessRate        float64 `json:"successRate"`
-	AverageProcessTime float64 `json:"averageProcessTime"`
-	QueueLength        int     `json:"queueLength"`
+	SuccessRate float64 `json:"successRate"`
+	QueueLength int     `json:"queueLength"`
 }
 
-type ErrorAnalysis struct {
-	TotalErrors      int                 `json:"totalErrors"`
-	ErrorsByCategory []DistributionPoint `json:"errorsByCategory"`
-	ErrorsByLevel    []DistributionPoint `json:"errorsByLevel"`
-	RecentErrors     []string            `json:"recentErrors"`
+type PhotoFailureReport struct {
+	Failed         int           `json:"failed"`
+	Stuck          int           `json:"stuck"`
+	RecentFailures []FailedPhoto `json:"recentFailures"`
 }
 
-// Helper function to check admin access
-func requireAdminAccess(ctx *vbeam.Context) error {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		return ErrAuthFailure
-	}
-	if user.Id != 1 {
-		return errors.New("Unauthorized: Admin access required")
-	}
-	return nil
+type FailedPhoto struct {
+	Id        int    `json:"id"`
+	FilePath  string `json:"filePath"`
+	CreatedAt string `json:"createdAt"`
 }
 
-// Get analytics overview with key metrics
 func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverviewResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -143,7 +130,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 	weekAgo := now.AddDate(0, 0, -7)
 	monthAgo := now.AddDate(0, 0, -30)
 
-	// Count totals
 	var users []User
 	vbolt.IterateAll(ctx.Tx, UsersBkt, func(key int, user User) bool {
 		users = append(users, user)
@@ -173,7 +159,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 	resp.TotalPhotos = len(photos)
 	resp.TotalMilestones = len(milestones)
 
-	// Calculate active users
 	for _, user := range users {
 		if user.LastLogin.After(weekAgo) {
 			resp.ActiveUsers7d++
@@ -189,14 +174,12 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 		}
 	}
 
-	// Recent activity (last 7 days)
 	activityMap := make(map[string]*ActivitySummary)
 	for i := 0; i < 7; i++ {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
 		activityMap[date] = &ActivitySummary{Date: date}
 	}
 
-	// Count photos by day
 	for _, photo := range photos {
 		date := photo.CreatedAt.Format("2006-01-02")
 		if activity, exists := activityMap[date]; exists {
@@ -204,7 +187,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 		}
 	}
 
-	// Count milestones by day
 	for _, milestone := range milestones {
 		date := milestone.CreatedAt.Format("2006-01-02")
 		if activity, exists := activityMap[date]; exists {
@@ -212,7 +194,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 		}
 	}
 
-	// Count logins by day (approximation using LastLogin)
 	for _, user := range users {
 		date := user.LastLogin.Format("2006-01-02")
 		if activity, exists := activityMap[date]; exists {
@@ -220,7 +201,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 		}
 	}
 
-	// Convert to slice
 	for i := 6; i >= 0; i-- {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
 		if activity := activityMap[date]; activity != nil {
@@ -228,7 +208,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 		}
 	}
 
-	// System health
 	photosProcessing := 0
 	photosFailed := 0
 	for _, photo := range photos {
@@ -248,7 +227,6 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 	return
 }
 
-// Get detailed user analytics
 func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -266,7 +244,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		return true
 	})
 
-	// Registration trends (last 30 days)
 	now := time.Now()
 	registrationMap := make(map[string]int)
 	loginMap := make(map[string]int)
@@ -289,7 +266,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		}
 	}
 
-	// Convert to data points
 	for i := 29; i >= 0; i-- {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
 		resp.RegistrationTrends = append(resp.RegistrationTrends, DataPoint{
@@ -302,12 +278,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		})
 	}
 
-	// Family size distribution. Size means membership, not the primary family:
-	// User.FamilyId is only a user's *default* family, so a household whose
-	// members all joined it as a secondary family would measure as empty and be
-	// dropped by the size > 0 filter below. A user in two families counts toward
-	// both, which is what "how big is this household" means — this is a
-	// distribution over families, not a partition of users.
 	familyMembers := make(map[int]map[int]bool)
 	countMember := func(familyId int, userId int) {
 		if familyId == 0 || userId == 0 {
@@ -326,7 +296,7 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		return true
 	})
 
-	familySizes := make(map[int]int) // family size -> count
+	familySizes := make(map[int]int)
 	for _, family := range families {
 		familySizes[len(familyMembers[family.Id])]++
 	}
@@ -340,44 +310,23 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		}
 	}
 
-	// Calculate retention (simplified)
-	totalUsers := len(users)
-	if totalUsers > 0 {
-		day1Retained := 0
-		day7Retained := 0
-		day30Retained := 0
-		day90Retained := 0
-
-		for _, user := range users {
-			daysSinceReg := int(now.Sub(user.Creation).Hours() / 24)
-			daysSinceLogin := int(now.Sub(user.LastLogin).Hours() / 24)
-
-			if daysSinceReg >= 1 && daysSinceLogin <= 1 {
-				day1Retained++
-			}
-			if daysSinceReg >= 7 && daysSinceLogin <= 7 {
-				day7Retained++
-			}
-			if daysSinceReg >= 30 && daysSinceLogin <= 30 {
-				day30Retained++
-			}
-			if daysSinceReg >= 90 && daysSinceLogin <= 90 {
-				day90Retained++
-			}
+	resp.UserEngagement.Total = len(users)
+	for _, user := range users {
+		if !user.LastLogin.After(user.Creation.Add(time.Minute)) {
+			resp.UserEngagement.NeverLoggedIn++
+			continue
 		}
-
-		resp.UserRetention = RetentionMetrics{
-			Day1:  float64(day1Retained) / float64(totalUsers) * 100,
-			Day7:  float64(day7Retained) / float64(totalUsers) * 100,
-			Day30: float64(day30Retained) / float64(totalUsers) * 100,
-			Day90: float64(day90Retained) / float64(totalUsers) * 100,
+		switch {
+		case user.LastLogin.After(now.AddDate(0, 0, -7)):
+			resp.UserEngagement.Active7d++
+			resp.UserEngagement.Active30d++
+		case user.LastLogin.After(now.AddDate(0, 0, -30)):
+			resp.UserEngagement.Active30d++
+		case user.LastLogin.Before(now.AddDate(0, 0, -90)):
+			resp.UserEngagement.Dormant90d++
 		}
 	}
 
-	// Top active families (by content creation). Deliberately provenance: a leaf
-	// record's FamilyId is the family that created it, which is exactly what
-	// "active" should measure. A family that can only *see* a shared person's
-	// photos through a link did not make them and should not score for them.
 	familyActivityMap := make(map[int]*FamilyActivity)
 	for _, family := range families {
 		familyActivityMap[family.Id] = &FamilyActivity{
@@ -385,7 +334,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		}
 	}
 
-	// Count photos per family
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
 		if activity, exists := familyActivityMap[image.FamilyId]; exists {
 			activity.TotalPhotos++
@@ -398,7 +346,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		return true
 	})
 
-	// Count milestones per family
 	vbolt.IterateAll(ctx.Tx, MilestoneBkt, func(key int, milestone Milestone) bool {
 		if activity, exists := familyActivityMap[milestone.FamilyId]; exists {
 			activity.TotalMilestones++
@@ -411,10 +358,9 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 		return true
 	})
 
-	// Calculate activity scores and add to response
 	for _, activity := range familyActivityMap {
 		if activity.TotalPhotos > 0 || activity.TotalMilestones > 0 {
-			activity.Score = activity.TotalPhotos + activity.TotalMilestones*2 // Weight milestones higher
+			activity.Score = activity.TotalPhotos + activity.TotalMilestones*2
 			resp.TopActiveFamilies = append(resp.TopActiveFamilies, *activity)
 		}
 	}
@@ -423,7 +369,6 @@ func GetUserAnalytics(ctx *vbeam.Context, req Empty) (resp UserAnalyticsResponse
 	return
 }
 
-// Get detailed content analytics
 func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -441,7 +386,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		return true
 	})
 
-	// Photo upload trends (last 30 days)
 	now := time.Now()
 	photoMap := make(map[string]int)
 	for i := 0; i < 30; i++ {
@@ -464,7 +408,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		})
 	}
 
-	// Milestones by category
 	categoryMap := make(map[string]int)
 	for _, milestone := range milestones {
 		categoryMap[milestone.Category]++
@@ -477,7 +420,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		})
 	}
 
-	// Photo formats
 	formatMap := make(map[string]int)
 	for _, photo := range photos {
 		formatMap[photo.MimeType]++
@@ -490,34 +432,17 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		})
 	}
 
-	// Content per family
 	var families []Family
 	vbolt.IterateAll(ctx.Tx, FamiliesBkt, func(key int, family Family) bool {
 		families = append(families, family)
 		return true
 	})
 
-	// Children per family, counted on the *home* roster — a person's home family
-	// is Person.FamilyId, and a person shared onto another family's roster is
-	// already counted there. Counting the full PersonFamily roster instead would
-	// count a shared child once per household it appears on, and break the
-	// system-wide averages below, which divide global totals by this sum.
-	//
-	// This is consistent with the provenance counts of photos and milestones
-	// below: a link tops out at MaxLinkAccess (AccessView), so a family that
-	// only hosts a shared person can never create content for them. The two
-	// numbers are both about what a family owns.
-	//
-	// One pass over PeopleBkt rather than a full scan per family, which was
-	// O(families x people).
 	homeChildren := make(map[int]int)
 	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, person Person) bool {
 		if person.FamilyId == 0 {
 			return true
 		}
-		// Role comes from the home roster row. Person.Type is deprecated in
-		// favor of PersonFamily.Role, but is still written in step with it, so
-		// it is the fallback for anyone predating the roster table.
 		role := person.Type
 		if row, found := FindPersonFamily(ctx.Tx, person.Id, person.FamilyId); found {
 			role = row.Role
@@ -534,7 +459,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 			Children:   homeChildren[family.Id],
 		}
 
-		// Count photos and milestones for this family, by provenance
 		for _, photo := range photos {
 			if photo.FamilyId == family.Id {
 				stats.Photos++
@@ -557,13 +481,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 		}
 	}
 
-	// Calculate averages. The denominator is every child in the system, not the
-	// sum over ContentPerFamily: that slice drops families with no photos and no
-	// milestones, so using it divided a global photo count by a subset of the
-	// children and inflated both averages. (Pre-existing, independent of
-	// multi-family — a family with children and no content has always been
-	// dropped.) Because homeChildren counts home rosters, it is a true partition
-	// of people and stays comparable with the global photo and milestone counts.
 	totalChildren := 0
 	for _, count := range homeChildren {
 		totalChildren += count
@@ -578,7 +495,6 @@ func GetContentAnalytics(ctx *vbeam.Context, req Empty) (resp ContentAnalyticsRe
 	return
 }
 
-// Get system analytics
 func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResponse, err error) {
 	if err = requireAdminAccess(ctx); err != nil {
 		return
@@ -590,7 +506,6 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		return true
 	})
 
-	// Storage metrics
 	var totalSize int64
 	for _, photo := range photos {
 		totalSize += int64(photo.FileSize)
@@ -601,7 +516,6 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		averageSize = totalSize / int64(len(photos))
 	}
 
-	// Calculate storage growth trend (last 30 days)
 	growthTrend := calculateStorageGrowthTrend(photos)
 
 	resp.StorageUsage = StorageMetrics{
@@ -610,7 +524,6 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		GrowthTrend:     growthTrend,
 	}
 
-	// Processing metrics
 	processingCount := 0
 	failedCount := 0
 	for _, photo := range photos {
@@ -626,28 +539,38 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 		successRate = float64(len(photos)-failedCount) / float64(len(photos)) * 100
 	}
 
-	// Calculate estimated average processing time based on file size and status
-	avgProcessTime := calculateAverageProcessingTime(photos)
-
 	resp.ProcessingMetrics = ProcessingMetrics{
-		SuccessRate:        successRate,
-		AverageProcessTime: avgProcessTime,
-		QueueLength:        processingCount,
+		SuccessRate: successRate,
+		QueueLength: processingCount,
 	}
 
-	// Error analysis (simplified - would need log analysis for full implementation)
-	resp.ErrorAnalysis = ErrorAnalysis{
-		TotalErrors:      failedCount,
-		ErrorsByCategory: []DistributionPoint{},
-		ErrorsByLevel:    []DistributionPoint{},
-		RecentErrors:     []string{},
+	stuckBefore := time.Now().Add(-time.Hour)
+	var failures []FailedPhoto
+	for _, photo := range photos {
+		switch {
+		case photo.Status == 2:
+			failures = append(failures, FailedPhoto{
+				Id:        photo.Id,
+				FilePath:  photo.FilePath,
+				CreatedAt: photo.CreatedAt.Format("2006-01-02 15:04"),
+			})
+		case photo.Status == 1 && photo.CreatedAt.Before(stuckBefore):
+			resp.PhotoFailures.Stuck++
+		}
 	}
+	sort.Slice(failures, func(i, j int) bool {
+		return failures[i].CreatedAt > failures[j].CreatedAt
+	})
+	if len(failures) > 20 {
+		failures = failures[:20]
+	}
+	resp.PhotoFailures.Failed = failedCount
+	resp.PhotoFailures.RecentFailures = failures
 
 	LogInfo(LogCategoryAdmin, "System analytics accessed", nil)
 	return
 }
 
-// Helper functions
 func formatFamilySize(size int) string {
 	switch size {
 	case 0:
@@ -667,26 +590,21 @@ func formatFamilySize(size int) string {
 	}
 }
 
-// calculateStorageGrowthTrend calculates daily storage usage over the last 30 days
 func calculateStorageGrowthTrend(photos []Image) []DataPoint {
 	now := time.Now()
 	dailyStorage := make(map[string]int64)
 
-	// Initialize all days to 0
 	for i := 0; i < 30; i++ {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
 		dailyStorage[date] = 0
 	}
 
-	// Accumulate storage for each day (cumulative)
-	// Sort photos by creation date first
 	for i := 29; i >= 0; i-- {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
 		currentDate := now.AddDate(0, 0, -i)
 
 		var cumulativeSize int64
 		for _, photo := range photos {
-			// If photo was created on or before this date, include its size
 			if photo.CreatedAt.Before(currentDate) || photo.CreatedAt.Format("2006-01-02") == date {
 				cumulativeSize += int64(photo.FileSize)
 			}
@@ -694,11 +612,9 @@ func calculateStorageGrowthTrend(photos []Image) []DataPoint {
 		dailyStorage[date] = cumulativeSize
 	}
 
-	// Convert to DataPoint slice
 	var trend []DataPoint
 	for i := 29; i >= 0; i-- {
 		date := now.AddDate(0, 0, -i).Format("2006-01-02")
-		// Convert bytes to MB for readability
 		sizeMB := dailyStorage[date] / (1024 * 1024)
 		trend = append(trend, DataPoint{
 			Date:  date,
@@ -707,41 +623,4 @@ func calculateStorageGrowthTrend(photos []Image) []DataPoint {
 	}
 
 	return trend
-}
-
-// calculateAverageProcessingTime estimates processing time based on historical data
-func calculateAverageProcessingTime(photos []Image) float64 {
-	if len(photos) == 0 {
-		return 0
-	}
-
-	// Simplified estimation: base processing time on file size
-	// Larger files generally take longer to process
-	totalEstimatedTime := 0.0
-	processedPhotos := 0
-
-	for _, photo := range photos {
-		// Only consider photos that have been processed (status 0 = done)
-		if photo.Status == 0 {
-			// Estimate processing time based on file size
-			// Base time: 0.5 seconds + (file size in MB * 0.1 seconds per MB)
-			fileSizeMB := float64(photo.FileSize) / (1024 * 1024)
-			estimatedTime := 0.5 + (fileSizeMB * 0.1)
-
-			// Add complexity factor based on image dimensions
-			if photo.Width > 0 && photo.Height > 0 {
-				megapixels := float64(photo.Width*photo.Height) / 1000000
-				estimatedTime += megapixels * 0.05 // 0.05 seconds per megapixel
-			}
-
-			totalEstimatedTime += estimatedTime
-			processedPhotos++
-		}
-	}
-
-	if processedPhotos == 0 {
-		return 0
-	}
-
-	return totalEstimatedTime / float64(processedPhotos)
 }

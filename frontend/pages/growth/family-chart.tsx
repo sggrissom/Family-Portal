@@ -35,15 +35,7 @@ const useChartDataLoad = vlens.declareHook(
   })
 );
 
-// Color palette for different people (works in both light and dark themes)
-// Optimized for maximum visual distinction
-const PERSON_COLORS = [
-  "#3b82f6", // blue
-  "#10b981", // emerald green
-  "#a855f7", // vibrant purple
-  "#f59e0b", // amber orange
-  "#f43f5e", // rose red
-];
+const PERSON_COLORS = ["#3b82f6", "#10b981", "#a855f7", "#f59e0b", "#f43f5e"];
 
 export async function fetch(route: string, prefix: string) {
   return server.ListPeople({});
@@ -141,7 +133,6 @@ const FamilyChartPage = ({ people }: FamilyChartPageProps) => {
   const state = useFamilyChartState();
   const loadState = useChartDataLoad();
 
-  // Prepare data for chart
   const chartPeopleData: PersonGrowthData[] = [];
   if (loadState.data && loadState.data.people) {
     loadState.data.people.forEach((personData, idx) => {

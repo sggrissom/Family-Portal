@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"go.hasen.dev/vbeam"
@@ -17,7 +18,6 @@ import (
 	"family/cfg"
 )
 
-const Port = 8666
 const Domain = "family.localhost"
 const FEDist = ".serve/frontend"
 
@@ -30,17 +30,19 @@ func StartLocalServer() {
 	app.StaticData = os.DirFS(cfg.StaticDir)
 	vbeam.GenerateTSBindings(app, "frontend/server.ts")
 
-	// Wrap with security headers
-	secureApp := backend.NewSecurityWrapper(app)
-	limitedApp := backend.NewRequestSizeLimitWrapper(secureApp)
+	// Security headers, request size limits, and rate limiting
+	handler := family.WrapApplication(app)
 
-	var addr = fmt.Sprintf(":%d", Port)
-	var appServer = family.NewHTTPServer(addr, limitedApp)
+	var addr = fmt.Sprintf(":%d", cfg.Port)
+	var appServer = family.NewHTTPServer(addr, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go backend.RunTokenCleanup(ctx, app.DB)
 	if err := family.RunHTTPServer(ctx, appServer); err != nil {
+		// The dev server's exit status is what `make local` reports, so a
+		// listener that could not start should not look like a clean stop.
 		log.Printf("server stopped unexpectedly: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -56,9 +58,10 @@ var FEOpts = esbuilder.FEBuildOptions{
 	},
 	Outdir: FEDist,
 	Define: map[string]string{
-		"BROWSER": "true",
-		"DEBUG":   "true",
-		"VERBOSE": "false",
+		"BROWSER":       "true",
+		"DEBUG":         "true",
+		"VERBOSE":       "false",
+		"SUPPORT_EMAIL": strconv.Quote(cfg.SupportEmail),
 	},
 }
 
@@ -73,7 +76,7 @@ func main() {
 
 	var args local_ui.LocalServerArgs
 	args.Domain = Domain
-	args.Port = Port
+	args.Port = cfg.Port
 	args.FEOpts = FEOpts
 	args.FEWatchDirs = FEWatchDirs
 	args.StartServer = StartLocalServer

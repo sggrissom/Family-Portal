@@ -10,7 +10,7 @@ export interface GrowthChartProps {
   width?: number;
   height?: number;
   birthday?: string;
-  gender?: number; // 0=Male, 1=Female, 2=Unknown
+  gender?: number;
 }
 
 type Kind = "Height" | "Weight";
@@ -40,9 +40,9 @@ const useHoveredPoint = vlens.declareHook((): { key: { id: number; kind: Kind } 
 }));
 
 interface ZoomState {
-  scale: number; // content units (centered scaling)
-  translateX: number; // content units
-  translateY: number; // content units
+  scale: number;
+  translateX: number;
+  translateY: number;
   isDragging: boolean;
 }
 
@@ -51,7 +51,7 @@ interface TouchState {
   initialDistance: number;
   initialScale: number;
   initialTranslate: { x: number; y: number };
-  focalPoint: { x: number; y: number }; // in inner-plot SVG coords
+  focalPoint: { x: number; y: number };
   initialFocalPoint: { x: number; y: number };
   touchStartTime: number;
   touchStartPosition: { x: number; y: number };
@@ -81,11 +81,8 @@ const useTouchState = vlens.declareHook(
   })
 );
 
-// -------------------- Helpers --------------------
-
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** Generate ~5 nice ticks between [min, max] (inclusive-ish). */
 function niceTicks(min: number, max: number, targetCount = 5): number[] {
   if (!isFinite(min) || !isFinite(max)) return [];
   if (min === max) return [min];
@@ -114,7 +111,6 @@ export const GrowthChart = ({
   const zoom = useZoomState();
   const touch = useTouchState();
 
-  // ---- Layout ----
   const chartWidth = width;
   const chartHeight = height;
   const margin = { top: 20, right: 80, bottom: 60, left: 60 };
@@ -129,7 +125,6 @@ export const GrowthChart = ({
     );
   }
 
-  // ---- Data prep (once per props change) ----
   const sortedData = growthData
     .slice()
     .sort((a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime());
@@ -137,17 +132,15 @@ export const GrowthChart = ({
   const heightData = sortedData.filter(d => d.measurementType === server.Height);
   const weightData = sortedData.filter(d => d.measurementType === server.Weight);
 
-  // Dates
   const dateTimes = sortedData.map(d => new Date(d.measurementDate).getTime());
   const minTs = Math.min(...dateTimes);
   const maxTs = Math.max(...dateTimes);
-  const rawDR = Math.max(1, maxTs - minTs); // avoid 0
-  const MIN_DATE_PAD_MS = 24 * 60 * 60 * 1000; // 1 day minimum pad
+  const rawDR = Math.max(1, maxTs - minTs);
+  const MIN_DATE_PAD_MS = 24 * 60 * 60 * 1000;
   const paddedMinTs = minTs - Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
   const paddedMaxTs = maxTs + Math.max(rawDR * 0.05, MIN_DATE_PAD_MS);
   const dateDen = Math.max(1, paddedMaxTs - paddedMinTs);
 
-  // Values
   const hv = heightData.map(d => d.value);
   const wv = weightData.map(d => d.value);
   const hMin = hv.length ? Math.min(...hv) : 0;
@@ -166,12 +159,10 @@ export const GrowthChart = ({
   const hDen = Math.max(1e-9, hHi - hLo);
   const wDen = Math.max(1e-9, wHi - wLo);
 
-  // Scales (inner plot coords)
   const dateToX = (t: number) => ((t - paddedMinTs) / dateDen) * innerW;
   const heightToY = (v: number) => innerH - ((v - hLo) / hDen) * innerH;
   const weightToY = (v: number) => innerH - ((v - wLo) / wDen) * innerH;
 
-  // Paths
   const createPath = (data: server.GrowthData[], yScale: (value: number) => number) => {
     if (data.length === 0) return "";
     let s = "";
@@ -186,8 +177,6 @@ export const GrowthChart = ({
   const heightPath = createPath(heightData, heightToY);
   const weightPath = createPath(weightData, weightToY);
 
-  // ---- Percentile label for selected point ----
-
   const birthdayMs = isValidBirthday(birthday) ? new Date(birthday).getTime() : null;
 
   let selectedPercentileLabel: string | null = null;
@@ -201,12 +190,8 @@ export const GrowthChart = ({
     }
   }
 
-  // ---- Zoom / Pan helpers ----
-
   const constrainZoom = (scale: number) => clamp(scale, 1, 8);
 
-  // Note: translateX/Y are in content (inner plot) units, with centered scaling:
-  // translate(center) -> scale -> translate(-center) -> translate(pan)
   const constrainTranslate = (tx: number, ty: number, scale: number) => {
     const maxX = (innerW * (scale - 1)) / 2;
     const maxY = (innerH * (scale - 1)) / 2;
@@ -218,10 +203,8 @@ export const GrowthChart = ({
 
   const screenToInnerSVG = (clientX: number, clientY: number, svgEl: SVGSVGElement) => {
     const rect = svgEl.getBoundingClientRect();
-    // Map to viewBox space (0..chartWidth/Height)
     const sx = ((clientX - rect.left) / rect.width) * chartWidth;
     const sy = ((clientY - rect.top) / rect.height) * chartHeight;
-    // Then to inner plot (account for margins)
     return { x: clamp(sx - margin.left, 0, innerW), y: clamp(sy - margin.top, 0, innerH) };
   };
 
@@ -236,8 +219,6 @@ export const GrowthChart = ({
     const scaleFactor = clamp(1 / Math.sqrt(zoom.scale), 0.5, 1);
     return Math.max(1, base * scaleFactor);
   };
-
-  // ---- Touch handlers (mobile) ----
 
   const handleTouchStart = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
     const touches = Array.from(e.touches);
@@ -277,7 +258,6 @@ export const GrowthChart = ({
       const scaleChange = currDist / touch.initialDistance;
       const newScale = constrainZoom(touch.initialScale * scaleChange);
 
-      // Centered scale focal anchoring
       const delta = newScale - touch.initialScale;
       const relFx = touch.initialFocalPoint.x - innerW / 2;
       const relFy = touch.initialFocalPoint.y - innerH / 2;
@@ -286,7 +266,6 @@ export const GrowthChart = ({
       zoom.translateX = touch.initialTranslate.x - relFx * delta;
       zoom.translateY = touch.initialTranslate.y - relFy * delta;
 
-      // Clamp pan
       const c = constrainTranslate(zoom.translateX, zoom.translateY, zoom.scale);
       zoom.translateX = c.x;
       zoom.translateY = c.y;
@@ -317,7 +296,6 @@ export const GrowthChart = ({
         vlens.scheduleRedraw();
       }
     }
-    // taps fall through (no preventDefault) so clicks still work
   };
 
   const handleTouchEnd = (e: JSX.TargetedTouchEvent<SVGSVGElement>) => {
@@ -348,13 +326,11 @@ export const GrowthChart = ({
     vlens.scheduleRedraw();
   };
 
-  // ---- Wheel zoom (desktop) ----
   const handleWheel = (e: JSX.TargetedWheelEvent<SVGSVGElement>) => {
     if (!e.ctrlKey && !e.metaKey) {
-      // Treat regular wheel as page scroll unless already zoomed; if zoomed, pan vertically a bit
       if (zoom.scale > 1) {
         e.preventDefault();
-        const ty = zoom.translateY - e.deltaY; // natural pan
+        const ty = zoom.translateY - e.deltaY;
         const c = constrainTranslate(zoom.translateX, ty, zoom.scale);
         zoom.translateX = c.x;
         zoom.translateY = c.y;
@@ -363,12 +339,11 @@ export const GrowthChart = ({
       return;
     }
 
-    // Ctrl/Cmd + wheel = zoom (common UX on web maps)
     e.preventDefault();
     const svg = e.currentTarget;
     const innerPt = screenToInnerSVG(e.clientX, e.clientY, svg);
 
-    const zoomFactor = Math.exp(-e.deltaY * 0.0015); // smooth
+    const zoomFactor = Math.exp(-e.deltaY * 0.0015);
     const newScale = constrainZoom(zoom.scale * zoomFactor);
     const delta = newScale - zoom.scale;
 
@@ -393,8 +368,6 @@ export const GrowthChart = ({
     zoom.isDragging = false;
     vlens.scheduleRedraw();
   };
-
-  // ---- Interactions on points ----
 
   const selectPoint = (d: server.GrowthData, kind: Kind) => {
     const key = { id: d.id as number, kind };
@@ -424,11 +397,9 @@ export const GrowthChart = ({
     vlens.scheduleRedraw();
   };
 
-  // ---- Colors via CSS vars with sensible fallbacks ----
   const heightColor = "var(--height-color, #3b82f6)";
   const weightColor = "var(--weight-color, #ef4444)";
 
-  // ---- Ticks ----
   const xRatios = [0, 0.25, 0.5, 0.75, 1];
   const hTicks = heightData.length
     ? niceTicks(hLo, hHi, 5).filter(v => v >= hMin && v <= hMax)
@@ -457,7 +428,6 @@ export const GrowthChart = ({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
         onWheel={handleWheel}
-        // Disable default pan/zoom gestures inside the SVG; we handle them.
         role="img"
         aria-label="Growth chart of height and weight over time"
       >
@@ -476,9 +446,7 @@ export const GrowthChart = ({
           </linearGradient>
         </defs>
 
-        {/* Outer margin group */}
         <g transform={`translate(${margin.left}, ${margin.top})`} clipPath="url(#plotArea)">
-          {/* Centered scale then pan in content units */}
           <g
             transform={`
               translate(${innerW / 2}, ${innerH / 2})
@@ -487,9 +455,7 @@ export const GrowthChart = ({
               translate(${zoom.translateX}, ${zoom.translateY})
             `}
           >
-            {/* Grid */}
             <g className="grid">
-              {/* Vertical grid lines */}
               {xRatios.map(r => (
                 <line
                   key={`vgrid-${r}`}
@@ -500,7 +466,6 @@ export const GrowthChart = ({
                   className="grid-line"
                 />
               ))}
-              {/* Horizontal grid lines (use 5 steps) */}
               {[0, 0.25, 0.5, 0.75, 1].map(r => (
                 <line
                   key={`hgrid-${r}`}
@@ -513,7 +478,6 @@ export const GrowthChart = ({
               ))}
             </g>
 
-            {/* Height line */}
             {heightData.length > 0 && (
               <g className="height-line">
                 <path
@@ -526,7 +490,6 @@ export const GrowthChart = ({
               </g>
             )}
 
-            {/* Weight line */}
             {weightData.length > 0 && (
               <g className="weight-line">
                 <path
@@ -540,7 +503,6 @@ export const GrowthChart = ({
               </g>
             )}
 
-            {/* Data points: Height */}
             {heightData.map(d => {
               const key = { id: d.id as number, kind: "Height" as const };
               const isSelected =
@@ -579,7 +541,6 @@ export const GrowthChart = ({
               );
             })}
 
-            {/* Data points: Weight */}
             {weightData.map(d => {
               const key = { id: d.id as number, kind: "Weight" as const };
               const isSelected =
@@ -618,14 +579,10 @@ export const GrowthChart = ({
               );
             })}
 
-            {/* Axes */}
             <g className="axes">
-              {/* X-axis */}
               <line x1={0} y1={innerH} x2={innerW} y2={innerH} className="axis-line" />
-              {/* Y-axis */}
               <line x1={0} y1={0} x2={0} y2={innerH} className="axis-line" />
 
-              {/* X-axis labels (dates at fixed ratios) */}
               {xRatios.map((ratio, i) => {
                 const t = paddedMinTs + ratio * (paddedMaxTs - paddedMinTs);
                 const date = new Date(t);
@@ -643,7 +600,6 @@ export const GrowthChart = ({
                 );
               })}
 
-              {/* Y-axis labels for height (left, blue) */}
               {heightData.length > 0 &&
                 hTicks.map((v, i) => (
                   <text
@@ -659,7 +615,6 @@ export const GrowthChart = ({
                   </text>
                 ))}
 
-              {/* Y-axis labels for weight (right, red) */}
               {weightData.length > 0 &&
                 wTicks.map((v, i) => (
                   <text
@@ -678,7 +633,6 @@ export const GrowthChart = ({
           </g>
         </g>
 
-        {/* Legend (outside clip & zoom) */}
         <g
           className="legend"
           transform={`translate(${chartWidth - margin.right + 10}, ${margin.top + 20})`}
@@ -710,7 +664,6 @@ export const GrowthChart = ({
         </g>
       </svg>
 
-      {/* Data Point Info Panel */}
       {selected.key ? (
         <div className="data-point-info">
           <div className="info-header">
@@ -732,8 +685,6 @@ export const GrowthChart = ({
     </div>
   );
 };
-
-// -------------------- local fns --------------------
 
 function distance(a: Touch, b: Touch) {
   const dx = a.clientX - b.clientX;

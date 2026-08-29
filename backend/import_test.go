@@ -1,5 +1,3 @@
-// Package backend_test provides unit tests for data import functionality
-// Tests: importing people, importing measurements, data validation, filtering, full workflow
 package backend
 
 import (
@@ -22,7 +20,6 @@ func TestImportPeople(t *testing.T) {
 
 	var testUser User
 
-	// Setup: Create test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -35,13 +32,12 @@ func TestImportPeople(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test import people data
 	testImportPeople := []ImportPerson{
 		{
 			Id:       1,
 			FamilyId: 100,
-			Type:     1, // Child
-			Gender:   0, // Male
+			Type:     1,
+			Gender:   0,
 			Name:     "John Doe",
 			Birthday: time.Date(2015, 6, 15, 0, 0, 0, 0, time.UTC),
 			Age:      "8 years",
@@ -50,8 +46,8 @@ func TestImportPeople(t *testing.T) {
 		{
 			Id:       2,
 			FamilyId: 100,
-			Type:     0, // Parent
-			Gender:   1, // Female
+			Type:     0,
+			Gender:   1,
 			Name:     "Jane Doe",
 			Birthday: time.Date(1985, 3, 20, 0, 0, 0, 0, time.UTC),
 			Age:      "38 years",
@@ -60,8 +56,8 @@ func TestImportPeople(t *testing.T) {
 		{
 			Id:       3,
 			FamilyId: 101,
-			Type:     1, // Child
-			Gender:   2, // Unknown
+			Type:     1,
+			Gender:   2,
 			Name:     "Sam Smith",
 			Birthday: time.Date(2010, 12, 1, 0, 0, 0, 0, time.UTC),
 			Age:      "13 years",
@@ -69,7 +65,6 @@ func TestImportPeople(t *testing.T) {
 		},
 	}
 
-	// Test importing people
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		mapping, importedCount, mergedCount, errors, warnings := importPeople(tx, testImportPeople, testUser.FamilyId, "create_all")
 
@@ -93,7 +88,6 @@ func TestImportPeople(t *testing.T) {
 			t.Errorf("Expected %d people in mapping, got %d", len(testImportPeople), len(mapping))
 		}
 
-		// Verify all people were imported with new IDs
 		for _, importPerson := range testImportPeople {
 			newId, exists := mapping[importPerson.Id]
 			if !exists {
@@ -107,7 +101,6 @@ func TestImportPeople(t *testing.T) {
 				continue
 			}
 
-			// Verify person details
 			if person.Name != importPerson.Name {
 				t.Errorf("Expected name %s, got %s", importPerson.Name, person.Name)
 			}
@@ -128,10 +121,8 @@ func TestImportPeople(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify people can be retrieved by family
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		familyPeople := GetFamilyPeople(tx, testUser.FamilyId)
-		// Should include the imported people plus the test user's auto-created family member count
 		expectedMinimum := len(testImportPeople)
 		if len(familyPeople) < expectedMinimum {
 			t.Errorf("Expected at least %d people in family, got %d", expectedMinimum, len(familyPeople))
@@ -149,7 +140,6 @@ func TestImportMeasurements(t *testing.T) {
 	var testUser User
 	var personIdMapping map[int]int
 
-	// Setup: Create user and import people first
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -160,7 +150,6 @@ func TestImportMeasurements(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Import test people
 		testPeople := []ImportPerson{
 			{
 				Id:       1,
@@ -178,11 +167,10 @@ func TestImportMeasurements(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test measurement data
 	importHeights := []ImportHeight{
 		{
 			Id:         1,
-			PersonId:   1, // Old person ID
+			PersonId:   1,
 			Inches:     30.5,
 			Date:       time.Date(2021, 6, 1, 0, 0, 0, 0, time.UTC),
 			DateString: "2021-06-01",
@@ -200,7 +188,7 @@ func TestImportMeasurements(t *testing.T) {
 		},
 		{
 			Id:         3,
-			PersonId:   999, // Non-existent person
+			PersonId:   999,
 			Inches:     40.0,
 			Date:       time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
 			DateString: "2023-06-01",
@@ -211,7 +199,7 @@ func TestImportMeasurements(t *testing.T) {
 			Id:         4,
 			PersonId:   1,
 			Inches:     25.0,
-			Date:       time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC), // Invalid date (year 0001)
+			Date:       time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
 			DateString: "0001-01-01",
 			Age:        0,
 			PersonName: "Test Child",
@@ -239,15 +227,11 @@ func TestImportMeasurements(t *testing.T) {
 		},
 	}
 
-	// Test importing measurements
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		importedCount, skippedCount, errors := importMeasurements(tx, importHeights, importWeights, personIdMapping, testUser.FamilyId)
 
-		// Should import 2 valid heights + 2 weights = 4 measurements
-		// Should skip 1 height with invalid date (year 0001)
-		// The height for non-existent person is filtered out by filterMeasurements, not counted as skipped
 		expectedImported := 4
-		expectedSkipped := 1 // Only 1 for invalid date (the other is filtered out)
+		expectedSkipped := 1
 
 		if importedCount != expectedImported {
 			t.Errorf("Expected %d measurements imported, got %d", expectedImported, importedCount)
@@ -257,7 +241,6 @@ func TestImportMeasurements(t *testing.T) {
 			t.Errorf("Expected %d measurements skipped, got %d", expectedSkipped, skippedCount)
 		}
 
-		// Should have 1 error for unknown person ID
 		if len(errors) != 1 {
 			t.Errorf("Expected 1 error for unknown person, got %d: %v", len(errors), errors)
 		}
@@ -265,7 +248,6 @@ func TestImportMeasurements(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify measurements are in database
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		newPersonId := personIdMapping[1]
 		growthData := GetPersonGrowthDataTx(tx, newPersonId)
@@ -274,7 +256,6 @@ func TestImportMeasurements(t *testing.T) {
 			t.Errorf("Expected 4 growth data records, got %d", len(growthData))
 		}
 
-		// Count by type
 		heightCount := 0
 		weightCount := 0
 		for _, data := range growthData {
@@ -290,7 +271,6 @@ func TestImportMeasurements(t *testing.T) {
 				}
 			}
 
-			// Verify family assignment
 			if data.FamilyId != testUser.FamilyId {
 				t.Errorf("Expected FamilyId %d, got %d", testUser.FamilyId, data.FamilyId)
 			}
@@ -354,7 +334,7 @@ func TestImportDataValidation(t *testing.T) {
 					{
 						Id:       1,
 						Name:     "Test Person",
-						Birthday: time.Time{}, // Zero time
+						Birthday: time.Time{},
 					},
 				},
 			},
@@ -371,8 +351,6 @@ func TestImportDataValidation(t *testing.T) {
 				if err == nil {
 					t.Errorf("Expected error for %s, but got none", test.name)
 				} else if test.errorContains != "" && err.Error() != test.errorContains {
-					// For this simple test, just check that we got an error
-					// In a more complex scenario, we might check specific error messages
 				}
 			} else {
 				if err != nil {
@@ -432,7 +410,7 @@ func TestFilterPeople(t *testing.T) {
 			filterFamilyIds: []int{100},
 			filterPersonIds: []int{1, 3},
 			expectedCount:   1,
-			expectedNames:   []string{"Person 1"}, // Only person 1 is in family 100 AND in person filter
+			expectedNames:   []string{"Person 1"},
 		},
 		{
 			name:            "non-existent family ID",
@@ -451,7 +429,6 @@ func TestFilterPeople(t *testing.T) {
 				t.Errorf("Expected %d people, got %d", test.expectedCount, len(filtered))
 			}
 
-			// Check names (order might vary, so convert to map for comparison)
 			actualNames := make(map[string]bool)
 			for _, person := range filtered {
 				actualNames[person.Name] = true
@@ -472,7 +449,7 @@ func TestGetUniqueFamilyIds(t *testing.T) {
 		{Id: 2, FamilyId: 100, Name: "Person 2"},
 		{Id: 3, FamilyId: 200, Name: "Person 3"},
 		{Id: 4, FamilyId: 200, Name: "Person 4"},
-		{Id: 5, FamilyId: 100, Name: "Person 5"}, // Duplicate family ID
+		{Id: 5, FamilyId: 100, Name: "Person 5"},
 	}
 
 	familyIds := getUniqueFamilyIds(testPeople)
@@ -481,7 +458,6 @@ func TestGetUniqueFamilyIds(t *testing.T) {
 		t.Errorf("Expected 2 unique family IDs, got %d", len(familyIds))
 	}
 
-	// Convert to map for easier checking
 	familyIdMap := make(map[int]bool)
 	for _, id := range familyIds {
 		familyIdMap[id] = true
@@ -497,36 +473,32 @@ func TestGetUniqueFamilyIds(t *testing.T) {
 
 func TestFilterMeasurements(t *testing.T) {
 	personIdMapping := map[int]int{
-		1: 101, // Old ID 1 maps to new ID 101
-		2: 102, // Old ID 2 maps to new ID 102
-		// Person ID 3 not in mapping (not imported)
+		1: 101,
+		2: 102,
 	}
 
 	importHeights := []ImportHeight{
-		{Id: 1, PersonId: 1, Inches: 30.0}, // Should be included
-		{Id: 2, PersonId: 2, Inches: 35.0}, // Should be included
-		{Id: 3, PersonId: 3, Inches: 40.0}, // Should be excluded (person not imported)
+		{Id: 1, PersonId: 1, Inches: 30.0},
+		{Id: 2, PersonId: 2, Inches: 35.0},
+		{Id: 3, PersonId: 3, Inches: 40.0},
 	}
 
 	importWeights := []ImportWeight{
-		{Id: 1, PersonId: 1, Pounds: 20.0}, // Should be included
-		{Id: 2, PersonId: 3, Pounds: 25.0}, // Should be excluded (person not imported)
-		{Id: 3, PersonId: 2, Pounds: 30.0}, // Should be included
+		{Id: 1, PersonId: 1, Pounds: 20.0},
+		{Id: 2, PersonId: 3, Pounds: 25.0},
+		{Id: 3, PersonId: 2, Pounds: 30.0},
 	}
 
 	filteredHeights, filteredWeights := filterMeasurements(importHeights, importWeights, personIdMapping)
 
-	// Should have 2 heights (person 1 and 2)
 	if len(filteredHeights) != 2 {
 		t.Errorf("Expected 2 filtered heights, got %d", len(filteredHeights))
 	}
 
-	// Should have 2 weights (person 1 and 2)
 	if len(filteredWeights) != 2 {
 		t.Errorf("Expected 2 filtered weights, got %d", len(filteredWeights))
 	}
 
-	// Verify the correct measurements were included
 	heightPersonIds := make(map[int]bool)
 	for _, height := range filteredHeights {
 		heightPersonIds[height.PersonId] = true
@@ -551,7 +523,6 @@ func TestFullImportWorkflow(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Create test import data
 	importData := ImportDataStructure{
 		People: []ImportPerson{
 			{
@@ -595,7 +566,6 @@ func TestFullImportWorkflow(t *testing.T) {
 
 	var testUser User
 
-	// Setup: Create test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -608,19 +578,15 @@ func TestFullImportWorkflow(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test preview mode
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		// Simulate ImportData procedure call with preview
 		var importDataParsed ImportDataStructure
 		json.Unmarshal(jsonData, &importDataParsed)
 
-		// Validate
 		err := validateImportData(importDataParsed)
 		if err != nil {
 			t.Fatalf("Validation failed: %v", err)
 		}
 
-		// Get preview data
 		availableFamilyIds := getUniqueFamilyIds(importDataParsed.People)
 		if len(availableFamilyIds) != 1 || availableFamilyIds[0] != 100 {
 			t.Errorf("Expected family ID 100 in preview, got %v", availableFamilyIds)
@@ -631,17 +597,13 @@ func TestFullImportWorkflow(t *testing.T) {
 		}
 	})
 
-	// Test actual import
 	var importResponse ImportDataResponse
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Parse and validate
 		var importDataParsed ImportDataStructure
 		json.Unmarshal(jsonData, &importDataParsed)
 
-		// Filter (no filters in this test)
 		filteredPeople := filterPeople(importDataParsed.People, []int{}, []int{})
 
-		// Import people
 		personIdMapping, importedPeople, mergedPeople, peopleErrors, peopleWarnings := importPeople(tx, filteredPeople, testUser.FamilyId, "create_all")
 		importResponse.ImportedPeople = importedPeople
 		importResponse.MergedPeople = mergedPeople
@@ -649,7 +611,6 @@ func TestFullImportWorkflow(t *testing.T) {
 		importResponse.Errors = append(importResponse.Errors, peopleErrors...)
 		importResponse.Warnings = append(importResponse.Warnings, peopleWarnings...)
 
-		// Import measurements
 		filteredHeights, filteredWeights := filterMeasurements(importDataParsed.Heights, importDataParsed.Weights, personIdMapping)
 		importedMeasurements, skippedMeasurements, measurementErrors := importMeasurements(tx, filteredHeights, filteredWeights, personIdMapping, testUser.FamilyId)
 		importResponse.ImportedMeasurements = importedMeasurements
@@ -659,7 +620,6 @@ func TestFullImportWorkflow(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Verify import results
 	if importResponse.ImportedPeople != 1 {
 		t.Errorf("Expected 1 imported person, got %d", importResponse.ImportedPeople)
 	}
@@ -688,11 +648,9 @@ func TestFullImportWorkflow(t *testing.T) {
 		t.Logf("Import warnings: %v", importResponse.Warnings)
 	}
 
-	// Verify data in database
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		newPersonId := importResponse.PersonIdMapping[1]
 
-		// Check person exists
 		person := GetPersonById(tx, newPersonId)
 		if person.Id == 0 {
 			t.Error("Imported person not found in database")
@@ -701,7 +659,6 @@ func TestFullImportWorkflow(t *testing.T) {
 			t.Errorf("Expected person name 'Test Child', got '%s'", person.Name)
 		}
 
-		// Check measurements exist
 		growthData := GetPersonGrowthDataTx(tx, newPersonId)
 		if len(growthData) != 2 {
 			t.Errorf("Expected 2 growth data records, got %d", len(growthData))
@@ -709,7 +666,6 @@ func TestFullImportWorkflow(t *testing.T) {
 	})
 }
 
-// Test merge functionality
 func TestImportPeopleMergeStrategy(t *testing.T) {
 	testDBPath := "test_import_merge.db"
 	db := vbolt.Open(testDBPath)
@@ -719,7 +675,6 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 
 	var testUser User
 
-	// Setup: Create test user and existing person
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -730,7 +685,6 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(userReq.Password), bcrypt.DefaultCost)
 		testUser = AddUserTx(tx, userReq, hash)
 
-		// Add existing person
 		existingPerson, _ := AddPersonTx(tx, AddPersonRequest{
 			Name:       "John Doe",
 			PersonType: 1,
@@ -742,13 +696,12 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test import data with same person
 	testImportPeople := []ImportPerson{
 		{
 			Id:       1,
 			FamilyId: 100,
-			Type:     1, // Child
-			Gender:   0, // Male
+			Type:     1,
+			Gender:   0,
 			Name:     "John Doe",
 			Birthday: time.Date(2015, 6, 15, 0, 0, 0, 0, time.UTC),
 			Age:      "8 years",
@@ -756,7 +709,6 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		},
 	}
 
-	// Test merge_people strategy
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		mapping, importedCount, mergedCount, errors, warnings := importPeople(tx, testImportPeople, testUser.FamilyId, "merge_people")
 
@@ -783,7 +735,6 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Test skip_duplicates strategy
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		mapping, importedCount, mergedCount, errors, warnings := importPeople(tx, testImportPeople, testUser.FamilyId, "skip_duplicates")
 

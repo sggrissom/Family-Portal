@@ -1,9 +1,8 @@
 import { block } from "vlens/css";
+import "./admin-tokens";
 
-// Analytics-specific color variables (extending admin theme)
 block(`
 :root {
-  --analytics-primary: #6366f1;
   --analytics-secondary: #8b5cf6;
   --analytics-success: #10b981;
   --analytics-warning: #f59e0b;
@@ -19,7 +18,6 @@ block(`
 
 block(`
 [data-theme="dark"] {
-  --analytics-primary: #818cf8;
   --analytics-secondary: #a78bfa;
   --analytics-success: #34d399;
   --analytics-warning: #fbbf24;
@@ -33,55 +31,15 @@ block(`
 }
 `);
 
-// Main analytics container
 block(`
-.analytics-container {
+.admin-container.analytics-container {
   max-width: 1400px;
-  margin: 0 auto;
-  padding: 2rem;
-  min-height: calc(100vh - 200px);
 }
 `);
 
 block(`
-.analytics-page {
-  background: var(--bg);
-  border-radius: 8px;
-  overflow: hidden;
-}
-`);
-
-// Analytics header
-block(`
-.analytics-header {
-  background: linear-gradient(135deg, var(--analytics-primary) 0%, var(--analytics-secondary) 100%);
-  color: var(--admin-text-on-accent);
-  padding: 2rem;
-  text-align: center;
-  margin-bottom: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-`);
-
-block(`
-.analytics-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
-  backdrop-filter: blur(10px);
-}
-`);
-
-block(`
-.analytics-icon {
-  font-size: 1rem;
+.admin-header.analytics-header {
+  background: linear-gradient(135deg, var(--admin-accent) 0%, var(--analytics-secondary) 100%);
 }
 `);
 
@@ -102,7 +60,6 @@ block(`
 }
 `);
 
-// Analytics controls
 block(`
 .analytics-controls {
   display: flex;
@@ -149,24 +106,11 @@ block(`
 
 block(`
 .view-btn.active {
-  background: var(--analytics-primary);
+  background: var(--admin-accent);
   color: white;
 }
 `);
 
-block(`
-.time-selector select {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-`);
-
-// Analytics content area
 block(`
 .analytics-content {
   display: flex;
@@ -175,7 +119,6 @@ block(`
 }
 `);
 
-// Metrics grid
 block(`
 .metrics-grid {
   display: grid;
@@ -200,7 +143,7 @@ block(`
 .metric-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  border-color: var(--analytics-primary);
+  border-color: var(--admin-accent);
 }
 `);
 
@@ -208,7 +151,7 @@ block(`
 .metric-value {
   font-size: 2.5rem;
   font-weight: 700;
-  color: var(--analytics-primary);
+  color: var(--admin-accent);
   margin-bottom: 0.5rem;
   line-height: 1;
 }
@@ -248,7 +191,6 @@ block(`
 }
 `);
 
-// Charts grid
 block(`
 .charts-grid {
   display: grid;
@@ -273,14 +215,13 @@ block(`
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--text);
-  border-bottom: 2px solid var(--analytics-primary);
+  border-bottom: 2px solid var(--admin-accent);
   padding-bottom: 0.5rem;
 }
 `);
 
-// Simple chart implementations
 block(`
-.chart-placeholder {
+.analytics-chart-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -294,7 +235,7 @@ block(`
 `);
 
 block(`
-.chart-placeholder.large {
+.analytics-chart-placeholder.large {
   min-height: 400px;
   font-size: 1.2rem;
 }
@@ -337,7 +278,7 @@ block(`
 .chart-point:hover {
   width: 12px;
   height: 12px;
-  background: var(--analytics-primary);
+  background: var(--admin-accent);
 }
 `);
 
@@ -522,7 +463,7 @@ block(`
 
 block(`
 .bar:hover {
-  background: linear-gradient(0deg, var(--analytics-primary), var(--analytics-secondary));
+  background: linear-gradient(0deg, var(--admin-accent), var(--analytics-secondary));
   transform: scaleY(1.1);
 }
 `);
@@ -583,7 +524,6 @@ block(`
 }
 `);
 
-// Health indicators
 block(`
 .health-indicators {
   display: flex;
@@ -635,7 +575,6 @@ block(`
 }
 `);
 
-// Retention metrics
 block(`
 .retention-metrics {
   display: grid;
@@ -673,11 +612,10 @@ block(`
 .retention-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--analytics-primary);
+  color: var(--admin-accent);
 }
 `);
 
-// Table card
 block(`
 .table-card {
   background: var(--surface);
@@ -694,7 +632,7 @@ block(`
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--text);
-  border-bottom: 2px solid var(--analytics-primary);
+  border-bottom: 2px solid var(--admin-accent);
   padding-bottom: 0.5rem;
 }
 `);
@@ -725,12 +663,12 @@ block(`
 block(`
 .family-row:hover {
   background: var(--hover-bg);
-  border-color: var(--analytics-primary);
+  border-color: var(--admin-accent);
 }
 `);
 
 block(`
-.family-name {
+.analytics-family-name {
   font-weight: 600;
   color: var(--text);
 }
@@ -746,7 +684,7 @@ block(`
 block(`
 .family-score {
   font-size: 0.875rem;
-  color: var(--analytics-primary);
+  color: var(--admin-accent);
   font-weight: 600;
 }
 `);
@@ -758,7 +696,6 @@ block(`
 }
 `);
 
-// Family content list
 block(`
 .family-content-list {
   display: flex;
@@ -793,7 +730,6 @@ block(`
 }
 `);
 
-// Error analysis
 block(`
 .error-summary {
   background: var(--bg);
@@ -832,27 +768,6 @@ block(`
 `);
 
 block(`
-.error-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-`);
-
-block(`
-.error-category {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.875rem;
-}
-`);
-
-block(`
 .recent-errors {
   display: flex;
   flex-direction: column;
@@ -886,7 +801,6 @@ block(`
 }
 `);
 
-// Responsive design
 block(`
 @media (max-width: 1200px) {
   .charts-grid {

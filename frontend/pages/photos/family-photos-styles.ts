@@ -1,9 +1,7 @@
 import { block } from "vlens/css";
 
-// Import shared photo styles
 import "./photos-styles";
 
-// Family Photos Page Styles
 block(`
 .family-photos-container {
   padding: 2rem;
@@ -18,15 +16,6 @@ block(`
 }
 `);
 
-// Page Header
-block(`
-.page-header {
-  margin-bottom: 2rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 1.5rem;
-}
-`);
-
 block(`
 .header-content {
   display: flex;
@@ -37,16 +26,7 @@ block(`
 `);
 
 block(`
-.page-header h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-}
-`);
-
-block(`
-.photos-count {
+.family-photos-container .photos-count {
   color: var(--muted);
   font-size: 0.875rem;
   font-weight: 500;
@@ -62,7 +42,6 @@ block(`
 }
 `);
 
-// Filter Panel
 block(`
 .filter-panel {
   background: var(--surface);
@@ -75,13 +54,13 @@ block(`
 `);
 
 block(`
-.filter-section {
+.family-photos-container .filter-section {
   margin-bottom: 1.5rem;
 }
 `);
 
 block(`
-.filter-section:last-of-type {
+.family-photos-container .filter-section:last-of-type {
   margin-bottom: 0;
 }
 `);
@@ -104,7 +83,7 @@ block(`
 `);
 
 block(`
-.person-checkbox {
+.family-photos-container .person-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -119,7 +98,7 @@ block(`
 `);
 
 block(`
-.person-checkbox:hover {
+.family-photos-container .person-checkbox:hover {
   background: var(--hover-bg);
   border-color: var(--primary-accent);
 }
@@ -199,13 +178,13 @@ block(`
 `);
 
 block(`
-.filter-toggle {
+.family-photos-container .filter-toggle {
   white-space: nowrap;
 }
 `);
 
 block(`
-.loading-state {
+.family-photos-container .loading-state {
   padding: 1rem;
   text-align: center;
   color: var(--muted);
@@ -213,7 +192,6 @@ block(`
 }
 `);
 
-// People Badges Container
 block(`
 .people-badges {
   position: absolute;
@@ -227,7 +205,6 @@ block(`
 }
 `);
 
-// Person Badge on Photos
 block(`
 .person-badge {
   background: rgba(0, 0, 0, 0.8);
@@ -245,7 +222,6 @@ block(`
 }
 `);
 
-// Tag filter
 block(`
 .tags-filter {
   display: flex;
@@ -304,7 +280,6 @@ block(`
 }
 `);
 
-// Tag badges on photo cards
 block(`
 .tag-badges {
   position: absolute;
@@ -327,7 +302,6 @@ block(`
 }
 `);
 
-// Responsive styles
 block(`
 @media (max-width: 768px) {
   .header-content {
@@ -374,9 +348,8 @@ block(`
 }
 `);
 
-// Empty State
 block(`
-.empty-state {
+.family-photos-container .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -414,7 +387,6 @@ block(`
 }
 `);
 
-// Responsive adjustments
 block(`
 @media (max-width: 768px) {
   .family-photos-container {
@@ -464,7 +436,6 @@ block(`
 }
 `);
 
-// Small mobile screens
 block(`
 @media (max-width: 480px) {
   .photos-gallery {

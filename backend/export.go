@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"family/cfg"
 	"fmt"
 	"io"
@@ -36,16 +37,15 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		mode = "data_only"
 	}
 	if mode != "data_only" && mode != "with_photos" {
-		RespondValidationError(w, r, "Unsupported export mode", mode)
+		RespondValidationError(w, r, "Choose either a data-only export or one with photos.", mode)
 		return
 	}
 
-	// familyId names the family to export; absent or blank means primary.
 	var requestedFamilyId int
 	if familyIdStr := r.URL.Query().Get("familyId"); familyIdStr != "" {
 		parsed, convErr := strconv.Atoi(familyIdStr)
 		if convErr != nil {
-			RespondValidationError(w, r, "Invalid family ID", convErr.Error())
+			RespondValidationError(w, r, "That family could not be identified.", convErr.Error())
 			return
 		}
 		requestedFamilyId = parsed
@@ -70,13 +70,17 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	if buildErr != nil {
-		RespondInternalError(w, r, "Failed to build export data", buildErr.Error())
+		if errors.Is(buildErr, ErrFamilyAccessDenied) || errors.Is(buildErr, ErrNoFamily) {
+			RespondForbiddenError(w, r, "You do not have access to that family's records.")
+			return
+		}
+		RespondUnexpectedError(w, r, buildErr)
 		return
 	}
 
 	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
-		RespondInternalError(w, r, "Failed to marshal export data", err.Error())
+		RespondUnexpectedError(w, r, err)
 		return
 	}
 
@@ -89,7 +93,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		zw := zip.NewWriter(&buf)
 		f, err := zw.Create("data.json")
 		if err != nil {
-			RespondInternalError(w, r, "Failed to create ZIP entry", err.Error())
+			RespondUnexpectedError(w, r, err)
 			return
 		}
 		f.Write(jsonBytes)
@@ -98,7 +102,6 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// with_photos: stream directly — headers already set, errors after first write are log-only
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
@@ -128,7 +131,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(entry, f); err != nil {
 			log.Printf("[EXPORT] Failed to write photo %d to ZIP: %v", ep.Id, err)
 			f.Close()
-			return // ZIP stream is broken; abort
+			return
 		}
 		f.Close()
 	}
@@ -139,7 +142,7 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	result := make([]ExportPhoto, 0, len(images))
 	for _, img := range images {
 		if img.Status != 0 {
-			continue // skip processing / failed
+			continue
 		}
 		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))
 		ext := filepath.Ext(img.FilePath)
@@ -164,14 +167,12 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	return result
 }
 
-// Export tag structure
 type ExportTag struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 }
 
-// Export photo structure
 type ExportPhoto struct {
 	Id          int       `json:"id"`
 	Title       string    `json:"title"`
@@ -182,7 +183,6 @@ type ExportPhoto struct {
 	TagIds      []int     `json:"tag_ids"`
 }
 
-// Export data types matching the import structure
 type ExportDataStructure struct {
 	People          []ImportPerson    `json:"people"`
 	Heights         []ImportHeight    `json:"heights"`
@@ -190,6 +190,7 @@ type ExportDataStructure struct {
 	Milestones      []ExportMilestone `json:"milestones"`
 	Tags            []ExportTag       `json:"tags"`
 	Photos          []ExportPhoto     `json:"photos,omitempty"`
+	Activities      []ExportActivity  `json:"activities,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -197,9 +198,15 @@ type ExportDataStructure struct {
 	TotalMilestones int               `json:"total_milestones"`
 	TotalTags       int               `json:"total_tags"`
 	TotalPhotos     int               `json:"total_photos,omitempty"`
+
+	TotalActivities  int `json:"total_activities,omitempty"`
+	TotalSeasons     int `json:"total_seasons,omitempty"`
+	TotalEvents      int `json:"total_events,omitempty"`
+	TotalEntries     int `json:"total_entries,omitempty"`
+	TotalAppearances int `json:"total_appearances,omitempty"`
+	TotalResults     int `json:"total_results,omitempty"`
 }
 
-// Export milestone structure
 type ExportMilestone struct {
 	Id            int       `json:"id"`
 	PersonId      int       `json:"personId"`
@@ -212,11 +219,7 @@ type ExportMilestone struct {
 	TagNames      []string  `json:"tagNames,omitempty"`
 }
 
-// Request/Response types
 type ExportDataRequest struct {
-	// FamilyId names the family to export. Zero means the caller's primary
-	// family. Export covers one family at a time rather than every family the
-	// user belongs to, so a bundle round-trips back into a single family.
 	FamilyId int `json:"familyId,omitempty"`
 }
 
@@ -224,9 +227,7 @@ type ExportDataResponse struct {
 	JsonData string `json:"jsonData"`
 }
 
-// vbeam procedure
 func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
@@ -238,13 +239,11 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 		return
 	}
 
-	// Get all family data
 	exportData, err := buildExportData(ctx.Tx, familyId)
 	if err != nil {
 		return
 	}
 
-	// Marshal to JSON
 	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
 		return
@@ -254,11 +253,9 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 	return
 }
 
-// Helper function to build export data structure
 func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	var exportData ExportDataStructure
 
-	// Get all family tags and build id->name map
 	tags := getTagsByFamily(tx, familyId)
 	tagIdToName := make(map[int]string, len(tags))
 	exportTags := make([]ExportTag, len(tags))
@@ -267,12 +264,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
 	}
 
-	// The people this family owns, not its whole roster: a person shared in
-	// from another household belongs in their own family's bundle, and would
-	// come back from this one as a duplicate homed in the wrong place.
 	people := GetFamilyOwnPeople(tx, familyId)
 
-	// Convert people to export format
 	exportData.People = make([]ImportPerson, len(people))
 	for i, person := range people {
 		exportData.People[i] = ImportPerson{
@@ -287,7 +280,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		}
 	}
 
-	// Get all family growth data
 	var growthDataIds []int
 	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &growthDataIds, vbolt.Window{})
 
@@ -296,12 +288,10 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
 	}
 
-	// Separate heights and weights, convert to export format
 	var heights []ImportHeight
 	var weights []ImportWeight
 
 	for _, gd := range growthData {
-		// Get person name for the measurement
 		var personName string
 		for _, person := range people {
 			if person.Id == gd.PersonId {
@@ -310,7 +300,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			}
 		}
 
-		// Calculate age at measurement date
 		var personBirthday time.Time
 		for _, person := range people {
 			if person.Id == gd.PersonId {
@@ -323,7 +312,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		dateString := gd.MeasurementDate.Format("2006-01-02")
 
 		if gd.MeasurementType == Height {
-			// Convert to inches if needed
 			inches := gd.Value
 			if gd.Unit == "cm" {
 				inches = gd.Value / 2.54
@@ -339,7 +327,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 				PersonName: personName,
 			})
 		} else if gd.MeasurementType == Weight {
-			// Convert to pounds if needed
 			pounds := gd.Value
 			if gd.Unit == "kg" {
 				pounds = gd.Value * 2.20462
@@ -357,7 +344,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		}
 	}
 
-	// Get all family milestones
 	var milestoneIds []int
 	vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, familyId, &milestoneIds, vbolt.Window{})
 
@@ -366,10 +352,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
 	}
 
-	// Convert milestones to export format
 	exportMilestones := make([]ExportMilestone, len(milestones))
 	for i, milestone := range milestones {
-		// Get person name for the milestone
 		var personName string
 		for _, person := range people {
 			if person.Id == milestone.PersonId {
@@ -399,7 +383,14 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		}
 	}
 
-	// Set export data
+	personNames := make(map[int]string, len(people))
+	for _, person := range people {
+		personNames[person.Id] = person.Name
+	}
+	exportData.Activities = buildActivityExport(tx, familyId, personNames)
+	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=
+		countExportedActivities(exportData.Activities)
+
 	exportData.Heights = heights
 	exportData.Weights = weights
 	exportData.Milestones = exportMilestones
@@ -410,11 +401,16 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalPeople = len(people)
 	exportData.TotalMilestones = len(milestones)
 	exportData.TotalTags = len(tags)
+	exportData.TotalActivities = len(exportData.Activities)
+	exportData.TotalSeasons = seasonCount
+	exportData.TotalEvents = eventCount
+	exportData.TotalEntries = entryCount
+	exportData.TotalAppearances = appearanceCount
+	exportData.TotalResults = resultCount
 
 	return exportData, nil
 }
 
-// Helper function to calculate age at a specific date
 func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
 	years := targetDate.Year() - birthday.Year()
 	months := int(targetDate.Month()) - int(birthday.Month())

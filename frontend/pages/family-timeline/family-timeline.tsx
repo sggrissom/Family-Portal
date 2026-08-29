@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -175,7 +174,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
   const people = data.people || [];
 
-  // Search handler
   const handleSearch = async () => {
     const query = state.searchQuery.trim();
     if (!query) {
@@ -208,7 +206,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     vlens.scheduleRedraw();
   };
 
-  // Build combined timeline from all people
   const allTimelineItems: TimelineItem[] = [];
 
   for (const personData of people) {
@@ -257,7 +254,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     }
   }
 
-  // Generate and inject birthday events based on the data's date range
   if (allTimelineItems.length > 0) {
     let minDate = new Date(allTimelineItems[0].date);
     let maxDate = new Date(allTimelineItems[0].date);
@@ -270,7 +266,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     allTimelineItems.push(...birthdayEvents);
   }
 
-  // Initialize monitoring for processing photos
   allTimelineItems.forEach(item => {
     if (item.type === "photo") {
       const photo = item.data as server.Image;
@@ -285,14 +280,12 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     }
   });
 
-  // Filter by person
   let filteredItems = allTimelineItems;
   if (state.selectedPerson !== "all") {
     const personId = parseInt(state.selectedPerson);
     filteredItems = filteredItems.filter(item => item.personId === personId);
   }
 
-  // Filter by type
   if (state.selectedType !== "all") {
     filteredItems = filteredItems.filter(item => {
       if (state.selectedType === "milestones") return item.type === "milestone";
@@ -303,7 +296,6 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     });
   }
 
-  // Filter by tag if selected
   if (state.selectedTagIds.length > 0) {
     filteredItems = filteredItems.filter(item => {
       if (item.type === "milestone") {
@@ -318,14 +310,12 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     });
   }
 
-  // Sort items by date
   const sortedItems = [...filteredItems].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return state.sortOrder === "newest" ? dateB - dateA : dateA - dateB;
   });
 
-  // Group by year for timeline rendering
   const yearGroups = groupByYear(sortedItems);
   const availableYears = yearGroups.map(g => g.year);
 
@@ -335,12 +325,12 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   return (
     <div className="family-timeline-page">
       <div className="timeline-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="timeline-header-row">
           <div>
             <h1>Family Timeline</h1>
             <p>All memories, milestones, and moments in one place</p>
           </div>
-          <a href="/manage-tags" className="btn btn-secondary" style={{ flexShrink: 0 }}>
+          <a href="/manage-tags" className="btn btn-secondary">
             Manage Tags
           </a>
         </div>
@@ -352,6 +342,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             <input
               type="text"
               className="search-input"
+              aria-label="Search milestones"
               placeholder="Search milestones..."
               value={state.searchQuery}
               onInput={e => {
@@ -380,8 +371,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
           <div className="timeline-filters">
             <div className="filter-group">
-              <label>Person:</label>
+              <label htmlFor="timelinePerson">Person:</label>
               <select
+                id="timelinePerson"
                 value={state.selectedPerson}
                 onChange={e => {
                   state.selectedPerson = e.currentTarget.value;
@@ -398,8 +390,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             </div>
 
             <div className="filter-group">
-              <label>Type:</label>
+              <label htmlFor="timelineType">Type:</label>
               <select
+                id="timelineType"
                 value={state.selectedType}
                 onChange={e => {
                   state.selectedType = e.currentTarget.value as any;
@@ -415,8 +408,9 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             </div>
 
             <div className="filter-group">
-              <label>Sort:</label>
+              <label htmlFor="timelineSort">Sort:</label>
               <select
+                id="timelineSort"
                 value={state.sortOrder}
                 onChange={e => {
                   state.sortOrder = e.currentTarget.value as any;
@@ -430,11 +424,14 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
 
             {tagCache.tags.length > 0 && (
               <div className="filter-group timeline-tag-filter">
-                <label>Tags:</label>
-                <div className="tag-filter-chips">
+                <span className="filter-group-caption" id="timelineTagsLabel">
+                  Tags:
+                </span>
+                <div className="tag-filter-chips" role="group" aria-labelledby="timelineTagsLabel">
                   {tagCache.tags.map(tag => (
                     <button
                       key={tag.id}
+                      aria-pressed={state.selectedTagIds.includes(tag.id)}
                       className={`tag-filter-chip${state.selectedTagIds.includes(tag.id) ? " active" : ""}`}
                       style={
                         state.selectedTagIds.includes(tag.id)
@@ -595,13 +592,14 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             {milestone.photoIds && milestone.photoIds.length > 0 && (
               <div className="milestone-photos">
                 {milestone.photoIds.map(photoId => (
-                  <ThumbnailImage
+                  <a
                     key={photoId}
-                    photoId={photoId}
-                    alt=""
-                    className="milestone-photo-thumb"
-                    onClick={() => core.setRoute(`/view-photo/${photoId}`)}
-                  />
+                    className="milestone-photo-link"
+                    href={`/view-photo/${photoId}`}
+                    aria-label="View photo"
+                  >
+                    <ThumbnailImage photoId={photoId} alt="" className="milestone-photo-thumb" />
+                  </a>
                 ))}
               </div>
             )}
@@ -628,6 +626,7 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
               href={`/edit-milestone/${milestone.id}`}
               className="btn-action btn-edit"
               title="Edit"
+              aria-label="Edit milestone"
             >
               ✏️
             </a>
@@ -655,10 +654,20 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             </div>
           </div>
           <div className="timeline-item-actions">
-            <a href={`/view-growth/${measurement.id}`} className="btn-action btn-view" title="View">
+            <a
+              href={`/view-growth/${measurement.id}`}
+              className="btn-action btn-view"
+              title="View"
+              aria-label="View measurement"
+            >
               👁️
             </a>
-            <a href={`/edit-growth/${measurement.id}`} className="btn-action btn-edit" title="Edit">
+            <a
+              href={`/edit-growth/${measurement.id}`}
+              className="btn-action btn-edit"
+              title="Edit"
+              aria-label="Edit measurement"
+            >
               ✏️
             </a>
           </div>
@@ -679,9 +688,10 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
               <span className="timeline-item-date">{formatDate(item.date)}</span>
             </div>
             <div className="photo-item-details">
-              <div
+              <a
                 className="photo-thumbnail"
-                onClick={() => core.setRoute(`/view-photo/${photo.id}`)}
+                href={`/view-photo/${photo.id}`}
+                aria-label={`View photo: ${photo.title}`}
               >
                 <ThumbnailImage
                   photoId={photo.id}
@@ -691,7 +701,7 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
                   fetchpriority="auto"
                   status={photoStatus.getStatus(photo.id)}
                 />
-              </div>
+              </a>
               <div className="photo-info">
                 <div className="photo-title">{photo.title}</div>
                 {photo.description && <div className="photo-description">{photo.description}</div>}
@@ -716,7 +726,12 @@ const TimelineItemComponent = ({ item, photoStatus }: TimelineItemComponentProps
             </div>
           </div>
           <div className="timeline-item-actions">
-            <a href={`/view-photo/${photo.id}`} className="btn-action btn-view" title="View">
+            <a
+              href={`/view-photo/${photo.id}`}
+              className="btn-action btn-view"
+              title="View"
+              aria-label="View photo"
+            >
               👁️
             </a>
           </div>

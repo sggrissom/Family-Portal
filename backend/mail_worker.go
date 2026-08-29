@@ -1,39 +1,65 @@
 package backend
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
-// Outbound mail is transactional and low volume, so a failed send is worth a
-// few attempts: a relay that is reloading or greylisting recovers in seconds,
-// and the alternative is a user who never receives the reset link they asked
-// for. Attempts are spaced apart rather than immediate because an instant retry
-// tends to meet the same condition that caused the failure.
 const mailMaxAttempts = 3
+
+const maxRecentMailAttempts = 20
 
 var mailRetryDelays = []time.Duration{15 * time.Second, 60 * time.Second}
 
-// MailWorker delivers queued messages on a background goroutine so an
-// unresponsive relay costs a message its latency rather than costing a user
-// their HTTP request.
+type MailAttempt struct {
+	Time      time.Time `json:"time"`
+	Kind      string    `json:"kind"`
+	To        string    `json:"to"`
+	Success   bool      `json:"success"`
+	Attempts  int       `json:"attempts"`
+	Permanent bool      `json:"permanent"`
+	Error     string    `json:"error"`
+}
+
 type MailWorker struct {
-	jobQueue    chan MailJob
-	stopChannel chan bool
-	isRunning   bool
+	workerLifecycle
+	jobQueue chan MailJob
+
+	statsMu   sync.Mutex
+	sent      int
+	failed    int
+	lastSent  time.Time
+	lastError string
+	lastErrAt time.Time
+	recent    []MailAttempt
+}
+
+func (mw *MailWorker) recordAttempt(attempt MailAttempt) {
+	mw.statsMu.Lock()
+	defer mw.statsMu.Unlock()
+
+	if attempt.Success {
+		mw.sent++
+		mw.lastSent = attempt.Time
+	} else {
+		mw.failed++
+		mw.lastError = attempt.Error
+		mw.lastErrAt = attempt.Time
+	}
+
+	mw.recent = append(mw.recent, attempt)
+	if len(mw.recent) > maxRecentMailAttempts {
+		mw.recent = mw.recent[len(mw.recent)-maxRecentMailAttempts:]
+	}
 }
 
 var globalMailWorker *MailWorker
 
-// mailDeliverer performs one delivery attempt. It is a variable so tests can
-// exercise queueing and retry behaviour without an SMTP server.
 var mailDeliverer = deliverNow
 
-// InitializeMailWorker starts the background mail worker. Unlike the push
-// worker there is no configuration to validate here: whether mail can be sent
-// at all depends on environment that resolveMailSettings reads per send, and a
-// relay that is down at startup may well be up by the first message.
 func InitializeMailWorker(queueSize int) {
 	if globalMailWorker != nil {
 		LogInfo(LogCategoryWorker, "Mail worker already initialized, skipping")
@@ -41,9 +67,7 @@ func InitializeMailWorker(queueSize int) {
 	}
 
 	globalMailWorker = &MailWorker{
-		jobQueue:    make(chan MailJob, queueSize),
-		stopChannel: make(chan bool),
-		isRunning:   false,
+		jobQueue: make(chan MailJob, queueSize),
 	}
 
 	globalMailWorker.Start()
@@ -52,10 +76,6 @@ func InitializeMailWorker(queueSize int) {
 	})
 }
 
-// QueueMail hands a message to the background worker, or sends it inline when
-// no worker is running. The fallback is what keeps tests and one-off tooling
-// working without a worker goroutine, and it is safe there precisely because
-// those callers are not serving a request.
 func QueueMail(job MailJob) error {
 	if globalMailWorker == nil {
 		return mailDeliverer(job)
@@ -65,65 +85,73 @@ func QueueMail(job MailJob) error {
 	case globalMailWorker.jobQueue <- job:
 		return nil
 	default:
-		// Deliberately not falling back to a synchronous send: a full queue
-		// means deliveries are already backing up, so sending inline would
-		// hand the caller the stall the queue exists to absorb.
 		LogErrorSimple(LogCategoryWorker, "Mail queue is full; message dropped", map[string]interface{}{
 			"kind": job.Kind,
+		})
+		globalMailWorker.recordAttempt(MailAttempt{
+			Time:      time.Now(),
+			Kind:      job.Kind,
+			To:        job.To,
+			Permanent: true,
+			Error:     "the mail queue was full, so the message was dropped without being sent",
 		})
 		return fmt.Errorf("mail queue is full")
 	}
 }
 
-// Start begins the background worker goroutine.
 func (mw *MailWorker) Start() {
-	if mw.isRunning {
+	quit, done, ok := mw.start()
+	if !ok {
 		return
 	}
 
-	mw.isRunning = true
-	go mw.processJobs()
+	go mw.processJobs(quit, done)
 }
 
-// Stop gracefully shuts down the worker.
 func (mw *MailWorker) Stop() {
-	if !mw.isRunning {
-		return
-	}
-
-	mw.stopChannel <- true
-	mw.isRunning = false
+	mw.stopImmediately()
 	LogInfo(LogCategoryWorker, "Mail worker stopped")
 }
 
-// processJobs is the main worker loop.
-func (mw *MailWorker) processJobs() {
+func (mw *MailWorker) StopAndDrain(ctx context.Context) bool {
+	return mw.stopAndWait(ctx, true)
+}
+
+func (mw *MailWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
+	defer close(done)
 	for {
 		select {
 		case job := <-mw.jobQueue:
-			// A stop signal can also arrive mid-delivery, during a retry
-			// backoff. Returning here is what makes it take effect; looping
-			// would leave the goroutine running with the signal consumed.
-			if !mw.deliver(job) {
-				LogInfo(LogCategoryWorker, "Mail worker stopped during delivery")
+			if !mw.deliver(job, quit) {
+				drained := drainQueue(mw.drainContext(), mw.jobQueue, mw.deliverFinal)
+				LogInfo(LogCategoryWorker, "Mail worker stopped during delivery", map[string]interface{}{
+					"drained": drained,
+				})
 				return
 			}
-		case <-mw.stopChannel:
-			LogInfo(LogCategoryWorker, "Mail worker received stop signal")
+		case <-quit:
+			drained := drainQueue(mw.drainContext(), mw.jobQueue, mw.deliverFinal)
+			LogInfo(LogCategoryWorker, "Mail worker received stop signal", map[string]interface{}{
+				"drained":   drained,
+				"abandoned": len(mw.jobQueue),
+			})
 			return
 		}
 	}
 }
 
-// deliver sends one job, retrying transient failures. It reports false when the
-// worker was stopped before the job was resolved, which is the caller's signal
-// to shut the loop down.
-//
-// Retries run on this goroutine, so a message being retried holds up the ones
-// behind it; at the volume of mail this application sends that is a fair trade
-// for not needing a durable queue, but it is the reason the backoff is measured
-// in seconds rather than minutes.
-func (mw *MailWorker) deliver(job MailJob) bool {
+func (mw *MailWorker) deliverFinal(job MailJob) {
+	err := mailDeliverer(job)
+	if err != nil {
+		LogErrorSimple(LogCategoryWorker, "Mail delivery failed during shutdown", map[string]interface{}{
+			"kind":  job.Kind,
+			"error": err.Error(),
+		})
+	}
+	mw.recordAttempt(mailAttemptFor(job, 1, err))
+}
+
+func (mw *MailWorker) deliver(job MailJob, quit <-chan struct{}) bool {
 	for attempt := 1; attempt <= mailMaxAttempts; attempt++ {
 		err := mailDeliverer(job)
 		if err == nil {
@@ -131,11 +159,10 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 				"kind":    job.Kind,
 				"attempt": attempt,
 			})
+			mw.recordAttempt(mailAttemptFor(job, attempt, nil))
 			return true
 		}
 
-		// A rejected recipient or an unconfigured mailer will fail identically
-		// on every attempt, so stop rather than spending the backoff on it.
 		permanent := isPermanentMailError(err) || errors.Is(err, ErrMailNotConfigured)
 		if permanent || attempt == mailMaxAttempts {
 			LogErrorSimple(LogCategoryWorker, "Mail delivery failed", map[string]interface{}{
@@ -144,6 +171,9 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 				"permanent": permanent,
 				"error":     err.Error(),
 			})
+			failure := mailAttemptFor(job, attempt, err)
+			failure.Permanent = permanent
+			mw.recordAttempt(failure)
 			return true
 		}
 
@@ -153,10 +183,13 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 			"error":   err.Error(),
 		})
 
-		if !mw.wait(mailRetryDelays[attempt-1]) {
+		if !mw.wait(mailRetryDelays[attempt-1], quit) {
 			LogInfo(LogCategoryWorker, "Mail worker stopping; abandoning retry", map[string]interface{}{
 				"kind": job.Kind,
 			})
+			abandoned := mailAttemptFor(job, attempt, err)
+			abandoned.Error = "the worker stopped before the retry, so this was never sent: " + err.Error()
+			mw.recordAttempt(abandoned)
 			return false
 		}
 	}
@@ -164,22 +197,69 @@ func (mw *MailWorker) deliver(job MailJob) bool {
 	return true
 }
 
-// wait sleeps between attempts, reporting false if the worker was stopped
-// first. Waiting on the stop channel keeps shutdown from blocking for the
-// length of a backoff.
-func (mw *MailWorker) wait(delay time.Duration) bool {
+func (mw *MailWorker) wait(delay time.Duration, quit <-chan struct{}) bool {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
 	select {
 	case <-timer.C:
 		return true
-	case <-mw.stopChannel:
+	case <-quit:
 		return false
 	}
 }
 
-// GetMailQueueLength returns the current number of messages awaiting delivery.
+func mailAttemptFor(job MailJob, attempts int, err error) MailAttempt {
+	attempt := MailAttempt{
+		Time:     time.Now(),
+		Kind:     job.Kind,
+		To:       job.To,
+		Success:  err == nil,
+		Attempts: attempts,
+	}
+	if err != nil {
+		attempt.Error = err.Error()
+	}
+	return attempt
+}
+
+type MailWorkerStats struct {
+	QueueLength    int           `json:"queueLength"`
+	IsRunning      bool          `json:"isRunning"`
+	Sent           int           `json:"sent"`
+	Failed         int           `json:"failed"`
+	LastSentAt     time.Time     `json:"lastSentAt"`
+	LastError      string        `json:"lastError"`
+	LastErrorAt    time.Time     `json:"lastErrorAt"`
+	RecentAttempts []MailAttempt `json:"recentAttempts"`
+}
+
+func GetMailWorkerStats() MailWorkerStats {
+	if globalMailWorker == nil {
+		return MailWorkerStats{RecentAttempts: []MailAttempt{}}
+	}
+
+	mw := globalMailWorker
+	mw.statsMu.Lock()
+	defer mw.statsMu.Unlock()
+
+	recent := make([]MailAttempt, 0, len(mw.recent))
+	for i := len(mw.recent) - 1; i >= 0; i-- {
+		recent = append(recent, mw.recent[i])
+	}
+
+	return MailWorkerStats{
+		QueueLength:    len(mw.jobQueue),
+		IsRunning:      mw.isRunning(),
+		Sent:           mw.sent,
+		Failed:         mw.failed,
+		LastSentAt:     mw.lastSent,
+		LastError:      mw.lastError,
+		LastErrorAt:    mw.lastErrAt,
+		RecentAttempts: recent,
+	}
+}
+
 func GetMailQueueLength() int {
 	if globalMailWorker == nil {
 		return 0
@@ -187,9 +267,15 @@ func GetMailQueueLength() int {
 	return len(globalMailWorker.jobQueue)
 }
 
-// StopMailWorker gracefully shuts down the global mail worker.
 func StopMailWorker() {
 	if globalMailWorker != nil {
 		globalMailWorker.Stop()
 	}
+}
+
+func stopMailWorkerAndDrain(ctx context.Context) bool {
+	if globalMailWorker == nil {
+		return true
+	}
+	return globalMailWorker.StopAndDrain(ctx)
 }

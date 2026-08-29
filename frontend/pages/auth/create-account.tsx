@@ -44,7 +44,6 @@ export async function fetch(route: string, prefix: string) {
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const form = useCreateAccountForm();
 
-  // Check for family code in URL parameters and pre-fill if present
   if (typeof window !== "undefined" && !form.familyCode) {
     const urlParams = new URLSearchParams(window.location.search);
     const codeParam = urlParams.get("code");
@@ -92,7 +91,6 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
   }
   vlens.scheduleRedraw();
 
-  // Scroll to error message if there's an error
   if (form.error) {
     setTimeout(() => {
       const errorElement = document.querySelector(".error-message");
@@ -115,7 +113,11 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
         <p>{form.familyCode ? "Join Your Family" : "Start a Family"}</p>
       </div>
 
-      {form.error && <div className="error-message">{form.error}</div>}
+      {form.error && (
+        <div className="error-message" role="alert">
+          {form.error}
+        </div>
+      )}
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onCreateAccountClicked, form)}>
         <div className="form-group">
@@ -233,6 +235,12 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
         >
           {form.loading ? "Creating..." : "Create Account"}
         </button>
+
+        <p className="auth-consent">
+          By creating an account you agree to the <a href="/terms">terms of use</a> and the{" "}
+          <a href="/privacy">privacy page</a>, which covers what is stored, what leaves the server,
+          and how to delete it.
+        </p>
       </form>
 
       <div className="auth-footer">
@@ -240,6 +248,11 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
           Already have an account?
           <a href="/login" className="auth-link">
             Sign in
+          </a>
+        </p>
+        <p>
+          <a href="/support" className="auth-link">
+            Need help?
           </a>
         </p>
       </div>

@@ -1,7 +1,3 @@
-// Tests for Stage 3 of the multi-family plan: a user belongs to more than one
-// family. The three things that must hold are that a two-family user reaches
-// both families, that a one-family user sees exactly what they saw before, and
-// that a non-member is still refused everywhere.
 package backend
 
 import (
@@ -14,9 +10,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// multiFamilyFixture is three families. The `both` user is a member of A and B
-// with A as their primary; `soloA` belongs only to A; `outsider` belongs only
-// to C and must never reach anything in A or B.
 type multiFamilyFixture struct {
 	db       *vbolt.DB
 	both     User
@@ -54,7 +47,6 @@ func setupMultiFamilyFixture(t *testing.T) (multiFamilyFixture, func()) {
 		fx.famA = fx.both.FamilyId
 		fx.famC = fx.outsider.FamilyId
 
-		// soloA joined A through an invite code, so A has two members.
 		soloOwnFamily := fx.soloA.FamilyId
 		fx.soloA.FamilyId = fx.famA
 		vbolt.Write(tx, UsersBkt, fx.soloA.Id, &fx.soloA)
@@ -66,8 +58,6 @@ func setupMultiFamilyFixture(t *testing.T) (multiFamilyFixture, func()) {
 		}
 		EnsureMembershipTx(tx, fx.soloA.Id, fx.famA, AccessAdmin)
 
-		// Family B exists on its own, and `both` joins it as a second family —
-		// the additive JoinFamily path, which leaves the primary alone.
 		famB := createFamilyTx(tx, "Grandparents", fx.both.Id)
 		fx.famB = famB.Id
 		EnsureMembershipTx(tx, fx.both.Id, fx.famB, AccessAdmin)
@@ -107,7 +97,6 @@ func setupMultiFamilyFixture(t *testing.T) (multiFamilyFixture, func()) {
 	return fx, cleanup
 }
 
-// A user in two families holds access in both, at every level of the ladder.
 func TestMemberOfTwoFamiliesReachesBoth(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
@@ -127,8 +116,6 @@ func TestMemberOfTwoFamiliesReachesBoth(t *testing.T) {
 	})
 }
 
-// The resolver must return both families, primary first, and callers built on
-// it must merge the two rosters rather than showing only the primary.
 func TestVisibleFamiliesAndRostersSpanMemberships(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
@@ -166,7 +153,6 @@ func TestVisibleFamiliesAndRostersSpanMemberships(t *testing.T) {
 	})
 }
 
-// A single-family user must see exactly what they saw before Stage 3.
 func TestSingleFamilyUserIsUnchanged(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
@@ -194,8 +180,6 @@ func TestSingleFamilyUserIsUnchanged(t *testing.T) {
 	})
 }
 
-// Cross-family denial still holds for every entity type once memberships are
-// consulted — a non-member of A and B reaches nothing in either.
 func TestNonMemberIsDeniedEveryEntity(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
@@ -229,8 +213,6 @@ func TestNonMemberIsDeniedEveryEntity(t *testing.T) {
 	})
 }
 
-// The active family for a mutation is the requested one when named and the
-// primary when not, and it is always checked against membership.
 func TestResolveActingFamilyDefaultsToPrimary(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
@@ -263,14 +245,11 @@ func TestResolveActingFamilyDefaultsToPrimary(t *testing.T) {
 	})
 }
 
-// Records created in a secondary family are owned by that family, and the
-// records they hang off resolve to it without the request naming it.
 func TestWritesLandInTheNamedFamily(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		// A person added to the secondary family belongs to it, not to primary.
 		familyId, err := ResolveActingFamily(tx, fx.both, fx.famB, AccessContribute)
 		if err != nil {
 			t.Fatalf("ResolveActingFamily: %v", err)
@@ -285,7 +264,6 @@ func TestWritesLandInTheNamedFamily(t *testing.T) {
 			t.Errorf("person landed in family %d, expected %d", person.FamilyId, fx.famB)
 		}
 
-		// A measurement follows the person's family with nothing named.
 		measurementFamily, err := ActingFamilyForPerson(tx, fx.both, fx.personB.Id, AccessContribute)
 		if err != nil {
 			t.Fatalf("ActingFamilyForPerson: %v", err)
@@ -308,7 +286,6 @@ func TestWritesLandInTheNamedFamily(t *testing.T) {
 			t.Errorf("measurement landed in family %d, expected %d", growth.FamilyId, fx.famB)
 		}
 
-		// And it is readable back by the member, but not by the outsider.
 		if _, err := GetGrowthDataForUser(tx, growth.Id, fx.both, AccessView); err != nil {
 			t.Errorf("member cannot read back their own secondary-family record: %v", err)
 		}
@@ -321,14 +298,11 @@ func TestWritesLandInTheNamedFamily(t *testing.T) {
 	})
 }
 
-// Notifications and the auth payload both have to know about the second family.
 func TestFamilyFanoutFollowsMembership(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		// UsersByFamilyIndex only tracks primary families, so family B knows
-		// about its secondary member only through FamilyMembership.
 		userIds := GetFamilyUserIds(tx, fx.famB)
 		if len(userIds) != 1 || userIds[0] != fx.both.Id {
 			t.Errorf("family B should notify user %d, got %v", fx.both.Id, userIds)
@@ -355,8 +329,6 @@ func TestFamilyFanoutFollowsMembership(t *testing.T) {
 	})
 }
 
-// A membership role caps what it grants, so an AccessView member can read but
-// not write.
 func TestMembershipRoleCapsAccess(t *testing.T) {
 	fx, cleanup := setupMultiFamilyFixture(t)
 	defer cleanup()

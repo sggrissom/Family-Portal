@@ -93,7 +93,7 @@ block(`
 
 block(`
 .manage-tags-error {
-  color: var(--error, red);
+  color: var(--danger, red);
   font-size: 0.9rem;
   margin-bottom: 1rem;
 }

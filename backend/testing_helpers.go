@@ -8,7 +8,6 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
-// setupTestApp creates a test application with temporary database file
 func setupTestApp(t *testing.T) (*vbeam.Application, func()) {
 	tempFile, err := os.CreateTemp("", "test_*.db")
 	if err != nil {

@@ -1,12 +1,11 @@
 import { block } from "vlens/css";
 
-// Growth Form Page Styles (Add Growth & Edit Growth)
 block(`
 .add-growth-container {
   max-width: 580px;
   padding: 40px 20px;
   margin: 0 auto;
-  background: var(--color-bg);
+  background: var(--bg);
   min-height: calc(100vh - 200px);
   display: flex;
   align-items: center;
@@ -53,7 +52,6 @@ block(`
 }
 `);
 
-// Mobile responsive styles for growth pages
 block(`
 @media (max-width: 580px) {
   .add-growth-container {

@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-// mailRecorder captures delivery attempts and lets a test decide what each one
-// returns.
 type mailRecorder struct {
 	mu       sync.Mutex
 	jobs     []MailJob
@@ -17,8 +15,6 @@ type mailRecorder struct {
 	attempts chan int
 }
 
-// newMailRecorder installs a stub deliverer. results supplies the error for
-// each successive attempt; attempts past the end of the slice succeed.
 func newMailRecorder(t *testing.T, results ...error) *mailRecorder {
 	t.Helper()
 
@@ -52,8 +48,6 @@ func (r *mailRecorder) count() int {
 	return len(r.jobs)
 }
 
-// waitForAttempts blocks until n delivery attempts have been made, failing the
-// test rather than hanging if they never arrive.
 func (r *mailRecorder) waitForAttempts(t *testing.T, n int) {
 	t.Helper()
 
@@ -66,8 +60,6 @@ func (r *mailRecorder) waitForAttempts(t *testing.T, n int) {
 	}
 }
 
-// useTestMailWorker installs a running worker with short retry delays so the
-// backoff does not dominate the test runtime.
 func useTestMailWorker(t *testing.T, queueSize int) *MailWorker {
 	t.Helper()
 
@@ -76,8 +68,7 @@ func useTestMailWorker(t *testing.T, queueSize int) *MailWorker {
 	mailRetryDelays = []time.Duration{time.Millisecond, time.Millisecond}
 
 	worker := &MailWorker{
-		jobQueue:    make(chan MailJob, queueSize),
-		stopChannel: make(chan bool),
+		jobQueue: make(chan MailJob, queueSize),
 	}
 	globalMailWorker = worker
 	worker.Start()
@@ -102,7 +93,6 @@ func TestQueueMailSendsInlineWithoutWorker(t *testing.T) {
 		t.Fatalf("QueueMail() error = %v", err)
 	}
 
-	// No worker means the send already happened by the time QueueMail returned.
 	if recorder.count() != 1 {
 		t.Fatalf("delivery attempts = %d, want 1", recorder.count())
 	}
@@ -126,7 +116,6 @@ func TestQueueMailDeliversInBackground(t *testing.T) {
 }
 
 func TestMailWorkerRetriesTransientFailures(t *testing.T) {
-	// A 451 is the server saying "not now", so the message is worth resending.
 	transient := &textproto.Error{Code: 451, Msg: "try again later"}
 	recorder := newMailRecorder(t, transient, transient)
 	useTestMailWorker(t, 4)
@@ -152,7 +141,6 @@ func TestMailWorkerGivesUpAfterMaxAttempts(t *testing.T) {
 
 	recorder.waitForAttempts(t, mailMaxAttempts)
 
-	// Give a fourth attempt a chance to happen so the cap is really tested.
 	time.Sleep(50 * time.Millisecond)
 	if got := recorder.count(); got != mailMaxAttempts {
 		t.Fatalf("delivery attempts = %d, want %d", got, mailMaxAttempts)
@@ -195,11 +183,8 @@ func TestMailWorkerDoesNotRetryUnconfiguredMailer(t *testing.T) {
 func TestQueueMailReportsAFullQueue(t *testing.T) {
 	originalWorker := globalMailWorker
 
-	// A worker that is never started leaves the queue unattended, which is the
-	// only reliable way to fill it.
 	globalMailWorker = &MailWorker{
-		jobQueue:    make(chan MailJob, 1),
-		stopChannel: make(chan bool),
+		jobQueue: make(chan MailJob, 1),
 	}
 	t.Cleanup(func() { globalMailWorker = originalWorker })
 
@@ -239,9 +224,112 @@ func TestDeliverNowLogsWhenMailIsNotConfigured(t *testing.T) {
 	t.Setenv("EMAIL", "")
 	t.Setenv("APP_PASSWORD", "")
 
-	// Local builds fall back to logging so link-bearing flows stay testable
-	// without a mail server; this must not surface as a failure.
 	if err := deliverNow(MailJob{To: "user@example.com", Subject: "Hi", Body: "body", Kind: "test"}); err != nil {
 		t.Fatalf("deliverNow() error = %v, want nil in a local build", err)
+	}
+}
+
+func waitForMailStats(t *testing.T, want func(MailWorkerStats) bool) MailWorkerStats {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	var stats MailWorkerStats
+	for time.Now().Before(deadline) {
+		stats = GetMailWorkerStats()
+		if want(stats) {
+			return stats
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting on mail stats: %+v", stats)
+	return stats
+}
+
+func TestMailWorkerRecordsASuccessfulSend(t *testing.T) {
+	newMailRecorder(t)
+	useTestMailWorker(t, 4)
+
+	if err := QueueMail(MailJob{To: "user@example.com", Subject: "Hi", Kind: "password_reset"}); err != nil {
+		t.Fatalf("QueueMail() error = %v", err)
+	}
+
+	stats := waitForMailStats(t, func(s MailWorkerStats) bool { return s.Sent == 1 })
+	if stats.Failed != 0 {
+		t.Errorf("Failed = %d, want 0", stats.Failed)
+	}
+	if stats.LastSentAt.IsZero() {
+		t.Error("LastSentAt is zero after a successful send")
+	}
+	if len(stats.RecentAttempts) != 1 {
+		t.Fatalf("RecentAttempts = %d, want 1", len(stats.RecentAttempts))
+	}
+	attempt := stats.RecentAttempts[0]
+	if !attempt.Success || attempt.Kind != "password_reset" || attempt.To != "user@example.com" {
+		t.Errorf("attempt = %+v, want a successful password_reset to user@example.com", attempt)
+	}
+}
+
+func TestMailWorkerRecordsAPermanentFailure(t *testing.T) {
+	permanent := &textproto.Error{Code: 550, Msg: "no such mailbox"}
+	newMailRecorder(t, permanent)
+	useTestMailWorker(t, 4)
+
+	if err := QueueMail(MailJob{To: "gone@example.com", Subject: "Hi", Kind: "password_reset"}); err != nil {
+		t.Fatalf("QueueMail() error = %v", err)
+	}
+
+	stats := waitForMailStats(t, func(s MailWorkerStats) bool { return s.Failed == 1 })
+	if stats.Sent != 0 {
+		t.Errorf("Sent = %d, want 0", stats.Sent)
+	}
+	if stats.LastError == "" || stats.LastErrorAt.IsZero() {
+		t.Errorf("LastError = %q at %v, want the failure recorded", stats.LastError, stats.LastErrorAt)
+	}
+	if len(stats.RecentAttempts) != 1 {
+		t.Fatalf("RecentAttempts = %d, want 1", len(stats.RecentAttempts))
+	}
+	if attempt := stats.RecentAttempts[0]; attempt.Success || !attempt.Permanent {
+		t.Errorf("attempt = %+v, want a permanent failure", attempt)
+	}
+}
+
+func TestMailWorkerRecordsADroppedJob(t *testing.T) {
+	newMailRecorder(t)
+
+	originalWorker := globalMailWorker
+	worker := &MailWorker{jobQueue: make(chan MailJob, 1)}
+	globalMailWorker = worker
+	t.Cleanup(func() { globalMailWorker = originalWorker })
+
+	worker.jobQueue <- MailJob{To: "first@example.com", Kind: "password_reset"}
+
+	if err := QueueMail(MailJob{To: "second@example.com", Kind: "password_reset"}); err == nil {
+		t.Fatal("QueueMail() error = nil, want a full-queue refusal")
+	}
+
+	stats := GetMailWorkerStats()
+	if stats.Failed != 1 {
+		t.Fatalf("Failed = %d, want 1 — a dropped message is a delivery failure", stats.Failed)
+	}
+	if len(stats.RecentAttempts) != 1 || stats.RecentAttempts[0].To != "second@example.com" {
+		t.Errorf("RecentAttempts = %+v, want the dropped message", stats.RecentAttempts)
+	}
+}
+
+func TestMailWorkerCapsRecentAttempts(t *testing.T) {
+	recorder := newMailRecorder(t)
+	useTestMailWorker(t, maxRecentMailAttempts*2)
+
+	total := maxRecentMailAttempts + 5
+	for i := 0; i < total; i++ {
+		if err := QueueMail(MailJob{To: "user@example.com", Subject: "Hi", Kind: "test"}); err != nil {
+			t.Fatalf("QueueMail() error = %v", err)
+		}
+	}
+
+	recorder.waitForAttempts(t, total)
+	stats := waitForMailStats(t, func(s MailWorkerStats) bool { return s.Sent == total })
+	if len(stats.RecentAttempts) != maxRecentMailAttempts {
+		t.Errorf("RecentAttempts = %d, want %d", len(stats.RecentAttempts), maxRecentMailAttempts)
 	}
 }

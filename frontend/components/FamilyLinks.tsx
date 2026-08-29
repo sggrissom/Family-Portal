@@ -4,17 +4,20 @@ import * as server from "../server";
 import { FamilySelect } from "./FamilySelect";
 import "./family-links-styles";
 
-// SCOPE_LABELS drives both the create form and the per-link editor, so the two
-// can never drift apart on what a link is able to share.
 const SCOPE_LABELS: { key: keyof server.LinkScopes; label: string; hint: string }[] = [
   { key: "people", label: "People", hint: "Required — the people you choose to share" },
   { key: "milestones", label: "Milestones", hint: "Their milestones and the tags on them" },
   { key: "photos", label: "Photos", hint: "Photos they appear in" },
   { key: "growth", label: "Measurements", hint: "Height and weight history" },
+  {
+    key: "activities",
+    label: "Activities",
+    hint: "Seasons, competitions and results for routines they are in",
+  },
 ];
 
 function defaultScopes(): server.LinkScopes {
-  return { people: true, milestones: true, photos: true, growth: false };
+  return { people: true, milestones: true, photos: true, growth: false, activities: false };
 }
 
 type FamilyLinksState = {
@@ -23,8 +26,6 @@ type FamilyLinksState = {
   inviteCode: string;
   kind: string;
   scopes: server.LinkScopes;
-  // Pending scope edits per link id, so editing one card does not disturb
-  // another that is mid-change.
   edits: Record<number, server.LinkScopes>;
   error: string;
   busy: boolean;
@@ -54,11 +55,8 @@ async function refresh(state: FamilyLinksState) {
   vlens.scheduleRedraw();
 }
 
-// Sharing people is what every other scope hangs off, so it is implied rather
-// than separately selectable. The backend normalizes the same way; doing it here
-// too keeps the checkboxes honest about what will be saved.
 function withImpliedPeople(scopes: server.LinkScopes): server.LinkScopes {
-  const needsPeople = scopes.milestones || scopes.photos || scopes.growth;
+  const needsPeople = scopes.milestones || scopes.photos || scopes.growth || scopes.activities;
   return { ...scopes, people: scopes.people || needsPeople };
 }
 
@@ -272,8 +270,6 @@ interface FamilyLinksSectionProps {
   initialLinks: server.FamilyLinkView[];
 }
 
-// FamilyLinksSection is the settings surface for relating one household to
-// another: who we share with, who shares with us, and exactly what travels.
 export const FamilyLinksSection = ({
   initialLinks,
 }: FamilyLinksSectionProps): preact.ComponentChild => {
@@ -291,7 +287,11 @@ export const FamilyLinksSection = ({
           anything.
         </p>
 
-        {state.error && <div className="error-message">{state.error}</div>}
+        {state.error && (
+          <div className="error-message" role="alert">
+            {state.error}
+          </div>
+        )}
 
         {links.length > 0 && (
           <div className="family-links">

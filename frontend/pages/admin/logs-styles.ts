@@ -1,6 +1,6 @@
 import { block } from "vlens/css";
+import "./admin-tokens";
 
-// Logs page container
 block(`
 .logs-page {
   max-width: 1200px;
@@ -9,7 +9,6 @@ block(`
 }
 `);
 
-// Header section
 block(`
 .logs-header {
   display: flex;
@@ -30,7 +29,7 @@ block(`
 `);
 
 block(`
-.back-link {
+.logs-back-link {
   color: var(--admin-accent);
   text-decoration: none;
   font-weight: 500;
@@ -39,13 +38,12 @@ block(`
 `);
 
 block(`
-.back-link:hover {
+.logs-back-link:hover {
   color: var(--primary-accent);
   text-decoration: underline;
 }
 `);
 
-// Statistics section
 block(`
 .logs-stats {
   margin-bottom: 2rem;
@@ -53,7 +51,7 @@ block(`
 `);
 
 block(`
-.stats-grid {
+.logs-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1rem;
@@ -61,7 +59,7 @@ block(`
 `);
 
 block(`
-.stat-card {
+.logs-stat-card {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
@@ -71,7 +69,7 @@ block(`
 `);
 
 block(`
-.stat-number {
+.logs-stat-number {
   font-size: 1.5rem;
   font-weight: bold;
   color: var(--admin-accent);
@@ -80,7 +78,7 @@ block(`
 `);
 
 block(`
-.stat-label {
+.logs-stat-label {
   font-size: 0.875rem;
   color: var(--muted);
   text-transform: uppercase;
@@ -88,7 +86,6 @@ block(`
 }
 `);
 
-// Controls section
 block(`
 .logs-controls {
   background: var(--surface);
@@ -109,7 +106,7 @@ block(`
 `);
 
 block(`
-.filter-group {
+.logs-filter-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -117,7 +114,7 @@ block(`
 `);
 
 block(`
-.filter-group label {
+.logs-filter-group label {
   font-weight: 500;
   color: var(--text);
   font-size: 0.875rem;
@@ -125,7 +122,7 @@ block(`
 `);
 
 block(`
-.filter-group select {
+.logs-filter-group select {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -136,14 +133,48 @@ block(`
 `);
 
 block(`
-.filter-group select:focus {
+.logs-filter-group input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.logs-filter-group input:focus {
   outline: none;
   border-color: var(--admin-accent);
   box-shadow: 0 0 0 2px var(--admin-accent)20;
 }
 `);
 
-// Pagination
+block(`
+.logs-filter-group-search {
+  grid-column: 1 / -1;
+}
+`);
+
+block(`
+.logs-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+`);
+
+block(`
+.logs-filter-group select:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px var(--admin-accent)20;
+}
+`);
+
 block(`
 .logs-pagination {
   display: flex;
@@ -196,7 +227,6 @@ block(`
 }
 `);
 
-// Log content table
 block(`
 .logs-content {
   background: var(--surface);
@@ -252,7 +282,6 @@ block(`
 }
 `);
 
-// Column specific styles
 block(`
 .col-timestamp {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -275,7 +304,6 @@ block(`
 }
 `);
 
-// Log badges
 block(`
 .log-badge {
   display: inline-block;
@@ -323,7 +351,6 @@ block(`
 }
 `);
 
-// Category badges
 block(`
 .log-category {
   display: inline-block;
@@ -378,7 +405,6 @@ block(`
 }
 `);
 
-// Log data display
 block(`
 .log-data {
   margin-top: 0.5rem;
@@ -400,14 +426,13 @@ block(`
 }
 `);
 
-// Stack trace display
 block(`
 .log-stack-trace {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: var(--surface-secondary, rgba(0,0,0,0.15));
+  background: var(--bg, rgba(0,0,0,0.15));
   border-radius: 4px;
-  border-left: 3px solid var(--error-color, #dc2626);
+  border-left: 3px solid var(--danger, #dc2626);
   overflow-x: auto;
 }
 `);
@@ -417,16 +442,15 @@ block(`
   margin: 0;
   font-family: monospace;
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: var(--muted);
   white-space: pre;
   word-break: normal;
 }
 `);
 
-// State messages
 block(`
 .loading-message,
-.error-message,
+.logs-error-message,
 .empty-logs {
   text-align: center;
   padding: 2rem;
@@ -435,7 +459,7 @@ block(`
 `);
 
 block(`
-.error-message {
+.logs-error-message {
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
@@ -464,9 +488,8 @@ block(`
 }
 `);
 
-// Dark mode support
 block(`
-[data-theme="dark"] .stat-card {
+[data-theme="dark"] .logs-stat-card {
   background: var(--admin-surface);
   border-color: var(--admin-border);
 }
@@ -542,7 +565,6 @@ block(`
 }
 `);
 
-// Mobile responsive design
 block(`
 @media (max-width: 768px) {
   .logs-header {
@@ -551,7 +573,7 @@ block(`
     gap: 1rem;
   }
 
-  .stats-grid {
+  .logs-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -619,7 +641,7 @@ block(`
     padding: 1rem 0.5rem;
   }
 
-  .stats-grid {
+  .logs-stats-grid {
     grid-template-columns: 1fr;
   }
 
@@ -633,3 +655,85 @@ block(`
     justify-content: center;
   }
 }`);
+
+block(`
+.reference-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+`);
+
+block(`
+.reference-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+`);
+
+block(`
+.reference-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.reference-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+`);
+
+block(`
+.reference-input {
+  flex: 1 1 22rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.reference-input:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px var(--admin-accent)20;
+}
+`);
+
+block(`
+.reference-result {
+  margin-top: 1rem;
+}
+`);
+
+block(`
+.reference-found-in {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+`);
+
+block(`
+.reference-match {
+  border-left: 3px solid var(--admin-accent);
+  background: var(--admin-accent)10;
+}
+`);
+
+block(`
+.context-row {
+  opacity: 0.62;
+}
+`);

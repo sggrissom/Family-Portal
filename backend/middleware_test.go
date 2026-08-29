@@ -22,12 +22,10 @@ func TestAuthMiddleware(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for the middleware functions
 	appDb = db
 
 	var testUser User
 
-	// Create a test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Test User",
@@ -40,13 +38,11 @@ func TestAuthMiddleware(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Generate a valid JWT token for the user
 	validToken, err := generateAuthJwt(testUser, httptest.NewRecorder())
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
 
-	// Test handler that checks if user is in context
 	testHandler := func(w http.ResponseWriter, r *http.Request) {
 		user, ok := GetUserFromContext(r)
 		if !ok {
@@ -113,7 +109,6 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("Expired token", func(t *testing.T) {
-		// Create an expired token
 		expiredClaims := &Claims{
 			Username: testUser.Email,
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -146,12 +141,10 @@ func TestAuthenticateRequest(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database
 	appDb = db
 
 	var testUser User
 
-	// Create a test user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		userReq := CreateAccountRequest{
 			Name:            "Auth Test User",
@@ -164,7 +157,6 @@ func TestAuthenticateRequest(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Generate a valid JWT token
 	validToken, err := generateAuthJwt(testUser, httptest.NewRecorder())
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
@@ -206,7 +198,6 @@ func TestAuthenticateRequest(t *testing.T) {
 	})
 
 	t.Run("Token for non-existent user", func(t *testing.T) {
-		// Create token for non-existent user
 		nonExistentClaims := &Claims{
 			Username: "nonexistent@example.com",
 			RegisteredClaims: jwt.RegisteredClaims{
@@ -296,7 +287,6 @@ func TestExtractToken(t *testing.T) {
 		{
 			name: "No token anywhere",
 			setupRequest: func(req *http.Request) {
-				// No cookies or headers set
 			},
 			expectedToken:  "",
 			expectedResult: false,
@@ -386,14 +376,11 @@ func TestRequireAdmin(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database
 	appDb = db
 
 	var adminUser, regularUser User
 
-	// Create users
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create admin user (ID = 1)
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -403,14 +390,11 @@ func TestRequireAdmin(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
 
-		// Ensure admin user has ID = 1 (admin check)
 		if adminUser.Id != 1 {
-			// Manually set ID to 1 for admin test
 			adminUser.Id = 1
 			vbolt.Write(tx, UsersBkt, 1, &adminUser)
 		}
 
-		// Create regular user
 		regularReq := CreateAccountRequest{
 			Name:            "Regular User",
 			Email:           "regular@example.com",
@@ -422,7 +406,6 @@ func TestRequireAdmin(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	// Generate tokens
 	adminToken, err := generateAuthJwt(adminUser, httptest.NewRecorder())
 	if err != nil {
 		t.Fatalf("Failed to generate admin token: %v", err)
@@ -433,7 +416,6 @@ func TestRequireAdmin(t *testing.T) {
 		t.Fatalf("Failed to generate regular token: %v", err)
 	}
 
-	// Test handler
 	adminHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Admin access granted"))

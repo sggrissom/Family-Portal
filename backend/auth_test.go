@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"family/cfg"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.hasen.dev/vbolt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestResolveJWTSecret(t *testing.T) {
@@ -48,12 +50,10 @@ func TestResolveJWTSecret(t *testing.T) {
 }
 
 func TestSetupGoogleOAuth(t *testing.T) {
-	// Save original env vars
 	originalClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	originalClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	originalSiteRoot := os.Getenv("SITE_ROOT")
 
-	// Clean up after test
 	defer func() {
 		os.Setenv("GOOGLE_CLIENT_ID", originalClientID)
 		os.Setenv("GOOGLE_CLIENT_SECRET", originalClientSecret)
@@ -132,10 +132,8 @@ func TestGenerateAuthJwt(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for the auth functions
 	appDb = db
 
-	// Create a test user
 	user := User{
 		Id:        1,
 		Name:      "Test User",
@@ -145,10 +143,8 @@ func TestGenerateAuthJwt(t *testing.T) {
 		LastLogin: time.Now(),
 	}
 
-	// Create a test response recorder
 	recorder := httptest.NewRecorder()
 
-	// Test JWT generation
 	token, err := generateAuthJwt(user, recorder)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -158,7 +154,6 @@ func TestGenerateAuthJwt(t *testing.T) {
 		t.Error("Expected non-empty token")
 	}
 
-	// Check that cookie was set
 	cookies := recorder.Result().Cookies()
 	var authCookie *http.Cookie
 	for _, cookie := range cookies {
@@ -180,7 +175,6 @@ func TestGenerateAuthJwt(t *testing.T) {
 		t.Error("Expected cookie to be HttpOnly")
 	}
 
-	// Verify token can be parsed and contains correct claims
 	parsedToken, err := jwt.ParseWithClaims(token, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
@@ -202,7 +196,6 @@ func TestGenerateAuthJwt(t *testing.T) {
 		t.Errorf("Expected username 'test@example.com', got %v", claims.Username)
 	}
 
-	// Verify expiration is set
 	if claims.ExpiresAt == nil {
 		t.Error("Expected expiration to be set")
 	}
@@ -215,10 +208,8 @@ func TestAuthenticateForUser(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for the auth functions
 	appDb = db
 
-	// Create a test user in the database
 	var user User
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		user = User{
@@ -241,7 +232,6 @@ func TestAuthenticateForUser(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	// Check that cookie was set
 	cookies := recorder.Result().Cookies()
 	var authCookie *http.Cookie
 	for _, cookie := range cookies {
@@ -267,12 +257,10 @@ func TestAuthenticateForUserNotFound(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for the auth functions
 	appDb = db
 
 	recorder := httptest.NewRecorder()
 
-	// Try to authenticate non-existent user
 	err := authenticateForUser(999, recorder)
 	if err == nil {
 		t.Error("Expected error for non-existent user")
@@ -290,12 +278,10 @@ func TestLogoutHandler(t *testing.T) {
 
 	logoutHandler(recorder, req)
 
-	// Check response
 	if recorder.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", recorder.Code)
 	}
 
-	// Check that cookie was cleared
 	cookies := recorder.Result().Cookies()
 	var authCookie *http.Cookie
 	for _, cookie := range cookies {
@@ -313,7 +299,6 @@ func TestLogoutHandler(t *testing.T) {
 		t.Errorf("Expected empty cookie value, got '%s'", authCookie.Value)
 	}
 
-	// Check that expiration is in the past
 	if authCookie.Expires.After(time.Now()) {
 		t.Error("Expected cookie expiration to be in the past")
 	}
@@ -413,7 +398,6 @@ func TestLogoutHandlerRequiresPost(t *testing.T) {
 }
 
 func TestGenerateStateString(t *testing.T) {
-	// Test that generateToken produces different results
 	token1, err1 := generateToken(32)
 	token2, err2 := generateToken(32)
 
@@ -427,5 +411,118 @@ func TestGenerateStateString(t *testing.T) {
 
 	if len(token1) == 0 || len(token2) == 0 {
 		t.Error("Expected non-empty tokens")
+	}
+}
+
+func loginTestUser(t *testing.T, db *vbolt.DB, email, password string) User {
+	t.Helper()
+
+	var user User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		user = User{
+			Id:        vbolt.NextIntId(tx, UsersBkt),
+			Name:      "Login Test",
+			Email:     email,
+			FamilyId:  1,
+			Creation:  time.Now(),
+			LastLogin: time.Now(),
+		}
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+		vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
+
+		hash := []byte{}
+		if password != "" {
+			generated, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				t.Fatalf("bcrypt.GenerateFromPassword() error = %v", err)
+			}
+			hash = generated
+		}
+		vbolt.Write(tx, PasswdBkt, user.Id, &hash)
+		vbolt.TxCommit(tx)
+	})
+	return user
+}
+
+func postLogin(t *testing.T, email, password string) (*httptest.ResponseRecorder, LoginResponse) {
+	t.Helper()
+
+	body := strings.NewReader(`{"email":"` + email + `","password":"` + password + `"}`)
+	req := httptest.NewRequest("POST", "/api/login", body)
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	loginHandler(recorder, req)
+
+	var resp LoginResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	return recorder, resp
+}
+
+func TestLoginFailuresAreIndistinguishable(t *testing.T) {
+	testDBPath := "test_login_enumeration.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+	appDb = db
+
+	loginTestUser(t, db, "member@example.com", "correct-horse-battery")
+	loginTestUser(t, db, "google-only@example.com", "")
+
+	cases := []struct {
+		name     string
+		email    string
+		password string
+	}{
+		{name: "wrong password", email: "member@example.com", password: "wrong-password"},
+		{name: "unknown address", email: "stranger@example.com", password: "wrong-password"},
+		{name: "google-only account", email: "google-only@example.com", password: "wrong-password"},
+	}
+
+	var firstStatus int
+	for i, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder, resp := postLogin(t, tt.email, tt.password)
+
+			if resp.Success {
+				t.Fatal("login succeeded with a bad password")
+			}
+			if resp.Error != invalidCredentialsMessage {
+				t.Errorf("error = %q, want %q", resp.Error, invalidCredentialsMessage)
+			}
+			if i == 0 {
+				firstStatus = recorder.Code
+			} else if recorder.Code != firstStatus {
+				t.Errorf("status = %d, want %d to match the other failures", recorder.Code, firstStatus)
+			}
+		})
+	}
+}
+
+func TestLoginTimingDoesNotRevealAccounts(t *testing.T) {
+	testDBPath := "test_login_timing.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+	appDb = db
+
+	loginTestUser(t, db, "member@example.com", "correct-horse-battery")
+
+	compareAgainstDecoyPassword("warmup")
+
+	start := time.Now()
+	postLogin(t, "member@example.com", "wrong-password")
+	knownAccount := time.Since(start)
+
+	start = time.Now()
+	postLogin(t, "stranger@example.com", "wrong-password")
+	unknownAccount := time.Since(start)
+
+	if unknownAccount < knownAccount/2 {
+		t.Errorf("unknown address answered in %v against %v for a known one", unknownAccount, knownAccount)
 	}
 }

@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Landing Page Styles
 block(`
 .landing-container {
   max-width: 1200px;
@@ -60,35 +59,6 @@ block(`
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-}
-`);
-
-block(`
-.btn-large {
-  padding: 16px 32px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  border: none;
-  min-width: 140px;
-}
-`);
-
-block(`
-.btn-secondary {
-  background: transparent;
-  color: var(--text);
-  border: 2px solid var(--border);
-}
-`);
-
-block(`
-.btn-secondary:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-  transform: translateY(-2px);
 }
 `);
 

@@ -9,7 +9,6 @@ import { GrowthForm } from "./GrowthForm";
 import "./growth-styles";
 
 export async function fetch(route: string, prefix: string) {
-  // Fetch people list to populate the person selector
   return server.ListPeople({});
 }
 
@@ -32,7 +31,6 @@ export function view(
     );
   }
 
-  // Extract person ID from URL if present (e.g., /add-growth/123)
   const personId = getIdFromRoute(route);
   const personIdFromUrl = personId ? personId.toString() : undefined;
 

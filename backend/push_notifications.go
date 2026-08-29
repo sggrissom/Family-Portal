@@ -26,11 +26,10 @@ func RegisterPushNotificationMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UnregisterPushDevice)
 }
 
-// Request/Response types
 type RegisterPushDeviceRequest struct {
 	Token       string `json:"token"`
-	Platform    string `json:"platform"`    // "ios" or "android"
-	Environment string `json:"environment"` // "sandbox" or "production"
+	Platform    string `json:"platform"`
+	Environment string `json:"environment"`
 	BundleId    string `json:"bundleId"`
 }
 
@@ -46,20 +45,18 @@ type UnregisterPushDeviceResponse struct {
 	Success bool `json:"success"`
 }
 
-// Database types
 type PushDeviceToken struct {
 	Id          int       `json:"id"`
 	UserId      int       `json:"userId"`
 	Token       string    `json:"token"`
-	Platform    string    `json:"platform"`    // "ios" or "android"
-	Environment string    `json:"environment"` // "sandbox" or "production"
+	Platform    string    `json:"platform"`
+	Environment string    `json:"environment"`
 	BundleId    string    `json:"bundleId"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 	IsActive    bool      `json:"isActive"`
 }
 
-// Packing function for vbolt serialization
 func PackPushDeviceToken(self *PushDeviceToken, buf *vpack.Buffer) {
 	vpack.Version(1, buf)
 	vpack.Int(&self.Id, buf)
@@ -73,16 +70,12 @@ func PackPushDeviceToken(self *PushDeviceToken, buf *vpack.Buffer) {
 	vpack.Bool(&self.IsActive, buf)
 }
 
-// Buckets for vbolt database storage
 var PushDeviceTokenBkt = vbolt.Bucket(&cfg.Info, "push_device_tokens", vpack.FInt, PackPushDeviceToken)
 
-// PushDeviceTokenByTokenBkt: token string => device token id (for uniqueness lookup)
 var PushDeviceTokenByTokenBkt = vbolt.Bucket(&cfg.Info, "push_device_token_by_token", vpack.StringZ, vpack.Int)
 
-// PushDeviceTokenByUserIndex: term = user_id, target = device_token_id
 var PushDeviceTokenByUserIndex = vbolt.Index(&cfg.Info, "push_device_token_by_user", vpack.FInt, vpack.FInt)
 
-// Database helper functions
 func GetPushDeviceTokenById(tx *vbolt.Tx, tokenId int) (token PushDeviceToken) {
 	vbolt.Read(tx, PushDeviceTokenBkt, tokenId, &token)
 	return
@@ -97,7 +90,6 @@ func GetPushDeviceTokenByToken(tx *vbolt.Tx, tokenStr string) (token PushDeviceT
 	return
 }
 
-// GetActiveDeviceTokensForUser returns all active device tokens for a user
 func GetActiveDeviceTokensForUser(tx *vbolt.Tx, userId int) (tokens []PushDeviceToken) {
 	var tokenIds []int
 	vbolt.ReadTermTargets(tx, PushDeviceTokenByUserIndex, userId, &tokenIds, vbolt.Window{})
@@ -111,15 +103,12 @@ func GetActiveDeviceTokensForUser(tx *vbolt.Tx, userId int) (tokens []PushDevice
 	return
 }
 
-// upsertPushDeviceToken creates or updates a device token
 func upsertPushDeviceToken(tx *vbolt.Tx, userId int, req RegisterPushDeviceRequest) (PushDeviceToken, error) {
 	now := time.Now()
 
-	// Check if token already exists
 	existingToken := GetPushDeviceTokenByToken(tx, req.Token)
 
 	if existingToken.Id != 0 {
-		// Update existing token
 		existingToken.UserId = userId
 		existingToken.Platform = req.Platform
 		existingToken.Environment = req.Environment
@@ -128,13 +117,11 @@ func upsertPushDeviceToken(tx *vbolt.Tx, userId int, req RegisterPushDeviceReque
 		existingToken.IsActive = true
 
 		vbolt.Write(tx, PushDeviceTokenBkt, existingToken.Id, &existingToken)
-		// Update user index (in case user changed)
 		vbolt.SetTargetSingleTerm(tx, PushDeviceTokenByUserIndex, existingToken.Id, userId)
 
 		return existingToken, nil
 	}
 
-	// Create new token
 	token := PushDeviceToken{
 		Id:          vbolt.NextIntId(tx, PushDeviceTokenBkt),
 		UserId:      userId,
@@ -154,12 +141,8 @@ func upsertPushDeviceToken(tx *vbolt.Tx, userId int, req RegisterPushDeviceReque
 	return token, nil
 }
 
-// deactivatePushDeviceToken soft-deletes a device token by setting IsActive=false
 func deactivatePushDeviceToken(tx *vbolt.Tx, userId int, tokenStr string) error {
 	token := GetPushDeviceTokenByToken(tx, tokenStr)
-	// Treat a token owned by another user as missing. Besides preventing one user
-	// from disabling another user's notifications, the indistinguishable error
-	// avoids revealing whether a submitted token is registered.
 	if token.Id == 0 || token.UserId != userId {
 		return errors.New("token not found")
 	}
@@ -171,8 +154,6 @@ func deactivatePushDeviceToken(tx *vbolt.Tx, userId int, tokenStr string) error 
 	return nil
 }
 
-// DeactivatePushDeviceTokenById deactivates a token by its database ID
-// Used by the push worker when APNs reports an invalid token
 func DeactivatePushDeviceTokenById(db *vbolt.DB, tokenId int) error {
 	var updateError error
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -190,7 +171,6 @@ func DeactivatePushDeviceTokenById(db *vbolt.DB, tokenId int) error {
 	return updateError
 }
 
-// Validation
 func validateRegisterPushDeviceRequest(req RegisterPushDeviceRequest) error {
 	if req.Token == "" {
 		return errors.New("device token is required")
@@ -243,21 +223,17 @@ func validatePushDeviceToken(platform, token string) error {
 	return nil
 }
 
-// vbeam procedures
 func RegisterPushDevice(ctx *vbeam.Context, req RegisterPushDeviceRequest) (resp RegisterPushDeviceResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
 		return
 	}
 
-	// Validate request
 	if err = validateRegisterPushDeviceRequest(req); err != nil {
 		return
 	}
 
-	// Upsert device token
 	vbeam.UseWriteTx(ctx)
 	_, err = upsertPushDeviceToken(ctx.Tx, user.Id, req)
 	if err != nil {
@@ -278,7 +254,6 @@ func RegisterPushDevice(ctx *vbeam.Context, req RegisterPushDeviceRequest) (resp
 }
 
 func UnregisterPushDevice(ctx *vbeam.Context, req UnregisterPushDeviceRequest) (resp UnregisterPushDeviceResponse, err error) {
-	// Get authenticated user
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
 		err = ErrAuthFailure
@@ -290,7 +265,6 @@ func UnregisterPushDevice(ctx *vbeam.Context, req UnregisterPushDeviceRequest) (
 		return
 	}
 
-	// Deactivate device token
 	vbeam.UseWriteTx(ctx)
 	err = deactivatePushDeviceToken(ctx.Tx, user.Id, req.Token)
 	if err != nil {

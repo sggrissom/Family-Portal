@@ -82,7 +82,6 @@ without it. On a fresh box you must recreate it, mode 600, owned by `apps`:
 | `BACKUP_TOKEN` | **release builds refuse to start** (`backend/backup.go`), ≥32 chars |
 | `SITE_ROOT`, `MAIL_FROM` | links in outbound mail point at the wrong place |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_IOS_CLIENT_ID` | Google sign-in unavailable; re-issue from Google Cloud console |
-| `GEMINI_API_KEY` | AI import unavailable; re-issue from the Gemini console |
 
 None of these are stored in the database, so restoring the database does not
 bring any of them back.
@@ -113,6 +112,16 @@ backup carries, and therefore the only one whose absence is unrecoverable.
 
 Finally, log in and look at a family: people, growth entries, milestones, tags,
 chat history, and photos should all be present.
+
+While you are logged in, press **Verify backup path** on `/admin`. It sends the
+application the same request `backupctl` sends — loopback, bearer token, whole
+body read — and says whether a complete snapshot came back. That is worth doing
+after a restore in particular, because `BACKUP_TOKEN` was just retyped by hand
+into a fresh `.env`, and a token the running process does not hold fails as a
+404 that says nothing about why. The check names both causes of that 404.
+
+It shares the endpoint's budget of ten requests an hour with the nightly backup,
+so a result stands for ten minutes before another check will actually run.
 
 ## 5. Photo variants come back missing, and that is fine
 

@@ -63,7 +63,6 @@ func TestNewAppError(t *testing.T) {
 			t.Error("Expected timestamp to be set")
 		}
 
-		// Check timestamp is recent (within last minute)
 		if time.Since(err.Timestamp) > time.Minute {
 			t.Error("Expected timestamp to be recent")
 		}
@@ -94,24 +93,20 @@ func TestRespondWithError(t *testing.T) {
 		err := NewAppError(ErrCodeValidation, "Test validation error", "Field is required")
 		RespondWithError(recorder, req, err, http.StatusBadRequest)
 
-		// Check status code
 		if recorder.Code != http.StatusBadRequest {
 			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, recorder.Code)
 		}
 
-		// Check content type
 		contentType := recorder.Header().Get("Content-Type")
 		if contentType != "application/json" {
 			t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
 		}
 
-		// Parse response
 		var response ErrorResponse
 		if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// Check response structure
 		if response.Success != false {
 			t.Error("Expected success to be false")
 		}
@@ -124,8 +119,11 @@ func TestRespondWithError(t *testing.T) {
 			t.Errorf("Expected message 'Test validation error', got '%s'", response.Error.Message)
 		}
 
-		if response.Error.Details != "Field is required" {
-			t.Errorf("Expected details 'Field is required', got '%s'", response.Error.Details)
+		if response.Error.Details != "" {
+			t.Errorf("details reached the response body: %q", response.Error.Details)
+		}
+		if strings.Contains(recorder.Body.String(), "Field is required") {
+			t.Errorf("details text found in the raw response: %s", recorder.Body.String())
 		}
 
 		if response.Error.RequestPath != "/test-path" {
@@ -152,7 +150,6 @@ func TestRespondWithError(t *testing.T) {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// Request path should be empty when request is nil
 		if response.Error.RequestPath != "" {
 			t.Errorf("Expected empty request path, got '%s'", response.Error.RequestPath)
 		}
@@ -212,7 +209,7 @@ func TestRespondValidationError(t *testing.T) {
 		}
 	})
 
-	t.Run("Validation error with details", func(t *testing.T) {
+	t.Run("Validation details stay out of the response", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/data", nil)
 
@@ -223,8 +220,11 @@ func TestRespondValidationError(t *testing.T) {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response.Error.Details != "Email field is required" {
-			t.Errorf("Expected details 'Email field is required', got '%s'", response.Error.Details)
+		if response.Error.Message != "Invalid input" {
+			t.Errorf("message = %q, want %q", response.Error.Message, "Invalid input")
+		}
+		if strings.Contains(recorder.Body.String(), "Email field is required") {
+			t.Errorf("details text found in the raw response: %s", recorder.Body.String())
 		}
 	})
 }
@@ -302,19 +302,14 @@ func TestRespondInternalError(t *testing.T) {
 		}
 	})
 
-	t.Run("Internal error with details", func(t *testing.T) {
+	t.Run("Internal details stay out of the response", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/process", nil)
 
 		RespondInternalError(recorder, req, "Database connection failed", "Connection timeout after 30s")
 
-		var response ErrorResponse
-		if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		if response.Error.Details != "Connection timeout after 30s" {
-			t.Errorf("Expected details 'Connection timeout after 30s', got '%s'", response.Error.Details)
+		if strings.Contains(recorder.Body.String(), "Connection timeout after 30s") {
+			t.Errorf("details text found in the raw response: %s", recorder.Body.String())
 		}
 	})
 }
@@ -370,7 +365,6 @@ func TestRespondInvalidFileTypeError(t *testing.T) {
 }
 
 func TestErrorCodes(t *testing.T) {
-	// Verify all error codes are properly defined
 	testCases := []struct {
 		code     ErrorCode
 		expected string
@@ -398,16 +392,13 @@ func TestErrorResponseJSONFormat(t *testing.T) {
 
 	RespondValidationError(recorder, req, "Test error", "Test details")
 
-	// Check the raw JSON structure
 	responseBody := recorder.Body.String()
 
-	// Verify it contains expected JSON fields
 	expectedFields := []string{
 		`"success":false`,
 		`"error":{`,
 		`"code":"VALIDATION_ERROR"`,
 		`"message":"Test error"`,
-		`"details":"Test details"`,
 		`"timestamp"`,
 		`"request_path":"/test"`,
 	}
@@ -415,6 +406,12 @@ func TestErrorResponseJSONFormat(t *testing.T) {
 	for _, field := range expectedFields {
 		if !strings.Contains(responseBody, field) {
 			t.Errorf("Expected JSON to contain '%s', got: %s", field, responseBody)
+		}
+	}
+
+	for _, forbidden := range []string{`"details"`, "Test details"} {
+		if strings.Contains(responseBody, forbidden) {
+			t.Errorf("Response contains %q, which belongs in the log: %s", forbidden, responseBody)
 		}
 	}
 }

@@ -19,10 +19,6 @@ func RegisterFamilyLinkMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UnsharePersonFromFamily)
 }
 
-// FamilyLinkView is one link as the caller's own family sees it. Direction is
-// relative to the family that was asked about, because the same row reads as
-// "we share with them" from one side and "they share with us" from the other,
-// and the two carry different controls.
 type FamilyLinkView struct {
 	Id             int         `json:"id"`
 	FromFamilyId   int         `json:"fromFamilyId"`
@@ -34,17 +30,11 @@ type FamilyLinkView struct {
 	Scopes         LinkScopes  `json:"scopes"`
 	Status         LinkStatus  `json:"status"`
 	CreatedAt      time.Time   `json:"createdAt"`
-	// Outgoing means this family is the one sharing. Only the sharing side
-	// chooses what a link carries; only the receiving side accepts it.
-	Outgoing bool `json:"outgoing"`
-	// SharedCount is how many of the sharing family's people are currently on
-	// the receiving family's roster through this relationship.
-	SharedCount int `json:"sharedCount"`
+	Outgoing       bool        `json:"outgoing"`
+	SharedCount    int         `json:"sharedCount"`
 }
 
 type ListFamilyLinksRequest struct {
-	// FamilyId names which of the caller's families to report on. Zero means
-	// all of them, which is what the settings page asks for.
 	FamilyId int `json:"familyId,omitempty"`
 }
 
@@ -53,13 +43,7 @@ type ListFamilyLinksResponse struct {
 }
 
 type CreateFamilyLinkRequest struct {
-	// FamilyId is the family doing the sharing; zero means the caller's
-	// primary family. The caller must be an admin of it, since this gives
-	// something away.
-	FamilyId int `json:"familyId,omitempty"`
-	// InviteCode identifies the family being shared with. It is the same code
-	// used to join a family, which is already a bearer secret for the strictly
-	// greater power of becoming a member.
+	FamilyId   int        `json:"familyId,omitempty"`
 	InviteCode string     `json:"inviteCode"`
 	Kind       string     `json:"kind,omitempty"`
 	Scopes     LinkScopes `json:"scopes"`
@@ -104,8 +88,6 @@ func linkView(tx *vbolt.Tx, link FamilyLink, forFamilyId int) FamilyLinkView {
 	}
 }
 
-// countSharedThroughLink counts the sharing family's people who currently sit
-// on the receiving family's roster.
 func countSharedThroughLink(tx *vbolt.Tx, link FamilyLink) (count int) {
 	for _, row := range GetFamilyRoster(tx, link.ToFamilyId) {
 		person := GetPersonById(tx, row.PersonId)
@@ -153,8 +135,6 @@ func CreateFamilyLink(ctx *vbeam.Context, req CreateFamilyLinkRequest) (resp Cre
 		return
 	}
 
-	// Sharing gives something away, so it takes admin rights in the family
-	// whose content is being shared.
 	fromFamilyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessAdmin)
 	if err != nil {
 		return
@@ -203,8 +183,6 @@ func AcceptFamilyLink(ctx *vbeam.Context, req FamilyLinkIdRequest) (resp FamilyL
 		err = ErrLinkNotFound
 		return
 	}
-	// Only the receiving family accepts: the offer is theirs to take or leave,
-	// and accepting is what puts their roster in reach of the other household.
 	if err = RequireFamilyAccess(ctx.Tx, user, link.ToFamilyId, AccessAdmin); err != nil {
 		return
 	}
@@ -236,8 +214,6 @@ func UpdateFamilyLink(ctx *vbeam.Context, req UpdateFamilyLinkRequest) (resp Fam
 		err = ErrLinkNotFound
 		return
 	}
-	// What a link carries is the sharing family's decision alone. The receiving
-	// family can decline it or hand it back, but it cannot widen it.
 	if err = RequireFamilyAccess(ctx.Tx, user, link.FromFamilyId, AccessAdmin); err != nil {
 		return
 	}
@@ -257,9 +233,6 @@ func UpdateFamilyLink(ctx *vbeam.Context, req UpdateFamilyLinkRequest) (resp Fam
 	link.Kind = normalizeLinkKind(req.Kind)
 	link.Scopes = mask
 	writeFamilyLinkTx(ctx.Tx, link)
-	// Narrowing a link can strip the People scope, which is what put the shared
-	// people on the other roster in the first place. Leaving those rows behind
-	// would show the receiving family a list of names with nothing behind them.
 	if !scopes.People {
 		unshareAllThroughLinkTx(ctx.Tx, link)
 	}
@@ -283,8 +256,6 @@ func RevokeFamilyLink(ctx *vbeam.Context, req FamilyLinkIdRequest) (resp FamilyL
 		err = ErrLinkNotFound
 		return
 	}
-	// Either side can end the relationship: the sharing family by withdrawing
-	// the offer, the receiving family by declining to hold it.
 	fromErr := RequireFamilyAccess(ctx.Tx, user, link.FromFamilyId, AccessAdmin)
 	toErr := RequireFamilyAccess(ctx.Tx, user, link.ToFamilyId, AccessAdmin)
 	if fromErr != nil && toErr != nil {
@@ -295,8 +266,6 @@ func RevokeFamilyLink(ctx *vbeam.Context, req FamilyLinkIdRequest) (resp FamilyL
 	vbeam.UseWriteTx(ctx)
 	link.Status = LinkRevoked
 	writeFamilyLinkTx(ctx.Tx, link)
-	// The shared people go with it. A revoked link grants nothing, so the rows
-	// would otherwise leave unreachable names on the receiving family's roster.
 	unshareAllThroughLinkTx(ctx.Tx, link)
 	vbolt.TxCommit(ctx.Tx)
 
@@ -304,10 +273,6 @@ func RevokeFamilyLink(ctx *vbeam.Context, req FamilyLinkIdRequest) (resp FamilyL
 	return
 }
 
-// unshareAllThroughLinkTx takes the sharing family's people back off the
-// receiving family's roster. Only rows placed by this relationship are removed:
-// a person's home roster is never touched, and neither is a roster row the
-// receiving family owns because the person is homed there.
 func unshareAllThroughLinkTx(tx *vbolt.Tx, link FamilyLink) {
 	for _, row := range GetFamilyRoster(tx, link.ToFamilyId) {
 		person := GetPersonById(tx, row.PersonId)
@@ -318,7 +283,6 @@ func unshareAllThroughLinkTx(tx *vbolt.Tx, link FamilyLink) {
 	}
 }
 
-// SharedRosterRef is one family a person appears on beyond their own household.
 type SharedRosterRef struct {
 	FamilyId     int        `json:"familyId"`
 	FamilyName   string     `json:"familyName"`
@@ -326,8 +290,6 @@ type SharedRosterRef struct {
 	Relationship string     `json:"relationship,omitempty"`
 }
 
-// ShareTargetRef is a family this person could be shared into: one with an
-// accepted link from their home family that carries people.
 type ShareTargetRef struct {
 	FamilyId   int    `json:"familyId"`
 	FamilyName string `json:"familyName"`
@@ -342,13 +304,8 @@ type GetPersonSharingResponse struct {
 	PersonId     int               `json:"personId"`
 	HomeFamilyId int               `json:"homeFamilyId"`
 	SharedWith   []SharedRosterRef `json:"sharedWith"`
-	// CanShare is empty when the home family has no accepted outbound link, in
-	// which case the answer to "who may I share into" is "nobody yet" rather
-	// than "any family you happen to belong to".
-	CanShare []ShareTargetRef `json:"canShare"`
-	// Manageable is false for a viewer who can see the person but does not
-	// administer the household that owns them.
-	Manageable bool `json:"manageable"`
+	CanShare     []ShareTargetRef  `json:"canShare"`
+	Manageable   bool              `json:"manageable"`
 }
 
 type SharePersonRequest struct {
@@ -382,7 +339,7 @@ func personSharing(tx *vbolt.Tx, user User, person Person) GetPersonSharingRespo
 	for _, row := range GetPersonFamilies(tx, person.Id) {
 		onRoster[row.FamilyId] = true
 		if row.FamilyId == person.FamilyId {
-			continue // the home roster is not a share
+			continue
 		}
 		resp.SharedWith = append(resp.SharedWith, SharedRosterRef{
 			FamilyId:     row.FamilyId,
@@ -395,9 +352,6 @@ func personSharing(tx *vbolt.Tx, user User, person Person) GetPersonSharingRespo
 	if !resp.Manageable {
 		return resp
 	}
-	// Which families a person may be placed into is a link question, not a
-	// membership one: the home family must have offered its people to them and
-	// they must have accepted.
 	for _, link := range GetLinksFromFamily(tx, person.FamilyId) {
 		if link.Status != LinkAccepted || !link.HasScope(ScopePeople) || onRoster[link.ToFamilyId] {
 			continue
@@ -439,8 +393,6 @@ func SharePersonWithFamily(ctx *vbeam.Context, req SharePersonRequest) (resp Per
 		err = errors.New("Person not found")
 		return
 	}
-	// Sharing a person out is the home family's decision, so it takes admin
-	// rights there — not in the family receiving them.
 	if err = RequireFamilyAccess(ctx.Tx, user, person.FamilyId, AccessAdmin); err != nil {
 		return
 	}
@@ -484,8 +436,6 @@ func UnsharePersonFromFamily(ctx *vbeam.Context, req UnsharePersonRequest) (resp
 		err = errors.New("Person not found")
 		return
 	}
-	// Either household can end a share: the owner by withdrawing the person,
-	// the host by taking them off its own roster.
 	ownerErr := RequireFamilyAccess(ctx.Tx, user, person.FamilyId, AccessAdmin)
 	hostErr := RequireFamilyAccess(ctx.Tx, user, req.FamilyId, AccessAdmin)
 	if ownerErr != nil && hostErr != nil {

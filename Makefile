@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy test test-race test-coverage local typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke e2e test test-race test-coverage local typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -19,13 +19,20 @@ build-frontend: check-css
 	@echo "Building frontend..."
 	go run -tags frontend release/frontend.go
 
+# The version itself lives in cfg/version.go — one constant, read by everything
+# that names it. Only the provenance is stamped in here, because a commit and a
+# build time are facts about this build rather than about the source.
+GIT_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_TIME   := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+VERSION_LDFLAGS := -X family/cfg.Commit=$(GIT_COMMIT) -X family/cfg.BuildTime=$(BUILD_TIME)
+
 build-go:
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building $(BINARY_NAME) ($(GIT_COMMIT))..."
 	# make sure build dir exists
 	mkdir -p $(BUILD_DIR)
 	# (b) compile release.go into a self‑contained Linux binary
 	cd release && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
-	  go build -tags release -ldflags="-s -w" \
+	  go build -tags release -ldflags="-s -w $(VERSION_LDFLAGS)" \
 	    -o ../$(BUILD_DIR)/$(BINARY_NAME) release.go
 
 build: build-frontend build-go
@@ -34,11 +41,25 @@ build-face:
 	@echo "Building family-face daemon (requires dlib on build machine)..."
 	mkdir -p $(BUILD_DIR)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=1 \
-	  go build -tags faceanalysis -ldflags="-s -w" \
+	  go build -tags faceanalysis -ldflags="-s -w $(VERSION_LDFLAGS)" \
 	    -o $(BUILD_DIR)/family-face ./cmd/faceanalysis/
 
 deploy: build
 	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
+
+# Post-deploy smoke check against a running deployment. Reads SMOKE_EMAIL and
+# SMOKE_PASSWORD from the environment; see docs/deployment.md for what the
+# account needs to be.
+SMOKE_URL ?= https://familyrecord.app
+smoke:
+	go run ./cmd/smokecheck -url $(SMOKE_URL)
+
+# End-to-end run of the five flows against the compiled release binary, over
+# TLS, on a scratch deployment. A release build resolves its storage paths at
+# compile time, so this needs the tree production would use; cmd/e2e prints the
+# two commands that create it, and refuses to run where a real deployment lives.
+e2e: build
+	go run -tags release ./cmd/e2e -binary $(BUILD_DIR)/$(BINARY_NAME)
 
 deploy-face: build-face
 	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
@@ -83,7 +104,7 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
-	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill
+	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following Go files need formatting:"; \

@@ -6,6 +6,28 @@ on:
   push:
     branches: [main]
 
+# Third-party actions are pinned to a commit SHA rather than a tag. A tag is
+# mutable: whoever owns the action can repoint it, and every workflow that
+# references it starts running new code with this repository's deploy key in
+# scope. The trailing comment is the version the SHA corresponds to, so a bump
+# is still a readable diff.
+
+# Nothing in this workflow needs to write to the repository.
+permissions:
+  contents: read
+
+# Pinned to an exact patch release, not the `1.25` minor. `setup-go` resolves a
+# minor to whatever it already finds in the runner's tool cache, which is the Go
+# the image happened to ship with and is usually several patches behind — so the
+# security job scanned a stdlib that was missing published fixes and failed on
+# five of them (net/http, net/url, crypto/tls, encoding/xml, html/template) that
+# a current 1.25 had already patched. An exact version makes every job build the
+# same toolchain, and makes the next stdlib advisory a one-line, reviewable bump
+# instead of a silent difference between the runner image and the release notes.
+env:
+  GO_VERSION: '1.25.14'
+  NODE_VERSION: '20'
+
 jobs:
   build-test:
     name: Build, Typecheck, and Test
@@ -13,18 +35,18 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install Node dependencies
@@ -49,7 +71,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-coverage
           path: |
@@ -59,8 +81,71 @@ jobs:
       - name: Race detector
         run: make test-race
 
+      # The unit tests run in-process against a local build. This runs the
+      # artifact that actually ships: release build tags, embedded frontend,
+      # compile-time storage paths, mandatory config, rate limiting that cannot
+      # be disabled, and Secure cookies over TLS.
+      - name: Prepare the end-to-end deployment tree
+        run: |
+          sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
+          sudo chown -R "$(id -un)" /srv/apps/family/shared
+
+      - name: End-to-end flows
+        run: make e2e
+
       - name: Verify checks did not modify tracked files
         run: make check-clean
+
+  # Dependency and secret scanning.
+  #
+  # This runs alongside build-test rather than in front of it: a CVE published
+  # this morning in a transitive dependency should not stop the tests from
+  # reporting, and it should not stop a deploy of unrelated code either. What it
+  # should do is block a merge, which is branch protection's job. So `deploy`
+  # deliberately does not list this job in `needs`.
+  security:
+    name: Dependency and secret scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # gitleaks scans history, not just the working tree; a shallow clone
+          # would let a secret committed and reverted last week pass unnoticed.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # govulncheck reports only vulnerabilities in code paths this module
+      # actually reaches, so a finding is worth reading rather than triaging.
+      - name: Go vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      # Frontend dependencies are two packages and their trees. `high` is the
+      # threshold worth failing a build over; anything lower is visible in the
+      # log without blocking.
+      - name: npm audit
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:
     name: Deploy
@@ -70,25 +155,25 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install Node dependencies
         run: npm ci
 
       - name: Start SSH agent and add deploy key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
 
@@ -98,7 +183,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Checkout deploy tool
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: sggrissom/tiny-server-helper
           path: .tiny-server-helper
@@ -111,3 +196,17 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: make deploy DEPLOY_HOST="$DEPLOY_USER@$DEPLOY_HOST"
+
+      # The deploy script already rolled back if /healthz went quiet. This asks
+      # the questions that survive a healthy process: does the site render, does
+      # a real account get in, does a photo come back, does chat connect.
+      - name: Post-deploy smoke check
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_EMAIL" ] || [ -z "$SMOKE_PASSWORD" ]; then
+            echo "::warning::SMOKE_EMAIL and SMOKE_PASSWORD are unset, so this deploy went out unverified. See docs/deployment.md."
+            exit 0
+          fi
+          make smoke

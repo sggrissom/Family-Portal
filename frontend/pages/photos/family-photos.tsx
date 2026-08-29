@@ -63,14 +63,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
   const hasPhotos = allPhotos.length > 0;
   const hasFilteredPhotos = filteredPhotos.length > 0;
 
-  // Initialize monitoring for processing photos
   if (hasPhotos) {
     allPhotos.forEach(photoWithPeople => {
       const photo = photoWithPeople.image;
       const currentStatus = photoStatus.getStatus(photo.id);
 
-      // Only start monitoring if we haven't seen this photo before (Unknown status)
-      // AND the server says it's processing
       if (
         currentStatus === Status.Unknown &&
         photo.status === 1 &&
@@ -83,7 +80,6 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
 
   return (
     <div className="family-photos-page">
-      {/* Page Header */}
       <div className="page-header">
         <div className="header-content">
           <div>
@@ -112,7 +108,6 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
         </div>
       </div>
 
-      {/* Filter Panel */}
       {hasPhotos && photoFilter.isFilterPanelOpen && (
         <div className="filter-panel">
           <div className="filter-section">
@@ -195,7 +190,6 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
         </div>
       )}
 
-      {/* Photos Grid */}
       <div className="photos-content">
         {hasPhotos ? (
           hasFilteredPhotos ? (
@@ -212,11 +206,9 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                       onClick={() => core.setRoute(`/view-photo/${photoWithPeople.image.id}`)}
                       status={photoStatus.getStatus(photoWithPeople.image.id)}
                     />
-                    {/* Show profile photo badge if any person has this as their profile photo */}
                     {photoWithPeople.people.some(
                       person => person.profilePhotoId === photoWithPeople.image.id
                     ) && <div className="profile-photo-badge">👤 Profile</div>}
-                    {/* Show person badges for all tagged people */}
                     {photoWithPeople.people.length > 0 ? (
                       <div className="people-badges">
                         {photoWithPeople.people.map(person => (

@@ -10,14 +10,11 @@ import (
 	"testing"
 )
 
-// Helper function to create a test image with specific dimensions
 func createTestImageWithSize(width, height int) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	// Create a simple test pattern
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// Create a gradient pattern
 			r := uint8((x * 255) / width)
 			g := uint8((y * 255) / height)
 			b := uint8(128)
@@ -65,7 +62,7 @@ func TestCalculateDimensions(t *testing.T) {
 			name:  "Portrait aspect ratio",
 			width: 400, height: 600,
 			maxWidth: 200, maxHeight: 200,
-			expectedWidth: 133, expectedHeight: 200, // Aspect ratio preserved
+			expectedWidth: 133, expectedHeight: 200,
 		},
 		{
 			name:  "Landscape aspect ratio",
@@ -98,14 +95,11 @@ func TestCalculateDimensions(t *testing.T) {
 				t.Errorf("Expected height %d, got %d", tc.expectedHeight, newHeight)
 			}
 
-			// Verify aspect ratio is preserved (within reasonable tolerance)
 			originalRatio := float64(tc.width) / float64(tc.height)
 			newRatio := float64(newWidth) / float64(newHeight)
 			tolerance := 0.01
 
 			if newWidth < tc.maxWidth && newHeight < tc.maxHeight {
-				// If both dimensions are under the max, check that at least one hits the max
-				// unless original was already small enough
 				if tc.width > tc.maxWidth || tc.height > tc.maxHeight {
 					if newWidth != tc.maxWidth && newHeight != tc.maxHeight {
 						t.Error("At least one dimension should hit the maximum")
@@ -121,7 +115,6 @@ func TestCalculateDimensions(t *testing.T) {
 }
 
 func TestProcessImage(t *testing.T) {
-	// Create a test image
 	testImageData := createTestImageWithSize(400, 300)
 
 	t.Run("JPEG compression", func(t *testing.T) {
@@ -136,7 +129,6 @@ func TestProcessImage(t *testing.T) {
 			t.Error("Expected non-empty result")
 		}
 
-		// Should preserve dimensions since they're under the medium size limit
 		if width != 400 {
 			t.Errorf("Expected width 400, got %d", width)
 		}
@@ -163,7 +155,6 @@ func TestProcessImage(t *testing.T) {
 	})
 
 	t.Run("Resize large image", func(t *testing.T) {
-		// Create a large test image
 		largeImageData := createTestImageWithSize(1200, 800)
 		reader := bytes.NewReader(largeImageData)
 
@@ -176,7 +167,6 @@ func TestProcessImage(t *testing.T) {
 			t.Error("Expected non-empty result")
 		}
 
-		// Should be resized to fit within thumbnail size (300x300)
 		if width > ThumbnailSize.MaxWidth {
 			t.Errorf("Width %d exceeds max width %d", width, ThumbnailSize.MaxWidth)
 		}
@@ -184,7 +174,6 @@ func TestProcessImage(t *testing.T) {
 			t.Errorf("Height %d exceeds max height %d", height, ThumbnailSize.MaxHeight)
 		}
 
-		// Should maintain aspect ratio (1200:800 = 3:2)
 		expectedWidth := 300
 		expectedHeight := 200
 		if width != expectedWidth || height != expectedHeight {
@@ -229,17 +218,14 @@ func TestProcessAndSaveMultipleSizes(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Note: Processing may resize the image to the smallest size variant
 		if width <= 0 || height <= 0 {
 			t.Errorf("Expected positive dimensions, got %dx%d", width, height)
 		}
 
-		// Should have results for multiple size/format combinations
 		if len(results) == 0 {
 			t.Error("Expected multiple results")
 		}
 
-		// Check for specific combinations (4 sizes × 3 formats = 12 variants)
 		expectedCombinations := []string{
 			"thumb_jpeg", "thumb_webp", "thumb_avif",
 			"medium_jpeg", "medium_webp", "medium_avif",
@@ -254,12 +240,10 @@ func TestProcessAndSaveMultipleSizes(t *testing.T) {
 			}
 		}
 
-		// Should generate all 12 combinations
 		if foundCombinations != 12 {
 			t.Errorf("Expected 12 size/format combinations, got %d", foundCombinations)
 		}
 
-		// Verify all results are non-empty
 		for key, data := range results {
 			if len(data) == 0 {
 				t.Errorf("Result for %s is empty", key)
@@ -275,14 +259,11 @@ func TestProcessAndSaveMultipleSizes(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Should have some fallback result
 		if len(results) == 0 {
 			t.Error("Expected at least fallback result")
 		}
 
-		// Should have dimensions even if processing failed
 		if width == 0 && height == 0 {
-			// Check if it at least has a fallback
 			if _, exists := results["large_jpeg"]; !exists {
 				t.Error("Expected fallback result when processing fails")
 			}
@@ -309,7 +290,7 @@ func TestGetOptimalImageFormat(t *testing.T) {
 		},
 		{
 			acceptHeader: "image/webp,image/avif,*/*",
-			expected:     "avif", // AVIF takes priority over WebP
+			expected:     "avif",
 		},
 		{
 			acceptHeader: "image/png,image/webp,*/*",
@@ -317,15 +298,15 @@ func TestGetOptimalImageFormat(t *testing.T) {
 		},
 		{
 			acceptHeader: "text/html,*/*",
-			expected:     "jpeg", // Fallback
+			expected:     "jpeg",
 		},
 		{
 			acceptHeader: "",
-			expected:     "jpeg", // Fallback for empty header
+			expected:     "jpeg",
 		},
 		{
 			acceptHeader: "application/json",
-			expected:     "jpeg", // Fallback for non-image accepts
+			expected:     "jpeg",
 		},
 	}
 
@@ -350,8 +331,8 @@ func TestGetImageMimeType(t *testing.T) {
 		{"jpeg", "image/jpeg"},
 		{"jpg", "image/jpeg"},
 		{"gif", "image/gif"},
-		{"unknown", "image/jpeg"}, // Fallback
-		{"", "image/jpeg"},        // Fallback for empty
+		{"unknown", "image/jpeg"},
+		{"", "image/jpeg"},
 	}
 
 	for _, tc := range testCases {
@@ -365,9 +346,6 @@ func TestGetImageMimeType(t *testing.T) {
 }
 
 func TestImageSizeDefinitions(t *testing.T) {
-	// Test that all predefined image sizes have valid values
-	// Note: SmallSize and XXLargeSize still exist for backward compatibility
-	// but are not actively generated for new uploads
 	sizes := []ImageSize{
 		ThumbnailSize, MediumSize,
 		LargeSize, XLargeSize,
@@ -390,7 +368,6 @@ func TestImageSizeDefinitions(t *testing.T) {
 		})
 	}
 
-	// Test that sizes are in ascending order
 	t.Run("Sizes in ascending order", func(t *testing.T) {
 		if ThumbnailSize.MaxWidth >= MediumSize.MaxWidth {
 			t.Error("Thumbnail size should be smaller than medium")
@@ -403,7 +380,6 @@ func TestImageSizeDefinitions(t *testing.T) {
 		}
 	})
 
-	// Test that quality generally increases with size
 	t.Run("Quality increases with size", func(t *testing.T) {
 		if ThumbnailSize.Quality > LargeSize.Quality {
 			t.Error("Thumbnail size quality should not exceed large size quality")
@@ -415,7 +391,6 @@ func TestImageSizeDefinitions(t *testing.T) {
 }
 
 func TestImageSizeStruct(t *testing.T) {
-	// Test creating custom image size
 	customSize := ImageSize{
 		Name:      "custom",
 		MaxWidth:  400,
@@ -438,11 +413,10 @@ func TestImageSizeStruct(t *testing.T) {
 }
 
 func TestCompressFunctions(t *testing.T) {
-	// Create a simple test image
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
 	for y := 0; y < 100; y++ {
 		for x := 0; x < 100; x++ {
-			img.Set(x, y, color.RGBA{255, 0, 0, 255}) // Red image
+			img.Set(x, y, color.RGBA{255, 0, 0, 255})
 		}
 	}
 
@@ -482,8 +456,6 @@ func TestCompressFunctions(t *testing.T) {
 			t.Fatalf("Expected no errors, got %v, %v", err1, err2)
 		}
 
-		// Higher quality should generally result in larger file size
-		// (though this isn't guaranteed for all images)
 		if len(lowQuality) == 0 || len(highQuality) == 0 {
 			t.Error("Expected non-empty results for both quality levels")
 		}

@@ -4,17 +4,12 @@ import { getFamilies } from "../lib/authCache";
 
 interface FamilySelectProps {
   id: string;
-  // Current selection. Zero means "the primary family", which is what the
-  // backend falls back to when a request names no family.
   value: number;
   onChange: (familyId: number) => void;
   disabled?: boolean;
   label?: string;
 }
 
-// FamilySelect asks which family a new record belongs to. It renders nothing
-// for the single-family case, where there is no choice to make and the backend
-// default is always right.
 export const FamilySelect = ({
   id,
   value,

@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"family/backend"
 	"family/cfg"
@@ -46,7 +45,7 @@ func main() {
 	vbolt.InitBuckets(db, &cfg.Info)
 
 	counts := map[string]int{}
-	var images []backend.Image
+	var report backend.PhotoConsistencyReport
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		counts["users"] = count(tx, backend.UsersBkt)
@@ -63,13 +62,19 @@ func main() {
 		counts["photo_person"] = count(tx, backend.PhotoPersonBkt)
 		counts["chat_messages"] = count(tx, backend.ChatMessagesBkt)
 		counts["family_link"] = count(tx, backend.FamilyLinkBkt)
+		counts["activities"] = count(tx, backend.ActivityBkt)
+		counts["seasons"] = count(tx, backend.SeasonBkt)
+		counts["activity_events"] = count(tx, backend.EventBkt)
+		counts["activity_entries"] = count(tx, backend.EntryBkt)
+		counts["entry_members"] = count(tx, backend.EntryMemberBkt)
+		counts["appearances"] = count(tx, backend.AppearanceBkt)
+		counts["activity_results"] = count(tx, backend.ResultBkt)
+		counts["appearance_photos"] = count(tx, backend.AppearancePhotoBkt)
+		counts["activity_event_photos"] = count(tx, backend.EventPhotoBkt)
 
-		vbolt.IterateAll(tx, backend.ImagesBkt, func(_ int, img backend.Image) bool {
-			images = append(images, img)
-			return true
-		})
+		report = backend.ScanPhotoConsistency(tx, *staticDir, 0)
 	})
-	counts["images"] = len(images)
+	counts["images"] = report.TotalImages
 
 	names := make([]string, 0, len(counts))
 	for name := range counts {
@@ -79,7 +84,7 @@ func main() {
 
 	fmt.Printf("database: %s\n\n", *dbPath)
 	for _, name := range names {
-		fmt.Printf("  %-20s %6d\n", name, counts[name])
+		fmt.Printf("  %-22s %6d\n", name, counts[name])
 	}
 
 	// A restored database with zero people is a restored empty file. Nothing
@@ -91,9 +96,9 @@ func main() {
 	}
 
 	if *staticDir != "" {
-		failures += checkOriginals(*staticDir, images)
-	} else if len(images) > 0 {
-		fmt.Printf("\n%d image rows not checked against disk (pass -static to verify originals)\n", len(images))
+		failures += reportOriginals(*staticDir, report)
+	} else if report.TotalImages > 0 {
+		fmt.Printf("\n%d image rows not checked against disk (pass -static to verify originals)\n", report.TotalImages)
 	}
 
 	if failures > 0 {
@@ -112,60 +117,29 @@ func count[K, T any](tx *vbolt.Tx, bkt *vbolt.BucketInfo[K, T]) int {
 	return n
 }
 
-// originalPath mirrors how photo_worker.go names the file it keeps for backup:
-// the upload's unique basename with an "_original" suffix before the original
-// extension (backend/photo_worker.go:221-227).
-func originalPath(staticDir, filePath string) string {
-	base := filepath.Join(staticDir, filePath)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext) + "_original" + ext
-}
+// A missing original is a failure: originals are the only photo files the backup
+// carries. An orphaned original only wastes archive space, so it is reported.
+func reportOriginals(staticDir string, report backend.PhotoConsistencyReport) int {
+	fmt.Printf("\noriginals: %d/%d present under %s\n", report.PresentCount, report.TotalImages, staticDir)
 
-// checkOriginals reports image rows whose original is not on disk. Originals
-// are the only photo files the backup carries — every other variant is
-// regenerable — so a missing one is unrecoverable data loss, not a warning.
-//
-// The reverse direction, an original with no row, is only reported. It means
-// the archive is carrying a photo the app can no longer reach, which wastes
-// space but loses nothing; DeletePhoto removes the original alongside the row
-// (backend/photos.go:1224), so a leftover is a delete that did not finish.
-func checkOriginals(staticDir string, images []backend.Image) int {
-	referenced := make(map[string]bool, len(images))
-	var missing []backend.Image
-	for _, img := range images {
-		path := originalPath(staticDir, img.FilePath)
-		referenced[filepath.Base(path)] = true
-		if _, err := os.Stat(path); err != nil {
-			missing = append(missing, img)
+	if report.OrphanScanErr != "" {
+		fmt.Printf("\ncould not scan %s for orphaned originals: %s\n", filepath.Join(staticDir, "photos"), report.OrphanScanErr)
+	}
+
+	if report.OrphanCount > 0 {
+		fmt.Printf("\n%d original(s) on disk with no image row (harmless, but backed up anyway):\n", report.OrphanCount)
+		for _, orphan := range report.Orphans {
+			fmt.Printf("  %s\n", orphan.Name)
 		}
 	}
 
-	fmt.Printf("\noriginals: %d/%d present under %s\n", len(images)-len(missing), len(images), staticDir)
-
-	entries, err := os.ReadDir(filepath.Join(staticDir, "photos"))
-	if err == nil {
-		var orphans []string
-		for _, entry := range entries {
-			name := entry.Name()
-			if strings.Contains(name, "_original.") && !referenced[name] {
-				orphans = append(orphans, name)
-			}
-		}
-		if len(orphans) > 0 {
-			fmt.Printf("\n%d original(s) on disk with no image row (harmless, but backed up anyway):\n", len(orphans))
-			for _, name := range orphans {
-				fmt.Printf("  %s\n", name)
-			}
-		}
-	}
-
-	if len(missing) == 0 {
+	if report.MissingCount == 0 {
 		return 0
 	}
 
-	fmt.Printf("\nFAIL: %d image row(s) have no original on disk:\n", len(missing))
-	for _, img := range missing {
-		fmt.Printf("  id=%d status=%d family=%d %s\n", img.Id, img.Status, img.FamilyId, img.FilePath)
+	fmt.Printf("\nFAIL: %d image row(s) have no original on disk:\n", report.MissingCount)
+	for _, img := range report.Missing {
+		fmt.Printf("  id=%d status=%d family=%d %s\n", img.ImageId, img.Status, img.FamilyId, img.FilePath)
 	}
 	return 1
 }

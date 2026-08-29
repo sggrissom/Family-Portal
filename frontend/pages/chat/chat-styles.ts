@@ -1,6 +1,5 @@
 import { block } from "vlens/css";
 
-// Chat Page Container
 block(`
 .chat-container {
   max-width: 1000px;
@@ -24,7 +23,6 @@ block(`
 }
 `);
 
-// Chat Header
 block(`
 .chat-header {
   background: var(--surface);
@@ -86,7 +84,6 @@ block(`
 }
 `);
 
-// Chat Content Area
 block(`
 .chat-content {
   display: flex;
@@ -96,7 +93,6 @@ block(`
 }
 `);
 
-// Messages Container
 block(`
 .chat-messages {
   flex: 1;
@@ -218,7 +214,6 @@ block(`
 }
 `);
 
-// Message Styles
 block(`
 .message {
   display: flex;
@@ -255,7 +250,6 @@ block(`
 }
 `);
 
-// Message Avatar
 block(`
 .message-avatar {
   width: 40px;
@@ -276,7 +270,6 @@ block(`
 }
 `);
 
-// Message Content
 block(`
 .message-content {
   flex: 1;
@@ -299,7 +292,6 @@ block(`
 }
 `);
 
-// Message Bubble
 block(`
 .message-bubble {
   background: var(--surface);
@@ -393,7 +385,6 @@ block(`
 }
 `);
 
-// Chat Input Form
 block(`
 .chat-input-form {
   background: var(--surface);
@@ -471,7 +462,6 @@ block(`
 }
 `);
 
-// Mobile Responsive Design
 block(`
 @media (max-width: 768px) {
   .chat-container {
@@ -619,7 +609,6 @@ block(`
 }
 `);
 
-// Dark theme specific adjustments
 block(`
 [data-theme="dark"] .message-own .message-bubble {
   background: var(--primary-accent);
@@ -639,7 +628,6 @@ block(`
 }
 `);
 
-// Delete Message Button
 block(`
 .delete-message-btn {
   background: none;

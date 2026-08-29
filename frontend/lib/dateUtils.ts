@@ -1,16 +1,9 @@
-/**
- * Calculate age between two dates, formatted as a human-readable string
- * @param birthdayString - ISO date string of birthday
- * @param targetDateString - ISO date string of target date (e.g., milestone date)
- * @returns Formatted age string like "2 years 3 months" or "5 months" or "Newborn"
- */
 export const calculateAge = (birthdayString: string, targetDateString: string): string => {
   if (!birthdayString || !targetDateString) return "";
 
   const birthday = new Date(birthdayString);
   const targetDate = new Date(targetDateString);
 
-  // Treat future birthdates as due dates and show gestational weeks.
   if (targetDate < birthday) {
     const birthdayUtc = Date.UTC(
       birthday.getUTCFullYear(),
@@ -28,17 +21,14 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
     return weeksPregnant === 1 ? "1 week" : `${weeksPregnant} weeks`;
   }
 
-  // Calculate the difference
   let years = targetDate.getFullYear() - birthday.getFullYear();
   let months = targetDate.getMonth() - birthday.getMonth();
 
-  // Adjust if target month is before birthday month
   if (months < 0) {
     years--;
     months += 12;
   }
 
-  // Format the age string
   if (years === 0 && months === 0) {
     return "Newborn";
   } else if (years === 0) {
@@ -52,19 +42,58 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
   }
 };
 
-/**
- * Format a date string for display
- * @param dateString - ISO date string
- * @returns Localized date string
- */
 export const formatDate = (dateString: string): string => {
   if (!dateString) return "";
   if (dateString.includes("T") && dateString.endsWith("Z")) {
     const dateParts = dateString.split("T")[0].split("-");
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+    const month = parseInt(dateParts[1]) - 1;
     const day = parseInt(dateParts[2]);
     return new Date(year, month, day).toLocaleDateString();
   }
   return new Date(dateString).toLocaleDateString();
+};
+
+export const isRealDate = (dateString: string | null | undefined): dateString is string => {
+  if (!dateString) return false;
+  const year = new Date(dateString).getFullYear();
+  return !isNaN(year) && year > 1000;
+};
+
+export const toDateInputValue = (dateString: string | null | undefined): string => {
+  if (!isRealDate(dateString)) return "";
+  return dateString.split("T")[0];
+};
+
+export const formatDateRange = (startDate: string, endDate: string): string => {
+  const start = isRealDate(startDate) ? formatDate(startDate) : "";
+  const end = isRealDate(endDate) ? formatDate(endDate) : "";
+  if (start && end && start !== end) return `${start} – ${end}`;
+  return start || end;
+};
+
+export const formatDateTime = (dateString: string): string => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return (
+    date.toLocaleDateString() +
+    " " +
+    date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+};
+
+export const formatRelativeTime = (timestamp: string, fallback?: string): string => {
+  const then = new Date(timestamp).getTime();
+  if (!Number.isFinite(then) || then <= 0) return fallback ?? timestamp;
+
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  return `${Math.floor(hours / 24)}d ago`;
 };

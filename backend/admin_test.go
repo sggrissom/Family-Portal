@@ -21,25 +21,20 @@ func TestListAllUsers(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser, regularUser User
 	var testFamily Family
 
-	// Create test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create a family
 		testFamily = Family{
 			Id:   1,
 			Name: "Test Family",
 		}
 		vbolt.Write(tx, FamiliesBkt, testFamily.Id, &testFamily)
 
-		// Create admin user (ID = 1)
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -48,11 +43,10 @@ func TestListAllUsers(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		adminUser.FamilyId = testFamily.Id
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Create regular user
 		regularReq := CreateAccountRequest{
 			Name:            "Regular User",
 			Email:           "regular@example.com",
@@ -68,11 +62,9 @@ func TestListAllUsers(t *testing.T) {
 	})
 
 	t.Run("Admin user lists all users", func(t *testing.T) {
-		// Create context with admin user
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -85,7 +77,6 @@ func TestListAllUsers(t *testing.T) {
 				t.Errorf("Expected 2 users, got %d", len(resp.Users))
 			}
 
-			// Check that admin user is marked as admin
 			var foundAdmin, foundRegular bool
 			for _, user := range resp.Users {
 				if user.Id == 1 {
@@ -93,7 +84,6 @@ func TestListAllUsers(t *testing.T) {
 					if !user.IsAdmin {
 						t.Error("Expected admin user to have IsAdmin=true")
 					}
-					// Family name comes from auto-generated family name, not our test name
 					if user.FamilyName == "" {
 						t.Error("Expected family name to be populated")
 					}
@@ -118,7 +108,6 @@ func TestListAllUsers(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -138,7 +127,6 @@ func TestListAllUsers(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// No user set in context
 
 			_, err := ListAllUsers(ctx, Empty{})
 			if err == nil {
@@ -155,14 +143,11 @@ func TestGetPhotoStats(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create test data
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		// Create admin user
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
 			Email:           "admin@example.com",
@@ -171,15 +156,14 @@ func TestGetPhotoStats(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 
-		// Create test images with different statuses
 		testImages := []Image{
-			{Id: 1, Status: 0, FamilyId: 1}, // Active
-			{Id: 2, Status: 1, FamilyId: 1}, // Processing
-			{Id: 3, Status: 0, FamilyId: 1}, // Active
-			{Id: 4, Status: 2, FamilyId: 1}, // Failed/Hidden
+			{Id: 1, Status: 0, FamilyId: 1},
+			{Id: 2, Status: 1, FamilyId: 1},
+			{Id: 3, Status: 0, FamilyId: 1},
+			{Id: 4, Status: 2, FamilyId: 1},
 		}
 
 		for _, img := range testImages {
@@ -193,7 +177,6 @@ func TestGetPhotoStats(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -206,8 +189,6 @@ func TestGetPhotoStats(t *testing.T) {
 				t.Errorf("Expected 4 total photos, got %d", resp.TotalPhotos)
 			}
 
-			// Note: processedCount depends on isPhotoProcessed() logic
-			// For this test, we just check that it returns reasonable values
 			if resp.ProcessedPhotos > resp.TotalPhotos {
 				t.Error("Processed photos cannot exceed total photos")
 			}
@@ -224,7 +205,6 @@ func TestGetPhotoStats(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -283,7 +263,7 @@ func TestStripAnsiCodes(t *testing.T) {
 func TestParseLogTimestamp(t *testing.T) {
 	testCases := []struct {
 		input           string
-		expectedTime    string // Use string format for easier comparison
+		expectedTime    string
 		expectedMessage string
 		hasValidTime    bool
 	}{
@@ -329,7 +309,6 @@ func TestParseLogTimestamp(t *testing.T) {
 				t.Errorf("For input '%s', expected time %v, got %v", tc.input, expectedTime, timestamp)
 			}
 		} else {
-			// For invalid timestamps, should return a recent time (within last minute)
 			if time.Since(timestamp) > time.Minute {
 				t.Errorf("For input '%s', expected recent timestamp, got %v", tc.input, timestamp)
 			}
@@ -399,7 +378,7 @@ func TestParseTimingLogLine(t *testing.T) {
 			}
 
 			if !tc.expectedOK {
-				return // No need to check result if we expect failure
+				return
 			}
 
 			if result.HTTPMethod != tc.expectedMethod {
@@ -475,7 +454,6 @@ func TestDetectLogLevel(t *testing.T) {
 		message  string
 		expected logLevel
 	}{
-		// Error level detection
 		{"ERROR: Database connection failed", logLevelError},
 		{"FATAL error occurred", logLevelError},
 		{"System PANIC: Out of memory", logLevelError},
@@ -486,24 +464,21 @@ func TestDetectLogLevel(t *testing.T) {
 		{"error processing image", logLevelError},
 		{"failed to save file", logLevelError},
 
-		// Warning level detection
 		{"WARN: Low disk space", logLevelWarn},
 		{"WARNING: Connection timeout", logLevelWarn},
 		{"DEPRECATED function usage", logLevelWarn},
 		{"warning about invalid input", logLevelWarn},
 
-		// Debug level detection
 		{"DEBUG: Processing request", logLevelDebug},
 		{"TRACE execution path", logLevelDebug},
 		{"VERBOSE logging enabled", logLevelDebug},
 		{"debug information logged", logLevelDebug},
 
-		// Info level (default)
 		{"User logged in successfully", logLevelInfo},
 		{"Photo uploaded", logLevelInfo},
 		{"Processing completed", logLevelInfo},
 		{"Regular log message", logLevelInfo},
-		{"", logLevelInfo}, // Empty message defaults to info
+		{"", logLevelInfo},
 	}
 
 	for _, tc := range testCases {
@@ -557,12 +532,10 @@ func TestGetLogContentSecurity(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create admin user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
@@ -572,7 +545,7 @@ func TestGetLogContentSecurity(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 		vbolt.TxCommit(tx)
 	})
@@ -590,7 +563,6 @@ func TestGetLogContentSecurity(t *testing.T) {
 			ctx := &vbeam.Context{}
 			vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 				ctx.Tx = tx
-				// Generate JWT token for admin user
 				adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 				ctx.Token = adminToken
 
@@ -617,7 +589,6 @@ func TestGetLogContentSecurity(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -649,7 +620,6 @@ func TestGetLogContentSecurity(t *testing.T) {
 			ctx := &vbeam.Context{}
 			vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 				ctx.Tx = tx
-				// Generate JWT token for admin user
 				adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 				ctx.Token = adminToken
 
@@ -657,7 +627,6 @@ func TestGetLogContentSecurity(t *testing.T) {
 					Filename: filename,
 				}
 
-				// This will fail because the file doesn't exist, but it should pass security checks
 				_, err := GetLogContent(ctx, req)
 				if err != nil && strings.Contains(err.Error(), "Invalid filename") {
 					t.Errorf("Filename '%s' should be valid but was rejected", filename)
@@ -674,12 +643,10 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 	defer os.Remove(testDBPath)
 	defer db.Close()
 
-	// Set the global database for auth functions
 	appDb = db
 
 	var adminUser User
 
-	// Create admin user
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		adminReq := CreateAccountRequest{
 			Name:            "Admin User",
@@ -689,7 +656,7 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(adminReq.Password), bcrypt.DefaultCost)
 		adminUser = AddUserTx(tx, adminReq, hash)
-		adminUser.Id = 1 // Force admin ID
+		adminUser.Id = 1
 		vbolt.Write(tx, UsersBkt, 1, &adminUser)
 		vbolt.TxCommit(tx)
 	})
@@ -698,7 +665,6 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for admin user
 			adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
 			ctx.Token = adminToken
 
@@ -707,12 +673,9 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			// Should return current processing stats (even if 0)
 			if resp.QueueLength < 0 {
 				t.Error("Queue length should not be negative")
 			}
-
-			// IsRunning can be true or false depending on worker state
 		})
 	})
 
@@ -722,7 +685,6 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 		ctx := &vbeam.Context{}
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 			ctx.Tx = tx
-			// Generate JWT token for regular user
 			regularToken, _ := generateAuthJwt(regularUser, httptest.NewRecorder())
 			ctx.Token = regularToken
 
@@ -740,7 +702,6 @@ func TestGetPhotoProcessingStats(t *testing.T) {
 }
 
 func TestAdminUserInfo(t *testing.T) {
-	// Test the AdminUserInfo struct
 	now := time.Now()
 	adminInfo := AdminUserInfo{
 		Id:         1,
@@ -765,4 +726,81 @@ func TestAdminUserInfo(t *testing.T) {
 	if adminInfo.FamilyName != "Admin Family" {
 		t.Errorf("Expected family name 'Admin Family', got '%s'", adminInfo.FamilyName)
 	}
+}
+
+func TestReprocessAllPhotosQueues(t *testing.T) {
+	if globalPhotoWorker != nil {
+		globalPhotoWorker.Stop()
+	}
+	globalPhotoWorker = nil
+
+	testDBPath := "test_reprocess_all.db"
+	db := vbolt.Open(testDBPath)
+	vbolt.InitBuckets(db, &cfg.Info)
+	defer os.Remove(testDBPath)
+	defer db.Close()
+
+	appDb = db
+
+	var adminUser User
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		req := CreateAccountRequest{
+			Name:            "Admin User",
+			Email:           "admin@example.com",
+			Password:        "password123",
+			ConfirmPassword: "password123",
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		adminUser = AddUserTx(tx, req, hash)
+		adminUser.Id = 1
+		vbolt.Write(tx, UsersBkt, 1, &adminUser)
+
+		for id := 1; id <= 3; id++ {
+			img := Image{Id: id, FamilyId: 1, FilePath: fmt.Sprintf("photos/reprocess-%d.jpg", id), MimeType: "image/jpeg"}
+			vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	adminToken, _ := generateAuthJwt(adminUser, httptest.NewRecorder())
+
+	t.Run("Refuses when the worker is not running", func(t *testing.T) {
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: adminToken}
+			_, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{})
+			if err != ErrPhotoWorkerUnavailable {
+				t.Errorf("Expected ErrPhotoWorkerUnavailable, got %v", err)
+			}
+		})
+	})
+
+	t.Run("Queues the backlog from a read transaction", func(t *testing.T) {
+		InitializePhotoWorker(10, db)
+		defer func() {
+			waitForBacklogFeeders()
+			globalPhotoWorker.Stop()
+			globalPhotoWorker = nil
+		}()
+
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: adminToken}
+			resp, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{})
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+			if resp.Queued != 3 {
+				t.Errorf("Queued = %d, want 3", resp.Queued)
+			}
+		})
+	})
+
+	t.Run("Non-admin is refused", func(t *testing.T) {
+		regularToken, _ := generateAuthJwt(User{Id: 2, Email: "regular@example.com"}, httptest.NewRecorder())
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+			ctx := &vbeam.Context{Tx: tx, Token: regularToken}
+			if _, err := ReprocessAllPhotos(ctx, ReprocessAllPhotosRequest{}); err != ErrAdminRequired {
+				t.Errorf("Expected ErrAdminRequired, got %v", err)
+			}
+		})
+	})
 }

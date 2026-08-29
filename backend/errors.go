@@ -2,6 +2,7 @@ package backend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"time"
 )
 
-// ErrorCode represents standardized error codes
 type ErrorCode string
 
 const (
@@ -21,29 +21,33 @@ const (
 	ErrCodeBadRequest  ErrorCode = "BAD_REQUEST"
 	ErrCodeTooLarge    ErrorCode = "FILE_TOO_LARGE"
 	ErrCodeInvalidType ErrorCode = "INVALID_FILE_TYPE"
+	ErrCodeConflict    ErrorCode = "CONFLICT"
+	ErrCodeRateLimited ErrorCode = "RATE_LIMITED"
+	ErrCodeUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
 )
 
-// AppError represents a structured application error
+const unexpectedErrorMessage = "Something went wrong on our end."
+
+const ReferencePrefix = "Reference: "
+
 type AppError struct {
 	Code        ErrorCode `json:"code"`
 	Message     string    `json:"message"`
-	Details     string    `json:"details,omitempty"`
+	Details     string    `json:"-"`
+	RequestId   string    `json:"requestId,omitempty"`
 	Timestamp   time.Time `json:"timestamp"`
 	RequestPath string    `json:"request_path,omitempty"`
 }
 
-// Error implements the error interface
 func (e AppError) Error() string {
 	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
 }
 
-// ErrorResponse represents the JSON response for errors
 type ErrorResponse struct {
 	Error   AppError `json:"error"`
 	Success bool     `json:"success"`
 }
 
-// NewAppError creates a new application error
 func NewAppError(code ErrorCode, message string, details ...string) *AppError {
 	err := &AppError{
 		Code:      code,
@@ -58,14 +62,12 @@ func NewAppError(code ErrorCode, message string, details ...string) *AppError {
 	return err
 }
 
-// RespondWithError sends a standardized error response
 func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, statusCode int) {
-	// Add request path to error for context
 	if r != nil {
 		err.RequestPath = r.URL.Path
+		err.RequestId = RequestID(r)
 	}
 
-	// Log the error with context
 	_, file, line, ok := runtime.Caller(1)
 	caller := "unknown"
 	if ok {
@@ -77,6 +79,12 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 		"error":  err.Error(),
 		"code":   err.Code,
 	}
+	if err.RequestId != "" {
+		data["requestId"] = err.RequestId
+	}
+	if err.Details != "" {
+		data["details"] = err.Details
+	}
 
 	if r != nil {
 		data["method"] = r.Method
@@ -86,11 +94,9 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 		LogErrorSimple(LogCategorySystem, err.Error(), data)
 	}
 
-	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	// Send JSON response
 	response := ErrorResponse{
 		Error:   *err,
 		Success: false,
@@ -101,8 +107,6 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
-
-// Helper functions for common error responses
 
 func RespondAuthError(w http.ResponseWriter, r *http.Request, message string) {
 	err := NewAppError(ErrCodeAuth, message)
@@ -129,6 +133,60 @@ func RespondInternalError(w http.ResponseWriter, r *http.Request, message string
 	RespondWithError(w, r, err, http.StatusInternalServerError)
 }
 
+func RespondUnexpectedError(w http.ResponseWriter, r *http.Request, cause error) {
+	details := ""
+	if cause != nil {
+		details = cause.Error()
+	}
+	appErr := NewAppError(ErrCodeInternal, unexpectedErrorMessage, details)
+	RespondWithError(w, r, appErr, http.StatusInternalServerError)
+}
+
+func RespondConflictError(w http.ResponseWriter, r *http.Request, message string) {
+	err := NewAppError(ErrCodeConflict, message)
+	RespondWithError(w, r, err, http.StatusConflict)
+}
+
+func RespondUnavailableError(w http.ResponseWriter, r *http.Request, message string, details ...string) {
+	err := NewAppError(ErrCodeUnavailable, message, details...)
+	RespondWithError(w, r, err, http.StatusServiceUnavailable)
+}
+
+func ProcError(cause error) error {
+	if cause == nil {
+		return nil
+	}
+	if isPublicError(cause) {
+		return cause
+	}
+
+	id := NewRequestID()
+	LogErrorSimple(LogCategorySystem, "Unexpected procedure error", map[string]interface{}{
+		"requestId": id,
+		"error":     cause.Error(),
+	})
+	return errors.New(unexpectedErrorMessage + " " + ReferencePrefix + id)
+}
+
+var publicErrors = []error{
+	ErrAuthFailure,
+	ErrFamilyAccessDenied,
+	ErrNoFamily,
+	ErrFaceAnalysisUnavailable,
+	ErrPhotoWorkerUnavailable,
+	ErrAdminRequired,
+	ErrUserNotFound,
+}
+
+func isPublicError(cause error) bool {
+	for _, known := range publicErrors {
+		if errors.Is(cause, known) {
+			return true
+		}
+	}
+	return false
+}
+
 func RespondFileTooLargeError(w http.ResponseWriter, r *http.Request, maxSize string) {
 	message := fmt.Sprintf("File too large. Maximum size is %s", maxSize)
 	err := NewAppError(ErrCodeTooLarge, message)
@@ -140,3 +198,32 @@ func RespondInvalidFileTypeError(w http.ResponseWriter, r *http.Request, allowed
 	err := NewAppError(ErrCodeInvalidType, message)
 	RespondWithError(w, r, err, http.StatusBadRequest)
 }
+
+func statusForErrorCode(code ErrorCode) int {
+	switch code {
+	case ErrCodeAuth:
+		return http.StatusUnauthorized
+	case ErrCodeForbidden:
+		return http.StatusForbidden
+	case ErrCodeNotFound:
+		return http.StatusNotFound
+	case ErrCodeConflict:
+		return http.StatusConflict
+	case ErrCodeRateLimited:
+		return http.StatusTooManyRequests
+	case ErrCodeUnavailable:
+		return http.StatusServiceUnavailable
+	case ErrCodeInternal:
+		return http.StatusInternalServerError
+	default:
+		return http.StatusBadRequest
+	}
+}
+
+var ErrFaceAnalysisUnavailable = errors.New("Face analysis is not available on this server")
+
+var ErrPhotoWorkerUnavailable = errors.New("Photo processing is not running on this server")
+
+var ErrAdminRequired = errors.New("Unauthorized: Admin access required")
+
+var ErrUserNotFound = errors.New("No such user")
