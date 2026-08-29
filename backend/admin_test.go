@@ -358,6 +358,16 @@ func TestParseTimingLogLine(t *testing.T) {
 			expectedHandler:  nil,
 		},
 		{
+			name:             "Production format with client IP and error in path",
+			line:             `2026/08/27 16:42:31 158.23.184.117 404 GET /.well-known/error.php ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ 45µs`,
+			expectedOK:       true,
+			expectedMethod:   "GET",
+			expectedPath:     "/.well-known/error.php",
+			expectedStatus:   404,
+			expectedDuration: 45,
+			expectedHandler:  nil,
+		},
+		{
 			name:       "Not a timing log",
 			line:       `2025/09/27 19:17:56 {"timestamp":"2025-09-27T19:17:56.37230023-05:00","level":"INFO","category":"API","message":"Broadcasting message"}`,
 			expectedOK: false,
@@ -400,6 +410,23 @@ func TestParseTimingLogLine(t *testing.T) {
 				t.Errorf("Expected handler duration %v, got %v", tc.expectedHandler, result.HandlerDuration)
 			}
 		})
+	}
+}
+
+func TestParseLogLineTreatsProduction404AsRequestNotError(t *testing.T) {
+	entry := parseLogLine(`2026/08/27 16:42:31 158.23.184.117 404 GET /.well-known/error.php ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ 45µs`)
+
+	if entry.Level != logLevelInfo {
+		t.Errorf("Level = %q, want INFO; text in a request path must not determine severity", entry.Level)
+	}
+	if entry.IP != "158.23.184.117" {
+		t.Errorf("IP = %q, want production timing-line client address", entry.IP)
+	}
+	if entry.HTTPStatus == nil || *entry.HTTPStatus != 404 {
+		t.Errorf("HTTPStatus = %v, want 404", entry.HTTPStatus)
+	}
+	if entry.HTTPPath != "/.well-known/error.php" {
+		t.Errorf("HTTPPath = %q, want parsed request path", entry.HTTPPath)
 	}
 }
 

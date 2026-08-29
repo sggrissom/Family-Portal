@@ -224,13 +224,17 @@ func categorizeLogMessage(message string) logCategory {
 	return logCategorySystem
 }
 
-var timingLogRegex = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(\d+)\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^\s⎯]+).*?(\d+)µs(?:\s+\[(\d+)µs\])?`)
+// vbeam includes the client address in production timing lines, but omits it
+// in some local/test formats. Parse both forms so a path containing a word
+// such as "error" cannot fall through to the plain-text severity detector and
+// turn an ordinary 404 into an application error.
+var timingLogRegex = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})\s+(?:(\S+)\s+)?(\d+)\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+([^\s⎯]+).*?(\d+)µs(?:\s+\[(\d+)µs\])?`)
 
 func parseTimingLogLine(line string) (*logEntry, bool) {
 	cleanLine := stripAnsiCodes(line)
 	matches := timingLogRegex.FindStringSubmatch(cleanLine)
 
-	if len(matches) < 6 {
+	if len(matches) < 7 {
 		return nil, false
 	}
 
@@ -239,19 +243,19 @@ func parseTimingLogLine(line string) (*logEntry, bool) {
 		return nil, false
 	}
 
-	status, err := strconv.Atoi(matches[2])
+	status, err := strconv.Atoi(matches[3])
 	if err != nil {
 		return nil, false
 	}
 
-	duration, err := strconv.Atoi(matches[5])
+	duration, err := strconv.Atoi(matches[6])
 	if err != nil {
 		return nil, false
 	}
 
 	var handlerDuration *int
-	if len(matches) > 6 && matches[6] != "" {
-		if hd, err := strconv.Atoi(matches[6]); err == nil {
+	if len(matches) > 7 && matches[7] != "" {
+		if hd, err := strconv.Atoi(matches[7]); err == nil {
 			handlerDuration = &hd
 		}
 	}
@@ -260,11 +264,12 @@ func parseTimingLogLine(line string) (*logEntry, bool) {
 		Timestamp:       timestamp,
 		Level:           logLevelInfo,
 		Category:        logCategoryAPI,
-		Message:         fmt.Sprintf("%s %s %s", matches[3], matches[4], matches[2]),
+		IP:              matches[2],
+		Message:         fmt.Sprintf("%s %s %s", matches[4], matches[5], matches[3]),
 		Duration:        &duration,
 		HandlerDuration: handlerDuration,
-		HTTPMethod:      matches[3],
-		HTTPPath:        matches[4],
+		HTTPMethod:      matches[4],
+		HTTPPath:        matches[5],
 		HTTPStatus:      &status,
 	}
 
