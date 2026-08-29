@@ -27,6 +27,8 @@ block(`
   --danger-hover: #ef4444;
   --success: #34d399;
   --warning: #fbbf24;
+  --surface-alt: #2a2417;
+  --surface-alt-border: #4a3f22;
 }
 `);
 
