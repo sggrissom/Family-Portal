@@ -27,6 +27,11 @@ export type MeasurementType = number;
 export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
+export type RelationKind = number;
+export const RelationParent: RelationKind = 0;
+export const RelationSibling: RelationKind = 1;
+export const RelationPartner: RelationKind = 2;
+
 // Errors
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
@@ -234,6 +239,7 @@ export interface AddPersonRequest {
     familyId: number
     stated: StatedRelation
     anchorId: number
+    additionalAnchorIds: number[]
 }
 
 export interface GetPersonResponse {
@@ -245,6 +251,7 @@ export interface GetPersonResponse {
 
 export interface ListPeopleResponse {
     people: Person[]
+    relations: Relation[]
 }
 
 export interface GetPersonRequest {
@@ -322,6 +329,7 @@ export interface AddRelationRequest {
     personId: number
     anchorId: number
     stated: StatedRelation
+    additionalAnchorIds: number[]
 }
 
 export interface RelationActionResponse {
@@ -1327,6 +1335,13 @@ export interface Image {
     tagIds: number[]
 }
 
+export interface Relation {
+    id: number
+    fromId: number
+    toId: number
+    kind: RelationKind
+}
+
 export interface PersonComparisonData {
     person: Person
     growthData: GrowthData[]
@@ -1346,6 +1361,7 @@ export interface RelationView {
     personId: number
     personName: string
     label: string
+    stored: boolean
 }
 
 export interface RelationLabelEntry {

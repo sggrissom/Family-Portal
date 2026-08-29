@@ -28,6 +28,13 @@ var (
 	termSiblingKid  = genderedTerm{"nephew", "niece", "nibling"}
 	termParentSib   = genderedTerm{"uncle", "aunt", "aunt or uncle"}
 	termCousin      = genderedTerm{"cousin", "cousin", "cousin"}
+
+	termStepchild    = genderedTerm{"stepson", "stepdaughter", "stepchild"}
+	termStepparent   = genderedTerm{"stepfather", "stepmother", "stepparent"}
+	termStepsibling  = genderedTerm{"stepbrother", "stepsister", "stepsibling"}
+	termParentInLaw  = genderedTerm{"father-in-law", "mother-in-law", "parent-in-law"}
+	termChildInLaw   = genderedTerm{"son-in-law", "daughter-in-law", "child-in-law"}
+	termSiblingInLaw = genderedTerm{"brother-in-law", "sister-in-law", "sibling-in-law"}
 )
 
 type relationMatch struct {
@@ -69,6 +76,7 @@ func relationBetween(tx *vbolt.Tx, subject Person, target Person) (relationMatch
 
 	subjectParents := parentsOf(tx, subject.Id)
 	subjectChildren := childrenOf(tx, subject.Id)
+	subjectPartners := partnersOf(tx, subject.Id)
 
 	if containsId(subjectChildren, target.Id) {
 		return relationMatch{termChild, GroupChild}, true
@@ -76,7 +84,7 @@ func relationBetween(tx *vbolt.Tx, subject Person, target Person) (relationMatch
 	if containsId(subjectParents, target.Id) {
 		return relationMatch{termParent, GroupParent}, true
 	}
-	if containsId(statedPeers(tx, subject.Id, RelationPartner), target.Id) {
+	if containsId(subjectPartners, target.Id) {
 		return relationMatch{termPartner, GroupPartner}, true
 	}
 	if containsId(SiblingsOf(tx, subject.Id), target.Id) {
@@ -108,6 +116,40 @@ func relationBetween(tx *vbolt.Tx, subject Person, target Person) (relationMatch
 			if containsId(childrenOf(tx, auntId), target.Id) {
 				return relationMatch{termCousin, GroupExtended}, true
 			}
+		}
+	}
+
+	// Step and in-law relationships are checked after blood ones so a person who
+	// is both keeps the closer name.
+	for _, partnerId := range subjectPartners {
+		if containsId(childrenOf(tx, partnerId), target.Id) {
+			return relationMatch{termStepchild, GroupExtended}, true
+		}
+		if containsId(parentsOf(tx, partnerId), target.Id) {
+			return relationMatch{termParentInLaw, GroupExtended}, true
+		}
+		if containsId(SiblingsOf(tx, partnerId), target.Id) {
+			return relationMatch{termSiblingInLaw, GroupExtended}, true
+		}
+	}
+	for _, parentId := range subjectParents {
+		if containsId(partnersOf(tx, parentId), target.Id) {
+			return relationMatch{termStepparent, GroupExtended}, true
+		}
+		for _, stepparentId := range partnersOf(tx, parentId) {
+			if containsId(childrenOf(tx, stepparentId), target.Id) {
+				return relationMatch{termStepsibling, GroupExtended}, true
+			}
+		}
+	}
+	for _, childId := range subjectChildren {
+		if containsId(partnersOf(tx, childId), target.Id) {
+			return relationMatch{termChildInLaw, GroupExtended}, true
+		}
+	}
+	for _, siblingId := range SiblingsOf(tx, subject.Id) {
+		if containsId(partnersOf(tx, siblingId), target.Id) {
+			return relationMatch{termSiblingInLaw, GroupExtended}, true
 		}
 	}
 

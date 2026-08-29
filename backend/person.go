@@ -41,6 +41,9 @@ type AddPersonRequest struct {
 
 	Stated   StatedRelation `json:"stated,omitempty"`
 	AnchorId int            `json:"anchorId,omitempty"`
+	// AdditionalAnchorIds states the same relation against more people, so a
+	// child can be linked to both parents as they are added.
+	AdditionalAnchorIds []int `json:"additionalAnchorIds,omitempty"`
 }
 
 type UpdatePersonRequest struct {
@@ -82,6 +85,9 @@ type MergePeopleResponse struct {
 
 type ListPeopleResponse struct {
 	People []Person `json:"people"`
+	// Relations are the stored edges among People, so a client can offer
+	// relationship shortcuts without a round trip per person.
+	Relations []Relation `json:"relations"`
 }
 
 type GetPersonResponse struct {
@@ -355,16 +361,10 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 	}
 
 	if req.Stated != StatedNone && req.AnchorId != 0 {
-		anchor := GetPersonById(ctx.Tx, req.AnchorId)
-		if !CanAccessPerson(ctx.Tx, user, anchor, ScopePeople, AccessView) {
-			err = ErrPersonNotFound
+		anchorIds := append([]int{req.AnchorId}, req.AdditionalAnchorIds...)
+		if relErr := applyStatedRelationTx(ctx.Tx, user, person.Id, req.Stated, anchorIds); relErr != nil {
+			err = relErr
 			return
-		}
-		if edge, ok := req.Stated.edge(person.Id, anchor.Id); ok {
-			if _, relErr := AddRelationTx(ctx.Tx, edge); relErr != nil {
-				err = relErr
-				return
-			}
 		}
 	}
 	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
@@ -415,6 +415,7 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
 
 	resp.Person = person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
@@ -437,6 +438,7 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 
 	resp.People = GetVisiblePeople(ctx.Tx, user)
 	labelPeopleFor(ctx.Tx, user, resp.People)
+	resp.Relations = relationsAmong(ctx.Tx, resp.People)
 	return
 }
 
