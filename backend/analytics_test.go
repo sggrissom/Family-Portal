@@ -359,9 +359,9 @@ func TestGetContentAnalytics(t *testing.T) {
 		}
 
 		people := []Person{
-			{Id: 1, FamilyId: 1, Name: "Child One", Type: 1},
-			{Id: 2, FamilyId: 1, Name: "Child Two", Type: 1},
-			{Id: 3, FamilyId: 2, Name: "Child Three", Type: 1},
+			{Id: 1, FamilyId: 1, Name: "Child One"},
+			{Id: 2, FamilyId: 1, Name: "Child Two"},
+			{Id: 3, FamilyId: 2, Name: "Child Three"},
 		}
 		for _, person := range people {
 			vbolt.Write(tx, PeopleBkt, person.Id, &person)
@@ -426,10 +426,10 @@ func TestGetContentAnalytics(t *testing.T) {
 				t.Error("Expected photo formats data")
 			}
 
-			if resp.AveragePhotosPerChild < 0 {
+			if resp.AveragePhotosPerPerson < 0 {
 				t.Error("Average photos per child should not be negative")
 			}
-			if resp.AverageMilestonesPerChild < 0 {
+			if resp.AverageMilestonesPerPerson < 0 {
 				t.Error("Average milestones per child should not be negative")
 			}
 
@@ -441,7 +441,7 @@ func TestGetContentAnalytics(t *testing.T) {
 				if familyStats.FamilyName == "" {
 					t.Error("Family stats should have a name")
 				}
-				if familyStats.Children < 0 {
+				if familyStats.People < 0 {
 					t.Error("Children count should not be negative")
 				}
 				if familyStats.Photos < 0 {

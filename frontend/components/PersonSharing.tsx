@@ -7,7 +7,6 @@ type PersonSharingState = {
   sharing: server.GetPersonSharingResponse | null;
   loadedFor: number;
   targetFamilyId: number;
-  role: number;
   relationship: string;
   error: string;
   busy: boolean;
@@ -18,7 +17,6 @@ const usePersonSharing = vlens.declareHook(
     sharing: null,
     loadedFor: 0,
     targetFamilyId: 0,
-    role: 1,
     relationship: "",
     error: "",
     busy: false,
@@ -67,7 +65,6 @@ async function onShareClicked(state: PersonSharingState, personId: number, event
   const [resp, err] = await server.SharePersonWithFamily({
     personId,
     familyId: state.targetFamilyId,
-    role: state.role,
     relationship: state.relationship.trim(),
   });
   applyResult(state, resp, err, "Could not share this person");
@@ -141,10 +138,12 @@ export const PersonSharingSection = ({
             <div key={target.familyId} className="person-sharing-row">
               <span>
                 {target.familyName}
-                <span className="person-sharing-role">
-                  {" · "}
-                  {target.relationship || (target.role === 1 ? "Child" : "Parent")}
-                </span>
+                {target.relationship && (
+                  <span className="person-sharing-role">
+                    {" · "}
+                    {target.relationship}
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -182,27 +181,12 @@ export const PersonSharingSection = ({
           </div>
 
           <div className="form-group">
-            <label htmlFor="shareRole">Their role there</label>
-            <select
-              id="shareRole"
-              value={String(state.role)}
-              disabled={state.busy}
-              onInput={event => {
-                state.role = Number((event.currentTarget as HTMLSelectElement).value);
-                vlens.scheduleRedraw();
-              }}
-            >
-              <option value="0">Parent</option>
-              <option value="1">Child</option>
-            </select>
-          </div>
-
-          <div className="form-group">
             <label htmlFor="shareRelationship">Relationship (optional)</label>
             <input
               type="text"
               id="shareRelationship"
-              placeholder="Grandchild"
+              placeholder="Grandchild, Niece…"
+              maxLength={40}
               {...vlens.attrsBindInput(vlens.ref(state, "relationship"))}
               disabled={state.busy}
             />

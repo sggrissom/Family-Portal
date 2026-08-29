@@ -1,19 +1,24 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as auth from "../../lib/authCache";
+import * as auth_ from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
+import { RELATION_OPTIONS } from "../../lib/routeHelpers";
 import "./add-person-styles";
 
-type Data = {};
+type Data = {
+  people: server.Person[];
+  selfPersonId: number;
+};
 
 type AddPersonForm = {
   name: string;
-  personType: number;
+  relationIndex: number;
+  anchorId: number;
   gender: number;
   birthdate: string;
   isPregnancy: boolean;
@@ -26,7 +31,8 @@ type AddPersonForm = {
 const useAddPersonForm = vlens.declareHook(
   (): AddPersonForm => ({
     name: "",
-    personType: 0,
+    relationIndex: -1,
+    anchorId: 0,
     gender: 0,
     birthdate: "",
     isPregnancy: false,
@@ -38,7 +44,13 @@ const useAddPersonForm = vlens.declareHook(
 );
 
 export async function fetch(route: string, prefix: string) {
-  return rpc.ok<Data>({});
+  const [resp, err] = await server.ListPeople({});
+  if (err) return [null, err] as rpc.Response<Data>;
+  const currentAuth = auth_.getAuth();
+  return rpc.ok<Data>({
+    people: resp?.people ?? [],
+    selfPersonId: currentAuth?.personId ?? 0,
+  });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -48,12 +60,16 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
   }
 
   const form = useAddPersonForm();
+  if (form.anchorId === 0) {
+    const preferred = data.people.find(p => p.id === data.selfPersonId) ?? data.people[0];
+    form.anchorId = preferred ? preferred.id : 0;
+  }
 
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="add-person-container">
-        <AddPersonPage form={form} />
+        <AddPersonPage form={form} people={data.people} />
       </main>
       <Footer />
     </div>
@@ -67,13 +83,15 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
   form.success = false;
 
   try {
+    const relation = RELATION_OPTIONS[form.relationIndex];
     let [resp, err] = await server.AddPerson({
       name: form.name,
-      personType: form.personType,
       gender: form.gender,
       birthdate: form.birthdate,
       isPregnancy: form.isPregnancy,
       familyId: form.familyId,
+      stated: relation ? relation.value : server.StatedNone,
+      anchorId: relation ? form.anchorId : 0,
     });
 
     form.loading = false;
@@ -81,7 +99,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
     if (resp) {
       form.success = true;
       form.name = "";
-      form.personType = 0;
+      form.relationIndex = -1;
       form.gender = 0;
       form.birthdate = "";
       form.isPregnancy = false;
@@ -99,11 +117,22 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
   vlens.scheduleRedraw();
 }
 
-interface AddPersonPageProps {
-  form: AddPersonForm;
+function onRelationPicked(form: AddPersonForm, event: Event) {
+  const index = Number((event.currentTarget as HTMLSelectElement).value);
+  form.relationIndex = index;
+  const relation = RELATION_OPTIONS[index];
+  if (relation && relation.gender !== null) {
+    form.gender = relation.gender;
+  }
+  vlens.scheduleRedraw();
 }
 
-const AddPersonPage = ({ form }: AddPersonPageProps) => (
+interface AddPersonPageProps {
+  form: AddPersonForm;
+  people: server.Person[];
+}
+
+const AddPersonPage = ({ form, people }: AddPersonPageProps) => (
   <div className="add-person-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -145,17 +174,46 @@ const AddPersonPage = ({ form }: AddPersonPageProps) => (
           />
         </div>
 
-        <div className="form-group">
-          <label htmlFor="personType">Relationship</label>
-          <select
-            id="personType"
-            {...vlens.attrsBindInput(vlens.ref(form, "personType"))}
-            disabled={form.loading}
-          >
-            <option value={0}>Parent</option>
-            <option value={1}>Child</option>
-          </select>
-        </div>
+        {people.length > 0 && (
+          <div className="form-group">
+            <label htmlFor="relation">Relationship (optional)</label>
+            <div className="relation-row">
+              <select
+                id="relation"
+                value={String(form.relationIndex)}
+                onInput={vlens.cachePartial(onRelationPicked, form)}
+                disabled={form.loading}
+              >
+                <option value="-1">Not saying yet</option>
+                {RELATION_OPTIONS.map((option, index) => (
+                  <option key={`${option.value}-${option.label}`} value={String(index)}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="relation-joiner">of</span>
+              <select
+                id="relationAnchor"
+                value={String(form.anchorId)}
+                onInput={event => {
+                  form.anchorId = Number((event.currentTarget as HTMLSelectElement).value);
+                  vlens.scheduleRedraw();
+                }}
+                disabled={form.loading || form.relationIndex < 0}
+              >
+                {people.map(person => (
+                  <option key={person.id} value={String(person.id)}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="form-hint">
+              Everyone else's relationship is worked out from this — a grandchild is a daughter or
+              son of one of your children.
+            </p>
+          </div>
+        )}
 
         <div className="form-group">
           <label htmlFor="gender">Gender</label>

@@ -19,7 +19,6 @@ func TestExportDataStructure(t *testing.T) {
 			{
 				Id:       1,
 				FamilyId: 1,
-				Type:     1,
 				Gender:   0,
 				Name:     "Test Child",
 				Birthday: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -288,10 +287,9 @@ func TestExportDataCompleteness(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		personReq := AddPersonRequest{
-			Name:       "Test Child",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2020-06-15",
+			Name:      "Test Child",
+			Gender:    0,
+			Birthdate: "2020-06-15",
 		}
 		var err error
 		testPerson, err = AddPersonTx(tx, personReq, testUser.FamilyId)
@@ -449,7 +447,6 @@ func TestExportImportCompatibility(t *testing.T) {
 			{
 				Id:       1,
 				FamilyId: 100,
-				Type:     1,
 				Gender:   0,
 				Name:     "Test Child",
 				Birthday: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),

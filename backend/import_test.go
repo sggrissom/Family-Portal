@@ -36,7 +36,6 @@ func TestImportPeople(t *testing.T) {
 		{
 			Id:       1,
 			FamilyId: 100,
-			Type:     1,
 			Gender:   0,
 			Name:     "John Doe",
 			Birthday: time.Date(2015, 6, 15, 0, 0, 0, 0, time.UTC),
@@ -46,7 +45,6 @@ func TestImportPeople(t *testing.T) {
 		{
 			Id:       2,
 			FamilyId: 100,
-			Type:     0,
 			Gender:   1,
 			Name:     "Jane Doe",
 			Birthday: time.Date(1985, 3, 20, 0, 0, 0, 0, time.UTC),
@@ -56,7 +54,6 @@ func TestImportPeople(t *testing.T) {
 		{
 			Id:       3,
 			FamilyId: 101,
-			Type:     1,
 			Gender:   2,
 			Name:     "Sam Smith",
 			Birthday: time.Date(2010, 12, 1, 0, 0, 0, 0, time.UTC),
@@ -103,9 +100,6 @@ func TestImportPeople(t *testing.T) {
 
 			if person.Name != importPerson.Name {
 				t.Errorf("Expected name %s, got %s", importPerson.Name, person.Name)
-			}
-			if person.Type != PersonType(importPerson.Type) {
-				t.Errorf("Expected type %d, got %d", importPerson.Type, int(person.Type))
 			}
 			if person.Gender != GenderType(importPerson.Gender) {
 				t.Errorf("Expected gender %d, got %d", importPerson.Gender, int(person.Gender))
@@ -154,7 +148,6 @@ func TestImportMeasurements(t *testing.T) {
 			{
 				Id:       1,
 				FamilyId: 100,
-				Type:     1,
 				Gender:   0,
 				Name:     "Test Child",
 				Birthday: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -528,7 +521,6 @@ func TestFullImportWorkflow(t *testing.T) {
 			{
 				Id:       1,
 				FamilyId: 100,
-				Type:     1,
 				Gender:   0,
 				Name:     "Test Child",
 				Birthday: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -686,10 +678,9 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		testUser = AddUserTx(tx, userReq, hash)
 
 		existingPerson, _ := AddPersonTx(tx, AddPersonRequest{
-			Name:       "John Doe",
-			PersonType: 1,
-			Gender:     0,
-			Birthdate:  "2015-06-15",
+			Name:      "John Doe",
+			Gender:    0,
+			Birthdate: "2015-06-15",
 		}, testUser.FamilyId)
 
 		t.Logf("Created existing person with ID %d", existingPerson.Id)
@@ -700,7 +691,6 @@ func TestImportPeopleMergeStrategy(t *testing.T) {
 		{
 			Id:       1,
 			FamilyId: 100,
-			Type:     1,
 			Gender:   0,
 			Name:     "John Doe",
 			Birthday: time.Date(2015, 6, 15, 0, 0, 0, 0, time.UTC),

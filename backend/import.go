@@ -262,10 +262,6 @@ func validateImportPerson(person ImportPerson, index int) error {
 		return errors.New("Person '" + person.Name + "' has invalid gender value")
 	}
 
-	if person.Type < 0 || person.Type > 1 {
-		return errors.New("Person '" + person.Name + "' has invalid person type")
-	}
-
 	return nil
 }
 
@@ -350,7 +346,6 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 		person.Id = vbolt.NextIntId(tx, PeopleBkt)
 		person.FamilyId = familyId
 		person.Name = importPerson.Name
-		person.Type = PersonType(importPerson.Type)
 		person.Gender = GenderType(importPerson.Gender)
 		person.Birthday = importPerson.Birthday
 		person.Age = calculateAge(importPerson.Birthday)

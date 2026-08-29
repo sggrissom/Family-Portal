@@ -59,19 +59,19 @@ func setupFamilyLinkFixture(t *testing.T) (familyLinkFixture, func()) {
 
 		var err error
 		fx.alice, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Alice", PersonType: int(Child), Gender: 1, Birthdate: "2018-04-01",
+			Name: "Alice", Gender: 1, Birthdate: "2018-04-01",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx alice: %v", err)
 		}
 		fx.bob, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Bob", PersonType: int(Child), Gender: 0, Birthdate: "2021-09-12",
+			Name: "Bob", Gender: 0, Birthdate: "2021-09-12",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx bob: %v", err)
 		}
 		fx.robin, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Robin", PersonType: int(Child), Gender: 0, Birthdate: "2015-01-20",
+			Name: "Robin", Gender: 0, Birthdate: "2015-01-20",
 		}, fx.famB)
 		if err != nil {
 			t.Fatalf("AddPersonTx robin: %v", err)
@@ -112,13 +112,13 @@ func setupFamilyLinkFixture(t *testing.T) (familyLinkFixture, func()) {
 		fx.linkAB = createFamilyLinkTx(tx, fx.famA, fx.famB, "grandparents", AccessView, DefaultLinkScopes().ToMask())
 		fx.linkAB.Status = LinkAccepted
 		writeFamilyLinkTx(tx, fx.linkAB)
-		EnsurePersonFamilyTx(tx, fx.alice.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, fx.alice.Id, fx.famB)
 
 		everything := LinkScopes{People: true, Milestones: true, Photos: true, Growth: true}
 		fx.linkBC = createFamilyLinkTx(tx, fx.famB, fx.famC, "friends", AccessView, everything.ToMask())
 		fx.linkBC.Status = LinkAccepted
 		writeFamilyLinkTx(tx, fx.linkBC)
-		EnsurePersonFamilyTx(tx, fx.robin.Id, fx.famC, Child)
+		EnsurePersonFamilyTx(tx, fx.robin.Id, fx.famC)
 
 		vbolt.TxCommit(tx)
 	})
@@ -451,7 +451,7 @@ func TestSharingThroughALinkCreatesNoDuplicatePerson(t *testing.T) {
 
 	before := countPeople()
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		EnsurePersonFamilyTx(tx, fx.bob.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, fx.bob.Id, fx.famB)
 		vbolt.TxCommit(tx)
 	})
 	if after := countPeople(); after != before {
@@ -577,7 +577,7 @@ func TestLinkProcFlow(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		ctx := &vbeam.Context{Tx: tx, Token: tokenA}
 		resp, procErr := SharePersonWithFamily(ctx, SharePersonRequest{
-			PersonId: fx.alice.Id, FamilyId: famD.Id, Role: int(Child), Kind: "niece",
+			PersonId: fx.alice.Id, FamilyId: famD.Id, Kind: "niece",
 		})
 		if procErr != nil || !resp.Success {
 			t.Fatalf("SharePersonWithFamily: %v %q", procErr, resp.Error)

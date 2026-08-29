@@ -232,6 +232,7 @@ func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 
 	removePersonFromActivitiesTx(tx, person.Id)
 	deletePersonRostersTx(tx, person.Id)
+	deletePersonRelationsTx(tx, person.Id)
 	vbolt.Delete(tx, PeopleBkt, person.Id)
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, -1)
 }

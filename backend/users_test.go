@@ -167,9 +167,6 @@ func TestCreateAccountInitialPersonRequest(t *testing.T) {
 		if person.FamilyId != user.FamilyId {
 			t.Fatalf("Initial person family = %d, want %d", person.FamilyId, user.FamilyId)
 		}
-		if person.Type != Parent {
-			t.Fatalf("Initial person type = %d, want parent", person.Type)
-		}
 		vbolt.TxCommit(tx)
 	})
 

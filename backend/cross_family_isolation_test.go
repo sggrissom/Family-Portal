@@ -63,13 +63,13 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		fx.theirFamily = fx.outsider.FamilyId
 
 		fx.person, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Their Kid", PersonType: 1, Gender: 0, Birthdate: "2020-06-15",
+			Name: "Their Kid", Gender: 0, Birthdate: "2020-06-15",
 		}, fx.ownerFamily)
 		if err != nil {
 			t.Fatalf("AddPersonTx(owner) error = %v", err)
 		}
 		fx.ownPerson, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "My Kid", PersonType: 1, Gender: 1, Birthdate: "2021-01-05",
+			Name: "My Kid", Gender: 1, Birthdate: "2021-01-05",
 		}, fx.theirFamily)
 		if err != nil {
 			t.Fatalf("AddPersonTx(outsider) error = %v", err)
@@ -195,7 +195,7 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		}},
 		{"UpdatePerson", func(ctx *vbeam.Context) error {
 			_, err := UpdatePerson(ctx, UpdatePersonRequest{
-				Id: fx.person.Id, Name: "Renamed", PersonType: 1, Gender: 0, Birthdate: "2020-06-15",
+				Id: fx.person.Id, Name: "Renamed", Gender: 0, Birthdate: "2020-06-15",
 			})
 			return err
 		}},
@@ -495,7 +495,7 @@ func TestProceduresRefuseAnotherFamilyId(t *testing.T) {
 		}},
 		{"AddPerson", func(ctx *vbeam.Context) error {
 			_, err := AddPerson(ctx, AddPersonRequest{
-				Name: "Planted", PersonType: 1, Gender: 0, Birthdate: "2022-02-02",
+				Name: "Planted", Gender: 0, Birthdate: "2022-02-02",
 				FamilyId: fx.ownerFamily,
 			})
 			return err

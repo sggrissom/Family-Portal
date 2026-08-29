@@ -7,11 +7,11 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { PersonSharingSection } from "../../components/PersonSharing";
+import { PersonRelationsSection } from "../../components/PersonRelations";
 import "./add-person-styles";
 
 type EditPersonForm = {
   name: string;
-  personType: number;
   gender: number;
   birthdate: string;
   isPregnancy: boolean;
@@ -22,7 +22,6 @@ type EditPersonForm = {
 const useEditPersonForm = vlens.declareHook(
   (): EditPersonForm => ({
     name: "",
-    personType: 0,
     gender: 0,
     birthdate: "",
     isPregnancy: false,
@@ -68,7 +67,6 @@ export function view(
 
   if (!form.name && data.person.name) {
     form.name = data.person.name;
-    form.personType = data.person.type;
     form.gender = data.person.gender;
     form.isPregnancy = data.person.isPregnancy;
     if (data.person.birthday) {
@@ -97,7 +95,6 @@ async function onUpdatePersonClicked(form: EditPersonForm, personId: number, eve
     let [resp, err] = await server.UpdatePerson({
       id: personId,
       name: form.name,
-      personType: form.personType,
       gender: form.gender,
       birthdate: form.birthdate,
       isPregnancy: form.isPregnancy,
@@ -163,18 +160,6 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
             required
             disabled={form.loading}
           />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="personType">Relationship</label>
-          <select
-            id="personType"
-            {...vlens.attrsBindInput(vlens.ref(form, "personType"))}
-            disabled={form.loading}
-          >
-            <option value={0}>Parent</option>
-            <option value={1}>Child</option>
-          </select>
         </div>
 
         <div className="form-group">
@@ -244,6 +229,8 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
           </a>
         </div>
       </form>
+
+      <PersonRelationsSection personId={personId} personName={personName} />
 
       <PersonSharingSection personId={personId} personName={personName} />
     </div>

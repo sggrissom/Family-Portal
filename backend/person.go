@@ -32,26 +32,20 @@ const (
 	Unknown
 )
 
-type PersonType int
-
-const (
-	Parent PersonType = iota
-	Child
-)
-
 type AddPersonRequest struct {
 	Name        string `json:"name"`
-	PersonType  int    `json:"personType"`
 	Gender      int    `json:"gender"`
 	Birthdate   string `json:"birthdate"`
 	IsPregnancy bool   `json:"isPregnancy"`
 	FamilyId    int    `json:"familyId,omitempty"`
+
+	Stated   StatedRelation `json:"stated,omitempty"`
+	AnchorId int            `json:"anchorId,omitempty"`
 }
 
 type UpdatePersonRequest struct {
 	Id          int    `json:"id"`
 	Name        string `json:"name"`
-	PersonType  int    `json:"personType"`
 	Gender      int    `json:"gender"`
 	Birthdate   string `json:"birthdate"`
 	IsPregnancy bool   `json:"isPregnancy"`
@@ -130,7 +124,6 @@ type Person struct {
 	Id               int        `json:"id"`
 	FamilyId         int        `json:"familyId"`
 	Name             string     `json:"name"`
-	Type             PersonType `json:"type"`
 	Gender           GenderType `json:"gender"`
 	Birthday         time.Time  `json:"birthday"`
 	Age              string     `json:"age"`
@@ -140,6 +133,7 @@ type Person struct {
 	ProfileCropScale float64    `json:"profileCropScale"`
 	FaceDescriptor   []float32  `json:"-"`
 	IsPregnancy      bool       `json:"isPregnancy"`
+	Relationship     string     `json:"relationship,omitempty"`
 }
 
 func packFloat32Slice(data *[]float32, buf *vpack.Buffer) {
@@ -166,7 +160,9 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
-	vpack.IntEnum(&self.Type, buf)
+	// Retired parent/child enum: read past it so existing records still decode.
+	var legacyType int
+	vpack.IntEnum(&legacyType, buf)
 	vpack.IntEnum(&self.Gender, buf)
 	vpack.Time(&self.Birthday, buf)
 	if version >= 2 {
@@ -200,7 +196,6 @@ func GetFamilyPeople(tx *vbolt.Tx, familyId int) (people []Person) {
 		if !vbolt.Read(tx, PeopleBkt, row.PersonId, &person) {
 			continue
 		}
-		person.Type = row.Role
 		person.Age = calculatePersonAge(person.Birthday, person.IsPregnancy)
 		people = append(people, person)
 	}
@@ -241,7 +236,6 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 	person.Id = vbolt.NextIntId(tx, PeopleBkt)
 	person.FamilyId = familyId
 	person.Name = req.Name
-	person.Type = PersonType(req.PersonType)
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
 	person.IsPregnancy = req.IsPregnancy
@@ -257,7 +251,7 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 
 func updatePersonIndex(tx *vbolt.Tx, person Person) {
 	vbolt.SetTargetSingleTerm(tx, PersonIndex, person.Id, person.FamilyId)
-	EnsurePersonFamilyTx(tx, person.Id, person.FamilyId, person.Type)
+	EnsurePersonFamilyTx(tx, person.Id, person.FamilyId)
 }
 
 func calculateAgeAt(birthdate, referenceDate time.Time) string {
@@ -360,6 +354,21 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 		return
 	}
 
+	if req.Stated != StatedNone && req.AnchorId != 0 {
+		anchor := GetPersonById(ctx.Tx, req.AnchorId)
+		if !CanAccessPerson(ctx.Tx, user, anchor, ScopePeople, AccessView) {
+			err = ErrPersonNotFound
+			return
+		}
+		if edge, ok := req.Stated.edge(person.Id, anchor.Id); ok {
+			if _, relErr := AddRelationTx(ctx.Tx, edge); relErr != nil {
+				err = relErr
+				return
+			}
+		}
+	}
+	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
+
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Person = person
@@ -378,7 +387,6 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 
 	if err = validateAddPersonRequest(AddPersonRequest{
 		Name:        req.Name,
-		PersonType:  req.PersonType,
 		Gender:      req.Gender,
 		Birthdate:   req.Birthdate,
 		IsPregnancy: req.IsPregnancy,
@@ -401,14 +409,12 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	}
 
 	person.Name = req.Name
-	person.Type = PersonType(req.PersonType)
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
 	person.IsPregnancy = req.IsPregnancy
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
-	SetPersonFamilyRoleTx(ctx.Tx, person.Id, person.FamilyId, person.Type)
 
 	resp.Person = person
 	resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
@@ -430,6 +436,7 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 	}
 
 	resp.People = GetVisiblePeople(ctx.Tx, user)
+	labelPeopleFor(ctx.Tx, user, resp.People)
 	return
 }
 
@@ -449,6 +456,7 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 	}
 
 	resp.Person.Age = calculatePersonAge(resp.Person.Birthday, resp.Person.IsPregnancy)
+	resp.Person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), resp.Person)
 
 	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopeGrowth, AccessView) {
 		resp.GrowthData = GetPersonGrowthDataTx(ctx.Tx, req.Id)
@@ -501,6 +509,7 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 
 		person.Age = calculateAge(person.Birthday)
 
+		person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
 		comparisonData := PersonComparisonData{Person: person}
 		if CanAccessPerson(ctx.Tx, user, person, ScopeGrowth, AccessView) {
 			comparisonData.GrowthData = GetPersonGrowthDataTx(ctx.Tx, personId)
@@ -525,9 +534,6 @@ func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePe
 func validateAddPersonRequest(req AddPersonRequest) error {
 	if req.Name == "" {
 		return errors.New("Name is required")
-	}
-	if req.PersonType < 0 || req.PersonType > 1 {
-		return errors.New("Invalid person type")
 	}
 	if req.Gender < 0 || req.Gender > 2 {
 		return errors.New("Invalid gender")
@@ -685,9 +691,10 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	resp.MergedPhotos = mergedPhotoCount
 
 	for _, row := range GetPersonFamilies(ctx.Tx, req.SourcePersonId) {
-		EnsurePersonFamilyTx(ctx.Tx, req.TargetPersonId, row.FamilyId, row.Role)
+		EnsurePersonFamilyTx(ctx.Tx, req.TargetPersonId, row.FamilyId)
 	}
 
+	movePersonRelationsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	deletePersonRostersTx(ctx.Tx, req.SourcePersonId)
 	vbolt.Delete(ctx.Tx, PeopleBkt, req.SourcePersonId)
 	vbolt.SetTargetSingleTerm(ctx.Tx, PersonIndex, req.SourcePersonId, -1)
@@ -719,6 +726,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	}
 
 	people := GetVisiblePeople(ctx.Tx, user)
+	labelPeopleFor(ctx.Tx, user, people)
 
 	resp.People = make([]FamilyTimelineItem, 0, len(people))
 

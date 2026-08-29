@@ -284,10 +284,9 @@ func unshareAllThroughLinkTx(tx *vbolt.Tx, link FamilyLink) {
 }
 
 type SharedRosterRef struct {
-	FamilyId     int        `json:"familyId"`
-	FamilyName   string     `json:"familyName"`
-	Role         PersonType `json:"role"`
-	Relationship string     `json:"relationship,omitempty"`
+	FamilyId     int    `json:"familyId"`
+	FamilyName   string `json:"familyName"`
+	Relationship string `json:"relationship,omitempty"`
 }
 
 type ShareTargetRef struct {
@@ -311,7 +310,6 @@ type GetPersonSharingResponse struct {
 type SharePersonRequest struct {
 	PersonId int    `json:"personId"`
 	FamilyId int    `json:"familyId"`
-	Role     int    `json:"role,omitempty"`
 	Kind     string `json:"relationship,omitempty"`
 }
 
@@ -344,7 +342,6 @@ func personSharing(tx *vbolt.Tx, user User, person Person) GetPersonSharingRespo
 		resp.SharedWith = append(resp.SharedWith, SharedRosterRef{
 			FamilyId:     row.FamilyId,
 			FamilyName:   GetFamily(tx, row.FamilyId).Name,
-			Role:         row.Role,
 			Relationship: row.Relationship,
 		})
 	}
@@ -405,13 +402,8 @@ func SharePersonWithFamily(ctx *vbeam.Context, req SharePersonRequest) (resp Per
 		return
 	}
 
-	role := PersonType(req.Role)
-	if req.Role == 0 && person.Type != 0 {
-		role = person.Type
-	}
-
 	vbeam.UseWriteTx(ctx)
-	row := EnsurePersonFamilyTx(ctx.Tx, person.Id, req.FamilyId, role)
+	row := EnsurePersonFamilyTx(ctx.Tx, person.Id, req.FamilyId)
 	if relationship := normalizeLinkKind(req.Kind); relationship != "" && row.Relationship != relationship {
 		row.Relationship = relationship
 		vbolt.Write(ctx.Tx, PersonFamilyBkt, row.Id, &row)

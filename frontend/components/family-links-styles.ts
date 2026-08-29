@@ -141,3 +141,15 @@ block(`
   gap: 0.75rem;
 }
 `);
+
+block(`
+.person-sharing-form > .form-group {
+  flex: 1 1 100%;
+}
+`);
+
+block(`
+.relation-joiner {
+  padding: 0 0.25rem;
+}
+`);

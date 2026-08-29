@@ -8,6 +8,7 @@ export interface AuthCache {
   isAdmin: boolean;
   emailVerified?: boolean;
   familyId: number;
+  personId?: number;
   families?: FamilyRef[];
 }
 

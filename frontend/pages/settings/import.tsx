@@ -714,8 +714,7 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
                       <div className="person-details">
                         <span className="person-name">{person.Name}</span>
                         <span className="person-meta">
-                          {new Date(person.Birthday).getFullYear()} •
-                          {person.Type === 0 ? "Parent" : "Child"} •
+                          {new Date(person.Birthday).getFullYear()} • •
                           {person.Gender === 0
                             ? "Male"
                             : person.Gender === 1

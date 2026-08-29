@@ -136,6 +136,15 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: link each user to the person record that represents them, so
+	// relationship labels have a subject to be phrased against.
+	vbolt.ApplyDBProcess(dbConnection, "2026-0829-backfill-user-person-id", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillUserPersonIds(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 
@@ -221,6 +230,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPasswordResetMethods(app)
 	backend.RegisterFamilyLinkMethods(app)
 	backend.RegisterPersonMethods(app)
+	backend.RegisterRelationMethods(app)
 	backend.RegisterGrowthMethods(app)
 	backend.RegisterMilestoneMethods(app)
 	backend.RegisterActivityMethods(app)

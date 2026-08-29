@@ -7,6 +7,7 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
+import { personSubtitle } from "../../lib/routeHelpers";
 import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -45,9 +46,6 @@ interface DashboardPageProps {
 
 const DashboardPage = ({ user, data }: DashboardPageProps) => {
   const people = data.people || [];
-  const parents = people.filter(p => p.type === 0);
-  const children = people.filter(p => p.type === 1);
-
   return (
     <div className="dashboard-page">
       <div className="dashboard-header">
@@ -69,28 +67,10 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               </a>
             </div>
           ) : (
-            <div className="people-groups">
-              {parents.length > 0 && (
-                <div className="people-group">
-                  <h3>Parents</h3>
-                  <div className="people-grid">
-                    {parents.map((person, index) => (
-                      <PersonCard key={person.id} person={person} index={index} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {children.length > 0 && (
-                <div className="people-group">
-                  <h3>Children</h3>
-                  <div className="people-grid">
-                    {children.map((person, index) => (
-                      <PersonCard key={person.id} person={person} index={index + parents.length} />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="people-grid">
+              {people.map((person, index) => (
+                <PersonCard key={person.id} person={person} index={index} />
+              ))}
             </div>
           )}
         </div>
@@ -227,10 +207,6 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
     }
   };
 
-  const getTypeLabel = (type: number) => {
-    return type === 0 ? "Parent" : "Child";
-  };
-
   return (
     <a href={`/profile/${person.id}`} className="person-card clickable">
       <div className="person-avatar">
@@ -252,9 +228,7 @@ const PersonCard = ({ person, index = 999 }: PersonCardProps) => {
       </div>
       <div className="person-info">
         <h4>{person.name}</h4>
-        <p className="person-details">
-          {getTypeLabel(person.type)} • Age {person.age}
-        </p>
+        <p className="person-details">{personSubtitle(person)}</p>
         {dueDateSummary && <p className="person-due-date">{dueDateSummary}</p>}
         {trimester && <p className="person-trimester">{trimester}</p>}
         {person.isPregnancy && <p className="person-born-action">Edit to mark as born</p>}

@@ -110,7 +110,7 @@ func TestLeaveFamilyDropsMembershipAndLeavesContentBehind(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		var err error
 		person, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Kid", PersonType: 1, Gender: 0, Birthdate: "2020-06-15",
+			Name: "Kid", Gender: 0, Birthdate: "2020-06-15",
 		}, fx.familyId)
 		if err != nil {
 			t.Fatalf("AddPersonTx() error = %v", err)

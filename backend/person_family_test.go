@@ -49,12 +49,12 @@ func setupPersonFamilyFixture(t *testing.T) (personFamilyFixture, func()) {
 
 		var err error
 		fx.shared, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Dana", PersonType: int(Parent), Gender: 1, Birthdate: "1990-04-20",
+			Name: "Dana", Gender: 1, Birthdate: "1990-04-20",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx: %v", err)
 		}
-		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB)
 
 		vbolt.TxCommit(tx)
 	})
@@ -73,7 +73,7 @@ func countPeople(t *testing.T, db *vbolt.DB) (count int) {
 	return
 }
 
-func TestPersonAppearsOnTwoRostersWithDifferentRoles(t *testing.T) {
+func TestPersonAppearsOnTwoRostersWithoutDuplicating(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
 
@@ -91,13 +91,6 @@ func TestPersonAppearsOnTwoRostersWithDifferentRoles(t *testing.T) {
 			t.Fatalf("rosters hold different people: A=%d B=%d want %d",
 				rosterA[0].Id, rosterB[0].Id, fx.shared.Id)
 		}
-		if rosterA[0].Type != Parent {
-			t.Errorf("home roster role = %v, want Parent", rosterA[0].Type)
-		}
-		if rosterB[0].Type != Child {
-			t.Errorf("extended roster role = %v, want Child", rosterB[0].Type)
-		}
-
 		if rosterB[0].FamilyId != fx.famA {
 			t.Errorf("extended roster changed the home family to %d, want %d",
 				rosterB[0].FamilyId, fx.famA)
@@ -114,7 +107,7 @@ func TestSharingCreatesNoDuplicatePerson(t *testing.T) {
 	}
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB)
 		vbolt.TxCommit(tx)
 	})
 
@@ -137,16 +130,13 @@ func TestVisiblePeopleDeduplicatesSharedPerson(t *testing.T) {
 		if len(people) != 1 {
 			t.Fatalf("shared person listed %d times, want 1", len(people))
 		}
-		if people[0].Type != Parent {
-			t.Errorf("role = %v, want the primary family's Parent", people[0].Type)
-		}
 
 		soloPeople := GetVisiblePeople(tx, fx.soloB)
 		if len(soloPeople) != 1 {
 			t.Fatalf("family B member saw %d people, want 1", len(soloPeople))
 		}
-		if soloPeople[0].Type != Child {
-			t.Errorf("family B role = %v, want Child", soloPeople[0].Type)
+		if soloPeople[0].Id != fx.shared.Id {
+			t.Errorf("family B saw person %d, want %d", soloPeople[0].Id, fx.shared.Id)
 		}
 	})
 }
@@ -196,58 +186,57 @@ func TestHomeRosterCannotBeRemoved(t *testing.T) {
 	})
 }
 
-func TestSetRoleIsScopedToOneRoster(t *testing.T) {
+func TestSetRelationshipIsScopedToOneRoster(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		SetPersonFamilyRoleTx(tx, fx.shared.Id, fx.famB, Parent)
+		SetPersonFamilyRelationshipTx(tx, fx.shared.Id, fx.famB, "Daughter")
 		vbolt.TxCommit(tx)
 	})
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		rowA, _ := FindPersonFamily(tx, fx.shared.Id, fx.famA)
-		if rowA.Role != Parent {
-			t.Errorf("home role changed to %v", rowA.Role)
+		if rowA.Relationship != "" {
+			t.Errorf("home relationship changed to %q", rowA.Relationship)
 		}
 		rowB, _ := FindPersonFamily(tx, fx.shared.Id, fx.famB)
-		if rowB.Role != Parent {
-			t.Errorf("extended role = %v, want Parent", rowB.Role)
+		if rowB.Relationship != "Daughter" {
+			t.Errorf("extended relationship = %q, want %q", rowB.Relationship, "Daughter")
 		}
 	})
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, fx.shared.Id, fx.famB)
 		vbolt.TxCommit(tx)
 	})
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		row, _ := FindPersonFamily(tx, fx.shared.Id, fx.famB)
-		if row.Role != Parent {
-			t.Errorf("EnsurePersonFamilyTx overwrote an existing role with %v", row.Role)
+		if row.Relationship != "Daughter" {
+			t.Errorf("EnsurePersonFamilyTx overwrote an existing relationship with %q", row.Relationship)
 		}
 	})
 }
 
-func TestUpdatePersonRoleTracksHomeRoster(t *testing.T) {
+func TestUpdatePersonNameTracksHomeRoster(t *testing.T) {
 	fx, cleanup := setupPersonFamilyFixture(t)
 	defer cleanup()
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		person := GetPersonById(tx, fx.shared.Id)
-		person.Type = Child
+		person.Name = "Dana Renamed"
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
-		SetPersonFamilyRoleTx(tx, person.Id, person.FamilyId, person.Type)
 		vbolt.TxCommit(tx)
 	})
 
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		rosterA := GetFamilyPeople(tx, fx.famA)
-		if len(rosterA) != 1 || rosterA[0].Type != Child {
+		if len(rosterA) != 1 || rosterA[0].Name != "Dana Renamed" {
 			t.Errorf("home roster did not follow the edit: %+v", rosterA)
 		}
-		rowB, _ := FindPersonFamily(tx, fx.shared.Id, fx.famB)
-		if rowB.Role != Child {
-			t.Errorf("extended role = %v, want the untouched Child", rowB.Role)
+		rosterB := GetFamilyPeople(tx, fx.famB)
+		if len(rosterB) != 1 || rosterB[0].Name != "Dana Renamed" {
+			t.Errorf("extended roster did not follow the edit: %+v", rosterB)
 		}
 	})
 }
@@ -266,17 +255,15 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 		for i, spec := range []struct {
 			name     string
 			familyId int
-			pType    PersonType
 		}{
-			{"Legacy Parent", 7, Parent},
-			{"Legacy Child", 7, Child},
-			{"Other Family", 9, Child},
+			{"Legacy One", 7},
+			{"Legacy Two", 7},
+			{"Other Family", 9},
 		} {
 			person := Person{
 				Id:       vbolt.NextIntId(tx, PeopleBkt),
 				FamilyId: spec.familyId,
 				Name:     spec.name,
-				Type:     spec.pType,
 				Birthday: time.Date(2015+i, 1, 1, 0, 0, 0, 0, time.UTC),
 			}
 			vbolt.Write(tx, PeopleBkt, person.Id, &person)
@@ -318,12 +305,12 @@ func TestBackfillPersonFamiliesIsIdempotent(t *testing.T) {
 		if len(roster) != 2 {
 			t.Fatalf("family 7 roster = %d people, want 2", len(roster))
 		}
-		roles := map[string]PersonType{}
+		names := map[string]bool{}
 		for _, person := range roster {
-			roles[person.Name] = person.Type
+			names[person.Name] = true
 		}
-		if roles["Legacy Parent"] != Parent || roles["Legacy Child"] != Child {
-			t.Errorf("backfill did not carry Person.Type onto the roster: %v", roles)
+		if !names["Legacy One"] || !names["Legacy Two"] {
+			t.Errorf("backfill did not place both people on the roster: %v", names)
 		}
 		if len(GetFamilyPeople(tx, 9)) != 1 {
 			t.Error("family 9 roster is wrong")
@@ -355,7 +342,7 @@ func TestMergeRefusesDifferentHomeFamilies(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		var err error
 		inB, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Dana", PersonType: int(Child), Gender: 1, Birthdate: "1990-04-20",
+			Name: "Dana", Gender: 1, Birthdate: "1990-04-20",
 		}, fx.famB)
 		if err != nil {
 			t.Fatalf("AddPersonTx famB: %v", err)
@@ -389,12 +376,12 @@ func TestMergeUnionsRosters(t *testing.T) {
 		}
 		var err error
 		duplicate, err = AddPersonTx(tx, AddPersonRequest{
-			Name: "Dana (dup)", PersonType: int(Parent), Gender: 1, Birthdate: "1990-04-20",
+			Name: "Dana (dup)", Gender: 1, Birthdate: "1990-04-20",
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddPersonTx duplicate: %v", err)
 		}
-		EnsurePersonFamilyTx(tx, duplicate.Id, fx.famB, Child)
+		EnsurePersonFamilyTx(tx, duplicate.Id, fx.famB)
 		vbolt.TxCommit(tx)
 	})
 
@@ -415,9 +402,6 @@ func TestMergeUnionsRosters(t *testing.T) {
 		if rosterB[0].Id != fx.shared.Id {
 			t.Errorf("family B roster holds person %d, want the survivor %d",
 				rosterB[0].Id, fx.shared.Id)
-		}
-		if rosterB[0].Type != Child {
-			t.Errorf("inherited role = %v, want Child", rosterB[0].Type)
 		}
 	})
 }

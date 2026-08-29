@@ -271,7 +271,6 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 		exportData.People[i] = ImportPerson{
 			Id:       person.Id,
 			FamilyId: person.FamilyId,
-			Type:     int(person.Type),
 			Gender:   int(person.Gender),
 			Name:     person.Name,
 			Birthday: person.Birthday,

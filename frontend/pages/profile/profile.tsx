@@ -8,7 +8,7 @@ import { Header, Footer } from "../../layout";
 import { UnifiedTimeline } from "./tabs/unified-timeline";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
-import { getIdFromRoute } from "../../lib/routeHelpers";
+import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
 import "./profile-styles";
 
 type ProfileState = {
@@ -169,10 +169,6 @@ const ProfilePage = ({
     }
   };
 
-  const getTypeLabel = (type: number) => {
-    return type === 0 ? "Parent" : "Child";
-  };
-
   return (
     <div className="profile-page">
       <div className="profile-header">
@@ -196,9 +192,7 @@ const ProfilePage = ({
           </div>
           <div className="profile-info">
             <h1>{person.name}</h1>
-            <p className="profile-details">
-              {getTypeLabel(person.type)} • Age {person.age}
-            </p>
+            <p className="profile-details">{personSubtitle(person)}</p>
             <p className="profile-birthday">Birthday: {formatDate(person.birthday)}</p>
           </div>
         </div>
