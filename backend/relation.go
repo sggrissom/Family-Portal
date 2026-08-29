@@ -174,6 +174,35 @@ func statedPeers(tx *vbolt.Tx, personId int, kind RelationKind) (ids []int) {
 	return
 }
 
+// applyStatedRelationTx writes one stated relation from person to each anchor.
+// Anchors the caller cannot see, and the person themselves, are skipped rather
+// than failing the whole save.
+func applyStatedRelationTx(tx *vbolt.Tx, user User, personId int, stated StatedRelation, anchorIds []int) error {
+	done := make(map[int]bool)
+	for _, anchorId := range anchorIds {
+		if anchorId == 0 || anchorId == personId || done[anchorId] {
+			continue
+		}
+		done[anchorId] = true
+		anchor := GetPersonById(tx, anchorId)
+		if anchor.Id == 0 || !CanAccessPerson(tx, user, anchor, ScopePeople, AccessView) {
+			return ErrPersonNotFound
+		}
+		edge, ok := stated.edge(personId, anchor.Id)
+		if !ok {
+			continue
+		}
+		if _, err := AddRelationTx(tx, edge); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func partnersOf(tx *vbolt.Tx, personId int) []int {
+	return statedPeers(tx, personId, RelationPartner)
+}
+
 // SiblingsOf returns siblings stated directly plus those implied by a shared parent.
 func SiblingsOf(tx *vbolt.Tx, personId int) []int {
 	seen := map[int]bool{personId: true}
@@ -195,6 +224,27 @@ func SiblingsOf(tx *vbolt.Tx, personId int) []int {
 	return ids
 }
 
+// relationsAmong returns the stored edges whose endpoints are both in people,
+// deduplicated, so a client holding that list can reason about the graph.
+func relationsAmong(tx *vbolt.Tx, people []Person) []Relation {
+	visible := make(map[int]bool, len(people))
+	for _, person := range people {
+		visible[person.Id] = true
+	}
+	seen := make(map[int]bool)
+	rows := []Relation{}
+	for _, person := range people {
+		for _, row := range GetPersonRelationsTx(tx, person.Id) {
+			if seen[row.Id] || !visible[row.FromId] || !visible[row.ToId] {
+				continue
+			}
+			seen[row.Id] = true
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
 func containsId(ids []int, id int) bool {
 	for _, candidate := range ids {
 		if candidate == id {
@@ -213,6 +263,7 @@ type RelationView struct {
 	PersonId   int    `json:"personId"`
 	PersonName string `json:"personName"`
 	Label      string `json:"label"`
+	Stored     bool   `json:"stored"`
 }
 
 type GetPersonRelationsResponse struct {
@@ -240,6 +291,9 @@ type AddRelationRequest struct {
 	PersonId int            `json:"personId"`
 	AnchorId int            `json:"anchorId"`
 	Stated   StatedRelation `json:"stated"`
+	// AdditionalAnchorIds states the same relation against more people in one
+	// call, so "child of Steven and Ruth" is a single save.
+	AdditionalAnchorIds []int `json:"additionalAnchorIds,omitempty"`
 }
 
 type RemoveRelationRequest struct {
@@ -252,12 +306,16 @@ type RelationActionResponse struct {
 	Relations GetPersonRelationsResponse `json:"relations,omitempty"`
 }
 
+// personRelations lists everyone related to person: the edges actually stored
+// first, then everyone else the relationship graph implies. Only stored rows
+// carry an Id, since only those can be removed.
 func personRelations(tx *vbolt.Tx, user User, person Person) GetPersonRelationsResponse {
 	resp := GetPersonRelationsResponse{
 		PersonId:   person.Id,
 		Relations:  []RelationView{},
 		Manageable: CanAccessFamily(tx, user, person.FamilyId, AccessContribute),
 	}
+	stated := make(map[int]bool)
 	for _, row := range GetPersonRelationsTx(tx, person.Id) {
 		otherId := row.ToId
 		if otherId == person.Id {
@@ -267,11 +325,27 @@ func personRelations(tx *vbolt.Tx, user User, person Person) GetPersonRelationsR
 		if other.Id == 0 || !CanAccessPerson(tx, user, other, ScopePeople, AccessView) {
 			continue
 		}
+		stated[other.Id] = true
 		resp.Relations = append(resp.Relations, RelationView{
 			Id:         row.Id,
 			PersonId:   other.Id,
 			PersonName: other.Name,
 			Label:      RelationLabel(tx, person, other),
+			Stored:     true,
+		})
+	}
+	for _, other := range GetVisiblePeople(tx, user) {
+		if other.Id == person.Id || stated[other.Id] {
+			continue
+		}
+		label := RelationLabel(tx, person, other)
+		if label == "" {
+			continue
+		}
+		resp.Relations = append(resp.Relations, RelationView{
+			PersonId:   other.Id,
+			PersonName: other.Name,
+			Label:      label,
 		})
 	}
 	return resp
@@ -349,14 +423,14 @@ func AddRelation(ctx *vbeam.Context, req AddRelationRequest) (resp RelationActio
 		return
 	}
 
-	edge, ok := req.Stated.edge(person.Id, anchor.Id)
-	if !ok {
-		resp.Error = "Pick how these two are related"
-		return
-	}
+	anchorIds := append([]int{req.AnchorId}, req.AdditionalAnchorIds...)
 
 	vbeam.UseWriteTx(ctx)
-	if _, addErr := AddRelationTx(ctx.Tx, edge); addErr != nil {
+	if addErr := applyStatedRelationTx(ctx.Tx, user, person.Id, req.Stated, anchorIds); addErr != nil {
+		if addErr == ErrPersonNotFound {
+			err = addErr
+			return
+		}
 		resp.Error = addErr.Error()
 		return
 	}

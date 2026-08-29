@@ -12,7 +12,7 @@ import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.ListPeopleResponse>({ people: [] });
+    return rpc.ok<server.ListPeopleResponse>({ people: [], relations: [] });
   }
 
   return server.ListPeople({});

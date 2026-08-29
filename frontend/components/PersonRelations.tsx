@@ -2,14 +2,18 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../server";
 import { RELATION_OPTIONS } from "../lib/routeHelpers";
+import { CoAnchorState, CoAnchorSuggestion, syncCoAnchors } from "../lib/relations";
+import { CoAnchorPicker } from "./CoAnchorPicker";
 import "./family-links-styles";
 
 type PersonRelationsState = {
   relations: server.GetPersonRelationsResponse | null;
   people: server.Person[];
+  graph: server.Relation[];
   loadedFor: number;
   relationIndex: number;
   anchorId: number;
+  coAnchors: CoAnchorState;
   error: string;
   busy: boolean;
 };
@@ -18,9 +22,11 @@ const usePersonRelations = vlens.declareHook(
   (): PersonRelationsState => ({
     relations: null,
     people: [],
+    graph: [],
     loadedFor: 0,
     relationIndex: -1,
     anchorId: 0,
+    coAnchors: { key: "", ids: [] },
     error: "",
     busy: false,
   })
@@ -35,10 +41,17 @@ async function load(state: PersonRelationsState, personId: number) {
     state.error = err;
   }
   const [peopleResp] = await server.ListPeople({});
+  state.graph = peopleResp?.relations ?? [];
   state.people = (peopleResp?.people ?? []).filter(p => p.id !== personId);
   if (state.anchorId === 0 && state.people.length > 0) {
     state.anchorId = state.people[0].id;
   }
+  vlens.scheduleRedraw();
+}
+
+async function refreshGraph(state: PersonRelationsState) {
+  const [peopleResp] = await server.ListPeople({});
+  state.graph = peopleResp?.relations ?? [];
   vlens.scheduleRedraw();
 }
 
@@ -52,7 +65,9 @@ function applyResult(
   if (resp && resp.success) {
     state.relations = resp.relations;
     state.relationIndex = -1;
+    state.coAnchors = { key: "", ids: [] };
     state.error = "";
+    refreshGraph(state);
   } else {
     state.error = resp?.error || err || fallback;
   }
@@ -73,6 +88,7 @@ async function onAddClicked(state: PersonRelationsState, personId: number, event
     personId,
     anchorId: state.anchorId,
     stated: relation.value,
+    additionalAnchorIds: state.coAnchors.ids,
   });
   applyResult(state, resp, err, "Could not save that relationship");
 }
@@ -112,6 +128,13 @@ export const PersonRelationsSection = ({
     return null;
   }
 
+  const stored = relations.relations.filter(r => r.stored);
+  const derived = relations.relations.filter(r => !r.stored);
+  const picked = RELATION_OPTIONS[state.relationIndex];
+  const suggestions: CoAnchorSuggestion[] = picked
+    ? syncCoAnchors(state.coAnchors, state.graph, picked.value, personId, state.anchorId)
+    : [];
+
   return (
     <div className="form-group">
       <label>Relationships</label>
@@ -122,9 +145,9 @@ export const PersonRelationsSection = ({
         </div>
       )}
 
-      {relations.relations.length > 0 ? (
+      {stored.length > 0 ? (
         <div className="person-sharing-list">
-          {relations.relations.map(relation => (
+          {stored.map(relation => (
             <div key={relation.id} className="person-sharing-row">
               <span>
                 {relation.personName}
@@ -149,6 +172,28 @@ export const PersonRelationsSection = ({
           Nobody is recorded as related to {personName} yet. Everyone else's relationship is worked
           out from the ones you add here.
         </p>
+      )}
+
+      {derived.length > 0 && (
+        <>
+          <p className="family-link-note">
+            Worked out from the above — nothing to enter for these:
+          </p>
+          <div className="person-sharing-list">
+            {derived.map(relation => (
+              <div key={relation.personId} className="person-sharing-row is-derived">
+                <span>
+                  {relation.personName}
+                  <span className="person-sharing-role">
+                    {" · "}
+                    {personName}'s {relation.label}
+                  </span>
+                </span>
+                <span className="person-sharing-derived">implied</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {state.people.length > 0 && (
@@ -190,6 +235,14 @@ export const PersonRelationsSection = ({
               </select>
             </div>
           </div>
+
+          <CoAnchorPicker
+            suggestions={suggestions}
+            state={state.coAnchors}
+            people={state.people}
+            relationLabel={picked ? picked.label : ""}
+            disabled={state.busy}
+          />
 
           <button
             type="button"

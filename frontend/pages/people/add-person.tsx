@@ -8,10 +8,13 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
 import { RELATION_OPTIONS } from "../../lib/routeHelpers";
+import { CoAnchorState, CoAnchorSuggestion, syncCoAnchors } from "../../lib/relations";
+import { CoAnchorPicker } from "../../components/CoAnchorPicker";
 import "./add-person-styles";
 
 type Data = {
   people: server.Person[];
+  relations: server.Relation[];
   selfPersonId: number;
 };
 
@@ -23,6 +26,7 @@ type AddPersonForm = {
   birthdate: string;
   isPregnancy: boolean;
   familyId: number;
+  coAnchors: CoAnchorState;
   error: string;
   loading: boolean;
   success: boolean;
@@ -37,6 +41,7 @@ const useAddPersonForm = vlens.declareHook(
     birthdate: "",
     isPregnancy: false,
     familyId: 0,
+    coAnchors: { key: "", ids: [] },
     error: "",
     loading: false,
     success: false,
@@ -49,6 +54,7 @@ export async function fetch(route: string, prefix: string) {
   const currentAuth = auth_.getAuth();
   return rpc.ok<Data>({
     people: resp?.people ?? [],
+    relations: resp?.relations ?? [],
     selfPersonId: currentAuth?.personId ?? 0,
   });
 }
@@ -65,11 +71,21 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     form.anchorId = preferred ? preferred.id : 0;
   }
 
+  const relation = RELATION_OPTIONS[form.relationIndex];
+  const suggestions = relation
+    ? syncCoAnchors(form.coAnchors, data.relations, relation.value, 0, form.anchorId)
+    : [];
+
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="add-person-container">
-        <AddPersonPage form={form} people={data.people} />
+        <AddPersonPage
+          form={form}
+          people={data.people}
+          suggestions={suggestions}
+          relationLabel={relation ? relation.label : ""}
+        />
       </main>
       <Footer />
     </div>
@@ -92,6 +108,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       familyId: form.familyId,
       stated: relation ? relation.value : server.StatedNone,
       anchorId: relation ? form.anchorId : 0,
+      additionalAnchorIds: relation ? form.coAnchors.ids : [],
     });
 
     form.loading = false;
@@ -100,6 +117,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.success = true;
       form.name = "";
       form.relationIndex = -1;
+      form.coAnchors = { key: "", ids: [] };
       form.gender = 0;
       form.birthdate = "";
       form.isPregnancy = false;
@@ -130,9 +148,11 @@ function onRelationPicked(form: AddPersonForm, event: Event) {
 interface AddPersonPageProps {
   form: AddPersonForm;
   people: server.Person[];
+  suggestions: CoAnchorSuggestion[];
+  relationLabel: string;
 }
 
-const AddPersonPage = ({ form, people }: AddPersonPageProps) => (
+const AddPersonPage = ({ form, people, suggestions, relationLabel }: AddPersonPageProps) => (
   <div className="add-person-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -208,6 +228,13 @@ const AddPersonPage = ({ form, people }: AddPersonPageProps) => (
                 ))}
               </select>
             </div>
+            <CoAnchorPicker
+              suggestions={suggestions}
+              state={form.coAnchors}
+              people={people}
+              relationLabel={relationLabel}
+              disabled={form.loading}
+            />
             <p className="form-hint">
               Everyone else's relationship is worked out from this — a grandchild is a daughter or
               son of one of your children.
