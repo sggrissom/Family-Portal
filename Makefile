@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy smoke e2e test test-race test-coverage local typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke e2e test test-frontend test-race test-coverage local typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -78,6 +78,10 @@ deploy-face-remote:
 test:
 	go test ./backend/ -v
 
+test-frontend:
+	@echo "Running frontend unit tests..."
+	npx vitest run
+
 # boltdb v1.3.1 uses pointer conversions rejected by Go's checkptr instrumentation.
 # Keep the race detector enabled while disabling only that incompatible check.
 test-race:
@@ -120,7 +124,7 @@ format:
 	@echo "Formatting TypeScript code..."
 	npx prettier --write "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
 
-check: test typecheck lint
+check: test test-frontend typecheck lint
 	@echo "✅ All quality checks passed!"
 
 # Run after CI checks to catch formatters, generators, or tests that silently

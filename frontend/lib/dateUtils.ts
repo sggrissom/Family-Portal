@@ -21,8 +21,19 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
     return weeksPregnant === 1 ? "1 week" : `${weeksPregnant} weeks`;
   }
 
-  let years = targetDate.getFullYear() - birthday.getFullYear();
-  let months = targetDate.getMonth() - birthday.getMonth();
+  // Read in UTC, as the pregnancy branch above does. A date-only or Z-suffixed
+  // string parses to UTC midnight, so local getters shift it to the previous
+  // day west of UTC and report an age up to a month out.
+  let years = targetDate.getUTCFullYear() - birthday.getUTCFullYear();
+  let months = targetDate.getUTCMonth() - birthday.getUTCMonth();
+
+  // The month is only complete once the day of the month has come round again,
+  // so borrow from it first. Someone born on the 20th is not a month older on
+  // the 1st. A birthday later in the month than the target's last day (born the
+  // 31st, viewed in February) simply lands on the 1st of the month after.
+  if (targetDate.getUTCDate() < birthday.getUTCDate()) {
+    months--;
+  }
 
   if (months < 0) {
     years--;

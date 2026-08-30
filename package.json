@@ -1,10 +1,15 @@
 {
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "dependencies": {
     "preact": "^10.26.9",
     "vlens": "^0.1.6"
   },
   "devDependencies": {
     "prettier": "3.8.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   }
 }
