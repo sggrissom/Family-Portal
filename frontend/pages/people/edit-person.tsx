@@ -120,6 +120,10 @@ function todayInputValue(): string {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
+function showsPregnancyOption(form: EditPersonForm): boolean {
+  return form.isPregnancy || form.birthdate > todayInputValue();
+}
+
 function onBornNowClicked(form: EditPersonForm) {
   form.isPregnancy = false;
   form.birthdate = todayInputValue();
@@ -192,17 +196,19 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
           </div>
         )}
 
-        <label className="checkbox-option">
-          <input
-            type="checkbox"
-            checked={form.isPregnancy}
-            onInput={event => {
-              form.isPregnancy = (event.currentTarget as HTMLInputElement).checked;
-            }}
-            disabled={form.loading}
-          />
-          <span>Baby isn’t born yet</span>
-        </label>
+        {showsPregnancyOption(form) && (
+          <label className="checkbox-option">
+            <input
+              type="checkbox"
+              checked={form.isPregnancy}
+              onInput={event => {
+                form.isPregnancy = (event.currentTarget as HTMLInputElement).checked;
+              }}
+              disabled={form.loading}
+            />
+            <span>Baby isn’t born yet</span>
+          </label>
+        )}
 
         <div className="form-group">
           <label htmlFor="birthdate">{form.isPregnancy ? "Due Date" : "Birthdate"}</label>
