@@ -176,6 +176,11 @@ var publicErrors = []error{
 	ErrPhotoWorkerUnavailable,
 	ErrAdminRequired,
 	ErrUserNotFound,
+	ErrSeedPasswordRequired,
+	ErrSeedDomainInvalid,
+	ErrSeedEmailsExist,
+	ErrSeedRunNotFound,
+	ErrSeedConfirmationMismatch,
 }
 
 func isPublicError(cause error) bool {
@@ -227,3 +232,13 @@ var ErrPhotoWorkerUnavailable = errors.New("Photo processing is not running on t
 var ErrAdminRequired = errors.New("Unauthorized: Admin access required")
 
 var ErrUserNotFound = errors.New("No such user")
+
+var ErrSeedPasswordRequired = errors.New("A password for the seeded accounts is required")
+
+var ErrSeedDomainInvalid = errors.New("Email domain must look like example.test")
+
+var ErrSeedEmailsExist = errors.New("Accounts already exist at that email domain")
+
+var ErrSeedRunNotFound = errors.New("No such seed run")
+
+var ErrSeedConfirmationMismatch = errors.New("Type the email domain exactly to confirm")

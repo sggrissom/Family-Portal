@@ -1,16 +1,15 @@
-//go:build !release
-
 package backend
 
-// Demo data for a development database.
+// Demo data.
 //
-// The tool that calls this is cmd/seed; `make seed-fresh` throws away
-// .serve/db.bolt and rebuilds it from here, so a fresh checkout is one command
-// away from a populated site with credentials you already know.
+// `make seed-fresh` throws away .serve/db.bolt and rebuilds it from here, so a
+// fresh checkout is one command away from a populated site with credentials you
+// already know. The same dataset backs the admin seeding page, which is how the
+// review accounts on production are created.
 //
-// This file is excluded from release builds. Every account below shares one
-// hardcoded password, and that must never be compiled into a binary that could
-// be deployed.
+// The shared password lives in seed_dev.go and is excluded from release builds.
+// SeedDemoData requires the caller to supply one, so no deployable binary
+// carries a default.
 //
 // The shape of the data is chosen to exercise both access mechanisms described
 // in docs/permissions.md at once: memberships inside the Rivera household
@@ -22,24 +21,69 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"regexp"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbolt"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// SeedPassword signs in every seeded account.
-const SeedPassword = "family123"
+const DefaultSeedDomain = "example.test"
+
+// MaxSeedScale bounds how much a single run can write, since the admin page can
+// reach this on a production database.
+const MaxSeedScale = 4
+
+// seedLocalParts is every mailbox the dataset creates. Conflicts are reported
+// all at once before anything is written, and seeder.email refuses a local part
+// missing from this list so the two cannot drift apart.
+var seedLocalParts = []string{
+	"dad", "mom", "teen", "nanny", "sitter",
+	"grandpa", "grandma", "nana", "aunt", "outsider",
+}
+
+var seedDomainPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 type SeedOptions struct {
-	// Password for every seeded account. Empty means SeedPassword.
+	// Password for every seeded account. Required.
 	Password string
+	// EmailDomain is the domain every seeded address is created under, which is
+	// what keeps a second run from colliding with the first. Empty means
+	// DefaultSeedDomain.
+	EmailDomain string
 	// Scale divides the interval between measurements, so 2 produces twice as
 	// many rows. Zero or less means 1.
 	Scale int
 	// Now anchors ages, activity seasons, and chat timestamps. Zero means
 	// time.Now().
 	Now time.Time
+	// CreatedBy records the admin who asked for the run. Zero means the CLI.
+	CreatedBy int
+}
+
+// SeedEmails lists the addresses a run under this domain would create.
+func SeedEmails(domain string) []string {
+	if domain == "" {
+		domain = DefaultSeedDomain
+	}
+	emails := make([]string, 0, len(seedLocalParts))
+	for _, local := range seedLocalParts {
+		emails = append(emails, local+"@"+domain)
+	}
+	return emails
+}
+
+// ExistingSeedEmails reports which of a run's addresses are already taken.
+// AddUserTx overwrites the email index rather than refusing a duplicate, so a
+// collision would strand the earlier account's login.
+func ExistingSeedEmails(tx *vbolt.Tx, domain string) (taken []string) {
+	for _, email := range SeedEmails(domain) {
+		if GetUserId(tx, email) != 0 {
+			taken = append(taken, email)
+		}
+	}
+	return
 }
 
 // SeedAccount is one row of the credentials table the seeder prints.
@@ -51,6 +95,7 @@ type SeedAccount struct {
 }
 
 type SeedSummary struct {
+	RunId        int
 	Accounts     []SeedAccount
 	Families     int
 	People       int
@@ -66,43 +111,88 @@ type SeedSummary struct {
 	ChatMessages int
 }
 
-// SeedDemoData writes the whole demo dataset into tx. The caller commits.
+// SeedDemoData writes the whole demo dataset into tx and records a SeedRun
+// describing what it created. The caller commits; on error nothing should be.
 func SeedDemoData(tx *vbolt.Tx, opts SeedOptions) (SeedSummary, error) {
-	password := opts.Password
-	if password == "" {
-		password = SeedPassword
+	if opts.Password == "" {
+		return SeedSummary{}, ErrSeedPasswordRequired
 	}
+	domain := strings.ToLower(strings.TrimSpace(opts.EmailDomain))
+	if domain == "" {
+		domain = DefaultSeedDomain
+	}
+	if !seedDomainPattern.MatchString(domain) {
+		return SeedSummary{}, ErrSeedDomainInvalid
+	}
+	if taken := ExistingSeedEmails(tx, domain); len(taken) > 0 {
+		return SeedSummary{}, fmt.Errorf("%w: %s", ErrSeedEmailsExist, strings.Join(taken, ", "))
+	}
+
 	scale := opts.Scale
 	if scale < 1 {
 		scale = 1
+	}
+	if scale > MaxSeedScale {
+		scale = MaxSeedScale
 	}
 	now := opts.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(opts.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return SeedSummary{}, err
 	}
 
 	s := &seeder{
-		tx:   tx,
-		now:  now,
-		hash: hash,
-		rng:  rand.New(rand.NewSource(20260829)),
+		tx:     tx,
+		now:    now,
+		hash:   hash,
+		domain: domain,
+		rng:    rand.New(rand.NewSource(20260829)),
 	}
 	s.build(scale)
-	return s.sum, s.err
+	if s.err != nil {
+		return s.sum, s.err
+	}
+
+	run := SeedRun{
+		Id:        vbolt.NextIntId(tx, SeedRunsBkt),
+		CreatedAt: now,
+		CreatedBy: opts.CreatedBy,
+		Domain:    domain,
+		UserIds:   s.userIds,
+		Emails:    s.emails,
+		FamilyIds: s.familyIds,
+	}
+	writeSeedRunTx(tx, &run)
+	s.sum.RunId = run.Id
+
+	return s.sum, nil
 }
 
 type seeder struct {
-	tx   *vbolt.Tx
-	now  time.Time
-	hash []byte
-	rng  *rand.Rand
-	sum  SeedSummary
-	err  error
+	tx        *vbolt.Tx
+	now       time.Time
+	hash      []byte
+	domain    string
+	rng       *rand.Rand
+	sum       SeedSummary
+	err       error
+	userIds   []int
+	emails    []string
+	familyIds []int
+}
+
+func (s *seeder) email(local string) string {
+	for _, known := range seedLocalParts {
+		if known == local {
+			return local + "@" + s.domain
+		}
+	}
+	s.fail(fmt.Errorf("seed: %q is missing from seedLocalParts", local))
+	return local + "@" + s.domain
 }
 
 func (s *seeder) fail(err error) {
@@ -124,6 +214,7 @@ func (s *seeder) household(name, email, familyName string) (User, Family) {
 	family.Name = familyName
 	vbolt.Write(s.tx, FamiliesBkt, family.Id, &family)
 
+	s.familyIds = append(s.familyIds, family.Id)
 	s.sum.Families++
 	return user, family
 }
@@ -166,6 +257,8 @@ func (s *seeder) guest(name, email, ownFamily string, into Family, role AccessLe
 }
 
 func (s *seeder) account(user User, family, access string) {
+	s.userIds = append(s.userIds, user.Id)
+	s.emails = append(s.emails, user.Email)
 	s.sum.Accounts = append(s.sum.Accounts, SeedAccount{
 		Email:  user.Email,
 		Name:   user.Name,
@@ -721,23 +814,28 @@ func (s *seeder) crossCountrySeason(familyId int, runner Person) {
 // ── the dataset ───────────────────────────────────────────────────────────────
 
 func (s *seeder) build(scale int) {
-	// The first account created is user 1, which backend/admin.go treats as the
-	// site administrator. Marcus has to come first for the admin pages to be
-	// reachable at all.
-	dad, riveras := s.owner("Marcus Rivera", "dad@example.test", "Rivera Family", "admin (site admin, user 1)")
-	mom := s.member("Priya Rivera", "mom@example.test", riveras, "admin")
-	teen := s.member("Sofia Rivera", "teen@example.test", riveras, "admin (the eldest child's own login)")
-	nanny := s.guest("Dana Brooks", "nanny@example.test", "Brooks Household", riveras, AccessContribute,
+	// On an empty database the first account created is user 1, which
+	// backend/admin.go treats as the site administrator. Marcus has to come
+	// first for the admin pages to be reachable at all.
+	marcusAccess := "admin"
+	if GetUser(s.tx, AdminUserId).Id == 0 {
+		marcusAccess = "admin (site admin, user 1)"
+	}
+
+	dad, riveras := s.owner("Marcus Rivera", s.email("dad"), "Rivera Family", marcusAccess)
+	mom := s.member("Priya Rivera", s.email("mom"), riveras, "admin")
+	teen := s.member("Sofia Rivera", s.email("teen"), riveras, "admin (the eldest child's own login)")
+	nanny := s.guest("Dana Brooks", s.email("nanny"), "Brooks Household", riveras, AccessContribute,
 		"contribute in the Riveras — adds records, cannot manage the family")
-	s.guest("Theo Nakamura", "sitter@example.test", "Nakamura Household", riveras, AccessView,
+	s.guest("Theo Nakamura", s.email("sitter"), "Nakamura Household", riveras, AccessView,
 		"view in the Riveras — read-only")
 
-	grandpa, elders := s.owner("Robert Rivera", "grandpa@example.test", "Rivera Grandparents", "admin")
-	grandma := s.member("Eleanor Rivera", "grandma@example.test", elders, "admin")
+	grandpa, elders := s.owner("Robert Rivera", s.email("grandpa"), "Rivera Grandparents", "admin")
+	grandma := s.member("Eleanor Rivera", s.email("grandma"), elders, "admin")
 
-	nana, chandras := s.owner("Asha Chandra", "nana@example.test", "Chandra Grandparents", "admin")
-	aunt, fords := s.owner("Camila Rivera-Ford", "aunt@example.test", "Ford Family", "admin (link to the Riveras is still pending)")
-	s.owner("Jordan Vale", "outsider@example.test", "Vale Family", "admin (no links at all — the isolation case)")
+	nana, chandras := s.owner("Asha Chandra", s.email("nana"), "Chandra Grandparents", "admin")
+	aunt, fords := s.owner("Camila Rivera-Ford", s.email("aunt"), "Ford Family", "admin (link to the Riveras is still pending)")
+	s.owner("Jordan Vale", s.email("outsider"), "Vale Family", "admin (no links at all — the isolation case)")
 
 	// People ------------------------------------------------------------------
 	marcus := s.person(riveras.Id, "Marcus Rivera", Male, "1985-03-14")

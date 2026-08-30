@@ -141,6 +141,20 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
           </div>
         </a>
 
+        <a href="/admin/seed" className="admin-card admin-card-link">
+          <div className="card-header">
+            <div className="admin-card-icon">🌱</div>
+            <h3>Test Accounts</h3>
+          </div>
+          <div className="card-content">
+            <p>
+              Create the demo family so a reviewer has something to sign in to, and remove it again
+              afterwards.
+            </p>
+            <div className="card-action">Manage Test Accounts →</div>
+          </div>
+        </a>
+
         <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
             <div className="admin-card-icon">📋</div>

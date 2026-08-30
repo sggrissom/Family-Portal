@@ -89,6 +89,7 @@ async function main() {
     guarded("/admin/analytics", () => import("@app/pages/admin/analytics")),
     guarded("/admin/push", () => import("@app/pages/admin/push")),
     guarded("/admin/app-versions", () => import("@app/pages/admin/app-versions")),
+    guarded("/admin/seed", () => import("@app/pages/admin/seed")),
     guarded("/admin", () => import("@app/pages/admin/admin")),
     guarded("/privacy", () => import("@app/pages/legal/privacy")),
     guarded("/terms", () => import("@app/pages/legal/terms")),

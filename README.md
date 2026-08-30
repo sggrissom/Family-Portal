@@ -135,7 +135,7 @@ make seed-fresh    # stop `make local` first — bolt holds an exclusive lock
 That writes seven households, fifteen people, roughly 180 milestones and 430
 measurements, three activity seasons with results, a family chat, and the links
 and roster rows that make cross-family permissions observable. Every account
-below signs in with the password **`familytest123`**:
+below signs in with the password **`family123`**:
 
 | account | who they are | what they can reach |
 | --- | --- | --- |
@@ -157,9 +157,25 @@ those claims, so the demo data cannot drift away from demonstrating them.
 
 `make seed` does the same without deleting anything, and refuses a database that
 already holds accounts. `-scale 2` records measurements twice as often;
-`-password` and `-db` override the obvious things. The seeder
-(`backend/seed.go`) and its command (`cmd/seed`) are both excluded from release
-builds, so a known password can never be compiled into a deployable binary.
+`-password`, `-domain`, and `-db` override the obvious things.
+
+`cmd/seed` and the shared password constant are excluded from release builds, so
+a known password can never be compiled into a deployable binary. The seeder
+itself is not, because the admin panel calls it.
+
+## Test accounts on a live server
+
+App Store review needs a working login, which means the demo family has to exist
+on the deployed site. **Admin → Test Accounts** (`/admin/seed`) writes the same
+dataset into the running database, under an email domain and a password chosen
+at the time. It is additive only: it refuses outright if any address it would
+create is already taken, so it can never take an existing account's login away
+from it.
+
+Each run records which accounts and families it created, and that receipt is the
+only thing a removal works from — an account the run did not create, or one whose
+address has since changed, is left alone. Removing a run deletes those accounts
+and everything they own; retyping the domain confirms it.
 
 ## Testing
 

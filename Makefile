@@ -123,8 +123,8 @@ lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
 	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e
-	# cmd/seed and the seeder it calls are !release-only, so they need the
-	# untagged pass to be vetted at all.
+	# cmd/seed is !release-only, so it needs the untagged pass to be vetted
+	# at all.
 	go vet ./cmd/seed
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \

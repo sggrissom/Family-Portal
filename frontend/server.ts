@@ -33,22 +33,27 @@ export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
 // Errors
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
 export const ErrUserNotFound = "No such user";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrSeedPasswordRequired = "A password for the seeded accounts is required";
+export const ErrSeedDomainInvalid = "Email domain must look like example.test";
+export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
+export const ErrSeedRunNotFound = "No such seed run";
+export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
 
 export interface CreateAccountRequest {
     name: string
@@ -1004,6 +1009,40 @@ export interface SendTestPushResponse {
     targetName: string
 }
 
+export interface ListSeedRunsResponse {
+    runs: SeedRunInfo[]
+    defaultDomain: string
+    maxScale: number
+}
+
+export interface CreateSeedDataRequest {
+    password: string
+    emailDomain: string
+    scale: number
+}
+
+export interface CreateSeedDataResponse {
+    run: SeedRunInfo
+    accounts: SeedAccountInfo[]
+    people: number
+    milestones: number
+    measurements: number
+    chatMessages: number
+}
+
+export interface RemoveSeedDataRequest {
+    runId: number
+    confirmValue: string
+}
+
+export interface RemoveSeedDataResponse {
+    removedEmails: string[]
+    skippedEmails: string[]
+    destroyedFamilies: number
+    survivingFamilies: number
+    deletedPhotos: number
+}
+
 export interface AnalyticsOverviewResponse {
     totalUsers: number
     totalFamilies: number
@@ -1606,6 +1645,24 @@ export interface AdminPushDevice {
     updatedAt: string
     isActive: boolean
     environmentMismatch: boolean
+}
+
+export interface SeedRunInfo {
+    id: number
+    createdAt: string
+    createdBy: number
+    domain: string
+    emails: string[]
+    accounts: number
+    families: number
+    existing: number
+}
+
+export interface SeedAccountInfo {
+    email: string
+    name: string
+    family: string
+    access: string
 }
 
 export interface ActivitySummary {
@@ -2301,6 +2358,18 @@ export async function ListPushDevices(data: Empty): Promise<rpc.Response<ListPus
 
 export async function SendTestPushNotification(data: SendTestPushRequest): Promise<rpc.Response<SendTestPushResponse>> {
     return await rpc.call<SendTestPushResponse>('SendTestPushNotification', JSON.stringify(data));
+}
+
+export async function ListSeedRuns(data: Empty): Promise<rpc.Response<ListSeedRunsResponse>> {
+    return await rpc.call<ListSeedRunsResponse>('ListSeedRuns', JSON.stringify(data));
+}
+
+export async function CreateSeedData(data: CreateSeedDataRequest): Promise<rpc.Response<CreateSeedDataResponse>> {
+    return await rpc.call<CreateSeedDataResponse>('CreateSeedData', JSON.stringify(data));
+}
+
+export async function RemoveSeedData(data: RemoveSeedDataRequest): Promise<rpc.Response<RemoveSeedDataResponse>> {
+    return await rpc.call<RemoveSeedDataResponse>('RemoveSeedData', JSON.stringify(data));
 }
 
 export async function GetAnalyticsOverview(data: Empty): Promise<rpc.Response<AnalyticsOverviewResponse>> {

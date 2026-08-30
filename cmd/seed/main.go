@@ -10,8 +10,10 @@
 //	make seed         # seed in place, refusing a database that already has users
 //
 // The credentials are printed at the end of every run and every account shares
-// one password (backend.SeedPassword). Both the seeder and this command are
-// excluded from release builds, so none of that can reach a deployed binary.
+// one password (backend.SeedPassword). This command and that password are
+// excluded from release builds, so neither can reach a deployed binary. The
+// seeder itself is not: the admin panel calls it to create review accounts on a
+// live server, with a password typed in at the time.
 //
 // bolt takes an exclusive lock on the database file, so `make local` has to be
 // stopped first. A run that cannot take the lock says so rather than hanging.
@@ -37,6 +39,7 @@ func main() {
 	reset := flag.Bool("reset", false, "delete the database file first, so the seed lands in a fresh one")
 	scale := flag.Int("scale", 1, "measurement density multiplier; 2 records twice as often")
 	password := flag.String("password", backend.SeedPassword, "password for every seeded account")
+	domain := flag.String("domain", backend.DefaultSeedDomain, "email domain for every seeded account")
 	flag.Parse()
 
 	if cfg.IsRelease {
@@ -71,8 +74,9 @@ func main() {
 	var seedErr error
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		summary, seedErr = backend.SeedDemoData(tx, backend.SeedOptions{
-			Password: *password,
-			Scale:    *scale,
+			Password:    *password,
+			EmailDomain: *domain,
+			Scale:       *scale,
 		})
 		if seedErr != nil {
 			return

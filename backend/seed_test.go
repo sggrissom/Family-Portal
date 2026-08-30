@@ -21,7 +21,7 @@ func seedForTest(t *testing.T) (*vbolt.DB, SeedSummary, func()) {
 	var summary SeedSummary
 	var seedErr error
 	vbolt.WithWriteTx(app.DB, func(tx *vbolt.Tx) {
-		summary, seedErr = SeedDemoData(tx, SeedOptions{Now: time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)})
+		summary, seedErr = SeedDemoData(tx, SeedOptions{Password: SeedPassword, Now: time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)})
 		if seedErr != nil {
 			return
 		}
