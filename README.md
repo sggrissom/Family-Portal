@@ -152,6 +152,14 @@ if any check modified a tracked file.
 
 Pushing to `main` builds and deploys to the VPS, then runs the smoke check.
 
+## Security and licensing
+
+Security problems go to **support@familyrecord.app**, not to a public issue
+[`LICENSE`](LICENSE).
+
+Note that the licence covers the source, not the service: the terms under which
+familyrecord.app itself is offered are the ones on `/terms`.
+
 ## Repository layout
 
 ```

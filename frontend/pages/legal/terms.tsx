@@ -25,7 +25,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
 const TermsPage = () => (
   <article className="legal-page">
     <h1>Terms of use</h1>
-    <p className="legal-updated">Last updated 19 August 2026</p>
+    <p className="legal-updated">Last updated 29 August 2026</p>
 
     <p className="legal-lead">
       Family Record is run by one person as a personal project, offered to a small number of
@@ -125,8 +125,9 @@ const TermsPage = () => (
 
     <h2>Changes to these terms</h2>
     <p>
-      If these terms change, the date at the top changes and you will be told in the app before the
-      change takes effect. Continuing to use the site after that means accepting the new version.
+      If these terms change, the date at the top changes and I email the address on your account
+      before the change takes effect. Continuing to use the site after that means accepting the new
+      version.
     </p>
 
     <h2>Questions</h2>

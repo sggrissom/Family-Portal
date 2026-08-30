@@ -25,7 +25,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
 const PrivacyPage = () => (
   <article className="legal-page">
     <h1>Privacy</h1>
-    <p className="legal-updated">Last updated 19 August 2026</p>
+    <p className="legal-updated">Last updated 29 August 2026</p>
 
     <p className="legal-lead">
       Family Record holds photographs and health measurements of children. This page says exactly
@@ -105,7 +105,7 @@ const PrivacyPage = () => (
             <td>
               Server logs of requests and errors: timestamps, paths, status codes, durations, and
               the user or family ID involved. Email addresses in logs are masked. Photo contents,
-              chat text, invite codes, tokens, and AI request or response bodies are not logged.
+              chat text, invite codes, and tokens are not logged.
             </td>
           </tr>
         </tbody>
@@ -141,7 +141,10 @@ const PrivacyPage = () => (
     </ul>
 
     <h2>What leaves the server</h2>
-    <p>Almost nothing does. Two features involve someone else's servers, and they are optional.</p>
+    <p>
+      Almost nothing does, and everything below is either optional or something you have to opt into
+      by installing the companion app.
+    </p>
 
     <h3>Sign in with Google</h3>
     <p>
@@ -260,8 +263,7 @@ const PrivacyPage = () => (
       <li>All traffic is served over HTTPS; session cookies are marked secure.</li>
       <li>Passwords are stored as bcrypt hashes; session and refresh tokens are stored hashed.</li>
       <li>
-        Authentication endpoints, uploads, imports, AI calls, and WebSocket connections are rate
-        limited.
+        Authentication endpoints, uploads, imports, and WebSocket connections are rate limited.
       </li>
       <li>
         Login and password reset return the same response whether or not an account exists, so
@@ -276,8 +278,9 @@ const PrivacyPage = () => (
     <h2>Changes</h2>
     <p>
       If this page changes in a way that matters — new data collected, a new third party involved,
-      or a change in how long things are kept — the date at the top changes and the change is
-      announced in the app before it takes effect.
+      or a change in how long things are kept — the date at the top changes and I email the address
+      on your account before the change takes effect. Smaller corrections, like fixing wording that
+      was unclear, change the date and nothing else.
     </p>
 
     <h2>Questions</h2>
