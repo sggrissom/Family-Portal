@@ -17,7 +17,7 @@ import "./family-timeline-styles";
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.GetFamilyTimelineResponse>({ people: [] });
+    return rpc.ok<server.GetFamilyTimelineResponse>({ people: [], relations: [] });
   }
 
   return server.GetFamilyTimeline({});

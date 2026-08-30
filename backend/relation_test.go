@@ -422,3 +422,52 @@ func TestUpdatePersonAnswersWithTheRelationship(t *testing.T) {
 		}
 	})
 }
+
+// The mobile client syncs through GetFamilyTimeline alone, so the edges have to
+// ride along with it the way they do on ListPeople — otherwise the roster has no
+// way to group by generation without a call per person.
+func TestFamilyTimelineCarriesTheEdges(t *testing.T) {
+	fx, cleanup := setupRelationFixture(t)
+	defer cleanup()
+	jwtKey = []byte("relation-test-secret-key-at-least-32")
+
+	token, err := generateJwtTokenString(fx.user)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		timeline, procErr := GetFamilyTimeline(&vbeam.Context{Tx: tx, Token: token}, GetFamilyTimelineRequest{})
+		if procErr != nil {
+			t.Fatalf("GetFamilyTimeline() error = %v", procErr)
+		}
+
+		people, listErr := ListPeople(&vbeam.Context{Tx: tx, Token: token}, Empty{})
+		if listErr != nil {
+			t.Fatalf("ListPeople() error = %v", listErr)
+		}
+
+		if len(timeline.Relations) != len(people.Relations) {
+			t.Fatalf("timeline relations = %d, ListPeople relations = %d",
+				len(timeline.Relations), len(people.Relations))
+		}
+		if len(timeline.Relations) == 0 {
+			t.Fatal("timeline carried no relations for a family that has six")
+		}
+
+		byId := make(map[int]Relation, len(timeline.Relations))
+		for _, row := range timeline.Relations {
+			byId[row.Id] = row
+		}
+		for _, want := range people.Relations {
+			got, ok := byId[want.Id]
+			if !ok {
+				t.Errorf("relation %d missing from the timeline", want.Id)
+				continue
+			}
+			if got != want {
+				t.Errorf("relation %d = %+v, want %+v", want.Id, got, want)
+			}
+		}
+	})
+}

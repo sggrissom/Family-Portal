@@ -304,6 +304,7 @@ export interface GetFamilyTimelineRequest {
 
 export interface GetFamilyTimelineResponse {
     people: FamilyTimelineItem[]
+    relations: Relation[]
 }
 
 export interface GetPersonRelationsRequest {

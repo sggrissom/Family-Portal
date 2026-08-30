@@ -529,7 +529,83 @@ partial list is a deletion.
 
 ---
 
-## 11. Retries and idempotency
+## 11. Relationships
+
+Only three edge kinds are ever stored — `RelationParent` (0), `RelationSibling`
+(1), `RelationPartner` (2), as `Relation{id, fromId, toId, kind}`
+(`backend/relation.go`). A parent edge is directed, `fromId` being the parent;
+sibling and partner edges are undirected and may arrive either way round. Every
+other word the app shows — grandmother, cousin, stepson, sister-in-law — is the
+server walking those edges, never something a client derives.
+
+**Direction rides on the wire.** `AddPerson` and `AddRelation` take `stated`
+(`StatedRelation`: none 0, child 1, parent 2, sibling 3, partner 4), which names
+what the *new or subject* person is to `anchorId`. The server picks the edge and
+its direction from that, so the client never has to decide which way round it
+was said.
+
+### Reading a person's relationships
+
+`GetPersonRelations` answers with `RelationView{id, personId, personName, label,
+stored}`.
+
+- **`stored: false` means the row is implied**, worked out from the edges rather
+  than typed by anyone: the siblings that follow from a shared parent, a
+  grandmother two parent edges up. Implied rows carry **`id: 0`** — they have no
+  stored row to point at.
+- A client must therefore **split the list on `stored` before rendering**, show
+  implied rows without a remove control, and **never key a list by `id`**, since
+  every implied row shares 0. Key implied rows by `personId`.
+- `RemoveRelation` only ever takes the `id` of a stored row. Sending 0 answers
+  `success: false` with "That relationship no longer exists" — an HTTP 200, not
+  an error status.
+
+### Stating one relation against several people
+
+`AddPerson` and `AddRelation` both take `additionalAnchorIds: []int` — the same
+stated relation against more people in one write, so "child of Steven and Ruth"
+is a single call rather than one save per parent. Ids that are 0, the subject
+itself, repeated within the call, or already stored are skipped, so a client may
+send its whole candidate list. An id naming somebody the caller cannot see
+fails the **whole** call with `ErrPersonNotFound` and commits nothing, not even
+the primary anchor — so send only ids that came from the same response as the
+people themselves.
+
+Nothing is inferred from a partner. Treating a partner's child as your own would
+be silent and unrefusable, and the step-family case is exactly where it is
+wrong; every edge stays stated and removable. The suggestions worth offering are
+therefore the client's to compose: a child's other parent (the anchor's
+partners, worth preselecting when there is exactly one), and the anchor's
+siblings for a stated parent or sibling. `frontend/lib/relations.ts` is the
+reference implementation.
+
+Sibling edges are **not transitive** — A–B and B–C does not make A–C, because
+half-siblings break it. That is why the co-anchor list exists.
+
+### Getting the whole graph
+
+`ListPeople` and `GetFamilyTimeline` both return `relations`: the stored edges
+**among the people that response carries**, deduplicated by id. Edges to anyone
+the caller cannot see are omitted, so a client can treat every `fromId` and
+`toId` as resolvable against the people in the same response. A client syncing
+through `GetFamilyTimeline` alone gets the graph without a second call.
+
+### Pregnancy
+
+`isPregnancy` is on `AddPersonRequest` and `UpdatePersonRequest`, and
+`UpdatePerson` **assigns it unconditionally** (`backend/person.go`), the way
+`UpdateSeason` assigns dates. An editor that omits the field decodes as `false`
+and silently clears the flag off an unborn baby. Always send the current value.
+
+An unborn record keeps its age in weeks even past the due date — 41 weeks, not a
+day old — so the flag is not something to derive from the date. The web offers
+the checkbox only when the record is already flagged or the date is in the
+future, which is the rule a client should mirror rather than showing it against
+every adult.
+
+---
+
+## 12. Retries and idempotency
 
 **There is none.** No endpoint accepts an idempotency key, and no create
 deduplicates.
@@ -557,7 +633,7 @@ creates, and it will be additive. Do not anticipate it.
 
 ---
 
-## 12. Limits
+## 13. Limits
 
 Exceed one and the response is 429 with `Retry-After` in seconds. Honor the
 header; there is no faster path.
@@ -587,7 +663,7 @@ appearance.
 
 ---
 
-## 13. What is not promised
+## 14. What is not promised
 
 - **No API versioning.** There is no `/v1/`, no deprecation window, and no
   contract test suite. The mitigation is the version gate in §7: when a change
@@ -608,7 +684,7 @@ appearance.
 
 ---
 
-## 14. Before each backend release
+## 15. Before each backend release
 
 The 1.0 plan calls for testing older supported builds against the server. In
 practice that is:

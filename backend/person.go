@@ -124,6 +124,11 @@ type FamilyTimelineItem struct {
 
 type GetFamilyTimelineResponse struct {
 	People []FamilyTimelineItem `json:"people"`
+	// Relations are the stored edges among People, the same set ListPeople
+	// returns. The mobile client syncs through this one proc, so without them
+	// it has no way to group a roster or suggest a co-parent short of a call
+	// per person.
+	Relations []Relation `json:"relations"`
 }
 
 type Person struct {
@@ -758,6 +763,8 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 
 		resp.People = append(resp.People, timelineItem)
 	}
+
+	resp.Relations = relationsAmong(ctx.Tx, people)
 
 	return
 }
