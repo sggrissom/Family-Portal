@@ -321,6 +321,18 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 <span className="stat-label">Measurements Skipped</span>
               </div>
             )}
+            {form.result.importedRelations > 0 && (
+              <div className="stat">
+                <span className="stat-number">{form.result.importedRelations}</span>
+                <span className="stat-label">Relationships Imported</span>
+              </div>
+            )}
+            {form.result.skippedRelations > 0 && (
+              <div className="stat">
+                <span className="stat-number">{form.result.skippedRelations}</span>
+                <span className="stat-label">Relationships Skipped</span>
+              </div>
+            )}
             {form.result.importedMilestones > 0 && (
               <div className="stat">
                 <span className="stat-number">{form.result.importedMilestones}</span>
@@ -613,6 +625,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
               <li>The import will create new entries in your family portal</li>
               <li>Existing data will not be affected</li>
               <li>People and their measurements will be imported together</li>
+              <li>
+                Relationships are restored between imported people; a relationship to someone left
+                out of the import is skipped
+              </li>
             </ul>
           </div>
         </div>
@@ -714,7 +730,7 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
                       <div className="person-details">
                         <span className="person-name">{person.Name}</span>
                         <span className="person-meta">
-                          {new Date(person.Birthday).getFullYear()} • •
+                          {new Date(person.Birthday).getFullYear()} •{" "}
                           {person.Gender === 0
                             ? "Male"
                             : person.Gender === 1

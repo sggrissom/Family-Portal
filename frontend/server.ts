@@ -846,6 +846,8 @@ export interface ImportDataResponse {
     skippedPeople: number
     importedMeasurements: number
     skippedMeasurements: number
+    importedRelations: number
+    skippedRelations: number
     importedMilestones: number
     skippedMilestones: number
     importedTags: number
@@ -1478,7 +1480,6 @@ export interface ActivityImportCounts {
 export interface ImportPerson {
     Id: number
     FamilyId: number
-    Type: number
     Gender: number
     Name: string
     Birthday: string

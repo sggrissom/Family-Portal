@@ -19,7 +19,6 @@ func RegisterImportMethods(app *vbeam.Application) {
 type ImportPerson struct {
 	Id       int       `json:"Id"`
 	FamilyId int       `json:"FamilyId"`
-	Type     int       `json:"Type"`
 	Gender   int       `json:"Gender"`
 	Name     string    `json:"Name"`
 	Birthday time.Time `json:"Birthday"`
@@ -49,6 +48,7 @@ type ImportWeight struct {
 
 type ImportDataStructure struct {
 	People          []ImportPerson    `json:"people"`
+	Relations       []ExportRelation  `json:"relations,omitempty"`
 	Heights         []ImportHeight    `json:"heights"`
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
@@ -80,6 +80,8 @@ type ImportDataResponse struct {
 	SkippedPeople        int                  `json:"skippedPeople"`
 	ImportedMeasurements int                  `json:"importedMeasurements"`
 	SkippedMeasurements  int                  `json:"skippedMeasurements"`
+	ImportedRelations    int                  `json:"importedRelations"`
+	SkippedRelations     int                  `json:"skippedRelations"`
 	ImportedMilestones   int                  `json:"importedMilestones"`
 	SkippedMilestones    int                  `json:"skippedMilestones"`
 	ImportedTags         int                  `json:"importedTags"`
@@ -174,6 +176,11 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		resp.SkippedMeasurements = skippedMeasurements
 		resp.Errors = append(resp.Errors, measurementErrors...)
 
+		importedRelations, skippedRelations, relationErrors := importRelations(ctx.Tx, importData.Relations, personIdMapping)
+		resp.ImportedRelations = importedRelations
+		resp.SkippedRelations = skippedRelations
+		resp.Errors = append(resp.Errors, relationErrors...)
+
 		if req.ImportMilestones && len(importData.Milestones) > 0 {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
 			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
@@ -230,6 +237,28 @@ func validateImportData(data ImportDataStructure) error {
 		if err := validateImportMilestone(milestone, i, personIds); err != nil {
 			return err
 		}
+	}
+
+	for i, relation := range data.Relations {
+		if err := validateImportRelation(relation, i, personIds); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateImportRelation(relation ExportRelation, index int, validPersonIds map[int]bool) error {
+	if !validPersonIds[relation.FromId] || !validPersonIds[relation.ToId] {
+		return errors.New("Relationship at index " + formatIndex(index) + " references an unknown person")
+	}
+
+	if relation.FromId == relation.ToId {
+		return errors.New("Relationship at index " + formatIndex(index) + " relates a person to themselves")
+	}
+
+	if _, ok := parseRelationKind(relation.Kind); !ok {
+		return errors.New("Relationship at index " + formatIndex(index) + " has unknown kind '" + relation.Kind + "'")
 	}
 
 	return nil
@@ -666,6 +695,45 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			}
 		}
 
+		importedCount++
+	}
+
+	return importedCount, skippedCount, errors
+}
+
+// importRelations rewrites each edge onto the people this import actually
+// created or merged onto. Skipped are edges reaching a person who was filtered
+// out, edges already stated in either direction, and edges whose ends collapse
+// onto one person because two import rows merged onto the same existing one.
+func importRelations(tx *vbolt.Tx, relations []ExportRelation, personIdMapping map[int]int) (int, int, []string) {
+	var errors []string
+	importedCount := 0
+	skippedCount := 0
+
+	for _, relation := range relations {
+		fromId, fromExists := personIdMapping[relation.FromId]
+		toId, toExists := personIdMapping[relation.ToId]
+		if !fromExists || !toExists || fromId == toId {
+			skippedCount++
+			continue
+		}
+
+		kind, ok := parseRelationKind(relation.Kind)
+		if !ok {
+			errors = append(errors, fmt.Sprintf("Relationship with unknown kind: %s", relation.Kind))
+			continue
+		}
+
+		edge := Relation{FromId: fromId, ToId: toId, Kind: kind}
+		if _, found := findRelationTx(tx, edge); found {
+			skippedCount++
+			continue
+		}
+
+		if _, err := AddRelationTx(tx, edge); err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to import relationship: %s", err.Error()))
+			continue
+		}
 		importedCount++
 	}
 

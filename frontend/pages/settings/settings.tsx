@@ -861,7 +861,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                       <div className="export-mode-label">
                         <span>Data only</span>
                         <span className="export-mode-desc">
-                          JSON file — people, heights, weights, milestones, tags
+                          JSON file — people, relationships, heights, weights, milestones, tags
                         </span>
                       </div>
                     </label>

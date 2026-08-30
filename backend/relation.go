@@ -3,6 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
+	"strings"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -37,6 +38,32 @@ func PackRelation(self *Relation, buf *vpack.Buffer) {
 	vpack.Int(&self.FromId, buf)
 	vpack.Int(&self.ToId, buf)
 	vpack.IntEnum(&self.Kind, buf)
+}
+
+// exportName is the wire spelling used by data exports, so a portable file
+// does not depend on the enum's numbering.
+func (k RelationKind) exportName() string {
+	switch k {
+	case RelationParent:
+		return "parent"
+	case RelationSibling:
+		return "sibling"
+	case RelationPartner:
+		return "partner"
+	}
+	return ""
+}
+
+func parseRelationKind(name string) (RelationKind, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "parent":
+		return RelationParent, true
+	case "sibling":
+		return RelationSibling, true
+	case "partner":
+		return RelationPartner, true
+	}
+	return 0, false
 }
 
 var RelationBkt = vbolt.Bucket(&cfg.Info, "relation", vpack.FInt, PackRelation)

@@ -127,6 +127,11 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			resp.SkippedMeasurements = skippedMeasurements
 			resp.Errors = append(resp.Errors, measurementErrors...)
 
+			importedRelations, skippedRelations, relationErrors := importRelations(tx, importData.Relations, personIdMapping)
+			resp.ImportedRelations = importedRelations
+			resp.SkippedRelations = skippedRelations
+			resp.Errors = append(resp.Errors, relationErrors...)
+
 			if len(importData.Milestones) > 0 {
 				filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
 				importedMilestones, skippedMilestones, milestoneErrors := importMilestones(tx, filteredMilestones, personIdMapping, familyId, tagNameToId)

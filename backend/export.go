@@ -173,6 +173,19 @@ type ExportTag struct {
 	Color string `json:"color"`
 }
 
+// ExportRelation is one stored relationship edge. Kind is spelled out rather
+// than numbered so the file does not depend on the enum's ordering. For a
+// "parent" edge From is the parent of To; "sibling" and "partner" are
+// symmetric and stored once, in the direction they were entered.
+type ExportRelation struct {
+	Id       int    `json:"id"`
+	FromId   int    `json:"fromId"`
+	ToId     int    `json:"toId"`
+	Kind     string `json:"kind"`
+	FromName string `json:"fromName,omitempty"`
+	ToName   string `json:"toName,omitempty"`
+}
+
 type ExportPhoto struct {
 	Id          int       `json:"id"`
 	Title       string    `json:"title"`
@@ -185,6 +198,7 @@ type ExportPhoto struct {
 
 type ExportDataStructure struct {
 	People          []ImportPerson    `json:"people"`
+	Relations       []ExportRelation  `json:"relations"`
 	Heights         []ImportHeight    `json:"heights"`
 	Weights         []ImportWeight    `json:"weights"`
 	Milestones      []ExportMilestone `json:"milestones"`
@@ -195,6 +209,7 @@ type ExportDataStructure struct {
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
 	TotalPeople     int               `json:"total_people"`
+	TotalRelations  int               `json:"total_relations"`
 	TotalMilestones int               `json:"total_milestones"`
 	TotalTags       int               `json:"total_tags"`
 	TotalPhotos     int               `json:"total_photos,omitempty"`
@@ -386,6 +401,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	for _, person := range people {
 		personNames[person.Id] = person.Name
 	}
+
+	exportData.Relations = buildRelationExport(tx, people, personNames)
+
 	exportData.Activities = buildActivityExport(tx, familyId, personNames)
 	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=
 		countExportedActivities(exportData.Activities)
@@ -398,6 +416,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalHeights = len(heights)
 	exportData.TotalWeights = len(weights)
 	exportData.TotalPeople = len(people)
+	exportData.TotalRelations = len(exportData.Relations)
 	exportData.TotalMilestones = len(milestones)
 	exportData.TotalTags = len(tags)
 	exportData.TotalActivities = len(exportData.Activities)
@@ -408,6 +427,29 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalResults = resultCount
 
 	return exportData, nil
+}
+
+// buildRelationExport lists the edges whose endpoints are both people in this
+// export. An edge to someone in another family is left out, since the import
+// side has no record to reattach it to.
+func buildRelationExport(tx *vbolt.Tx, people []Person, personNames map[int]string) []ExportRelation {
+	rows := relationsAmong(tx, people)
+	result := make([]ExportRelation, 0, len(rows))
+	for _, row := range rows {
+		kind := row.Kind.exportName()
+		if kind == "" {
+			continue
+		}
+		result = append(result, ExportRelation{
+			Id:       row.Id,
+			FromId:   row.FromId,
+			ToId:     row.ToId,
+			Kind:     kind,
+			FromName: personNames[row.FromId],
+			ToName:   personNames[row.ToId],
+		})
+	}
+	return result
 }
 
 func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
