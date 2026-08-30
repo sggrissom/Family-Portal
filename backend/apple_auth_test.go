@@ -290,7 +290,7 @@ func TestAppleClientSecretClaims(t *testing.T) {
 	configureAppleForTest(t)
 
 	now := time.Now()
-	secret, err := appleWebConfig.clientSecret(now)
+	secret, err := appleWebConfig.clientSecret(appleWebConfig.ClientID, now)
 	if err != nil {
 		t.Fatalf("clientSecret: %v", err)
 	}
@@ -313,6 +313,20 @@ func TestAppleClientSecretClaims(t *testing.T) {
 	}
 	if claims["sub"] != "app.familyrecord.web" {
 		t.Errorf("sub = %v, want the services id", claims["sub"])
+	}
+
+	// The same team key also signs for the app's bundle ID, which is what the
+	// native exchange and the revoke call need.
+	iosSecret, err := appleWebConfig.clientSecret(appleIOSClientID, now)
+	if err != nil {
+		t.Fatalf("clientSecret(ios): %v", err)
+	}
+	iosParsed, _, err := jwt.NewParser().ParseUnverified(iosSecret, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("parse ios client secret: %v", err)
+	}
+	if sub := iosParsed.Claims.(jwt.MapClaims)["sub"]; sub != "app.familyrecord.ios" {
+		t.Errorf("sub = %v, want the bundle id", sub)
 	}
 	if claims["aud"] != appleIssuer {
 		t.Errorf("aud = %v, want %s", claims["aud"], appleIssuer)
@@ -711,7 +725,7 @@ func TestExchangeAppleCodeFailures(t *testing.T) {
 		appleTokenEndpoint = server.URL
 		defer func() { appleTokenEndpoint = original }()
 
-		if _, err := exchangeAppleCode("bad"); err == nil {
+		if _, err := exchangeAppleCode(appleWebConfig.ClientID, "bad", appleWebConfig.RedirectURL); err == nil {
 			t.Fatal("expected an error for a rejected exchange")
 		}
 	})
@@ -726,7 +740,7 @@ func TestExchangeAppleCodeFailures(t *testing.T) {
 		appleTokenEndpoint = server.URL
 		defer func() { appleTokenEndpoint = original }()
 
-		if _, err := exchangeAppleCode("code"); err == nil {
+		if _, err := exchangeAppleCode(appleWebConfig.ClientID, "code", appleWebConfig.RedirectURL); err == nil {
 			t.Fatal("a response with no id_token authenticates nobody")
 		}
 	})

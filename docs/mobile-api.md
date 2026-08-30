@@ -123,13 +123,24 @@ get the same envelope §2.1 returns.
 POST /api/login/apple/token
 Content-Type: application/json
 
-{"idToken": "<credential.identityToken as UTF-8>", "name": "Ada Lovelace"}
+{"idToken": "<credential.identityToken as UTF-8>",
+ "name": "Ada Lovelace",
+ "authorizationCode": "<credential.authorizationCode as UTF-8>"}
 ```
 
 The server verifies the signature against Apple's published keys, requires the
 issuer to be `https://appleid.apple.com`, and requires the audience to equal
 `APPLE_IOS_CLIENT_ID` — the app's bundle ID. A token minted for any other
 relying party is refused.
+
+`authorizationCode` is what makes account deletion revoke the user's Apple
+tokens, which App Store Review Guideline 5.1.1(v) requires. Send it on every
+sign-in — unlike `name`, Apple issues one each time. The server spends it for a
+refresh token and files that against the account; `/api/delete-account` later
+posts it to Apple's `/auth/revoke`. Sign-in has already succeeded by then, so a
+code that is missing, expired, or refused costs nothing but a log line, and the
+field is optional for an older build that does not send one. Such an account
+simply has no token to revoke until the user next signs in.
 
 Two things about `name`:
 

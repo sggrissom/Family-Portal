@@ -61,6 +61,10 @@ type AppleTokenLoginRequest struct {
 	// authorization, and never again. The native client forwards it here so a
 	// first-time account gets a real name.
 	Name string `json:"name"`
+	// Spent for a refresh token that account deletion can revoke, as App Store
+	// Review Guideline 5.1.1(v) requires. Optional: sign-in predates it, and an
+	// older build of the app does not send one.
+	AuthorizationCode string `json:"authorizationCode"`
 }
 
 type AppleTokenInfo struct {
@@ -148,13 +152,18 @@ func loadApplePrivateKey(keyPath string) (*ecdsa.PrivateKey, error) {
 // appleClientSecret mints the short-lived JWT Apple accepts in place of a
 // static client secret. Apple never issues one, so this is the only way to
 // authenticate the code exchange.
-func (c *appleOAuthConfig) clientSecret(now time.Time) (string, error) {
+//
+// clientID is a parameter rather than c.ClientID because the team's signing key
+// covers every client under it: the web Services ID and the app's bundle ID are
+// both signed here, and Apple checks that `sub` names the client the request is
+// for.
+func (c *appleOAuthConfig) clientSecret(clientID string, now time.Time) (string, error) {
 	claims := jwt.MapClaims{
 		"iss": c.TeamID,
 		"iat": now.Unix(),
 		"exp": now.Add(appleClientSecretLifetime).Unix(),
 		"aud": appleIssuer,
-		"sub": c.ClientID,
+		"sub": clientID,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
@@ -564,7 +573,7 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := exchangeAppleCode(code)
+	exchange, err := exchangeAppleCode(appleWebConfig.ClientID, code, appleWebConfig.RedirectURL)
 	if err != nil {
 		LogWarnWithRequest(r, LogCategoryAuth, "Apple code exchange failed", map[string]interface{}{
 			"error": err.Error(),
@@ -573,7 +582,7 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenInfo, err := verifyAppleIDToken(idToken)
+	tokenInfo, err := verifyAppleIDToken(exchange.IDToken)
 	if err != nil {
 		LogWarnWithRequest(r, LogCategoryAuth, "Apple identity token verification failed", map[string]interface{}{
 			"error": err.Error(),
@@ -609,6 +618,16 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The exchange above already spent the code, so the refresh token is in hand
+	// and only needs filing against the account it turned out to belong to.
+	if exchange.RefreshToken != "" {
+		now := time.Now()
+		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+			storeAppleRefreshTokenTx(tx, user.Id, appleWebConfig.ClientID, exchange.RefreshToken, now)
+			vbolt.TxCommit(tx)
+		})
+	}
+
 	LogInfoWithRequest(r, LogCategoryAuth, "Apple sign-in successful", map[string]interface{}{
 		"userId": user.Id,
 		"email":  redactEmail(user.Email),
@@ -621,18 +640,39 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 // reaching appleid.apple.com.
 var appleTokenEndpoint = appleTokenURL
 
-func exchangeAppleCode(code string) (string, error) {
-	secret, err := appleWebConfig.clientSecret(time.Now())
+// appleTokenExchange is what /auth/token gives back that outlives the request:
+// the identity token that says who signed in, and the refresh token that
+// account deletion later revokes.
+type appleTokenExchange struct {
+	IDToken      string
+	RefreshToken string
+}
+
+// redirectURI is empty for the native flow — a native client authorizes without
+// one, and Apple rejects the exchange if one it never saw is sent.
+func exchangeAppleCode(clientID, code, redirectURI string) (appleTokenExchange, error) {
+	var exchange appleTokenExchange
+
+	if appleWebConfig == nil {
+		return exchange, errors.New("Apple Sign In not configured")
+	}
+	if clientID == "" {
+		return exchange, errors.New("no Apple client id for the code exchange")
+	}
+
+	secret, err := appleWebConfig.clientSecret(clientID, time.Now())
 	if err != nil {
-		return "", fmt.Errorf("failed to sign client secret: %v", err)
+		return exchange, fmt.Errorf("failed to sign client secret: %v", err)
 	}
 
 	form := url.Values{
-		"client_id":     {appleWebConfig.ClientID},
+		"client_id":     {clientID},
 		"client_secret": {secret},
 		"code":          {code},
 		"grant_type":    {"authorization_code"},
-		"redirect_uri":  {appleWebConfig.RedirectURL},
+	}
+	if redirectURI != "" {
+		form.Set("redirect_uri", redirectURI)
 	}
 
 	resp, err := appleHTTPClient.PostForm(appleTokenEndpoint, form)
@@ -641,34 +681,37 @@ func exchangeAppleCode(code string) (string, error) {
 		if errors.As(err, &urlErr) {
 			err = urlErr.Err
 		}
-		return "", fmt.Errorf("token request failed: %v", err)
+		return exchange, fmt.Errorf("token request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", fmt.Errorf("failed to read token response: %v", err)
+		return exchange, fmt.Errorf("failed to read token response: %v", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("token request rejected: %s", strings.TrimSpace(string(body)))
+		return exchange, fmt.Errorf("token request rejected: %s", strings.TrimSpace(string(body)))
 	}
 
 	var payload struct {
-		IDToken string `json:"id_token"`
-		Error   string `json:"error"`
+		IDToken      string `json:"id_token"`
+		RefreshToken string `json:"refresh_token"`
+		Error        string `json:"error"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", fmt.Errorf("failed to decode token response: %v", err)
+		return exchange, fmt.Errorf("failed to decode token response: %v", err)
 	}
 	if payload.Error != "" {
-		return "", fmt.Errorf("token request rejected: %s", payload.Error)
+		return exchange, fmt.Errorf("token request rejected: %s", payload.Error)
 	}
 	if payload.IDToken == "" {
-		return "", errors.New("token response contained no identity token")
+		return exchange, errors.New("token response contained no identity token")
 	}
 
-	return payload.IDToken, nil
+	exchange.IDToken = payload.IDToken
+	exchange.RefreshToken = payload.RefreshToken
+	return exchange, nil
 }
 
 /* ---------- native flow ---------- */
@@ -719,6 +762,10 @@ func appleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(LoginResponse{Success: false, Error: "Failed to generate token"})
 		return
 	}
+
+	// The audience on the verified token names the client the code was issued
+	// to, which is the only client Apple will accept it back from.
+	captureAppleRefreshToken(r, user.Id, tokenInfo.Aud, req.AuthorizationCode, "")
 
 	LogInfoWithRequest(r, LogCategoryAuth, "Apple sign-in successful", map[string]interface{}{
 		"userId": user.Id,

@@ -77,6 +77,12 @@ func deleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Guideline 5.1.1(v) asks that an Apple account's tokens be revoked, and
+	// separately that deletion not be blocked. Revoking first leaves the token on
+	// file if this dies half way, so a retry still has something to spend; a
+	// failure is logged inside and the deletion below goes ahead regardless.
+	revokeAppleTokensForUser(r, user.Id)
+
 	var orphanedPhotos []Image
 	var destroyedFamilies []int
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
@@ -141,6 +147,7 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 	DeleteUserRefreshTokens(tx, user.Id)
 	deleteUserPasswordResetTokensTx(tx, user.Id)
 	deleteUserVerificationTokensTx(tx, user.Id)
+	deleteAppleRefreshTokenTx(tx, user.Id)
 
 	vbolt.Delete(tx, PasswdBkt, user.Id)
 	vbolt.Delete(tx, EmailBkt, user.Email)
