@@ -8,6 +8,7 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { personSubtitle } from "../../lib/routeHelpers";
+import { groupFamily } from "../../lib/familyGroups";
 import "./dashboard-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -46,6 +47,8 @@ interface DashboardPageProps {
 
 const DashboardPage = ({ user, data }: DashboardPageProps) => {
   const people = data.people || [];
+  const groups = groupFamily(people, data.relations || []);
+  let cardIndex = 0;
   return (
     <div className="dashboard-page">
       <div className="dashboard-header">
@@ -67,9 +70,16 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
               </a>
             </div>
           ) : (
-            <div className="people-grid">
-              {people.map((person, index) => (
-                <PersonCard key={person.id} person={person} index={index} />
+            <div className="people-groups">
+              {groups.map(group => (
+                <div key={group.key} className="people-group">
+                  {groups.length > 1 && <h3>{group.title}</h3>}
+                  <div className="people-grid">
+                    {group.people.map(person => (
+                      <PersonCard key={person.id} person={person} index={cardIndex++} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
