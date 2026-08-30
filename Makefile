@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy smoke e2e test test-frontend test-race test-coverage local typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke e2e test test-frontend test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -99,6 +99,20 @@ typecheck: check-css
 local:
 	go run family/local
 
+# ── development data ───────────────────────────────────────────────────────────
+# Fill a development database with a large family, a set of accounts whose
+# password is printed at the end of the run, and the links that make
+# cross-family permissions visible. Both targets need `make local` stopped,
+# because bolt holds an exclusive lock on the database file.
+#
+# `seed` refuses a database that already has accounts. `seed-fresh` deletes
+# .serve/db.bolt first, which is the one to reach for.
+seed:
+	go run ./cmd/seed
+
+seed-fresh:
+	go run ./cmd/seed -reset
+
 # ── code quality ───────────────────────────────────────────────────────────────
 
 check-css:
@@ -109,6 +123,9 @@ lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
 	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e
+	# cmd/seed and the seeder it calls are !release-only, so they need the
+	# untagged pass to be vetted at all.
+	go vet ./cmd/seed
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following Go files need formatting:"; \

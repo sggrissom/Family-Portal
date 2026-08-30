@@ -239,3 +239,29 @@ path, a linked family can never be chosen as an acting family for a write.
 Chat being household-only is a design decision, not an oversight: the link
 model shares *people*, and a message belongs to a family rather than to any
 person.
+
+---
+
+## 7. Seeing it in a browser
+
+`make seed-fresh` builds a development database shaped to make every rule above
+visible from the login screen. The README lists the accounts; what matters here
+is which claim each one demonstrates:
+
+| Sign in as | Demonstrates |
+| --- | --- |
+| `grandpa@example.test` | a link carrying every scope, in both directions — he sees all five children, their measurements and their activities, and cannot write a word |
+| `nana@example.test` | scopes are independent: milestones and photos, no growth, no activities. And roster rows are per person — Luca and Nora were never shared, so for her they don't exist |
+| `sitter@example.test` | a household membership below admin. Read-only inside someone else's family |
+| `nanny@example.test` | the same, at contribute. She can add a measurement; the sitter gets `Person not found or not in your family` for the identical call |
+| `aunt@example.test` | a pending link grants nothing |
+| `outsider@example.test` | no link, no membership, empty everything |
+
+One thing the seed had to work around is worth recording, because it is not
+obvious from §2. A role below admin only has an effect on a family that is
+**not** the user's primary one. `CanAccessFamily` ends with a fallback on
+`user.FamilyId`, which grants admin unconditionally, so a `Role: AccessView`
+membership row on a user's own household is dead weight. The sitter and the
+nanny therefore each own an otherwise-empty household and hold their reduced
+membership in the Riveras as a secondary one. `TestSeedIssuesSubAdminMemberships`
+pins that down.

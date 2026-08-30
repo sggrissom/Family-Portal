@@ -105,6 +105,7 @@ start when any required variable is missing (`backend/config_check.go`).
 | command | what it does |
 | --- | --- |
 | `make local` | dev server with frontend watch and TS binding regeneration |
+| `make seed-fresh` | replace the dev database with a large demo family (see below) |
 | `make build` | frontend bundle + release binary into `build/` |
 | `make test` | Go unit tests, verbose |
 | `make test-race` | the same under the race detector |
@@ -120,6 +121,45 @@ start when any required variable is missing (`backend/config_check.go`).
 Run `npm ci` before `make lint` or `make typecheck`. Without `node_modules`,
 `npx` fetches the latest Prettier and TypeScript instead of the pinned versions,
 and local results stop matching CI.
+
+## Development data
+
+A fresh database is an empty site, and clicking a realistic family into
+existence takes an afternoon. `make seed-fresh` deletes `.serve/db.bolt` and
+rebuilds it with one:
+
+```bash
+make seed-fresh    # stop `make local` first — bolt holds an exclusive lock
+```
+
+That writes seven households, fifteen people, roughly 180 milestones and 430
+measurements, three activity seasons with results, a family chat, and the links
+and roster rows that make cross-family permissions observable. Every account
+below signs in with the password **`familytest123`**:
+
+| account | who they are | what they can reach |
+| --- | --- | --- |
+| `dad@example.test` | Marcus Rivera | admin of the Rivera family, and user 1, so the only site administrator |
+| `mom@example.test` | Priya Rivera | admin of the Rivera family |
+| `teen@example.test` | Sofia Rivera | admin — the eldest child with her own login |
+| `nanny@example.test` | Dana Brooks | **contribute** in the Rivera family; her own household is separate |
+| `sitter@example.test` | Theo Nakamura | **view** in the Rivera family; read-only |
+| `grandpa@example.test` | Robert Rivera | linked household, every scope, both directions |
+| `grandma@example.test` | Eleanor Rivera | the same household as Robert |
+| `nana@example.test` | Asha Chandra | linked household, **no growth or activities**, and only three of the five children shared |
+| `aunt@example.test` | Camila Rivera-Ford | a link that was offered and never accepted, so she sees nothing |
+| `outsider@example.test` | Jordan Vale | no links at all — the isolation case |
+
+The last five rows are the point of the dataset: it is hard to tell whether
+`docs/permissions.md` is being honoured until two accounts are looking at the
+same child and seeing different things. `backend/seed_test.go` asserts each of
+those claims, so the demo data cannot drift away from demonstrating them.
+
+`make seed` does the same without deleting anything, and refuses a database that
+already holds accounts. `-scale 2` records measurements twice as often;
+`-password` and `-db` override the obvious things. The seeder
+(`backend/seed.go`) and its command (`cmd/seed`) are both excluded from release
+builds, so a known password can never be compiled into a deployable binary.
 
 ## Testing
 
