@@ -6,6 +6,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
+import { toDateInputValue } from "../../lib/dateUtils";
 import { PersonSharingSection } from "../../components/PersonSharing";
 import { PersonRelationsSection } from "../../components/PersonRelations";
 import "./add-person-styles";
@@ -69,10 +70,7 @@ export function view(
     form.name = data.person.name;
     form.gender = data.person.gender;
     form.isPregnancy = data.person.isPregnancy;
-    if (data.person.birthday) {
-      const d = new Date(data.person.birthday);
-      form.birthdate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    }
+    form.birthdate = toDateInputValue(data.person.birthday);
   }
 
   return (
