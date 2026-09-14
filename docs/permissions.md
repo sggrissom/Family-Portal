@@ -251,7 +251,7 @@ is which claim each one demonstrates:
 | Sign in as | Demonstrates |
 | --- | --- |
 | `grandpa@example.test` | a link carrying every scope, in both directions — he sees all five children, their measurements and their activities, and cannot write a word |
-| `nana@example.test` | scopes are independent: milestones and photos, no growth, no activities. And roster rows are per person — Luca and Nora were never shared, so for her they don't exist |
+| `nana@example.test` | scopes are independent: milestones and photos, no growth, no activities. And roster rows are per person — Rowan and Maeve were never shared, so for her they don't exist |
 | `sitter@example.test` | a household membership below admin. Read-only inside someone else's family |
 | `nanny@example.test` | the same, at contribute. She can add a measurement; the sitter gets `Person not found or not in your family` for the identical call |
 | `aunt@example.test` | a pending link grants nothing |
@@ -263,5 +263,5 @@ obvious from §2. A role below admin only has an effect on a family that is
 `user.FamilyId`, which grants admin unconditionally, so a `Role: AccessView`
 membership row on a user's own household is dead weight. The sitter and the
 nanny therefore each own an otherwise-empty household and hold their reduced
-membership in the Riveras as a secondary one. `TestSeedIssuesSubAdminMemberships`
+membership in the Whitfields as a secondary one. `TestSeedIssuesSubAdminMemberships`
 pins that down.

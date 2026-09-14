@@ -36,6 +36,13 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
   const menuRef = vlens.ref(headerData, "isMenuOpen");
   const currentAuth = auth.getAuth();
   const isAuthenticated = currentAuth && currentAuth.id > 0;
+  const navLinksClass = [
+    "nav-links",
+    isAuthenticated ? "nav-links-account" : "nav-links-guest",
+    vlens.refGet(menuRef) ? "" : "hidden",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <header className="site-header">
@@ -66,7 +73,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
             {vlens.refGet(menuRef) ? "×" : "☰"}
           </span>
         </button>
-        <ul className={vlens.refGet(menuRef) ? "nav-links" : "nav-links hidden"} id="navLinks">
+        <ul className={navLinksClass} id="navLinks">
           {isAuthenticated ? (
             <>
               <li className="menu-account">

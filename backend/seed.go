@@ -12,7 +12,7 @@ package backend
 // carries a default.
 //
 // The shape of the data is chosen to exercise both access mechanisms described
-// in docs/permissions.md at once: memberships inside the Rivera household
+// in docs/permissions.md at once: memberships inside the Whitfield household
 // (including the sub-admin roles nothing in the UI currently issues), and
 // family links outward to two sets of grandparents with deliberately different
 // scopes, one of them still pending.
@@ -529,7 +529,7 @@ type milestoneTemplate struct {
 var childMilestones = []milestoneTemplate{
 	{0, 2, "First real smile", "development", []string{"Firsts"}},
 	{0, 4, "Rolled over unassisted", "development", []string{"Firsts"}},
-	{0, 6, "First solid food — sweet potato, mostly on the wall", "first", []string{"Firsts", "Funny"}},
+	{0, 6, "First solid food. sweet potato, mostly on the wall", "first", []string{"Firsts", "Funny"}},
 	{0, 9, "Crawled the length of the living room", "development", []string{"Firsts"}},
 	{0, 11, "Said \"mama\" and meant it", "first", []string{"Firsts"}},
 	{1, 0, "First birthday, first cake, first sugar crash", "achievement", []string{"Firsts", "Funny"}},
@@ -540,7 +540,7 @@ var childMilestones = []milestoneTemplate{
 	{2, 4, "Out of diapers", "achievement", nil},
 	{2, 9, "Memorized every dinosaur name, corrects adults", "behavior", []string{"Funny"}},
 	{3, 0, "First day of preschool", "first", []string{"School", "Firsts"}},
-	{3, 4, "First stitches — coffee table, one to nothing", "health", nil},
+	{3, 4, "First stitches. Fell into coffee table", "health", nil},
 	{3, 8, "Rode a balance bike the length of the driveway", "achievement", []string{"Sports"}},
 	{4, 0, "Wrote own name legibly", "development", []string{"School"}},
 	{4, 6, "First time seeing the ocean", "first", []string{"Travel", "Firsts"}},
@@ -548,14 +548,14 @@ var childMilestones = []milestoneTemplate{
 	{5, 4, "Lost first tooth", "health", []string{"Firsts"}},
 	{5, 10, "Swam a full length without floaties", "achievement", []string{"Sports"}},
 	{6, 0, "Read a chapter book alone, start to finish", "achievement", []string{"School"}},
-	{6, 8, "First soccer goal, celebrated for a week", "achievement", []string{"Sports"}},
+	{6, 8, "First goal, celebrated for a week", "achievement", []string{"Sports"}},
 	{7, 0, "Broke an arm on the monkey bars", "health", nil},
 	{7, 6, "Joined the school choir", "achievement", []string{"School"}},
 	{8, 0, "Flew on a plane, own seat, own snacks", "first", []string{"Travel", "Firsts"}},
 	{8, 8, "Won the class spelling bee", "achievement", []string{"School"}},
 	{9, 0, "First sleepover away from home", "first", []string{"Firsts"}},
 	{9, 6, "Started piano lessons", "development", []string{"School"}},
-	{10, 0, "Double digits — birthday at the trampoline park", "achievement", nil},
+	{10, 0, "birthday at the trampoline park", "achievement", nil},
 	{10, 6, "Cooked dinner for the family, unsupervised, edible", "achievement", []string{"Funny"}},
 	{11, 0, "Made the travel team", "achievement", []string{"Sports"}},
 	{11, 6, "Braces on", "health", nil},
@@ -565,7 +565,7 @@ var childMilestones = []milestoneTemplate{
 	{13, 6, "First solo trip across town on the bus", "first", []string{"Firsts"}},
 	{14, 0, "Started high school", "first", []string{"School", "Firsts"}},
 	{14, 8, "Braces off", "health", nil},
-	{15, 0, "First job — scooping ice cream on weekends", "first", []string{"Firsts"}},
+	{15, 0, "First job at ice cream shop", "first", []string{"Firsts"}},
 	{15, 6, "Ran a 5K under 25 minutes", "achievement", []string{"Sports"}},
 	{16, 0, "Learner's permit", "achievement", []string{"Firsts"}},
 	{16, 6, "Drove the family to dinner, nobody gripped the door", "behavior", []string{"Funny"}},
@@ -815,105 +815,105 @@ func (s *seeder) crossCountrySeason(familyId int, runner Person) {
 
 func (s *seeder) build(scale int) {
 	// On an empty database the first account created is user 1, which
-	// backend/admin.go treats as the site administrator. Marcus has to come
+	// backend/admin.go treats as the site administrator. Owen has to come
 	// first for the admin pages to be reachable at all.
-	marcusAccess := "admin"
+	ownerAccess := "admin"
 	if GetUser(s.tx, AdminUserId).Id == 0 {
-		marcusAccess = "admin (site admin, user 1)"
+		ownerAccess = "admin (site admin, user 1)"
 	}
 
-	dad, riveras := s.owner("Marcus Rivera", s.email("dad"), "Rivera Family", marcusAccess)
-	mom := s.member("Priya Rivera", s.email("mom"), riveras, "admin")
-	teen := s.member("Sofia Rivera", s.email("teen"), riveras, "admin (the eldest child's own login)")
-	nanny := s.guest("Dana Brooks", s.email("nanny"), "Brooks Household", riveras, AccessContribute,
-		"contribute in the Riveras — adds records, cannot manage the family")
-	s.guest("Theo Nakamura", s.email("sitter"), "Nakamura Household", riveras, AccessView,
-		"view in the Riveras — read-only")
+	dad, whitfields := s.owner("Owen Whitfield", s.email("dad"), "Whitfield Family", ownerAccess)
+	mom := s.member("Meera Whitfield", s.email("mom"), whitfields, "admin")
+	teen := s.member("Clara Whitfield", s.email("teen"), whitfields, "admin (the eldest child's own login)")
+	nanny := s.guest("Dana Brooks", s.email("nanny"), "Brooks Household", whitfields, AccessContribute,
+		"contribute in the Whitfields — adds records, cannot manage the family")
+	s.guest("Theo Nakamura", s.email("sitter"), "Nakamura Household", whitfields, AccessView,
+		"view in the Whitfields — read-only")
 
-	grandpa, elders := s.owner("Robert Rivera", s.email("grandpa"), "Rivera Grandparents", "admin")
-	grandma := s.member("Eleanor Rivera", s.email("grandma"), elders, "admin")
+	grandpa, elders := s.owner("Gerald Whitfield", s.email("grandpa"), "Whitfield Grandparents", "admin")
+	grandma := s.member("Rosalind Whitfield", s.email("grandma"), elders, "admin")
 
-	nana, chandras := s.owner("Asha Chandra", s.email("nana"), "Chandra Grandparents", "admin")
-	aunt, fords := s.owner("Camila Rivera-Ford", s.email("aunt"), "Ford Family", "admin (link to the Riveras is still pending)")
+	nana, nayars := s.owner("Sunita Nayar", s.email("nana"), "Nayar Grandparents", "admin")
+	aunt, coles := s.owner("Bridget Whitfield-Cole", s.email("aunt"), "Cole Family", "admin (link to the Whitfields is still pending)")
 	s.owner("Jordan Vale", s.email("outsider"), "Vale Family", "admin (no links at all — the isolation case)")
 
 	// People ------------------------------------------------------------------
-	marcus := s.person(riveras.Id, "Marcus Rivera", Male, "1985-03-14")
-	priya := s.person(riveras.Id, "Priya Rivera", Female, "1987-07-02")
-	sofia := s.person(riveras.Id, "Sofia Rivera", Female, "2009-05-21")
-	mateo := s.person(riveras.Id, "Mateo Rivera", Male, "2012-01-09")
-	ines := s.person(riveras.Id, "Ines Rivera", Female, "2015-08-30")
-	luca := s.person(riveras.Id, "Luca Rivera", Male, "2019-11-12")
-	nora := s.person(riveras.Id, "Nora Rivera", Female, "2023-04-05")
-	baby := s.pregnancy(riveras.Id, "Baby Rivera", s.now.AddDate(0, 4, 0).Format("2006-01-02"))
-	kids := []Person{sofia, mateo, ines, luca, nora}
+	owen := s.person(whitfields.Id, "Owen Whitfield", Male, "1985-03-14")
+	meera := s.person(whitfields.Id, "Meera Whitfield", Female, "1987-07-02")
+	clara := s.person(whitfields.Id, "Clara Whitfield", Female, "2009-05-21")
+	julian := s.person(whitfields.Id, "Julian Whitfield", Male, "2012-01-09")
+	esme := s.person(whitfields.Id, "Esme Whitfield", Female, "2015-08-30")
+	rowan := s.person(whitfields.Id, "Rowan Whitfield", Male, "2019-11-12")
+	maeve := s.person(whitfields.Id, "Maeve Whitfield", Female, "2023-04-05")
+	baby := s.pregnancy(whitfields.Id, "Baby Whitfield", s.now.AddDate(0, 4, 0).Format("2006-01-02"))
+	kids := []Person{clara, julian, esme, rowan, maeve}
 
-	robert := s.person(elders.Id, "Robert Rivera", Male, "1957-02-11")
-	eleanor := s.person(elders.Id, "Eleanor Rivera", Female, "1959-09-27")
+	gerald := s.person(elders.Id, "Gerald Whitfield", Male, "1957-02-11")
+	rosalind := s.person(elders.Id, "Rosalind Whitfield", Female, "1959-09-27")
 
-	asha := s.person(chandras.Id, "Asha Chandra", Female, "1961-06-18")
-	vikram := s.person(chandras.Id, "Vikram Chandra", Male, "1958-12-03")
+	sunita := s.person(nayars.Id, "Sunita Nayar", Female, "1961-06-18")
+	arjun := s.person(nayars.Id, "Arjun Nayar", Male, "1958-12-03")
 
-	camila := s.person(fords.Id, "Camila Rivera-Ford", Female, "1990-10-08")
-	jesse := s.person(fords.Id, "Jesse Ford", Male, "1989-04-22")
-	theoFord := s.person(fords.Id, "Theo Ford", Male, "2018-06-14")
+	bridget := s.person(coles.Id, "Bridget Whitfield-Cole", Female, "1990-10-08")
+	jesse := s.person(coles.Id, "Jesse Cole", Male, "1989-04-22")
+	samCole := s.person(coles.Id, "Sam Cole", Male, "2018-06-14")
 
-	s.represent(dad, marcus)
-	s.represent(mom, priya)
-	s.represent(teen, sofia)
-	s.represent(grandpa, robert)
-	s.represent(grandma, eleanor)
-	s.represent(nana, asha)
-	s.represent(aunt, camila)
+	s.represent(dad, owen)
+	s.represent(mom, meera)
+	s.represent(teen, clara)
+	s.represent(grandpa, gerald)
+	s.represent(grandma, rosalind)
+	s.represent(nana, sunita)
+	s.represent(aunt, bridget)
 
 	// Relations. The grandparent edges cross family boundaries, which is what
 	// makes RelationLabel produce "grandmother" rather than nothing.
-	s.relate(marcus, priya, RelationPartner)
-	s.parents(marcus, priya, sofia, mateo, ines, luca, nora, baby)
+	s.relate(owen, meera, RelationPartner)
+	s.parents(owen, meera, clara, julian, esme, rowan, maeve, baby)
 
-	s.relate(robert, eleanor, RelationPartner)
-	s.parents(robert, eleanor, marcus, camila)
+	s.relate(gerald, rosalind, RelationPartner)
+	s.parents(gerald, rosalind, owen, bridget)
 
-	s.relate(asha, vikram, RelationPartner)
-	s.parents(vikram, asha, priya)
+	s.relate(sunita, arjun, RelationPartner)
+	s.parents(arjun, sunita, meera)
 
-	s.relate(camila, jesse, RelationPartner)
-	s.parents(jesse, camila, theoFord)
+	s.relate(bridget, jesse, RelationPartner)
+	s.parents(jesse, bridget, samCole)
 
 	// Links and sharing -------------------------------------------------------
 	// The paternal grandparents see everything, in both directions.
-	s.link(riveras, elders, "grandparents", LinkScopes{
+	s.link(whitfields, elders, "grandparents", LinkScopes{
 		People: true, Milestones: true, Photos: true, Growth: true, Activities: true,
 	}, LinkAccepted)
-	s.share(marcus, elders, "Son")
-	s.share(priya, elders, "Daughter-in-law")
-	s.share(sofia, elders, "Granddaughter")
-	s.share(mateo, elders, "Grandson")
-	s.share(ines, elders, "Granddaughter")
-	s.share(luca, elders, "Grandson")
-	s.share(nora, elders, "Granddaughter")
+	s.share(owen, elders, "Son")
+	s.share(meera, elders, "Daughter-in-law")
+	s.share(clara, elders, "Granddaughter")
+	s.share(julian, elders, "Grandson")
+	s.share(esme, elders, "Granddaughter")
+	s.share(rowan, elders, "Grandson")
+	s.share(maeve, elders, "Granddaughter")
 	s.share(baby, elders, "Grandchild on the way")
 
-	s.link(elders, riveras, "parents", LinkScopes{People: true, Photos: true}, LinkAccepted)
-	s.share(robert, riveras, "Grandpa Rivera")
-	s.share(eleanor, riveras, "Grandma Rivera")
+	s.link(elders, whitfields, "parents", LinkScopes{People: true, Photos: true}, LinkAccepted)
+	s.share(gerald, whitfields, "Grandpa Whitfield")
+	s.share(rosalind, whitfields, "Grandma Whitfield")
 
 	// The maternal grandparents get a narrower link: no growth, no activities,
 	// and only three of the five children on the roster.
-	s.link(riveras, chandras, "grandparents", LinkScopes{
+	s.link(whitfields, nayars, "grandparents", LinkScopes{
 		People: true, Milestones: true, Photos: true,
 	}, LinkAccepted)
-	s.share(priya, chandras, "Daughter")
-	s.share(sofia, chandras, "Granddaughter")
-	s.share(mateo, chandras, "Grandson")
-	s.share(ines, chandras, "Granddaughter")
+	s.share(meera, nayars, "Daughter")
+	s.share(clara, nayars, "Granddaughter")
+	s.share(julian, nayars, "Grandson")
+	s.share(esme, nayars, "Granddaughter")
 
-	s.link(chandras, riveras, "parents", LinkScopes{People: true}, LinkAccepted)
-	s.share(asha, riveras, "Nana")
-	s.share(vikram, riveras, "Grandpa Chandra")
+	s.link(nayars, whitfields, "parents", LinkScopes{People: true}, LinkAccepted)
+	s.share(sunita, whitfields, "Nana")
+	s.share(arjun, whitfields, "Grandpa Nayar")
 
-	// Camila's link was offered but never accepted, so it grants nothing.
-	s.link(riveras, fords, "aunt and uncle", LinkScopes{
+	// Bridget's link was offered but never accepted, so it grants nothing.
+	s.link(whitfields, coles, "aunt and uncle", LinkScopes{
 		People: true, Milestones: true, Photos: true,
 	}, LinkPending)
 
@@ -927,7 +927,7 @@ func (s *seeder) build(scale int) {
 		{"Funny", "#a855f7"},
 		{"Firsts", "#ec4899"},
 	} {
-		tags[spec.name] = s.tag(riveras.Id, spec.name, spec.color)
+		tags[spec.name] = s.tag(whitfields.Id, spec.name, spec.color)
 	}
 	elderTags := map[string]Tag{
 		"Visits":    s.tag(elders.Id, "Visits", "#0ea5e9"),
@@ -938,25 +938,25 @@ func (s *seeder) build(scale int) {
 		s.childMilestones(kid, tags)
 		s.growthSeries(kid, scale)
 	}
-	s.growthSeries(marcus, scale)
-	s.growthSeries(priya, scale)
-	s.growthSeries(robert, scale)
-	s.growthSeries(eleanor, scale)
-	s.growthSeries(theoFord, scale)
-	s.childMilestones(theoFord, nil)
+	s.growthSeries(owen, scale)
+	s.growthSeries(meera, scale)
+	s.growthSeries(gerald, scale)
+	s.growthSeries(rosalind, scale)
+	s.growthSeries(samCole, scale)
+	s.childMilestones(samCole, nil)
 
-	s.milestone(marcus, s.now.AddDate(-2, -3, 0), "Ran the Springfield half marathon", "achievement", tags["Sports"])
-	s.milestone(marcus, s.now.AddDate(-1, -1, 0), "Started the new job downtown", "achievement")
-	s.milestone(priya, s.now.AddDate(-3, 0, 0), "Finished the master's degree, finally", "achievement", tags["School"])
-	s.milestone(priya, s.now.AddDate(0, -5, 0), "Announced the pregnancy at Sunday dinner", "first", tags["Firsts"])
+	s.milestone(owen, s.now.AddDate(-2, -3, 0), "Ran the Springfield half marathon", "achievement", tags["Sports"])
+	s.milestone(owen, s.now.AddDate(-1, -1, 0), "Started the new job downtown", "achievement")
+	s.milestone(meera, s.now.AddDate(-3, 0, 0), "Finished the master's degree, finally", "achievement", tags["School"])
+	s.milestone(meera, s.now.AddDate(0, -5, 0), "Announced the pregnancy at Sunday dinner", "first", tags["Firsts"])
 
-	s.milestone(robert, s.now.AddDate(-1, -6, 0), "Retired after 38 years", "achievement", elderTags["Keepsakes"])
-	s.milestone(eleanor, s.now.AddDate(0, -4, 0), "Drove out to see all five grandchildren in one weekend", "first", elderTags["Visits"])
+	s.milestone(gerald, s.now.AddDate(-1, -6, 0), "Retired after 38 years", "achievement", elderTags["Keepsakes"])
+	s.milestone(rosalind, s.now.AddDate(0, -4, 0), "Drove out to see all five grandchildren in one weekend", "first", elderTags["Visits"])
 
 	// Activities --------------------------------------------------------------
-	s.danceSeason(riveras.Id, ines)
-	s.soccerSeason(riveras.Id, mateo)
-	s.crossCountrySeason(riveras.Id, sofia)
+	s.danceSeason(whitfields.Id, esme)
+	s.soccerSeason(whitfields.Id, julian)
+	s.crossCountrySeason(whitfields.Id, clara)
 
 	// Chat --------------------------------------------------------------------
 	transcript := []struct {
@@ -964,12 +964,12 @@ func (s *seeder) build(scale int) {
 		hoursAgo int
 		content  string
 	}{
-		{mom, 96, "Reminder that Ines has dress rehearsal Thursday at 5, not 6."},
-		{dad, 95, "Noted. I can take her if you get Mateo to practice."},
+		{mom, 96, "Reminder that Esme has dress rehearsal Thursday at 5, not 6."},
+		{dad, 95, "Noted. I can take her if you get Julian to practice."},
 		{mom, 94, "Deal."},
 		{teen, 80, "can someone sign my permission slip before friday"},
 		{dad, 79, "Leave it on the counter."},
-		{nanny, 52, "Nora skipped her nap but was cheerful about it. Snack at 3, no dinner yet."},
+		{nanny, 52, "Maeve skipped her nap but was cheerful about it. Snack at 3, no dinner yet."},
 		{mom, 51, "Thank you! We'll be back by 6."},
 		{teen, 40, "21:34 at the invitational 🎉"},
 		{dad, 39, "That's a PR by 40 seconds. Very proud of you."},
@@ -977,9 +977,9 @@ func (s *seeder) build(scale int) {
 		{dad, 20, "Grandma and Grandpa are coming the weekend after next. Two nights."},
 		{teen, 19, "am i giving up my room again"},
 		{dad, 19, "You are."},
-		{mom, 6, "Luca lost a tooth at breakfast and has told four separate people about it."},
+		{mom, 6, "Rowan lost a tooth at breakfast and has told four separate people about it."},
 	}
 	for _, line := range transcript {
-		s.chat(riveras.Id, line.user, s.now.Add(-time.Duration(line.hoursAgo)*time.Hour), line.content)
+		s.chat(whitfields.Id, line.user, s.now.Add(-time.Duration(line.hoursAgo)*time.Hour), line.content)
 	}
 }

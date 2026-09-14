@@ -1561,6 +1561,26 @@ block(`
 `);
 
 block(`
+.nav-links-guest {
+  left: auto;
+  width: max-content;
+  min-width: 200px;
+  max-width: calc(100vw - 32px);
+  gap: 2px;
+  padding: 8px;
+}
+`);
+
+block(`
+.nav-links-guest a {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+`);
+
+block(`
 .relation-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

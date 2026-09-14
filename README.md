@@ -139,15 +139,15 @@ below signs in with the password **`family123`**:
 
 | account | who they are | what they can reach |
 | --- | --- | --- |
-| `dad@example.test` | Marcus Rivera | admin of the Rivera family, and user 1, so the only site administrator |
-| `mom@example.test` | Priya Rivera | admin of the Rivera family |
-| `teen@example.test` | Sofia Rivera | admin — the eldest child with her own login |
-| `nanny@example.test` | Dana Brooks | **contribute** in the Rivera family; her own household is separate |
-| `sitter@example.test` | Theo Nakamura | **view** in the Rivera family; read-only |
-| `grandpa@example.test` | Robert Rivera | linked household, every scope, both directions |
-| `grandma@example.test` | Eleanor Rivera | the same household as Robert |
-| `nana@example.test` | Asha Chandra | linked household, **no growth or activities**, and only three of the five children shared |
-| `aunt@example.test` | Camila Rivera-Ford | a link that was offered and never accepted, so she sees nothing |
+| `dad@example.test` | Owen Whitfield | admin of the Whitfield family, and user 1, so the only site administrator |
+| `mom@example.test` | Meera Whitfield | admin of the Whitfield family |
+| `teen@example.test` | Clara Whitfield | admin — the eldest child with her own login |
+| `nanny@example.test` | Dana Brooks | **contribute** in the Whitfield family; her own household is separate |
+| `sitter@example.test` | Theo Nakamura | **view** in the Whitfield family; read-only |
+| `grandpa@example.test` | Gerald Whitfield | linked household, every scope, both directions |
+| `grandma@example.test` | Rosalind Whitfield | the same household as Gerald |
+| `nana@example.test` | Sunita Nayar | linked household, **no growth or activities**, and only three of the five children shared |
+| `aunt@example.test` | Bridget Whitfield-Cole | a link that was offered and never accepted, so she sees nothing |
 | `outsider@example.test` | Jordan Vale | no links at all — the isolation case |
 
 The last five rows are the point of the dataset: it is hard to tell whether

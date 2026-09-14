@@ -114,34 +114,34 @@ func TestSeedIssuesSubAdminMemberships(t *testing.T) {
 			user := seedUser(t, tx, want.email)
 			membership, found := FindMembership(tx, user.Id, dad.FamilyId)
 			if !found {
-				t.Errorf("%s has no membership in the Rivera family", want.email)
+				t.Errorf("%s has no membership in the Whitfield family", want.email)
 				continue
 			}
 			if membership.Role != want.role {
-				t.Errorf("%s has role %d in the Rivera family, want %d", want.email, membership.Role, want.role)
+				t.Errorf("%s has role %d in the Whitfield family, want %d", want.email, membership.Role, want.role)
 			}
 		}
 
-		// A guest's reduced role only bites because the Rivera family is not
+		// A guest's reduced role only bites because the Whitfield family is not
 		// their primary one; CanAccessFamily grants admin on a user's own
 		// household whatever the membership row says.
 		sitter := seedUser(t, tx, "sitter@example.test")
 		if sitter.FamilyId == dad.FamilyId {
-			t.Fatal("the read-only guest's primary family is the Rivera family, which would grant them admin")
+			t.Fatal("the read-only guest's primary family is the Whitfield family, which would grant them admin")
 		}
 		if !CanAccessFamily(tx, sitter, dad.FamilyId, AccessView) {
-			t.Error("the read-only guest cannot view the Rivera family")
+			t.Error("the read-only guest cannot view the Whitfield family")
 		}
 		if CanAccessFamily(tx, sitter, dad.FamilyId, AccessContribute) {
-			t.Error("the read-only guest can contribute to the Rivera family")
+			t.Error("the read-only guest can contribute to the Whitfield family")
 		}
 
 		nanny := seedUser(t, tx, "nanny@example.test")
 		if !CanAccessFamily(tx, nanny, dad.FamilyId, AccessContribute) {
-			t.Error("the contributing guest cannot contribute to the Rivera family")
+			t.Error("the contributing guest cannot contribute to the Whitfield family")
 		}
 		if CanAccessFamily(tx, nanny, dad.FamilyId, AccessAdmin) {
-			t.Error("the contributing guest has admin on the Rivera family")
+			t.Error("the contributing guest has admin on the Whitfield family")
 		}
 	})
 }
@@ -155,37 +155,37 @@ func TestSeedLinkScopesDifferByGrandparent(t *testing.T) {
 		grandpa := seedUser(t, tx, "grandpa@example.test")
 		nana := seedUser(t, tx, "nana@example.test")
 
-		sofia := seedPerson(t, tx, dad.FamilyId, "Sofia Rivera")
-		luca := seedPerson(t, tx, dad.FamilyId, "Luca Rivera")
+		clara := seedPerson(t, tx, dad.FamilyId, "Clara Whitfield")
+		rowan := seedPerson(t, tx, dad.FamilyId, "Rowan Whitfield")
 
 		// The paternal link carries every scope.
 		for _, scope := range []LinkScope{ScopePeople, ScopeMilestones, ScopeGrowth, ScopeActivities, ScopePhotos} {
-			if !CanAccessPerson(tx, grandpa, sofia, scope, AccessView) {
-				t.Errorf("grandpa cannot view Sofia through scope %d", scope)
+			if !CanAccessPerson(tx, grandpa, clara, scope, AccessView) {
+				t.Errorf("grandpa cannot view Clara through scope %d", scope)
 			}
 		}
-		if !CanAccessPerson(tx, grandpa, luca, ScopeGrowth, AccessView) {
-			t.Error("grandpa cannot view Luca's growth")
+		if !CanAccessPerson(tx, grandpa, rowan, ScopeGrowth, AccessView) {
+			t.Error("grandpa cannot view Rowan's growth")
 		}
 
 		// The maternal link carries people, milestones, and photos only.
-		if !CanAccessPerson(tx, nana, sofia, ScopeMilestones, AccessView) {
-			t.Error("nana cannot see Sofia's milestones")
+		if !CanAccessPerson(tx, nana, clara, ScopeMilestones, AccessView) {
+			t.Error("nana cannot see Clara's milestones")
 		}
-		if CanAccessPerson(tx, nana, sofia, ScopeGrowth, AccessView) {
-			t.Error("nana can see Sofia's growth, but the link carries no growth scope")
+		if CanAccessPerson(tx, nana, clara, ScopeGrowth, AccessView) {
+			t.Error("nana can see Clara's growth, but the link carries no growth scope")
 		}
-		if CanAccessPerson(tx, nana, sofia, ScopeActivities, AccessView) {
-			t.Error("nana can see Sofia's activities, but the link carries no activities scope")
+		if CanAccessPerson(tx, nana, clara, ScopeActivities, AccessView) {
+			t.Error("nana can see Clara's activities, but the link carries no activities scope")
 		}
 
-		// Luca was never shared onto the Chandra roster.
-		if CanAccessPerson(tx, nana, luca, ScopePeople, AccessView) {
-			t.Error("nana can see Luca, who was never shared with her")
+		// Rowan was never shared onto the Nayar roster.
+		if CanAccessPerson(tx, nana, rowan, ScopePeople, AccessView) {
+			t.Error("nana can see Rowan, who was never shared with her")
 		}
 
 		// A link is view-only and never reaches the household itself.
-		if CanAccessPerson(tx, grandpa, sofia, ScopeGrowth, AccessContribute) {
+		if CanAccessPerson(tx, grandpa, clara, ScopeGrowth, AccessContribute) {
 			t.Error("a link granted write access")
 		}
 		if CanAccessFamily(tx, grandpa, dad.FamilyId, AccessView) {
@@ -200,15 +200,15 @@ func TestSeedPendingLinkAndOutsiderSeeNothing(t *testing.T) {
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		dad := seedUser(t, tx, "dad@example.test")
-		sofia := seedPerson(t, tx, dad.FamilyId, "Sofia Rivera")
+		clara := seedPerson(t, tx, dad.FamilyId, "Clara Whitfield")
 
 		for _, email := range []string{"aunt@example.test", "outsider@example.test"} {
 			user := seedUser(t, tx, email)
-			if CanAccessPerson(tx, user, sofia, ScopePeople, AccessView) {
-				t.Errorf("%s can see Sofia", email)
+			if CanAccessPerson(tx, user, clara, ScopePeople, AccessView) {
+				t.Errorf("%s can see Clara", email)
 			}
 			if CanAccessFamily(tx, user, dad.FamilyId, AccessView) {
-				t.Errorf("%s can see the Rivera family", email)
+				t.Errorf("%s can see the Whitfield family", email)
 			}
 		}
 	})
@@ -225,20 +225,20 @@ func TestSeedRelationsSpanFamilies(t *testing.T) {
 		grandpa := seedUser(t, tx, "grandpa@example.test")
 		nana := seedUser(t, tx, "nana@example.test")
 
-		sofia := seedPerson(t, tx, dad.FamilyId, "Sofia Rivera")
-		mateo := seedPerson(t, tx, dad.FamilyId, "Mateo Rivera")
-		eleanor := seedPerson(t, tx, grandpa.FamilyId, "Eleanor Rivera")
-		vikram := seedPerson(t, tx, nana.FamilyId, "Vikram Chandra")
+		clara := seedPerson(t, tx, dad.FamilyId, "Clara Whitfield")
+		julian := seedPerson(t, tx, dad.FamilyId, "Julian Whitfield")
+		rosalind := seedPerson(t, tx, grandpa.FamilyId, "Rosalind Whitfield")
+		arjun := seedPerson(t, tx, nana.FamilyId, "Arjun Nayar")
 
 		for _, want := range []struct {
 			subject Person
 			target  Person
 			label   string
 		}{
-			{sofia, eleanor, "grandmother"},
-			{sofia, vikram, "grandfather"},
-			{sofia, mateo, "brother"},
-			{eleanor, sofia, "granddaughter"},
+			{clara, rosalind, "grandmother"},
+			{clara, arjun, "grandfather"},
+			{clara, julian, "brother"},
+			{rosalind, clara, "granddaughter"},
 		} {
 			if got := RelationLabel(tx, want.subject, want.target); got != want.label {
 				t.Errorf("%s is %q to %s, want %q", want.target.Name, got, want.subject.Name, want.label)
@@ -279,7 +279,7 @@ func TestSeedSharedPeopleAppearOnGrandparentRoster(t *testing.T) {
 
 		roster := GetFamilyPeople(tx, grandpa.FamilyId)
 		if len(roster) < 8 {
-			t.Errorf("grandparent roster holds %d people, want the two of them plus the Riveras", len(roster))
+			t.Errorf("grandparent roster holds %d people, want the two of them plus the Whitfields", len(roster))
 		}
 		own := GetFamilyOwnPeople(tx, grandpa.FamilyId)
 		if len(own) != 2 {

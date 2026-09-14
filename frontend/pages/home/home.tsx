@@ -2,7 +2,6 @@ import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
-import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureNoAuthInFetch } from "../../lib/authHelpers";
 import "./landing-styles";
@@ -35,75 +34,67 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
   );
 }
 
+const Shot = ({ src, alt, caption }: { src: string; alt: string; caption: string }) => (
+  <figure className="shot">
+    <img className="shot-img" src={src} alt={alt} loading="lazy" />
+    <figcaption>{caption}</figcaption>
+  </figure>
+);
+
+const Actions = () => (
+  <div className="intro-actions">
+    <a href="/create-account" className="btn btn-primary">
+      Create an account
+    </a>
+    <a href="/login" className="btn">
+      Log in
+    </a>
+  </div>
+);
+
 const LandingPage = () => (
   <div className="landing-page">
-    <section className="landing-hero">
-      <div className="hero-content">
-        <h1 className="hero-title">Family Record</h1>
-        <p className="hero-subtitle">
-          A private space for your family to share photos, coordinate schedules, and stay connected.
-        </p>
-        <div className="hero-actions">
-          <a href="/create-account" className="btn btn-primary btn-large">
-            Create Account
-          </a>
-          <a href="/login" className="btn btn-secondary btn-large">
-            Log In
-          </a>
-        </div>
-      </div>
-      <div className="hero-visual">
-        <div className="floating-card card-1">
-          <div className="card-icon">📸</div>
-          <div className="card-text">Photos</div>
-        </div>
-        <div className="floating-card card-2">
-          <div className="card-icon">📅</div>
-          <div className="card-text">Calendar</div>
-        </div>
-        <div className="floating-card card-3">
-          <div className="card-icon">💬</div>
-          <div className="card-text">Messages</div>
-        </div>
-      </div>
+    <section className="landing-intro">
+      <h1>Family Record</h1>
+      <p className="intro-lead">
+        A private record of your family: who is in it, how the children are growing, what they have
+        done, and the photographs that go with it.
+      </p>
+      <Actions />
     </section>
 
-    <section className="features-section">
-      <h2 className="section-title">What you can do</h2>
-      <div className="features-grid">
-        <div className="feature-card">
-          <div className="feature-icon">🏠</div>
-          <h3>Family Space</h3>
-          <p>Create a private group just for your family. Invite members with a simple link.</p>
-        </div>
-        <div className="feature-card">
-          <div className="feature-icon">📸</div>
-          <h3>Photo Albums</h3>
-          <p>Share photos in organized albums. Everyone can contribute and download.</p>
-        </div>
-        <div className="feature-card">
-          <div className="feature-icon">📅</div>
-          <h3>Shared Calendar</h3>
-          <p>Keep track of birthdays, events, and family plans in one place.</p>
-        </div>
-        <div className="feature-card">
-          <div className="feature-icon">💬</div>
-          <h3>Group Chat</h3>
-          <p>Simple messaging to stay in touch. No ads, no algorithms, just family.</p>
-        </div>
-      </div>
+    <section className="landing-what">
+      <h2>What you can keep here</h2>
+      <ul>
+        <li>Each family member, with birth dates and how everyone is related.</li>
+        <li>Height and weight over time, in metric or imperial, charted per person or together.</li>
+        <li>Milestones: first steps, a lost tooth, the first day of a school year.</li>
+        <li>Photos with captions, dates, tags, and a note of who is in them.</li>
+        <li>Sports seasons and dance years: the games, the teams, and how they placed.</li>
+        <li>A message thread for the family, and a timeline of everything in date order.</li>
+      </ul>
     </section>
 
-    <section className="cta-section">
-      <div className="cta-content">
-        <h2>Getting started is simple</h2>
-        <p>Create an account, set up your family group, and invite members.</p>
-        <div className="cta-actions">
-          <a href="/create-account" className="btn btn-primary btn-large">
-            Create Account
-          </a>
-        </div>
-      </div>
+    <section className="landing-shots">
+      <Shot
+        src="/images/screenshots/person.png"
+        alt="A person's page"
+        caption="Each person has a page gathering their milestones, measurements, and photos."
+      />
+      <Shot
+        src="/images/screenshots/growth.png"
+        alt="The family growth chart"
+        caption="Growth charted by age, one child or several on the same axes."
+      />
+      <Shot
+        src="/images/screenshots/timeline.png"
+        alt="The family timeline"
+        caption="The timeline puts everything in one list, filtered by person or by kind."
+      />
+    </section>
+
+    <section className="landing-close">
+      <Actions />
     </section>
   </div>
 );

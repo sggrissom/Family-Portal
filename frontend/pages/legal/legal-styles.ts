@@ -144,3 +144,17 @@ block(`
   font-size: 0.95rem;
 }
 `);
+
+block(`
+.legal-page a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+`);
+
+block(`
+.legal-page a:hover {
+  color: var(--primary-accent);
+}
+`);
