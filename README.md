@@ -109,12 +109,14 @@ start when any required variable is missing (`backend/config_check.go`).
 | `make build` | frontend bundle + release binary into `build/` |
 | `make test` | Go unit tests, verbose |
 | `make test-race` | the same under the race detector |
+| `make test-frontend` | frontend unit tests on vitest |
 | `make test-coverage` | coverage profile and HTML report in `build/` |
 | `make typecheck` | `tsc --noEmit` |
 | `make lint` | `go vet`, `gofmt`, Prettier, CSS block validation |
 | `make format` | `go fmt` + Prettier, in place |
 | `make check` | test + typecheck + lint |
 | `make e2e` | five core flows against the compiled release binary over TLS |
+| `make test-ui` | the same deployment, driven through Chromium by Playwright |
 | `make smoke` | read-only checks against a running deployment |
 | `make deploy` | build and ship to the VPS |
 
@@ -190,9 +192,19 @@ uploading a photo, and chat, then sends `SIGTERM` and requires a clean drain. It
 needs the production directory tree and refuses to run where a real deployment
 lives.
 
+`make test-ui` asks what neither of those can. Both call the procedures
+directly, so a bundle that throws on boot, a route that renders nothing, or a
+form wired to the wrong field passes them both. The Playwright suite in
+`tests/ui` drives the built frontend in Chromium — signing up, adding a person,
+recording a measurement, and reading the result back off the page — against the
+same scratch deployment `make e2e` uses. Playwright starts and stops it through
+`cmd/e2e -serve`, so there is no server to run first; the browser is a one-time
+`npx playwright install chromium`. A failing run leaves a trace, a screenshot,
+and a video under `build/playwright-report`, which CI uploads as an artifact.
+
 CI runs formatting, `go vet`, backend tests, TypeScript checks, CSS validation,
-a release build, the race detector, coverage, `make e2e`, and a guard that fails
-if any check modified a tracked file.
+a release build, the race detector, coverage, `make e2e`, `make test-ui`, and a
+guard that fails if any check modified a tracked file.
 
 ## Deployment and operations
 

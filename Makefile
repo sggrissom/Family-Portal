@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy smoke e2e test test-frontend test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
+.PHONY: all build deploy smoke e2e test test-frontend test-ui test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -82,6 +82,16 @@ test-frontend:
 	@echo "Running frontend unit tests..."
 	npx vitest run
 
+# Browser-level flows. `make e2e` calls the procedures directly, so it passes a
+# bundle that throws on boot or a form wired to the wrong field; this drives the
+# built frontend in Chromium against the same scratch deployment. Playwright
+# starts and stops the harness itself (tests/ui/playwright.config.ts), which is
+# why there is no server to run first. Needs `npx playwright install chromium`
+# once.
+test-ui: build
+	go build -tags release -o $(BUILD_DIR)/e2e ./cmd/e2e
+	npx playwright test -c tests/ui/playwright.config.ts
+
 # boltdb v1.3.1 uses pointer conversions rejected by Go's checkptr instrumentation.
 # Keep the race detector enabled while disabling only that incompatible check.
 test-race:
@@ -95,6 +105,8 @@ test-coverage:
 typecheck: check-css
 	@echo "Checking TypeScript types..."
 	npx tsc --noEmit
+	@echo "Checking browser test types..."
+	npx tsc --noEmit -p tests/ui/tsconfig.json
 
 local:
 	go run family/local
@@ -133,13 +145,13 @@ lint: check-css
 		exit 1; \
 	fi
 	@echo "Running TypeScript linter..."
-	npx prettier --check "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
+	npx prettier --check "frontend/**/*.{ts,tsx,json}" "tests/**/*.ts" --ignore-path .prettierignore
 
 format:
 	@echo "Formatting Go code..."
 	go fmt ./...
 	@echo "Formatting TypeScript code..."
-	npx prettier --write "frontend/**/*.{ts,tsx,json}" --ignore-path .prettierignore
+	npx prettier --write "frontend/**/*.{ts,tsx,json}" "tests/**/*.ts" --ignore-path .prettierignore
 
 check: test test-frontend typecheck lint
 	@echo "✅ All quality checks passed!"

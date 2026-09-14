@@ -62,6 +62,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -112,14 +113,21 @@ func main() {
 	keep := flag.Bool("keep", false, "leave the scratch deployment and the server's working directory behind")
 	echo := flag.Bool("echo", false, "stream the server's own log to stderr as it runs")
 	timeout := flag.Duration("timeout", 5*time.Minute, "deadline for the whole run")
+	serve := flag.Bool("serve", false, "hold the deployment open for a driver outside this process instead of running the flows")
+	port := flag.Int("port", 0, "with -serve, the TLS port to serve on; 0 picks a free one")
 	flag.Parse()
 
 	h := &harness{
-		binary:   *binary,
-		keep:     *keep,
-		log:      &serverLog{echo: *echo},
-		email:    "e2e@family-portal.invalid",
-		password: "e2e-portal-password",
+		binary:    *binary,
+		keep:      *keep,
+		log:       &serverLog{echo: *echo},
+		frontPort: *port,
+		email:     "e2e@family-portal.invalid",
+		password:  "e2e-portal-password",
+	}
+
+	if *serve {
+		os.Exit(h.serve())
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
@@ -161,6 +169,11 @@ type harness struct {
 	binary string
 	keep   bool
 	log    *serverLog
+
+	// frontPort pins the TLS port. A run that drives itself does not care
+	// which port it got, but -serve has to name one before the deployment
+	// exists, because the driver is configured with the URL up front.
+	frontPort int
 
 	// dir is the server's working directory. A release build writes its
 	// rotating log and its relative data/static directories there, so it gets
@@ -621,7 +634,22 @@ func (h *harness) start(ctx context.Context) error {
 	// what Caddy does and what the WebSocket origin check depends on.
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ErrorLog = log.New(h.log, "proxy: ", log.LstdFlags)
-	h.front = httptest.NewTLSServer(proxy)
+	front := httptest.NewUnstartedServer(proxy)
+	// A browser rejects this self-signed certificate on the sockets it opens
+	// speculatively and retries on the ones it keeps, so a run that is working
+	// perfectly still logs a dozen handshake errors. They go to the server log
+	// with everything else, where a failure prints them and a pass does not.
+	front.Config.ErrorLog = log.New(h.log, "front: ", log.LstdFlags)
+	if h.frontPort != 0 {
+		listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", h.frontPort))
+		if err != nil {
+			return fmt.Errorf("listening on port %d: %w", h.frontPort, err)
+		}
+		front.Listener.Close()
+		front.Listener = listener
+	}
+	front.StartTLS()
+	h.front = front
 
 	base, err := url.Parse(h.front.URL)
 	if err != nil {
@@ -659,6 +687,48 @@ func (h *harness) start(ctx context.Context) error {
 
 	fmt.Printf("e2e: %s serving %s from %s\n", filepath.Base(binary), h.base, h.dir)
 	return h.waitForListener(ctx)
+}
+
+// serve boots the scratch deployment and holds it open for a driver running
+// outside this process. That driver is the Playwright suite in tests/ui, which
+// asks the questions an http.Client cannot: whether the bundle boots, whether
+// the routes render, whether a form submits what it displays. Everything else
+// is a flow run — the same preflight refuses to touch a real deployment, and
+// the same cleanup removes what the run created.
+//
+// There is no deadline here on purpose. The parent process owns the lifetime
+// and ends it with SIGTERM; a CI job's own timeout is the backstop if it never
+// does.
+func (h *harness) serve() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	startCtx, cancel := context.WithTimeout(ctx, startupTimeout)
+	err := h.start(startCtx)
+	cancel()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+		h.dumpServerLog()
+		_ = h.stop()
+		h.cleanup()
+		return 1
+	}
+
+	fmt.Printf("e2e: holding %s open until SIGTERM\n", h.base)
+	<-ctx.Done()
+	stop()
+	fmt.Println("e2e: draining")
+
+	stopErr := h.stop()
+	if stopErr != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", stopErr)
+		h.dumpServerLog()
+	}
+	h.cleanup()
+	if stopErr != nil {
+		return 1
+	}
+	return 0
 }
 
 // preflight refuses to run anywhere that looks like a real deployment. A
