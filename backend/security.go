@@ -3,6 +3,7 @@ package backend
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"go.hasen.dev/vbeam"
 )
@@ -69,6 +70,16 @@ func isWebSocketRequest(r *http.Request) bool {
 }
 
 func (sw *SecurityWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// net/http unescapes URL paths before dispatch, but it does not require the
+	// decoded bytes to be valid UTF-8. Passing such a path to an fs.FS makes the
+	// SPA file server report an internal error for what is really a malformed
+	// client request.
+	if !utf8.ValidString(r.URL.Path) {
+		addSecurityHeaders(w)
+		http.Error(w, "invalid URL path", http.StatusBadRequest)
+		return
+	}
+
 	if isWebSocketRequest(r) && r.URL.Path == "/ws/chat" {
 		HandleWebSocketChat(sw.app)(w, r)
 		return

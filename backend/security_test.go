@@ -223,6 +223,27 @@ func TestSecurityWrapperServeHTTP(t *testing.T) {
 	})
 }
 
+func TestSecurityWrapperRejectsInvalidUTF8Path(t *testing.T) {
+	testApp, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	wrapper := NewSecurityWrapper(testApp)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/%C0", nil)
+
+	wrapper.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if body := recorder.Body.String(); body != "invalid URL path\n" {
+		t.Errorf("body = %q, want %q", body, "invalid URL path\\n")
+	}
+	if recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("malformed path response should include security headers")
+	}
+}
+
 func TestSecurityWrapperWithDifferentRoutes(t *testing.T) {
 	tests := []struct {
 		name           string
