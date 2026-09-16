@@ -526,3 +526,111 @@ func TestLoginTimingDoesNotRevealAccounts(t *testing.T) {
 		t.Errorf("unknown address answered in %v against %v for a known one", unknownAccount, knownAccount)
 	}
 }
+
+func postSignup(t *testing.T, body string) (*httptest.ResponseRecorder, CreateAccountResponse) {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/signup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	signupHandler(recorder, req)
+
+	var resp CreateAccountResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode signup response: %v", err)
+	}
+	return recorder, resp
+}
+
+func TestSignupHandlerStartsACookieSession(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/signup.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("signup-test-secret-key-at-least-32-chars")
+
+	recorder, resp := postSignup(t, `{
+		"name": "New Parent",
+		"email": "new-parent@example.com",
+		"password": "correct-horse-battery",
+		"confirmPassword": "correct-horse-battery",
+		"initialPersonName": "New Parent",
+		"initialPersonGender": 0,
+		"initialPersonBirthdate": "1990-04-01"
+	}`)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if !resp.Success {
+		t.Fatalf("signup rejected: %s", resp.Error)
+	}
+	if resp.Auth.Id == 0 || resp.Auth.FamilyId == 0 {
+		t.Fatalf("signup returned no user or family: %+v", resp.Auth)
+	}
+	if resp.Token == "" {
+		t.Error("signup returned no token for the mobile-style caller")
+	}
+
+	cookies := make(map[string]*http.Cookie)
+	for _, cookie := range recorder.Result().Cookies() {
+		cookies[cookie.Name] = cookie
+	}
+
+	authCookie, ok := cookies["authToken"]
+	if !ok {
+		t.Fatal("signup set no authToken cookie, so a reload would sign the new account out")
+	}
+	if authCookie.Value == "" {
+		t.Error("authToken cookie is empty")
+	}
+	if !authCookie.HttpOnly || !authCookie.Secure {
+		t.Errorf("authToken cookie = HttpOnly %v, Secure %v, want both true", authCookie.HttpOnly, authCookie.Secure)
+	}
+	if _, ok := cookies["refreshToken"]; !ok {
+		t.Error("signup set no refreshToken cookie, so the session could never be renewed")
+	}
+
+	claims := &Claims{}
+	parsed, err := jwt.ParseWithClaims(authCookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !parsed.Valid {
+		t.Fatalf("authToken cookie did not parse: %v", err)
+	}
+	if claims.Username != "new-parent@example.com" {
+		t.Errorf("authToken is for %q, want %q", claims.Username, "new-parent@example.com")
+	}
+}
+
+func TestSignupHandlerRejectsADuplicateAddressWithoutASession(t *testing.T) {
+	db := vbolt.Open(t.TempDir() + "/signup_duplicate.db")
+	vbolt.InitBuckets(db, &cfg.Info)
+	t.Cleanup(func() { _ = db.Close() })
+	appDb = db
+	jwtKey = []byte("signup-test-secret-key-at-least-32-chars")
+
+	body := `{
+		"name": "First Parent",
+		"email": "taken@example.com",
+		"password": "correct-horse-battery",
+		"confirmPassword": "correct-horse-battery",
+		"initialPersonBirthdate": "1990-04-01"
+	}`
+
+	if _, resp := postSignup(t, body); !resp.Success {
+		t.Fatalf("first signup rejected: %s", resp.Error)
+	}
+
+	recorder, resp := postSignup(t, body)
+	if resp.Success {
+		t.Fatal("the second signup with the same address succeeded")
+	}
+	if resp.Error != "Email already registered" {
+		t.Errorf("error = %q, want %q", resp.Error, "Email already registered")
+	}
+	if len(recorder.Result().Cookies()) != 0 {
+		t.Errorf("a rejected signup set %d cookies, want none", len(recorder.Result().Cookies()))
+	}
+}

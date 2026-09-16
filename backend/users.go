@@ -336,41 +336,58 @@ func GetAuthResponseForUser(user User) (resp AuthResponse) {
 	return
 }
 
-func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAccountResponse, err error) {
-	if err = validateCreateAccountRequest(req); err != nil {
-		resp.Success = false
-		resp.Error = err.Error()
-		return
+// newAccountRejection reports why this request cannot become an account, or ""
+// if it can. It only reads, so a caller can ask before taking a write tx.
+func newAccountRejection(tx *vbolt.Tx, req CreateAccountRequest) string {
+	if err := validateCreateAccountRequest(req); err != nil {
+		return err.Error()
 	}
-
-	userId := GetUserId(ctx.Tx, req.Email)
-	if userId != 0 {
-		resp.Success = false
-		resp.Error = "Email already registered"
-		return
+	if GetUserId(tx, req.Email) != 0 {
+		return "Email already registered"
 	}
+	return ""
+}
 
+// createAccountTx writes the account and returns what the caller answers with.
+// It assumes newAccountRejection has passed, and it does not commit: the auth
+// response is read out of the transaction, so the caller closes it after.
+func createAccountTx(tx *vbolt.Tx, req CreateAccountRequest) (user User, auth AuthResponse, rejection string) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
+		return User{}, AuthResponse{}, "Failed to process password"
+	}
+
+	user = AddUserTx(tx, req, hash)
+	if req.InitialPersonBirthdate != "" {
+		person, personErr := AddInitialPersonForAccountTx(tx, req, user.FamilyId)
+		if personErr != nil {
+			return User{}, AuthResponse{}, personErr.Error()
+		}
+		user.PersonId = person.Id
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+	}
+	sendVerificationEmailTx(tx, user, time.Now())
+	auth = GetAuthResponseFromUser(tx, user)
+	return user, auth, ""
+}
+
+// CreateAccount is how the mobile client signs up: it answers with a token the
+// caller stores itself. A procedure never sees a ResponseWriter and so cannot
+// set cookies, which is why the web app posts to /api/signup instead.
+func CreateAccount(ctx *vbeam.Context, req CreateAccountRequest) (resp CreateAccountResponse, err error) {
+	if rejection := newAccountRejection(ctx.Tx, req); rejection != "" {
 		resp.Success = false
-		resp.Error = "Failed to process password"
+		resp.Error = rejection
 		return
 	}
 
 	vbeam.UseWriteTx(ctx)
-	user := AddUserTx(ctx.Tx, req, hash)
-	if req.InitialPersonBirthdate != "" {
-		person, personErr := AddInitialPersonForAccountTx(ctx.Tx, req, user.FamilyId)
-		if personErr != nil {
-			resp.Success = false
-			resp.Error = personErr.Error()
-			return
-		}
-		user.PersonId = person.Id
-		vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
+	user, auth, rejection := createAccountTx(ctx.Tx, req)
+	if rejection != "" {
+		resp.Success = false
+		resp.Error = rejection
+		return
 	}
-	sendVerificationEmailTx(ctx.Tx, user, time.Now())
-	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.Success = true

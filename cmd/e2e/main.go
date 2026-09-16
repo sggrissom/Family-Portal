@@ -170,9 +170,8 @@ type harness struct {
 	keep   bool
 	log    *serverLog
 
-	// frontPort pins the TLS port. A run that drives itself does not care
-	// which port it got, but -serve has to name one before the deployment
-	// exists, because the driver is configured with the URL up front.
+	// frontPort pins the TLS port, which -serve needs: the driver outside
+	// this process is configured with the URL before the deployment exists.
 	frontPort int
 
 	// dir is the server's working directory. A release build writes its
@@ -636,9 +635,8 @@ func (h *harness) start(ctx context.Context) error {
 	proxy.ErrorLog = log.New(h.log, "proxy: ", log.LstdFlags)
 	front := httptest.NewUnstartedServer(proxy)
 	// A browser rejects this self-signed certificate on the sockets it opens
-	// speculatively and retries on the ones it keeps, so a run that is working
-	// perfectly still logs a dozen handshake errors. They go to the server log
-	// with everything else, where a failure prints them and a pass does not.
+	// speculatively, so a healthy run still logs handshake errors. The server
+	// log is where they belong: printed on a failure, quiet on a pass.
 	front.Config.ErrorLog = log.New(h.log, "front: ", log.LstdFlags)
 	if h.frontPort != 0 {
 		listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", h.frontPort))
@@ -689,16 +687,13 @@ func (h *harness) start(ctx context.Context) error {
 	return h.waitForListener(ctx)
 }
 
-// serve boots the scratch deployment and holds it open for a driver running
-// outside this process. That driver is the Playwright suite in tests/ui, which
-// asks the questions an http.Client cannot: whether the bundle boots, whether
-// the routes render, whether a form submits what it displays. Everything else
-// is a flow run — the same preflight refuses to touch a real deployment, and
-// the same cleanup removes what the run created.
+// serve boots the scratch deployment and holds it open for a driver outside
+// this process — the Playwright suite in tests/ui. Preflight and cleanup are a
+// flow run's, so it still refuses to touch a real deployment and still removes
+// what it created.
 //
-// There is no deadline here on purpose. The parent process owns the lifetime
-// and ends it with SIGTERM; a CI job's own timeout is the backstop if it never
-// does.
+// There is no deadline on purpose: the parent owns the lifetime and ends it
+// with SIGTERM, and a CI job's own timeout is the backstop if it never does.
 func (h *harness) serve() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

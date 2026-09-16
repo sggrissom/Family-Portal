@@ -99,11 +99,8 @@ jobs:
       - name: Install the Playwright browser
         run: npx playwright install --with-deps chromium
 
-      # Everything above this line talks to the server the way a script does,
-      # which is why all of it passes a frontend that throws on boot. This runs
-      # the same flows through Chromium against the same deployment: the bundle
-      # has to load, the routes have to render, and the forms have to submit
-      # what they display.
+      # The checks above talk to the server the way a script does, so they all
+      # pass a frontend that throws on boot. This runs the flows in Chromium.
       - name: Browser flows
         run: make test-ui
 

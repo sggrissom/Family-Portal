@@ -76,6 +76,7 @@ func SetupAuth(app *vbeam.Application) {
 	jwtKey = []byte(jwtSecret)
 
 	app.HandleFunc("/api/login", loginHandler)
+	app.HandleFunc("/api/signup", signupHandler)
 	app.HandleFunc("/api/logout", logoutHandler)
 	app.HandleFunc("/api/refresh", refreshTokenHandler)
 
@@ -191,6 +192,60 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := GetAuthResponseForUser(user)
 	json.NewEncoder(w).Encode(LoginResponse{Success: true, Token: token, Auth: resp})
+}
+
+// signupHandler is the browser's way in: the same account CreateAccount
+// creates, plus the session cookies a procedure cannot set.
+func signupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		vbeam.RespondError(w, errors.New("signup call must be POST"))
+		return
+	}
+
+	var req CreateAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		vbeam.RespondError(w, errors.New("invalid signup request"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var user User
+	var auth AuthResponse
+	var rejection string
+	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		if rejection = newAccountRejection(tx, req); rejection != "" {
+			return
+		}
+		if user, auth, rejection = createAccountTx(tx, req); rejection != "" {
+			return
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	if rejection != "" {
+		json.NewEncoder(w).Encode(CreateAccountResponse{Success: false, Error: rejection})
+		return
+	}
+
+	token, err := generateAuthJwt(user, w)
+	if err != nil {
+		// The account exists by now, so this is a session that failed to
+		// start, not a signup. A retry would collide with the new address.
+		LogErrorWithRequest(r, LogCategoryAuth, "Failed to generate JWT after signup", map[string]interface{}{
+			"userId": user.Id,
+			"error":  err.Error(),
+		})
+		json.NewEncoder(w).Encode(CreateAccountResponse{Success: false, Error: "Account created, but sign-in failed. Please log in."})
+		return
+	}
+
+	LogInfoWithRequest(r, LogCategoryAuth, "Account created", map[string]interface{}{
+		"userId": user.Id,
+		"email":  redactEmail(user.Email),
+	})
+
+	json.NewEncoder(w).Encode(CreateAccountResponse{Success: true, Token: token, Auth: auth})
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {

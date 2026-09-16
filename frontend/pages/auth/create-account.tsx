@@ -3,7 +3,6 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
-import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import "./create-account-styles";
 
@@ -69,25 +68,38 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
   form.loading = true;
   form.error = "";
 
-  let [resp, err] = await server.CreateAccount({
-    name: form.name,
-    email: form.email,
-    password: form.password,
-    confirmPassword: form.confirmPassword,
-    familyCode: form.familyCode,
-    initialPersonName: form.initialPersonName || form.name,
-    initialPersonGender: form.initialPersonGender,
-    initialPersonBirthdate: form.initialPersonBirthdate,
-  });
+  const nativeFetch = window.fetch.bind(window);
+  try {
+    const res = await nativeFetch("/api/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+        familyCode: form.familyCode,
+        initialPersonName: form.initialPersonName || form.name,
+        initialPersonGender: form.initialPersonGender,
+        initialPersonBirthdate: form.initialPersonBirthdate,
+      }),
+    });
 
-  form.loading = false;
+    const result = await res.json();
+    form.loading = false;
 
-  if (resp && resp.success) {
-    rpc.setAuthHeaders({ "x-auth-token": resp.token });
-    auth.setAuth(resp.auth);
-    core.setRoute("/dashboard");
-  } else {
-    form.error = resp?.error || err || "Failed to create account";
+    if (result.success) {
+      rpc.setAuthHeaders({ "x-auth-token": result.token });
+      auth.setAuth(result.auth);
+      core.setRoute("/dashboard");
+    } else {
+      form.error = result.error || "Failed to create account";
+    }
+  } catch (error) {
+    form.loading = false;
+    form.error = "Network error. Please try again.";
   }
   vlens.scheduleRedraw();
 

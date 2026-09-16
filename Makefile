@@ -82,12 +82,9 @@ test-frontend:
 	@echo "Running frontend unit tests..."
 	npx vitest run
 
-# Browser-level flows. `make e2e` calls the procedures directly, so it passes a
-# bundle that throws on boot or a form wired to the wrong field; this drives the
-# built frontend in Chromium against the same scratch deployment. Playwright
-# starts and stops the harness itself (tests/ui/playwright.config.ts), which is
-# why there is no server to run first. Needs `npx playwright install chromium`
-# once.
+# Browser-level flows against the same scratch deployment `make e2e` uses.
+# Playwright starts and stops the harness itself (tests/ui/playwright.config.ts),
+# so there is no server to run first. Needs `npx playwright install chromium`.
 test-ui: build
 	go build -tags release -o $(BUILD_DIR)/e2e ./cmd/e2e
 	npx playwright test -c tests/ui/playwright.config.ts

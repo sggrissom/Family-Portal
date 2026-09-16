@@ -72,12 +72,9 @@ export async function ensureNoAuthInFetch(): Promise<boolean> {
       return false;
     }
 
-    const refreshedAuth = await tryRefreshAuth();
-    if (refreshedAuth) {
-      auth.setAuth(refreshedAuth);
-      core.setRoute("/dashboard");
-      return false;
-    }
+    // Nothing to refresh: the server has just said there is no session. Asking
+    // anyway answers 401 on every anonymous page view.
+    return true;
   } catch (error) {
     const refreshedAuth = await tryRefreshAuth();
     if (refreshedAuth) {

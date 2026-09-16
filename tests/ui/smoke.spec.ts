@@ -1,15 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// What this suite is for: `cmd/e2e` already proves the server answers. It calls
-// the procedures directly, so a bundle that throws on boot, a route that
-// renders nothing, or a form wired to the wrong field all pass it. Those are
-// the questions here, which is why every assertion is about what a person can
-// see on the page rather than about a response body.
+// `cmd/e2e` calls the procedures directly, so a bundle that throws on boot or a
+// form wired to the wrong field passes it. Everything asserted here is what a
+// person can see on the page instead.
 //
-// Navigation is by clicking, never by page.goto. vlens intercepts same-origin
-// link clicks and routes in place, so clicking is both what a visitor does and
-// the only way the session survives: signup's token lives in memory until a
-// later login exchanges it for a cookie.
+// Navigate by clicking, not page.goto: vlens intercepts same-origin link clicks
+// and routes in place, so clicking is what exercises the router.
 
 const account = {
   name: "UI Runner",
@@ -24,14 +20,14 @@ const child = {
 
 const measurement = { value: "42.5", unit: "in" };
 
-// The deployment outlives an individual attempt, and signup refuses an address
-// it has already seen, so a retry needs an address of its own.
+// The deployment outlives an attempt and signup refuses an address it has seen,
+// so a retry needs its own.
 function freshEmail(): string {
   return `ui-${Date.now()}@family-portal.invalid`;
 }
 
-// An uncaught exception does not fail a page, it just leaves it half-rendered,
-// so it has to be collected and asserted on rather than waited for.
+// An uncaught exception leaves the page half-rendered rather than failing it,
+// so it has to be collected and asserted on.
 let pageErrors: string[] = [];
 
 test.beforeEach(({ page }) => {
@@ -44,6 +40,14 @@ test.afterEach(() => {
 });
 
 test("the landing page renders for a signed-out visitor", async ({ page }) => {
+  // A visitor with no session has nothing to refresh, and asking answers 401.
+  const refreshCalls: string[] = [];
+  page.on("request", request => {
+    if (request.url().includes("/api/refresh")) {
+      refreshCalls.push(request.url());
+    }
+  });
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Family Record", level: 1 })).toBeVisible();
@@ -53,6 +57,10 @@ test("the landing page renders for a signed-out visitor", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/create-account$/);
   await expect(page.getByRole("heading", { name: "Create Account" })).toBeVisible();
+
+  expect(refreshCalls, "a signed-out visitor asked to refresh a session they do not have").toEqual(
+    []
+  );
 });
 
 test("a new family signs up, adds a person, and records a measurement", async ({ page }) => {
@@ -80,6 +88,17 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(personCard(page, account.name)).toBeVisible();
   });
 
+  await test.step("the new session survives a reload", async () => {
+    // Signup goes through /api/signup rather than the CreateAccount procedure
+    // so that the browser is left holding cookies.
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(
+      page.getByRole("heading", { name: `Welcome back, ${account.name}!` })
+    ).toBeVisible();
+  });
+
   await test.step("add a family member", async () => {
     await page.getByRole("link", { name: "Add family member" }).click();
 
@@ -102,8 +121,8 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(page).toHaveURL(/\/add-growth$/);
     await expect(page.getByRole("heading", { name: "Measure Now" })).toBeVisible();
 
-    // The option's label carries an age alongside the name, so the person is
-    // found by the option that names them and selected by its value.
+    // The option's label carries an age alongside the name, so match on the
+    // name and select by value.
     const option = page.locator("#person option").filter({ hasText: child.name });
     await expect(option).toHaveCount(1);
     await page.locator("#person").selectOption(await option.getAttribute("value"));
@@ -115,8 +134,6 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await page.locator("#unit").selectOption(measurement.unit);
     await page.getByRole("radio", { name: "Today" }).check();
 
-    // The preview renders from the same form state the request is built from,
-    // so it is worth one assertion before the submit.
     await expect(page.locator(".measurement-preview")).toContainText(
       `${measurement.value} ${measurement.unit}`
     );

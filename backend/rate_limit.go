@@ -43,6 +43,7 @@ var (
 
 var exactPathRules = map[string]RateLimitRule{
 	"/api/login":              rateRuleLogin,
+	"/api/signup":             rateRuleSignup,
 	"/api/login/google":       rateRuleLogin,
 	"/api/login/google/token": rateRuleLogin,
 	"/api/google/callback":    rateRuleLogin,

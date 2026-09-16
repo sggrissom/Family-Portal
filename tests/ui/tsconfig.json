@@ -1,3 +1,6 @@
+// @types/node is not installed: it breaks the frontend typecheck by shadowing
+// the DOM's setTimeout. "types": [] keeps anything that lands in
+// node_modules/@types out of this program too.
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
@@ -6,5 +9,7 @@
     "module": "esnext"
   },
   "include": ["./**/*.ts"],
+  // extends carries the root's exclude down, which would exclude this
+  // directory from its own program.
   "exclude": []
 }
