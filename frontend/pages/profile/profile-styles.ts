@@ -3,8 +3,8 @@ import "../../styles/timeline-item";
 
 block(`
 .profile-container {
-  max-width: 1200px;
-  padding: 40px 20px;
+  max-width: 1000px;
+  padding: 28px 16px 72px;
   margin: 0 auto;
 }
 `);
@@ -19,9 +19,9 @@ block(`
 .profile-header {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  margin-bottom: 30px;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -39,15 +39,15 @@ block(`
 
 block(`
 .profile-avatar {
-  font-size: 4rem;
+  font-size: 2.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
   background: var(--bg);
   border-radius: 50%;
-  border: 3px solid var(--border);
+  border: 1px solid var(--border);
 }
 `);
 
@@ -72,15 +72,15 @@ block(`
 
 block(`
 .profile-info h1 {
-  font-size: 2.2rem;
-  margin: 0 0 8px;
+  font-size: 1.6rem;
+  margin: 0 0 4px;
   color: var(--text);
 }
 `);
 
 block(`
 .profile-details {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: var(--muted);
   margin: 0;
 }
@@ -166,12 +166,12 @@ block(`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 16px;
+  margin-bottom: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 20px;
+  border-radius: 10px;
+  padding: 12px 16px;
   flex-wrap: wrap;
 }
 `);
@@ -186,7 +186,7 @@ block(`
 
 block(`
 .filter-label {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -205,14 +205,17 @@ block(`
 
 block(`
 .profile-container .filter-toggle {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--muted);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+  font-size: 0.85rem;
   font-weight: 500;
 }
 `);
@@ -227,8 +230,8 @@ block(`
 
 block(`
 .filter-toggle.active {
-  background: var(--accent);
-  color: var(--button-text);
+  background: var(--accent-soft);
+  color: var(--accent);
   border-color: var(--accent);
   font-weight: 600;
 }
@@ -444,7 +447,7 @@ block(`
 block(`
 @media (max-width: 768px) {
   .profile-container {
-    padding: 30px 16px;
+    padding: 24px 16px 56px;
   }
 
   .profile-header {
@@ -460,13 +463,13 @@ block(`
   }
 
   .profile-avatar {
-    width: 70px;
-    height: 70px;
-    font-size: 3rem;
+    width: 56px;
+    height: 56px;
+    font-size: 2rem;
   }
 
   .profile-info h1 {
-    font-size: 1.8rem;
+    font-size: 1.4rem;
   }
 
   .profile-actions {
@@ -580,7 +583,7 @@ block(`
 block(`
 @media (max-width: 420px) {
   .profile-header {
-    padding: 24px 18px;
+    padding: 16px;
   }
 
   .profile-actions {

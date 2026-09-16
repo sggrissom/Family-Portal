@@ -3,27 +3,26 @@ import { block } from "vlens/css";
 block(`
 .age-filter {
   display: flex;
-  gap: 0.5rem;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  margin-bottom: 10px;
 }
 `);
 
 block(`
 .profile-container .filter-btn {
-  padding: 0.5rem 1rem;
+  padding: 6px 12px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  transition: all var(--transition-speed) ease;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 `);
 
@@ -36,19 +35,18 @@ block(`
 
 block(`
 .filter-btn.active {
-  background: var(--primary-accent);
-  color: white;
-  border-color: var(--primary-accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 `);
 
 block(`
 .filter-info {
   color: var(--muted);
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-style: italic;
+  font-size: 0.85rem;
+  margin: 4px 0 14px;
 }
 `);
 

@@ -4,7 +4,7 @@ import "./photos-styles";
 
 block(`
 .family-photos-container {
-  padding: 2rem;
+  padding: 28px 16px 72px;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -355,8 +355,8 @@ block(`
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 4rem 2rem;
-  min-height: 400px;
+  padding: 44px 20px;
+  min-height: 0;
 }
 `);
 
@@ -422,8 +422,7 @@ block(`
   }
 
   .empty-state {
-    padding: 2rem 1rem;
-    min-height: 300px;
+    padding: 32px 16px;
   }
 
   .empty-icon {

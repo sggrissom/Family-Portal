@@ -20,7 +20,7 @@ block(`
 
 block(`
 .admin-header {
-  background: linear-gradient(135deg, var(--admin-accent) 0%, var(--admin-accent-hover) 100%);
+  background: var(--admin-accent);
   color: var(--admin-text-on-accent);
   padding: 2rem;
   text-align: center;
@@ -501,7 +501,7 @@ block(`
 block(`
 .reprocess-card {
   border-left: 4px solid var(--admin-accent);
-  background: linear-gradient(135deg, var(--admin-surface-elevated) 0%, var(--admin-surface) 100%);
+  background: var(--admin-surface-elevated);
 }
 `);
 

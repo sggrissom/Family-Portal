@@ -17,6 +17,12 @@ block(`
 `);
 
 block(`
+.photos-gallery > .empty-state {
+  grid-column: 1 / -1;
+}
+`);
+
+block(`
 .photo-card {
   background: var(--surface);
   border-radius: 12px;

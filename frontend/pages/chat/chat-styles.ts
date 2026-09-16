@@ -135,7 +135,7 @@ block(`
 .chat-thread-header:hover,
 .chat-thread-header:focus {
   border-color: var(--primary-accent);
-  box-shadow: 0 0 0 2px rgba(105, 219, 124, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
   outline: none;
 }
 `);
@@ -380,7 +380,7 @@ block(`
 
 block(`
 .message-pending.message-own .message-bubble {
-  background: rgba(105, 219, 124, 0.3);
+  background: color-mix(in srgb, var(--primary-accent) 45%, transparent);
   border: 1px dashed var(--primary-accent);
 }
 `);
@@ -418,7 +418,7 @@ block(`
 block(`
 .message-input:focus {
   border-color: var(--primary-accent);
-  box-shadow: 0 0 0 2px rgba(105, 219, 124, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 `);
 

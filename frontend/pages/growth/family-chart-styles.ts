@@ -2,9 +2,9 @@ import { block } from "vlens/css";
 
 block(`
 .family-chart-page {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 28px 16px 72px;
   overflow-x: hidden;
 }
 `);

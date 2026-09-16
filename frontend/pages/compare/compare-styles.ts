@@ -3,9 +3,9 @@ import "../../styles/timeline-item";
 
 block(`
 .compare-page {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 28px 16px 72px;
 }
 `);
 
@@ -165,9 +165,10 @@ block(`
 
 block(`
 .filter-btn.active {
-  background: var(--primary-accent);
-  color: white;
-  border-color: var(--primary-accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 `);
 

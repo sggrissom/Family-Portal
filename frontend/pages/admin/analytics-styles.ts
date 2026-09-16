@@ -39,7 +39,7 @@ block(`
 
 block(`
 .admin-header.analytics-header {
-  background: linear-gradient(135deg, var(--admin-accent) 0%, var(--analytics-secondary) 100%);
+  background: var(--admin-accent);
 }
 `);
 
@@ -452,7 +452,7 @@ block(`
 
 block(`
 .bar {
-  background: linear-gradient(0deg, var(--analytics-chart-1), var(--analytics-chart-2));
+  background: var(--analytics-chart-1);
   border-radius: 4px 4px 0 0;
   width: 100%;
   min-height: 4px;
@@ -463,7 +463,7 @@ block(`
 
 block(`
 .bar:hover {
-  background: linear-gradient(0deg, var(--admin-accent), var(--analytics-secondary));
+  background: var(--admin-accent);
   transform: scaleY(1.1);
 }
 `);

@@ -27,15 +27,9 @@ block(`
 `);
 
 block(`
-.form-actions .btn {
-  flex: 1;
-}
-`);
-
-block(`
 @media (max-width: 768px) {
   .add-person-container {
-    padding: 30px 16px;
+    padding: 24px 16px;
   }
 
   .form-actions {
@@ -50,9 +44,9 @@ block(`
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid rgba(102, 126, 234, 0.25);
-  border-radius: 12px;
-  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
   color: var(--text);
   font-weight: 600;
 }
@@ -72,16 +66,16 @@ block(`
   gap: 16px;
   align-items: center;
   padding: 16px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(72, 187, 120, 0.14), rgba(56, 178, 172, 0.12));
-  border: 1px solid rgba(56, 178, 172, 0.25);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-border);
 }
 `);
 
 block(`
 .born-now-card p {
   margin: 4px 0 0;
-  color: #4a5568;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 `);
