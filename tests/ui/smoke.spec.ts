@@ -153,6 +153,49 @@ test("a new family signs up, adds a person, and records a measurement", async ({
   });
 });
 
+test("an infant's weight is entered and shown in pounds and ounces", async ({ page }) => {
+  const baby = { name: "UI Baby", birthdate: monthsAgo(2) };
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: "Add family member" }).click();
+  await page.locator("#name").fill(baby.name);
+  await page.locator("#gender").selectOption("1");
+  await page.locator("#birthdate").fill(baby.birthdate);
+  await page.getByRole("button", { name: "Add Family Member" }).click();
+  await expect(personCard(page, baby.name)).toBeVisible();
+
+  await page.getByRole("link", { name: "Record growth" }).click();
+  const option = page.locator("#person option").filter({ hasText: baby.name });
+  await page.locator("#person").selectOption(await option.getAttribute("value"));
+  await page.getByRole("radio", { name: "Weight" }).check();
+
+  // Under two, weight entry defaults to pounds and ounces.
+  await expect(page.getByRole("radio", { name: "Pounds & Ounces" })).toBeChecked();
+  await page.locator("#pounds").fill("7");
+  await page.locator("#ounces").fill("8");
+  await page.getByRole("radio", { name: "Today" }).check();
+  await expect(page.locator(".measurement-preview")).toContainText("7 lb 8 oz");
+  await page.getByRole("button", { name: "Save Measurement" }).click();
+
+  await expect(page).toHaveURL(/\/profile\/\d+$/);
+  const entry = page.locator(".timeline-item.measurement-item").first();
+  await expect(entry.locator(".measurement-value")).toContainText("7 lb 8 oz");
+});
+
+function monthsAgo(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return d.toISOString().split("T")[0];
+}
+
 function personCard(page: Page, name: string) {
   return page.locator(".person-card").filter({ hasText: name });
 }

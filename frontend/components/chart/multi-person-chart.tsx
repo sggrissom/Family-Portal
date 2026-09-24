@@ -3,6 +3,7 @@ import { JSX } from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import { computePercentileLabel } from "../../lib/growthPercentiles";
+import { formatMeasurement } from "../../lib/weightFormat";
 import "./chart.styles";
 
 export interface PersonGrowthData {
@@ -23,8 +24,7 @@ type Kind = "Height" | "Weight";
 
 interface SelectedDataPoint {
   key: { id: number; kind: Kind; personId: number } | null;
-  value: number;
-  unit: string;
+  display: string;
   type: Kind | "";
   date: string;
   personName: string;
@@ -37,8 +37,7 @@ const formatDate = (s: string) => new Date(s).toLocaleDateString();
 const useSelectedPoint = vlens.declareHook(
   (): SelectedDataPoint => ({
     key: null,
-    value: 0,
-    unit: "",
+    display: "",
     type: "",
     date: "",
     personName: "",
@@ -482,8 +481,7 @@ export const MultiPersonChart = ({
       selected.key.personId === key.personId
     ) {
       selected.key = null;
-      selected.value = 0;
-      selected.unit = "";
+      selected.display = "";
       selected.type = "";
       selected.date = "";
       selected.personName = "";
@@ -491,8 +489,7 @@ export const MultiPersonChart = ({
       selected.percentile = null;
     } else {
       selected.key = key;
-      selected.value = d.value;
-      selected.unit = d.unit;
+      selected.display = formatMeasurement(d.value, d.unit, d.ageInMonths);
       selected.type = kind;
       selected.date = `${formatAge(d.ageInMonths)} (${formatDate(d.measurementDate)})`;
       selected.personName = personData.person.name;
@@ -675,7 +672,7 @@ export const MultiPersonChart = ({
                         onMouseLeave={clearHover}
                         tabIndex={0}
                         role="button"
-                        aria-label={`${personData.person.name} height: ${d.value} ${d.unit} at age ${formatAge(d.ageInMonths)}`}
+                        aria-label={`${personData.person.name} height: ${formatMeasurement(d.value, d.unit, d.ageInMonths)} at age ${formatAge(d.ageInMonths)}`}
                         onKeyDown={e => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -724,7 +721,7 @@ export const MultiPersonChart = ({
                         onMouseLeave={clearHover}
                         tabIndex={0}
                         role="button"
-                        aria-label={`${personData.person.name} weight: ${d.value} ${d.unit} at age ${formatAge(d.ageInMonths)}`}
+                        aria-label={`${personData.person.name} weight: ${formatMeasurement(d.value, d.unit, d.ageInMonths)} at age ${formatAge(d.ageInMonths)}`}
                         onKeyDown={e => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -844,9 +841,7 @@ export const MultiPersonChart = ({
             </span>
             <span className="info-date">{selected.date}</span>
           </div>
-          <div className="info-value">
-            {selected.value} {selected.unit}
-          </div>
+          <div className="info-value">{selected.display}</div>
           {selected.percentile && <div className="info-percentile">{selected.percentile}</div>}
         </div>
       ) : (

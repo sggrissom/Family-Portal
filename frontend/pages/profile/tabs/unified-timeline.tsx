@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as server from "../../../server";
 import { calculateAge, formatDate, isRealDate } from "../../../lib/dateUtils";
+import { formatMeasurement } from "../../../lib/weightFormat";
 import { labelsForKind } from "../../activities/labels";
 import {
   getCategoryIcon,
@@ -324,15 +325,19 @@ export const UnifiedTimeline = ({
 
               case "measurement": {
                 const measurement = item.data as server.GrowthData;
-                const pctLabel = isValidBirthday(person.birthday)
-                  ? computePercentileLabel(
-                      measurement.value,
-                      measurement.unit,
-                      ageInMonths(person.birthday, measurement.measurementDate),
-                      person.gender,
-                      measurement.measurementType === server.Height ? "height" : "weight"
-                    )
+                const measuredAgeMonths = isValidBirthday(person.birthday)
+                  ? ageInMonths(person.birthday, measurement.measurementDate)
                   : null;
+                const pctLabel =
+                  measuredAgeMonths !== null
+                    ? computePercentileLabel(
+                        measurement.value,
+                        measurement.unit,
+                        measuredAgeMonths,
+                        person.gender,
+                        measurement.measurementType === server.Height ? "height" : "weight"
+                      )
+                    : null;
                 return (
                   <div key={`measurement-${item.id}`} className="timeline-item measurement-item">
                     <div className="timeline-item-icon">📏</div>
@@ -345,7 +350,7 @@ export const UnifiedTimeline = ({
                         <span className="timeline-item-date">{formatDate(item.date)}</span>
                       </div>
                       <div className="timeline-item-description measurement-value">
-                        {measurement.value} {measurement.unit}
+                        {formatMeasurement(measurement.value, measurement.unit, measuredAgeMonths)}
                         {pctLabel && (
                           <span className="percentile-badge" style={{ marginLeft: "10px" }}>
                             {pctLabel}

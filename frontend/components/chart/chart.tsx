@@ -4,6 +4,7 @@ import * as vlens from "vlens";
 import * as server from "../../server";
 import "./chart.styles";
 import { ageInMonths, computePercentileLabel, isValidBirthday } from "../../lib/growthPercentiles";
+import { formatMeasurement } from "../../lib/weightFormat";
 
 export interface GrowthChartProps {
   growthData: server.GrowthData[];
@@ -17,8 +18,7 @@ type Kind = "Height" | "Weight";
 
 interface SelectedDataPoint {
   key: { id: number; kind: Kind } | null;
-  value: number;
-  unit: string;
+  display: string;
   type: Kind | "";
   date: string;
 }
@@ -28,8 +28,7 @@ const formatDate = (s: string) => new Date(s).toLocaleDateString();
 const useSelectedPoint = vlens.declareHook(
   (): SelectedDataPoint => ({
     key: null,
-    value: 0,
-    unit: "",
+    display: "",
     type: "",
     date: "",
   })
@@ -178,6 +177,12 @@ export const GrowthChart = ({
   const weightPath = createPath(weightData, weightToY);
 
   const birthdayMs = isValidBirthday(birthday) ? new Date(birthday).getTime() : null;
+  const formatPoint = (d: server.GrowthData) =>
+    formatMeasurement(
+      d.value,
+      d.unit,
+      birthdayMs !== null ? ageInMonths(birthday!, d.measurementDate) : null
+    );
 
   let selectedPercentileLabel: string | null = null;
   if (selected.key && birthdayMs !== null) {
@@ -373,14 +378,12 @@ export const GrowthChart = ({
     const key = { id: d.id as number, kind };
     if (selected.key && selected.key.id === key.id && selected.key.kind === key.kind) {
       selected.key = null;
-      selected.value = 0;
-      selected.unit = "";
+      selected.display = "";
       selected.type = "";
       selected.date = "";
     } else {
       selected.key = key;
-      selected.value = d.value;
-      selected.unit = d.unit;
+      selected.display = formatPoint(d);
       selected.type = kind;
       selected.date = formatDate(d.measurementDate);
     }
@@ -526,7 +529,7 @@ export const GrowthChart = ({
                   onMouseLeave={clearHover}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Height measurement: ${d.value} ${d.unit} on ${formatDate(
+                  aria-label={`Height measurement: ${formatPoint(d)} on ${formatDate(
                     d.measurementDate
                   )}`}
                   onKeyDown={e => {
@@ -564,7 +567,7 @@ export const GrowthChart = ({
                   onMouseLeave={clearHover}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Weight measurement: ${d.value} ${d.unit} on ${formatDate(
+                  aria-label={`Weight measurement: ${formatPoint(d)} on ${formatDate(
                     d.measurementDate
                   )}`}
                   onKeyDown={e => {
@@ -670,9 +673,7 @@ export const GrowthChart = ({
             <span className="info-type">{selected.type}</span>
             <span className="info-date">{selected.date}</span>
           </div>
-          <div className="info-value">
-            {selected.value} {selected.unit}
-          </div>
+          <div className="info-value">{selected.display}</div>
           {selectedPercentileLabel && (
             <div className="info-percentile">{selectedPercentileLabel}</div>
           )}

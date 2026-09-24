@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as server from "../../../server";
 import { GrowthChart } from "../../../components/chart/chart";
+import { formatMeasurement } from "../../../lib/weightFormat";
 import {
   ageInMonths,
   computePercentileLabel,
@@ -33,7 +34,7 @@ const handleDeleteGrowthData = async (
 ) => {
   const typeLabel = type === server.Height ? "Height" : "Weight";
   const confirmed = confirm(
-    `Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${value} ${unit}?`
+    `Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${formatMeasurement(value, unit)}?`
   );
 
   if (confirmed) {
@@ -114,7 +115,13 @@ export const GrowthTab = ({ person, growthData }: GrowthTabProps) => {
                       <tr key={record.id}>
                         <td>{getMeasurementTypeLabel(record.measurementType)}</td>
                         <td>
-                          {record.value} {record.unit}
+                          {formatMeasurement(
+                            record.value,
+                            record.unit,
+                            hasBirthday
+                              ? ageInMonths(person.birthday, record.measurementDate)
+                              : null
+                          )}
                         </td>
                         {hasBirthday && <td>{getAgeLabel(record)}</td>}
                         {hasBirthday && (

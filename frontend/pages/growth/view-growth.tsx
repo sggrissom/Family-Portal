@@ -5,6 +5,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate } from "../../lib/dateUtils";
+import { formatMeasurement } from "../../lib/weightFormat";
 import { ErrorPage } from "../../components/ErrorPage";
 import { handleDeleteGrowthData } from "../../lib/timelineHelpers";
 import {
@@ -140,7 +141,7 @@ const ViewGrowthPage = ({
             {getMeasurementTypeLabel(growthData.measurementType)}
           </div>
           <div className="growth-detail-value">
-            {growthData.value} {growthData.unit}
+            {formatMeasurement(growthData.value, growthData.unit, ageMonths)}
           </div>
           <div className="growth-detail-meta">
             <span>{person.name}</span>
@@ -250,10 +251,8 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
                   renderText={p => (
                     <>
                       At <strong>{p.ageLabel}</strong> old, {entry.person.name} measured{" "}
-                      <strong>
-                        {p.value} {p.unit}
-                      </strong>{" "}
-                      — {describeValueComparison(p, measurementType)}
+                      <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> —{" "}
+                      {describeValueComparison(p, measurementType)}
                     </>
                   )}
                 />
@@ -264,10 +263,8 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
                   renderText={p => (
                     <>
                       {entry.person.name} reached{" "}
-                      <strong>
-                        {p.value} {p.unit}
-                      </strong>{" "}
-                      at <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)}) —{" "}
+                      <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> at{" "}
+                      <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)}) —{" "}
                       {describeAgeComparison(p)}
                     </>
                   )}

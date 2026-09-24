@@ -5,6 +5,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { calculateAge, formatDate } from "../../lib/dateUtils";
+import { formatMeasurement } from "../../lib/weightFormat";
 import {
   getCategoryIcon,
   getCategoryLabel,
@@ -448,7 +449,7 @@ const PersonColumn = ({
                           <span className="timeline-item-date">{formatDate(item.date)}</span>
                         </div>
                         <div className="timeline-item-description measurement-value">
-                          {measurement.value} {measurement.unit}
+                          {formatMeasurement(measurement.value, measurement.unit)}
                         </div>
                       </div>
                     </div>

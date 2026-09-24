@@ -3,6 +3,8 @@ import * as vlens from "vlens";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { personSubtitle } from "../../lib/routeHelpers";
+import { ageInMonths, isValidBirthday } from "../../lib/growthPercentiles";
+import { formatLbOz, lbOzToLbs, OZ_PER_LB, prefersLbOz, splitLbOz } from "../../lib/weightFormat";
 
 type GrowthFormData = {
   selectedPersonId: string;
@@ -12,6 +14,9 @@ type GrowthFormData = {
   heightInputMode: string;
   feet: string;
   inches: string;
+  weightInputMode: string;
+  pounds: string;
+  ounces: string;
   inputType: string;
   measurementDate: string;
   ageYears: string;
@@ -19,6 +24,11 @@ type GrowthFormData = {
   error: string;
   loading: boolean;
 };
+
+const editLbOz = (growthData?: server.GrowthData) =>
+  !!growthData &&
+  growthData.measurementType === server.Weight &&
+  prefersLbOz(growthData.value, growthData.unit);
 
 const useGrowthForm = vlens.declareHook(
   (mode: "add" | "edit", personId?: string, growthData?: server.GrowthData): GrowthFormData => ({
@@ -34,6 +44,11 @@ const useGrowthForm = vlens.declareHook(
     heightInputMode: "decimal",
     feet: "",
     inches: "",
+    weightInputMode: mode === "edit" && editLbOz(growthData) ? "lb-oz" : "decimal",
+    pounds:
+      mode === "edit" && editLbOz(growthData) ? splitLbOz(growthData!.value).lb.toString() : "",
+    ounces:
+      mode === "edit" && editLbOz(growthData) ? splitLbOz(growthData!.value).oz.toString() : "",
     inputType: mode === "edit" ? "date" : "today",
     measurementDate:
       mode === "edit" && growthData?.measurementDate
@@ -79,6 +94,16 @@ async function onSubmitGrowth(
       return;
     }
     actualValue = feet * 12 + inches;
+  } else if (isLbOzEntry(form)) {
+    const pounds = parseFloat(form.pounds) || 0;
+    const ounces = parseFloat(form.ounces) || 0;
+    if ((pounds <= 0 && ounces <= 0) || pounds < 0 || ounces < 0 || ounces >= OZ_PER_LB) {
+      form.error = "Please enter a valid weight (pounds and ounces under 16)";
+      form.loading = false;
+      vlens.scheduleRedraw();
+      return;
+    }
+    actualValue = lbOzToLbs(pounds, ounces);
   } else {
     actualValue = parseFloat(form.value);
     if (!form.value || actualValue <= 0) {
@@ -161,13 +186,40 @@ async function onSubmitGrowth(
   }
 }
 
-function onMeasurementTypeChange(form: GrowthFormData, newType: string) {
+function isLbOzEntry(form: GrowthFormData): boolean {
+  return (
+    form.measurementType === "weight" && form.unit === "lbs" && form.weightInputMode === "lb-oz"
+  );
+}
+
+function isInfant(person: server.Person | undefined): boolean {
+  if (!person || !isValidBirthday(person.birthday)) return false;
+  return prefersLbOz(0, "lbs", ageInMonths(person.birthday, new Date()));
+}
+
+function onMeasurementTypeChange(
+  form: GrowthFormData,
+  people: server.Person[] | undefined,
+  newType: string
+) {
   form.measurementType = newType;
   form.unit = newType === "height" ? "in" : "lbs";
   form.heightInputMode = "decimal";
+  const person = people?.find(p => p.id === parseInt(form.selectedPersonId));
+  form.weightInputMode = isInfant(person) ? "lb-oz" : "decimal";
   form.value = "";
   form.feet = "";
   form.inches = "";
+  form.pounds = "";
+  form.ounces = "";
+  vlens.scheduleRedraw();
+}
+
+function onWeightInputModeChange(form: GrowthFormData, newMode: string) {
+  form.weightInputMode = newMode;
+  form.value = "";
+  form.pounds = "";
+  form.ounces = "";
   vlens.scheduleRedraw();
 }
 
@@ -268,7 +320,7 @@ export const GrowthForm = ({
                   name="measurementType"
                   value="height"
                   checked={form.measurementType === "height"}
-                  onChange={() => onMeasurementTypeChange(form, "height")}
+                  onChange={() => onMeasurementTypeChange(form, people, "height")}
                   disabled={form.loading}
                 />
                 <span>Height</span>
@@ -279,7 +331,7 @@ export const GrowthForm = ({
                   name="measurementType"
                   value="weight"
                   checked={form.measurementType === "weight"}
-                  onChange={() => onMeasurementTypeChange(form, "weight")}
+                  onChange={() => onMeasurementTypeChange(form, people, "weight")}
                   disabled={form.loading}
                 />
                 <span>Weight</span>
@@ -317,43 +369,104 @@ export const GrowthForm = ({
             </fieldset>
           )}
 
+          {form.measurementType === "weight" && form.unit === "lbs" && (
+            <fieldset className="form-group growth-choice-group">
+              <legend>Weight Input Mode</legend>
+              <div className="radio-group growth-radio-group">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="weightInputMode"
+                    value="decimal"
+                    checked={form.weightInputMode === "decimal"}
+                    onChange={() => onWeightInputModeChange(form, "decimal")}
+                    disabled={form.loading}
+                  />
+                  <span>Decimal (lbs)</span>
+                </label>
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="weightInputMode"
+                    value="lb-oz"
+                    checked={form.weightInputMode === "lb-oz"}
+                    onChange={() => onWeightInputModeChange(form, "lb-oz")}
+                    disabled={form.loading}
+                  />
+                  <span>Pounds & Ounces</span>
+                </label>
+              </div>
+            </fieldset>
+          )}
+
+          {isLbOzEntry(form) && (
+            <div className="form-row">
+              <div className="form-group flex-2">
+                <label htmlFor="pounds">Pounds</label>
+                <input
+                  id="pounds"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="numeric"
+                  {...vlens.attrsBindInput(vlens.ref(form, "pounds"))}
+                  placeholder="7"
+                  disabled={form.loading}
+                />
+              </div>
+              <div className="form-group flex-2">
+                <label htmlFor="ounces">Ounces</label>
+                <input
+                  id="ounces"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*\.?[0-9]*"
+                  {...vlens.attrsBindInput(vlens.ref(form, "ounces"))}
+                  placeholder="8"
+                  disabled={form.loading}
+                />
+              </div>
+            </div>
+          )}
+
           {!(
             form.measurementType === "height" &&
             form.unit === "in" &&
             form.heightInputMode === "feet-inches"
-          ) && (
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label htmlFor="value">
-                  {form.measurementType === "height" ? "Height" : "Weight"}
-                </label>
-                <input
-                  id="value"
-                  type="text"
-                  inputmode="decimal"
-                  pattern="[0-9]*\.?[0-9]*"
-                  {...vlens.attrsBindInput(vlens.ref(form, "value"))}
-                  placeholder={form.measurementType === "height" ? "67.50" : "45.25"}
-                  required
-                  disabled={form.loading}
-                />
+          ) &&
+            !isLbOzEntry(form) && (
+              <div className="form-row">
+                <div className="form-group flex-2">
+                  <label htmlFor="value">
+                    {form.measurementType === "height" ? "Height" : "Weight"}
+                  </label>
+                  <input
+                    id="value"
+                    type="text"
+                    inputmode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    {...vlens.attrsBindInput(vlens.ref(form, "value"))}
+                    placeholder={form.measurementType === "height" ? "67.50" : "45.25"}
+                    required
+                    disabled={form.loading}
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label htmlFor="unit">Unit</label>
+                  <select
+                    id="unit"
+                    {...vlens.attrsBindInput(vlens.ref(form, "unit"))}
+                    disabled={form.loading}
+                  >
+                    {getUnitOptions().map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="form-group flex-1">
-                <label htmlFor="unit">Unit</label>
-                <select
-                  id="unit"
-                  {...vlens.attrsBindInput(vlens.ref(form, "unit"))}
-                  disabled={form.loading}
-                >
-                  {getUnitOptions().map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+            )}
 
           {form.measurementType === "height" &&
             form.unit === "in" &&
@@ -499,49 +612,57 @@ export const GrowthForm = ({
           </div>
         </form>
 
-        {selectedPerson && (form.value || form.feet || form.inches) && (
-          <div className="measurement-preview">
-            <h3>Preview</h3>
-            <p>
-              {mode === "add" && <strong>{selectedPerson.name}</strong>}
-              {mode === "add" && " - "}
-              {mode === "edit" && "Updated "}
-              {form.measurementType}:{" "}
-              {form.measurementType === "height" &&
-              form.unit === "in" &&
-              form.heightInputMode === "feet-inches" ? (
-                <>
-                  {form.feet || "0"} ft {form.inches || "0"} in
-                  {form.feet || form.inches ? (
-                    <span style="opacity: 0.7">
-                      {" "}
-                      (
-                      {((parseFloat(form.feet) || 0) * 12 + (parseFloat(form.inches) || 0)).toFixed(
-                        2
-                      )}{" "}
-                      in total)
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  {form.value} {form.unit}
-                </>
-              )}
-              {form.inputType === "today" && <span> today</span>}
-              {form.inputType === "date" && form.measurementDate && (
-                <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
-              )}
-              {form.inputType === "age" && form.ageYears && (
-                <span>
-                  {" "}
-                  at age {form.ageYears}
-                  {form.ageMonths ? `.${form.ageMonths}` : ""} years
-                </span>
-              )}
-            </p>
-          </div>
-        )}
+        {selectedPerson &&
+          (form.value || form.feet || form.inches || form.pounds || form.ounces) && (
+            <div className="measurement-preview">
+              <h3>Preview</h3>
+              <p>
+                {mode === "add" && <strong>{selectedPerson.name}</strong>}
+                {mode === "add" && " - "}
+                {mode === "edit" && "Updated "}
+                {form.measurementType}:{" "}
+                {form.measurementType === "height" &&
+                form.unit === "in" &&
+                form.heightInputMode === "feet-inches" ? (
+                  <>
+                    {form.feet || "0"} ft {form.inches || "0"} in
+                    {form.feet || form.inches ? (
+                      <span style="opacity: 0.7">
+                        {" "}
+                        (
+                        {(
+                          (parseFloat(form.feet) || 0) * 12 +
+                          (parseFloat(form.inches) || 0)
+                        ).toFixed(2)}{" "}
+                        in total)
+                      </span>
+                    ) : null}
+                  </>
+                ) : isLbOzEntry(form) ? (
+                  <>
+                    {formatLbOz(
+                      lbOzToLbs(parseFloat(form.pounds) || 0, parseFloat(form.ounces) || 0)
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {form.value} {form.unit}
+                  </>
+                )}
+                {form.inputType === "today" && <span> today</span>}
+                {form.inputType === "date" && form.measurementDate && (
+                  <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
+                )}
+                {form.inputType === "age" && form.ageYears && (
+                  <span>
+                    {" "}
+                    at age {form.ageYears}
+                    {form.ageMonths ? `.${form.ageMonths}` : ""} years
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
       </div>
     </div>
   );

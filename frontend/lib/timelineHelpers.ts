@@ -1,4 +1,5 @@
 import * as server from "../server";
+import { formatMeasurement } from "./weightFormat";
 
 export function getAgeInYears(ageString: string): number {
   if (!ageString || ageString === "Newborn") return 0;
@@ -41,7 +42,7 @@ export async function handleDeleteGrowthData(
 ): Promise<void> {
   const typeLabel = type === server.Height ? "Height" : "Weight";
   const confirmed = confirm(
-    `Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${value} ${unit}?`
+    `Are you sure you want to delete this ${typeLabel.toLowerCase()} measurement of ${formatMeasurement(value, unit)}?`
   );
 
   if (confirmed) {

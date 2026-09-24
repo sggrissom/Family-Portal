@@ -1,8 +1,10 @@
 import * as server from "../server";
 import { ageInMonths, formatAgeAtMeasurement, isValidBirthday } from "./growthPercentiles";
+import { formatLbOz, prefersLbOz } from "./weightFormat";
 
 export interface ComparisonPoint {
   ageLabel: string;
+  ageMonths: number;
   value: number;
   unit: string;
   date: string;
@@ -82,6 +84,7 @@ function toPoint(
   const targetValueInPointUnit = fromMetric(targetValueMetric, r.record.unit);
   return {
     ageLabel: formatAgeAtMeasurement(r.ageMonths),
+    ageMonths: r.ageMonths,
     value: r.record.value,
     unit: r.record.unit,
     date: r.record.measurementDate,
@@ -94,7 +97,9 @@ function roundTo1Decimal(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-function formatValueDiff(diff: number, unit: string): string {
+function formatValueDiff(point: ComparisonPoint): string {
+  const { valueDiff: diff, unit } = point;
+  if (prefersLbOz(point.value, unit, point.ageMonths)) return formatLbOz(Math.abs(diff));
   const rounded = roundTo1Decimal(Math.abs(diff));
   const formatted = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
   return `${formatted} ${unit}`;
@@ -117,7 +122,7 @@ export function describeValueComparison(
   if (roundTo1Decimal(Math.abs(point.valueDiff)) === 0) {
     return `you were about the same ${noun} at this age`;
   }
-  const magnitude = formatValueDiff(point.valueDiff, point.unit);
+  const magnitude = formatValueDiff(point);
   const comparative =
     measurementType === server.Height
       ? point.valueDiff > 0
