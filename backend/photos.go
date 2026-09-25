@@ -143,6 +143,7 @@ type Image struct {
 	CreatedAt        time.Time `json:"createdAt"`
 	Status           int       `json:"status"`
 	AnalysisStatus   int       `json:"analysisStatus"`
+	AnalysisVersion  int       `json:"-"`
 	TagIds           []int     `json:"tagIds,omitempty"`
 }
 
@@ -156,7 +157,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(3, buf)
+	version := vpack.Version(4, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -173,6 +174,9 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	vpack.Int(&self.Status, buf)
 	if version >= 3 {
 		vpack.Int(&self.AnalysisStatus, buf)
+	}
+	if version >= 4 {
+		vpack.Int(&self.AnalysisVersion, buf)
 	}
 }
 
@@ -1088,6 +1092,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 }
 
 func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
+	deletePhotoFacesTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
@@ -1345,6 +1350,7 @@ func RemovePersonFromPhotoProc(ctx *vbeam.Context, req RemovePersonFromPhotoRequ
 	}
 
 	RemovePersonFromPhoto(ctx.Tx, req.PhotoId, req.PersonId)
+	unassignPersonFacesOnPhotoTx(ctx.Tx, req.PhotoId, req.PersonId, true)
 
 	vbolt.TxCommit(ctx.Tx)
 

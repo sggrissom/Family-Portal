@@ -31,8 +31,12 @@ type GetPhotoStatsResponse struct {
 	AnalysisAnalyzing int `json:"analysisAnalyzing"`
 	AnalysisDone      int `json:"analysisDone"`
 	AnalysisFailed    int `json:"analysisFailed"`
+	AnalysisOutdated  int `json:"analysisOutdated"`
 	AutoTaggedCount   int `json:"autoTaggedCount"`
 	PersonsWithFace   int `json:"personsWithFace"`
+	FacesDetected     int `json:"facesDetected"`
+	FacesUnknown      int `json:"facesUnknown"`
+	FacesConfirmed    int `json:"facesConfirmed"`
 }
 
 type ReprocessAllPhotosRequest struct{}
@@ -66,6 +70,9 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 			resp.AnalysisAnalyzing++
 		case 2:
 			resp.AnalysisDone++
+			if photo.AnalysisVersion < currentAnalysisVersion {
+				resp.AnalysisOutdated++
+			}
 		case 3:
 			resp.AnalysisFailed++
 		}
@@ -84,6 +91,17 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	vbolt.IterateAll(ctx.Tx, PeopleBkt, func(key int, p Person) bool {
 		if len(p.FaceDescriptor) == 128 {
 			resp.PersonsWithFace++
+		}
+		return true
+	})
+
+	vbolt.IterateAll(ctx.Tx, PhotoFaceBkt, func(key int, face PhotoFace) bool {
+		resp.FacesDetected++
+		switch face.Status {
+		case FaceUnknown:
+			resp.FacesUnknown++
+		case FaceConfirmed:
+			resp.FacesConfirmed++
 		}
 		return true
 	})
@@ -204,7 +222,7 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if image.AnalysisStatus == 0 || image.AnalysisStatus == 3 {
+		if image.AnalysisStatus == 3 || imageNeedsAnalysis(image) {
 			toQueue = append(toQueue, image)
 		} else {
 			resp.Skipped++
@@ -223,10 +241,12 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 		vbolt.TxCommit(ctx.Tx)
 	}
 
+	jobs := make([]PhotoAnalysisJob, 0, len(toQueue))
 	for _, image := range toQueue {
-		QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: image.Id, FamilyId: image.FamilyId})
-		resp.Queued++
+		jobs = append(jobs, PhotoAnalysisJob{ImageId: image.Id, FamilyId: image.FamilyId})
 	}
+	QueueAnalysisBacklog(jobs)
+	resp.Queued = len(jobs)
 
 	return
 }

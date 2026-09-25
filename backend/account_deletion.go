@@ -230,6 +230,7 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 }
 
 func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
+	unassignPersonFacesTx(tx, person.Id)
 	for _, photoPerson := range GetPhotoPersonsByPerson(tx, person.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)

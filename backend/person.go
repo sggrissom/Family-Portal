@@ -697,6 +697,12 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	}
 	resp.MergedPhotos = mergedPhotoCount
 
+	moveFacesToPersonTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	if len(targetPerson.FaceDescriptor) != 128 && len(sourcePerson.FaceDescriptor) == 128 {
+		targetPerson.FaceDescriptor = sourcePerson.FaceDescriptor
+		vbolt.Write(ctx.Tx, PeopleBkt, targetPerson.Id, &targetPerson)
+	}
+
 	for _, row := range GetPersonFamilies(ctx.Tx, req.SourcePersonId) {
 		EnsurePersonFamilyTx(ctx.Tx, req.TargetPersonId, row.FamilyId)
 	}

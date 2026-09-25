@@ -267,3 +267,97 @@ block(`
   }
 }
 `);
+
+block(`
+.person-tag-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+`);
+
+block(`
+.person-tag-remove:hover {
+  color: var(--danger);
+}
+`);
+
+block(`
+.photo-faces {
+  margin-top: 1rem;
+}
+`);
+
+block(`
+.photo-faces-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+`);
+
+block(`
+.photo-face {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+`);
+
+block(`
+.photo-face-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+`);
+
+block(`
+.photo-face-name {
+  font-weight: 600;
+}
+`);
+
+block(`
+.photo-face-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+`);
+
+block(`
+.photo-face-auto {
+  font-size: 0.75rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+}
+`);
+
+block(`
+.photo-face-dismiss {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+}
+`);
+
+block(`
+.photo-faces-link {
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+`);

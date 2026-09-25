@@ -59,8 +59,12 @@ export async function fetch(route: string, prefix: string) {
       analysisAnalyzing: 0,
       analysisDone: 0,
       analysisFailed: 0,
+      analysisOutdated: 0,
       autoTaggedCount: 0,
       personsWithFace: 0,
+      facesDetected: 0,
+      facesUnknown: 0,
+      facesConfirmed: 0,
     });
   }
 
@@ -411,9 +415,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
   };
 
   const startReanalysis = async () => {
-    const pendingCount = data.analysisPending + data.analysisFailed;
+    const pendingCount = data.analysisPending + data.analysisFailed + data.analysisOutdated;
     const confirmed = confirm(
-      `Queue ${pendingCount} photos for face analysis? This will analyze pending/failed photos. Continue?`
+      `Queue ${pendingCount} photos for face analysis? This will analyze pending, failed, and outdated photos. Continue?`
     );
 
     if (!confirmed) return;
@@ -616,6 +620,18 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
             </div>
           </div>
 
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">🙂</div>
+            <div className="stat-content">
+              <h3>Faces</h3>
+              <div className="admin-stat-value">{data.facesDetected.toLocaleString()}</div>
+              <div className="admin-stat-label">
+                {data.facesUnknown.toLocaleString()} unnamed, {data.facesConfirmed.toLocaleString()}{" "}
+                confirmed
+              </div>
+            </div>
+          </div>
+
           {state.analysisStats && (
             <div className="admin-stat-card">
               <div className="admin-stat-icon">{state.analysisStats.isRunning ? "🟢" : "🔴"}</div>
@@ -631,7 +647,7 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
       </div>
 
-      {data.analysisPending + data.analysisFailed > 0 && (
+      {data.analysisPending + data.analysisFailed + data.analysisOutdated > 0 && (
         <div className="admin-card reprocess-card">
           <div className="card-header">
             <div className="admin-card-icon">🔍</div>
@@ -639,8 +655,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
           <div className="card-content">
             <p>
-              {data.analysisPending} pending and {data.analysisFailed} failed photos have not been
-              analyzed. Queue them for face recognition.
+              {data.analysisPending} pending, {data.analysisFailed} failed, and{" "}
+              {data.analysisOutdated} outdated photos need face analysis. Outdated photos were
+              analyzed before face positions were stored. Queue them for face recognition.
             </p>
 
             {state.isReanalyzing ? (
@@ -654,7 +671,8 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                   onClick={startReanalysis}
                   disabled={state.isReanalyzing}
                 >
-                  Reanalyze {data.analysisPending + data.analysisFailed} Photos
+                  Reanalyze {data.analysisPending + data.analysisFailed + data.analysisOutdated}{" "}
+                  Photos
                 </button>
                 {state.lastReanalysisTime && (
                   <div className="last-reprocess">Last queued: {state.lastReanalysisTime}</div>

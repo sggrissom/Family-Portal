@@ -20,8 +20,8 @@ and nothing else.**
 | --- | --- |
 | socket missing at startup | `InitializeAnalysisWorker` logs and returns. No worker exists; `QueuePhotoAnalysis` becomes a no-op. Uploads are unaffected. |
 | daemon dies while running | Each job fails its socket call, the photo's `AnalysisStatus` is set to `3` (failed), and the loop continues to the next job. |
-| queue full | The job is dropped with a log line. The photo keeps every other property. |
-| local build | `photo_analysis_worker_stub.go` — every entry point is a no-op and `cfg.EnableFaceTagging` is false. |
+| queue full | The job moves to an in-memory backlog the worker drains between live jobs. Anything lost on restart is re-queued by the startup sweep. |
+| local build | `cfg.EnableFaceTagging` is false, so the worker is never created and every entry point is a no-op. |
 | shutdown | Stopped without draining. See `StopAnalysisWorker`. |
 
 A photo that misses analysis keeps its pixels, its date, its caption, and every

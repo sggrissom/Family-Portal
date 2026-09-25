@@ -101,6 +101,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                 🔍 Filter {photoFilter.hasActiveFilters() && `(${photoFilter.getFilterSummary()})`}
               </button>
             )}
+            {hasPhotos && (
+              <a href="/faces" className="btn btn-secondary">
+                🙂 Faces
+              </a>
+            )}
             <a href="/add-photo" className="btn btn-primary">
               📸 Add Photo
             </a>

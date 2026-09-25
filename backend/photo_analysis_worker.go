@@ -1,5 +1,3 @@
-//go:build release
-
 package backend
 
 import (
@@ -8,6 +6,8 @@ import (
 	"encoding/json"
 	"family/cfg"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"log"
 	"math"
 	"net"
@@ -15,10 +15,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
+	"sync"
 
+	"github.com/disintegration/imaging"
 	"go.hasen.dev/vbolt"
 )
+
+const currentAnalysisVersion = 1
+
+const analysisMaxDimension = 2048
 
 type PhotoAnalysisJob struct {
 	ImageId  int
@@ -30,6 +35,10 @@ type photoAnalysisWorker struct {
 	jobQueue chan PhotoAnalysisJob
 	db       *vbolt.DB
 	client   *http.Client
+
+	backlogMu sync.Mutex
+	backlog   []PhotoAnalysisJob
+	wake      chan struct{}
 }
 
 var globalAnalysisWorker *photoAnalysisWorker
@@ -43,8 +52,11 @@ func GetAnalysisWorkerStats() AnalysisWorkerStats {
 	if globalAnalysisWorker == nil {
 		return AnalysisWorkerStats{}
 	}
+	globalAnalysisWorker.backlogMu.Lock()
+	backlog := len(globalAnalysisWorker.backlog)
+	globalAnalysisWorker.backlogMu.Unlock()
 	return AnalysisWorkerStats{
-		QueueLength: len(globalAnalysisWorker.jobQueue),
+		QueueLength: len(globalAnalysisWorker.jobQueue) + backlog,
 		IsRunning:   globalAnalysisWorker.isRunning(),
 	}
 }
@@ -82,6 +94,7 @@ func InitializeAnalysisWorker(db *vbolt.DB) {
 		jobQueue: make(chan PhotoAnalysisJob, 100),
 		db:       db,
 		client:   client,
+		wake:     make(chan struct{}, 1),
 	}
 
 	quit, done, _ := globalAnalysisWorker.start()
@@ -99,8 +112,40 @@ func QueuePhotoAnalysis(job PhotoAnalysisJob) {
 	case globalAnalysisWorker.jobQueue <- job:
 		log.Printf("[FACE_ANALYSIS] Photo %d queued for analysis", job.ImageId)
 	default:
-		log.Printf("[FACE_ANALYSIS] Cannot queue photo %d: analysis queue full", job.ImageId)
+		globalAnalysisWorker.addBacklog([]PhotoAnalysisJob{job})
+		log.Printf("[FACE_ANALYSIS] Analysis queue full; photo %d added to backlog", job.ImageId)
 	}
+}
+
+func QueueAnalysisBacklog(jobs []PhotoAnalysisJob) {
+	if globalAnalysisWorker == nil {
+		return
+	}
+	globalAnalysisWorker.addBacklog(jobs)
+}
+
+func (aw *photoAnalysisWorker) addBacklog(jobs []PhotoAnalysisJob) {
+	if len(jobs) == 0 {
+		return
+	}
+	aw.backlogMu.Lock()
+	aw.backlog = append(aw.backlog, jobs...)
+	aw.backlogMu.Unlock()
+	select {
+	case aw.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (aw *photoAnalysisWorker) popBacklog() (PhotoAnalysisJob, bool) {
+	aw.backlogMu.Lock()
+	defer aw.backlogMu.Unlock()
+	if len(aw.backlog) == 0 {
+		return PhotoAnalysisJob{}, false
+	}
+	job := aw.backlog[0]
+	aw.backlog = aw.backlog[1:]
+	return job, true
 }
 
 func TriggerPersonFaceUpdate(personId int) {
@@ -115,17 +160,68 @@ func TriggerPersonFaceUpdate(personId int) {
 func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
 	defer close(done)
 	aw.backfillPersonEmbeddings(quit)
+	aw.addBacklog(photosNeedingAnalysis(aw.db))
 	for {
 		select {
+		case <-quit:
+			aw.logStopped()
+			return
 		case job := <-aw.jobQueue:
 			aw.processAnalysisJob(job)
+			continue
+		default:
+		}
+
+		if job, ok := aw.popBacklog(); ok {
+			aw.processAnalysisJob(job)
+			continue
+		}
+
+		select {
 		case <-quit:
-			LogInfo(LogCategoryWorker, "Photo analysis worker stopped", map[string]interface{}{
-				"abandoned": len(aw.jobQueue),
-			})
+			aw.logStopped()
 			return
+		case job := <-aw.jobQueue:
+			aw.processAnalysisJob(job)
+		case <-aw.wake:
 		}
 	}
+}
+
+func (aw *photoAnalysisWorker) logStopped() {
+	aw.backlogMu.Lock()
+	backlog := len(aw.backlog)
+	aw.backlogMu.Unlock()
+	LogInfo(LogCategoryWorker, "Photo analysis worker stopped", map[string]interface{}{
+		"abandoned": len(aw.jobQueue) + backlog,
+	})
+}
+
+func imageNeedsAnalysis(image Image) bool {
+	switch image.AnalysisStatus {
+	case 0, 1:
+		return true
+	case 2:
+		return image.AnalysisVersion < currentAnalysisVersion
+	}
+	return false
+}
+
+func photosNeedingAnalysis(db *vbolt.DB) (jobs []PhotoAnalysisJob) {
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
+			if image.Status == 0 && imageNeedsAnalysis(image) {
+				jobs = append(jobs, PhotoAnalysisJob{ImageId: image.Id, FamilyId: image.FamilyId})
+			}
+			return true
+		})
+	})
+	if len(jobs) > 0 {
+		LogInfo(LogCategoryWorker, "Queued photos for face analysis backfill", map[string]interface{}{
+			"count": len(jobs),
+		})
+	}
+	return
 }
 
 func (aw *photoAnalysisWorker) backfillPersonEmbeddings(quit <-chan struct{}) {
@@ -175,176 +271,150 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) {
 		return
 	}
 
-	imagePath := aw.resolveImagePath(job.ImageId)
-	if imagePath == "" {
-		log.Printf("[FACE_ANALYSIS] Image file not found for photo %d", job.ImageId)
-		aw.setAnalysisStatus(job.ImageId, 3)
+	var img Image
+	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
+		img = GetImageById(tx, job.ImageId)
+	})
+	if img.Id == 0 {
 		return
 	}
 
-	descriptors, err := callRecognize(aw.client, imagePath)
+	faces, err := detectFaces(aw.client, img)
 	if err != nil {
 		log.Printf("[FACE_ANALYSIS] Face detection failed for photo %d: %v", job.ImageId, err)
 		aw.setAnalysisStatus(job.ImageId, 3)
 		return
 	}
-	log.Printf("[FACE_ANALYSIS] Detected %d face(s) in photo %d", len(descriptors), job.ImageId)
 
-	if len(descriptors) > 0 {
-		aw.matchAndTagFaces(job, descriptors)
-	}
-
-	aw.setAnalysisStatus(job.ImageId, 2)
-	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d", job.ImageId)
+	tagged := 0
+	vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
+		img := GetImageById(tx, job.ImageId)
+		if img.Id == 0 {
+			return
+		}
+		tagged = RecordPhotoFacesTx(tx, img.Id, faces)
+		img = GetImageById(tx, job.ImageId)
+		img.AnalysisStatus = 2
+		img.AnalysisVersion = currentAnalysisVersion
+		vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		vbolt.TxCommit(tx)
+	})
+	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d: %d face(s), %d auto-tagged", job.ImageId, len(faces), tagged)
 }
 
 type recognizeRequest struct {
 	ImagePath string `json:"image_path"`
+	ImageData []byte `json:"image_data,omitempty"`
+}
+
+type recognizedFace struct {
+	Descriptor []float32 `json:"descriptor"`
+	Rect       [4]int    `json:"rect"`
 }
 
 type recognizeResponse struct {
-	Descriptors [][]float32 `json:"descriptors"`
+	Descriptors [][]float32      `json:"descriptors"`
+	Faces       []recognizedFace `json:"faces"`
+	Source      string           `json:"source"`
 }
 
-type embedRequest struct {
-	ImagePath string `json:"image_path"`
-}
-
-type embedResponse struct {
-	Descriptor []float32 `json:"descriptor"`
-}
-
-func callRecognize(client *http.Client, imagePath string) ([][]float32, error) {
-	body, _ := json.Marshal(recognizeRequest{ImagePath: imagePath})
+func callRecognize(client *http.Client, req recognizeRequest) (recognizeResponse, error) {
+	var result recognizeResponse
+	body, _ := json.Marshal(req)
 	resp, err := client.Post("http://face/recognize", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("face daemon returned status %d", resp.StatusCode)
+		return result, fmt.Errorf("face daemon returned status %d", resp.StatusCode)
 	}
-	var result recognizeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result.Descriptors, nil
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	return result, err
 }
 
-func callEmbed(client *http.Client, imagePath string) ([]float32, error) {
-	body, _ := json.Marshal(embedRequest{ImagePath: imagePath})
-	resp, err := client.Post("http://face/embed", "application/json", bytes.NewReader(body))
+func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
+	path := analysisImagePath(img)
+	data, dataSize, dataErr := analysisImageData(img)
+	if path == "" && dataErr != nil {
+		return nil, fmt.Errorf("no readable image for photo %d: %w", img.Id, dataErr)
+	}
+
+	result, err := callRecognize(client, recognizeRequest{ImagePath: path, ImageData: data})
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("face daemon returned status %d", resp.StatusCode)
+	if result.Source == "data" {
+		return toDetectedFaces(result, dataSize), nil
 	}
-	var result embedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result.Descriptor, nil
+	return toDetectedFaces(result, imageSize(path)), nil
 }
 
-func (aw *photoAnalysisWorker) resolveImagePath(imageId int) string {
-	var imagePath string
-	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
-		img := GetImageById(tx, imageId)
-		if img.Id == 0 {
-			return
-		}
-		basePath := filepath.Join(cfg.StaticDir, img.FilePath)
-		base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-		mediumPath := base + "_medium.jpg"
-		if _, err := os.Stat(mediumPath); err == nil {
-			imagePath = mediumPath
-			return
-		}
-		largePath := base + ".jpg"
-		if _, err := os.Stat(largePath); err == nil {
-			imagePath = largePath
-		}
-	})
-	return imagePath
+// The display variants are too small for the detector to find faces in group
+// shots, so analysis works from the original, upright and capped in size.
+func analysisImageData(img Image) ([]byte, image.Point, error) {
+	decoded, err := imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
+	if err != nil {
+		return nil, image.Point{}, err
+	}
+	b := decoded.Bounds()
+	if b.Dx() > analysisMaxDimension || b.Dy() > analysisMaxDimension {
+		decoded = imaging.Fit(decoded, analysisMaxDimension, analysisMaxDimension, imaging.Lanczos)
+	}
+	rgb := imaging.Clone(decoded)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, rgb, &jpeg.Options{Quality: 90}); err != nil {
+		return nil, image.Point{}, err
+	}
+	return buf.Bytes(), image.Point{X: rgb.Bounds().Dx(), Y: rgb.Bounds().Dy()}, nil
 }
 
-func (aw *photoAnalysisWorker) matchAndTagFaces(job PhotoAnalysisJob, descriptors [][]float32) {
-	var knownPersons []Person
-	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
-		all := GetFamilyOwnPeople(tx, job.FamilyId)
-		for _, p := range all {
-			if len(p.FaceDescriptor) == 128 {
-				knownPersons = append(knownPersons, p)
-			}
-		}
-	})
-
-	if len(knownPersons) == 0 {
-		return
+func imageSize(path string) image.Point {
+	f, err := os.Open(path)
+	if err != nil {
+		return image.Point{}
 	}
-
-	existingPersonIds := make(map[int]bool)
-	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
-		for _, pp := range GetPhotoPersonsByPhoto(tx, job.ImageId) {
-			existingPersonIds[pp.PersonId] = true
-		}
-	})
-
-	const matchThreshold = 0.6
-	matched := make(map[int]bool)
-
-	for _, detected := range descriptors {
-		bestDist := math.MaxFloat64
-		bestPersonId := 0
-
-		for _, known := range knownPersons {
-			dist := faceEuclideanDistance(detected, known.FaceDescriptor)
-			if dist < bestDist {
-				bestDist = dist
-				bestPersonId = known.Id
-			}
-		}
-
-		if bestPersonId == 0 || bestDist >= matchThreshold {
-			continue
-		}
-		if existingPersonIds[bestPersonId] || matched[bestPersonId] {
-			continue
-		}
-
-		matched[bestPersonId] = true
-		tagged := false
-		vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
-			if GetImageById(tx, job.ImageId).Id == 0 || GetPersonById(tx, bestPersonId).Id == 0 {
-				return
-			}
-			addAutoTaggedPersonToPhoto(tx, job.ImageId, bestPersonId, job.FamilyId)
-			vbolt.TxCommit(tx)
-			tagged = true
-		})
-		if !tagged {
-			log.Printf("[FACE_ANALYSIS] Photo %d or person %d disappeared mid-analysis; not tagging", job.ImageId, bestPersonId)
-			continue
-		}
-		log.Printf("[FACE_ANALYSIS] Auto-tagged person %d in photo %d (dist: %.3f)", bestPersonId, job.ImageId, bestDist)
+	defer f.Close()
+	config, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return image.Point{}
 	}
+	return image.Point{X: config.Width, Y: config.Height}
 }
 
-func addAutoTaggedPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) {
-	pp := PhotoPerson{
-		Id:         vbolt.NextIntId(tx, PhotoPersonBkt),
-		PhotoId:    photoId,
-		PersonId:   personId,
-		FamilyId:   familyId,
-		CreatedAt:  time.Now(),
-		AutoTagged: true,
+func toDetectedFaces(result recognizeResponse, size image.Point) []DetectedFace {
+	var faces []DetectedFace
+	if result.Faces == nil {
+		for _, d := range result.Descriptors {
+			faces = append(faces, DetectedFace{Descriptor: d})
+		}
+		return faces
 	}
-	vbolt.Write(tx, PhotoPersonBkt, pp.Id, &pp)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, pp.Id, photoId)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, pp.Id, personId)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, pp.Id, familyId)
+	for _, f := range result.Faces {
+		face := DetectedFace{Descriptor: f.Descriptor}
+		if size.X > 0 && size.Y > 0 {
+			clamp := func(v float64) float64 { return math.Max(0, math.Min(1, v)) }
+			face.Box = FaceBox{
+				Left:   clamp(float64(f.Rect[0]) / float64(size.X)),
+				Top:    clamp(float64(f.Rect[1]) / float64(size.Y)),
+				Right:  clamp(float64(f.Rect[2]) / float64(size.X)),
+				Bottom: clamp(float64(f.Rect[3]) / float64(size.Y)),
+			}
+		}
+		faces = append(faces, face)
+	}
+	return faces
+}
+
+func analysisImagePath(img Image) string {
+	basePath := filepath.Join(cfg.StaticDir, img.FilePath)
+	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
+	for _, candidate := range []string{base + "_xlarge.jpg", base + ".jpg", base + "_medium.jpg"} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error {
@@ -362,43 +432,64 @@ func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error 
 	return updateErr
 }
 
+// Picks the face a profile photo is about: one already assigned to the person,
+// otherwise the detected face closest to the crop's focal point.
+func pickProfileFace(person Person, known []PhotoFace, detected []DetectedFace) []float32 {
+	for _, face := range known {
+		if face.PersonId == person.Id && len(face.Descriptor) == 128 {
+			return face.Descriptor
+		}
+	}
+	if len(detected) == 0 {
+		return nil
+	}
+	cx, cy := person.ProfileCropX/100, person.ProfileCropY/100
+	if cx == 0 && cy == 0 {
+		cx, cy = 0.5, 0.5
+	}
+	best, bestDist := 0, math.MaxFloat64
+	for i, face := range detected {
+		fx := (face.Box.Left + face.Box.Right) / 2
+		fy := (face.Box.Top + face.Box.Bottom) / 2
+		if d := math.Hypot(fx-cx, fy-cy); d < bestDist {
+			best, bestDist = i, d
+		}
+	}
+	return detected[best].Descriptor
+}
+
 func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) error {
-	var imagePath string
+	var person Person
+	var img Image
+	var known []PhotoFace
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		person := GetPersonById(tx, personId)
+		person = GetPersonById(tx, personId)
 		if person.ProfilePhotoId == 0 {
 			return
 		}
-		img := GetImageById(tx, person.ProfilePhotoId)
-		if img.Id == 0 {
-			return
-		}
-		basePath := filepath.Join(cfg.StaticDir, img.FilePath)
-		base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-		mediumPath := base + "_medium.jpg"
-		if _, err := os.Stat(mediumPath); err == nil {
-			imagePath = mediumPath
-			return
-		}
-		largePath := base + ".jpg"
-		if _, err := os.Stat(largePath); err == nil {
-			imagePath = largePath
+		img = GetImageById(tx, person.ProfilePhotoId)
+		if img.Id != 0 {
+			known = GetPhotoFacesTx(tx, img.Id)
 		}
 	})
 
-	if imagePath == "" {
-		return nil
+	descriptor := pickProfileFace(person, known, nil)
+	if descriptor == nil {
+		if img.Id == 0 {
+			return nil
+		}
+		detected, err := detectFaces(client, img)
+		if err != nil {
+			return fmt.Errorf("face embedding failed: %w", err)
+		}
+		descriptor = pickProfileFace(person, nil, detected)
 	}
-
-	descriptor, err := callEmbed(client, imagePath)
-	if err != nil {
-		return fmt.Errorf("face embedding failed: %w", err)
-	}
-	if len(descriptor) == 0 {
+	if len(descriptor) != 128 {
 		log.Printf("[FACE_ANALYSIS] No face found in profile photo for person %d", personId)
 		return nil
 	}
 
+	tagged := 0
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		p := GetPersonById(tx, personId)
 		if p.Id == 0 {
@@ -406,18 +497,10 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 		}
 		p.FaceDescriptor = descriptor
 		vbolt.Write(tx, PeopleBkt, p.Id, &p)
+		tagged = RematchFamilyFacesTx(tx, p.FamilyId)
 		vbolt.TxCommit(tx)
 	})
 
-	log.Printf("[FACE_ANALYSIS] Updated face embedding for person %d", personId)
+	log.Printf("[FACE_ANALYSIS] Updated face embedding for person %d (%d photos newly auto-tagged)", personId, tagged)
 	return nil
-}
-
-func faceEuclideanDistance(a, b []float32) float64 {
-	var sum float64
-	for i := range a {
-		d := float64(a[i]) - float64(b[i])
-		sum += d * d
-	}
-	return math.Sqrt(sum)
 }

@@ -7,6 +7,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { FullImage } from "../../components/ResponsiveImage";
 import { CropSelector } from "../../components/CropSelector";
+import { FaceCrop } from "../../components/FaceCrop";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
@@ -16,18 +17,23 @@ type ViewPhotoData = {
   image: server.Image | null;
   people: server.Person[] | null;
   tags: server.Tag[];
+  faces: server.GetPhotoFacesResponse | null;
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewPhotoData>> {
   const photoId = getIdFromRoute(route) || 0;
   const [photoResp, photoErr] = await server.GetPhoto({ id: photoId });
   if (photoErr) return [null, photoErr];
-  const [tagsResp] = await server.ListTags({});
+  const [[tagsResp], [facesResp]] = await Promise.all([
+    server.ListTags({}),
+    server.GetPhotoFaces({ photoId }),
+  ]);
   return [
     {
       image: photoResp?.image ?? null,
       people: photoResp?.people ?? null,
       tags: tagsResp?.tags ?? [],
+      faces: facesResp ?? null,
     },
     "",
   ];
@@ -75,7 +81,12 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     <div>
       <Header isHome={false} />
       <main id="app" className="view-photo-container">
-        <ViewPhotoPage photo={data.image} people={data.people || []} allTags={data.tags} />
+        <ViewPhotoPage
+          photo={data.image}
+          people={data.people || []}
+          allTags={data.tags}
+          faces={data.faces}
+        />
       </main>
       <Footer />
     </div>
@@ -86,7 +97,105 @@ interface ViewPhotoPageProps {
   photo: server.Image;
   people: server.Person[];
   allTags: server.Tag[];
+  faces: server.GetPhotoFacesResponse | null;
 }
+
+async function refreshAfter(photo: server.Image, call: Promise<[unknown, string]>) {
+  const [, err] = await call;
+  if (err) {
+    alert(err);
+    return;
+  }
+  core.setRoute(`/view-photo/${photo.id}`);
+}
+
+function handleRemovePerson(photo: server.Image, person: server.Person) {
+  if (!confirm(`Remove ${person.name} from this photo?`)) return;
+  refreshAfter(photo, server.RemovePersonFromPhotoProc({ photoId: photo.id, personId: person.id }));
+}
+
+function handleAssignFace(photo: server.Image, face: server.PhotoFace, personId: number) {
+  if (!personId) return;
+  refreshAfter(photo, server.AssignFaces({ faceIds: [face.id], personId }));
+}
+
+function handleRejectFace(photo: server.Image, face: server.PhotoFace) {
+  refreshAfter(photo, server.RejectFaces({ faceIds: [face.id] }));
+}
+
+function handleDismissFace(photo: server.Image, face: server.PhotoFace) {
+  refreshAfter(photo, server.DismissFaces({ faceIds: [face.id] }));
+}
+
+const PhotoFaces = ({
+  photo,
+  faces,
+}: {
+  photo: server.Image;
+  faces: server.GetPhotoFacesResponse;
+}) => {
+  const nameOf = (id: number) => faces.people.find(p => p.id === id)?.name ?? "Someone";
+  return (
+    <div className="photo-faces">
+      <h3>Faces</h3>
+      <div className="photo-faces-list">
+        {faces.faces.map(face => (
+          <div key={face.id} className="photo-face">
+            <FaceCrop photoId={photo.id} box={face.box} size={72} />
+            {face.personId > 0 ? (
+              <div className="photo-face-info">
+                <span className="photo-face-name">{nameOf(face.personId)}</span>
+                {face.status === 1 && (
+                  <div className="photo-face-actions">
+                    <span className="photo-face-auto">auto</span>
+                    <button
+                      className="btn btn-outline btn-small"
+                      aria-label={`Confirm ${nameOf(face.personId)}`}
+                      onClick={() => handleAssignFace(photo, face, face.personId)}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      className="btn btn-outline btn-small"
+                      aria-label={`Not ${nameOf(face.personId)}`}
+                      onClick={() => handleRejectFace(photo, face)}
+                    >
+                      ✗
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="photo-face-info">
+                <select
+                  aria-label="Who is this?"
+                  value={0}
+                  onChange={e => handleAssignFace(photo, face, Number(e.currentTarget.value))}
+                >
+                  <option value={0}>Who is this?</option>
+                  {faces.people.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="photo-face-dismiss"
+                  onClick={() => handleDismissFace(photo, face)}
+                >
+                  Not family
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <a href="/faces" className="photo-faces-link">
+        Review all faces →
+      </a>
+    </div>
+  );
+};
 
 async function handleDeletePhoto(photo: server.Image) {
   const confirmed = confirm(
@@ -179,7 +288,7 @@ function closeCropModal(state: CropModalState) {
   vlens.scheduleRedraw();
 }
 
-const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
+const ViewPhotoPage = ({ photo, people, allTags, faces }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
 
@@ -230,6 +339,16 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
                       {person.profilePhotoId === photo.id && (
                         <span className="profile-badge">Profile Photo</span>
                       )}
+                      {faces?.canLabel && (
+                        <button
+                          className="person-tag-remove"
+                          aria-label={`Remove ${person.name} from this photo`}
+                          title="Remove from photo"
+                          onClick={() => handleRemovePerson(photo, person)}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -241,6 +360,8 @@ const ViewPhotoPage = ({ photo, people, allTags }: ViewPhotoPageProps) => {
               </div>
             )}
           </div>
+
+          {faces && faces.faces.length > 0 && <PhotoFaces photo={photo} faces={faces} />}
 
           {photo.tagIds && photo.tagIds.length > 0 && (
             <div className="photo-tags">

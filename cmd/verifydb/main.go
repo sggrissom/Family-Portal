@@ -60,6 +60,7 @@ func main() {
 		counts["tags"] = count(tx, backend.TagBkt)
 		counts["photo_tags"] = count(tx, backend.PhotoTagBkt)
 		counts["photo_person"] = count(tx, backend.PhotoPersonBkt)
+		counts["photo_faces"] = count(tx, backend.PhotoFaceBkt)
 		counts["chat_messages"] = count(tx, backend.ChatMessagesBkt)
 		counts["family_link"] = count(tx, backend.FamilyLinkBkt)
 		counts["activities"] = count(tx, backend.ActivityBkt)

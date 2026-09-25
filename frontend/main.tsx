@@ -81,6 +81,7 @@ async function main() {
     guarded("/routine/", () => import("@app/pages/activities/routine")),
     guarded("/person-activities/", () => import("@app/pages/activities/person")),
     guarded("/activities", () => import("@app/pages/activities/activities")),
+    guarded("/faces", () => import("@app/pages/faces/faces")),
     guarded("/manage-tags", () => import("@app/pages/tags/manage-tags")),
     guarded("/import", () => import("@app/pages/settings/import")),
     guarded("/admin/users", () => import("@app/pages/admin/users")),

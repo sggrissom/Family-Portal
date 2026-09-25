@@ -54,6 +54,7 @@ export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrFaceNotFound = "Face not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -833,6 +834,46 @@ export interface UpdatePhotoTagsRequest {
 export interface UpdatePhotoTagsResponse {
 }
 
+export interface GetFaceReviewRequest {
+}
+
+export interface GetFaceReviewResponse {
+    enabled: boolean
+    groups: FaceGroup[]
+    autoTagged: PhotoFace[]
+    families: FaceReviewFamily[]
+    unknownCount: number
+    autoCount: number
+}
+
+export interface GetPhotoFacesRequest {
+    photoId: number
+}
+
+export interface GetPhotoFacesResponse {
+    faces: PhotoFace[]
+    people: Person[]
+    canLabel: boolean
+}
+
+export interface AssignFacesRequest {
+    faceIds: number[]
+    personId: number
+}
+
+export interface AssignFacesResponse {
+    assigned: number
+    autoTagged: number
+}
+
+export interface FaceIdsRequest {
+    faceIds: number[]
+}
+
+export interface FaceIdsResponse {
+    updated: number
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -891,8 +932,12 @@ export interface GetPhotoStatsResponse {
     analysisAnalyzing: number
     analysisDone: number
     analysisFailed: number
+    analysisOutdated: number
     autoTaggedCount: number
     personsWithFace: number
+    facesDetected: number
+    facesUnknown: number
+    facesConfirmed: number
 }
 
 export interface ReprocessAllPhotosRequest {
@@ -1505,6 +1550,30 @@ export interface PhotoWithPeople {
     people: Person[]
 }
 
+export interface FaceGroup {
+    familyId: number
+    faces: PhotoFace[]
+    suggestedPersonId: number
+    suggestionDistance: number
+}
+
+export interface PhotoFace {
+    id: number
+    photoId: number
+    familyId: number
+    personId: number
+    status: number
+    distance: number
+    box: FaceBox
+    createdAt: string
+}
+
+export interface FaceReviewFamily {
+    familyId: number
+    name: string
+    people: Person[]
+}
+
 export interface ActivityImportCounts {
     activities: number
     seasons: number
@@ -1873,6 +1942,13 @@ export interface EventSummary {
     location: string
     startDate: string
     endDate: string
+}
+
+export interface FaceBox {
+    left: number
+    top: number
+    right: number
+    bottom: number
 }
 
 export interface PerformanceStats {
@@ -2294,6 +2370,26 @@ export async function RemovePersonFromPhotoProc(data: RemovePersonFromPhotoReque
 
 export async function UpdatePhotoTags(data: UpdatePhotoTagsRequest): Promise<rpc.Response<UpdatePhotoTagsResponse>> {
     return await rpc.call<UpdatePhotoTagsResponse>('UpdatePhotoTags', JSON.stringify(data));
+}
+
+export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {
+    return await rpc.call<GetFaceReviewResponse>('GetFaceReview', JSON.stringify(data));
+}
+
+export async function GetPhotoFaces(data: GetPhotoFacesRequest): Promise<rpc.Response<GetPhotoFacesResponse>> {
+    return await rpc.call<GetPhotoFacesResponse>('GetPhotoFaces', JSON.stringify(data));
+}
+
+export async function AssignFaces(data: AssignFacesRequest): Promise<rpc.Response<AssignFacesResponse>> {
+    return await rpc.call<AssignFacesResponse>('AssignFaces', JSON.stringify(data));
+}
+
+export async function RejectFaces(data: FaceIdsRequest): Promise<rpc.Response<FaceIdsResponse>> {
+    return await rpc.call<FaceIdsResponse>('RejectFaces', JSON.stringify(data));
+}
+
+export async function DismissFaces(data: FaceIdsRequest): Promise<rpc.Response<FaceIdsResponse>> {
+    return await rpc.call<FaceIdsResponse>('DismissFaces', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

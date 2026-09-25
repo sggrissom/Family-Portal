@@ -216,9 +216,20 @@ It takes no flags from the unit file, so both paths come from its `.env`:
   default is `/run/family/face.sock`, which is a directory systemd never creates
   and the app never dials.
 
+The app sends `/recognize` the original photo, upright and capped at 2048px,
+as `image_data`, alongside the `image_path` of the xlarge JPEG. A daemon that
+predates `image_data` falls back to the path and still works, but finds fewer
+faces in group shots, and the app then stores no face positions. Deploy
+`make deploy-face-remote` before or with the app.
+
+On startup the worker re-queues every photo whose analysis is pending, was
+interrupted, or predates stored face positions (`Image.AnalysisVersion`). The
+first start after an upgrade therefore re-analyzes the whole library in the
+background, one photo at a time. Existing tags are kept.
+
 Face analysis is optional, and degrades quietly: if the socket is missing,
 photos still upload, process, and serve. But the reachability check runs **once,
-at app startup** (`backend/photo_analysis_worker.go:71`) — if the daemon is down
+at app startup** (`backend/photo_analysis_worker.go:75`) — if the daemon is down
 when `app@family` starts, the worker is never created and stays off until the
 app is restarted, however healthy the daemon becomes later. Restart `family` after
 `family-face`, not before.

@@ -17,10 +17,18 @@ var recognizer *face.Recognizer
 
 type recognizeRequest struct {
 	ImagePath string `json:"image_path"`
+	ImageData []byte `json:"image_data,omitempty"`
+}
+
+type recognizedFace struct {
+	Descriptor []float32 `json:"descriptor"`
+	Rect       [4]int    `json:"rect"`
 }
 
 type recognizeResponse struct {
-	Descriptors [][]float32 `json:"descriptors"`
+	Descriptors [][]float32      `json:"descriptors"`
+	Faces       []recognizedFace `json:"faces"`
+	Source      string           `json:"source"`
 }
 
 type embedRequest struct {
@@ -37,19 +45,33 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	faces, err := recognizer.RecognizeFile(req.ImagePath)
+	var faces []face.Face
+	var err error
+	source := "path"
+	if len(req.ImageData) > 0 {
+		source = "data"
+		faces, err = recognizer.Recognize(req.ImageData)
+	} else {
+		faces, err = recognizer.RecognizeFile(req.ImagePath)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	descriptors := make([][]float32, len(faces))
+	resp := recognizeResponse{
+		Descriptors: make([][]float32, len(faces)),
+		Faces:       make([]recognizedFace, len(faces)),
+		Source:      source,
+	}
 	for i, f := range faces {
 		desc := make([]float32, 128)
 		copy(desc, f.Descriptor[:])
-		descriptors[i] = desc
+		r := f.Rectangle
+		resp.Descriptors[i] = desc
+		resp.Faces[i] = recognizedFace{Descriptor: desc, Rect: [4]int{r.Min.X, r.Min.Y, r.Max.X, r.Max.Y}}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(recognizeResponse{Descriptors: descriptors})
+	json.NewEncoder(w).Encode(resp)
 }
 
 func handleEmbed(w http.ResponseWriter, r *http.Request) {
