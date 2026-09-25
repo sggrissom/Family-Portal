@@ -463,6 +463,7 @@ func appleLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setAppleStateCookie(w, state, nonce)
+	rememberOAuthInvite(w, r)
 
 	query := url.Values{
 		"client_id":     {appleWebConfig.ClientID},
@@ -544,6 +545,8 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	inviteCode := takeOAuthInvite(w, r)
+
 	// A user who cancels at Apple's prompt comes back here with an error and no
 	// code. That is not a failure worth an error page.
 	if appleErr := r.FormValue("error"); appleErr != "" {
@@ -551,7 +554,11 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		LogInfoWithRequest(r, LogCategoryAuth, "Apple sign-in not completed", map[string]interface{}{
 			"error": appleErr,
 		})
-		http.Redirect(w, r, "/login", http.StatusFound)
+		if inviteCode != "" {
+			http.Redirect(w, r, "/create-account?code="+url.QueryEscape(inviteCode), http.StatusFound)
+		} else {
+			http.Redirect(w, r, "/login", http.StatusFound)
+		}
 		return
 	}
 
@@ -604,7 +611,7 @@ func appleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, err := upsertAppleUser(r, tokenInfo, name)
+	user, err := upsertAppleUser(r, tokenInfo, name, inviteCode)
 	if err != nil {
 		LogErrorWithRequest(r, LogCategoryAuth, "Apple sign-in could not resolve an account", map[string]interface{}{
 			"error": err.Error(),
@@ -744,7 +751,7 @@ func appleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := upsertAppleUser(r, tokenInfo, req.Name)
+	user, err := upsertAppleUser(r, tokenInfo, req.Name, "")
 	if err != nil {
 		LogErrorWithRequest(r, LogCategoryAuth, "Apple sign-in could not resolve an account", map[string]interface{}{
 			"error": err.Error(),
@@ -781,7 +788,7 @@ func appleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 // password and Google paths use. Apple keeps that address stable for the life
 // of the app's team, including the relay address issued to someone who chose to
 // hide their real one.
-func upsertAppleUser(r *http.Request, info *AppleTokenInfo, name string) (User, error) {
+func upsertAppleUser(r *http.Request, info *AppleTokenInfo, name, inviteCode string) (User, error) {
 	if info.Email == "" {
 		return User{}, errors.New("identity token carried no email address")
 	}
@@ -793,12 +800,13 @@ func upsertAppleUser(r *http.Request, info *AppleTokenInfo, name string) (User, 
 
 	var user User
 	if userId > 0 {
-		if info.EmailVerified {
-			vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+			if info.EmailVerified {
 				markEmailVerifiedTx(tx, userId)
-				vbolt.TxCommit(tx)
-			})
-		}
+			}
+			joinFamilyByInviteTx(tx, GetUser(tx, userId), inviteCode)
+			vbolt.TxCommit(tx)
+		})
 		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 			user = GetUser(tx, userId)
 		})
@@ -809,8 +817,9 @@ func upsertAppleUser(r *http.Request, info *AppleTokenInfo, name string) (User, 
 	}
 
 	createAccountRequest := CreateAccountRequest{
-		Name:  appleDisplayName(name, info.Email, info.IsPrivateEmail),
-		Email: info.Email,
+		Name:       appleDisplayName(name, info.Email, info.IsPrivateEmail),
+		Email:      info.Email,
+		FamilyCode: inviteCode,
 	}
 
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {

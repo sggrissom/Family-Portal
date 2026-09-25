@@ -49,6 +49,43 @@ block(`
 `);
 
 block(`
+.intro-actions-oauth {
+  flex-direction: column;
+  max-width: 340px;
+}
+`);
+
+block(`
+.landing-oauth {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+`);
+
+block(`
+.landing-email,
+.landing-consent {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+`);
+
+block(`
+.landing-email {
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+`);
+
+block(`
+.landing-consent {
+  font-size: 0.85rem;
+}
+`);
+
+block(`
 .landing-what {
   padding: 48px 0;
   border-top: 1px solid var(--border);

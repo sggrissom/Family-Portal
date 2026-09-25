@@ -4,16 +4,25 @@ import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import { Header, Footer } from "../../layout";
 import { ensureNoAuthInFetch } from "../../lib/authHelpers";
+import {
+  OAuthButtons,
+  AuthProviders,
+  allProvidersOff,
+  loadProviders,
+  anyProvider,
+} from "../../components/OAuthButtons";
 import "./landing-styles";
 
-type Data = {};
+type Data = {
+  providers: AuthProviders;
+};
 
 export async function fetch(route: string, prefix: string) {
   if (!(await ensureNoAuthInFetch())) {
-    return rpc.ok<Data>({});
+    return rpc.ok<Data>({ providers: allProvidersOff });
   }
 
-  return rpc.ok<Data>({});
+  return rpc.ok<Data>({ providers: await loadProviders() });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -27,7 +36,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     <div>
       <Header isHome={true} />
       <main id="app" className="landing-container">
-        <LandingPage />
+        <LandingPage providers={data.providers} />
       </main>
       <Footer />
     </div>
@@ -41,18 +50,37 @@ const Shot = ({ src, alt, caption }: { src: string; alt: string; caption: string
   </figure>
 );
 
-const Actions = () => (
-  <div className="intro-actions">
-    <a href="/create-account" className="btn btn-primary">
-      Create an account
-    </a>
-    <a href="/login" className="btn">
-      Log in
-    </a>
-  </div>
-);
+const Actions = ({ providers }: { providers: AuthProviders }) => {
+  if (!anyProvider(providers)) {
+    return (
+      <div className="intro-actions">
+        <a href="/create-account" className="btn btn-primary">
+          Create an account
+        </a>
+        <a href="/login" className="btn">
+          Log in
+        </a>
+      </div>
+    );
+  }
 
-const LandingPage = () => (
+  return (
+    <div className="intro-actions intro-actions-oauth">
+      <div className="landing-oauth">
+        <OAuthButtons providers={providers} />
+      </div>
+      <p className="landing-email">
+        Or with email: <a href="/login">Log in</a> · <a href="/create-account">Create an account</a>
+      </p>
+      <p className="landing-consent">
+        New here? Continuing creates your account and agrees to the <a href="/terms">terms</a> and{" "}
+        <a href="/privacy">privacy page</a>.
+      </p>
+    </div>
+  );
+};
+
+const LandingPage = ({ providers }: { providers: AuthProviders }) => (
   <div className="landing-page">
     <section className="landing-intro">
       <h1>Family Record</h1>
@@ -60,7 +88,7 @@ const LandingPage = () => (
         A private record of your family: who is in it, how the children are growing, what they have
         done, and the photographs that go with it.
       </p>
-      <Actions />
+      <Actions providers={providers} />
     </section>
 
     <section className="landing-what">
@@ -94,7 +122,7 @@ const LandingPage = () => (
     </section>
 
     <section className="landing-close">
-      <Actions />
+      <Actions providers={providers} />
     </section>
   </div>
 );

@@ -4,6 +4,12 @@ import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
+import {
+  OAuthButtons,
+  AuthProviders,
+  loadProviders,
+  anyProvider,
+} from "../../components/OAuthButtons";
 import "./create-account-styles";
 
 type CreateAccountForm = {
@@ -19,7 +25,9 @@ type CreateAccountForm = {
   loading: boolean;
 };
 
-type Data = {};
+type Data = {
+  providers: AuthProviders;
+};
 
 const useCreateAccountForm = vlens.declareHook(
   (): CreateAccountForm => ({
@@ -37,7 +45,7 @@ const useCreateAccountForm = vlens.declareHook(
 );
 
 export async function fetch(route: string, prefix: string) {
-  return vlens.rpcOk({});
+  return vlens.rpcOk<Data>({ providers: await loadProviders() });
 }
 
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
@@ -56,7 +64,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     <div>
       <Header isHome={false} />
       <main id="app" className="create-account-container">
-        <CreateAccountPage form={form} />
+        <CreateAccountPage form={form} providers={data.providers} />
       </main>
       <Footer />
     </div>
@@ -115,9 +123,10 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
 
 interface CreateAccountPageProps {
   form: CreateAccountForm;
+  providers: AuthProviders;
 }
 
-const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
+const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
   <div className="create-account-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -128,6 +137,19 @@ const CreateAccountPage = ({ form }: CreateAccountPageProps) => (
       {form.error && (
         <div className="error-message" role="alert">
           {form.error}
+        </div>
+      )}
+
+      {anyProvider(providers) && (
+        <div className="auth-methods">
+          <OAuthButtons
+            providers={providers}
+            disabled={form.loading}
+            inviteCode={form.familyCode.trim()}
+          />
+          <div className="auth-divider">
+            <span>or sign up with email</span>
+          </div>
         </div>
       )}
 

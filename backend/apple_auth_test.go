@@ -881,6 +881,7 @@ func TestUpsertAppleUserWithoutAnEmail(t *testing.T) {
 		httptest.NewRequest(http.MethodPost, "/api/login/apple/token", nil),
 		&AppleTokenInfo{Sub: "001234.abcdef.0000"},
 		"Someone",
+		"",
 	)
 	if err == nil {
 		t.Fatal("an account is keyed by email; a token without one cannot resolve to a user")

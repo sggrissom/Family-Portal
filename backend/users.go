@@ -478,12 +478,7 @@ func JoinFamily(ctx *vbeam.Context, req JoinFamilyRequest) (resp JoinFamilyRespo
 	}
 
 	vbeam.UseWriteTx(ctx)
-	EnsureMembershipTx(ctx.Tx, user.Id, family.Id, AccessAdmin)
-	if user.FamilyId == 0 {
-		user.FamilyId = family.Id
-		vbolt.Write(ctx.Tx, UsersBkt, user.Id, &user)
-		vbolt.SetTargetSingleTerm(ctx.Tx, UsersByFamilyIndex, user.Id, user.FamilyId)
-	}
+	user, _ = joinFamilyByInviteTx(ctx.Tx, user, req.InviteCode)
 	auth := GetAuthResponseFromUser(ctx.Tx, user)
 	vbolt.TxCommit(ctx.Tx)
 

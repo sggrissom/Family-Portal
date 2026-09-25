@@ -96,6 +96,7 @@ func googleLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rememberOAuthInvite(w, r)
 	url := oauthConf.AuthCodeURL(oauthStateString, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
@@ -110,6 +111,8 @@ func googleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid OAuth state", http.StatusBadRequest)
 		return
 	}
+
+	inviteCode := takeOAuthInvite(w, r)
 
 	code := r.FormValue("code")
 	token, err := oauthConf.Exchange(context.Background(), code)
@@ -138,12 +141,13 @@ func googleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if userId > 0 {
-		if userInfo.VerifiedEmail {
-			vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+			if userInfo.VerifiedEmail {
 				markEmailVerifiedTx(tx, userId)
-				vbolt.TxCommit(tx)
-			})
-		}
+			}
+			joinFamilyByInviteTx(tx, GetUser(tx, userId), inviteCode)
+			vbolt.TxCommit(tx)
+		})
 		err = authenticateForUser(userId, w)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Authentication failed: %s", err.Error()), http.StatusInternalServerError)
@@ -155,6 +159,7 @@ func googleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 			Email:           userInfo.Email,
 			Password:        "",
 			ConfirmPassword: "",
+			FamilyCode:      inviteCode,
 		}
 
 		var user User
