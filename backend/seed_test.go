@@ -75,7 +75,7 @@ func TestSeedProducesData(t *testing.T) {
 		{"activities", summary.Activities, 3},
 		{"results", summary.Results, 10},
 		{"chat messages", summary.ChatMessages, 10},
-		{"photos", summary.Photos, 12},
+		{"photos", summary.Photos, 16},
 	}
 	for _, check := range checks {
 		if check.count < check.least {

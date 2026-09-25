@@ -1019,6 +1019,22 @@ func (s *seeder) build(scale int) {
 	s.photo(w, mom, "bubbles-closeup.jpg", "More bubbles",
 		"", s.now.AddDate(0, 0, -20), []Person{maeve})
 
+	scan := s.photo(w, mom, "ultrasound-scan.jpg", "Twenty-week scan",
+		"Waving already.", s.now.AddDate(0, -1, -5), []Person{baby}, tags["Firsts"])
+	s.profile(baby, scan, 42, 58, 2.0)
+
+	album := s.photo(elders.Id, grandma, "grandparents-album.jpg", "Going through the old albums",
+		"Esme wanted to see every picture of her dad at her age.", s.now.AddDate(-5, -2, 0),
+		[]Person{gerald, rosalind, esme}, elderTags["Visits"])
+	s.profile(gerald, album, 0, 28, 2.4)
+	s.profile(rosalind, album, 72, 0, 2.4)
+
+	bridgetShot := s.photo(coles.Id, aunt, "bridget-portrait.jpg", "Out in the pines",
+		"", s.now.AddDate(0, -3, 0), []Person{bridget})
+	s.profile(bridget, bridgetShot, 87, 31, 1.6)
+	s.photo(coles.Id, aunt, "chess-with-grandpa.jpg", "Chess with Grandpa Cole",
+		"Sam has decided the knight is the only piece worth moving.", s.now.AddDate(0, -2, -12), []Person{samCole})
+
 	// Chat --------------------------------------------------------------------
 	transcript := []struct {
 		user     User
