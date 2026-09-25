@@ -65,6 +65,8 @@ type AppleTokenLoginRequest struct {
 	// Review Guideline 5.1.1(v) requires. Optional: sign-in predates it, and an
 	// older build of the app does not send one.
 	AuthorizationCode string `json:"authorizationCode"`
+	// An invite code the app collected before sign-in. Optional.
+	FamilyCode string `json:"familyCode"`
 }
 
 type AppleTokenInfo struct {
@@ -751,7 +753,7 @@ func appleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := upsertAppleUser(r, tokenInfo, req.Name, "")
+	user, err := upsertAppleUser(r, tokenInfo, req.Name, req.FamilyCode)
 	if err != nil {
 		LogErrorWithRequest(r, LogCategoryAuth, "Apple sign-in could not resolve an account", map[string]interface{}{
 			"error": err.Error(),

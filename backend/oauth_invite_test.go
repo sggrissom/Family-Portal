@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -181,4 +182,29 @@ func findCookie(rec *httptest.ResponseRecorder, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func TestAppleTokenLoginFollowsAnInvite(t *testing.T) {
+	family := setupInviteTest(t)
+	key := startAppleKeyServer(t)
+
+	claims := appleClaims("app.familyrecord.ios")
+	claims["email"] = "app-invitee@example.com"
+	body, _ := json.Marshal(AppleTokenLoginRequest{
+		IDToken:    signAppleIDToken(t, key, claims),
+		FamilyCode: family.InviteCode,
+	})
+
+	resp := decodeLoginResponse(t, appleTokenLoginRequest(string(body)))
+	if !resp.Success {
+		t.Fatalf("response = %+v, want success", resp)
+	}
+
+	var user User
+	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+		user = GetUser(tx, GetUserId(tx, "app-invitee@example.com"))
+	})
+	if user.FamilyId != family.Id {
+		t.Errorf("family = %d, want the inviting family %d", user.FamilyId, family.Id)
+	}
 }

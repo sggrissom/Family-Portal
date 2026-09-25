@@ -35,6 +35,8 @@ type UserInfo struct {
 
 type GoogleTokenLoginRequest struct {
 	IDToken string `json:"idToken"`
+	// An invite code the app collected before sign-in. Optional.
+	FamilyCode string `json:"familyCode"`
 }
 
 type GoogleTokenInfo struct {
@@ -277,12 +279,13 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var user User
 	if userId > 0 {
-		if tokenInfo.EmailVerified == "true" {
-			vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+			if tokenInfo.EmailVerified == "true" {
 				markEmailVerifiedTx(tx, userId)
-				vbolt.TxCommit(tx)
-			})
-		}
+			}
+			joinFamilyByInviteTx(tx, GetUser(tx, userId), req.FamilyCode)
+			vbolt.TxCommit(tx)
+		})
 		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 			user = GetUser(tx, userId)
 		})
@@ -292,6 +295,7 @@ func googleTokenLoginHandler(w http.ResponseWriter, r *http.Request) {
 			Email:           tokenInfo.Email,
 			Password:        "",
 			ConfirmPassword: "",
+			FamilyCode:      req.FamilyCode,
 		}
 
 		vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
