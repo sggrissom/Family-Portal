@@ -114,6 +114,7 @@ func TriggerPersonFaceUpdate(personId int) {
 
 func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
 	defer close(done)
+	aw.backfillPersonEmbeddings(quit)
 	for {
 		select {
 		case job := <-aw.jobQueue:
@@ -125,6 +126,38 @@ func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struc
 			return
 		}
 	}
+}
+
+func (aw *photoAnalysisWorker) backfillPersonEmbeddings(quit <-chan struct{}) {
+	var personIds []int
+	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
+		vbolt.IterateAll(tx, PeopleBkt, func(_ int, p Person) bool {
+			if p.ProfilePhotoId != 0 && len(p.FaceDescriptor) != 128 {
+				personIds = append(personIds, p.Id)
+			}
+			return true
+		})
+	})
+	if len(personIds) == 0 {
+		return
+	}
+
+	failed := 0
+	for _, personId := range personIds {
+		select {
+		case <-quit:
+			return
+		default:
+		}
+		if err := updatePersonEmbedding(aw.db, aw.client, personId); err != nil {
+			log.Printf("[FACE_ANALYSIS] Backfill failed for person %d: %v", personId, err)
+			failed++
+		}
+	}
+	LogInfo(LogCategoryWorker, "Face embedding backfill finished", map[string]interface{}{
+		"candidates": len(personIds),
+		"failed":     failed,
+	})
 }
 
 func StopAnalysisWorker(ctx context.Context) bool {
