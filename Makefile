@@ -68,7 +68,7 @@ deploy-face: build-face
 FACE_SOURCE ?= ~/Family-Portal
 deploy-face-remote:
 	@echo "Building family-face on $(DEPLOY_HOST)..."
-	ssh $(DEPLOY_HOST) "cd $(FACE_SOURCE) && \
+	ssh $(DEPLOY_HOST) "cd $(FACE_SOURCE) && git pull --ff-only && \
 	  CGO_ENABLED=1 go build -tags faceanalysis -ldflags='-s -w' \
 	    -o /tmp/family-face ./cmd/faceanalysis/"
 	mkdir -p $(BUILD_DIR)
