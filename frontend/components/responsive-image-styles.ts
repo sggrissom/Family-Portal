@@ -91,7 +91,7 @@ block(`
 `);
 
 block(`
-.profile-image-cropped {
+.profile-image-inner img.profile-image-cropped {
   width: 100%;
   height: 100%;
   object-fit: cover;

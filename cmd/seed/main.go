@@ -88,6 +88,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Printf("rendering %d photos...\n", len(summary.PhotoJobs))
+	backend.ProcessSeedPhotos(db, summary.PhotoJobs)
+
 	report(*dbPath, *password, summary)
 }
 
@@ -147,6 +150,7 @@ func report(dbPath, password string, summary backend.SeedSummary) {
 		{"activity events", summary.Events},
 		{"activity results", summary.Results},
 		{"chat messages", summary.ChatMessages},
+		{"photos", summary.Photos},
 	}
 	var parts []string
 	for _, count := range counts {

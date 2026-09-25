@@ -75,6 +75,7 @@ func TestSeedProducesData(t *testing.T) {
 		{"activities", summary.Activities, 3},
 		{"results", summary.Results, 10},
 		{"chat messages", summary.ChatMessages, 10},
+		{"photos", summary.Photos, 12},
 	}
 	for _, check := range checks {
 		if check.count < check.least {
@@ -303,6 +304,50 @@ func TestSeedPasswordSignsIn(t *testing.T) {
 			}
 			if !user.EmailVerified {
 				t.Errorf("%s is not email-verified", account.Email)
+			}
+		}
+	})
+}
+
+// Every avatar has to point at a photo its person is tagged in and that a
+// Whitfield can load, or the profile renders as a broken image.
+func TestSeedProfilePhotosAreVisible(t *testing.T) {
+	db, summary, cleanup := seedForTest(t)
+	defer cleanup()
+
+	if len(summary.PhotoJobs) != summary.Photos {
+		t.Fatalf("%d photo jobs for %d photos", len(summary.PhotoJobs), summary.Photos)
+	}
+
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		dad := seedUser(t, tx, "dad@example.test")
+		nana := seedUser(t, tx, "nana@example.test")
+
+		names := []struct {
+			familyId int
+			name     string
+		}{
+			{dad.FamilyId, "Owen Whitfield"},
+			{dad.FamilyId, "Meera Whitfield"},
+			{dad.FamilyId, "Clara Whitfield"},
+			{dad.FamilyId, "Maeve Whitfield"},
+			{nana.FamilyId, "Arjun Nayar"},
+		}
+		for _, entry := range names {
+			person := seedPerson(t, tx, entry.familyId, entry.name)
+			if person.ProfilePhotoId == 0 {
+				t.Errorf("%s has no profile photo", entry.name)
+				continue
+			}
+			tagged := false
+			for _, inPhoto := range GetPhotoPeople(tx, person.ProfilePhotoId) {
+				tagged = tagged || inPhoto.Id == person.Id
+			}
+			if !tagged {
+				t.Errorf("%s is not tagged in their profile photo", entry.name)
+			}
+			if !CanAccessPhoto(tx, dad, GetImageById(tx, person.ProfilePhotoId), AccessView) {
+				t.Errorf("dad cannot load %s's profile photo", entry.name)
 			}
 		}
 	})

@@ -109,6 +109,10 @@ type SeedSummary struct {
 	Events       int
 	Results      int
 	ChatMessages int
+	Photos       int
+	// PhotoJobs carry the bytes for photos whose variants still need
+	// rendering. Pass them to ProcessSeedPhotos once the tx has committed.
+	PhotoJobs []PhotoProcessingJob
 }
 
 // SeedDemoData writes the whole demo dataset into tx and records a SeedRun
@@ -697,7 +701,8 @@ func seedInt(n int) *int { return &n }
 
 func seedFloat(f float64) *float64 { return &f }
 
-func (s *seeder) danceSeason(familyId int, dancer Person) {
+// danceSeason returns the solo at Spring Regionals, which the photos hang off.
+func (s *seeder) danceSeason(familyId int, dancer Person) Appearance {
 	ballet := s.activity(familyId, "Ballet — Meridian Dance Academy", ActivityKindDance)
 	season := s.season(ballet, "Competition Season",
 		s.now.AddDate(0, -11, 0), s.now.AddDate(0, 1, 0),
@@ -727,9 +732,11 @@ func (s *seeder) danceSeason(familyId int, dancer Person) {
 
 	fourth := s.appearance(spring, group, spring.StartDate.AddDate(0, 0, 1), "")
 	s.result(fourth, Result{Kind: ResultKindPlacement, Label: "2nd", Rank: seedInt(2), OutOf: seedInt(11), Category: "Junior Group Ballet", SortOrder: 0})
+	return third
 }
 
-func (s *seeder) soccerSeason(familyId int, player Person) {
+// soccerSeason returns the 4–0 win over Springfield City.
+func (s *seeder) soccerSeason(familyId int, player Person) (highlight Appearance) {
 	soccer := s.activity(familyId, "Soccer — Riverside United", ActivityKindSport)
 	season := s.season(soccer, "U15 Select", s.now.AddDate(0, -5, 0), s.now.AddDate(0, 1, 0),
 		"Left back, moved to centre mid in April.")
@@ -753,6 +760,9 @@ func (s *seeder) soccerSeason(familyId int, player Person) {
 		date := s.now.AddDate(0, -5, i*21)
 		event := s.event(season, "vs "+match.opponent, "Metro Youth League", match.venue, date, date)
 		appearance := s.appearance(event, team, date, "")
+		if match.goals == 2 {
+			highlight = appearance
+		}
 		s.result(appearance, Result{Kind: ResultKindScore, Label: match.label, Category: "Final", SortOrder: 0})
 		if match.goals > 0 {
 			s.result(appearance, Result{
@@ -765,6 +775,7 @@ func (s *seeder) soccerSeason(familyId int, player Person) {
 			})
 		}
 	}
+	return
 }
 
 func (s *seeder) crossCountrySeason(familyId int, runner Person) {
@@ -908,7 +919,8 @@ func (s *seeder) build(scale int) {
 	s.share(julian, nayars, "Grandson")
 	s.share(esme, nayars, "Granddaughter")
 
-	s.link(nayars, whitfields, "parents", LinkScopes{People: true}, LinkAccepted)
+	// Photos too, or Arjun's profile picture would not load for the Whitfields.
+	s.link(nayars, whitfields, "parents", LinkScopes{People: true, Photos: true}, LinkAccepted)
 	s.share(sunita, whitfields, "Nana")
 	s.share(arjun, whitfields, "Grandpa Nayar")
 
@@ -954,9 +966,58 @@ func (s *seeder) build(scale int) {
 	s.milestone(rosalind, s.now.AddDate(0, -4, 0), "Drove out to see all five grandchildren in one weekend", "first", elderTags["Visits"])
 
 	// Activities --------------------------------------------------------------
-	s.danceSeason(whitfields.Id, esme)
-	s.soccerSeason(whitfields.Id, julian)
+	regionals := s.danceSeason(whitfields.Id, esme)
+	springfieldMatch := s.soccerSeason(whitfields.Id, julian)
 	s.crossCountrySeason(whitfields.Id, clara)
+
+	// Photos ------------------------------------------------------------------
+	// Crops were eyeballed against each image so the avatar lands on a face.
+	w := whitfields.Id
+	maeveBorn := maeve.Birthday
+
+	meeraShot := s.photo(w, mom, "meera-portrait.jpg", "Portrait session",
+		"Finally got a photo of Mom that isn't a blurry selfie.", s.now.AddDate(0, -8, 0), []Person{meera})
+	s.profile(meera, meeraShot, 40, 30, 1.6)
+
+	owenShot := s.photo(w, dad, "owen-portrait.jpg", "Headshot for the new job",
+		"", s.now.AddDate(-1, -1, 3), []Person{owen})
+	s.profile(owen, owenShot, 50, 45, 1.2)
+
+	arjunShot := s.photo(nayars.Id, nana, "arjun-portrait.jpg", "Arjun on the porch",
+		"My favourite picture of him.", s.now.AddDate(-1, -4, 0), []Person{arjun})
+	s.profile(arjun, arjunShot, 35, 38, 1.5)
+
+	newborn := s.photo(w, mom, "newborn-wrapped.jpg", "Maeve, ten days old",
+		"", maeveBorn.AddDate(0, 0, 10), []Person{maeve}, tags["Firsts"])
+	s.profile(maeve, newborn, 42, 30, 1.8)
+	s.photo(w, mom, "newborn-feet.jpg", "Ten tiny toes",
+		"", maeveBorn.AddDate(0, 0, 12), []Person{maeve})
+	s.photo(w, dad, "baptism.jpg", "Maeve's baptism",
+		"Slept through the whole thing, then screamed at the reception.", maeveBorn.AddDate(0, 3, 0),
+		[]Person{maeve, owen, meera, gerald, rosalind})
+
+	ballet := s.photo(w, mom, "ballet-studio.jpg", "Warm-up before Spring Regionals",
+		"", regionals.OccurredAt, []Person{esme}, tags["Sports"])
+	s.profile(esme, ballet, 48, 4, 2.2)
+	s.appearancePhotos(regionals, ballet)
+
+	soccer := s.photo(w, dad, "soccer-match.jpg", "Julian vs Springfield City",
+		"Two goals, both with his left foot.", springfieldMatch.OccurredAt, []Person{julian}, tags["Sports"])
+	s.profile(julian, soccer, 31, 24, 2.4)
+	s.appearancePhotos(springfieldMatch, soccer)
+
+	basketball := s.photo(w, dad, "basketball-tipoff.jpg", "Winter league tip-off",
+		"Clara won the jump, which she will tell you about.", s.now.AddDate(0, -7, 0), []Person{clara}, tags["Sports"])
+	s.profile(clara, basketball, 60, 40, 1.6)
+
+	fieldDay := s.photo(w, mom, "parachute-games.jpg", "Field day",
+		"Rowan spent most of it under the parachute.", s.now.AddDate(0, -4, -10), []Person{rowan}, tags["School"])
+	s.profile(rowan, fieldDay, 34, 58, 2.2)
+
+	s.photo(w, mom, "bubbles-park.jpg", "Bubbles at the park",
+		"", s.now.AddDate(0, 0, -20), []Person{maeve}, tags["Funny"])
+	s.photo(w, mom, "bubbles-closeup.jpg", "More bubbles",
+		"", s.now.AddDate(0, 0, -20), []Person{maeve})
 
 	// Chat --------------------------------------------------------------------
 	transcript := []struct {
