@@ -137,7 +137,7 @@ func CreateSeedData(ctx *vbeam.Context, req CreateSeedDataRequest) (resp CreateS
 	})
 
 	vbolt.TxCommit(ctx.Tx)
-	ProcessSeedPhotos(appDb, summary.PhotoJobs)
+	processSeedPhotos(appDb, summary.PhotoJobs)
 	return
 }
 

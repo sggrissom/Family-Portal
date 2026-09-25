@@ -103,6 +103,8 @@ func (s *seeder) appearancePhotos(appearance Appearance, photos ...Image) {
 // ProcessSeedPhotos renders the variants for a committed seed run. A running
 // server hands them to its photo worker; the CLI has none, so it does the work
 // inline against its own database handle.
+var processSeedPhotos = ProcessSeedPhotos
+
 func ProcessSeedPhotos(db *vbolt.DB, jobs []PhotoProcessingJob) {
 	if len(jobs) == 0 {
 		return

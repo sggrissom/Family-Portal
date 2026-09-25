@@ -12,6 +12,10 @@ import (
 
 const testSeedPassword = "review-account-pw"
 
+func init() {
+	processSeedPhotos = func(*vbolt.DB, []PhotoProcessingJob) {}
+}
+
 func createSeedData(t *testing.T, db *vbolt.DB, token string, req CreateSeedDataRequest) (CreateSeedDataResponse, error) {
 	t.Helper()
 	var resp CreateSeedDataResponse
