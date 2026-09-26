@@ -1,4 +1,12 @@
 import * as preact from "preact";
+import * as server from "../server";
+import { LoadMore } from "./LoadMore";
+import {
+  hasMorePhotos,
+  loadMorePhotos,
+  syncPhotoPages,
+  usePhotoPages,
+} from "../hooks/usePhotoPages";
 import "./photo-picker-styles";
 
 export const PhotoPicker = ({
@@ -7,25 +15,33 @@ export const PhotoPicker = ({
   onToggle,
   disabled,
   emptyText,
+  loading = false,
+  onLoadMore,
 }: {
   photos: { image: { id: number } }[];
   selectedIds: number[];
   onToggle: (photoId: number) => void;
   disabled?: boolean;
   emptyText: string;
+  loading?: boolean;
+  onLoadMore?: () => void;
 }): preact.ComponentChild => {
-  if (photos.length === 0) {
+  // A selected photo may sit on a page not loaded yet; it still needs to show
+  // so it can be unselected.
+  const listed = new Set(photos.map(photo => photo.image.id));
+  const ids = [...selectedIds.filter(id => !listed.has(id)), ...photos.map(p => p.image.id)];
+
+  if (ids.length === 0) {
     return (
       <div className="photo-picker">
-        <p className="photo-picker-empty">{emptyText}</p>
+        <p className="photo-picker-empty">{loading ? "Loading photos..." : emptyText}</p>
       </div>
     );
   }
 
   return (
     <div className="photo-picker">
-      {photos.map(photo => {
-        const id = photo.image.id;
+      {ids.map(id => {
         const isSelected = selectedIds.includes(id);
         return (
           <button
@@ -46,7 +62,37 @@ export const PhotoPicker = ({
           </button>
         );
       })}
+      {onLoadMore && (
+        <div className="photo-picker-more">
+          <LoadMore loading={loading} onLoad={onLoadMore} />
+        </div>
+      )}
     </div>
+  );
+};
+
+// A PhotoPicker that loads the family's photos a page at a time.
+export const PagedPhotoPicker = ({
+  pageKey,
+  filters,
+  ...picker
+}: {
+  pageKey: string;
+  filters: Partial<server.ListFamilyPhotosRequest>;
+  selectedIds: number[];
+  onToggle: (photoId: number) => void;
+  disabled?: boolean;
+  emptyText: string;
+}): preact.ComponentChild => {
+  const pages = usePhotoPages(pageKey);
+  syncPhotoPages(pages, filters);
+  return (
+    <PhotoPicker
+      {...picker}
+      photos={pages.photos}
+      loading={!pages.started || pages.loading}
+      onLoadMore={pages.started && hasMorePhotos(pages) ? () => loadMorePhotos(pages) : undefined}
+    />
   );
 };
 

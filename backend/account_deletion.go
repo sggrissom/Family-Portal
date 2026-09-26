@@ -236,6 +236,7 @@ func deletePersonRecordTx(tx *vbolt.Tx, person Person) {
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+		ReindexPhotoDates(tx, photoPerson.PhotoId)
 	}
 
 	removePersonFromActivitiesTx(tx, person.Id)

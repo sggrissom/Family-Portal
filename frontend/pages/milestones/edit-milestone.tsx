@@ -9,7 +9,7 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { ErrorPage } from "../../components/ErrorPage";
-import { PhotoPicker } from "../../components/PhotoPicker";
+import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
 
 type EditMilestoneForm = {
@@ -44,7 +44,6 @@ const useEditMilestoneForm = vlens.declareHook(
 
 type EditMilestoneData = {
   milestone: server.GetMilestoneResponse;
-  photos: server.ListFamilyPhotosResponse;
   tags: server.Tag[];
 };
 
@@ -61,14 +60,9 @@ export async function fetch(
   const [milestone, milestoneErr] = await server.GetMilestone({ id: milestoneId });
   if (milestoneErr) return [null, milestoneErr];
 
-  const [photos, photosErr] = await server.ListFamilyPhotos({
-    personId: milestone?.milestone?.personId || 0,
-  });
-  if (photosErr) return [null, photosErr];
-
   const [tagsResp] = await server.ListTags({});
 
-  return [{ milestone: milestone!, photos: photos!, tags: tagsResp?.tags ?? [] }, ""];
+  return [{ milestone: milestone!, tags: tagsResp?.tags ?? [] }, ""];
 }
 
 export function view(
@@ -99,12 +93,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <EditMilestonePage
-          form={form}
-          milestone={milestone}
-          photos={data.photos.photos}
-          allTags={data.tags}
-        />
+        <EditMilestonePage form={form} milestone={milestone} allTags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -200,14 +189,10 @@ function onTogglePhoto(form: EditMilestoneForm, photoId: number) {
 interface EditMilestonePageProps {
   form: EditMilestoneForm;
   milestone: server.Milestone;
-  photos: server.PhotoWithPeople[];
   allTags: server.Tag[];
 }
 
-const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePageProps) => {
-  const personPhotos = photos.filter(p =>
-    p.people.some(person => person.id === milestone.personId)
-  );
+const EditMilestonePage = ({ form, milestone, allTags }: EditMilestonePageProps) => {
   return (
     <div className="add-milestone-page">
       <div className="auth-card">
@@ -262,8 +247,9 @@ const EditMilestonePage = ({ form, milestone, photos, allTags }: EditMilestonePa
 
           <div className="form-group">
             <label>Photos (optional)</label>
-            <PhotoPicker
-              photos={personPhotos}
+            <PagedPhotoPicker
+              pageKey="milestone-photos"
+              filters={{ personIds: [milestone.personId] }}
               selectedIds={form.photoIds}
               onToggle={photoId => onTogglePhoto(form, photoId)}
               disabled={form.loading}

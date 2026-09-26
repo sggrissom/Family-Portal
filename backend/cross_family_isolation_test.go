@@ -100,6 +100,7 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		}
 		vbolt.Write(tx, ImagesBkt, fx.photo.Id, &fx.photo)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, fx.photo.Id, fx.ownerFamily)
+		ReindexPhotoDates(tx, fx.photo.Id)
 
 		ownPhoto := Image{
 			Id: vbolt.NextIntId(tx, ImagesBkt), FamilyId: fx.theirFamily,
@@ -108,6 +109,7 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		}
 		vbolt.Write(tx, ImagesBkt, ownPhoto.Id, &ownPhoto)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, ownPhoto.Id, fx.theirFamily)
+		ReindexPhotoDates(tx, ownPhoto.Id)
 		fx.ownPhotoId = ownPhoto.Id
 
 		fx.tag = Tag{
@@ -569,6 +571,12 @@ func TestListingProceduresShowNothingFromAnotherFamily(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
 
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		AddPersonToPhoto(tx, fx.photo.Id, fx.person.Id, fx.ownerFamily)
+		addTagToPhoto(tx, fx.photo.Id, fx.tag.Id, fx.ownerFamily)
+		vbolt.TxCommit(tx)
+	})
+
 	fx.asOutsider(t, func(ctx *vbeam.Context) {
 		people, err := ListPeople(ctx, Empty{})
 		if err != nil {
@@ -590,14 +598,25 @@ func TestListingProceduresShowNothingFromAnotherFamily(t *testing.T) {
 			}
 		}
 
-		photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{})
-		if err != nil {
-			t.Fatalf("ListFamilyPhotos() error = %v", err)
-		}
-		for _, photo := range photos.Photos {
-			if photo.Image.FamilyId != fx.theirFamily {
-				t.Errorf("ListFamilyPhotos returned a photo from family %d", photo.Image.FamilyId)
+		for _, req := range []ListFamilyPhotosRequest{
+			{},
+			{Limit: 1},
+			{PersonIds: []int{fx.person.Id}},
+			{PersonId: fx.person.Id},
+			{TagIds: []int{fx.tag.Id}},
+		} {
+			photos, err := ListFamilyPhotos(ctx, req)
+			if err != nil {
+				t.Fatalf("ListFamilyPhotos(%+v) error = %v", req, err)
 			}
+			for _, photo := range photos.Photos {
+				if photo.Image.FamilyId != fx.theirFamily {
+					t.Errorf("ListFamilyPhotos(%+v) returned a photo from family %d", req, photo.Image.FamilyId)
+				}
+			}
+		}
+		if photos, _ := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{}); len(photos.Photos) != 1 || photos.Photos[0].Image.Id != fx.ownPhotoId {
+			t.Errorf("ListFamilyPhotos should show the caller's own photo and nothing else, got %d", len(photos.Photos))
 		}
 
 		milestones, err := SearchMilestones(ctx, SearchMilestonesRequest{Query: "first"})

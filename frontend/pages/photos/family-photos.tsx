@@ -8,22 +8,41 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import { usePhotoFilter } from "../../hooks/usePhotoFilter";
+import {
+  hasMorePhotos,
+  loadMorePhotos,
+  seedPhotoPages,
+  syncPhotoPages,
+  usePhotoPages,
+} from "../../hooks/usePhotoPages";
+import { LoadMore } from "../../components/LoadMore";
+import { parseFilterQuery, serverFilters } from "../../lib/photoFilterQuery";
+import { PHOTO_PAGE_SIZE, photosRequest } from "../../lib/photoPages";
 import { saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import "./family-photos-styles";
 
-export async function fetch(route: string, prefix: string) {
+type FamilyPhotosData = {
+  first: server.ListFamilyPhotosResponse;
+  filters: ReturnType<typeof serverFilters>;
+};
+
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<FamilyPhotosData>> {
+  const filters = serverFilters(parseFilterQuery(route.split("?")[1] ?? ""));
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.ListFamilyPhotosResponse>({ photos: [] });
+    return rpc.ok<FamilyPhotosData>({ first: { photos: [], nextCursor: "" }, filters });
   }
 
-  return server.ListFamilyPhotos({ personId: 0 });
+  const [first, err] = await server.ListFamilyPhotos(
+    photosRequest({ ...filters, limit: PHOTO_PAGE_SIZE })
+  );
+  if (!first) return [null, err];
+  return rpc.ok<FamilyPhotosData>({ first, filters });
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: server.ListFamilyPhotosResponse
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: FamilyPhotosData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -42,7 +61,7 @@ export function view(
 
 interface FamilyPhotosPageProps {
   user: auth.AuthCache;
-  data: server.ListFamilyPhotosResponse;
+  data: FamilyPhotosData;
 }
 
 const formatPhotoDate = (dateString: string) => {
@@ -61,16 +80,21 @@ function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
 }
 
 const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
-  const allPhotos = data.photos || [];
   const photoFilter = usePhotoFilter();
   const photoStatus = usePhotoStatus();
+  const pages = usePhotoPages("family-photos");
 
-  const filteredPhotos = photoFilter.filterPhotos(allPhotos);
-  const hasPhotos = allPhotos.length > 0;
+  seedPhotoPages(pages, data.filters, data.first);
+  syncPhotoPages(pages, photoFilter.serverFilters());
+
+  const filteredPhotos = pages.photos;
+  const hasMore = hasMorePhotos(pages);
   const hasFilteredPhotos = filteredPhotos.length > 0;
+  const hasPhotos = hasFilteredPhotos || photoFilter.hasActiveFilters() || !pages.started;
+  const countLabel = `${filteredPhotos.length}${hasMore ? "+" : ""}`;
 
-  if (hasPhotos) {
-    allPhotos.forEach(photoWithPeople => {
+  if (hasFilteredPhotos) {
+    filteredPhotos.forEach(photoWithPeople => {
       const photo = photoWithPeople.image;
       const currentStatus = photoStatus.getStatus(photo.id);
 
@@ -93,8 +117,8 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
             {hasPhotos && (
               <div className="photos-count">
                 {photoFilter.hasActiveFilters()
-                  ? `${filteredPhotos.length} of ${allPhotos.length} photos`
-                  : `${allPhotos.length} photo${allPhotos.length !== 1 ? "s" : ""}`}
+                  ? `${countLabel} matching photo${countLabel !== "1" ? "s" : ""}`
+                  : `${countLabel} photo${countLabel !== "1" ? "s" : ""}`}
               </div>
             )}
           </div>
@@ -204,62 +228,70 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
       <div className="photos-content">
         {hasPhotos ? (
           hasFilteredPhotos ? (
-            <div className="photos-gallery has-photos">
-              {filteredPhotos.map((photoWithPeople, index) => (
-                <div key={photoWithPeople.image.id} className="photo-card">
-                  <div className="photo-image-container">
-                    <ThumbnailImage
-                      photoId={photoWithPeople.image.id}
-                      alt={photoWithPeople.image.title}
-                      className="photo-image"
-                      loading={index < 6 ? "eager" : "lazy"}
-                      fetchpriority={index < 3 ? "high" : "auto"}
-                      onClick={() => openPhoto(photoWithPeople.image.id, filteredPhotos)}
-                      status={photoStatus.getStatus(photoWithPeople.image.id)}
-                    />
-                    {photoWithPeople.people.some(
-                      person => person.profilePhotoId === photoWithPeople.image.id
-                    ) && <div className="profile-photo-badge">👤 Profile</div>}
-                    {photoWithPeople.people.length > 0 ? (
-                      <div className="people-badges">
-                        {photoWithPeople.people.map(person => (
-                          <div key={person.id} className="person-badge">
-                            {person.name}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="people-badges">
-                        <div className="person-badge family-badge">Family Photo</div>
+            <>
+              <div className="photos-gallery has-photos">
+                {filteredPhotos.map((photoWithPeople, index) => (
+                  <div key={photoWithPeople.image.id} className="photo-card">
+                    <div className="photo-image-container">
+                      <ThumbnailImage
+                        photoId={photoWithPeople.image.id}
+                        alt={photoWithPeople.image.title}
+                        className="photo-image"
+                        loading={index < 6 ? "eager" : "lazy"}
+                        fetchpriority={index < 3 ? "high" : "auto"}
+                        onClick={() => openPhoto(photoWithPeople.image.id, filteredPhotos)}
+                        status={photoStatus.getStatus(photoWithPeople.image.id)}
+                      />
+                      {photoWithPeople.people.some(
+                        person => person.profilePhotoId === photoWithPeople.image.id
+                      ) && <div className="profile-photo-badge">👤 Profile</div>}
+                      {photoWithPeople.people.length > 0 ? (
+                        <div className="people-badges">
+                          {photoWithPeople.people.map(person => (
+                            <div key={person.id} className="person-badge">
+                              {person.name}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="people-badges">
+                          <div className="person-badge family-badge">Family Photo</div>
+                        </div>
+                      )}
+                    </div>
+                    {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
+                      <div className="tag-badges">
+                        {photoWithPeople.image.tagIds.map(tagId => {
+                          const tag = photoFilter.tags.find(t => t.id === tagId);
+                          return tag ? (
+                            <span
+                              key={tagId}
+                              className="tag-badge"
+                              style={{ background: tag.color }}
+                              title={tag.name}
+                            />
+                          ) : null;
+                        })}
                       </div>
                     )}
-                  </div>
-                  {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
-                    <div className="tag-badges">
-                      {photoWithPeople.image.tagIds.map(tagId => {
-                        const tag = photoFilter.tags.find(t => t.id === tagId);
-                        return tag ? (
-                          <span
-                            key={tagId}
-                            className="tag-badge"
-                            style={{ background: tag.color }}
-                            title={tag.name}
-                          />
-                        ) : null;
-                      })}
+                    <div className="photo-info">
+                      <h3 className="photo-title">{photoWithPeople.image.title}</h3>
+                      <div className="photo-date">
+                        {formatPhotoDate(photoWithPeople.image.photoDate)}
+                      </div>
+                      {photoWithPeople.image.description && (
+                        <div className="photo-description">{photoWithPeople.image.description}</div>
+                      )}
                     </div>
-                  )}
-                  <div className="photo-info">
-                    <h3 className="photo-title">{photoWithPeople.image.title}</h3>
-                    <div className="photo-date">
-                      {formatPhotoDate(photoWithPeople.image.photoDate)}
-                    </div>
-                    {photoWithPeople.image.description && (
-                      <div className="photo-description">{photoWithPeople.image.description}</div>
-                    )}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              {hasMore && <LoadMore loading={pages.loading} onLoad={() => loadMorePhotos(pages)} />}
+              {pages.error && <div className="error-message">{pages.error}</div>}
+            </>
+          ) : !pages.started || pages.loading ? (
+            <div className="photos-gallery">
+              <div className="loading-state">Loading photos...</div>
             </div>
           ) : (
             <div className="photos-gallery">

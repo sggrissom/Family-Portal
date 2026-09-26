@@ -1,6 +1,6 @@
 import * as vlens from "vlens";
 import * as server from "../server";
-import { filterQuery, parseFilterQuery } from "../lib/photoFilterQuery";
+import { filterQuery, parseFilterQuery, serverFilters } from "../lib/photoFilterQuery";
 
 export interface PhotoFilterState {
   selectedPeopleIds: number[];
@@ -146,42 +146,6 @@ export const usePhotoFilter = () => {
     vlens.scheduleRedraw();
   };
 
-  const filterPhotos = (photos: server.PhotoWithPeople[]): server.PhotoWithPeople[] => {
-    let filtered = photos;
-
-    if (state.selectedPeopleIds.length > 0) {
-      filtered = filtered.filter(photoWithPeople => {
-        return state.selectedPeopleIds.some(selectedId =>
-          photoWithPeople.people.some(person => person.id === selectedId)
-        );
-      });
-    }
-
-    if (state.selectedTagIds.length > 0) {
-      filtered = filtered.filter(p =>
-        state.selectedTagIds.some(tagId => p.image.tagIds?.includes(tagId))
-      );
-    }
-
-    if (state.dateFrom || state.dateTo) {
-      const { from, to } = normalizeDateRange(state.dateFrom, state.dateTo);
-
-      filtered = filtered.filter(photoWithPeople => {
-        const photoDate = photoWithPeople.image.photoDate;
-        if (!photoDate) return false;
-
-        const date = new Date(photoDate);
-
-        if (from && date < from) return false;
-        if (to && date > to) return false;
-
-        return true;
-      });
-    }
-
-    return filtered;
-  };
-
   const hasActiveFilters = (): boolean => {
     return (
       state.selectedPeopleIds.length > 0 ||
@@ -218,6 +182,7 @@ export const usePhotoFilter = () => {
   };
 
   return {
+    serverFilters: () => serverFilters(state),
     selectedPeopleIds: state.selectedPeopleIds,
     selectedTagIds: state.selectedTagIds,
     dateFrom: state.dateFrom,
@@ -237,7 +202,6 @@ export const usePhotoFilter = () => {
     toggleFilterPanel,
     loadPeople,
     loadTags,
-    filterPhotos,
     hasActiveFilters,
     getFilterSummary,
   };

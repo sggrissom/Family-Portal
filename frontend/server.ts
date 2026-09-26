@@ -330,11 +330,16 @@ export interface DeletePersonResponse {
 }
 
 export interface GetFamilyTimelineRequest {
+    from: string
+    to: string
+    skipMilestones: boolean
+    skipPhotos: boolean
 }
 
 export interface GetFamilyTimelineResponse {
     people: FamilyTimelineItem[]
     relations: Relation[]
+    years: number[]
 }
 
 export interface GetPersonRelationsRequest {
@@ -825,10 +830,17 @@ export interface GetPhotoStatusResponse {
 
 export interface ListFamilyPhotosRequest {
     personId: number
+    limit: number
+    cursor: string
+    personIds: number[]
+    tagIds: number[]
+    dateFrom: string
+    dateTo: string
 }
 
 export interface ListFamilyPhotosResponse {
     photos: PhotoWithPeople[]
+    nextCursor: string
 }
 
 export interface AddPeopleToPhotoRequest {

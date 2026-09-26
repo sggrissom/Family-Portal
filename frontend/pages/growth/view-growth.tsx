@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import { timelineRequest } from "../../lib/photoPages";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
@@ -35,7 +36,9 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const [growthResp, growthErr] = await server.GetGrowthData({ id: growthId });
   if (growthErr) return [null, growthErr];
 
-  const [timelineResp, timelineErr] = await server.GetFamilyTimeline({});
+  const [timelineResp, timelineErr] = await server.GetFamilyTimeline(
+    timelineRequest({ skipMilestones: true, skipPhotos: true })
+  );
   if (timelineErr) return [null, timelineErr];
 
   const growthData = growthResp?.growthData ?? null;

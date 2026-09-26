@@ -8,17 +8,8 @@ future idea and lives in [`plans/`](plans/).
 ## Short term: make what's here solid
 
 The UI pass and the landing page rework from the previous version of this plan
-have shipped. What's left is correctness and rough edges in features that
-already exist.
-
-### Loading everything doesn't scale
-
-`GetFamilyTimeline` and `ListFamilyPhotos` return every row the family has,
-and the photos page filters on the client. That's fine at a few hundred photos
-and won't be after a few years, which is exactly how long a record is meant to
-last. Add windowing or pagination before it hurts. The mobile app syncs through
-`GetFamilyTimeline`, so any change there goes through `docs/mobile-api.md`
-first.
+have shipped, and so has paging for photos and the timeline. What's left is
+correctness and rough edges in features that already exist.
 
 ### Photo rough edges
 

@@ -145,6 +145,14 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: date-ordered photo indexes, which ListFamilyPhotos pages over.
+	vbolt.ApplyDBProcess(dbConnection, "2026-0925-index-photo-dates", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillPhotoDateIndexes(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 

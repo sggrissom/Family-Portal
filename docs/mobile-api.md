@@ -342,7 +342,10 @@ user believes they entered.
 
 ## 6. Pagination
 
-There is one paginated read: `GetChatMessages`.
+`GetChatMessages` pages by offset. `ListFamilyPhotos` pages by cursor, and
+`GetFamilyTimeline` windows by date.
+
+### Chat: `GetChatMessages`
 
 ```json
 {"familyId": 0, "limit": 50, "offset": 0}
@@ -356,10 +359,45 @@ There is one paginated read: `GetChatMessages`.
   history must keep its limit fixed**, and new messages arriving mid-scroll will
   shift page boundaries. Reconcile by message id, not by position.
 
-Every other list proc returns the whole set: `ListPeople`, `ListFamilyPhotos`,
-`GetPersonMilestones`, `GetFamilyTimeline`, `ListTags`. There is no cursor and
-no total count. Sizes are family-scale, not internet-scale; if that stops being
-true it is a server change, not a client workaround.
+### Photos: `ListFamilyPhotos`
+
+```json
+{"limit": 60, "cursor": "", "personIds": [3], "tagIds": [], "dateFrom": "2024-01-01", "dateTo": ""}
+```
+
+- Photos come **newest first by `photoDate`**, ties broken by id, in every mode.
+- `limit` 0 (or absent) returns every match in one response, as older builds
+  expect. Above 200 it is clamped to 200.
+- `cursor` is opaque. Send back the `nextCursor` of the previous page, keeping
+  the same filters. An empty `nextCursor` means the last page. The cursor is a
+  position rather than an offset, so uploads mid-scroll don't shift or repeat
+  pages. A malformed cursor is refused.
+- `personIds` and `tagIds` each match a photo carrying **any** of the listed
+  ids. Across the two fields, both must match. `personId` (singular) is the
+  older one-person filter and still works.
+- `dateFrom` / `dateTo` are inclusive `YYYY-MM-DD` dates, compared against the
+  UTC day of `photoDate`. A reversed range is swapped, not refused.
+- There is no total count.
+
+### Timeline: `GetFamilyTimeline`
+
+```json
+{"from": "2024-01-01", "to": "2024-12-31", "skipMilestones": false, "skipPhotos": false}
+```
+
+- `from` / `to` (inclusive `YYYY-MM-DD`, UTC day) window the growth data,
+  milestones and photos. Both empty returns the whole record, which is still
+  what a full sync should send.
+- The response's `years` lists every year that has an entry, newest first,
+  **whatever the window**. That lets a client page year by year and draw a
+  year index without loading the years first.
+- `people` and `relations` are always complete. Only the per-person arrays are
+  windowed, so merge windows per person by entry id.
+- `skipMilestones` / `skipPhotos` send those arrays as `null`, the same as for
+  a person whose scope the caller can't see.
+
+Every other list proc returns the whole set: `ListPeople`,
+`GetPersonMilestones`, `ListTags`. There is no cursor and no total count.
 
 ---
 
@@ -688,7 +726,7 @@ appearance.
 - **No Android.** Push registration refuses it and nothing should claim
   otherwise.
 - **No offline write protocol.** No delta sync, no server-side conflict
-  resolution, no tombstones. `GetFamilyTimeline` is a full read. Client-side
+  resolution, no tombstones. `GetFamilyTimeline` with no window is a full read. Client-side
   queueing is the app's own arrangement and the server knows nothing about it.
 - **Response shapes may gain fields.** Decode leniently; ignore what you do not
   recognize.

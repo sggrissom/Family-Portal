@@ -6,6 +6,7 @@ import (
 	"family/cfg"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -117,6 +118,12 @@ type ComparePeopleResponse struct {
 }
 
 type GetFamilyTimelineRequest struct {
+	// From and To (YYYY-MM-DD, inclusive) window the growth data, milestones
+	// and photos. Both empty returns the whole record.
+	From           string `json:"from,omitempty"`
+	To             string `json:"to,omitempty"`
+	SkipMilestones bool   `json:"skipMilestones,omitempty"`
+	SkipPhotos     bool   `json:"skipPhotos,omitempty"`
 }
 
 type FamilyTimelineItem struct {
@@ -133,6 +140,8 @@ type GetFamilyTimelineResponse struct {
 	// it has no way to group a roster or suggest a co-parent short of a call
 	// per person.
 	Relations []Relation `json:"relations"`
+	// Years holds every year with an entry, newest first, whatever the window.
+	Years []int `json:"years"`
 }
 
 type Person struct {
@@ -698,6 +707,7 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, req.TargetPersonId)
 			mergedPhotoCount++
 		}
+		ReindexPhotoDates(ctx.Tx, photoPerson.PhotoId)
 	}
 	resp.MergedPhotos = mergedPhotoCount
 
@@ -747,6 +757,19 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		return
 	}
 
+	from, to, err := parsePhotoDateRange(req.From, req.To)
+	if err != nil {
+		return
+	}
+
+	years := make(map[int]bool)
+	inWindow := func(date time.Time) bool {
+		date = date.UTC()
+		years[date.Year()] = true
+		day := date.Format(dateOnlyLayout)
+		return (from == "" || day >= from) && (to == "" || day <= to)
+	}
+
 	people := GetVisiblePeople(ctx.Tx, user)
 	labelPeopleFor(ctx.Tx, user, people)
 
@@ -755,31 +778,58 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	for _, person := range people {
 		timelineItem := FamilyTimelineItem{Person: person}
 
-		if CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
-			timelineMilestones := GetPersonMilestonesTx(ctx.Tx, person.Id)
-			for i := range timelineMilestones {
-				timelineMilestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, timelineMilestones[i].Id)
-				timelineMilestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, timelineMilestones[i].Id)
+		if !req.SkipMilestones && CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
+			timelineItem.Milestones = []Milestone{}
+			for _, milestone := range GetPersonMilestonesTx(ctx.Tx, person.Id) {
+				if !inWindow(milestone.MilestoneDate) {
+					continue
+				}
+				milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+				milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
+				timelineItem.Milestones = append(timelineItem.Milestones, milestone)
 			}
-			timelineItem.Milestones = timelineMilestones
 		}
 
-		if CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {
-			timelinePhotos := GetPersonImages(ctx.Tx, person.Id)
-			for i := range timelinePhotos {
-				timelinePhotos[i].TagIds = GetPhotoTagIds(ctx.Tx, timelinePhotos[i].Id)
+		if !req.SkipPhotos && CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {
+			// The date index answers both the years and the window without
+			// reading a photo outside it.
+			var photoIds []int
+			vbolt.IterateTerm(ctx.Tx, ImageByPersonDateIndex, person.Id, func(photoId int, seconds int64) bool {
+				if inWindow(time.Unix(seconds, 0)) {
+					photoIds = append(photoIds, photoId)
+				}
+				return true
+			})
+			timelineItem.Photos = make([]Image, 0, len(photoIds))
+			for _, photoId := range photoIds {
+				photo := GetImageById(ctx.Tx, photoId)
+				if photo.Id == 0 {
+					continue
+				}
+				photo.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
+				timelineItem.Photos = append(timelineItem.Photos, photo)
 			}
-			timelineItem.Photos = timelinePhotos
 		}
 
 		if CanAccessPerson(ctx.Tx, user, person, ScopeGrowth, AccessView) {
-			timelineItem.GrowthData = GetPersonGrowthDataTx(ctx.Tx, person.Id)
+			timelineItem.GrowthData = []GrowthData{}
+			for _, growth := range GetPersonGrowthDataTx(ctx.Tx, person.Id) {
+				if inWindow(growth.MeasurementDate) {
+					timelineItem.GrowthData = append(timelineItem.GrowthData, growth)
+				}
+			}
 		}
 
 		resp.People = append(resp.People, timelineItem)
 	}
 
 	resp.Relations = relationsAmong(ctx.Tx, people)
+
+	resp.Years = make([]int, 0, len(years))
+	for year := range years {
+		resp.Years = append(resp.Years, year)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(resp.Years)))
 
 	return
 }

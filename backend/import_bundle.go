@@ -282,6 +282,7 @@ func importPhotos(
 
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
+		ReindexPhotoDates(tx, image.Id)
 		photoIdMapping[photo.Id] = image.Id
 
 		for _, tagId := range newTagIds {

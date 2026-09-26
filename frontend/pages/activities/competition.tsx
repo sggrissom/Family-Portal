@@ -6,7 +6,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
-import { PhotoPicker, PhotoStrip } from "../../components/PhotoPicker";
+import { PagedPhotoPicker, PhotoStrip } from "../../components/PhotoPicker";
 import { ActivityLabels, labelsFor } from "./labels";
 import { ResultList } from "./results";
 import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
@@ -20,7 +20,6 @@ export type CompetitionPageData = {
   entries: server.EntryView[];
   people: server.Person[];
   vocabulary: server.ListActivityVocabularyResponse;
-  photos: server.PhotoWithPeople[];
 };
 
 const emptyDetail: server.GetEventDetailResponse = {
@@ -72,7 +71,6 @@ export async function fetch(
       entries: [],
       people: [],
       vocabulary: emptyVocabulary,
-      photos: [],
     });
   }
 
@@ -86,7 +84,6 @@ export async function fetch(
   const [vocabulary] = await server.ListActivityVocabulary({
     activityId: overview?.activity.id ?? 0,
   });
-  const [photos] = await server.ListFamilyPhotos({ personId: 0 });
 
   return rpc.ok<CompetitionPageData>({
     detail,
@@ -94,7 +91,6 @@ export async function fetch(
     entries: overview?.entries ?? [],
     people: people?.people ?? [],
     vocabulary: vocabulary ?? emptyVocabulary,
-    photos: photos?.photos ?? [],
   });
 }
 
@@ -220,8 +216,9 @@ export function view(
                 of any one {labels.entry.toLowerCase()}. A {labels.entry.toLowerCase()}'s own photos
                 hang off its {labels.appearance.toLowerCase()} below.
               </p>
-              <PhotoPicker
-                photos={data.photos}
+              <PagedPhotoPicker
+                pageKey="competition-photos"
+                filters={{}}
                 selectedIds={state.photoDraft}
                 onToggle={photoId => onTogglePhotoDraft(state, photoId)}
                 disabled={state.saving}
@@ -298,8 +295,9 @@ export function view(
                   ) : state.editingPhotosFor === detail.appearance.id ? (
                     <div className="appearance-editing">
                       <strong className="event-name">{detail.entry.name}</strong>
-                      <PhotoPicker
-                        photos={data.photos}
+                      <PagedPhotoPicker
+                        pageKey="competition-photos"
+                        filters={{}}
                         selectedIds={state.photoDraft}
                         onToggle={photoId => onTogglePhotoDraft(state, photoId)}
                         disabled={state.saving}

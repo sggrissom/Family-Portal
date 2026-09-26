@@ -11,6 +11,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -97,6 +98,14 @@ type GetPhotoStatusResponse struct {
 
 type ListFamilyPhotosRequest struct {
 	PersonId int `json:"personId,omitempty"`
+	// Limit 0 returns every match in one response.
+	Limit  int    `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+	// PersonIds and TagIds match a photo carrying any of them.
+	PersonIds []int  `json:"personIds,omitempty"`
+	TagIds    []int  `json:"tagIds,omitempty"`
+	DateFrom  string `json:"dateFrom,omitempty"`
+	DateTo    string `json:"dateTo,omitempty"`
 }
 
 type PhotoWithPeople struct {
@@ -106,6 +115,8 @@ type PhotoWithPeople struct {
 
 type ListFamilyPhotosResponse struct {
 	Photos []PhotoWithPeople `json:"photos"`
+	// NextCursor is empty on the last page.
+	NextCursor string `json:"nextCursor"`
 }
 
 type AddPeopleToPhotoRequest struct {
@@ -292,29 +303,42 @@ func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
 		images = append(images, image)
 	}
 
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		for _, image := range GetFamilyImages(tx, familyId) {
+			add(image)
+		}
+	}
+	for _, person := range linkedPeopleVisibleTo(tx, user, ScopePhotos) {
+		for _, image := range GetPersonImages(tx, person.Id) {
+			add(image)
+		}
+	}
+	return
+}
+
+// linkedPeopleVisibleTo lists the people on the user's rosters whose home is a
+// family the user isn't in, and whose link shares scope with them.
+func linkedPeopleVisibleTo(tx *vbolt.Tx, user User, scope LinkScope) (people []Person) {
 	own := familiesVisibleTo(tx, user)
 	member := make(map[int]bool, len(own))
 	for _, familyId := range own {
 		member[familyId] = true
 	}
-	for _, familyId := range own {
-		for _, image := range GetFamilyImages(tx, familyId) {
-			add(image)
-		}
-	}
-
+	seen := make(map[int]bool)
 	for _, familyId := range own {
 		for _, row := range GetFamilyRoster(tx, familyId) {
+			if seen[row.PersonId] {
+				continue
+			}
+			seen[row.PersonId] = true
 			person := GetPersonById(tx, row.PersonId)
 			if person.Id == 0 || member[person.FamilyId] {
 				continue
 			}
-			if !canAccessPersonViaLink(tx, user, person, ScopePhotos, AccessView) {
+			if !canAccessPersonViaLink(tx, user, person, scope, AccessView) {
 				continue
 			}
-			for _, image := range GetPersonImages(tx, person.Id) {
-				add(image)
-			}
+			people = append(people, person)
 		}
 	}
 	return
@@ -333,6 +357,18 @@ func GetPhotoTagIds(tx *vbolt.Tx, photoId int) []int {
 		tagIds = append(tagIds, pt.TagId)
 	}
 	return tagIds
+}
+
+func GetTagPhotoIds(tx *vbolt.Tx, tagId int) []int {
+	var ptIds []int
+	vbolt.ReadTermTargets(tx, PhotoTagByTagIndex, tagId, &ptIds, vbolt.Window{})
+	var pts []PhotoTag
+	vbolt.ReadSlice(tx, PhotoTagBkt, ptIds, &pts)
+	photoIds := make([]int, 0, len(pts))
+	for _, pt := range pts {
+		photoIds = append(photoIds, pt.PhotoId)
+	}
+	return photoIds
 }
 
 func addTagToPhoto(tx *vbolt.Tx, photoId int, tagId int, familyId int) {
@@ -413,6 +449,7 @@ func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (ph
 	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, photoId)
 	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, personId)
 	vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, familyId)
+	ReindexPhotoDates(tx, photoId)
 
 	return photoPerson.Id
 }
@@ -426,6 +463,7 @@ func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
 			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
 			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
 			vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
+			ReindexPhotoDates(tx, photoId)
 			break
 		}
 	}
@@ -707,6 +745,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
+		ReindexPhotoDates(tx, image.Id)
 
 		for _, person := range validPersons {
 			AddPersonToPhoto(tx, image.Id, person.Id, familyId)
@@ -1056,6 +1095,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	}
 
 	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
+	ReindexPhotoDates(ctx.Tx, photo.Id)
 
 	resp.Image = photo
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
@@ -1106,6 +1146,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
+	ReindexPhotoDates(tx, photo.Id)
 }
 
 func deletePhotoFiles(photo Image) error {
@@ -1211,6 +1252,8 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 	return
 }
 
+const maxPhotoPageSize = 200
+
 func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp ListFamilyPhotosResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -1218,35 +1261,79 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		return
 	}
 
-	images := GetVisibleImages(ctx.Tx, user)
+	dateFrom, dateTo, err := parsePhotoDateRange(req.DateFrom, req.DateTo)
+	if err != nil {
+		return
+	}
 
+	start := photoKey{seconds: math.MaxInt64, id: math.MaxInt}
+	if req.Cursor != "" {
+		start, err = parsePhotoCursor(req.Cursor)
+		if err != nil {
+			return
+		}
+	}
+	stop := int64(math.MinInt64)
+	if dateTo != "" {
+		end, _ := time.Parse(dateOnlyLayout, dateTo)
+		if last := (photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}); start.newerThan(last) {
+			start = last
+		}
+	}
+	if dateFrom != "" {
+		begin, _ := time.Parse(dateOnlyLayout, dateFrom)
+		stop = begin.Unix()
+	}
+
+	personIds := req.PersonIds
 	if req.PersonId > 0 {
-		photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.PersonId)
-		images = make([]Image, 0, len(photoPersons))
-		seenImageIds := make(map[int]struct{}, len(photoPersons))
+		personIds = append([]int{req.PersonId}, personIds...)
+	}
 
-		for _, photoPerson := range photoPersons {
-			if _, exists := seenImageIds[photoPerson.PhotoId]; exists {
-				continue
-			}
-
-			image := GetImageById(ctx.Tx, photoPerson.PhotoId)
-			if !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
-				continue
-			}
-
-			seenImageIds[photoPerson.PhotoId] = struct{}{}
-			images = append(images, image)
+	var streams []*photoStream
+	checkAccess := len(personIds) > 0
+	if checkAccess {
+		for _, personId := range personIds {
+			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, personId, start))
+		}
+	} else {
+		for _, familyId := range familiesVisibleTo(ctx.Tx, user) {
+			streams = append(streams, newPhotoStream(ImageByFamilyDateIndex, familyId, start))
+		}
+		for _, person := range linkedPeopleVisibleTo(ctx.Tx, user, ScopePhotos) {
+			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, person.Id, start))
 		}
 	}
 
-	resp.Photos = make([]PhotoWithPeople, 0, len(images))
-
-	for _, image := range images {
-		if image.Status == 2 {
-			continue
+	var withTag map[int]bool
+	if len(req.TagIds) > 0 {
+		withTag = make(map[int]bool)
+		for _, tagId := range req.TagIds {
+			for _, photoId := range GetTagPhotoIds(ctx.Tx, tagId) {
+				withTag[photoId] = true
+			}
 		}
+	}
 
+	limit := min(req.Limit, maxPhotoPageSize)
+	var page []Image
+	mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
+		if image.Status == 2 || (withTag != nil && !withTag[image.Id]) {
+			return true
+		}
+		if checkAccess && !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
+			return true
+		}
+		if limit > 0 && len(page) == limit {
+			resp.NextCursor = photoKeyOf(page[limit-1]).String()
+			return false
+		}
+		page = append(page, image)
+		return true
+	})
+
+	resp.Photos = make([]PhotoWithPeople, 0, len(page))
+	for _, image := range page {
 		people := GetPhotoPeople(ctx.Tx, image.Id)
 
 		for i := range people {
@@ -1262,6 +1349,41 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	}
 
 	return
+}
+
+const dateOnlyLayout = "2006-01-02"
+
+func parsePhotoDateRange(from, to string) (string, string, error) {
+	for _, value := range []string{from, to} {
+		if value == "" {
+			continue
+		}
+		if _, err := time.Parse(dateOnlyLayout, value); err != nil {
+			return "", "", errors.New("Invalid date format. Use YYYY-MM-DD")
+		}
+	}
+	if from != "" && to != "" && from > to {
+		from, to = to, from
+	}
+	return from, to, nil
+}
+
+func (k photoKey) String() string {
+	return fmt.Sprintf("%d_%d", k.seconds, k.id)
+}
+
+func parsePhotoCursor(value string) (key photoKey, err error) {
+	secondsPart, idPart, found := strings.Cut(value, "_")
+	if found {
+		key.seconds, err = strconv.ParseInt(secondsPart, 10, 64)
+		if err == nil {
+			key.id, err = strconv.Atoi(idPart)
+		}
+	}
+	if !found || err != nil {
+		return photoKey{}, errors.New("Invalid cursor")
+	}
+	return key, nil
 }
 
 func AddPeopleToPhoto(ctx *vbeam.Context, req AddPeopleToPhotoRequest) (resp AddPeopleToPhotoResponse, err error) {

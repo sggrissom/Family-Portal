@@ -106,3 +106,9 @@ block(`
   display: block;
 }
 `);
+
+block(`
+.photo-picker-more {
+  flex-basis: 100%;
+}
+`);

@@ -55,6 +55,7 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 	}
 	vbolt.Write(s.tx, ImagesBkt, photo.Id, &photo)
 	vbolt.SetTargetSingleTerm(s.tx, ImageByFamilyIndex, photo.Id, familyId)
+	ReindexPhotoDates(s.tx, photo.Id)
 
 	for _, person := range people {
 		AddPersonToPhoto(s.tx, photo.Id, person.Id, familyId)

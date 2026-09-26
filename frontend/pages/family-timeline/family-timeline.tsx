@@ -14,21 +14,64 @@ import {
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import { useTagCache } from "../../hooks/useTagCache";
+import { LoadMore } from "../../components/LoadMore";
+import {
+  entryYear,
+  firstUnloadedYear,
+  isShownYear,
+  mergeTimeline,
+  timelineRequest,
+  yearRange,
+  yearsToReach,
+} from "../../lib/photoPages";
 import "./family-timeline-styles";
 
-export async function fetch(route: string, prefix: string) {
+// Enough entries that the first screen isn't a lone photo when the newest year
+// is quiet.
+const FIRST_LOAD_ENTRIES = 50;
+
+type TimelineData = {
+  timeline: server.GetFamilyTimelineResponse;
+  loaded: number[];
+};
+
+const countEntries = (timeline: server.GetFamilyTimelineResponse) =>
+  (timeline.people ?? []).reduce(
+    (sum, item) =>
+      sum +
+      (item.milestones?.length ?? 0) +
+      (item.growthData?.length ?? 0) +
+      (item.photos?.length ?? 0),
+    0
+  );
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<TimelineData>> {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.GetFamilyTimelineResponse>({ people: [], relations: [] });
+    return rpc.ok<TimelineData>({ timeline: { people: [], relations: [], years: [] }, loaded: [] });
   }
 
-  return server.GetFamilyTimeline({});
+  const thisYear = new Date().getUTCFullYear();
+  const [first, err] = await server.GetFamilyTimeline(
+    timelineRequest({ from: `${thisYear}-01-01` })
+  );
+  if (!first) return [null, err];
+
+  const data: TimelineData = {
+    timeline: first,
+    loaded: (first.years ?? []).filter(year => year >= thisYear),
+  };
+  while (countEntries(data.timeline) < FIRST_LOAD_ENTRIES) {
+    const next = firstUnloadedYear(data.timeline.years ?? [], data.loaded, "newest");
+    if (next === null) break;
+    const [more, moreErr] = await server.GetFamilyTimeline(yearRange(next, next));
+    if (!more) return [null, moreErr];
+    data.timeline = mergeTimeline(data.timeline, more);
+    data.loaded.push(next);
+  }
+  return rpc.ok(data);
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: server.GetFamilyTimelineResponse
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: TimelineData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) {
     return;
@@ -46,7 +89,47 @@ export function view(
 }
 
 interface FamilyTimelinePageProps {
-  data: server.GetFamilyTimelineResponse;
+  data: TimelineData;
+}
+
+type TimelineStore = {
+  seed: TimelineData | null;
+  timeline: server.GetFamilyTimelineResponse;
+  loaded: number[];
+  loading: boolean;
+  error: string;
+};
+
+const useTimelineStore = vlens.declareHook(
+  (): TimelineStore => ({
+    seed: null,
+    timeline: { people: [], relations: [], years: [] },
+    loaded: [],
+    loading: false,
+    error: "",
+  })
+);
+
+async function loadYears(store: TimelineStore, years: number[]): Promise<boolean> {
+  if (store.loading || years.length === 0) return false;
+  store.loading = true;
+  vlens.scheduleRedraw();
+
+  const from = Math.min(...years);
+  const to = Math.max(...years);
+  const [more, err] = await server.GetFamilyTimeline(yearRange(from, to));
+  store.loading = false;
+  if (more) {
+    store.timeline = mergeTimeline(store.timeline, more);
+    for (const year of store.timeline.years ?? []) {
+      if (year >= from && year <= to && !store.loaded.includes(year)) store.loaded.push(year);
+    }
+    store.error = "";
+  } else {
+    store.error = err || "Failed to load the timeline";
+  }
+  vlens.scheduleRedraw();
+  return !!more;
 }
 
 type TimelineItemType = "milestone" | "measurement" | "photo" | "birthday";
@@ -129,7 +212,7 @@ function generateBirthdayEvents(
 function groupByYear(items: TimelineItem[]): YearGroup[] {
   const groups: YearGroup[] = [];
   for (const item of items) {
-    const year = new Date(item.date).getFullYear();
+    const year = entryYear(item.date);
     const last = groups[groups.length - 1];
     if (last && last.year === year) {
       last.items.push(item);
@@ -147,7 +230,10 @@ const YearBanner = ({ year }: { year: number }) => (
   </div>
 );
 
-const YearJumpNav = ({ years }: { years: number[] }) => (
+const scrollToYear = (year: number) =>
+  document.getElementById(`year-${year}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+const YearJumpNav = ({ years, onJump }: { years: number[]; onJump: (year: number) => void }) => (
   <div className="year-jump-nav">
     {years.map(year => (
       <a
@@ -156,9 +242,7 @@ const YearJumpNav = ({ years }: { years: number[] }) => (
         className="year-pill"
         onClick={e => {
           e.preventDefault();
-          document
-            .getElementById(`year-${year}`)
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          onJump(year);
         }}
       >
         {year}
@@ -173,7 +257,23 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   const tagCache = useTagCache();
   tagCache.loadTags();
 
-  const people = data.people || [];
+  const store = useTimelineStore();
+  if (store.seed !== data) {
+    store.seed = data;
+    store.timeline = data.timeline;
+    store.loaded = [...data.loaded];
+    store.error = "";
+  }
+
+  const people = store.timeline.people || [];
+  const years = store.timeline.years || [];
+  const stopYear = firstUnloadedYear(years, store.loaded, state.sortOrder);
+
+  const jumpToYear = async (year: number) => {
+    const missing = yearsToReach(year, years, store.loaded, state.sortOrder);
+    if (missing.length > 0 && !(await loadYears(store, missing))) return;
+    requestAnimationFrame(() => scrollToYear(year));
+  };
 
   const handleSearch = async () => {
     const query = state.searchQuery.trim();
@@ -281,7 +381,11 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
     }
   });
 
-  let filteredItems = allTimelineItems;
+  const loadedItems = allTimelineItems.filter(item =>
+    isShownYear(entryYear(item.date), stopYear, state.sortOrder)
+  );
+
+  let filteredItems = loadedItems;
   if (state.selectedPerson !== "all") {
     const personId = parseInt(state.selectedPerson);
     filteredItems = filteredItems.filter(item => item.personId === personId);
@@ -318,9 +422,14 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
   });
 
   const yearGroups = groupByYear(sortedItems);
-  const availableYears = yearGroups.map(g => g.year);
+  const availableYears = [
+    ...new Set([
+      ...yearGroups.map(g => g.year),
+      ...years.filter(year => !isShownYear(year, stopYear, state.sortOrder)),
+    ]),
+  ].sort((a, b) => (state.sortOrder === "newest" ? b - a : a - b));
 
-  const hasAnyData = allTimelineItems.length > 0;
+  const hasAnyData = years.length > 0;
   const hasFilteredData = sortedItems.length > 0;
 
   return (
@@ -503,12 +612,13 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
             <>
               {hasFilteredData ? (
                 <div className="timeline-stats">
-                  Showing {sortedItems.length} of {allTimelineItems.length} entries
+                  Showing {sortedItems.length} of {loadedItems.length}
+                  {stopYear !== null ? " loaded" : ""} entries
                 </div>
               ) : null}
 
-              {hasFilteredData && availableYears.length > 1 && (
-                <YearJumpNav years={availableYears} />
+              {availableYears.length > 1 && (
+                <YearJumpNav years={availableYears} onJump={jumpToYear} />
               )}
 
               {hasFilteredData ? (
@@ -526,7 +636,7 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                     </preact.Fragment>
                   ))}
                 </div>
-              ) : (
+              ) : stopYear !== null ? null : (
                 <div className="empty-state">
                   <p>No entries match your filters.</p>
                   <button
@@ -542,6 +652,15 @@ const FamilyTimelinePage = ({ data }: FamilyTimelinePageProps) => {
                   </button>
                 </div>
               )}
+
+              {stopYear !== null && (
+                <LoadMore
+                  loading={store.loading}
+                  onLoad={() => loadYears(store, [stopYear])}
+                  label={`Load ${stopYear}`}
+                />
+              )}
+              {store.error && <div className="error-message">{store.error}</div>}
             </>
           )}
         </>

@@ -9,7 +9,7 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
-import { PhotoPicker } from "../../components/PhotoPicker";
+import { PagedPhotoPicker, PhotoPicker } from "../../components/PhotoPicker";
 import "./add-milestone-styles";
 
 type AddMilestoneForm = {
@@ -44,7 +44,6 @@ const useAddMilestoneForm = vlens.declareHook(
 
 type AddMilestoneData = {
   people: server.ListPeopleResponse;
-  photos: server.ListFamilyPhotosResponse;
   tags: server.Tag[];
 };
 
@@ -55,16 +54,10 @@ export async function fetch(
   const [people, peopleErr] = await server.ListPeople({});
   if (peopleErr) return [null, peopleErr];
 
-  const personId = getIdFromRoute(route);
-  const [photos, photosErr] = await server.ListFamilyPhotos({
-    personId: personId || 0,
-  });
-  if (photosErr) return [null, photosErr];
-
   const [tags, tagsErr] = await server.ListTags({});
   if (tagsErr) return [null, tagsErr];
 
-  return [{ people: people!, photos: photos!, tags: tags!.tags }, ""];
+  return [{ people: people!, tags: tags!.tags }, ""];
 }
 
 export function view(route: string, prefix: string, data: AddMilestoneData): preact.ComponentChild {
@@ -91,12 +84,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     <div>
       <Header isHome={false} />
       <main id="app" className="add-milestone-container">
-        <AddMilestonePage
-          form={form}
-          people={data.people.people}
-          photos={data.photos.photos}
-          tags={data.tags}
-        />
+        <AddMilestonePage form={form} people={data.people.people} tags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -193,18 +181,13 @@ function onTogglePhoto(form: AddMilestoneForm, photoId: number) {
 interface AddMilestonePageProps {
   form: AddMilestoneForm;
   people: server.Person[];
-  photos: server.PhotoWithPeople[];
   tags: server.Tag[];
 }
 
-const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps) => {
+const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
   const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
 
   const selectedPersonIdNum = parseInt(form.selectedPersonId) || 0;
-  const personPhotos =
-    selectedPersonIdNum > 0
-      ? photos.filter(p => p.people.some(person => person.id === selectedPersonIdNum))
-      : [];
 
   return (
     <div className="add-milestone-page">
@@ -270,17 +253,24 @@ const AddMilestonePage = ({ form, people, photos, tags }: AddMilestonePageProps)
 
           <div className="form-group">
             <label>Photos (optional)</label>
-            <PhotoPicker
-              photos={personPhotos}
-              selectedIds={form.photoIds}
-              onToggle={photoId => onTogglePhoto(form, photoId)}
-              disabled={form.loading}
-              emptyText={
-                selectedPersonIdNum > 0
-                  ? "No photos found for this person"
-                  : "Select a family member to see their photos"
-              }
-            />
+            {selectedPersonIdNum > 0 ? (
+              <PagedPhotoPicker
+                pageKey="milestone-photos"
+                filters={{ personIds: [selectedPersonIdNum] }}
+                selectedIds={form.photoIds}
+                onToggle={photoId => onTogglePhoto(form, photoId)}
+                disabled={form.loading}
+                emptyText="No photos found for this person"
+              />
+            ) : (
+              <PhotoPicker
+                photos={[]}
+                selectedIds={form.photoIds}
+                onToggle={photoId => onTogglePhoto(form, photoId)}
+                disabled={form.loading}
+                emptyText="Select a family member to see their photos"
+              />
+            )}
           </div>
 
           {tags.length > 0 && (

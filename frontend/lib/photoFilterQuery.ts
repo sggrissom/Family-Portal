@@ -39,3 +39,12 @@ export const filterQuery = (criteria: PhotoFilterCriteria): string => {
   const query = params.toString().replace(/%2C/g, ",");
   return query ? `?${query}` : "";
 };
+
+// The ListFamilyPhotos fields for a set of criteria. Key order is fixed so the
+// same criteria always serialize the same way.
+export const serverFilters = (criteria: PhotoFilterCriteria) => ({
+  personIds: criteria.selectedPeopleIds,
+  tagIds: criteria.selectedTagIds,
+  dateFrom: criteria.dateFrom,
+  dateTo: criteria.dateTo,
+});
