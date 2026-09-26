@@ -7,15 +7,9 @@ future idea and lives in [`plans/`](plans/).
 
 ## Short term: make what's here solid
 
-The UI pass and the landing page rework from the previous version of this plan
-have shipped, and so has paging for photos and the timeline. What's left is
-correctness and rough edges in features that already exist.
-
-### Photo rough edges
-
-- Web upload takes one file at a time. Recording a trip or a birthday means
-  uploading one photo, then the next. Accept several files and apply people,
-  tags, and date to all of them.
+The UI pass, the landing page rework, paging for photos and the timeline, and
+multi-file web upload have all shipped. Nothing short-term is open; new
+correctness bugs and rough edges in existing features go here as they're found.
 
 ## Future
 

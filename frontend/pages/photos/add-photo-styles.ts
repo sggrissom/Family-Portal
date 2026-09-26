@@ -166,6 +166,33 @@ block(`
 `);
 
 block(`
+.file-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+`);
+
+block(`
+.file-preview.upload-done {
+  opacity: 0.6;
+}
+`);
+
+block(`
+.file-preview.upload-failed .file-size {
+  color: var(--danger);
+}
+`);
+
+block(`
+.add-more-photos {
+  align-self: flex-start;
+}
+`);
+
+block(`
 .add-photo-container .photo-preview {
   margin-top: 30px;
   padding: 20px;

@@ -234,6 +234,34 @@ test("a person is deleted from their edit page after seeing what goes with them"
   await expect(personCard(page, mistake.name)).toHaveCount(0);
 });
 
+test("several photos are uploaded in one go with a shared title", async ({ page }) => {
+  const title = "UI Park Day";
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: /Share a photo/ }).click();
+  await expect(page).toHaveURL(/\/add-photo$/);
+
+  await page
+    .locator("#photo-input")
+    .setInputFiles(["backend/seedphotos/bubbles-park.jpg", "backend/seedphotos/soccer-match.jpg"]);
+  await expect(page.locator(".file-preview")).toHaveCount(2);
+
+  await page.locator("#title").fill(title);
+  await page.getByRole("radio", { name: "Today" }).check();
+  await page.getByRole("button", { name: "Upload 2 Photos" }).click();
+
+  await expect(page).toHaveURL(/\/photos$/);
+  await expect(page.locator(".photo-card").filter({ hasText: title })).toHaveCount(2);
+});
+
 function monthsAgo(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
