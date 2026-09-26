@@ -125,14 +125,18 @@ const PrivacyPage = () => (
         not an image and cannot be turned back into one, but it does identify that person's face.
       </li>
       <li>
-        Face measurements computed from an uploaded photo are used to compare against those
-        summaries and are then discarded. Only the resulting tag — "this person is in this photo" —
-        is stored, and a tag is marked so you can tell an automatic suggestion from one you made
-        yourself.
+        For each face found in an uploaded photo, the same kind of summary plus where in the photo
+        the face is. These are kept so unrecognized faces can be grouped for you to name, and so
+        faces you confirm help recognize that person in later photos.
       </li>
       <li>
-        A person's face summary is deleted when that person is deleted, and every summary in a
-        family is deleted when the family is.
+        Tags added by face recognition are marked as automatic, so you can tell a suggestion from
+        one you made yourself, and confirm or reject it.
+      </li>
+      <li>
+        A photo's face data is deleted when the photo is. A person's profile summary is deleted when
+        that person is deleted, and their faces in photos go back to being unnamed. Everything is
+        deleted when the family is.
       </li>
       <li>
         Face recognition is a convenience, not a certainty. It is wrong sometimes, and you can

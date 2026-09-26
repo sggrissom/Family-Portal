@@ -11,20 +11,6 @@ The UI pass and the landing page rework from the previous version of this plan
 have shipped. What's left is correctness and rough edges in features that
 already exist.
 
-### Finish face review
-
-The backend for reviewing faces is in progress (`backend/faces.go`: grouped
-unknown faces, assign, reject, dismiss), but nothing on the web calls it yet.
-The privacy page already promises that "a tag is marked so you can tell an
-automatic suggestion from one you made yourself", and `GetPhoto` returns plain
-`[]Person`, so the photo page has no way to show that. Before face tagging
-counts as done:
-
-- A review screen for unknown and auto-tagged faces.
-- Auto tags marked as auto tags on the photo page, with a one-tap confirm or
-  reject.
-- The privacy and support pages checked against what actually shipped.
-
 ### Loading everything doesn't scale
 
 `GetFamilyTimeline` and `ListFamilyPhotos` return every row the family has,

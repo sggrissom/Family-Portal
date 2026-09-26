@@ -76,7 +76,8 @@ const SupportPage = () => (
       </li>
       <li>
         <strong>The wrong person was tagged in a photo</strong> — face suggestions are frequently
-        wrong. Open the photo and correct the tag; nothing you fix gets re-suggested.
+        wrong. Open the photo and correct the tag, or review many at once from Photos → Faces. Once
+        you reject a suggestion, that face is not suggested as that person again.
       </li>
     </ul>
 
