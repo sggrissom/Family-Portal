@@ -814,7 +814,7 @@ func (h *harness) serverEnv() ([]string, error) {
 		"BACKUP_TOKEN=" + backupToken,
 		"SITE_ROOT=" + h.base.String(),
 		// The release config check refuses to serve without these. None of
-		// the flows below call Google, Gemini, or a mail relay, so
+		// the flows below call Google or a mail relay, so
 		// placeholders both satisfy the check and keep the run offline —
 		// which is the point of asserting they are only placeholders.
 		"GOOGLE_CLIENT_ID=e2e-google-client-id",

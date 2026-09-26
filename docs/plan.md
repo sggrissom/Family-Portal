@@ -25,13 +25,6 @@ counts as done:
   reject.
 - The privacy and support pages checked against what actually shipped.
 
-### Family timeline includes activities
-
-A person's timeline shows performances and results. The family timeline shows
-milestones, measurements, photos, and birthdays, but no activities.
-`GetFamilyTimeline` doesn't return them either. The landing page describes the
-timeline as pulling everything together, so it should.
-
 ### Loading everything doesn't scale
 
 `GetFamilyTimeline` and `ListFamilyPhotos` return every row the family has,
@@ -40,12 +33,6 @@ and won't be after a few years, which is exactly how long a record is meant to
 last. Add windowing or pagination before it hurts. The mobile app syncs through
 `GetFamilyTimeline`, so any change there goes through `docs/mobile-api.md`
 first.
-
-### Dead AI code
-
-`backend/ai.go` is a Gemini client that nothing calls, and `.env.example` still
-lists `GEMINI_API_KEY`. It also contradicts "no data leaving the host". Delete
-both.
 
 ### Photo rough edges
 

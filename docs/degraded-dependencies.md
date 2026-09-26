@@ -8,7 +8,7 @@ them.
 "Primary user data" means the record a person created: the account, the person,
 the measurement, the milestone, the photo and its file, the chat message. Those
 are what a family would notice losing. Everything the two subsystems produce —
-a suggested face tag, an AI-drafted set of records, a lock-screen notification —
+a suggested face tag, a lock-screen notification —
 is derived, regenerable, or merely convenient.
 
 The rule, in one line: **an optional dependency failing may cost its own output
