@@ -9,6 +9,7 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import { toDateInputValue } from "../../lib/dateUtils";
 import { PersonSharingSection } from "../../components/PersonSharing";
 import { PersonRelationsSection } from "../../components/PersonRelations";
+import { PersonDeletionSection } from "../../components/PersonDeletion";
 import "./add-person-styles";
 
 type EditPersonForm = {
@@ -237,6 +238,8 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
       <PersonRelationsSection personId={personId} personName={personName} />
 
       <PersonSharingSection personId={personId} personName={personName} />
+
+      <PersonDeletionSection personId={personId} personName={personName} />
     </div>
   </div>
 );

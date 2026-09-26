@@ -190,6 +190,50 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
   await expect(entry.locator(".measurement-value")).toContainText("7 lb 8 oz");
 });
 
+test("a person is deleted from their edit page after seeing what goes with them", async ({
+  page,
+}) => {
+  const mistake = { name: "UI Mistake", birthdate: "2019-02-03" };
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: "Add family member" }).click();
+  await page.locator("#name").fill(mistake.name);
+  await page.locator("#gender").selectOption("0");
+  await page.locator("#birthdate").fill(mistake.birthdate);
+  await page.getByRole("button", { name: "Add Family Member" }).click();
+  await expect(personCard(page, mistake.name)).toBeVisible();
+
+  await page.getByRole("link", { name: "Record growth" }).click();
+  const option = page.locator("#person option").filter({ hasText: mistake.name });
+  await page.locator("#person").selectOption(await option.getAttribute("value"));
+  await page.getByRole("radio", { name: "Height" }).check();
+  await page.locator("#value").fill("40");
+  await page.locator("#unit").selectOption("in");
+  await page.getByRole("radio", { name: "Today" }).check();
+  await page.getByRole("button", { name: "Save Measurement" }).click();
+  await expect(page).toHaveURL(/\/profile\/\d+$/);
+
+  await page.getByRole("link", { name: "✏️ Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/edit-person\/\d+$/);
+
+  await page.getByRole("button", { name: `Delete ${mistake.name}…` }).click();
+  await expect(page.locator(".person-deletion-confirm")).toContainText("1 measurement");
+
+  await page.getByRole("button", { name: `Delete ${mistake.name}`, exact: true }).click();
+
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(personCard(page, account.name)).toBeVisible();
+  await expect(personCard(page, mistake.name)).toHaveCount(0);
+});
+
 function monthsAgo(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months);

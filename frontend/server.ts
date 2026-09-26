@@ -303,6 +303,30 @@ export interface MergePeopleResponse {
     mergedGrowthCount: number
     mergedMilestones: number
     mergedPhotos: number
+    mergedEntries: number
+    mergedResults: number
+}
+
+export interface PersonDeletionRequest {
+    personId: number
+}
+
+export interface PersonDeletionSummary {
+    personId: number
+    name: string
+    milestones: number
+    growthRecords: number
+    photoTags: number
+    faces: number
+    activityRoles: number
+    results: number
+    relations: number
+    sharedFamilies: number
+}
+
+export interface DeletePersonResponse {
+    success: boolean
+    deleted: PersonDeletionSummary
 }
 
 export interface GetFamilyTimelineRequest {
@@ -2142,6 +2166,14 @@ export async function SetProfilePhoto(data: SetProfilePhotoRequest): Promise<rpc
 
 export async function MergePeople(data: MergePeopleRequest): Promise<rpc.Response<MergePeopleResponse>> {
     return await rpc.call<MergePeopleResponse>('MergePeople', JSON.stringify(data));
+}
+
+export async function GetPersonDeletionSummary(data: PersonDeletionRequest): Promise<rpc.Response<PersonDeletionSummary>> {
+    return await rpc.call<PersonDeletionSummary>('GetPersonDeletionSummary', JSON.stringify(data));
+}
+
+export async function DeletePerson(data: PersonDeletionRequest): Promise<rpc.Response<DeletePersonResponse>> {
+    return await rpc.call<DeletePersonResponse>('DeletePerson', JSON.stringify(data));
 }
 
 export async function GetFamilyTimeline(data: GetFamilyTimelineRequest): Promise<rpc.Response<GetFamilyTimelineResponse>> {

@@ -25,21 +25,6 @@ counts as done:
   reject.
 - The privacy and support pages checked against what actually shipped.
 
-### Person lifecycle
-
-- **Merging drops activity history.** `MergePeople` moves growth, milestones,
-  photo tags, faces, relations, and family rows, but not activity roster rows
-  (`EntryMember`) or per-person results (`Result.PersonId`). After a merge
-  those still point at the deleted person, so the merged person's seasons and
-  results disappear. Move them, and extend `TestMergePeople` to cover
-  activities.
-- **There's no way to delete a person.** A mistaken add can only be merged
-  into someone else. The privacy page says a face summary "is deleted when that
-  person is deleted", which currently can't happen. Add `DeletePerson` that
-  cascades through everything merge already knows how to find, plus activity
-  rows, shares, and faces. It needs a cross-family isolation test and a
-  confirmation that says what will be removed.
-
 ### Family timeline includes activities
 
 A person's timeline shows performances and results. The family timeline shows

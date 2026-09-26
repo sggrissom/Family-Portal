@@ -21,6 +21,8 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdatePerson)
 	vbeam.RegisterProc(app, SetProfilePhoto)
 	vbeam.RegisterProc(app, MergePeople)
+	vbeam.RegisterProc(app, GetPersonDeletionSummary)
+	vbeam.RegisterProc(app, DeletePerson)
 	vbeam.RegisterProc(app, GetFamilyTimeline)
 }
 
@@ -81,6 +83,8 @@ type MergePeopleResponse struct {
 	MergedGrowthCount int    `json:"mergedGrowthCount"`
 	MergedMilestones  int    `json:"mergedMilestones"`
 	MergedPhotos      int    `json:"mergedPhotos"`
+	MergedEntries     int    `json:"mergedEntries"`
+	MergedResults     int    `json:"mergedResults"`
 }
 
 type ListPeopleResponse struct {
@@ -707,6 +711,9 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 		EnsurePersonFamilyTx(ctx.Tx, req.TargetPersonId, row.FamilyId)
 	}
 
+	resp.MergedEntries, resp.MergedResults = movePersonActivitiesTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	repointUserPersonTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+
 	movePersonRelationsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	deletePersonRostersTx(ctx.Tx, req.SourcePersonId)
 	vbolt.Delete(ctx.Tx, PeopleBkt, req.SourcePersonId)
@@ -726,6 +733,8 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 		"mergedGrowth":     resp.MergedGrowthCount,
 		"mergedMilestones": resp.MergedMilestones,
 		"mergedPhotos":     resp.MergedPhotos,
+		"mergedEntries":    resp.MergedEntries,
+		"mergedResults":    resp.MergedResults,
 	})
 
 	return

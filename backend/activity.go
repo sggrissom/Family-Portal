@@ -618,6 +618,31 @@ func removePersonFromActivitiesTx(tx *vbolt.Tx, personId int) {
 	}
 }
 
+func movePersonActivitiesTx(tx *vbolt.Tx, fromPersonId int, toPersonId int) (entries int, results int) {
+	for _, member := range GetPersonEntryMembers(tx, fromPersonId) {
+		onEntry := false
+		for _, other := range GetEntryMembers(tx, member.EntryId) {
+			if other.PersonId == toPersonId {
+				onEntry = true
+				break
+			}
+		}
+		if onEntry {
+			deleteEntryMemberRowTx(tx, member.Id)
+			continue
+		}
+		member.PersonId = toPersonId
+		writeEntryMemberTx(tx, &member)
+		entries++
+	}
+	for _, result := range GetPersonResults(tx, fromPersonId) {
+		result.PersonId = &toPersonId
+		writeResultTx(tx, &result)
+		results++
+	}
+	return
+}
+
 func deleteFamilyActivitiesTx(tx *vbolt.Tx, familyId int) {
 	for _, join := range GetFamilyAppearancePhotos(tx, familyId) {
 		deleteAppearancePhotoRowTx(tx, join.Id)

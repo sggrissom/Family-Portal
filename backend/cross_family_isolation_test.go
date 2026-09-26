@@ -209,6 +209,14 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			})
 			return err
 		}},
+		{"GetPersonDeletionSummary", func(ctx *vbeam.Context) error {
+			_, err := GetPersonDeletionSummary(ctx, PersonDeletionRequest{PersonId: fx.person.Id})
+			return err
+		}},
+		{"DeletePerson", func(ctx *vbeam.Context) error {
+			_, err := DeletePerson(ctx, PersonDeletionRequest{PersonId: fx.person.Id})
+			return err
+		}},
 		{"SetProfilePhoto", func(ctx *vbeam.Context) error {
 			_, err := SetProfilePhoto(ctx, SetProfilePhotoRequest{
 				PersonId: fx.person.Id, PhotoId: fx.photo.Id, CropX: 50, CropY: 50, CropScale: 1,
