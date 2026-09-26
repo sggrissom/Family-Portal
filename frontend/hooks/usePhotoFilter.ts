@@ -1,5 +1,6 @@
 import * as vlens from "vlens";
 import * as server from "../server";
+import { filterQuery, parseFilterQuery } from "../lib/photoFilterQuery";
 
 export interface PhotoFilterState {
   selectedPeopleIds: number[];
@@ -21,10 +22,7 @@ interface NormalizedDateRange {
 }
 
 const createInitialState = (): PhotoFilterState => ({
-  selectedPeopleIds: [],
-  selectedTagIds: [],
-  dateFrom: "",
-  dateTo: "",
+  ...parseFilterQuery(BROWSER ? window.location.search : ""),
   isFilterPanelOpen: false,
   people: [],
   peopleLoaded: false,
@@ -36,8 +34,20 @@ const createInitialState = (): PhotoFilterState => ({
 
 const photoFilterState = vlens.declareHook((): PhotoFilterState => createInitialState());
 
+// Keeping the filter in the URL means leaving the grid and coming back, by the
+// back button or the viewer's back link, lands on the same filtered grid.
+const syncUrl = (state: PhotoFilterState) => {
+  const route = window.location.pathname + filterQuery(state);
+  history.replaceState(history.state, "", route);
+};
+
 export const usePhotoFilter = () => {
   const state = photoFilterState();
+
+  const changed = () => {
+    syncUrl(state);
+    vlens.scheduleRedraw();
+  };
 
   const togglePerson = (personId: number) => {
     const currentIndex = state.selectedPeopleIds.indexOf(personId);
@@ -46,17 +56,17 @@ export const usePhotoFilter = () => {
     } else {
       state.selectedPeopleIds = state.selectedPeopleIds.filter(id => id !== personId);
     }
-    vlens.scheduleRedraw();
+    changed();
   };
 
   const setDateFrom = (date: string) => {
     state.dateFrom = date;
-    vlens.scheduleRedraw();
+    changed();
   };
 
   const setDateTo = (date: string) => {
     state.dateTo = date;
-    vlens.scheduleRedraw();
+    changed();
   };
 
   const toggleTag = (tagId: number) => {
@@ -66,7 +76,7 @@ export const usePhotoFilter = () => {
     } else {
       state.selectedTagIds = state.selectedTagIds.filter(id => id !== tagId);
     }
-    vlens.scheduleRedraw();
+    changed();
   };
 
   const loadTags = async () => {
@@ -96,7 +106,7 @@ export const usePhotoFilter = () => {
     state.selectedTagIds = [];
     state.dateFrom = "";
     state.dateTo = "";
-    vlens.scheduleRedraw();
+    changed();
   };
 
   const loadPeople = async () => {

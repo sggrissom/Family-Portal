@@ -8,6 +8,7 @@ import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import { usePhotoFilter } from "../../hooks/usePhotoFilter";
+import { saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import "./family-photos-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -53,6 +54,11 @@ const formatPhotoDate = (dateString: string) => {
     return "";
   }
 };
+
+function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
+  saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
+  core.setRoute(viewPhotoRoute(photoId, true));
+}
 
 const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
   const allPhotos = data.photos || [];
@@ -208,7 +214,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                       className="photo-image"
                       loading={index < 6 ? "eager" : "lazy"}
                       fetchpriority={index < 3 ? "high" : "auto"}
-                      onClick={() => core.setRoute(`/view-photo/${photoWithPeople.image.id}`)}
+                      onClick={() => openPhoto(photoWithPeople.image.id, filteredPhotos)}
                       status={photoStatus.getStatus(photoWithPeople.image.id)}
                     />
                     {photoWithPeople.people.some(

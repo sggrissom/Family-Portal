@@ -12,6 +12,14 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import "./view-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
+import {
+  loadSequence,
+  routeHasSequence,
+  sequencePosition,
+  swipeDirection,
+  viewPhotoRoute,
+  SequencePosition,
+} from "../../lib/photoSequence";
 
 type ViewPhotoData = {
   image: server.Image | null;
@@ -77,6 +85,9 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     );
   }
 
+  const sequence = routeHasSequence(route) ? loadSequence() : null;
+  const position = sequence ? sequencePosition(sequence.ids, data.image.id) : null;
+
   return (
     <div>
       <Header isHome={false} />
@@ -86,6 +97,8 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           people={data.people || []}
           allTags={data.tags}
           faces={data.faces}
+          position={position}
+          backRoute={sequence?.backRoute || "/photos"}
         />
       </main>
       <Footer />
@@ -98,6 +111,8 @@ interface ViewPhotoPageProps {
   people: server.Person[];
   allTags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
+  position: SequencePosition | null;
+  backRoute: string;
 }
 
 async function refreshAfter(photo: server.Image, call: Promise<[unknown, string]>) {
@@ -106,7 +121,62 @@ async function refreshAfter(photo: server.Image, call: Promise<[unknown, string]
     alert(err);
     return;
   }
-  core.setRoute(`/view-photo/${photo.id}`);
+  core.replaceRoute(core.getRoute());
+}
+
+function goToPhoto(photoId: number) {
+  if (photoId) core.replaceRoute(viewPhotoRoute(photoId, true));
+}
+
+let detachKeys: (() => void) | null = null;
+core.registerCleanupFunction(() => {
+  detachKeys?.();
+  detachKeys = null;
+});
+
+function isTyping(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
+  );
+}
+
+// View functions run on every redraw, so this replaces the listener rather
+// than stacking another one.
+function bindArrowKeys(position: SequencePosition, isBlocked: () => boolean) {
+  detachKeys?.();
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (isBlocked() || isTyping(event.target)) return;
+    const photoId =
+      event.key === "ArrowLeft"
+        ? position.prevId
+        : event.key === "ArrowRight"
+          ? position.nextId
+          : 0;
+    if (!photoId) return;
+    event.preventDefault();
+    goToPhoto(photoId);
+  };
+  document.addEventListener("keydown", onKeyDown);
+  detachKeys = () => document.removeEventListener("keydown", onKeyDown);
+}
+
+let touchStart: { x: number; y: number } | null = null;
+
+function handleTouchStart(event: TouchEvent) {
+  const touch = event.touches[0];
+  touchStart = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
+}
+
+function handleTouchEnd(position: SequencePosition, event: TouchEvent) {
+  const start = touchStart;
+  touchStart = null;
+  const touch = event.changedTouches[0];
+  if (!start || !touch) return;
+  const direction = swipeDirection(touch.clientX - start.x, touch.clientY - start.y);
+  if (direction === "prev") goToPhoto(position.prevId);
+  if (direction === "next") goToPhoto(position.nextId);
 }
 
 function handleRemovePerson(photo: server.Image, person: server.Person) {
@@ -197,7 +267,7 @@ const PhotoFaces = ({
   );
 };
 
-async function handleDeletePhoto(photo: server.Image) {
+async function handleDeletePhoto(photo: server.Image, backRoute: string) {
   const confirmed = confirm(
     `Are you sure you want to delete "${photo.title}"? This action cannot be undone.`
   );
@@ -212,7 +282,7 @@ async function handleDeletePhoto(photo: server.Image) {
 
     if (resp && resp.success) {
       alert("Photo deleted successfully");
-      core.setRoute("/photos");
+      core.setRoute(backRoute);
     } else {
       alert("Failed to delete photo");
     }
@@ -244,7 +314,7 @@ async function handleSetProfilePhoto(
 
     if (resp && resp.person) {
       alert("Profile photo set successfully");
-      core.setRoute(`/view-photo/${photo.id}`);
+      core.replaceRoute(core.getRoute());
     } else {
       alert("Failed to set profile photo");
     }
@@ -288,9 +358,20 @@ function closeCropModal(state: CropModalState) {
   vlens.scheduleRedraw();
 }
 
-const ViewPhotoPage = ({ photo, people, allTags, faces }: ViewPhotoPageProps) => {
+const ViewPhotoPage = ({
+  photo,
+  people,
+  allTags,
+  faces,
+  position,
+  backRoute,
+}: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
+
+  if (position) {
+    bindArrowKeys(position, () => cropModalState.isOpen);
+  }
 
   const handleSaveProfilePhoto = async () => {
     await handleSetProfilePhoto(
@@ -306,18 +387,49 @@ const ViewPhotoPage = ({ photo, people, allTags, faces }: ViewPhotoPageProps) =>
   return (
     <div className="view-photo-page">
       <div className="photo-header">
-        <a href="/photos" className="back-link">
+        <a href={backRoute} className="back-link">
           ← Back to Photos
         </a>
+        {position && (
+          <span className="photo-position">
+            {position.index + 1} of {position.total}
+          </span>
+        )}
       </div>
 
-      <div className="photo-display">
+      <div
+        className="photo-display"
+        onTouchStart={position ? handleTouchStart : undefined}
+        onTouchEnd={position ? e => handleTouchEnd(position, e) : undefined}
+      >
         <FullImage
           photoId={photo.id}
           alt={photo.title}
           className="photo-main-image"
           status={photoStatus.getStatus(photo.id)}
         />
+        {position && (
+          <>
+            <button
+              className="photo-nav photo-nav-prev"
+              aria-label="Previous photo"
+              title="Previous (←)"
+              disabled={!position.prevId}
+              onClick={() => goToPhoto(position.prevId)}
+            >
+              ‹
+            </button>
+            <button
+              className="photo-nav photo-nav-next"
+              aria-label="Next photo"
+              title="Next (→)"
+              disabled={!position.nextId}
+              onClick={() => goToPhoto(position.nextId)}
+            >
+              ›
+            </button>
+          </>
+        )}
       </div>
 
       <div className="photo-info-panel">
@@ -418,7 +530,7 @@ const ViewPhotoPage = ({ photo, people, allTags, faces }: ViewPhotoPageProps) =>
             </div>
           )}
 
-          <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo)}>
+          <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo, backRoute)}>
             🗑️ Delete
           </button>
         </div>

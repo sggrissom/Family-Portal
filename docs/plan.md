@@ -25,9 +25,6 @@ first.
 - Web upload takes one file at a time. Recording a trip or a birthday means
   uploading one photo, then the next. Accept several files and apply people,
   tags, and date to all of them.
-- The photo viewer has no previous/next, so looking through photos means
-  going back to the grid after each one. Add arrow keys and swipe, following
-  whatever filter the grid had.
 
 ## Future
 
