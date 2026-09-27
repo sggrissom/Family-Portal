@@ -9,9 +9,6 @@ Derived photo variants (thumbnails, WebP/AVIF) are deliberately not backed up �
 in practice. The app's `shared/.env` is **not** in the archive either; see
 [§3](#3-put-back-the-secrets-not-in-the-archive).
 
-Verified end to end on 2026-08-09 against the archive `backupctl run family`
-produced on 2026-08-08 — see [§8](#8-drill-log).
-
 ---
 
 ## 0. Before you touch anything
@@ -27,19 +24,19 @@ sudo cp -a /srv/apps/family/shared/data/db.bolt /root/db.bolt.before-restore
 
 ## 1. Get the archive onto disk
 
-`backupctl fetch` is not implemented yet (`tiny-server-helper/back-plan.md` §6),
-so today this is raw restic on the VPS:
-
 ```bash
-export $(grep -v '^#' /etc/tiny-server-helper/backup.env | xargs -d '\n')
-
-restic snapshots --tag app=family              # pick one; `latest` is the newest
-restic restore latest --tag app=family --target /root/restore
+sudo backupctl list family                      # pick one; `latest` is the newest
+sudo backupctl fetch family latest /root/restore
 ```
 
-Without `/etc/tiny-server-helper/backup.env` you need the repository URL and the
-repository password by hand (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`). **There is
-no recovery path if the password is lost** — the archives are encrypted with it.
+`fetch` refuses a destination that already has files in it, so restore into a
+new directory each time.
+
+`backupctl` reads the repository URL and password from
+`/etc/tiny-server-helper/backup.env`; on a fresh box, write that file by hand
+first (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and the bucket credentials).
+**There is no recovery path if the password is lost** — the archives are
+encrypted with it.
 
 restic restores full absolute paths, so the two things you want land at:
 
@@ -48,7 +45,7 @@ restic restores full absolute paths, so the two things you want land at:
 | database | `var/lib/tiny-server-helper/backup/stage/family/db.bolt` |
 | photo originals | `srv/apps/family/shared/static/photos/*_original.*` |
 
-The database sits under the staging path because that is where `backupctl`
+The database sits under backupctl's stage directory because that is where `backupctl`
 wrote the snapshot it fetched from `/internal/snapshot` before handing it to
 restic. It is a normal bolt file; the path is cosmetic.
 
@@ -146,8 +143,7 @@ database itself (`app.go:104`). Restoring an archive taken *before* a migration
 landed means that migration replays on first boot.
 
 This was tested, not assumed: forcing all three migrations to replay against the
-restored production data produced byte-identical row counts in every bucket. See
-[§8](#8-drill-log).
+restored production data produced byte-identical row counts in every bucket.
 
 **Expect the database file to grow on that first boot** — a 2.5 MB restored file
 became 20.9 MB after replaying the milestone search index rebuild. That is bolt
@@ -178,22 +174,6 @@ the recorded migrations first, which is the only way to exercise the
 older-archive case — a same-day restore skips every migration because the
 records came back with the snapshot.
 
-## 8. Drill log
-
-**2026-08-09** — restored the 2026-08-08 archive (restic snapshot `1ca432a3`,
-71.0 MiB, 40 files) into a scratch tree and booted the app against it.
-
-- `db.bolt` 2,547,712 bytes, 27 originals.
-- Counts: 3 users, 2 families, 8 people, 8 person_family, 3 family_membership,
-  272 growth_data, 861 milestones, 2 tags, 3 photo_tags, 26 images,
-  38 photo_person, 24 chat_messages, 1 milestone_photo, 2 milestone_tags.
-- 26/26 image rows had their original on disk. One extra original
-  (`ea1fcdff…_original.jpeg`) has no image row — an unfinished delete, harmless,
-  costs one file of archive space.
-- `/readyz` 200; a photo served from `/static` at 156,010 bytes.
-- With `-replay-migrations`, all three migrations re-ran and every count was
-  unchanged.
-
-Re-run this after any change to a `Pack*` function or to the migration list in
-`OpenDB` — those are the two things that can make an old archive unreadable by
-new code.
+Re-run the rehearsal after any change to a `Pack*` function or to the
+migration list in `OpenDB` — those are the two things that can make an old
+archive unreadable by new code.

@@ -18,6 +18,7 @@ func TestRegisterSEOHandlers(t *testing.T) {
 }
 
 func TestRobotsHandler(t *testing.T) {
+	t.Setenv("SITE_ROOT", cfg.SiteURL)
 	req := httptest.NewRequest("GET", "/robots.txt", nil)
 	recorder := httptest.NewRecorder()
 
@@ -82,6 +83,36 @@ func TestRobotsHandler(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestRobotsHandlerOffProduction(t *testing.T) {
+	t.Setenv("SITE_ROOT", "https://staging.familyrecord.app")
+	recorder := httptest.NewRecorder()
+	robotsHandler(recorder, httptest.NewRequest("GET", "/robots.txt", nil))
+
+	body := recorder.Body.String()
+	if body != "User-agent: *\nDisallow: /\n" {
+		t.Errorf("staging robots.txt should disallow everything, got:\n%s", body)
+	}
+}
+
+func TestIndexingPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		siteRoot string
+		want     string
+	}{
+		{cfg.SiteURL, ""},
+		{"https://staging.familyrecord.app", "noindex, nofollow"},
+	} {
+		t.Run(tc.siteRoot, func(t *testing.T) {
+			t.Setenv("SITE_ROOT", tc.siteRoot)
+			recorder := httptest.NewRecorder()
+			addIndexingPolicy(recorder)
+			if got := recorder.Header().Get("X-Robots-Tag"); got != tc.want {
+				t.Errorf("X-Robots-Tag = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestSitemapHandler(t *testing.T) {

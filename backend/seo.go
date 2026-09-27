@@ -3,6 +3,7 @@ package backend
 import (
 	"family/cfg"
 	"net/http"
+	"os"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -14,9 +15,26 @@ func RegisterSEOHandlers(app *vbeam.Application) {
 	app.HandleFunc("/sitemap.xml", sitemapHandler)
 }
 
+// isProductionSite reports whether this server is the public site, as opposed
+// to staging, which runs the same release binary under another SITE_ROOT.
+func isProductionSite() bool {
+	return os.Getenv("SITE_ROOT") == cfg.SiteURL
+}
+
+func addIndexingPolicy(w http.ResponseWriter) {
+	if !isProductionSite() {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	}
+}
+
 func robotsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
+
+	if !isProductionSite() {
+		w.Write([]byte("User-agent: *\nDisallow: /\n"))
+		return
+	}
 
 	robotsContent := `User-agent: *
 Disallow: /
