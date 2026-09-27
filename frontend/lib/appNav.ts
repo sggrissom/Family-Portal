@@ -25,6 +25,7 @@ export function activeDestination(path: string): Destination | null {
 export const LEGACY_ROUTES: Record<string, string> = {
   "/family-timeline": "/history",
   "/family-chart": "/growth",
+  "/compare": "/same-age",
 };
 
 export function legacyRedirect(route: string): string | null {

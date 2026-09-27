@@ -21,6 +21,8 @@ import {
   FamilyComparisonEntry,
   ComparisonPoint,
 } from "../../lib/growthComparison";
+import { sameAgePath } from "../../lib/sameAge";
+import { copy } from "../../lib/copy";
 import "./view-growth-styles";
 
 type ViewGrowthData = {
@@ -197,7 +199,12 @@ const ViewGrowthPage = ({
         </div>
       ) : (
         <div className="family-comparison">
-          <h2>Compared to Family</h2>
+          <div className="family-comparison-head">
+            <h2>Compared to Family</h2>
+            {ageMonths !== null && ageMonths >= 0 && (
+              <a href={sameAgePath(Math.floor(ageMonths), person.id)}>{copy.sameAge.seeAll}</a>
+            )}
+          </div>
           {comparisons.length === 0 ? (
             <div className="empty-state">
               <p>No other family members have a birthday set yet.</p>

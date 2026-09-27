@@ -29,6 +29,7 @@ describe("legacyRedirect", () => {
     expect(legacyRedirect("/family-timeline")).toBe("/history");
     expect(legacyRedirect("/family-timeline?person=4")).toBe("/history?person=4");
     expect(legacyRedirect("/family-chart")).toBe("/growth");
+    expect(legacyRedirect("/compare")).toBe("/same-age");
   });
 
   it("leaves current URLs alone", () => {

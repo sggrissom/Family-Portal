@@ -30,7 +30,7 @@ export const DaySummaryList = ({ days, people, today }: DaySummaryListProps) => 
             </div>
           ))}
           {day.milestones.map(m => (
-            <a key={`m${m.id}`} href={`/profile/${m.personId}`} className="day-milestone">
+            <a key={`m${m.id}`} href={`/milestone/${m.id}`} className="day-milestone">
               <span className="day-milestone-icon" aria-hidden="true">
                 {getCategoryIcon(m.category)}
               </span>

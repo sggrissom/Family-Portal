@@ -9,6 +9,10 @@ import { FullImage } from "../../components/ResponsiveImage";
 import { CropSelector } from "../../components/CropSelector";
 import { FaceCrop } from "../../components/FaceCrop";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
+import { SameAgeStrip } from "../../components/SameAgeRows";
+import { isValidBirthday } from "../../lib/growthPercentiles";
+import { monthsOld } from "../../lib/sameAge";
+import { localDateString } from "../../lib/when";
 import "./view-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
@@ -26,15 +30,38 @@ type ViewPhotoData = {
   people: server.Person[] | null;
   tags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
+  sameAge: server.GetSameAgeResponse | null;
+  childId: number;
 };
+
+const CHILD_MAX_MONTHS = 18 * 12;
+
+function firstChildIn(people: server.Person[], photoDate: string): [number, number] {
+  for (const person of people) {
+    if (person.isPregnancy || !isValidBirthday(person.birthday)) continue;
+    const age = monthsOld(person.birthday, photoDate);
+    if (age >= 0 && age < CHILD_MAX_MONTHS) return [person.id, age];
+  }
+  return [0, 0];
+}
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewPhotoData>> {
   const photoId = getIdFromRoute(route) || 0;
   const [photoResp, photoErr] = await server.GetPhoto({ id: photoId });
   if (photoErr) return [null, photoErr];
-  const [[tagsResp], [facesResp]] = await Promise.all([
+  const [childId, childAge] = photoResp
+    ? firstChildIn(photoResp.people ?? [], photoResp.image.photoDate)
+    : [0, 0];
+  const [[tagsResp], [facesResp], [sameAge]] = await Promise.all([
     server.ListTags({}),
     server.GetPhotoFaces({ photoId }),
+    childId
+      ? server.GetSameAge({
+          ageMonths: childAge,
+          fromPersonId: childId,
+          today: localDateString(new Date()),
+        })
+      : Promise.resolve([null, ""] as rpc.Response<server.GetSameAgeResponse>),
   ]);
   return [
     {
@@ -42,6 +69,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       people: photoResp?.people ?? null,
       tags: tagsResp?.tags ?? [],
       faces: facesResp ?? null,
+      sameAge: sameAge ?? null,
+      childId,
     },
     "",
   ];
@@ -97,6 +126,8 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           people={data.people || []}
           allTags={data.tags}
           faces={data.faces}
+          sameAge={data.sameAge}
+          childId={data.childId}
           position={position}
           backRoute={sequence?.backRoute || "/photos"}
         />
@@ -111,6 +142,8 @@ interface ViewPhotoPageProps {
   people: server.Person[];
   allTags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
+  sameAge: server.GetSameAgeResponse | null;
+  childId: number;
   position: SequencePosition | null;
   backRoute: string;
 }
@@ -363,6 +396,8 @@ const ViewPhotoPage = ({
   people,
   allTags,
   faces,
+  sameAge,
+  childId,
   position,
   backRoute,
 }: ViewPhotoPageProps) => {
@@ -535,6 +570,10 @@ const ViewPhotoPage = ({
           </button>
         </div>
       </div>
+
+      {childId > 0 && (
+        <SameAgeStrip data={sameAge} today={localDateString(new Date())} exceptPersonId={childId} />
+      )}
 
       {cropModalState.isOpen && (
         <CropSelector

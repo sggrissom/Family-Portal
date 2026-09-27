@@ -133,6 +133,16 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     );
   });
 
+  await test.step("the result links to everyone at the same age", async () => {
+    await page.getByRole("link", { name: /See everything at this age/ }).click();
+    await expect(page).toHaveURL(/\/same-age\?age=\d+m&from=\d+$/);
+    await expect(page.locator(".same-age-row").filter({ hasText: child.name })).toContainText(
+      `${measurement.value} ${measurement.unit}`
+    );
+    await page.goBack();
+    await expect(page).toHaveURL(/\/view-growth\/\d+$/);
+  });
+
   await test.step("the measurement is on the person's profile", async () => {
     await page.getByRole("link", { name: `Back to ${child.name}'s Profile` }).click();
     await expect(page).toHaveURL(/\/profile\/\d+$/);

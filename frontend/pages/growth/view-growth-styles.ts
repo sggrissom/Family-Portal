@@ -239,3 +239,21 @@ block(`
   }
 }
 `);
+
+block(`
+.family-comparison-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+`);
+
+block(`
+.family-comparison-head a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+`);

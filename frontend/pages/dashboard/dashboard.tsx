@@ -174,7 +174,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                   </div>
                 )}
                 {(year.milestones || []).map(m => (
-                  <a key={m.id} href={`/profile/${m.personId}`} className="day-milestone">
+                  <a key={m.id} href={`/milestone/${m.id}`} className="day-milestone">
                     <span className="day-milestone-icon" aria-hidden="true">
                       {getCategoryIcon(m.category)}
                     </span>

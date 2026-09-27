@@ -55,6 +55,7 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
 
 export interface CreateAccountRequest {
     name: string
@@ -932,6 +933,19 @@ export interface ListOpenEventsResponse {
     events: OpenEvent[]
 }
 
+export interface GetSameAgeRequest {
+    ageMonths: number | null
+    fromPersonId: number
+    today: string
+}
+
+export interface GetSameAgeResponse {
+    ageMonths: number
+    fromPersonId: number
+    maxAgeMonths: number
+    rows: SameAgeRow[]
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -1664,6 +1678,15 @@ export interface DashboardRecent {
 export interface OpenEvent {
     event: EventSummary
     activityName: string
+}
+
+export interface SameAgeRow {
+    person: Person
+    date: string
+    height: GrowthData | null
+    weight: GrowthData | null
+    milestones: Milestone[]
+    photoIds: number[]
 }
 
 export interface ActivityImportCounts {
@@ -2498,6 +2521,10 @@ export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Respo
 
 export async function ListOpenEvents(data: ListOpenEventsRequest): Promise<rpc.Response<ListOpenEventsResponse>> {
     return await rpc.call<ListOpenEventsResponse>('ListOpenEvents', JSON.stringify(data));
+}
+
+export async function GetSameAge(data: GetSameAgeRequest): Promise<rpc.Response<GetSameAgeResponse>> {
+    return await rpc.call<GetSameAgeResponse>('GetSameAge', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
