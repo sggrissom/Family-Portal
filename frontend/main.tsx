@@ -80,7 +80,7 @@ async function main() {
     guarded("/dashboard", () => import("@app/pages/dashboard/dashboard")),
     guarded("/same-age", () => import("@app/pages/same-age/same-age")),
     guarded("/milestone/", () => import("@app/pages/milestones/view-milestone")),
-    guarded("/history", () => import("@app/pages/family-timeline/family-timeline")),
+    guarded("/history", () => import("@app/pages/history/history")),
     guarded("/chat", () => import("@app/pages/chat/chat")),
     guarded("/settings", () => import("@app/pages/settings/settings")),
     guarded("/add-person", () => import("@app/pages/people/add-person")),

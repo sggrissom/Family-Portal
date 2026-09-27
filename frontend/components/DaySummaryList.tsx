@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as server from "../server";
-import { Checkup, DaySummary, PhotoGroup, dayLabel } from "../lib/daySummary";
+import { Checkup, DayEvent, DaySummary, PhotoGroup, dayLabel } from "../lib/daySummary";
 import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
 import { formatMeasurement } from "../lib/weightFormat";
@@ -42,24 +42,9 @@ export const DaySummaryList = ({ days, people, today, subjectId }: DaySummaryLis
               </span>
             </a>
           ))}
-          {day.appearances.map(a => {
-            const results = (a.results ?? []).map(r => r.label).filter(l => l.trim());
-            return (
-              <a
-                key={`a${a.appearance.id}`}
-                href={`/competition/${a.event.id}`}
-                className="day-appearance"
-              >
-                <span className="day-milestone-icon" aria-hidden="true">
-                  🏆
-                </span>
-                <span>
-                  <strong>{a.entry.name}</strong> at {a.event.name}
-                  {results.length > 0 && ` · ${results.join(" · ")}`}
-                </span>
-              </a>
-            );
-          })}
+          {day.events.map(e => (
+            <EventCard key={`e${e.event.id}`} dayEvent={e} name={name} subjectId={subjectId} />
+          ))}
           {day.checkups.map(c => (
             <CheckupRow
               key={`c${c.personId}`}
@@ -89,6 +74,50 @@ function percentile(g: server.GrowthData, person: server.Person | undefined): st
     ) ?? ""
   );
 }
+
+const EVENT_PHOTOS = 4;
+
+const EventCard = ({
+  dayEvent,
+  name,
+  subjectId,
+}: {
+  dayEvent: DayEvent;
+  name: (id: number) => string;
+  subjectId?: number;
+}) => {
+  const photoIds = dayEvent.appearances
+    .flatMap(a => a.detail.photoIds ?? [])
+    .slice(0, EVENT_PHOTOS);
+  return (
+    <a href={`/competition/${dayEvent.event.id}`} className="day-event">
+      <span className="day-event-head">
+        <span className="day-milestone-icon" aria-hidden="true">
+          🏆
+        </span>
+        <strong>{dayEvent.event.name}</strong>
+      </span>
+      {dayEvent.appearances.map(({ detail, personIds }) => {
+        const who = personIds.filter(id => id !== subjectId).map(name);
+        const results = (detail.results ?? []).map(r => r.label).filter(l => l.trim());
+        return (
+          <span key={detail.appearance.id} className="day-event-line">
+            {detail.entry.name}
+            {who.length > 0 && ` (${who.join(", ")})`}
+            {results.length > 0 && <strong> · {results.join(" · ")}</strong>}
+          </span>
+        );
+      })}
+      {photoIds.length > 0 && (
+        <span className="day-event-photos">
+          {photoIds.map(id => (
+            <img key={id} src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />
+          ))}
+        </span>
+      )}
+    </a>
+  );
+};
 
 const CheckupRow = ({
   checkup,

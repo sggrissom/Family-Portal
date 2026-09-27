@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as server from "@app/server";
-import { birthdaysBetween, dayKey, dayLabel, summarizeDays } from "./daySummary";
+import { birthdaysBetween, dayKey, dayLabel, groupByMonth, summarizeDays } from "./daySummary";
 
 const person = (
   id: number,
@@ -104,7 +104,7 @@ describe("summarizeDays", () => {
         day: "2026-09-26",
         birthdays: [{ personId: 2, age: 7 }],
         milestones: [],
-        appearances: [],
+        events: [],
         checkups: [],
         photos: null,
       },
@@ -112,30 +112,54 @@ describe("summarizeDays", () => {
   });
 });
 
-describe("appearances", () => {
-  it("land on the day they happened, or the event's first day", () => {
-    const detail = (id: number, occurredAt: string, startDate: string) =>
-      ({
+describe("activity events", () => {
+  const appearance = (id: number, eventId: number, occurredAt: string, startDate: string) =>
+    ({
+      detail: {
         appearance: { id, occurredAt },
-        event: { startDate },
+        event: { id: eventId, startDate },
+        entry: { name: `Entry ${id}` },
         results: [],
         photoIds: [],
-      }) as unknown as server.AppearanceDetail;
+      },
+      personIds: [1],
+    }) as unknown as server.TimelineAppearance;
+
+  it("puts appearances at one event on one card, dated by when they happened", () => {
     const days = summarizeDays(
       {
         photos: [],
         growth: [],
         milestones: [],
         appearances: [
-          detail(1, "2026-09-20T15:00:00Z", "2026-09-19T00:00:00Z"),
-          detail(2, "0001-01-01T00:00:00Z", "2026-09-12T00:00:00Z"),
+          appearance(1, 10, "2026-09-20T15:00:00Z", "2026-09-19T00:00:00Z"),
+          appearance(2, 10, "2026-09-20T17:00:00Z", "2026-09-19T00:00:00Z"),
+          appearance(3, 11, "0001-01-01T00:00:00Z", "2026-09-12T00:00:00Z"),
         ],
       },
       []
     );
-    expect(days.map(d => [d.day, d.appearances.map(a => a.appearance.id)])).toEqual([
-      ["2026-09-20", [1]],
-      ["2026-09-12", [2]],
+    expect(days.map(d => [d.day, d.events.map(e => [e.event.id, e.appearances.length])])).toEqual([
+      ["2026-09-20", [[10, 2]]],
+      ["2026-09-12", [[11, 1]]],
+    ]);
+  });
+});
+
+describe("groupByMonth", () => {
+  it("keeps days in order under their month", () => {
+    const day = (d: string) => ({
+      day: d,
+      birthdays: [],
+      milestones: [],
+      events: [],
+      checkups: [],
+      photos: null,
+    });
+    const groups = groupByMonth([day("2026-09-20"), day("2026-09-02"), day("2026-08-30")]);
+    expect(groups.map(g => [g.label, g.days.length])).toEqual([
+      ["September 2026", 2],
+      ["August 2026", 1],
     ]);
   });
 });

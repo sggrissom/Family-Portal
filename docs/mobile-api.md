@@ -396,6 +396,11 @@ user believes they entered.
   windowed, so merge windows per person by entry id.
 - `skipMilestones` / `skipPhotos` send those arrays as `null`, the same as for
   a person whose scope the caller can't see.
+- `includeActivities: true` fills `appearances`: each activity appearance in
+  the window once, as `{detail, personIds}`, where `detail` is the same
+  `AppearanceDetail` that `GetPersonSeason` returns and `personIds` are the
+  visible people in the entry. An appearance with no `occurredAt` is dated by
+  its event's start. Without the flag, `appearances` is an empty array.
 
 Every other list proc returns the whole set: `ListPeople`,
 `GetPersonMilestones`, `ListTags`. There is no cursor and no total count.

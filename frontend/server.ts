@@ -335,12 +335,14 @@ export interface GetFamilyTimelineRequest {
     to: string
     skipMilestones: boolean
     skipPhotos: boolean
+    includeActivities: boolean
 }
 
 export interface GetFamilyTimelineResponse {
     people: FamilyTimelineItem[]
     relations: Relation[]
     years: number[]
+    appearances: TimelineAppearance[]
 }
 
 export interface GetPersonRelationsRequest {
@@ -1513,6 +1515,11 @@ export interface FamilyTimelineItem {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+}
+
+export interface TimelineAppearance {
+    detail: AppearanceDetail
+    personIds: number[]
 }
 
 export interface RelationView {

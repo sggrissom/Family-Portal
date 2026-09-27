@@ -341,7 +341,10 @@ const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
       photos: (data.person.photos ?? []).map(image => ({ image, people: [] })),
       growth: data.person.growthData ?? [],
       milestones: data.person.milestones ?? [],
-      appearances: data.activities.appearances ?? [],
+      appearances: (data.activities.appearances ?? []).map(detail => ({
+        detail,
+        personIds: [person.id],
+      })),
     },
     [person],
     isValidBirthday(person.birthday) && !person.isPregnancy

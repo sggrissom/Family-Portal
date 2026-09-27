@@ -17,11 +17,16 @@ export interface Birthday {
   age: number;
 }
 
+export interface DayEvent {
+  event: server.EventSummary;
+  appearances: server.TimelineAppearance[];
+}
+
 export interface DaySummary {
   day: string;
   birthdays: Birthday[];
   milestones: server.Milestone[];
-  appearances: server.AppearanceDetail[];
+  events: DayEvent[];
   checkups: Checkup[];
   photos: PhotoGroup | null;
 }
@@ -30,7 +35,7 @@ export interface DayRecords {
   photos: server.PhotoWithPeople[];
   growth: server.GrowthData[];
   milestones: server.Milestone[];
-  appearances?: server.AppearanceDetail[];
+  appearances?: server.TimelineAppearance[];
 }
 
 const MOSAIC_SIZE = 4;
@@ -82,7 +87,7 @@ export function summarizeDays(
   const summary = (day: string) => {
     let found = days.get(day);
     if (!found) {
-      found = { day, birthdays: [], milestones: [], appearances: [], checkups: [], photos: null };
+      found = { day, birthdays: [], milestones: [], events: [], checkups: [], photos: null };
       days.set(day, found);
     }
     return found;
@@ -99,12 +104,20 @@ export function summarizeDays(
     if (day) summary(day).milestones.push(milestone);
   }
 
-  for (const detail of records.appearances ?? []) {
+  for (const appearance of records.appearances ?? []) {
+    const { detail } = appearance;
     const occurred = new Date(detail.appearance.occurredAt);
     const day = dayKey(
       occurred.getUTCFullYear() > 1900 ? detail.appearance.occurredAt : detail.event.startDate
     );
-    if (day) summary(day).appearances.push(detail);
+    if (!day) continue;
+    const events = summary(day).events;
+    let group = events.find(e => e.event.id === detail.event.id);
+    if (!group) {
+      group = { event: detail.event, appearances: [] };
+      events.push(group);
+    }
+    group.appearances.push(appearance);
   }
 
   const newestFirst = (a: server.GrowthData, b: server.GrowthData) =>
@@ -152,4 +165,40 @@ export function dayLabel(day: string, today: string): string {
   return date.getUTCFullYear() === new Date(today + "T00:00:00Z").getUTCFullYear()
     ? label
     : `${label}, ${date.getUTCFullYear()}`;
+}
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+export interface MonthGroup {
+  month: string;
+  label: string;
+  days: DaySummary[];
+}
+
+export function groupByMonth(days: DaySummary[]): MonthGroup[] {
+  const groups: MonthGroup[] = [];
+  for (const day of days) {
+    const month = day.day.slice(0, 7);
+    let group = groups[groups.length - 1];
+    if (!group || group.month !== month) {
+      const [year, m] = month.split("-").map(Number);
+      group = { month, label: `${MONTH_NAMES[m - 1]} ${year}`, days: [] };
+      groups.push(group);
+    }
+    group.days.push(day);
+  }
+  return groups;
 }

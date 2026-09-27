@@ -1,248 +1,179 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
-import { MultiPersonChart, PersonGrowthData } from "../../components/chart/multi-person-chart";
+import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import { AgeChart, AgeSeries, SERIES_COLORS } from "../../components/AgeChart";
+import { PersonChips } from "../../components/PersonChips";
+import { SegmentedControl } from "../../components/SegmentedControl";
+import { chipOrder } from "../../lib/familyGroups";
+import { timelineRequest } from "../../lib/photoPages";
+import { Metric, chartPoints, percentileBand } from "../../lib/ageChart";
+import { isValidBirthday } from "../../lib/growthPercentiles";
+import { monthsOld } from "../../lib/sameAge";
+import { copy } from "../../lib/copy";
 import "./family-chart-styles";
 
-type FamilyChartState = {
-  selectedPersonIds: Set<number>;
-  showHeight: boolean;
-  showWeight: boolean;
+type GrowthPageData = {
+  people: server.Person[];
+  growth: Map<number, server.GrowthData[]>;
 };
 
-const useFamilyChartState = vlens.declareHook(
-  (): FamilyChartState => ({
-    selectedPersonIds: new Set(),
-    showHeight: true,
-    showWeight: true,
-  })
-);
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<GrowthPageData>> {
+  if (!(await ensureAuthInFetch())) {
+    return rpc.ok<GrowthPageData>({ people: [], growth: new Map() });
+  }
+  const [resp, err] = await server.GetFamilyTimeline(
+    timelineRequest({ skipMilestones: true, skipPhotos: true })
+  );
+  if (!resp) return [null, err];
 
-type ChartDataLoadState = {
-  data: server.ComparePeopleResponse | null;
-  loading: boolean;
-  error: string | null;
-};
-
-const useChartDataLoad = vlens.declareHook(
-  (): ChartDataLoadState => ({
-    data: null,
-    loading: false,
-    error: null,
-  })
-);
-
-const PERSON_COLORS = ["#3b82f6", "#10b981", "#a855f7", "#f59e0b", "#f43f5e"];
-
-export async function fetch(route: string, prefix: string) {
-  return server.ListPeople({});
+  const measured = resp.people.filter(
+    item => (item.growthData ?? []).length > 0 && isValidBirthday(item.person.birthday)
+  );
+  return rpc.ok<GrowthPageData>({
+    people: chipOrder(
+      measured.map(item => item.person),
+      resp.relations ?? [],
+      auth.getAuth()?.familyId ?? 0
+    ),
+    growth: new Map(measured.map(item => [item.person.id, item.growthData ?? []])),
+  });
 }
 
-type FamilyChartData = server.ListPeopleResponse;
+type Bands = "off" | "girls" | "boys";
 
-const loadChartData = async (state: FamilyChartState, loadState: ChartDataLoadState) => {
-  if (state.selectedPersonIds.size === 0) {
-    loadState.data = null;
-    loadState.loading = false;
-    loadState.error = null;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  loadState.loading = true;
-  loadState.error = null;
-  vlens.scheduleRedraw();
-
-  const personIds = Array.from(state.selectedPersonIds);
-  const [resp, err] = await server.ComparePeople({ personIds });
-
-  if (err || !resp) {
-    loadState.error = err || "Failed to load growth data";
-    loadState.data = null;
-  } else {
-    loadState.data = resp;
-  }
-
-  loadState.loading = false;
-  vlens.scheduleRedraw();
+type GrowthPageState = {
+  selected: number[] | null;
+  metric: Metric;
+  bands: Bands;
 };
 
-const togglePersonSelection = (
-  state: FamilyChartState,
-  loadState: ChartDataLoadState,
-  personId: number
-) => {
-  if (state.selectedPersonIds.has(personId)) {
-    state.selectedPersonIds.delete(personId);
-  } else {
-    if (state.selectedPersonIds.size >= 5) {
-      alert("You can compare up to 5 people at once");
-      return;
-    }
-    state.selectedPersonIds.add(personId);
-  }
+const useGrowthPageState = vlens.declareHook(
+  (): GrowthPageState => ({ selected: null, metric: "height", bands: "off" })
+);
+
+const CHILD_MONTHS = 18 * 12;
+
+function defaultSelection(data: GrowthPageData): number[] {
+  const now = new Date().toISOString();
+  const familyId = auth.getAuth()?.familyId ?? 0;
+  const kids = data.people.filter(
+    p => p.familyId === familyId && monthsOld(p.birthday, now) < CHILD_MONTHS
+  );
+  return (kids.length > 0 ? kids : data.people).map(p => p.id);
+}
+
+function togglePerson(state: GrowthPageState, personId: number) {
+  const selected = state.selected ?? [];
+  state.selected = selected.includes(personId)
+    ? selected.filter(id => id !== personId)
+    : [...selected, personId];
   vlens.scheduleRedraw();
-  loadChartData(state, loadState);
-};
+}
 
-const clearSelection = (state: FamilyChartState, loadState: ChartDataLoadState) => {
-  state.selectedPersonIds.clear();
-  loadState.data = null;
-  loadState.error = null;
+function chooseMetric(state: GrowthPageState, metric: Metric) {
+  state.metric = metric;
   vlens.scheduleRedraw();
-};
+}
 
-const toggleMeasurementType = (state: FamilyChartState, type: "height" | "weight") => {
-  if (type === "height") {
-    state.showHeight = !state.showHeight;
-  } else {
-    state.showWeight = !state.showWeight;
-  }
+function chooseBands(state: GrowthPageState, bands: Bands) {
+  state.bands = bands;
   vlens.scheduleRedraw();
-};
+}
 
-export function view(route: string, prefix: string, data: FamilyChartData): preact.ComponentChild {
-  const currentAuth = auth.getAuth();
-  if (!currentAuth || currentAuth.id <= 0) {
-    auth.clearAuth();
-    core.setRoute("/login");
-    return;
-  }
-
-  const people = data.people || [];
+export function view(route: string, prefix: string, data: GrowthPageData): preact.ComponentChild {
+  if (!requireAuthInView()) return;
 
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="family-chart-page">
-        <FamilyChartPage people={people} />
+      <main id="app" className="growth-page-container">
+        <GrowthPage data={data} />
       </main>
       <Footer />
     </div>
   );
 }
 
-interface FamilyChartPageProps {
-  people: server.Person[];
-}
+const GrowthPage = ({ data }: { data: GrowthPageData }) => {
+  const state = useGrowthPageState();
+  state.selected ??= defaultSelection(data);
+  const selected = state.selected;
 
-const FamilyChartPage = ({ people }: FamilyChartPageProps) => {
-  const state = useFamilyChartState();
-  const loadState = useChartDataLoad();
+  const series: AgeSeries[] = data.people
+    .filter(p => selected.includes(p.id))
+    .map(person => ({
+      key: person.id,
+      label: person.name.split(" ")[0],
+      color: SERIES_COLORS[data.people.indexOf(person) % SERIES_COLORS.length],
+      points: chartPoints(data.growth.get(person.id) ?? [], person.birthday, state.metric),
+    }))
+    .filter(s => s.points.length > 0);
 
-  const chartPeopleData: PersonGrowthData[] = [];
-  if (loadState.data && loadState.data.people) {
-    loadState.data.people.forEach((personData, idx) => {
-      chartPeopleData.push({
-        person: personData.person,
-        growthData: personData.growthData || [],
-        color: PERSON_COLORS[idx % PERSON_COLORS.length],
-      });
-    });
-  }
+  const maxAge = Math.max(0, ...series.flatMap(s => s.points.map(p => p.ageMonths)));
+  const band =
+    state.bands === "off"
+      ? []
+      : percentileBand(state.bands === "boys" ? 0 : 1, state.metric, 0, maxAge);
 
   return (
-    <div className="family-chart-container">
-      <div className="family-chart-header">
-        <h1>Family Growth Chart</h1>
-        <p className="subtitle">Compare growth measurements across family members</p>
+    <div className="growth-page">
+      <div className="growth-page-head">
+        <h1>{copy.growthPage.title}</h1>
+        <a href="/add-growth" className="btn btn-primary">
+          {copy.growthPage.measure}
+        </a>
       </div>
 
-      <div className="chart-controls">
-        <div className="person-selection">
-          <h3>Select People (up to 5)</h3>
-          <div className="person-checkboxes">
-            {people.map(person => (
-              <label key={person.id} className="person-checkbox">
-                <input
-                  type="checkbox"
-                  checked={state.selectedPersonIds.has(person.id)}
-                  onChange={() => togglePersonSelection(state, loadState, person.id)}
-                />
-                <span className="checkbox-label">{person.name}</span>
-              </label>
-            ))}
+      {data.people.length === 0 ? (
+        <p className="growth-page-empty">{copy.growthPage.noData}</p>
+      ) : (
+        <>
+          <PersonChips
+            people={data.people}
+            selected={selected}
+            onToggle={vlens.cachePartial(togglePerson, state)}
+            label={copy.growthPage.people}
+          />
+          <div className="growth-page-controls">
+            <SegmentedControl
+              label={copy.growthPage.metric}
+              options={[
+                { value: "height", label: copy.measurement.height },
+                { value: "weight", label: copy.measurement.weight },
+              ]}
+              value={state.metric}
+              onChange={vlens.cachePartial(chooseMetric, state)}
+            />
+            <span className="growth-page-bands">
+              <span>{copy.growthPage.bands}</span>
+              <SegmentedControl
+                label={copy.growthPage.bands}
+                options={[
+                  { value: "off", label: copy.growthPage.bandsOff },
+                  { value: "girls", label: copy.growthPage.girls },
+                  { value: "boys", label: copy.growthPage.boys },
+                ]}
+                value={state.bands}
+                onChange={vlens.cachePartial(chooseBands, state)}
+              />
+            </span>
           </div>
-          {state.selectedPersonIds.size > 0 && (
-            <button className="btn-clear" onClick={() => clearSelection(state, loadState)}>
-              Clear Selection
-            </button>
+          {series.length === 0 ? (
+            <p className="growth-page-empty">{copy.growthPage.empty}</p>
+          ) : (
+            <AgeChart
+              series={series}
+              metric={state.metric}
+              band={band}
+              label={`${copy.growthPage.title}: ${state.metric}`}
+            />
           )}
-        </div>
-
-        <div className="measurement-filters">
-          <h3>Show Measurements</h3>
-          <div className="filter-toggles">
-            <label className="filter-toggle">
-              <input
-                type="checkbox"
-                checked={state.showHeight}
-                onChange={() => toggleMeasurementType(state, "height")}
-              />
-              <span className="toggle-label">Height (solid line)</span>
-            </label>
-            <label className="filter-toggle">
-              <input
-                type="checkbox"
-                checked={state.showWeight}
-                onChange={() => toggleMeasurementType(state, "weight")}
-              />
-              <span className="toggle-label">Weight (dashed line)</span>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div className="chart-display">
-        {loadState.loading && (
-          <div className="loading-state">
-            <p>Loading growth data...</p>
-          </div>
-        )}
-
-        {loadState.error && (
-          <div className="error-state">
-            <p>Error: {loadState.error}</p>
-          </div>
-        )}
-
-        {!loadState.loading && !loadState.error && state.selectedPersonIds.size === 0 && (
-          <div className="empty-state">
-            <p>📈 Select one or more people above to view their growth chart</p>
-          </div>
-        )}
-
-        {!loadState.loading &&
-          !loadState.error &&
-          state.selectedPersonIds.size > 0 &&
-          chartPeopleData.length > 0 && (
-            <div className="chart-wrapper">
-              <MultiPersonChart
-                peopleData={chartPeopleData}
-                width={900}
-                height={640}
-                showHeight={state.showHeight}
-                showWeight={state.showWeight}
-              />
-            </div>
-          )}
-      </div>
-
-      <div className="chart-info">
-        <h3>How to use</h3>
-        <ul>
-          <li>Select up to 5 family members to compare their growth measurements</li>
-          <li>Toggle height and weight measurements on or off</li>
-          <li>Solid lines represent height measurements</li>
-          <li>Dashed lines represent weight measurements</li>
-          <li>Each person is assigned a different color</li>
-          <li>Click on any data point to see detailed information</li>
-          <li>Use Ctrl/Cmd + scroll to zoom, or pinch on mobile devices</li>
-        </ul>
-      </div>
+        </>
+      )}
     </div>
   );
 };

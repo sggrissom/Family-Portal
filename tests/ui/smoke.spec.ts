@@ -152,6 +152,14 @@ test("a new family signs up, adds a person, and records a measurement", async ({
       `${measurement.value} ${measurement.unit}`
     );
   });
+
+  await test.step("and in the family history", async () => {
+    await page.getByRole("link", { name: "History", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/history$/);
+    await expect(page.locator(".day-checkup").first()).toContainText(
+      `${measurement.value} ${measurement.unit}`
+    );
+  });
 });
 
 test("an infant's weight is entered and shown in pounds and ounces", async ({ page }) => {
