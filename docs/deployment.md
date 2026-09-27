@@ -120,7 +120,17 @@ moment you most want logs is right after a deploy that broke something.
 
 ## Deploys
 
-CI deploys `main` after the full check gate passes (`.github/workflows/test.yml`).
+CI deploys after the full check gate passes (`.github/workflows/test.yml`):
+`main` goes to staging (`staging.familyrecord.app`) and `release` goes to
+production (`familyrecord.app`). To ship, fast-forward `release` to a `main`
+commit that has already run on staging.
+
+Each target is a GitHub environment (`staging`, `production`) with its own
+secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `SMOKE_EMAIL`,
+`SMOKE_PASSWORD`. Keep none of these at repository level: GitHub falls back to a
+repository secret when an environment lacks one, which would send a release
+build to the wrong box.
+
 `make deploy` builds the frontend and a CGO Linux binary, then hands it to the
 `deploy` script, which uploads to a new timestamped release directory, repoints
 `current`, restarts the unit, and **rolls back to the previous release if
@@ -198,8 +208,8 @@ a dedicated account rather than a person's, so a failure here is never
 confused with somebody's own session, and so rotating its password costs
 nobody anything.
 
-CI runs it as the last step of the deploy job, from the same two repository
-secrets. When they are unset the step logs a warning and passes, so an
+CI runs it as the last step of the deploy job, from the same two secrets on
+the target's environment, against that environment's URL. When they are unset the step logs a warning and passes, so an
 un-armed check is visible on every deploy rather than silent.
 
 ## Face analysis
