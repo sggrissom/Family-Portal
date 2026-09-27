@@ -30,6 +30,7 @@ describe("legacyRedirect", () => {
     expect(legacyRedirect("/family-timeline?person=4")).toBe("/history?person=4");
     expect(legacyRedirect("/family-chart")).toBe("/growth");
     expect(legacyRedirect("/compare")).toBe("/same-age");
+    expect(legacyRedirect("/person-activities/7")).toBe("/profile/7?tab=activities");
   });
 
   it("leaves current URLs alone", () => {
@@ -42,7 +43,6 @@ describe("contextPersonId", () => {
   it("reads the person from pages about one person", () => {
     expect(contextPersonId("/profile/7")).toBe(7);
     expect(contextPersonId("/edit-person/7")).toBe(7);
-    expect(contextPersonId("/person-activities/7")).toBe(7);
   });
 
   it("is null elsewhere", () => {

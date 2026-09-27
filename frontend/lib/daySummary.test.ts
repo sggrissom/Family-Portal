@@ -104,9 +104,38 @@ describe("summarizeDays", () => {
         day: "2026-09-26",
         birthdays: [{ personId: 2, age: 7 }],
         milestones: [],
+        appearances: [],
         checkups: [],
         photos: null,
       },
+    ]);
+  });
+});
+
+describe("appearances", () => {
+  it("land on the day they happened, or the event's first day", () => {
+    const detail = (id: number, occurredAt: string, startDate: string) =>
+      ({
+        appearance: { id, occurredAt },
+        event: { startDate },
+        results: [],
+        photoIds: [],
+      }) as unknown as server.AppearanceDetail;
+    const days = summarizeDays(
+      {
+        photos: [],
+        growth: [],
+        milestones: [],
+        appearances: [
+          detail(1, "2026-09-20T15:00:00Z", "2026-09-19T00:00:00Z"),
+          detail(2, "0001-01-01T00:00:00Z", "2026-09-12T00:00:00Z"),
+        ],
+      },
+      []
+    );
+    expect(days.map(d => [d.day, d.appearances.map(a => a.appearance.id)])).toEqual([
+      ["2026-09-20", [1]],
+      ["2026-09-12", [2]],
     ]);
   });
 });

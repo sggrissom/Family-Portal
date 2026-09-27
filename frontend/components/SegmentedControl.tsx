@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
+import "./segmented-styles";
 
 interface SegmentedControlProps<T extends string> {
   label: string;

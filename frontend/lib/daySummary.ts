@@ -21,6 +21,7 @@ export interface DaySummary {
   day: string;
   birthdays: Birthday[];
   milestones: server.Milestone[];
+  appearances: server.AppearanceDetail[];
   checkups: Checkup[];
   photos: PhotoGroup | null;
 }
@@ -29,6 +30,7 @@ export interface DayRecords {
   photos: server.PhotoWithPeople[];
   growth: server.GrowthData[];
   milestones: server.Milestone[];
+  appearances?: server.AppearanceDetail[];
 }
 
 const MOSAIC_SIZE = 4;
@@ -80,7 +82,7 @@ export function summarizeDays(
   const summary = (day: string) => {
     let found = days.get(day);
     if (!found) {
-      found = { day, birthdays: [], milestones: [], checkups: [], photos: null };
+      found = { day, birthdays: [], milestones: [], appearances: [], checkups: [], photos: null };
       days.set(day, found);
     }
     return found;
@@ -95,6 +97,14 @@ export function summarizeDays(
   for (const milestone of records.milestones) {
     const day = dayKey(milestone.milestoneDate);
     if (day) summary(day).milestones.push(milestone);
+  }
+
+  for (const detail of records.appearances ?? []) {
+    const occurred = new Date(detail.appearance.occurredAt);
+    const day = dayKey(
+      occurred.getUTCFullYear() > 1900 ? detail.appearance.occurredAt : detail.event.startDate
+    );
+    if (day) summary(day).appearances.push(detail);
   }
 
   const newestFirst = (a: server.GrowthData, b: server.GrowthData) =>

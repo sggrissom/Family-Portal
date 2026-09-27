@@ -85,11 +85,13 @@ interface SameAgeStripProps {
   data: server.GetSameAgeResponse | null;
   today: string;
   exceptPersonId: number;
+  hideWhenEmpty?: boolean;
 }
 
-export const SameAgeStrip = ({ data, today, exceptPersonId }: SameAgeStripProps) => {
+export const SameAgeStrip = ({ data, today, exceptPersonId, hideWhenEmpty }: SameAgeStripProps) => {
   if (!data) return null;
   const others = (data.rows ?? []).filter(r => r.person.id !== exceptPersonId && hasRecords(r));
+  if (hideWhenEmpty && others.length === 0) return null;
   return (
     <section className="same-age-strip">
       <div className="same-age-strip-head">

@@ -12,12 +12,14 @@ interface DaySummaryListProps {
   days: DaySummary[];
   people: server.Person[];
   today: string;
+  subjectId?: number;
 }
 
-export const DaySummaryList = ({ days, people, today }: DaySummaryListProps) => {
+export const DaySummaryList = ({ days, people, today, subjectId }: DaySummaryListProps) => {
   const byId = new Map(people.map(p => [p.id, p]));
   const names = chipLabels(people);
   const name = (id: number) => names.get(id) ?? "Someone";
+  const who = (id: number) => (id === subjectId ? null : <strong>{name(id)} </strong>);
 
   return (
     <div className="day-summaries">
@@ -35,16 +37,35 @@ export const DaySummaryList = ({ days, people, today }: DaySummaryListProps) => 
                 {getCategoryIcon(m.category)}
               </span>
               <span>
-                <strong>{name(m.personId)}</strong> {m.description}
+                {who(m.personId)}
+                {m.description}
               </span>
             </a>
           ))}
+          {day.appearances.map(a => {
+            const results = (a.results ?? []).map(r => r.label).filter(l => l.trim());
+            return (
+              <a
+                key={`a${a.appearance.id}`}
+                href={`/competition/${a.event.id}`}
+                className="day-appearance"
+              >
+                <span className="day-milestone-icon" aria-hidden="true">
+                  🏆
+                </span>
+                <span>
+                  <strong>{a.entry.name}</strong> at {a.event.name}
+                  {results.length > 0 && ` · ${results.join(" · ")}`}
+                </span>
+              </a>
+            );
+          })}
           {day.checkups.map(c => (
             <CheckupRow
               key={`c${c.personId}`}
               checkup={c}
               person={byId.get(c.personId)}
-              name={name(c.personId)}
+              name={c.personId === subjectId ? null : name(c.personId)}
             />
           ))}
           {day.photos && <PhotoMosaic day={day.day} photos={day.photos} name={name} />}
@@ -76,7 +97,7 @@ const CheckupRow = ({
 }: {
   checkup: Checkup;
   person: server.Person | undefined;
-  name: string;
+  name: string | null;
 }) => {
   const ids = [checkup.height, checkup.weight].filter(Boolean).map(g => g!.id);
   const months = (g: server.GrowthData) =>
@@ -96,7 +117,14 @@ const CheckupRow = ({
         📏
       </span>
       <span>
-        <strong>{name}</strong> {copy.home.checkup} · {parts.join(" · ")}
+        {name ? (
+          <>
+            <strong>{name}</strong> {copy.home.checkup}
+          </>
+        ) : (
+          copy.home.checkupTitle
+        )}{" "}
+        · {parts.join(" · ")}
       </span>
     </a>
   );

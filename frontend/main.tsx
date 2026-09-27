@@ -9,7 +9,7 @@ import { ErrorDisplay } from "./components/ErrorDisplay";
 import { Header, Footer } from "./layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installGlobalErrorHandlers } from "./lib/clientErrors";
-import { LEGACY_ROUTES, legacyRedirect } from "./lib/appNav";
+import { LEGACY_PREFIXES, legacyRedirect } from "./lib/appNav";
 import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
@@ -70,7 +70,7 @@ async function main() {
   }
 
   vlens.initRoutes([
-    ...Object.keys(LEGACY_ROUTES).map(redirect),
+    ...LEGACY_PREFIXES.map(redirect),
     guarded("/profile/", () => import("@app/pages/profile/profile")),
     guarded("/create-account", () => import("@app/pages/auth/create-account")),
     guarded("/login", () => import("@app/pages/auth/login")),
@@ -98,7 +98,6 @@ async function main() {
     guarded("/season/", () => import("@app/pages/activities/season")),
     guarded("/competition/", () => import("@app/pages/activities/competition")),
     guarded("/routine/", () => import("@app/pages/activities/routine")),
-    guarded("/person-activities/", () => import("@app/pages/activities/person")),
     guarded("/activities", () => import("@app/pages/activities/activities")),
     guarded("/faces", () => import("@app/pages/faces/faces")),
     guarded("/manage-tags", () => import("@app/pages/tags/manage-tags")),

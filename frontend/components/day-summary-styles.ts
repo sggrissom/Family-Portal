@@ -35,6 +35,7 @@ block(`
 
 block(`
 .day-milestone,
+.day-appearance,
 .day-checkup {
   display: flex;
   align-items: center;
@@ -57,6 +58,7 @@ block(`
 
 block(`
 .day-milestone:hover,
+.day-appearance:hover,
 .day-checkup:hover,
 .day-mosaic:hover {
   border-color: var(--accent);

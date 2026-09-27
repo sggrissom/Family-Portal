@@ -148,9 +148,7 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(page).toHaveURL(/\/profile\/\d+$/);
     await expect(page.getByRole("heading", { name: child.name, level: 1 })).toBeVisible();
 
-    const entry = page.locator(".timeline-item.measurement-item").first();
-    await expect(entry).toBeVisible();
-    await expect(entry.locator(".measurement-value")).toContainText(
+    await expect(page.locator(".day-checkup").first()).toContainText(
       `${measurement.value} ${measurement.unit}`
     );
   });

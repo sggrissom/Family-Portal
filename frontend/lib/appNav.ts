@@ -28,7 +28,11 @@ export const LEGACY_ROUTES: Record<string, string> = {
   "/compare": "/same-age",
 };
 
+export const LEGACY_PREFIXES = [...Object.keys(LEGACY_ROUTES), "/person-activities/"];
+
 export function legacyRedirect(route: string): string | null {
+  const personActivities = /^\/person-activities\/(\d+)/.exec(route);
+  if (personActivities) return `/profile/${personActivities[1]}?tab=activities`;
   for (const [from, to] of Object.entries(LEGACY_ROUTES)) {
     if (underPrefix(route, from)) {
       return to + route.slice(from.length);
@@ -38,7 +42,7 @@ export function legacyRedirect(route: string): string | null {
 }
 
 export function contextPersonId(path: string): number | null {
-  const match = /^\/(?:profile|edit-person|person-activities)\/(\d+)/.exec(path);
+  const match = /^\/(?:profile|edit-person)\/(\d+)/.exec(path);
   return match ? parseInt(match[1]) : null;
 }
 
