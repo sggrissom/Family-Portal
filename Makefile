@@ -5,7 +5,7 @@ all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
 APP_NAME     := family
-DEPLOY_HOST  := vps
+DEPLOY_HOST  ?= vps
 
 # ── build settings ─────────────────────────────────────────────────────────────
 BUILD_DIR    := build
