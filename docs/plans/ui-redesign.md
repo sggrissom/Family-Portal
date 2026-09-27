@@ -7,7 +7,7 @@ like one thing, and the navigation is a list of those features rather than a
 way to get anything done.
 
 This plan redesigns navigation, the dashboard, the person page, the
-timelines, and the entry flows around two jobs:
+timelines, and the entry flows around three jobs:
 
 1. **Putting data in, fast.** This is most of the day-to-day use: I just took
    a photo, I just measured someone, something happened.
@@ -15,20 +15,26 @@ timelines, and the entry flows around two jobs:
    the app because it answers "what were the others like at this age?" That
    idea should be everywhere it makes sense, and it should replace the compare
    page.
+3. **Finding something remembered.** A particular photo, a first, a summer,
+   or a routine's results should be reachable without scrolling through years
+   of unrelated records.
 
 Most day-to-day entry happens in the iOS app, and the app should look and work
 like the web. So this web design is also the reference the app copies: the
 same destinations, the same add sheet, the same page layouts. See
 [iOS parity](#ios-parity) for what that constrains.
 
-The work is frontend only. The few places that could use a new backend proc are
-called out. They're optional for the web, but worth doing for the app (see
-[iOS parity](#ios-parity)).
+This is primarily a UI and flow redesign, with additive backend work where
+needed to make grouped history, same-age matching, and web/iOS behavior
+consistent. Existing APIs can support prototypes; their current shape should
+not dictate the finished experience. See [iOS parity](#ios-parity).
 
 ## What we have to work with
 
-Everything the family records hangs off a **person** and a **date**. Since
-every person has a birthday, every date is also an **age**.
+The main browsing axes are **person**, **date**, and **age** (when a birthday
+and record date are known). Existing activity events, appearances, and milestone
+attachments also connect records by **occasion**. Photos may include several
+people or none; chat belongs to a household rather than a person.
 
 | Data | Shape | Where it shows now |
 | --- | --- | --- |
@@ -98,12 +104,17 @@ x-axis. It's the same "at this age" idea, done right, but for growth only.
   like at the same age. Never "pick five people and look at everything."
 - **Rows per person, not columns.** Comparisons stack vertically, so they
   work at phone width.
-- **Default everything, ask for nothing.** Today's date, the last person you
-  picked, the units you used last time, the EXIF date, face-suggested people.
-  Every field on an entry form should already be filled with its most likely
-  value.
-- **Summarize, then drill in.** Timelines show a day or month as one unit
-  (a photo mosaic, a checkup row, a result) rather than one card per record.
+- **Remember preferences; visibly suggest inferred facts.** Default today's
+  date and remembered units. Carry an explicitly selected person or event
+  forward, and make that selection visible. A globally opened photo upload
+  must not silently tag the last person used in an unrelated form.
+- **Summarize, then drill in.** Group explicit relationships first (an event
+  and its photos, a milestone and its attachments), then use day grouping
+  for remaining records. Do not repeat attachments as standalone feed items.
+- **Preserve context.** Person, date or age, filters, and the originating
+  scroll position survive opening a detail, adding a record, and going back.
+- **Keep retrieval available.** Summaries and chapters do not replace search,
+  date/age jumps, or a milestones-only view.
 - **Activities are part of the person's life, not a separate app.** They show
   on the person's page and the family history, and they surface on the
   dashboard when a season is active.
@@ -113,246 +124,259 @@ x-axis. It's the same "at this age" idea, done right, but for growth only.
 
 ## Navigation
 
-Replace the hamburger with a small set of permanent destinations plus one
-add button.
+Replace the hamburger with permanent entrances to the main browsing jobs and
+one add action. Chat is a minor, experimental feature and does not receive a
+primary navigation slot.
 
-**Phone (bottom bar, always visible):**
+**Proposed phone order:** Home · History · **+** · Photos · Family.
 
-```
- Home   Photos   [ + ]   Growth   Chat
-```
+**Desktop:** Family Record · Home · History · Photos · Family, with
+**+ Add** and the account menu on the right. The destinations match mobile;
+desktop can expose secondary links within the current section.
 
-**Desktop (top bar):**
+- **Home:** a changing overview of recent memories and timely highlights.
+  A compact family strip provides shortcuts to people.
+- **History:** the complete chronological family record, with search, date
+  jumps, and person/type/tag filters. Always directly reachable on phones.
+- **Photos:** visual retrieval and browsing, with people/date/tag filters.
+- **Family:** a stable overview of people, plus clear links to family-wide
+  **Growth**, **Same age**, and **Activities**. Own household comes first;
+  linked people are visibly grouped separately. This is the full directory,
+  not a second dashboard. Home's strip remains a shortcut.
+- **+** opens the add sheet; it is an action, not a selected destination.
+- **Account menu:** Chat (with unread count), Tags, Face review (with count),
+  Settings, Import/Export, Admin where allowed, and Log out. Chat notifications
+  still deep-link to chat. No separate persistent chat button is needed.
 
-```
- Family Record   Home  Photos  Growth  History  Chat      [+ Add]  (avatar ▾)
-```
-
-- **Home** is the dashboard, and its family strip is the way into each person
-  (see below). There's no separate "People" destination. With fewer than ten
-  people, a strip of faces beats a list page.
-- **Photos** is the existing grid, with person chips across the top.
-- **Growth** is the age-aligned chart, which is the family chart promoted to
-  top level (see below).
-- **History** is the reworked family timeline. On phones it's reached from
-  Home ("See all") and the account menu instead of taking a bottom-bar slot.
-- **Chat** keeps its slot, since it's the one thing people open to reply to a
-  push notification.
-- **+** opens the add sheet (see below).
-- **Account menu** (avatar, top right): Activities setup, Tags, Face review
-  (with a count badge), Settings, Import/Export, Admin (admins only), Log out.
-  These are occasional or administrative and don't need a top-level slot.
+Validate the Family destination in phase 0. If it duplicates Home without
+helping retrieval, fold its directory and stable Growth/Same age/Activities
+links into Home and use fewer navigation items. Do not fill a spare slot with
+Chat merely to reach five items.
 
 The marketing header for signed-out visitors stays as is.
 
-Old URLs keep working: `/family-timeline` → `/history`, `/family-chart` →
-`/growth`, `/compare` → `/same-age`, `/dashboard` stays. Push notifications
-and bookmarks both point at these.
+Old URLs keep working: `/family-timeline` → `/history`,
+`/family-chart` → `/growth`, `/compare` → `/same-age`, and
+`/dashboard` stays. Add `/family` if the proposed Family destination survives
+the prototype. Keep `/activities` as the stable activities entrance.
+Preserve meaningful query parameters in redirects. Ship each redirect with
+its working destination, not before it exists.
 
 ## The add sheet
 
 One sheet, opened from **+** anywhere. It replaces the menu's quick-add grid
-and the dashboard's action cards.
+and the dashboard's duplicate action cards.
 
-```
-┌──────────────────────────────┐
-│  (Clara)  Jake   Mom   Dad   │  ← person chips; preselected from context
-│                              │     or the last person used
-│  📷 Photos                   │
-│  📏 Measurement              │
-│  ⭐ Milestone                │
-│  🏆 Result — Regionals (Sat) │  ← only while an event is in its window
-└──────────────────────────────┘
-```
+- Photos
+- Measurement
+- Milestone
+- Activity result
 
-Picking a person on the sheet carries through to the form, so the form doesn't
-ask again. Each form below still shows the chips, to change or add people.
+Show person chips when relevant, visibly preselected from the current person
+page or an explicit selection. A global add can suggest the last person for
+single-person entry, but the form must show who will receive the record.
+Global photo upload starts without inherited person tags.
+Measurement requires one person; photos can have multiple people or none.
+Keep milestone cardinality consistent with the existing API.
+
+Within an event, show its name and promote results/photos for that event.
+During an event or the three days after it, suggest that event on the global
+sheet. This changes shortcut priority, never action availability. If several
+events qualify, let the user choose.
 
 ### Photo: upload first, describe after
 
-1. Tap **Photos** and the file picker opens right away (on a phone, that's the
-   camera roll or camera).
-2. Uploads start as soon as files are picked. The existing multi-file upload
-   and processing queue handle the rest.
-3. While they upload, a light form shows the people chips (preselected from
-   the sheet), an optional note, and tags. Date is the EXIF date, shown as a
-   read-only line with a "change" link. The "When was this taken?" radio goes
-   away.
-4. **Done** goes back to wherever you started. Face tagging adds people in
-   the background, as it already does.
+1. Tap **Photos** and open the file picker immediately.
+2. Begin uploads after selection using the existing processing queue.
+3. Show optional people, note, and tags while uploading. An explicit person
+   selection is visible and removable, with batch edits labeled as applying
+   to all selected photos. Face-derived suggestions must be distinguishable
+   from manual selections; preserve existing confirmation rules.
+4. Keep each photo's EXIF date independently. A batch can span many dates.
+   Where EXIF is missing, display the fallback date and its source with a
+   change action. Do not silently assign a whole batch one date.
+5. **Done** returns to the origin. Show which uploads completed, are still
+   pending, or failed, with retry for failures. Leaving optional metadata
+   must not silently discard the uploads.
 
-Being able to skip the form entirely matters most here. Picking the files is
-the whole job, and everything after it is optional.
+Picking files can be the whole job. Additional description is optional.
+A native background transfer and a web upload do not have identical lifecycle
+guarantees; each must clearly communicate pending work.
 
 ### Measurement: a checkup is one entry
 
-```
-Clara · 3y 4m                          Today ▾
-Height  [ 38.5 ] in        Weight  [ 32 ] lb  [ 4 ] oz
-                                       [ Save ]
-```
+Show the selected person and their age on the chosen date, a compact
+**Today ▾** date control, and height and weight together.
 
-- Height and weight on the same screen, both optional, at least one required.
-  Saving sends one `AddGrowthData` per filled field. No backend change.
-- Units are remembered per person (babies in lb/oz, adults in lb, and so on),
-  falling back to the family's last-used unit. The existing lb-oz and ft-in
-  inputs stay; they just stop being a choice you make every time.
-- Date is a "Today ▾" control that opens to Yesterday, a date picker, or
-  "by age." Today is the default and needs no tap.
-- The field shows the last value as a placeholder ("last: 37.75 in, 4 months
-  ago"). That catches a mistyped unit before it's saved.
-- **After saving, land on the result.** Show the measurement detail for what
-  was just entered, with the percentile and the "compared to family" cards. That
-  context is the reward for entering the data, so it's what you should see
-  next. With both height and weight entered, show both on one result page,
-  stacked.
+- Both measurements are optional, with at least one required.
+- Units are remembered per person, falling back to the family's preference.
+  Keep the existing lb/oz and ft/in inputs.
+- The date menu offers Today, Yesterday, a date picker, and by-age entry.
+- Show the last value and date as persistent helper text rather than a
+  placeholder that disappears while typing.
+- Existing `AddGrowthData` calls can save each filled field. If one succeeds
+  and one fails, show that explicitly and retry only the failed field;
+  never present a partially saved checkup as fully complete.
+- **After saving, land on the result:** both saved measurements, with their
+  percentiles and family comparisons where available. Include **Add another
+  measurement** for entering another child's data and **Done** to return to
+  the original view.
+- Grouping height and weight is a display convenience, not an assumption that
+  all measurements on a date are a single underlying record.
 
 ### Milestone
 
 - Person chips, then the text box with focus.
-- Category is a row of six icon chips instead of a dropdown, defaulting to
-  "First time" (most milestones are firsts).
-- Date defaults to today, using the same control as measurements.
-- Photo attach and tags live behind "Add photos / tags", collapsed by default.
+- Category is a compact row or wrapping set of six labeled chips. A default
+  category remains visible and easy to change.
+- Date defaults to today, with the same date control.
+- Photo attach and tags are behind **Add photos / tags**.
+- Save opens the new milestone detail; Done returns to the origin.
 
 ### Activity result
 
-This only shows while an event is in progress or just ended, meaning an event
-whose dates include today or the previous three days. It jumps straight to that
-event's results editor, filtered to the family's entries. Outside that window,
-results are entered from the season pages as they are now.
+Always available when the user can record results. Offer current/recent events
+first and a route to all seasons and events for backfilling. An event shortcut
+opens its results editor filtered to the family's entries.
 
 ## Home (dashboard)
 
-Home is for "what's new, and what should I add." From the top:
+Home answers "what's happening, and what would I enjoy revisiting?" It is not
+the only entrance to the archive.
 
-1. **Family strip.** Avatars with name and current age ("3y 4m"), kids
-   first, then adults, then linked households. Tapping one opens that
-   person's page. A pregnancy shows as a card with the countdown, as it does
-   now.
-2. **Nudges** (at most two, dismissible, and only when they're true):
-   - "4 photos have faces to review" → face review.
-   - "Clara hasn't been measured since March" → measurement form for Clara.
-     Shown when a child under 18 has no measurement in 6 months.
-   - "Jake turns 7 on Saturday."
-3. **In season.** For each activity season active today: the next or most
-   recent event, its date, and quick links to add photos or results. Hidden
-   when nothing is in season.
-4. **On this day.** Photos and milestones from this date in past years, one
-   row per year ("3 years ago"). Hidden when there's nothing. This comes
-   from `plans/record-ideas.md`, and it's the most likely reason to open the
-   app when you aren't adding something.
-5. **Recent.** The last two weeks, grouped by day, in the summary style
-   described under History below. Links to **History**.
+1. **Family strip:** compact avatars and names linking to people, with current
+   ages where known. Pregnancy can retain its countdown. The full directory
+   and linked-household grouping live in Family.
+2. **One timely highlight:** an upcoming birthday, current competition, or
+   On this day memory. Avoid stacking one large card per active season.
+3. **Recent memories:** grouped summaries of recent occurrences, linking to
+   History. Keep this visible without scrolling through maintenance prompts.
+4. **On this day:** additional past-year photos and milestones when available,
+   limited initially with a way to expand.
+5. **In season:** compact current-season links, including upcoming/recent
+   events and permitted result/photo actions. All activities remain reachable
+   from Family even when nothing is active.
+6. **Maintenance:** at most two dismissible prompts, such as faces to review
+   or an optional measurement reminder. Show only actionable prompts the
+   viewer has permission to resolve. Reminder thresholds are product choices,
+   not medical guidance.
 
-The dashboard's add buttons go away, because **+** is always on screen.
+Distinguish **Recently happened** from **Recently added**. An old photo
+uploaded today belongs at its original date in History, but can appear in a
+clearly labeled Recently added section on Home. Do not falsify occurrence
+dates to make backfilled records discoverable. Verify creation timestamps and
+query support before committing that section; add an API query if needed.
 
-**Data:** `ListPeople`, plus `GetFamilyTimeline` over a recent range for
-Recent and nudges, `GetFaceReview` for its counts, and `ListActivities` /
-`ListSeasons` for In season. For On this day, a handful of narrow
-`GetFamilyTimeline` date-range calls (one per past year, a few days wide) works
-with no backend change. If that's too chatty, a `GetDashboard` proc bundling
-these is the natural optional backend addition.
+The persistent **+** replaces duplicate generic add buttons. Contextual
+actions on an event or measurement remain useful.
+
+**Data:** Prototype with `ListPeople`, `GetFamilyTimeline`,
+`GetFaceReview`, and activity/season calls as supported. A recent timeline
+range cannot determine that someone has not been measured for six months;
+reminders need their latest measurement dates. On this day can initially use
+per-year date-range queries, but bound the work and use `GetDashboard` for
+the finished aggregated response. Return occurrence and creation dates
+separately when supporting Recently added.
 
 ## Person page
 
-The person page is where people go most after Home. It gets a summary at the
-top and the story below.
+The person page is the main place to browse one life.
 
-```
-┌───────────────────────────────────────────────┐
-│ (photo)  Clara                     [ + Add ]   │
-│          3 years 4 months · born May 2, 2023   │
-├───────────────────────────────────────────────┤
-│ Height 38.5 in  71st %ile   ▁▂▃▅▆▇ (sparkline)│
-│ Weight 32 lb    55th %ile   ▁▂▃▄▅▆             │
-│ Measured 2 weeks ago · Jake was 37 in at 3y4m  │
-│                                                │
-│ 🩰 Dance 2025–26 · 3 routines · next: Sat      │
-├───────────────────────────────────────────────┤
-│ At 3y 4m, Jake was…   [photo] [photo] [photo] →│
-├───────────────────────────────────────────────┤
-│  Story | Photos | Growth | Activities          │
-└───────────────────────────────────────────────┘
-```
+**Header:** photo, name, age/birthday, person switcher, and **+ Add** where
+permitted. Put **Story · Photos · Growth · Activities** immediately below it.
+Do not stack a growth dashboard and multiple comparison strips above the tabs.
 
-- **Snapshot:** the latest height and weight with percentile, a sparkline,
-  when they were last measured, and one line of sibling context at the same
-  age (reusing `lib/growthComparison.ts`). Then any active activity season.
-- **"At this age" strip:** photos of siblings at this person's current age,
-  from the same-age lens below. For the oldest child there's no one ahead of
-  them, so the strip flips to "…and Jake at this age was" for the next-younger
-  sibling's future, or hides.
-- **Tabs:**
-  - **Story** replaces the unified timeline (see History, which uses the same
-    layout), grouped into chapters by age: "Age 3", "Age 2", … Each chapter
-    opens with a line like "Grew 3 in and 4 lb" when it has measurements.
-  - **Photos** is the photo grid filtered to this person (`ListFamilyPhotos`
-    with `personId`).
-  - **Growth** is this person's chart with percentile bands, siblings' curves
-    as a faint overlay you can toggle, and the measurement list.
-  - **Activities** is the current `/person-activities/:id` page, folded in.
-    That route redirects here.
-- **+ Add** opens the add sheet with this person preselected.
+- **Story:** a short overview followed by history grouped into age chapters.
+  Include a compact active-season link and at most one relevant same-age
+  preview. Keep a **Jump to age** control, search, and an easy
+  **All / Milestones** filter; other type/tag controls can collapse into More.
+  Provide oldest/newest order without restoring the old large filter wall.
+  Chapter growth summaries must describe the actual recorded interval, not
+  imply full-year growth from incomplete data.
+- **Photos:** the photo grid scoped to this person, with date and tag filters.
+- **Growth:** latest height/weight and their individual measurement dates,
+  percentiles where supported, chart, measurement list, and optional faint
+  sibling curves. Detailed growth summaries belong here.
+- **Activities:** current and past seasons, routines, and appearances, folding
+  in `/person-activities/:id`. Redirect that URL to this tab when ready.
 
-The profile page's filter bar (type toggles, sort, age-year pills, tag pills)
-goes away. Chapters replace the age pills, the tabs replace the type toggles,
-and tag filtering moves to History and Photos, where it's actually used.
+An **At this age** preview uses the person's current age only when meaningful
+matches exist. For the oldest child with no matches, omit it. Do not reverse
+the meaning to a younger child's hypothetical future. Older records of that
+child still provide useful comparison anchors.
+
+Switching person keeps the current tab where applicable. Preserve an explicit
+age filter as an age, not a calendar year; if the new person has not reached it,
+show that clearly rather than silently substituting another age.
 
 ## Same age (replaces Compare)
 
 This is the "what were they like at this age?" lens as a page of its own. It's
 also the component behind the strips on the person, photo, and milestone pages.
 
-```
-At  [ ◀  3 years 4 months  ▶ ]        (slider)
+**Around age 3 years 4 months** — previous/next, direct entry, and slider.
 
-Clara   now      [photo][photo][photo]  38.5 in · 32 lb
-                 ⭐ First time: wrote her name
+| Person | Photos | Measurements | Milestones |
+| --- | --- | --- | --- |
+| Clara | Preview, age/date on each | 38.5 in at 3y 4m; 32 lb at 3y 4m | Wrote her name · 3y 4m |
+| Jake | Preview, age/date on each | 37 in at 3y 3m; 31 lb at 3y 5m | Started preschool · 3y 5m |
 
-Jake    Jan 2022 [photo][photo]          37 in · 31 lb
-                 ⭐ Started preschool
-
-Mom     —  no records at this age
-```
+Values are illustrative. Each cell links to its records.
+**Include people without matching records** reveals otherwise hidden rows.
 
 - One age at a time, one row per person who has reached that age. That fixes
   the old page's misaligned columns.
-- The age control steps by one month under 2, three months from 2 to 6, and
-  six months after that. The window around the age scales the same way,
-  reusing the tolerance idea in `growthComparison.ts`.
-- By default, the age is the youngest child's current age, which answers the
-  question you actually have: "what were the older ones doing at this age?"
-- Each row shows the nearest photos in the window, the height and weight
-  nearest that age (from `computeFamilyComparisons`), and the milestones in the
-  window.
-- People without data at that age collapse to one line. Adults usually have
-  none, and that's fine.
+- Proposed navigation steps are one month under 2, three months from 2 to 6,
+  and six months after that, plus direct age entry (including weeks for babies).
+  Navigation steps and match tolerance are separate rules. Prototype newborn
+  and sparse-data cases before fixing photo/milestone windows. Existing growth
+  tolerances are a starting point for measurements, not all record types.
+- Label the target as **Around this age** and show each matched record's actual
+  age and date. Do not silently widen an empty window or imply exact matches.
+- On direct entry, default to the youngest own child's current age. When
+  reached from a record, use that record's person and exact age. Without a
+  suitable child/birthday, offer explicit person/age selection.
+- Each row shows nearest photos, measurements, and milestones within their
+  respective windows. Extract a shared nearest-measurement-by-age helper from
+  `growthComparison.ts`; `computeFamilyComparisons` currently requires a real
+  target measurement and also computes same-value comparisons. Do not fabricate
+  a measurement to browse an arbitrary age.
+- Hide people without matching records by default; an explicit control can
+  reveal them. Never label an inaccessible record scope as missing data.
+- Default to own-household people. Offer **Include shared relatives**, retaining
+  the viewer's choice and honoring permissions per record type. Do not assume
+  everyone on a roster is a sibling.
 - It can be opened from anywhere with a person and an age:
   `/same-age?age=40m&from=<personId>`.
 
 **Where it shows up in context:**
 - **Measurement detail:** as now, with a link to "see everything at this
   age."
-- **Photo detail:** a "Siblings at this age" strip under the photo, using the
-  age of the first tagged child in it.
+- **Photo detail:** a same-age strip with a visible anchor person. Use the
+  originating person's context if present; for a group photo, offer tagged
+  people as choices. Do not use an invisible first-tag ordering.
 - **Milestone detail:** a new read-only milestone page (only an edit page
   exists today). It shows the milestone, its photos, and "at this age, Jake
   was…". `GetMilestone` already exists.
 - **Person page:** the strip described above.
 
-**Data:** `GetFamilyTimeline` with `skipPhotos` gives growth and milestones for
-everyone. That's already what the measurement page does. Photos come from
-one `ListFamilyPhotos` call per person, with `personId` and a `dateFrom` /
-`dateTo` window computed from their birthday. No backend change.
+This answers "what was everyone doing around this age?", not "at what age did
+everyone reach the same milestone?" Matching milestone meanings is out of scope.
 
-`/compare`, `ComparePeople`'s only frontend caller, and the compare styles
-are deleted. Leave the proc in place until a release has passed, since the
-mobile app might call it. Check `docs/mobile-api.md` before removing it.
+**Data:** Existing timeline and per-person photo queries can prototype this.
+Verify scope coverage for linked people; a household-wide endpoint must not be
+assumed to include every visible person's data. `GetSameAge` should own the
+finished window rules and return actual record ages/dates and scope availability.
+
+Replace the old compare UI and its frontend caller; retain `/compare` as a
+redirect to the working new page. Leave the proc in place until a release has
+passed, and verify supported mobile builds no longer call it before removal.
+Check `docs/mobile-api.md`; elapsed time alone does not establish compatibility.
 
 ## Growth
 
-The family chart becomes **Growth**, a top-level page:
+The family chart becomes **Growth**, reachable from Family and person Growth
+tabs. It keeps its own deep-linkable route but does not need a primary tab:
 
 - It's the age-aligned multi-person chart, as now, with one height or weight
   toggle instead of solid and dashed lines on one plot. Mixing both on one
@@ -371,11 +395,19 @@ This is the chronological view, redesigned to summarize.
 
 - **Grouped by month**, with sticky month headers and a year jump (the
   existing year pills).
-- **Within a day, related records merge:**
-  - Photos taken on the same day become one mosaic tile ("12 photos · Clara,
-    Jake"), which opens the photo grid filtered to that day.
-  - Height and weight for one person on one day become one "Checkup" row with
-    both values and percentiles.
+- **Group explicit relationships before grouping by day:**
+  - Milestone attachments stay with their milestone; event/appearance photos
+    stay with their activity summary. Remove these photo IDs from the remaining
+    daily mosaics only when their parent summary is visible in the current filtered
+    view; filtering out an event must not hide its photos from a photos-only view.
+    A photo attached to multiple meaningful records can remain
+    in those contexts without also becoming a standalone history item.
+  - Remaining photos on the same day become one mosaic tile ("12 photos · Clara,
+    Jake"). Open the corresponding photo set, preserving the person/tag scope;
+    a day-only filter must not unexpectedly include unrelated photos.
+  - Height and weight for one person on one day can become one "Measurements"
+    row with both values and percentiles. If multiple values of either type
+    exist, show the count and let the user expand; never discard extra readings.
   - Birthdays are dividers ("🎂 Jake turned 6"), not cards.
   - Milestones stay as full cards. They're the rarest and most meaningful
     records, and they should stand out.
@@ -383,39 +415,74 @@ This is the chronological view, redesigned to summarize.
     ("Regionals · Clara 1st place, Solo Jazz") and photos.
 - **Filters** collapse to one row: person chips, and a "More" popover for
   type and tags. Search stays.
-- It keeps the existing year-based paging (`lib/photoPages.ts`).
+- Keep date jumps and paging (`lib/photoPages.ts` where applicable). Merge
+  groups across page boundaries, deduplicate by stable IDs, and make incomplete
+  counts explicit until a group's records are loaded.
+- History orders by occurrence date. Recently added belongs on Home; the same
+  historical event must not move when edited or uploaded later.
 
 The person page's Story tab uses the same components, grouped by age instead
 of by month.
 
 **Activities data:** `GetFamilyTimeline` doesn't return activity events.
-Frontend-only, History can call `GetPersonSeason` per person and merge the
-results. That's N small calls, which is fine for a family. The cleaner
-optional backend change is adding events and appearances to
-`GetFamilyTimeline`'s response under the same date range.
+For a prototype, call `GetPersonSeason` per person and merge by stable event
+and appearance IDs so a shared routine is not duplicated for each child.
+For the finished view, add events and appearances to `GetFamilyTimeline` under
+the same date range, with permission-aware summaries and grouping metadata.
 
 ## Activities
 
-Activities stop being a separate island:
+Activities have a stable entrance from Family, including outside active seasons.
+The activities overview distinguishes **Browse** (current/past seasons, events,
+routines, and people) from **Manage** (programs, seasons, entries, rosters).
 
-- **Person page:** the Activities tab (the current person-activities page)
-  plus the season line in the snapshot.
-- **Home:** the In season card.
-- **History:** event cards with results.
-- **Add sheet:** "Result" during an event's window.
-- **Setup** (programs, seasons, events, entries, rosters) stays as its
-  current pages, reached from the account menu under "Activities." That's
-  administration, done a few times a year.
+- **Person page:** Activities tab and a compact current-season link in Story.
+- **Home:** current/recent event shortcuts.
+- **History:** event summaries with results and linked photos.
+- **Add sheet:** Result is always available where permitted; current events
+  get priority without excluding late entry.
+- **Setup:** retain existing management pages, reached through Manage within
+  Activities. Do not make the account menu their only entrance.
 
-The season, competition, and routine pages keep their layouts, but get the new
-nav and a context-aware **+** (photos for this event, results for this event).
+The existing season, competition, and routine layouts are starting points.
+Add contextual photo/result actions and explicit cross-links:
+person → appearance → event → another participant's appearance, and
+appearance → routine → its results across the season. Reuse existing
+relationships; a new general-purpose occasion entity is out of scope.
+Show links only where the destination is accessible.
 
 ## Detail pages
 
-The measurement, photo, and new milestone detail pages share one layout:
-the record, its actions (edit, delete), then **context**, which is the
-same-age lens scoped to that record. Back links go to where you came from
-rather than always to the profile.
+Measurement, photo, and milestone detail share a basic layout: record, permitted
+actions, then useful context. Context can be the person's story, a linked event
+or milestone, a routine's season history, or Same age. Do not force an age
+comparison onto every record when its occasion is more useful.
+
+### Navigation state
+
+- Put bookmarkable state in the URL: person/tab, date or age, and meaningful
+  filters. Opening an item retains the source list's scroll position.
+- Back returns to the actual origin with its filters and position, not always
+  to the profile. A deep link without an origin uses an explicit parent link.
+- Add carries visible person/event context. A historical viewing date must not
+  silently become the entry date; offer **Add for this date** explicitly.
+- Cancel returns without changing the source view. Save/Done behavior is
+  specified per entry flow above. Preserve unfinished text when a recoverable
+  error occurs.
+
+### Linked people and read-only views
+
+Use the existing model in `docs/permissions.md`; this redesign does not change
+who can see or edit records.
+
+- Label linked people and show only the record scopes available to the viewer.
+- Suppress edit/add/manage actions for read-only people. A global Add may still
+  operate on the viewer's own writable household, with its scope explicit.
+- Do not show measurement reminders or face-review tasks the viewer cannot act on.
+- Distinguish inaccessible scopes from permitted scopes with no records.
+- Chat remains household-only; a family link is not membership.
+- Validate an own-household editor, a linked viewer with photos/milestones only,
+  and a linked viewer with all record scopes in the same core journeys.
 
 ## Out of scope
 
@@ -437,12 +504,12 @@ natively. That's a constraint on the web design, not just a follow-up task.
 
 | Web | iOS |
 | --- | --- |
-| Bottom bar: Home, Photos, +, Growth, Chat | `TabView` with the same five items. **+** presents a sheet instead of switching tabs |
+| Primary destinations: Home, History, Photos, Family (pending phase 0) | Native tabs with the same destinations; **+** is a separate action presenting a sheet, not a content tab |
 | Add sheet | a sheet with a medium detent |
 | Person chips | the same horizontal chip row |
 | "Today ▾" date control | a menu (Today, Yesterday, Pick…) plus a date picker |
 | Upload-first photos | `PhotosPicker`, then upload in the background |
-| Account menu | a profile button in the Home toolbar |
+| Account menu, including minor Chat entry | a toolbar profile/menu button; chat notifications still deep-link |
 | Same-age stepper | a stepper or slider, with the same age steps |
 
 - **No hover-only interactions.** Everything has to be reachable by tapping,
@@ -451,31 +518,31 @@ natively. That's a constraint on the web design, not just a follow-up task.
   text should be identical, so a family using both doesn't notice the switch.
   Keep them in one place on the web (a small `lib/copy.ts`) so the app has a
   single list to copy from.
-- **Logic the app would need is kept pure.** The age-window rules, nudge
-  thresholds, merging a day's records into summaries, and the same-age lookup
-  go in plain functions in `lib/` with vitest coverage, next to the existing
-  `growthComparison.ts`. The app ports them, and the tests become the spec for
-  what the port must do.
+- **Share behavior, not pixel layouts.** Use native navigation, pickers, and
+  accessible controls while preserving destinations, labels, and task outcomes.
+- **One owner for domain rules.** Put final age-window, reminder, visibility,
+  and grouping rules in the aggregate backend APIs. Clients render the results.
+  Prototype helpers can live as pure functions in `lib/` with fixture tests;
+  carry those fixtures into server tests when moving the rules. Avoid permanent
+  independent web and iOS implementations of the same matching logic.
 
-**Backend procs become worth adding.** On the web, a few extra round trips
-for Home, Same age, and History are fine. On a phone on cellular they aren't,
-and the app would otherwise have to reimplement the fan-out logic. So the
-optional procs this plan names become part of the plan, added as each phase
-needs them:
+**Additive backend work:** both mobile web and native apps benefit from bounded
+requests and consistent grouping. Add these as their corresponding views ship,
+using client fan-out only as a temporary prototype fallback:
 
-- `GetDashboard`: people with current ages, nudges, in-season activities, On
-  this day, and recent records, in one call. This also moves the nudge rules
-  to the server, so the web and the app can't disagree.
-- `GetSameAge(age, fromPersonId)`: one row per person, with the nearest
-  measurements, milestones, and photo IDs in the window. This puts the window
-  rules on the server too.
+- `GetDashboard`: permitted people, latest-measurement dates, actionable nudges,
+  activity highlights, On this day, and recent occurrences. Add a separately
+  ordered recently-created query/section if timestamps support it. Date-sensitive
+  results use the viewer's intended local date, not the server's UTC day.
+- `GetSameAge(age, fromPersonId, includeShared)`: matched records per visible
+  person, with actual ages/dates, per-type windows, and scope availability.
 - Activity events and appearances in `GetFamilyTimeline`, under the same date
   range, for History.
 
-These are all additive, so older app builds are unaffected. They go into
-`docs/mobile-api.md` once the app depends on them. Where a phase above says
-"frontend only, N calls", treat that as the fallback if the proc isn't ready
-yet.
+Keep changes additive and preserve existing response contracts for older app
+builds. Document new contracts in `docs/mobile-api.md` before the app depends
+on them. Verify available timestamps, associations, and pagination rather than
+assuming the current responses contain everything a summary needs.
 
 **Each phase ships web first, then app.** The web version settles the design.
 The app follows once it's been used for a bit, rather than both being built
@@ -483,36 +550,58 @@ at the same time and drifting apart.
 
 ## Phases
 
-Each phase ships on its own and leaves the app coherent.
+Each shipping phase leaves the app coherent. Validate the flow before fixing
+the permanent shell.
 
-1. **Shell.** Bottom bar and top bar, the account menu, and the add sheet
-   (linking to the existing forms), plus the route redirects. The hamburger
-   menu is deleted. Small, and it changes how the whole app feels.
-2. **Fast entry.** Person chips and the date control as shared components.
-   The combined height and weight form with remembered units and a result
-   page after saving, upload-first photos, and the milestone form with
-   category chips. This is the day-to-day win. It goes early because it's
-   also the part the iOS app copies first, since that's where entry happens.
-3. **Home.** Family strip, nudges, In season, On this day, and Recent.
-4. **Same age.** The lens component, the `/same-age` page, and the strips on
-   measurement and photo detail. The milestone detail page. Delete compare.
-5. **Person page.** Snapshot, the at-this-age strip, tabs, and Story
-   chapters. Fold in person-activities.
-6. **History and Growth.** Month grouping with merged day summaries,
-   activity events, and the Growth page's toggles and bands.
-7. **Cleanup.** Delete dead code. `pages/profile/tabs/growth.tsx`,
-   `photos.tsx`, and `timeline.tsx` already have no importers. Also delete the
-   old unified timeline and whatever styles are orphaned in `styles/global.ts`.
+0. **Journey prototype.** Use realistic dense and sparse records at phone width.
+   Walk through the five journeys below. Decide whether Family is distinct
+   enough from Home to warrant a tab, and settle Back, Save, and scope behavior.
+1. **Shell and stable entrances.** Implement the validated navigation, account
+   menu with secondary Chat, add sheet, and Family overview if retained.
+   Existing History/Growth/Activities views can serve their new entrances.
+   Redirect URLs only when the destination works. Update click-based smoke
+   selectors in the same PR.
+2. **Fast entry.** Shared person/date controls, combined measurement entry and
+   result, upload-first photos, milestone entry/detail, and always-available
+   result entry. Include partial failures and late/backfilled entries.
+3. **Person browsing and History.** Compact profile, tabs, milestone retrieval,
+   age/date jumps, related-record grouping, and activity cross-links. Add the
+   timeline API support needed for consistent grouping and pagination.
+4. **Same age and Growth.** Age lens/API, explicit anchor selection, matching
+   labels, contextual strips, and clearer Growth charts. Redirect Compare when
+   the replacement ships.
+5. **Home.** Build the overview using the established summary components and
+   aggregate API. Add recent memories, highlights, On this day, and restrained
+   maintenance prompts.
+6. **Cleanup.** Verify importers before deleting old profile tabs, unified
+   timeline code, compare code, and orphaned styles. Keep legacy redirects.
+   Check mobile API callers before removing any old proc.
 
-`tests/ui/smoke.spec.ts` navigates by clicking (see the Playwright notes), so
-phase 1 changes its selectors. Update it in the same PR.
+Each phase ships web first, then native after the flow has been used and settled.
+
+### Journey acceptance checks
+
+| Journey | What the prototype must demonstrate |
+| --- | --- |
+| Enter a checkup | Select the child once, save height/weight, see the result, add another child's measurement, and return to the origin. Handle one-field save failure without duplication. |
+| Upload mixed photos | A batch spans children and dates; individual dates survive, no unrelated last-used child is silently tagged, and failures remain visible/retryable. |
+| Find an old milestone | From Home, reach a person's milestones, jump to the right age, open one, then return with filter and position intact. |
+| Explore siblings at one age | Open from a group photo, choose the anchor child, see actual match ages, change age, and handle no matches honestly. |
+| Review a competition | Reach a past event across multiple children, inspect a routine's season history, add late results, and return without losing the event context. |
+
+Also exercise a linked read-only viewer and a household with little history:
+no dead-end edit actions, inaccessible-scope nudges, or empty dashboards made
+entirely of prompts. Test keyboard/touch navigation and browser Back as part
+of the flows, rather than only checking that each page renders.
 
 ## Open questions
 
-- **Chat in the bottom bar**, or in the account menu with an unread badge on
-  the avatar? It depends on how much it gets used.
-- **Linked households on Same age.** Grandparents rarely have records at a
-  child's age, but a cousin in a linked household might. Include shared
-  people by default, or behind a toggle?
-- **Nudge thresholds.** Six months without a measurement is a guess. Under
-  two, well-child visits are every two to three months.
+- **Family as a destination:** validate the proposed directory plus family-wide
+  views against keeping all stable entrances on Home. Chat remains secondary
+  in either version.
+- **Same-age windows:** choose and document separate photo/milestone tolerances,
+  including newborn and sparse-history cases. Show actual ages regardless.
+- **Recently added:** verify creation timestamps and retrieval support before
+  committing its exact contents and pagination.
+- **Measurement reminders:** decide whether they are useful enough to enable
+  by default; thresholds and dismiss/snooze behavior need deliberate choices.
