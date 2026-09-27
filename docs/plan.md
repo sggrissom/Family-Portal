@@ -8,8 +8,12 @@ future idea and lives in [`plans/`](plans/).
 ## Short term: make what's here solid
 
 The UI pass, the landing page rework, paging for photos and the timeline, and
-multi-file web upload have all shipped. Nothing short-term is open; new
-correctness bugs and rough edges in existing features go here as they're found.
+multi-file web upload have all shipped. New correctness bugs and rough edges in
+existing features go here as they're found.
+
+- [UI redesign](plans/ui-redesign.md): navigation, fast entry, a dashboard
+  worth opening, and "at this age" comparison in place of the compare page.
+  The web design is the reference the iOS app copies.
 
 ## Future
 
