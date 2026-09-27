@@ -5,6 +5,7 @@ import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
+import { openAddSheet } from "../../components/AppNav";
 import { UnifiedTimeline } from "./tabs/unified-timeline";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
@@ -207,24 +208,13 @@ const ProfilePage = ({
           <a href={`/edit-person/${person.id}`} className="btn btn-secondary profile-edit-action">
             ✏️ Edit
           </a>
-          <details className="profile-add-menu">
-            <summary className="btn btn-primary profile-add-trigger">+ Add</summary>
-            <div
-              className="profile-add-options"
-              role="menu"
-              aria-label={`Add something for ${person.name}`}
-            >
-              <a href={`/add-milestone/${person.id}`} role="menuitem">
-                <span aria-hidden="true">📝</span> Milestone
-              </a>
-              <a href={`/add-growth/${person.id}`} role="menuitem">
-                <span aria-hidden="true">📏</span> Measurement
-              </a>
-              <a href={`/add-photo/${person.id}`} role="menuitem">
-                <span aria-hidden="true">📸</span> Photo
-              </a>
-            </div>
-          </details>
+          <button
+            type="button"
+            className="btn btn-primary profile-add-button"
+            onClick={openAddSheet}
+          >
+            + Add
+          </button>
         </div>
       </div>
 

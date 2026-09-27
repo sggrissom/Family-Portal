@@ -95,73 +95,6 @@ block(`
 `);
 
 block(`
-.profile-add-menu {
-  position: relative;
-}
-`);
-
-block(`
-.profile-add-menu summary {
-  list-style: none;
-  cursor: pointer;
-}
-`);
-
-block(`
-.profile-add-menu summary::-webkit-details-marker {
-  display: none;
-}
-`);
-
-block(`
-.profile-add-trigger::after {
-  content: "▾";
-  font-size: 0.8rem;
-  margin-left: 2px;
-}
-`);
-
-block(`
-.profile-add-menu[open] .profile-add-trigger::after {
-  content: "▴";
-}
-`);
-
-block(`
-.profile-add-options {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 10;
-  min-width: 220px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
-}
-`);
-
-block(`
-.profile-add-options a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: none;
-}
-`);
-
-block(`
-.profile-add-options a:hover {
-  background: var(--hover-bg);
-}
-`);
-
-block(`
 .profile-filters {
   display: flex;
   justify-content: space-between;
@@ -490,14 +423,8 @@ block(`
     white-space: normal;
   }
 
-  .profile-add-menu {
+  .profile-add-button {
     width: 100%;
-  }
-
-  .profile-add-options {
-    left: 0;
-    right: 0;
-    min-width: 0;
   }
 
   .profile-filters {

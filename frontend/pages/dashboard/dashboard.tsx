@@ -133,7 +133,7 @@ const DashboardPage = ({ user, data }: DashboardPageProps) => {
           </div>
           <div className="secondary-actions" aria-label="More family actions">
             <a href="/add-person">＋ Add family member</a>
-            <a href="/family-timeline">View family timeline</a>
+            <a href="/history">View family history</a>
             <a href="/compare">Compare growth</a>
           </div>
         </section>

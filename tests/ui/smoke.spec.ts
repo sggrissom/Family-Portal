@@ -116,16 +116,11 @@ test("a new family signs up, adds a person, and records a measurement", async ({
   });
 
   await test.step("record a height for them", async () => {
-    await page.getByRole("link", { name: "Record growth" }).click();
+    await addFor(page, child.name, "Measurement");
 
-    await expect(page).toHaveURL(/\/add-growth$/);
+    await expect(page).toHaveURL(/\/add-growth\/\d+$/);
     await expect(page.getByRole("heading", { name: "Measure Now" })).toBeVisible();
-
-    // The option's label carries an age alongside the name, so match on the
-    // name and select by value.
-    const option = page.locator("#person option").filter({ hasText: child.name });
-    await expect(option).toHaveCount(1);
-    await page.locator("#person").selectOption(await option.getAttribute("value"));
+    await expect(page.locator("#person option:checked")).toContainText(child.name);
 
     // By id, not by label: the value field and the measurement-type radio are
     // both labelled "Height".
@@ -172,9 +167,8 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
   await page.getByRole("button", { name: "Add Family Member" }).click();
   await expect(personCard(page, baby.name)).toBeVisible();
 
-  await page.getByRole("link", { name: "Record growth" }).click();
-  const option = page.locator("#person option").filter({ hasText: baby.name });
-  await page.locator("#person").selectOption(await option.getAttribute("value"));
+  await addFor(page, baby.name, "Measurement");
+  await expect(page.locator("#person option:checked")).toContainText(baby.name);
   await page.getByRole("radio", { name: "Weight" }).check();
 
   // Under two, weight entry defaults to pounds and ounces.
@@ -211,9 +205,8 @@ test("a person is deleted from their edit page after seeing what goes with them"
   await page.getByRole("button", { name: "Add Family Member" }).click();
   await expect(personCard(page, mistake.name)).toBeVisible();
 
-  await page.getByRole("link", { name: "Record growth" }).click();
-  const option = page.locator("#person option").filter({ hasText: mistake.name });
-  await page.locator("#person").selectOption(await option.getAttribute("value"));
+  await addFor(page, mistake.name, "Measurement");
+  await expect(page.locator("#person option:checked")).toContainText(mistake.name);
   await page.getByRole("radio", { name: "Height" }).check();
   await page.locator("#value").fill("40");
   await page.locator("#unit").selectOption("in");
@@ -246,7 +239,8 @@ test("several photos are uploaded in one go with a shared title", async ({ page 
   await page.getByRole("button", { name: "Create Account" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.getByRole("link", { name: /Share a photo/ }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("dialog").getByRole("link", { name: "Photos" }).click();
   await expect(page).toHaveURL(/\/add-photo$/);
 
   await page
@@ -261,6 +255,17 @@ test("several photos are uploaded in one go with a shared title", async ({ page 
   await expect(page).toHaveURL(/\/photos$/);
   await expect(page.locator(".photo-card").filter({ hasText: title })).toHaveCount(2);
 });
+
+async function addFor(
+  page: Page,
+  personName: string,
+  kind: "Photos" | "Measurement" | "Milestone"
+) {
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("button", { name: personName }).click();
+  await sheet.getByRole("link", { name: kind }).click();
+}
 
 function monthsAgo(months: number): string {
   const d = new Date();

@@ -1,5 +1,6 @@
 import * as vlens from "vlens";
-import { setRoute, setErrorView, type RouteHandler } from "vlens/core";
+import { getRoute, replaceRoute, setRoute, setErrorView, type RouteHandler } from "vlens/core";
+import * as rpc from "vlens/rpc";
 import * as preact from "preact";
 import * as server from "./server";
 import * as auth from "./lib/authCache";
@@ -8,6 +9,7 @@ import { ErrorDisplay } from "./components/ErrorDisplay";
 import { Header, Footer } from "./layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installGlobalErrorHandlers } from "./lib/clientErrors";
+import { LEGACY_ROUTES, legacyRedirect } from "./lib/appNav";
 import "./styles/global";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
@@ -48,11 +50,27 @@ function guarded<Data>(prefix: string, load: () => Promise<RouteHandler<Data>>) 
   });
 }
 
+function redirect(prefix: string) {
+  return vlens.routeHandler<{}>(prefix, async () => ({
+    fetch: async () => rpc.ok({}),
+    view: (route: string) => {
+      setTimeout(() => replaceRoute(legacyRedirect(route) ?? "/dashboard"), 0);
+      return null;
+    },
+  }));
+}
+
 async function main() {
   setErrorView(customErrorView);
   installGlobalErrorHandlers();
 
+  const legacyTarget = legacyRedirect(getRoute());
+  if (legacyTarget) {
+    history.replaceState(null, "", legacyTarget);
+  }
+
   vlens.initRoutes([
+    ...Object.keys(LEGACY_ROUTES).map(redirect),
     guarded("/profile/", () => import("@app/pages/profile/profile")),
     guarded("/create-account", () => import("@app/pages/auth/create-account")),
     guarded("/login", () => import("@app/pages/auth/login")),
@@ -61,7 +79,7 @@ async function main() {
     guarded("/verify-email", () => import("@app/pages/auth/verify-email")),
     guarded("/dashboard", () => import("@app/pages/dashboard/dashboard")),
     guarded("/compare", () => import("@app/pages/compare/compare")),
-    guarded("/family-timeline", () => import("@app/pages/family-timeline/family-timeline")),
+    guarded("/history", () => import("@app/pages/family-timeline/family-timeline")),
     guarded("/chat", () => import("@app/pages/chat/chat")),
     guarded("/settings", () => import("@app/pages/settings/settings")),
     guarded("/add-person", () => import("@app/pages/people/add-person")),
@@ -69,7 +87,7 @@ async function main() {
     guarded("/add-growth", () => import("@app/pages/growth/add-growth")),
     guarded("/edit-growth", () => import("@app/pages/growth/edit-growth")),
     guarded("/view-growth", () => import("@app/pages/growth/view-growth")),
-    guarded("/family-chart", () => import("@app/pages/growth/family-chart")),
+    guarded("/growth", () => import("@app/pages/growth/family-chart")),
     guarded("/add-milestone", () => import("@app/pages/milestones/add-milestone")),
     guarded("/edit-milestone", () => import("@app/pages/milestones/edit-milestone")),
     guarded("/photos", () => import("@app/pages/photos/family-photos")),

@@ -466,7 +466,7 @@ block(`
 @media (max-width: 768px) {
   .chat-container {
     padding: 10px;
-    height: calc(100vh - 140px);
+    height: calc(100vh - 140px - var(--bottom-bar-space, 0px));
   }
 
   .chat-header {
@@ -539,7 +539,7 @@ block(`
 @media (max-width: 480px) {
   .chat-container {
     padding: 5px;
-    height: calc(100vh - 120px);
+    height: calc(100vh - 120px - var(--bottom-bar-space, 0px));
   }
 
   .chat-header {

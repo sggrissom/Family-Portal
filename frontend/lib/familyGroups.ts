@@ -139,3 +139,25 @@ export function groupFamily(people: server.Person[], relations: server.Relation[
   }
   return groups;
 }
+
+export function chipOrder(
+  people: server.Person[],
+  relations: server.Relation[],
+  familyId: number
+): server.Person[] {
+  const groups = groupFamily(people, relations);
+  const generations = groups.filter(g => g.key !== "unlinked").reverse();
+  const unlinked = groups.filter(g => g.key === "unlinked");
+  const ordered = [...generations, ...unlinked].flatMap(g => g.people).filter(p => !p.isPregnancy);
+  return [
+    ...ordered.filter(p => p.familyId === familyId),
+    ...ordered.filter(p => p.familyId !== familyId),
+  ];
+}
+
+export function chipLabels(people: server.Person[]): Map<number, string> {
+  const first = (p: server.Person) => p.name.trim().split(/\s+/)[0] || p.name;
+  const counts = new Map<string, number>();
+  people.forEach(p => counts.set(first(p), (counts.get(first(p)) ?? 0) + 1));
+  return new Map(people.map(p => [p.id, counts.get(first(p))! > 1 ? p.name : first(p)]));
+}

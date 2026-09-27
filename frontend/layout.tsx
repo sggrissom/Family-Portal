@@ -3,6 +3,7 @@ import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
 import { applyPageMetadata } from "./lib/pageMetadata";
 import { VerifyEmailBanner } from "./components/VerifyEmailBanner";
+import { AddSheet, BottomNav, TopNav } from "./components/AppNav";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -30,17 +31,45 @@ function syncPageMetadata() {
   applyPageMetadata(path);
 }
 
+const Brand = ({ href }: { href: string }) => (
+  <a className="brand" href={href}>
+    <svg className="brand-mark" viewBox="132 82 248 348" aria-hidden="true">
+      <g stroke="currentColor" stroke-width="44" stroke-linecap="round" fill="none">
+        <path d="M156 106 V406" />
+        <path d="M156 166 H356" />
+        <path d="M156 286 H286" />
+      </g>
+    </svg>
+    Family Record
+  </a>
+);
+
 export const Header = ({ isHome }: { isHome: boolean }) => {
   syncPageMetadata();
   const headerData = useHeader();
-  const menuRef = vlens.ref(headerData, "isMenuOpen");
   const currentAuth = auth.getAuth();
-  const isAuthenticated = currentAuth && currentAuth.id > 0;
-  const navLinksClass = [
-    "nav-links",
-    isAuthenticated ? "nav-links-account" : "nav-links-guest",
-    vlens.refGet(menuRef) ? "" : "hidden",
-  ]
+
+  if (currentAuth && currentAuth.id > 0) {
+    return (
+      <>
+        <header className="site-header">
+          <a className="skip-link" href="#app" onClick={skipToContent}>
+            Skip to main content
+          </a>
+          <nav className="nav app-topbar" aria-label="Main navigation">
+            <Brand href="/dashboard" />
+            <TopNav user={currentAuth} />
+          </nav>
+          <VerifyEmailBanner />
+        </header>
+        <BottomNav />
+        <AddSheet />
+      </>
+    );
+  }
+
+  const menuRef = vlens.ref(headerData, "isMenuOpen");
+  const navLinksClass = ["nav-links", "nav-links-guest", vlens.refGet(menuRef) ? "" : "hidden"]
     .filter(Boolean)
     .join(" ");
 
@@ -50,16 +79,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
         Skip to main content
       </a>
       <nav className="nav" aria-label="Main navigation">
-        <a className="brand" href={isAuthenticated ? "/dashboard" : "/"}>
-          <svg className="brand-mark" viewBox="132 82 248 348" aria-hidden="true">
-            <g stroke="currentColor" stroke-width="44" stroke-linecap="round" fill="none">
-              <path d="M156 106 V406" />
-              <path d="M156 166 H356" />
-              <path d="M156 286 H286" />
-            </g>
-          </svg>
-          Family Record
-        </a>
+        <Brand href="/" />
         <button
           className={vlens.refGet(menuRef) ? "nav-toggle open" : "nav-toggle"}
           id="navToggle"
@@ -74,92 +94,19 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
           </span>
         </button>
         <ul className={navLinksClass} id="navLinks">
-          {isAuthenticated ? (
-            <>
-              <li className="menu-account">
-                <span className="user-avatar" aria-hidden="true">
-                  👤
-                </span>
-                <span>
-                  <span className="menu-eyebrow">Signed in as</span>
-                  <strong className="user-name">{currentAuth.name}</strong>
-                </span>
-              </li>
-              <li className="menu-section" aria-label="Quick add">
-                <span className="menu-section-title">Quick add</span>
-                <div className="menu-action-grid">
-                  <a href="/add-milestone" className="menu-action menu-action-featured">
-                    <span className="menu-action-icon" aria-hidden="true">
-                      ⭐
-                    </span>
-                    <span>
-                      <strong>Milestone</strong>
-                      <small>Capture a special moment</small>
-                    </span>
-                  </a>
-                  <a href="/add-growth" className="menu-action">
-                    <span className="menu-action-icon" aria-hidden="true">
-                      📏
-                    </span>
-                    <span>
-                      <strong>Growth</strong>
-                      <small>Record height or weight</small>
-                    </span>
-                  </a>
-                  <a href="/add-photo" className="menu-action">
-                    <span className="menu-action-icon" aria-hidden="true">
-                      📷
-                    </span>
-                    <span>
-                      <strong>Photo</strong>
-                      <small>Save a family memory</small>
-                    </span>
-                  </a>
-                </div>
-              </li>
-              <li className="menu-section" aria-label="Go to">
-                <span className="menu-section-title">Go to</span>
-                <div className="menu-destination-grid">
-                  <a href="/dashboard">🏠 Dashboard</a>
-                  <a href="/family-timeline">📅 Timeline</a>
-                  <a href="/photos">🖼️ Photos</a>
-                  <a href="/family-chart">📈 Growth chart</a>
-                  <a href="/chat">💬 Family chat</a>
-                  <a href="/activities">🏆 Activities</a>
-                  <a href="/settings">⚙️ Settings</a>
-                </div>
-              </li>
-              <li className="menu-footer">
-                {currentAuth.isAdmin ? (
-                  <a href="/admin" className="admin-link">
-                    <span aria-hidden="true">⚡</span> Admin
-                  </a>
-                ) : (
-                  <span />
-                )}
-                <button onClick={logoutClicked} className="logout-button">
-                  Log out
-                </button>
-              </li>
-            </>
-          ) : (
-            <>
-              <li>
-                <a href="/" className={isHome ? "active" : ""}>
-                  Home
-                </a>
-              </li>
-              <li>
-                <a href="/login">Log in</a>
-              </li>
-              <li>
-                <a href="/create-account">Sign up</a>
-              </li>
-            </>
-          )}
+          <li>
+            <a href="/" className={isHome ? "active" : ""}>
+              Home
+            </a>
+          </li>
+          <li>
+            <a href="/login">Log in</a>
+          </li>
+          <li>
+            <a href="/create-account">Sign up</a>
+          </li>
         </ul>
       </nav>
-      <VerifyEmailBanner />
     </header>
   );
 };
@@ -174,15 +121,6 @@ export const Footer = () => (
     <p>© {new Date().getFullYear()} Family Record. All rights reserved.</p>
   </footer>
 );
-
-const logoutClicked = async (event: Event) => {
-  event.preventDefault();
-  const menuToggle = document.getElementById("navToggle");
-  if (menuToggle && menuToggle.getAttribute("aria-expanded") === "true") {
-    menuToggle.click();
-  }
-  await auth.logout();
-};
 
 const skipToContent = (event: Event) => {
   event.preventDefault();
