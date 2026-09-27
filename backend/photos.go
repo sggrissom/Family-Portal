@@ -1081,9 +1081,12 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		referencePerson = people[0]
 	}
 
-	calculatedPhotoDate, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
-	if err != nil {
-		return
+	calculatedPhotoDate := photo.PhotoDate
+	if req.InputType != "keep" {
+		calculatedPhotoDate, err = calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
+		if err != nil {
+			return
+		}
 	}
 
 	photo.Title = strings.TrimSpace(req.Title)
@@ -1191,7 +1194,7 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 		return errors.New("Input type is required")
 	}
 
-	validInputTypes := []string{"auto", "today", "date", "age"}
+	validInputTypes := []string{"auto", "today", "date", "age", "keep"}
 	isValid := false
 	for _, validType := range validInputTypes {
 		if req.InputType == validType {

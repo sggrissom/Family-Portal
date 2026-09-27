@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   failureSummary,
   maxPhotoBytes,
+  peopleChanges,
   pendingPhotos,
+  takenLabel,
   photoFileProblem,
   type UploadState,
 } from "@app/lib/photoUploadQueue";
@@ -53,5 +55,29 @@ describe("failureSummary", () => {
     expect(failureSummary(states("done", "failed"))).toBe(
       "1 of 2 photos could not be uploaded. Fix or remove them, then upload again."
     );
+  });
+});
+
+describe("peopleChanges", () => {
+  it("adds who was picked after upload and removes who was unpicked", () => {
+    expect(peopleChanges([1, 2], [2, 3])).toEqual({ add: [3], remove: [1] });
+    expect(peopleChanges([], [])).toEqual({ add: [], remove: [] });
+  });
+});
+
+describe("takenLabel", () => {
+  it("names one day, a span in a month, and a span across months", () => {
+    expect(takenLabel(["2026-09-03T14:00:00Z", "2026-09-03T09:00:00Z"])).toBe("Sep 3, 2026");
+    expect(takenLabel(["2026-09-03T14:00:00Z", "2026-09-01T09:00:00Z"])).toBe("Sep 1 – 3, 2026");
+    expect(takenLabel(["2026-08-30T00:00:00Z", "2026-09-03T00:00:00Z"])).toBe(
+      "Aug 30 – Sep 3, 2026"
+    );
+    expect(takenLabel(["2025-12-30T00:00:00Z", "2026-01-02T00:00:00Z"])).toBe(
+      "Dec 30, 2025 – Jan 2, 2026"
+    );
+  });
+
+  it("is empty before anything has uploaded", () => {
+    expect(takenLabel([])).toBe("");
   });
 });

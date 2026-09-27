@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
@@ -592,4 +593,38 @@ func TestValidateUpdatePhotoRequest(t *testing.T) {
 			t.Error("Expected error for age input without years")
 		}
 	})
+}
+
+func TestUpdatePhotoKeepsDate(t *testing.T) {
+	fx, cleanup := setupIsolationFixture(t)
+	defer cleanup()
+
+	taken := time.Date(2025, 7, 4, 15, 42, 0, 0, time.UTC)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		photo := GetImageById(tx, fx.photo.Id)
+		photo.PhotoDate = taken
+		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
+		vbolt.TxCommit(tx)
+	})
+
+	token, err := generateJwtTokenString(fx.owner)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+
+	var resp UpdatePhotoResponse
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, err = UpdatePhoto(&vbeam.Context{Tx: tx, Token: token}, UpdatePhotoRequest{
+			Id: fx.photo.Id, Title: "Fireworks", InputType: "keep",
+		})
+	})
+	if err != nil {
+		t.Fatalf("UpdatePhoto() error = %v", err)
+	}
+	if resp.Image.Title != "Fireworks" {
+		t.Errorf("Title = %q, want %q", resp.Image.Title, "Fireworks")
+	}
+	if !resp.Image.PhotoDate.Equal(taken) {
+		t.Errorf("PhotoDate = %v, want %v unchanged", resp.Image.PhotoDate, taken)
+	}
 }

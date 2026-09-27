@@ -5,14 +5,15 @@ import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
 import { Destination, activeDestination, addPath, contextPersonId } from "../lib/appNav";
-import { chipLabels, chipOrder } from "../lib/familyGroups";
+import { chipOrder } from "../lib/familyGroups";
+import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import {
   ModalDialogState,
   attrsModalDialog,
   closeModalDialog,
   newModalDialog,
 } from "../lib/modalDialog";
-import { ProfileImage } from "./ResponsiveImage";
+import { PersonChips, initial, scrollSelectedChipIntoView } from "./PersonChips";
 import "./app-nav-styles";
 
 const DESTINATIONS: { key: Destination; href: string; icon: string }[] = [
@@ -24,8 +25,6 @@ const DESTINATIONS: { key: Destination; href: string; icon: string }[] = [
 ];
 
 const BOTTOM_BAR: Destination[] = ["home", "photos", "growth", "chat"];
-
-const LAST_PERSON_KEY = "last-person-id";
 
 interface NavState {
   accountOpen: boolean;
@@ -86,7 +85,7 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
             aria-controls="accountMenu"
             onClick={vlens.cachePartial(toggleAccount, state)}
           >
-            {initials(user.name)}
+            {initial(user.name)}
           </button>
           {state.accountOpen && <AccountMenu user={user} state={state} />}
         </div>
@@ -135,7 +134,6 @@ export const AddSheet = () => {
   if (!state.sheetOpen) return null;
 
   const people = familyPeople ?? [];
-  const labels = chipLabels(people);
   const personId = state.selectedPersonId;
 
   return (
@@ -160,44 +158,32 @@ export const AddSheet = () => {
         </div>
 
         {people.length > 0 && (
-          <div className="person-chips" role="group" aria-label={copy.addSheet.whoFor}>
-            {people.map(person => (
-              <button
-                key={person.id}
-                type="button"
-                className={person.id === personId ? "person-chip selected" : "person-chip"}
-                aria-pressed={person.id === personId ? "true" : "false"}
-                onClick={vlens.cachePartial(choosePerson, state, person.id)}
-              >
-                <span className="person-chip-avatar" aria-hidden="true">
-                  {person.profilePhotoId ? (
-                    <ProfileImage
-                      photoId={person.profilePhotoId}
-                      alt=""
-                      cropX={person.profileCropX}
-                      cropY={person.profileCropY}
-                      cropScale={person.profileCropScale}
-                    />
-                  ) : (
-                    initials(person.name)
-                  )}
-                </span>
-                {labels.get(person.id)}
-              </button>
-            ))}
-          </div>
+          <PersonChips
+            people={people}
+            selected={personId ? [personId] : []}
+            onToggle={vlens.cachePartial(choosePerson, state)}
+            label={copy.addSheet.whoFor}
+          />
         )}
 
         <div className="add-sheet-options">
-          <a href={addPath("/add-photo", personId)} onClick={vlens.cachePartial(closeSheet, state)}>
+          <button type="button" onClick={pickPhotos}>
             <span className="add-sheet-icon" aria-hidden="true">
               📷
             </span>
             {copy.addSheet.photos}
-          </a>
+          </button>
+          <input
+            id="addSheetPhotoInput"
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={vlens.cachePartial(photosPicked, state)}
+          />
           <a
             href={addPath("/add-growth", personId)}
-            onClick={vlens.cachePartial(closeSheet, state)}
+            onClick={vlens.cachePartial(formChosen, state)}
           >
             <span className="add-sheet-icon" aria-hidden="true">
               📏
@@ -206,7 +192,7 @@ export const AddSheet = () => {
           </a>
           <a
             href={addPath("/add-milestone", personId)}
-            onClick={vlens.cachePartial(closeSheet, state)}
+            onClick={vlens.cachePartial(formChosen, state)}
           >
             <span className="add-sheet-icon" aria-hidden="true">
               ⭐
@@ -259,31 +245,6 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
   </div>
 );
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts[0][0].toUpperCase();
-}
-
-function readLastPerson(): number | null {
-  try {
-    const id = parseInt(localStorage.getItem(LAST_PERSON_KEY) ?? "");
-    return isNaN(id) ? null : id;
-  } catch {
-    return null;
-  }
-}
-
-function writeLastPerson(id: number | null) {
-  try {
-    if (id) {
-      localStorage.setItem(LAST_PERSON_KEY, String(id));
-    } else {
-      localStorage.removeItem(LAST_PERSON_KEY);
-    }
-  } catch {}
-}
-
 function defaultPerson(people: server.Person[]): number | null {
   const candidates = [contextPersonId(window.location.pathname), readLastPerson()];
   return candidates.find(id => id !== null && people.some(p => p.id === id)) ?? null;
@@ -306,11 +267,7 @@ async function openSheet(state: NavState) {
     state.selectedPersonId = defaultPerson(familyPeople);
   }
   vlens.scheduleRedraw();
-  requestAnimationFrame(() =>
-    document
-      .querySelector(".person-chip.selected")
-      ?.scrollIntoView({ block: "nearest", inline: "center" })
-  );
+  scrollSelectedChipIntoView();
 }
 
 function closeSheet(state: NavState) {
@@ -324,6 +281,31 @@ function backdropClicked(state: NavState, event: MouseEvent) {
   if (event.target === event.currentTarget) {
     closeSheet(state);
   }
+}
+
+function currentPath(): string {
+  return window.location.pathname + window.location.search;
+}
+
+function formChosen(state: NavState) {
+  rememberReturn(currentPath());
+  closeSheet(state);
+}
+
+function pickPhotos() {
+  document.getElementById("addSheetPhotoInput")?.click();
+}
+
+function photosPicked(state: NavState, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+  if (files.length === 0) return;
+  handOffPhotos(files);
+  rememberReturn(currentPath());
+  const personId = state.selectedPersonId;
+  closeSheet(state);
+  core.setRoute(addPath("/add-photo", personId));
 }
 
 function choosePerson(state: NavState, personId: number) {

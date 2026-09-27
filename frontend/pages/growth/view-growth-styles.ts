@@ -17,6 +17,21 @@ block(`
 `);
 
 block(`
+.view-growth-measurement {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+`);
+
+block(`
+.view-growth-measurement + .view-growth-measurement {
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+`);
+
+block(`
 .view-growth-header {
   display: flex;
   align-items: center;

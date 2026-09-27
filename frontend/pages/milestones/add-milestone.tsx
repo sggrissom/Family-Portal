@@ -7,43 +7,45 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
-import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
+import { getIdFromRoute } from "../../lib/routeHelpers";
+import { chipOrder } from "../../lib/familyGroups";
+import { copy } from "../../lib/copy";
+import { When, newWhen, whenProblem, whenRequest } from "../../lib/when";
+import { readLastPerson, returnPath, takeReturnPath, writeLastPerson } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PagedPhotoPicker, PhotoPicker } from "../../components/PhotoPicker";
+import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
+import { WhenControl } from "../../components/WhenControl";
 import "./add-milestone-styles";
+import "../../components/entry-form-styles";
 
 type AddMilestoneForm = {
-  selectedPersonId: string;
+  personId: number | null;
   description: string;
   category: string;
-  inputType: string;
-  milestoneDate: string;
-  ageYears: string;
-  ageMonths: string;
+  when: When;
   photoIds: number[];
   tagIds: number[];
   error: string;
-  loading: boolean;
+  saving: boolean;
 };
 
-const useAddMilestoneForm = vlens.declareHook(
-  (personId?: string): AddMilestoneForm => ({
-    selectedPersonId: personId || "",
+const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMilestoneForm => {
+  scrollSelectedChipIntoView();
+  return {
+    personId,
     description: "",
-    category: "development",
-    inputType: "today",
-    milestoneDate: "",
-    ageYears: "",
-    ageMonths: "",
+    category: "first",
+    when: newWhen(),
     photoIds: [],
     tagIds: [],
     error: "",
-    loading: false,
-  })
-);
+    saving: false,
+  };
+});
 
 type AddMilestoneData = {
-  people: server.ListPeopleResponse;
+  people: server.Person[];
   tags: server.Tag[];
 };
 
@@ -52,12 +54,17 @@ export async function fetch(
   prefix: string
 ): Promise<rpc.Response<AddMilestoneData>> {
   const [people, peopleErr] = await server.ListPeople({});
-  if (peopleErr) return [null, peopleErr];
+  if (!people) return [null, peopleErr];
 
   const [tags, tagsErr] = await server.ListTags({});
-  if (tagsErr) return [null, tagsErr];
+  if (!tags) return [null, tagsErr];
 
-  return [{ people: people!, tags: tags!.tags }, ""];
+  const ordered = chipOrder(
+    people.people || [],
+    people.relations || [],
+    auth.getAuth()?.familyId ?? 0
+  );
+  return [{ people: ordered, tags: tags.tags }, ""];
 }
 
 export function view(route: string, prefix: string, data: AddMilestoneData): preact.ComponentChild {
@@ -66,98 +73,89 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
     return;
   }
 
-  if (!data.people.people || data.people.people.length === 0) {
+  if (data.people.length === 0) {
     return (
       <NoFamilyMembersPage
         message="Please add family members before adding milestones"
-        containerClass="add-milestone-container"
+        containerClass="entry-container"
       />
     );
   }
 
-  const personId = getIdFromRoute(route);
-  const personIdFromUrl = personId ? personId.toString() : undefined;
-
-  const form = useAddMilestoneForm(personIdFromUrl);
+  const fromRoute = getIdFromRoute(route);
+  const initial = [fromRoute, readLastPerson()].find(
+    id => id !== null && data.people.some(p => p.id === id)
+  );
+  const form = useAddMilestoneForm(initial ?? null);
 
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="add-milestone-container">
-        <AddMilestonePage form={form} people={data.people.people} tags={data.tags} />
+      <main id="app" className="entry-container">
+        <AddMilestonePage form={form} people={data.people} tags={data.tags} />
       </main>
       <Footer />
     </div>
   );
 }
 
-async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[], event: Event) {
+async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
   event.preventDefault();
-  form.loading = true;
+  if (form.saving) return;
+
+  const personId = form.personId;
+  const problem =
+    personId === null
+      ? copy.milestone.pickPerson
+      : !form.description.trim()
+        ? copy.milestone.needsText
+        : whenProblem(form.when);
+  if (problem || personId === null) {
+    form.error = problem;
+    vlens.scheduleRedraw();
+    return;
+  }
+
+  form.saving = true;
   form.error = "";
+  vlens.scheduleRedraw();
 
-  if (!form.selectedPersonId) {
-    form.error = "Please select a family member";
-    form.loading = false;
+  const when = whenRequest(form.when, new Date());
+  const [resp, err] = await server.AddMilestone({
+    personId,
+    description: form.description.trim(),
+    category: form.category,
+    inputType: when.inputType,
+    milestoneDate: when.date,
+    ageYears: when.ageYears,
+    ageMonths: when.ageMonths,
+    photoIds: form.photoIds,
+  });
+
+  if (!resp) {
+    form.saving = false;
+    form.error = err || "That milestone could not be saved. Please try again.";
     vlens.scheduleRedraw();
     return;
   }
 
-  if (!form.description.trim()) {
-    form.error = "Please enter a milestone description";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
+  if (form.tagIds.length > 0) {
+    await server.UpdateMilestoneTags({ milestoneId: resp.milestone.id, tagIds: form.tagIds });
   }
-
-  if (form.inputType === "date" && !form.milestoneDate) {
-    form.error = "Please select a date";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
-    form.error = "Please enter a valid age";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  try {
-    const requestData: server.AddMilestoneRequest = {
-      personId: parseInt(form.selectedPersonId),
-      description: form.description.trim(),
-      category: form.category,
-      inputType: form.inputType,
-      milestoneDate: form.inputType === "date" ? form.milestoneDate : null,
-      ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
-      ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
-      photoIds: form.photoIds,
-    };
-
-    const [resp, err] = await server.AddMilestone(requestData);
-
-    if (resp) {
-      if (form.tagIds.length > 0) {
-        await server.UpdateMilestoneTags({ milestoneId: resp.milestone.id, tagIds: form.tagIds });
-      }
-      core.setRoute(`/profile/${form.selectedPersonId}`);
-    } else {
-      form.loading = false;
-      form.error = err || "Failed to save milestone. Please try again.";
-      vlens.scheduleRedraw();
-    }
-  } catch (error) {
-    form.loading = false;
-    form.error =
-      error instanceof Error ? error.message : "Failed to save milestone. Please try again.";
-    vlens.scheduleRedraw();
-  }
+  writeLastPerson(personId);
+  takeReturnPath("");
+  core.setRoute(`/profile/${personId}`);
 }
 
-function onInputTypeChange(form: AddMilestoneForm, newType: string) {
-  form.inputType = newType;
+function choosePerson(form: AddMilestoneForm, personId: number) {
+  form.personId = form.personId === personId ? null : personId;
+  form.photoIds = [];
+  form.error = "";
+  vlens.scheduleRedraw();
+}
+
+function chooseCategory(form: AddMilestoneForm, category: string) {
+  form.category = category;
   vlens.scheduleRedraw();
 }
 
@@ -178,6 +176,21 @@ function onTogglePhoto(form: AddMilestoneForm, photoId: number) {
   vlens.scheduleRedraw();
 }
 
+function cancel(event: Event) {
+  event.preventDefault();
+  core.setRoute(takeReturnPath("/dashboard"));
+}
+
+const focused = new WeakSet<HTMLElement>();
+
+function focusOnMount(el: HTMLElement | null) {
+  if (!el || focused.has(el)) return;
+  focused.add(el);
+  requestAnimationFrame(() => el.focus());
+}
+
+const CATEGORY_ORDER = ["first", "development", "achievement", "behavior", "health", "other"];
+
 interface AddMilestonePageProps {
   form: AddMilestoneForm;
   people: server.Person[];
@@ -185,233 +198,136 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
-  const selectedPerson = people.find(p => p.id === parseInt(form.selectedPersonId));
-
-  const selectedPersonIdNum = parseInt(form.selectedPersonId) || 0;
+  const disabled = form.saving;
+  const categories = CATEGORY_ORDER.map(
+    value => MILESTONE_CATEGORIES.find(c => c.value === value)!
+  );
 
   return (
-    <div className="add-milestone-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Add Milestone</h1>
-          <p>Capture special moments and developmental milestones</p>
-        </div>
+    <div className="entry-card">
+      <h1 className="entry-title">{copy.milestone.title}</h1>
 
+      <PersonChips
+        people={people}
+        selected={form.personId !== null ? [form.personId] : []}
+        onToggle={vlens.cachePartial(choosePerson, form)}
+        label={copy.milestone.who}
+        disabled={disabled}
+      />
+
+      <form
+        className="entry-form"
+        onSubmit={vlens.cachePartial(onSubmitMilestone, form)}
+        noValidate
+      >
         {form.error && (
           <div className="error-message" role="alert">
             {form.error}
           </div>
         )}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}>
-          <div className="form-group">
-            <label htmlFor="person">Family Member</label>
-            <select
-              id="person"
-              {...vlens.attrsBindInput(vlens.ref(form, "selectedPersonId"))}
-              required
-              disabled={form.loading}
-            >
-              <option value="">Select a family member</option>
-              {people.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.name} ({personSubtitle(person)})
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="entry-field">
+          <label htmlFor="description">{copy.milestone.whatHappened}</label>
+          <textarea
+            id="description"
+            ref={focusOnMount}
+            rows={3}
+            placeholder={copy.milestone.placeholder}
+            disabled={disabled}
+            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+          />
+        </div>
 
-          <div className="form-group">
-            <label htmlFor="category">Category</label>
-            <select
-              id="category"
-              {...vlens.attrsBindInput(vlens.ref(form, "category"))}
-              disabled={form.loading}
-            >
-              {MILESTONE_CATEGORIES.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+        <div className="entry-field">
+          <span className="entry-label" id="categoryLabel">
+            {copy.milestone.category}
+          </span>
+          <div className="category-chips" role="group" aria-labelledby="categoryLabel">
+            {categories.map(category => (
+              <button
+                key={category.value}
+                type="button"
+                className={
+                  form.category === category.value ? "category-chip selected" : "category-chip"
+                }
+                aria-pressed={form.category === category.value ? "true" : "false"}
+                disabled={disabled}
+                onClick={vlens.cachePartial(chooseCategory, form, category.value)}
+              >
+                <span aria-hidden="true">{category.icon}</span>
+                {category.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div className="form-group">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-              placeholder="e.g., 'only wears ballet shoes', 'can count to 100', 'first time swinging by herself'"
-              rows={3}
-              required
-              disabled={form.loading}
-            />
-            <small className="form-hint">
-              Describe what happened, what they said, or how they're developing
-            </small>
-          </div>
+        <div className="entry-subject">
+          <span className="entry-label">{copy.when.label}</span>
+          <WhenControl when={form.when} disabled={disabled} />
+        </div>
 
-          <div className="form-group">
-            <label>Photos (optional)</label>
-            {selectedPersonIdNum > 0 ? (
-              <PagedPhotoPicker
-                pageKey="milestone-photos"
-                filters={{ personIds: [selectedPersonIdNum] }}
-                selectedIds={form.photoIds}
-                onToggle={photoId => onTogglePhoto(form, photoId)}
-                disabled={form.loading}
-                emptyText="No photos found for this person"
-              />
-            ) : (
-              <PhotoPicker
-                photos={[]}
-                selectedIds={form.photoIds}
-                onToggle={photoId => onTogglePhoto(form, photoId)}
-                disabled={form.loading}
-                emptyText="Select a family member to see their photos"
-              />
+        <details className="entry-more">
+          <summary>{copy.milestone.more}</summary>
+          <div className="entry-form">
+            <div className="entry-field">
+              <span className="entry-label">{copy.milestone.photos}</span>
+              {form.personId !== null ? (
+                <PagedPhotoPicker
+                  pageKey="milestone-photos"
+                  filters={{ personIds: [form.personId] }}
+                  selectedIds={form.photoIds}
+                  onToggle={photoId => onTogglePhoto(form, photoId)}
+                  disabled={disabled}
+                  emptyText="No photos found for this person"
+                />
+              ) : (
+                <PhotoPicker
+                  photos={[]}
+                  selectedIds={form.photoIds}
+                  onToggle={photoId => onTogglePhoto(form, photoId)}
+                  disabled={disabled}
+                  emptyText="Pick a person to see their photos"
+                />
+              )}
+            </div>
+
+            {tags.length > 0 && (
+              <div className="entry-field">
+                <span className="entry-label" id="tagPickerLabel">
+                  {copy.milestone.tags}
+                </span>
+                <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
+                  {tags.map(tag => {
+                    const selected = form.tagIds.includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className={`tag-pill${selected ? " selected" : ""}`}
+                        style={{ borderColor: tag.color }}
+                        aria-pressed={selected}
+                        onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
+                      >
+                        <span className="tag-color-dot" style={{ background: tag.color }} />
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
+        </details>
 
-          {tags.length > 0 && (
-            <div className="form-group">
-              <span className="form-group-caption" id="tagPickerLabel">
-                Tags
-              </span>
-              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-                {tags.map(tag => {
-                  const selected = form.tagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`tag-pill${selected ? " selected" : ""}`}
-                      style={{ borderColor: tag.color }}
-                      aria-pressed={selected}
-                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
-                    >
-                      <span className="tag-color-dot" style={{ background: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label>When did this happen?</label>
-            <div className="radio-group">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="today"
-                  checked={form.inputType === "today"}
-                  onChange={() => onInputTypeChange(form, "today")}
-                  disabled={form.loading}
-                />
-                <span>Today</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="date"
-                  checked={form.inputType === "date"}
-                  onChange={() => onInputTypeChange(form, "date")}
-                  disabled={form.loading}
-                />
-                <span>Specific Date</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="age"
-                  checked={form.inputType === "age"}
-                  onChange={() => onInputTypeChange(form, "age")}
-                  disabled={form.loading}
-                />
-                <span>At Age</span>
-              </label>
-            </div>
-          </div>
-
-          {form.inputType === "date" && (
-            <div className="form-group">
-              <label htmlFor="date">Date</label>
-              <input
-                id="date"
-                type="date"
-                {...vlens.attrsBindInput(vlens.ref(form, "milestoneDate"))}
-                max={new Date().toISOString().split("T")[0]}
-                required
-                disabled={form.loading}
-              />
-            </div>
-          )}
-
-          {form.inputType === "age" && (
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label htmlFor="ageYears">Age (Years)</label>
-                <input
-                  id="ageYears"
-                  type="number"
-                  min="0"
-                  max="100"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
-                  placeholder="5"
-                  required
-                  disabled={form.loading}
-                />
-              </div>
-              <div className="form-group flex-1">
-                <label htmlFor="ageMonths">Months</label>
-                <input
-                  id="ageMonths"
-                  type="number"
-                  min="0"
-                  max="11"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
-                  placeholder="0"
-                  disabled={form.loading}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="form-actions">
-            <a href="/dashboard" className="btn btn-secondary">
-              Cancel
-            </a>
-            <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
-              {form.loading ? "Saving..." : "Save Milestone"}
-            </button>
-          </div>
-        </form>
-
-        {selectedPerson && form.description && (
-          <div className="milestone-preview">
-            <h3>Preview</h3>
-            <p>
-              <strong>{selectedPerson.name}</strong> - {form.description}
-              {form.inputType === "today" && <span> today</span>}
-              {form.inputType === "date" && form.milestoneDate && (
-                <span> on {new Date(form.milestoneDate).toLocaleDateString()}</span>
-              )}
-              {form.inputType === "age" && form.ageYears && (
-                <span>
-                  {" "}
-                  at age {form.ageYears}
-                  {form.ageMonths ? `.${form.ageMonths}` : ""} years
-                </span>
-              )}
-            </p>
-          </div>
-        )}
-      </div>
+        <div className="entry-actions">
+          <a href={returnPath("/dashboard")} className="btn btn-secondary" onClick={cancel}>
+            {copy.milestone.cancel}
+          </a>
+          <button type="submit" className="btn btn-primary" disabled={disabled}>
+            {form.saving ? copy.milestone.saving : copy.milestone.save}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

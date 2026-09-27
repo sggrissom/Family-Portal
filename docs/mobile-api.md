@@ -332,6 +332,7 @@ Growth records, milestones, and photo dates take an `inputType`:
 | `"today"` | none | `time.Now()` — **the server's clock, in the server's zone** |
 | `"date"` | `measurementDate: "YYYY-MM-DD"` | parsed as given |
 | `"age"` | `ageYears`, `ageMonths` (0–11) | birthday + that offset |
+| `"keep"` | none | `UpdatePhoto` only: the photo's date is left as it is |
 
 **Send `"date"` with the device's local calendar date. Never send `"today"`.**
 The server is not in the user's time zone, so `"today"` from a phone at 8pm can

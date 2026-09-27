@@ -4,7 +4,6 @@ import * as server from "../../server";
 import { timelineRequest } from "../../lib/photoPages";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
-import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate } from "../../lib/dateUtils";
 import { formatMeasurement } from "../../lib/weightFormat";
 import { ErrorPage } from "../../components/ErrorPage";
@@ -25,23 +24,27 @@ import {
 import "./view-growth-styles";
 
 type ViewGrowthData = {
-  growthData: server.GrowthData | null;
+  measurements: server.GrowthData[];
   targetPerson: server.Person | null;
   familyMembers: server.FamilyTimelineItem[];
   relationGroups: Map<number, string>;
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewGrowthData>> {
-  const growthId = getIdFromRoute(route) || 0;
-  const [growthResp, growthErr] = await server.GetGrowthData({ id: growthId });
-  if (growthErr) return [null, growthErr];
+  const ids = growthIdsFromRoute(route);
+  const measurements: server.GrowthData[] = [];
+  for (const id of ids.length ? ids : [0]) {
+    const [growthResp, growthErr] = await server.GetGrowthData({ id });
+    if (!growthResp) return [null, growthErr];
+    measurements.push(growthResp.growthData);
+  }
 
   const [timelineResp, timelineErr] = await server.GetFamilyTimeline(
     timelineRequest({ skipMilestones: true, skipPhotos: true })
   );
   if (timelineErr) return [null, timelineErr];
 
-  const growthData = growthResp?.growthData ?? null;
+  const growthData = measurements[0] ?? null;
   const familyMembers = timelineResp?.people ?? [];
   const targetPerson =
     familyMembers.find(item => item.person.id === growthData?.personId)?.person ?? null;
@@ -54,7 +57,15 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     }
   }
 
-  return [{ growthData, targetPerson, familyMembers, relationGroups }, ""];
+  return [{ measurements, targetPerson, familyMembers, relationGroups }, ""];
+}
+
+function growthIdsFromRoute(route: string): number[] {
+  const segment = route.split("?")[0].split("/")[2] ?? "";
+  return segment
+    .split(",")
+    .map(part => parseInt(part))
+    .filter(id => !isNaN(id));
 }
 
 export function view(route: string, prefix: string, data: ViewGrowthData): preact.ComponentChild {
@@ -63,7 +74,8 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
     return;
   }
 
-  if (!data.growthData || !data.targetPerson) {
+  const person = data.targetPerson;
+  if (data.measurements.length === 0 || !person) {
     return (
       <ErrorPage
         title="Measurement Not Found"
@@ -77,12 +89,24 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
     <div>
       <Header isHome={false} />
       <main id="app" className="view-growth-container">
-        <ViewGrowthPage
-          growthData={data.growthData}
-          person={data.targetPerson}
-          familyMembers={data.familyMembers}
-          relationGroups={data.relationGroups}
-        />
+        <div className="view-growth-page">
+          <div className="view-growth-header">
+            <a href={`/profile/${person.id}`} className="back-link">
+              ← Back to {person.name}'s Profile
+            </a>
+          </div>
+          {data.measurements
+            .filter(growthData => growthData.personId === person.id)
+            .map(growthData => (
+              <ViewGrowthPage
+                key={growthData.id}
+                growthData={growthData}
+                person={person}
+                familyMembers={data.familyMembers}
+                relationGroups={data.relationGroups}
+              />
+            ))}
+        </div>
       </main>
       <Footer />
     </div>
@@ -128,13 +152,7 @@ const ViewGrowthPage = ({
   const { siblings, parents, others } = splitComparisonsByRelation(comparisons, relationGroups);
 
   return (
-    <div className="view-growth-page">
-      <div className="view-growth-header">
-        <a href={`/profile/${person.id}`} className="back-link">
-          ← Back to {person.name}'s Profile
-        </a>
-      </div>
-
+    <section className="view-growth-measurement">
       <div className="growth-detail-card">
         <div className="growth-detail-icon">
           {growthData.measurementType === server.Height ? "📏" : "⚖️"}
@@ -211,7 +229,7 @@ const ViewGrowthPage = ({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 };
 
