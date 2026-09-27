@@ -431,3 +431,12 @@ block(`
   font-size: 1.2rem;
 }
 `);
+
+block(`
+.add-sheet-when {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+`);

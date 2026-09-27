@@ -267,5 +267,5 @@ function monthsAgo(months: number): string {
 }
 
 function personCard(page: Page, name: string) {
-  return page.locator(".person-card").filter({ hasText: name });
+  return page.getByRole("navigation", { name: "Family" }).getByRole("link", { name });
 }

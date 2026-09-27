@@ -6,6 +6,8 @@ import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
 import { Destination, activeDestination, addPath, contextPersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
+import { dayKey, dayLabel } from "../lib/daySummary";
+import { localDateString } from "../lib/when";
 import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import {
   ModalDialogState,
@@ -35,6 +37,7 @@ interface NavState {
 }
 
 let familyPeople: server.Person[] | null = null;
+let openEvents: server.OpenEvent[] = [];
 
 const useNav = vlens.declareHook((): NavState => {
   const state: NavState = {
@@ -199,6 +202,21 @@ export const AddSheet = () => {
             </span>
             {copy.addSheet.milestone}
           </a>
+          {openEvents.slice(0, 2).map(open => (
+            <a
+              key={open.event.id}
+              href={`/competition/${open.event.id}`}
+              onClick={vlens.cachePartial(formChosen, state)}
+            >
+              <span className="add-sheet-icon" aria-hidden="true">
+                🏆
+              </span>
+              {copy.result} — {open.event.name}
+              <span className="add-sheet-when">
+                {dayLabel(dayKey(open.event.startDate), localDateString(new Date()))}
+              </span>
+            </a>
+          ))}
         </div>
       </div>
     </div>
@@ -260,7 +278,12 @@ async function openSheet(state: NavState) {
   state.selectedPersonId = defaultPerson(familyPeople ?? []);
   vlens.scheduleRedraw();
 
-  const [resp] = await server.ListPeople({});
+  const today = localDateString(new Date());
+  const [[resp], [events]] = await Promise.all([
+    server.ListPeople({}),
+    server.ListOpenEvents({ today }),
+  ]);
+  openEvents = events?.events ?? [];
   if (!resp) return;
   familyPeople = chipOrder(resp.people || [], resp.relations || [], auth.getAuth()?.familyId ?? 0);
   if (state.sheetOpen) {

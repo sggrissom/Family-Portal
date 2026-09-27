@@ -910,6 +910,28 @@ export interface FaceIdsResponse {
     updated: number
 }
 
+export interface GetDashboardRequest {
+    today: string
+}
+
+export interface GetDashboardResponse {
+    today: string
+    people: Person[]
+    relations: Relation[]
+    nudges: DashboardNudge[]
+    seasons: DashboardSeason[]
+    onThisDay: DashboardYear[]
+    recent: DashboardRecent
+}
+
+export interface ListOpenEventsRequest {
+    today: string
+}
+
+export interface ListOpenEventsResponse {
+    events: OpenEvent[]
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -1608,6 +1630,40 @@ export interface FaceReviewFamily {
     familyId: number
     name: string
     people: Person[]
+}
+
+export interface DashboardNudge {
+    kind: string
+    key: string
+    text: string
+    personId: number
+    count: number
+}
+
+export interface DashboardSeason {
+    season: SeasonSummary
+    activityName: string
+    event: EventSummary | null
+    eventTiming: string
+    canAddResults: boolean
+}
+
+export interface DashboardYear {
+    yearsAgo: number
+    photos: Image[]
+    milestones: Milestone[]
+}
+
+export interface DashboardRecent {
+    from: string
+    photos: PhotoWithPeople[]
+    milestones: Milestone[]
+    growth: GrowthData[]
+}
+
+export interface OpenEvent {
+    event: EventSummary
+    activityName: string
 }
 
 export interface ActivityImportCounts {
@@ -2434,6 +2490,14 @@ export async function RejectFaces(data: FaceIdsRequest): Promise<rpc.Response<Fa
 
 export async function DismissFaces(data: FaceIdsRequest): Promise<rpc.Response<FaceIdsResponse>> {
     return await rpc.call<FaceIdsResponse>('DismissFaces', JSON.stringify(data));
+}
+
+export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Response<GetDashboardResponse>> {
+    return await rpc.call<GetDashboardResponse>('GetDashboard', JSON.stringify(data));
+}
+
+export async function ListOpenEvents(data: ListOpenEventsRequest): Promise<rpc.Response<ListOpenEventsResponse>> {
+    return await rpc.call<ListOpenEventsResponse>('ListOpenEvents', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

@@ -249,6 +249,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterFaceMethods(app)
+	backend.RegisterDashboardMethods(app)
 	backend.RegisterImportMethods(app)
 	backend.RegisterExportMethods(app)
 	backend.RegisterAdminMethods(app)
