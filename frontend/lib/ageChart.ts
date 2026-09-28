@@ -101,10 +101,105 @@ export function ageTicks(
   maxMonths: number
 ): { months: number; label: string }[] {
   const span = maxMonths - minMonths;
-  const step = span <= 24 ? 3 : span <= 72 ? 12 : span <= 144 ? 24 : 60;
+  const step = span <= 8 ? 1 : span <= 24 ? 3 : span <= 72 ? 12 : span <= 144 ? 24 : 60;
   const ticks = [];
   for (let m = Math.ceil(minMonths / step) * step; m <= maxMonths; m += step) {
-    ticks.push({ months: m, label: m < 24 && step < 12 ? `${m}m` : `${Math.round(m / 12)}y` });
+    ticks.push({ months: m, label: step >= 12 ? `${Math.round(m / 12)}y` : ageLabel(m) });
   }
   return ticks;
+}
+
+function ageLabel(months: number): string {
+  if (months < 24) return `${months}m`;
+  const rest = months % 12;
+  return rest === 0 ? `${months / 12}y` : `${Math.floor(months / 12)}y ${rest}m`;
+}
+
+export interface AgeRange {
+  from: number;
+  to: number;
+}
+
+export interface ChartDomain {
+  minAge: number;
+  maxAge: number;
+  minValue: number;
+  maxValue: number;
+  band: BandRow[];
+  zoomed: boolean;
+}
+
+export const MIN_ZOOM_MONTHS = 1;
+
+export function chartDomain(
+  series: ChartPoint[][],
+  band: BandRow[],
+  zoom: AgeRange | null
+): ChartDomain | null {
+  const points = series.flat();
+  if (points.length === 0) return null;
+
+  const ages = points.map(p => p.ageMonths);
+  let minAge = Math.max(0, Math.min(...ages) - 1);
+  let maxAge = Math.max(...ages, minAge + 6) + 1;
+  const range = zoom && clampRange(zoom, minAge, maxAge);
+  if (range) {
+    minAge = range.from;
+    maxAge = range.to;
+  }
+
+  const values = series.flatMap(s => visibleValues(s, minAge, maxAge));
+  const inRange = bandWithin(band, minAge, maxAge);
+  values.push(
+    ...inRange
+      .filter(r => r.ageMonths >= minAge && r.ageMonths <= maxAge)
+      .flatMap(r => [r.p3, r.p97])
+  );
+  if (values.length === 0) return null;
+
+  const pad = Math.max((Math.max(...values) - Math.min(...values)) * 0.06, 0.5);
+  return {
+    minAge,
+    maxAge,
+    minValue: Math.max(0, Math.min(...values) - pad),
+    maxValue: Math.max(...values) + pad,
+    band: inRange,
+    zoomed: range !== null,
+  };
+}
+
+export function clampRange(range: AgeRange, min: number, max: number): AgeRange | null {
+  let from = Math.max(min, Math.min(range.from, range.to));
+  let to = Math.min(max, Math.max(range.from, range.to));
+  if (to - from < MIN_ZOOM_MONTHS) {
+    const mid = (from + to) / 2;
+    from = Math.max(min, mid - MIN_ZOOM_MONTHS / 2);
+    to = Math.min(max, from + MIN_ZOOM_MONTHS);
+    from = Math.max(min, to - MIN_ZOOM_MONTHS);
+  }
+  if (to <= from || (from === min && to === max)) return null;
+  return { from, to };
+}
+
+function visibleValues(points: ChartPoint[], from: number, to: number): number[] {
+  const values = points.filter(p => p.ageMonths >= from && p.ageMonths <= to).map(p => p.value);
+  for (const edge of [from, to]) {
+    const after = points.findIndex(p => p.ageMonths > edge);
+    if (after > 0) {
+      const a = points[after - 1];
+      const b = points[after];
+      values.push(
+        a.value + ((edge - a.ageMonths) / (b.ageMonths - a.ageMonths)) * (b.value - a.value)
+      );
+    }
+  }
+  return values;
+}
+
+function bandWithin(band: BandRow[], from: number, to: number): BandRow[] {
+  const start = band.findIndex(r => r.ageMonths >= from);
+  if (start === -1) return [];
+  const first = Math.max(0, start - 1);
+  const past = band.findIndex(r => r.ageMonths > to);
+  return band.slice(first, past === -1 ? band.length : past + 1);
 }

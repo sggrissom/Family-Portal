@@ -11,6 +11,45 @@ block(`
   display: block;
   width: 100%;
   height: auto;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  cursor: crosshair;
+}
+`);
+
+block(`
+.age-chart svg.dragging a {
+  pointer-events: none;
+}
+`);
+
+block(`
+.age-chart-zoom {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 30px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+`);
+
+block(`
+.age-chart-reset {
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+`);
+
+block(`
+.age-chart-brush {
+  fill: var(--accent);
+  opacity: 0.15;
 }
 `);
 

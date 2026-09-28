@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import * as server from "@app/server";
-import { ageTicks, chartPoints, niceTicks, percentileBand, toDisplay } from "./ageChart";
+import {
+  ChartPoint,
+  ageTicks,
+  chartDomain,
+  chartPoints,
+  clampRange,
+  niceTicks,
+  percentileBand,
+  toDisplay,
+} from "./ageChart";
 
 const growth = (
   id: number,
@@ -72,5 +81,58 @@ describe("ticks", () => {
   it("labels ages in months for babies and years after", () => {
     expect(ageTicks(0, 12).map(t => t.label)).toEqual(["0m", "3m", "6m", "9m", "12m"]);
     expect(ageTicks(0, 60).map(t => t.label)).toEqual(["0y", "1y", "2y", "3y", "4y", "5y"]);
+  });
+
+  it("labels zoomed-in ages past two with years and months", () => {
+    expect(ageTicks(30, 42).map(t => t.label)).toEqual(["2y 6m", "2y 9m", "3y", "3y 3m", "3y 6m"]);
+    expect(ageTicks(12, 16).map(t => t.label)).toEqual(["12m", "13m", "14m", "15m", "16m"]);
+  });
+});
+
+const pts = (...pairs: [number, number][]): ChartPoint[] =>
+  pairs.map(([ageMonths, value], i) => ({ id: i, ageMonths, value }));
+
+describe("chartDomain", () => {
+  const a = pts([0, 20], [12, 30], [24, 34], [60, 44]);
+  const b = pts([0, 19], [12, 29], [24, 33.5], [60, 43]);
+
+  it("fits every point when not zoomed", () => {
+    const d = chartDomain([a, b], [], null)!;
+    expect(d.zoomed).toBe(false);
+    expect(d.minAge).toBe(0);
+    expect(d.maxAge).toBe(61);
+    expect(d.minValue).toBeLessThan(19);
+    expect(d.maxValue).toBeGreaterThan(44);
+  });
+
+  it("refits values to the zoomed ages, including where lines cross the edges", () => {
+    const d = chartDomain([a, b], [], { from: 18, to: 30 })!;
+    expect(d.zoomed).toBe(true);
+    expect(d.minAge).toBe(18);
+    expect(d.maxAge).toBe(30);
+    expect(d.minValue).toBeGreaterThan(30);
+    expect(d.maxValue).toBeLessThan(37);
+  });
+
+  it("keeps band rows just past each edge so the band reaches the axes", () => {
+    const band = percentileBand(1, "height", 0, 60).filter(r => r.ageMonths % 3 === 0);
+    const d = chartDomain([a], band, { from: 19, to: 29 })!;
+    expect(d.band[0].ageMonths).toBe(18);
+    expect(d.band[d.band.length - 1].ageMonths).toBe(30);
+  });
+});
+
+describe("clampRange", () => {
+  it("orders and clamps to the data", () => {
+    expect(clampRange({ from: 30, to: 12 }, 0, 20)).toEqual({ from: 12, to: 20 });
+    expect(clampRange({ from: 15, to: 5 }, 0, 20)).toEqual({ from: 5, to: 15 });
+  });
+
+  it("widens a tiny selection to a month", () => {
+    expect(clampRange({ from: 10, to: 10.2 }, 0, 20)).toEqual({ from: 9.6, to: 10.6 });
+  });
+
+  it("ignores a selection covering everything", () => {
+    expect(clampRange({ from: 0, to: 20 }, 0, 20)).toBeNull();
   });
 });

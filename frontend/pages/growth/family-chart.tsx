@@ -5,7 +5,13 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
-import { AgeChart, AgeSeries, SERIES_COLORS } from "../../components/AgeChart";
+import {
+  AgeChart,
+  AgeSeries,
+  ChartZoom,
+  SERIES_COLORS,
+  newChartZoom,
+} from "../../components/AgeChart";
 import { PersonChips } from "../../components/PersonChips";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { chipOrder } from "../../lib/familyGroups";
@@ -49,10 +55,16 @@ type GrowthPageState = {
   selected: number[] | null;
   metric: Metric;
   bands: Bands;
+  zoom: ChartZoom;
 };
 
 const useGrowthPageState = vlens.declareHook(
-  (): GrowthPageState => ({ selected: null, metric: "height", bands: "off" })
+  (): GrowthPageState => ({
+    selected: null,
+    metric: "height",
+    bands: "off",
+    zoom: newChartZoom(),
+  })
 );
 
 const CHILD_MONTHS = 18 * 12;
@@ -170,6 +182,7 @@ const GrowthPage = ({ data }: { data: GrowthPageData }) => {
               metric={state.metric}
               band={band}
               label={`${copy.growthPage.title}: ${state.metric}`}
+              zoom={state.zoom}
             />
           )}
         </>

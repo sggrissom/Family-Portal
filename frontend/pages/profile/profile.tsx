@@ -8,7 +8,13 @@ import { openAddSheet } from "../../components/AppNav";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
 import { DaySummaryList } from "../../components/DaySummaryList";
 import { SameAgeStrip } from "../../components/SameAgeRows";
-import { AgeChart, AgeSeries, SERIES_COLORS } from "../../components/AgeChart";
+import {
+  AgeChart,
+  AgeSeries,
+  ChartZoom,
+  SERIES_COLORS,
+  newChartZoom,
+} from "../../components/AgeChart";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { initial } from "../../components/PersonChips";
 import { PersonActivities } from "../activities/person";
@@ -72,6 +78,7 @@ type ProfileState = {
   tab: Tab;
   metric: Metric;
   showSiblings: boolean;
+  zoom: ChartZoom;
 };
 
 const useProfileState = vlens.declareHook((personId: number): ProfileState => {
@@ -80,6 +87,7 @@ const useProfileState = vlens.declareHook((personId: number): ProfileState => {
     tab: requested && TABS.includes(requested) ? requested : "story",
     metric: "height",
     showSiblings: true,
+    zoom: newChartZoom(),
   };
 });
 
@@ -480,6 +488,7 @@ const GrowthTab = ({ data, state }: { data: ProfileData; state: ProfileState }) 
           metric={state.metric}
           band={band}
           label={`${person.name} ${state.metric}`}
+          zoom={state.zoom}
         />
       )}
 

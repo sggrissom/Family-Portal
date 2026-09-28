@@ -161,6 +161,10 @@ export const copy = {
       birthdays: "Birthdays",
     },
   },
+  ageChart: {
+    zoomHint: "Drag across the chart to zoom",
+    resetZoom: "Reset zoom",
+  },
   growthPage: {
     title: "Growth",
     people: "People",
