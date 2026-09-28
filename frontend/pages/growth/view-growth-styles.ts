@@ -17,6 +17,21 @@ block(`
 `);
 
 block(`
+.view-growth-measurement {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+`);
+
+block(`
+.view-growth-measurement + .view-growth-measurement {
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+`);
+
+block(`
 .view-growth-header {
   display: flex;
   align-items: center;
@@ -222,5 +237,23 @@ block(`
     flex-direction: row;
     width: 100%;
   }
+}
+`);
+
+block(`
+.family-comparison-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+`);
+
+block(`
+.family-comparison-head a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
 }
 `);

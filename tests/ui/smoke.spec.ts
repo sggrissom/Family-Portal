@@ -116,38 +116,47 @@ test("a new family signs up, adds a person, and records a measurement", async ({
   });
 
   await test.step("record a height for them", async () => {
-    await page.getByRole("link", { name: "Record growth" }).click();
+    await addFor(page, child.name, "Measurement");
 
-    await expect(page).toHaveURL(/\/add-growth$/);
-    await expect(page.getByRole("heading", { name: "Measure Now" })).toBeVisible();
+    await expect(page).toHaveURL(/\/add-growth\/\d+$/);
+    await expect(page.getByRole("heading", { name: "Measurement" })).toBeVisible();
+    await expect(page.locator(".entry-subject")).toContainText(child.name);
 
-    // The option's label carries an age alongside the name, so match on the
-    // name and select by value.
-    const option = page.locator("#person option").filter({ hasText: child.name });
-    await expect(option).toHaveCount(1);
-    await page.locator("#person").selectOption(await option.getAttribute("value"));
+    await page.locator("#height").fill(measurement.value);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+  });
 
-    // By id, not by label: the value field and the measurement-type radio are
-    // both labelled "Height".
-    await page.getByRole("radio", { name: "Height" }).check();
-    await page.locator("#value").fill(measurement.value);
-    await page.locator("#unit").selectOption(measurement.unit);
-    await page.getByRole("radio", { name: "Today" }).check();
-
-    await expect(page.locator(".measurement-preview")).toContainText(
+  await test.step("saving shows the measurement in context", async () => {
+    await expect(page).toHaveURL(/\/view-growth\/\d+$/);
+    await expect(page.locator(".growth-detail-value")).toContainText(
       `${measurement.value} ${measurement.unit}`
     );
+  });
 
-    await page.getByRole("button", { name: "Save Measurement" }).click();
+  await test.step("the result links to everyone at the same age", async () => {
+    await page.getByRole("link", { name: /See everything at this age/ }).click();
+    await expect(page).toHaveURL(/\/same-age\?age=\d+m&from=\d+$/);
+    await expect(page.locator(".same-age-row").filter({ hasText: child.name })).toContainText(
+      `${measurement.value} ${measurement.unit}`
+    );
+    await page.goBack();
+    await expect(page).toHaveURL(/\/view-growth\/\d+$/);
   });
 
   await test.step("the measurement is on the person's profile", async () => {
+    await page.getByRole("link", { name: `Back to ${child.name}'s Profile` }).click();
     await expect(page).toHaveURL(/\/profile\/\d+$/);
     await expect(page.getByRole("heading", { name: child.name, level: 1 })).toBeVisible();
 
-    const entry = page.locator(".timeline-item.measurement-item").first();
-    await expect(entry).toBeVisible();
-    await expect(entry.locator(".measurement-value")).toContainText(
+    await expect(page.locator(".day-checkup").first()).toContainText(
+      `${measurement.value} ${measurement.unit}`
+    );
+  });
+
+  await test.step("and in the family history", async () => {
+    await page.getByRole("link", { name: "History", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/history$/);
+    await expect(page.locator(".day-checkup").first()).toContainText(
       `${measurement.value} ${measurement.unit}`
     );
   });
@@ -172,22 +181,17 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
   await page.getByRole("button", { name: "Add Family Member" }).click();
   await expect(personCard(page, baby.name)).toBeVisible();
 
-  await page.getByRole("link", { name: "Record growth" }).click();
-  const option = page.locator("#person option").filter({ hasText: baby.name });
-  await page.locator("#person").selectOption(await option.getAttribute("value"));
-  await page.getByRole("radio", { name: "Weight" }).check();
+  await addFor(page, baby.name, "Measurement");
+  await expect(page.locator(".entry-subject")).toContainText(baby.name);
 
   // Under two, weight entry defaults to pounds and ounces.
-  await expect(page.getByRole("radio", { name: "Pounds & Ounces" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "lb/oz" })).toHaveAttribute("aria-pressed", "true");
   await page.locator("#pounds").fill("7");
   await page.locator("#ounces").fill("8");
-  await page.getByRole("radio", { name: "Today" }).check();
-  await expect(page.locator(".measurement-preview")).toContainText("7 lb 8 oz");
-  await page.getByRole("button", { name: "Save Measurement" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/profile\/\d+$/);
-  const entry = page.locator(".timeline-item.measurement-item").first();
-  await expect(entry.locator(".measurement-value")).toContainText("7 lb 8 oz");
+  await expect(page).toHaveURL(/\/view-growth\/\d+$/);
+  await expect(page.locator(".growth-detail-value")).toContainText("7 lb 8 oz");
 });
 
 test("a person is deleted from their edit page after seeing what goes with them", async ({
@@ -211,14 +215,11 @@ test("a person is deleted from their edit page after seeing what goes with them"
   await page.getByRole("button", { name: "Add Family Member" }).click();
   await expect(personCard(page, mistake.name)).toBeVisible();
 
-  await page.getByRole("link", { name: "Record growth" }).click();
-  const option = page.locator("#person option").filter({ hasText: mistake.name });
-  await page.locator("#person").selectOption(await option.getAttribute("value"));
-  await page.getByRole("radio", { name: "Height" }).check();
-  await page.locator("#value").fill("40");
-  await page.locator("#unit").selectOption("in");
-  await page.getByRole("radio", { name: "Today" }).check();
-  await page.getByRole("button", { name: "Save Measurement" }).click();
+  await addFor(page, mistake.name, "Measurement");
+  await page.locator("#height").fill("40");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page).toHaveURL(/\/view-growth\/\d+$/);
+  await page.getByRole("link", { name: `Back to ${mistake.name}'s Profile` }).click();
   await expect(page).toHaveURL(/\/profile\/\d+$/);
 
   await page.getByRole("link", { name: "✏️ Edit", exact: true }).click();
@@ -234,8 +235,8 @@ test("a person is deleted from their edit page after seeing what goes with them"
   await expect(personCard(page, mistake.name)).toHaveCount(0);
 });
 
-test("several photos are uploaded in one go with a shared title", async ({ page }) => {
-  const title = "UI Park Day";
+test("photos upload as soon as they are picked and take a caption after", async ({ page }) => {
+  const caption = "UI Park Day";
 
   await page.goto("/create-account");
   await page.getByLabel("Full Name").fill(account.name);
@@ -246,21 +247,34 @@ test("several photos are uploaded in one go with a shared title", async ({ page 
   await page.getByRole("button", { name: "Create Account" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.getByRole("link", { name: /Share a photo/ }).click();
-  await expect(page).toHaveURL(/\/add-photo$/);
-
+  // The sheet's Photos button opens the file picker directly.
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
-    .locator("#photo-input")
+    .locator("#addSheetPhotoInput")
     .setInputFiles(["backend/seedphotos/bubbles-park.jpg", "backend/seedphotos/soccer-match.jpg"]);
-  await expect(page.locator(".file-preview")).toHaveCount(2);
 
-  await page.locator("#title").fill(title);
-  await page.getByRole("radio", { name: "Today" }).check();
-  await page.getByRole("button", { name: "Upload 2 Photos" }).click();
+  await expect(page).toHaveURL(/\/add-photo$/);
+  await expect(page.locator(".upload-tile.upload-done")).toHaveCount(2);
 
+  await page.locator("#caption").fill(caption);
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole("link", { name: "Photos" }).first().click();
   await expect(page).toHaveURL(/\/photos$/);
-  await expect(page.locator(".photo-card").filter({ hasText: title })).toHaveCount(2);
+  await expect(page.locator(".photo-card").filter({ hasText: caption })).toHaveCount(2);
 });
+
+async function addFor(
+  page: Page,
+  personName: string,
+  kind: "Photos" | "Measurement" | "Milestone"
+) {
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("button", { name: personName }).click();
+  await sheet.getByRole("link", { name: kind }).click();
+}
 
 function monthsAgo(months: number): string {
   const d = new Date();
@@ -269,5 +283,5 @@ function monthsAgo(months: number): string {
 }
 
 function personCard(page: Page, name: string) {
-  return page.locator(".person-card").filter({ hasText: name });
+  return page.getByRole("navigation", { name: "Family" }).getByRole("link", { name });
 }

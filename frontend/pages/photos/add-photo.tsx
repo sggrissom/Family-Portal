@@ -7,63 +7,74 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
-import { getIdFromRoute, personSubtitle } from "../../lib/routeHelpers";
+import { getIdFromRoute } from "../../lib/routeHelpers";
+import { chipOrder } from "../../lib/familyGroups";
+import { copy } from "../../lib/copy";
+import { localDateString } from "../../lib/when";
+import { readLastPerson, returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
+import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import {
-  failureSummary,
-  pendingPhotos,
+  peopleChanges,
   photoFileProblem,
+  takenLabel,
   type QueuedPhoto,
 } from "../../lib/photoUploadQueue";
 import "./add-photo-styles";
+import "../../components/entry-form-styles";
 
-type AddPhotoForm = {
-  selectedPersonIds: string[];
-  title: string;
-  description: string;
-  inputType: string;
-  photoDate: string;
-  ageYears: string;
-  ageMonths: string;
-  tagIds: number[];
-  photos: QueuedPhoto[];
-  batchTotal: number;
-  batchDone: number;
-  error: string;
-  loading: boolean;
-  dragActive: boolean;
+type UploadItem = QueuedPhoto & {
+  image: server.Image | null;
+  taggedAtUpload: number[];
 };
 
-const useAddPhotoForm = vlens.declareHook(
-  (personId?: string): AddPhotoForm => ({
-    selectedPersonIds: personId ? [personId] : [],
-    title: "",
-    description: "",
-    inputType: "auto",
-    photoDate: "",
-    ageYears: "",
-    ageMonths: "",
+type AddPhotoForm = {
+  personIds: number[];
+  caption: string;
+  tagIds: number[];
+  items: UploadItem[];
+  pumping: boolean;
+  editingDate: boolean;
+  newDate: string;
+  finishing: boolean;
+  dragActive: boolean;
+  handedOff: boolean;
+  error: string;
+};
+
+const useAddPhotoForm = vlens.declareHook((personId: number | null): AddPhotoForm => {
+  scrollSelectedChipIntoView();
+  return {
+    personIds: personId ? [personId] : [],
+    caption: "",
     tagIds: [],
-    photos: [],
-    batchTotal: 0,
-    batchDone: 0,
-    error: "",
-    loading: false,
+    items: [],
+    pumping: false,
+    editingDate: false,
+    newDate: "",
+    finishing: false,
     dragActive: false,
-  })
-);
+    handedOff: false,
+    error: "",
+  };
+});
 
 type AddPhotoData = {
-  people: server.ListPeopleResponse;
+  people: server.Person[];
   tags: server.Tag[];
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddPhotoData>> {
   const [people, peopleErr] = await server.ListPeople({});
-  if (peopleErr) return [null, peopleErr];
+  if (!people) return [null, peopleErr];
   const [tags, tagsErr] = await server.ListTags({});
-  if (tagsErr) return [null, tagsErr];
-  return [{ people: people!, tags: tags!.tags }, ""];
+  if (!tags) return [null, tagsErr];
+  const ordered = chipOrder(
+    people.people || [],
+    people.relations || [],
+    auth.getAuth()?.familyId ?? 0
+  );
+  return [{ people: ordered, tags: tags.tags }, ""];
 }
 
 export function view(route: string, prefix: string, data: AddPhotoData): preact.ComponentChild {
@@ -72,25 +83,32 @@ export function view(route: string, prefix: string, data: AddPhotoData): preact.
     return;
   }
 
-  if (!data.people.people || data.people.people.length === 0) {
+  if (data.people.length === 0) {
     return (
       <NoFamilyMembersPage
         message="Please add family members before adding photos"
-        containerClass="add-photo-container"
+        containerClass="entry-container"
       />
     );
   }
 
-  const personId = getIdFromRoute(route);
-  const personIdFromUrl = personId ? personId.toString() : undefined;
+  const fromRoute = getIdFromRoute(route);
+  const initial = [fromRoute, readLastPerson()].find(
+    id => id !== null && data.people.some(p => p.id === id)
+  );
+  const form = useAddPhotoForm(initial ?? null);
 
-  const form = useAddPhotoForm(personIdFromUrl);
+  if (!form.handedOff) {
+    form.handedOff = true;
+    const files = takeHandedOffPhotos();
+    if (files.length > 0) addFiles(form, data.people, files);
+  }
 
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="add-photo-container">
-        <AddPhotoPage form={form} people={data.people.people} tags={data.tags} />
+      <main id="app" className="entry-container">
+        <AddPhotoPage form={form} people={data.people} tags={data.tags} />
       </main>
       <Footer />
     </div>
@@ -111,29 +129,17 @@ async function uploadErrorMessage(response: Response): Promise<string> {
 }
 
 async function uploadPhoto(
-  form: AddPhotoForm,
+  file: File,
   personIds: number[],
-  familyId: number | undefined,
-  file: File
-): Promise<void> {
+  familyId: number | undefined
+): Promise<server.Image> {
   const formData = new FormData();
   formData.append("personIds", JSON.stringify(personIds));
   if (familyId !== undefined) {
     formData.append("familyId", String(familyId));
   }
-  formData.append("title", form.title.trim());
-  formData.append("description", form.description.trim());
-  formData.append("inputType", form.inputType);
+  formData.append("inputType", "auto");
   formData.append("photo", file);
-
-  if (form.inputType === "date") {
-    formData.append("photoDate", form.photoDate);
-  } else if (form.inputType === "age") {
-    formData.append("ageYears", form.ageYears);
-    if (form.ageMonths) {
-      formData.append("ageMonths", form.ageMonths);
-    }
-  }
 
   const response = await window.fetch("/api/upload-photo", {
     method: "POST",
@@ -145,138 +151,68 @@ async function uploadPhoto(
     throw new Error(await uploadErrorMessage(response));
   }
 
-  const responseData = await response.json();
-
-  if (responseData.image && responseData.image.status === 1) {
-    usePhotoStatus().startMonitoring(responseData.image.id, responseData.image.status);
+  const image: server.Image = (await response.json()).image;
+  if (image.status === 1) {
+    usePhotoStatus().startMonitoring(image.id, image.status);
   }
-
-  if (form.tagIds.length > 0 && responseData.image?.id) {
-    await server.UpdatePhotoTags({ photoId: responseData.image.id, tagIds: form.tagIds });
-  }
+  return image;
 }
 
-async function onSubmitPhoto(form: AddPhotoForm, people: server.Person[], event: Event) {
-  event.preventDefault();
-  form.error = "";
-
-  const queue = pendingPhotos(form.photos);
-  if (queue.length === 0) {
-    form.error = "Please select a photo to upload";
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (form.inputType === "date" && !form.photoDate) {
-    form.error = "Please select a date";
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
-    form.error = "Please enter a valid age";
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (!auth.getAuth()) {
-    form.error = "Authentication required";
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  const personIds = form.selectedPersonIds.map(id => parseInt(id)).filter(id => !isNaN(id));
-  const familyId = people.find(p => personIds.includes(p.id))?.familyId;
-
-  form.loading = true;
-  form.batchTotal = queue.length;
-  form.batchDone = 0;
-
-  for (const photo of queue) {
-    photo.state = "uploading";
-    photo.error = "";
-    vlens.scheduleRedraw();
-
-    try {
-      await uploadPhoto(form, personIds, familyId, photo.file);
-      photo.state = "done";
-    } catch (error) {
-      photo.state = "failed";
-      photo.error =
-        error instanceof Error ? error.message : "Failed to upload photo. Please try again.";
-    }
-    form.batchDone++;
-  }
-
-  form.loading = false;
-
-  const firstFailure = form.photos.find(p => p.state === "failed");
-  if (firstFailure) {
-    form.error = failureSummary(form.photos) || firstFailure.error;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  form.photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
-
-  if (form.selectedPersonIds.length === 1) {
-    core.setRoute(`/profile/${form.selectedPersonIds[0]}`);
-  } else {
-    core.setRoute("/photos");
-  }
-}
-
-function onToggleTag(form: AddPhotoForm, tagId: number) {
-  const idx = form.tagIds.indexOf(tagId);
-  if (idx >= 0) form.tagIds.splice(idx, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
-function onInputTypeChange(form: AddPhotoForm, newType: string) {
-  form.inputType = newType;
-  vlens.scheduleRedraw();
-}
-
-function onPersonToggle(form: AddPhotoForm, personId: string) {
-  const index = form.selectedPersonIds.indexOf(personId);
-
-  if (index === -1) {
-    form.selectedPersonIds.push(personId);
-  } else {
-    form.selectedPersonIds.splice(index, 1);
-  }
-
-  vlens.scheduleRedraw();
-}
-
-function onFileSelect(form: AddPhotoForm, event: Event) {
-  const target = event.target as HTMLInputElement;
-  if (target.files) {
-    addFiles(form, target.files);
-  }
-  target.value = "";
-}
-
-function addFiles(form: AddPhotoForm, files: FileList) {
+function addFiles(form: AddPhotoForm, people: server.Person[], files: File[]) {
   const problems: string[] = [];
-
-  for (const file of Array.from(files)) {
+  for (const file of files) {
     const problem = photoFileProblem(file);
     if (problem) {
       problems.push(problem);
       continue;
     }
-    form.photos.push({
+    form.items.push({
       file,
       previewUrl: URL.createObjectURL(file),
       state: "queued",
       error: "",
+      image: null,
+      taggedAtUpload: [],
     });
   }
-
   form.error = problems.length > 0 ? `Skipped: ${problems.join("; ")}` : "";
   vlens.scheduleRedraw();
+  pump(form, people);
+}
+
+async function pump(form: AddPhotoForm, people: server.Person[]) {
+  if (form.pumping) return;
+  form.pumping = true;
+
+  let next: UploadItem | undefined;
+  while ((next = form.items.find(item => item.state === "queued"))) {
+    const item = next;
+    item.state = "uploading";
+    item.taggedAtUpload = [...form.personIds];
+    vlens.scheduleRedraw();
+
+    const familyId = people.find(p => item.taggedAtUpload.includes(p.id))?.familyId;
+    try {
+      item.image = await uploadPhoto(item.file, item.taggedAtUpload, familyId);
+      item.state = "done";
+    } catch (error) {
+      item.state = "failed";
+      item.error = error instanceof Error ? error.message : "The upload failed.";
+    }
+    vlens.scheduleRedraw();
+  }
+
+  form.pumping = false;
+  if (form.finishing) {
+    finish(form);
+  }
+}
+
+function onFileSelect(form: AddPhotoForm, people: server.Person[], event: Event) {
+  const target = event.target as HTMLInputElement;
+  const files = Array.from(target.files ?? []);
+  target.value = "";
+  if (files.length > 0) addFiles(form, people, files);
 }
 
 function onDragOver(form: AddPhotoForm, event: DragEvent) {
@@ -291,47 +227,134 @@ function onDragLeave(form: AddPhotoForm, event: DragEvent) {
   vlens.scheduleRedraw();
 }
 
-function onDrop(form: AddPhotoForm, event: DragEvent) {
+function onDrop(form: AddPhotoForm, people: server.Person[], event: DragEvent) {
   event.preventDefault();
   form.dragActive = false;
-
-  const files = event.dataTransfer?.files;
-  if (files && files.length > 0) {
-    addFiles(form, files);
-  }
+  const files = Array.from(event.dataTransfer?.files ?? []);
+  if (files.length > 0) addFiles(form, people, files);
   vlens.scheduleRedraw();
 }
 
-function removePhoto(form: AddPhotoForm, photo: QueuedPhoto) {
-  const index = form.photos.indexOf(photo);
-  if (index >= 0) {
-    form.photos.splice(index, 1);
-    URL.revokeObjectURL(photo.previewUrl);
-  }
+function retry(form: AddPhotoForm, people: server.Person[], item: UploadItem) {
+  item.state = "queued";
+  item.error = "";
+  form.error = "";
+  pump(form, people);
+}
+
+function remove(form: AddPhotoForm, item: UploadItem) {
+  const index = form.items.indexOf(item);
+  if (index >= 0) form.items.splice(index, 1);
+  URL.revokeObjectURL(item.previewUrl);
   vlens.scheduleRedraw();
 }
 
-function uploadStatusLabel(photo: QueuedPhoto): string {
-  switch (photo.state) {
+function togglePerson(form: AddPhotoForm, personId: number) {
+  const index = form.personIds.indexOf(personId);
+  if (index >= 0) form.personIds.splice(index, 1);
+  else form.personIds.push(personId);
+  vlens.scheduleRedraw();
+}
+
+function toggleTag(form: AddPhotoForm, tagId: number) {
+  const index = form.tagIds.indexOf(tagId);
+  if (index >= 0) form.tagIds.splice(index, 1);
+  else form.tagIds.push(tagId);
+  vlens.scheduleRedraw();
+}
+
+function editDate(form: AddPhotoForm) {
+  form.editingDate = true;
+  const first = form.items.find(item => item.image)?.image;
+  form.newDate = first ? first.photoDate.split("T")[0] : localDateString(new Date());
+  vlens.scheduleRedraw();
+}
+
+function onDone(form: AddPhotoForm, event: Event) {
+  event.preventDefault();
+  if (form.finishing) return;
+  if (form.items.some(item => item.state === "failed")) {
+    form.error = "Some photos did not upload. Retry or remove them first.";
+    vlens.scheduleRedraw();
+    return;
+  }
+  if (form.editingDate && !form.newDate) {
+    form.error = "Pick the date these were taken";
+    vlens.scheduleRedraw();
+    return;
+  }
+  form.finishing = true;
+  form.error = "";
+  vlens.scheduleRedraw();
+  if (!form.pumping) finish(form);
+}
+
+async function finish(form: AddPhotoForm) {
+  const caption = form.caption.trim();
+  const problems: string[] = [];
+
+  for (const item of form.items) {
+    const image = item.image;
+    if (!image) continue;
+
+    const { add, remove } = peopleChanges(item.taggedAtUpload, form.personIds);
+    if (add.length > 0) {
+      const [, err] = await server.AddPeopleToPhoto({ photoId: image.id, personIds: add });
+      if (err) problems.push(err);
+    }
+    for (const personId of remove) {
+      const [, err] = await server.RemovePersonFromPhotoProc({ photoId: image.id, personId });
+      if (err) problems.push(err);
+    }
+    item.taggedAtUpload = [...form.personIds];
+
+    if (caption || form.editingDate) {
+      const [resp, err] = await server.UpdatePhoto({
+        id: image.id,
+        title: caption || (form.editingDate ? "" : image.title),
+        description: image.description,
+        inputType: form.editingDate ? "date" : "keep",
+        photoDate: form.editingDate ? form.newDate : "",
+        ageYears: null,
+        ageMonths: null,
+      });
+      if (resp) item.image = resp.image;
+      else problems.push(err);
+    }
+
+    if (form.tagIds.length > 0) {
+      const [, err] = await server.UpdatePhotoTags({ photoId: image.id, tagIds: form.tagIds });
+      if (err) problems.push(err);
+    }
+  }
+
+  if (problems.length > 0) {
+    form.finishing = false;
+    form.error = problems[0];
+    vlens.scheduleRedraw();
+    return;
+  }
+
+  form.items.forEach(item => URL.revokeObjectURL(item.previewUrl));
+  const fallback = form.personIds.length === 1 ? `/profile/${form.personIds[0]}` : "/photos";
+  core.setRoute(takeReturnPath(fallback));
+}
+
+function cancel(event: Event) {
+  event.preventDefault();
+  core.setRoute(takeReturnPath("/dashboard"));
+}
+
+function statusLabel(item: UploadItem): string {
+  switch (item.state) {
     case "uploading":
-      return "Uploading…";
+    case "queued":
+      return copy.photos.uploading;
     case "done":
-      return "Uploaded";
+      return copy.photos.uploaded;
     case "failed":
-      return photo.error;
-    default:
-      return `${(photo.file.size / 1024 / 1024).toFixed(2)} MB`;
+      return item.error || copy.photos.failed;
   }
-}
-
-function submitLabel(form: AddPhotoForm): string {
-  if (form.loading) {
-    return form.batchTotal > 1
-      ? `Uploading ${Math.min(form.batchDone + 1, form.batchTotal)} of ${form.batchTotal}...`
-      : "Uploading...";
-  }
-  const count = pendingPhotos(form.photos).length;
-  return count > 1 ? `Upload ${count} Photos` : "Upload Photo";
 }
 
 interface AddPhotoPageProps {
@@ -341,17 +364,141 @@ interface AddPhotoPageProps {
 }
 
 const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
-  const selectedPersonIds = new Set(form.selectedPersonIds.map(id => parseInt(id)));
-  const hasPhotos = form.photos.length > 0;
-  const isBatch = form.photos.length > 1;
+  const hasItems = form.items.length > 0;
+  const uploaded = form.items.filter(item => item.image).map(item => item.image!.photoDate);
+  const taken = takenLabel(uploaded);
+  const busy = form.items.some(item => item.state === "queued" || item.state === "uploading");
 
   return (
-    <div className="add-photo-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Add Photos</h1>
-          <p>Upload and share precious moments with your family</p>
+    <div className="entry-card">
+      <h1 className="entry-title">{copy.photos.title}</h1>
+
+      <input
+        id="photo-input"
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={vlens.cachePartial(onFileSelect, form, people)}
+      />
+
+      <div
+        className={`photo-drop${form.dragActive ? " drag-active" : ""}${hasItems ? " has-items" : ""}`}
+        onDragOver={vlens.cachePartial(onDragOver, form)}
+        onDragLeave={vlens.cachePartial(onDragLeave, form)}
+        onDrop={vlens.cachePartial(onDrop, form, people)}
+      >
+        {!hasItems ? (
+          <div className="photo-drop-empty">
+            <label htmlFor="photo-input" className="btn btn-primary">
+              {copy.photos.choose}
+            </label>
+            <small>{copy.photos.dropHint}</small>
+          </div>
+        ) : (
+          <div className="upload-grid">
+            {form.items.map(item => (
+              <div key={item.previewUrl} className={`upload-tile upload-${item.state}`}>
+                <img src={item.previewUrl} alt="" />
+                <span className="upload-tile-status">{statusLabel(item)}</span>
+                {item.state === "failed" && (
+                  <span className="upload-tile-actions">
+                    <button type="button" onClick={() => retry(form, people, item)}>
+                      Retry
+                    </button>
+                    <button type="button" onClick={() => remove(form, item)}>
+                      Remove
+                    </button>
+                  </span>
+                )}
+              </div>
+            ))}
+            {!form.finishing && (
+              <label htmlFor="photo-input" className="upload-tile upload-add">
+                <span aria-hidden="true">+</span>
+                {copy.photos.addMore}
+              </label>
+            )}
+          </div>
+        )}
+      </div>
+
+      <form className="entry-form" onSubmit={vlens.cachePartial(onDone, form)} noValidate>
+        <div className="entry-field">
+          <span className="entry-label">{copy.photos.whoIsIn}</span>
+          <PersonChips
+            people={people}
+            selected={form.personIds}
+            onToggle={vlens.cachePartial(togglePerson, form)}
+            label={copy.photos.whoIsIn}
+            disabled={form.finishing}
+          />
         </div>
+
+        <div className="entry-field">
+          <label htmlFor="caption">{copy.photos.caption}</label>
+          <input
+            id="caption"
+            type="text"
+            placeholder={copy.photos.captionPlaceholder}
+            disabled={form.finishing}
+            {...vlens.attrsBindInput(vlens.ref(form, "caption"))}
+          />
+        </div>
+
+        {tags.length > 0 && (
+          <div className="entry-field">
+            <span className="entry-label" id="tagPickerLabel">
+              {copy.photos.tags}
+            </span>
+            <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
+              {tags.map(tag => {
+                const selected = form.tagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className={`tag-pill${selected ? " selected" : ""}`}
+                    style={{ borderColor: tag.color }}
+                    aria-pressed={selected}
+                    disabled={form.finishing}
+                    onClick={vlens.cachePartial(toggleTag, form, tag.id)}
+                  >
+                    <span className="tag-color-dot" style={{ background: tag.color }} />
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {(taken || form.editingDate) && (
+          <div className="photo-taken">
+            <span className="entry-label">{copy.photos.taken}</span>
+            {form.editingDate ? (
+              <input
+                type="date"
+                className="when-date"
+                aria-label={copy.photos.taken}
+                max={localDateString(new Date())}
+                disabled={form.finishing}
+                {...vlens.attrsBindInput(vlens.ref(form, "newDate"))}
+              />
+            ) : (
+              <span>
+                {taken} ·{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={vlens.cachePartial(editDate, form)}
+                >
+                  {copy.photos.change}
+                </button>
+              </span>
+            )}
+          </div>
+        )}
 
         {form.error && (
           <div className="error-message" role="alert">
@@ -359,287 +506,21 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
           </div>
         )}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitPhoto, form, people)}>
-          <div className="form-group">
-            <label>Who's in this photo? (Optional)</label>
-            <p className="form-hint">
-              Select family members who appear in this photo. Leave unchecked for general family
-              photos.
-            </p>
-
-            <div className="photo-person-group">
-              {people.map(person => (
-                <label key={person.id} className="photo-person-option">
-                  <input
-                    type="checkbox"
-                    checked={selectedPersonIds.has(person.id)}
-                    onChange={() => onPersonToggle(form, person.id.toString())}
-                    disabled={form.loading}
-                  />
-                  <span>
-                    {person.name} ({personSubtitle(person)})
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Photos</label>
-            <div
-              className={`file-upload-area ${form.dragActive ? "drag-active" : ""} ${
-                hasPhotos ? "has-file" : ""
-              }`}
-              onDragOver={vlens.cachePartial(onDragOver, form)}
-              onDragLeave={vlens.cachePartial(onDragLeave, form)}
-              onDrop={vlens.cachePartial(onDrop, form)}
-            >
-              {!hasPhotos ? (
-                <div className="upload-prompt">
-                  <div className="upload-icon">📸</div>
-                  <p>
-                    Drag and drop photos here, or{" "}
-                    <label htmlFor="photo-input" className="upload-link">
-                      browse
-                    </label>
-                  </p>
-                  <small>Supports JPG, PNG, GIF up to 10MB each</small>
-                </div>
-              ) : (
-                <div className="file-preview-list">
-                  {form.photos.map(photo => (
-                    <div key={photo.previewUrl} className={`file-preview upload-${photo.state}`}>
-                      <img src={photo.previewUrl} alt="" className="preview-image" />
-                      <div className="file-info">
-                        <p className="file-name">{photo.file.name}</p>
-                        <p className="file-size">{uploadStatusLabel(photo)}</p>
-                        {photo.state !== "done" && (
-                          <button
-                            type="button"
-                            onClick={() => removePhoto(form, photo)}
-                            className="remove-file"
-                            disabled={form.loading}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {!form.loading && (
-                    <label htmlFor="photo-input" className="upload-link add-more-photos">
-                      Add more photos
-                    </label>
-                  )}
-                </div>
-              )}
-              <input
-                id="photo-input"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={vlens.cachePartial(onFileSelect, form)}
-                disabled={form.loading}
-                style={{ display: "none" }}
-              />
-            </div>
-            {isBatch && (
-              <p className="form-hint">Everything else on this form applies to every photo.</p>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="title">Photo Title (Optional)</label>
-            <input
-              id="title"
-              type="text"
-              {...vlens.attrsBindInput(vlens.ref(form, "title"))}
-              placeholder="Leave empty to auto-generate from date or filename"
-              disabled={form.loading}
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="description">Description (Optional)</label>
-            <textarea
-              id="description"
-              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-              placeholder="Add any details about this photo..."
-              rows={3}
-              disabled={form.loading}
-            />
-          </div>
-
-          {tags.length > 0 && (
-            <div className="form-group">
-              <span className="form-group-caption" id="tagPickerLabel">
-                Tags
-              </span>
-              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-                {tags.map(tag => {
-                  const selected = form.tagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`tag-pill${selected ? " selected" : ""}`}
-                      style={{ borderColor: tag.color }}
-                      aria-pressed={selected}
-                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
-                    >
-                      <span className="tag-color-dot" style={{ background: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label>When was this photo taken?</label>
-            <div className="radio-group">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="auto"
-                  checked={form.inputType === "auto"}
-                  onChange={() => onInputTypeChange(form, "auto")}
-                  disabled={form.loading}
-                />
-                <span>Auto (from photo)</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="today"
-                  checked={form.inputType === "today"}
-                  onChange={() => onInputTypeChange(form, "today")}
-                  disabled={form.loading}
-                />
-                <span>Today</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="date"
-                  checked={form.inputType === "date"}
-                  onChange={() => onInputTypeChange(form, "date")}
-                  disabled={form.loading}
-                />
-                <span>Specific Date</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="age"
-                  checked={form.inputType === "age"}
-                  onChange={() => onInputTypeChange(form, "age")}
-                  disabled={form.loading || form.selectedPersonIds.length === 0}
-                />
-                <span>
-                  At Age {form.selectedPersonIds.length === 0 && "(requires person selection)"}
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {form.inputType === "date" && (
-            <div className="form-group">
-              <label htmlFor="date">Date</label>
-              <input
-                id="date"
-                type="date"
-                {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                max={new Date().toISOString().split("T")[0]}
-                required
-                disabled={form.loading}
-              />
-            </div>
-          )}
-
-          {form.inputType === "age" && (
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label htmlFor="ageYears">Age (Years)</label>
-                <input
-                  id="ageYears"
-                  type="number"
-                  min="0"
-                  max="100"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
-                  placeholder="5"
-                  required
-                  disabled={form.loading}
-                />
-              </div>
-              <div className="form-group flex-1">
-                <label htmlFor="ageMonths">Months</label>
-                <input
-                  id="ageMonths"
-                  type="number"
-                  min="0"
-                  max="11"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
-                  placeholder="0"
-                  disabled={form.loading}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="form-actions">
-            <a href="/dashboard" className="btn btn-secondary">
-              Cancel
+        <div className="entry-actions">
+          {!hasItems && (
+            <a href={returnPath("/dashboard")} className="btn btn-secondary" onClick={cancel}>
+              {copy.measurement.cancel}
             </a>
-            <button
-              type="submit"
-              className="btn btn-primary auth-submit"
-              disabled={form.loading || pendingPhotos(form.photos).length === 0}
-            >
-              {submitLabel(form)}
-            </button>
-          </div>
-        </form>
-
-        {form.title && hasPhotos && (
-          <div className="photo-preview">
-            <h3>Preview</h3>
-            <p>
-              <strong>{form.title}</strong>
-              {form.selectedPersonIds.length > 0 && (
-                <span>
-                  {" "}
-                  -{" "}
-                  {form.selectedPersonIds
-                    .map(id => {
-                      const person = people.find(p => p.id === parseInt(id));
-                      return person?.name;
-                    })
-                    .filter(Boolean)
-                    .join(", ")}
-                </span>
-              )}
-              {form.inputType === "today" && <span> (today)</span>}
-              {form.inputType === "date" && form.photoDate && (
-                <span> ({new Date(form.photoDate).toLocaleDateString()})</span>
-              )}
-              {form.inputType === "age" && form.ageYears && (
-                <span>
-                  {" "}
-                  (age {form.ageYears}
-                  {form.ageMonths ? `.${form.ageMonths}` : ""} years)
-                </span>
-              )}
-            </p>
-            {form.description && <p className="preview-description">{form.description}</p>}
-          </div>
-        )}
-      </div>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={!hasItems || form.finishing}>
+            {form.finishing
+              ? busy
+                ? `${copy.photos.uploading}…`
+                : copy.photos.finishing
+              : copy.photos.done}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

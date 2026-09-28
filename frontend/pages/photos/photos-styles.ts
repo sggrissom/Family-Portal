@@ -109,25 +109,9 @@ block(`
 `);
 
 block(`
-.photos-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-`);
-
-block(`
 .photos-count {
   font-size: 14px;
   color: var(--muted);
-}
-`);
-
-block(`
-.photos-actions {
-  display: flex;
-  gap: 12px;
 }
 `);
 
@@ -144,16 +128,6 @@ block(`
 
   .photo-info {
     padding: 10px 12px;
-  }
-
-  .photos-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-  }
-
-  .photos-actions {
-    justify-content: center;
   }
 }
 `);

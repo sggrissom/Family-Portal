@@ -442,3 +442,59 @@ func ListActivityVocabulary(ctx *vbeam.Context, req ListActivityVocabularyReques
 	resp.Hosts = hosts.sorted()
 	return
 }
+
+type TimelineAppearance struct {
+	Detail    AppearanceDetail `json:"detail"`
+	PersonIds []int            `json:"personIds"`
+}
+
+// timelineAppearances is every appearance by the given people that inWindow
+// accepts, once each however many of them were in the entry.
+func timelineAppearances(tx *vbolt.Tx, user User, people []Person, inWindow func(time.Time) bool) []TimelineAppearance {
+	result := []TimelineAppearance{}
+	byAppearance := map[int]int{}
+	events := eventCache{}
+	entries := entryCache{}
+
+	for _, person := range people {
+		if !CanAccessPerson(tx, user, person, ScopeActivities, AccessView) {
+			continue
+		}
+		for _, member := range GetPersonEntryMembers(tx, person.Id) {
+			entry := entries.get(tx, member.EntryId)
+			if entry.Id == 0 || !canAccessEntry(tx, user, entry, AccessView) {
+				continue
+			}
+			for _, appearance := range GetEntryAppearances(tx, entry.Id) {
+				if i, seen := byAppearance[appearance.Id]; seen {
+					result[i].PersonIds = append(result[i].PersonIds, person.Id)
+					continue
+				}
+				event := events.get(tx, appearance.EventId)
+				when := appearance.OccurredAt
+				if when.IsZero() {
+					when = event.StartDate
+				}
+				if !inWindow(when) {
+					continue
+				}
+				byAppearance[appearance.Id] = len(result)
+				result = append(result, TimelineAppearance{
+					Detail: AppearanceDetail{
+						Appearance: appearance,
+						Results:    sortResults(GetAppearanceResults(tx, appearance.Id)),
+						PhotoIds:   visiblePhotoIds(tx, user, GetAppearancePhotoIds(tx, appearance.Id)),
+						Entry:      entry,
+						Event:      event,
+					},
+					PersonIds: []int{person.Id},
+				})
+			}
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return appearanceOrder(result[i].Detail, result[j].Detail)
+	})
+	return result
+}

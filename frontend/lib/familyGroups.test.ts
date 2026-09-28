@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as server from "@app/server";
-import { groupFamily } from "@app/lib/familyGroups";
+import { chipLabels, chipOrder, groupFamily } from "@app/lib/familyGroups";
 
 let nextRelationId = 1;
 const parent = (fromId: number, toId: number): server.Relation => ({
@@ -115,5 +115,31 @@ describe("groupFamily", () => {
 
   it("returns no groups for an empty family", () => {
     expect(groupFamily([], [])).toEqual([]);
+  });
+});
+
+describe("chipOrder", () => {
+  const cousin = { ...person(6, "Cousin", "2011-01-01"), familyId: 2 };
+  const due = { ...person(7, "Due", "2027-01-01"), isPregnancy: true };
+  const loner = person(8, "Loner", "1990-01-01");
+
+  it("puts the children first, then older generations, then linked households", () => {
+    const order = chipOrder(
+      [dad, mom, ann, ben, gran, cousin, due, loner],
+      [parent(5, 1), parent(1, 3), parent(2, 3), parent(1, 4), parent(2, 4), partner(1, 2)],
+      1
+    );
+    expect(order.map(p => p.name)).toEqual(["Ann", "Ben", "Dad", "Mom", "Gran", "Loner", "Cousin"]);
+  });
+});
+
+describe("chipLabels", () => {
+  it("uses first names unless two people share one", () => {
+    const labels = chipLabels([
+      person(1, "Ann Smith", "2010-01-01"),
+      person(2, "Ben Smith", "2012-01-01"),
+      person(3, "Ben Jones", "2011-01-01"),
+    ]);
+    expect([...labels.values()]).toEqual(["Ann", "Ben Smith", "Ben Jones"]);
   });
 });

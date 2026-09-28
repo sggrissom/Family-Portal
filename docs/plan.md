@@ -13,7 +13,7 @@ existing features go here as they're found.
 
 - [UI redesign](plans/ui-redesign.md): navigation, fast entry, a dashboard
   worth opening, and "at this age" comparison in place of the compare page.
-  The web design is the reference the iOS app copies.
+  The web side has shipped; the iOS app follows it, one phase at a time.
 
 ## Future
 

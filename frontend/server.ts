@@ -33,16 +33,19 @@ export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
 // Errors
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -52,9 +55,7 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
 
 export interface CreateAccountRequest {
     name: string
@@ -334,12 +335,14 @@ export interface GetFamilyTimelineRequest {
     to: string
     skipMilestones: boolean
     skipPhotos: boolean
+    includeActivities: boolean
 }
 
 export interface GetFamilyTimelineResponse {
     people: FamilyTimelineItem[]
     relations: Relation[]
     years: number[]
+    appearances: TimelineAppearance[]
 }
 
 export interface GetPersonRelationsRequest {
@@ -908,6 +911,41 @@ export interface FaceIdsRequest {
 
 export interface FaceIdsResponse {
     updated: number
+}
+
+export interface GetDashboardRequest {
+    today: string
+}
+
+export interface GetDashboardResponse {
+    today: string
+    people: Person[]
+    relations: Relation[]
+    nudges: DashboardNudge[]
+    seasons: DashboardSeason[]
+    onThisDay: DashboardYear[]
+    recent: DashboardRecent
+}
+
+export interface ListOpenEventsRequest {
+    today: string
+}
+
+export interface ListOpenEventsResponse {
+    events: OpenEvent[]
+}
+
+export interface GetSameAgeRequest {
+    ageMonths: number | null
+    fromPersonId: number
+    today: string
+}
+
+export interface GetSameAgeResponse {
+    ageMonths: number
+    fromPersonId: number
+    maxAgeMonths: number
+    rows: SameAgeRow[]
 }
 
 export interface ImportDataRequest {
@@ -1479,6 +1517,11 @@ export interface FamilyTimelineItem {
     photos: Image[]
 }
 
+export interface TimelineAppearance {
+    detail: AppearanceDetail
+    personIds: number[]
+}
+
 export interface RelationView {
     id: number
     personId: number
@@ -1608,6 +1651,49 @@ export interface FaceReviewFamily {
     familyId: number
     name: string
     people: Person[]
+}
+
+export interface DashboardNudge {
+    kind: string
+    key: string
+    text: string
+    personId: number
+    count: number
+}
+
+export interface DashboardSeason {
+    season: SeasonSummary
+    activityName: string
+    event: EventSummary | null
+    eventTiming: string
+    canAddResults: boolean
+}
+
+export interface DashboardYear {
+    yearsAgo: number
+    photos: Image[]
+    milestones: Milestone[]
+}
+
+export interface DashboardRecent {
+    from: string
+    photos: PhotoWithPeople[]
+    milestones: Milestone[]
+    growth: GrowthData[]
+}
+
+export interface OpenEvent {
+    event: EventSummary
+    activityName: string
+}
+
+export interface SameAgeRow {
+    person: Person
+    date: string
+    height: GrowthData | null
+    weight: GrowthData | null
+    milestones: Milestone[]
+    photoIds: number[]
 }
 
 export interface ActivityImportCounts {
@@ -2434,6 +2520,18 @@ export async function RejectFaces(data: FaceIdsRequest): Promise<rpc.Response<Fa
 
 export async function DismissFaces(data: FaceIdsRequest): Promise<rpc.Response<FaceIdsResponse>> {
     return await rpc.call<FaceIdsResponse>('DismissFaces', JSON.stringify(data));
+}
+
+export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Response<GetDashboardResponse>> {
+    return await rpc.call<GetDashboardResponse>('GetDashboard', JSON.stringify(data));
+}
+
+export async function ListOpenEvents(data: ListOpenEventsRequest): Promise<rpc.Response<ListOpenEventsResponse>> {
+    return await rpc.call<ListOpenEventsResponse>('ListOpenEvents', JSON.stringify(data));
+}
+
+export async function GetSameAge(data: GetSameAgeRequest): Promise<rpc.Response<GetSameAgeResponse>> {
+    return await rpc.call<GetSameAgeResponse>('GetSameAge', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {

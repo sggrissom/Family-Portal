@@ -124,6 +124,8 @@ type GetFamilyTimelineRequest struct {
 	To             string `json:"to,omitempty"`
 	SkipMilestones bool   `json:"skipMilestones,omitempty"`
 	SkipPhotos     bool   `json:"skipPhotos,omitempty"`
+	// IncludeActivities adds the family's activity appearances in the window.
+	IncludeActivities bool `json:"includeActivities,omitempty"`
 }
 
 type FamilyTimelineItem struct {
@@ -142,6 +144,8 @@ type GetFamilyTimelineResponse struct {
 	Relations []Relation `json:"relations"`
 	// Years holds every year with an entry, newest first, whatever the window.
 	Years []int `json:"years"`
+	// Appearances is empty unless IncludeActivities was set.
+	Appearances []TimelineAppearance `json:"appearances"`
 }
 
 type Person struct {
@@ -824,6 +828,11 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	}
 
 	resp.Relations = relationsAmong(ctx.Tx, people)
+
+	resp.Appearances = []TimelineAppearance{}
+	if req.IncludeActivities {
+		resp.Appearances = timelineAppearances(ctx.Tx, user, people, inWindow)
+	}
 
 	resp.Years = make([]int, 0, len(years))
 	for year := range years {

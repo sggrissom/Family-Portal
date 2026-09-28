@@ -51,6 +51,7 @@ describe("mergeTimeline", () => {
     people,
     relations: [],
     years: [2024, 2023],
+    appearances: [],
   });
 
   it("appends a window's entries to each person once", () => {
@@ -62,5 +63,23 @@ describe("mergeTimeline", () => {
   it("keeps a scope the caller can't see as null", () => {
     const merged = mergeTimeline(timeline([item([], null)]), timeline([item([], null)]));
     expect(merged.people[0].photos).toBeNull();
+  });
+});
+
+describe("mergeTimeline appearances", () => {
+  const appearance = (id: number): server.TimelineAppearance => ({
+    detail: { appearance: { id } } as server.AppearanceDetail,
+    personIds: [1],
+  });
+  const base = (appearances: server.TimelineAppearance[]): server.GetFamilyTimelineResponse => ({
+    people: [],
+    relations: [],
+    years: [],
+    appearances,
+  });
+
+  it("adds a year's appearances once", () => {
+    const merged = mergeTimeline(base([appearance(1)]), base([appearance(1), appearance(2)]));
+    expect(merged.appearances.map(a => a.detail.appearance.id)).toEqual([1, 2]);
   });
 });

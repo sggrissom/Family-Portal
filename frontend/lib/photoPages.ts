@@ -20,7 +20,14 @@ export function photosRequest(
 export function timelineRequest(
   fields: Partial<server.GetFamilyTimelineRequest> = {}
 ): server.GetFamilyTimelineRequest {
-  return { from: "", to: "", skipMilestones: false, skipPhotos: false, ...fields };
+  return {
+    from: "",
+    to: "",
+    skipMilestones: false,
+    skipPhotos: false,
+    includeActivities: false,
+    ...fields,
+  };
 }
 
 // Timeline entries are bucketed by UTC year on the server, so the client has to
@@ -94,5 +101,11 @@ export function mergeTimeline(
         photos: mergeById(item.photos, add.photos),
       };
     }),
+    appearances: [
+      ...(base.appearances ?? []),
+      ...(more.appearances ?? []).filter(
+        a => !(base.appearances ?? []).some(b => b.detail.appearance.id === a.detail.appearance.id)
+      ),
+    ],
   };
 }

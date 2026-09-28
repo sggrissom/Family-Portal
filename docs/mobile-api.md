@@ -332,6 +332,7 @@ Growth records, milestones, and photo dates take an `inputType`:
 | `"today"` | none | `time.Now()` — **the server's clock, in the server's zone** |
 | `"date"` | `measurementDate: "YYYY-MM-DD"` | parsed as given |
 | `"age"` | `ageYears`, `ageMonths` (0–11) | birthday + that offset |
+| `"keep"` | none | `UpdatePhoto` only: the photo's date is left as it is |
 
 **Send `"date"` with the device's local calendar date. Never send `"today"`.**
 The server is not in the user's time zone, so `"today"` from a phone at 8pm can
@@ -395,6 +396,11 @@ user believes they entered.
   windowed, so merge windows per person by entry id.
 - `skipMilestones` / `skipPhotos` send those arrays as `null`, the same as for
   a person whose scope the caller can't see.
+- `includeActivities: true` fills `appearances`: each activity appearance in
+  the window once, as `{detail, personIds}`, where `detail` is the same
+  `AppearanceDetail` that `GetPersonSeason` returns and `personIds` are the
+  visible people in the entry. An appearance with no `occurredAt` is dated by
+  its event's start. Without the flag, `appearances` is an empty array.
 
 Every other list proc returns the whole set: `ListPeople`,
 `GetPersonMilestones`, `ListTags`. There is no cursor and no total count.

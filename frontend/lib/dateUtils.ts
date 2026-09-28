@@ -108,3 +108,14 @@ export const formatRelativeTime = (timestamp: string, fallback?: string): string
 
   return `${Math.floor(hours / 24)}d ago`;
 };
+
+export const formatLongDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+};
