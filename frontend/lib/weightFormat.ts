@@ -1,6 +1,9 @@
 export const OZ_PER_LB = 16;
 const LB_OZ_MAX_AGE_MONTHS = 24;
 const LB_OZ_MAX_LBS = 25;
+const IN_PER_FT = 12;
+const FT_IN_MIN_AGE_MONTHS = 24;
+const FT_IN_MIN_INCHES = 36;
 
 export function prefersLbOz(value: number, unit: string, ageMonths?: number | null): boolean {
   if (unit !== "lbs") return false;
@@ -36,7 +39,28 @@ export function formatLbOz(lbs: number): string {
   return `${lb} lb ${oz} oz`;
 }
 
+export function prefersFtIn(value: number, unit: string, ageMonths?: number | null): boolean {
+  if (unit !== "in") return false;
+  if (ageMonths !== undefined && ageMonths !== null && ageMonths >= 0) {
+    return ageMonths >= FT_IN_MIN_AGE_MONTHS;
+  }
+  return value >= FT_IN_MIN_INCHES;
+}
+
+export function formatFtIn(inches: number): string {
+  let ft = Math.floor(inches / IN_PER_FT);
+  let rest = roundTo(inches - ft * IN_PER_FT, 2);
+  if (rest >= IN_PER_FT) {
+    ft += 1;
+    rest -= IN_PER_FT;
+  }
+  if (ft === 0) return `${rest} in`;
+  if (rest === 0) return `${ft} ft`;
+  return `${ft} ft ${rest} in`;
+}
+
 export function formatMeasurement(value: number, unit: string, ageMonths?: number | null): string {
   if (prefersLbOz(value, unit, ageMonths)) return formatLbOz(value);
+  if (prefersFtIn(value, unit, ageMonths)) return formatFtIn(value);
   return `${roundTo(value, 2)} ${unit}`;
 }

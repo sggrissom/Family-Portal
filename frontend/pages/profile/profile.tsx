@@ -243,6 +243,8 @@ function isActive(season: server.SeasonSummary, today: string): boolean {
   return start <= today && (open || end >= today);
 }
 
+const STALE_METRIC_MONTHS = 12;
+
 const Snapshot = ({
   person,
   growth,
@@ -263,13 +265,16 @@ const Snapshot = ({
     { metric: "height", type: server.Height, label: copy.measurement.height },
     { metric: "weight", type: server.Weight, label: copy.measurement.weight },
   ];
-  const latest = metrics
+  const readings = metrics
     .map(m => ({ ...m, record: latestOf(growth, m.type) }))
     .filter(m => m.record);
-  const lastMeasured = latest
+  const lastMeasured = readings
     .map(m => m.record!.measurementDate)
     .sort()
     .pop();
+  const latest = readings.filter(
+    m => monthsOld(m.record!.measurementDate, lastMeasured!) <= STALE_METRIC_MONTHS
+  );
   const sibling = (sameAge?.rows ?? []).find(r => r.person.id !== person.id && r.height);
   const seasons = (activities.seasons ?? []).filter(s => isActive(s, today));
 

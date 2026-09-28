@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatFtIn,
   formatLbOz,
   formatMeasurement,
   lbOzToLbs,
+  prefersFtIn,
   prefersLbOz,
   splitLbOz,
 } from "@app/lib/weightFormat";
@@ -43,6 +45,30 @@ describe("prefersLbOz", () => {
   });
 });
 
+describe("prefersFtIn", () => {
+  it("uses age when known", () => {
+    expect(prefersFtIn(40, "in", 12)).toBe(false);
+    expect(prefersFtIn(33, "in", 24)).toBe(true);
+  });
+
+  it("falls back to height when age is unknown", () => {
+    expect(prefersFtIn(30, "in")).toBe(false);
+    expect(prefersFtIn(36, "in", null)).toBe(true);
+  });
+
+  it("never applies to other units", () => {
+    expect(prefersFtIn(170, "cm", 400)).toBe(false);
+  });
+});
+
+describe("formatFtIn", () => {
+  it("omits zero parts and carries rounded inches", () => {
+    expect(formatFtIn(72)).toBe("6 ft");
+    expect(formatFtIn(11.5)).toBe("11.5 in");
+    expect(formatFtIn(71.999)).toBe("6 ft");
+  });
+});
+
 describe("formatMeasurement", () => {
   it("formats infant weights as lb/oz", () => {
     expect(formatMeasurement(7.5, "lbs", 0)).toBe("7 lb 8 oz");
@@ -50,6 +76,12 @@ describe("formatMeasurement", () => {
 
   it("rounds other values to two decimals", () => {
     expect(formatMeasurement(150.53125, "lbs", 400)).toBe("150.53 lbs");
-    expect(formatMeasurement(67.5, "in")).toBe("67.5 in");
+    expect(formatMeasurement(20.5, "in", 0)).toBe("20.5 in");
+    expect(formatMeasurement(170.25, "cm", 400)).toBe("170.25 cm");
+  });
+
+  it("formats heights from age two as ft/in", () => {
+    expect(formatMeasurement(64.75, "in", 400)).toBe("5 ft 4.75 in");
+    expect(formatMeasurement(67.5, "in")).toBe("5 ft 7.5 in");
   });
 });

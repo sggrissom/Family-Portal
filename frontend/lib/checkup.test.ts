@@ -139,7 +139,7 @@ describe("describeLast", () => {
     ];
     expect(latestOf(list, server.Height)?.id).toBe(2);
     expect(describeLast(latestOf(list, server.Height), 38, now)).toBe(
-      "last: 37.75 in, 4 months ago"
+      "last: 3 ft 1.75 in, 4 months ago"
     );
   });
 
