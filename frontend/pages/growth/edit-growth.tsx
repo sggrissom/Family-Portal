@@ -43,7 +43,6 @@ export function view(
       <Header isHome={false} />
       <main id="app" className="add-growth-container">
         <GrowthForm
-          mode="edit"
           growthData={data.growthData}
           onCancel={() => core.setRoute(`/profile/${data.growthData!.personId}`)}
           onSuccess={personId => core.setRoute(`/profile/${personId}`)}

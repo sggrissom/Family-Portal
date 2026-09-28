@@ -18,7 +18,6 @@ import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import {
   firstUnloadedYear,
-  isShownYear,
   mergeTimeline,
   timelineRequest,
   yearRange,

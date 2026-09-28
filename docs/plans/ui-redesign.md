@@ -507,6 +507,33 @@ Each phase ships on its own and leaves the app coherent.
 `tests/ui/smoke.spec.ts` navigates by clicking (see the Playwright notes), so
 phase 1 changes its selectors. Update it in the same PR.
 
+## Status
+
+All seven web phases are built on the `ui-*` branch stack. Where the build
+differs from the text above:
+
+- **Backend procs.** `GetDashboard`, `ListOpenEvents` (the add sheet's Result
+  option), `GetSameAge`, and `includeActivities` on `GetFamilyTimeline` were
+  built with their phases rather than left as fallbacks. `UpdatePhoto` also
+  takes `inputType: "keep"`, so a caption or tag edit doesn't reset the EXIF
+  time. Only `includeActivities` and `keep` are in `docs/mobile-api.md` so far.
+- **Dates.** Entry forms send today as the device's local date with
+  `inputType: "date"`, never `"today"`.
+- **Same age.** `ageMonths` is nullable: null means the person's current age,
+  0 means birth. Linked households are included; people without records
+  collapse to one line.
+- **Person page.** The at-this-age strip hides for the oldest child rather than
+  flipping to a younger sibling's age.
+- **Nudges.** Measure nudges only fire for children who have been measured
+  before, at 3 months under two and 6 months after. Birthday nudges cover
+  everyone visible, including linked households.
+- **Shared logic** for the app to port lives in `lib/` with vitest coverage:
+  `when`, `checkup`, `familyGroups` (chip order and labels), `daySummary`,
+  `story`, `history`, `sameAge`, `ageChart`, `familyStrip`, `appNav`.
+  Wording is in `lib/copy.ts`.
+- **Not done.** `ComparePeople` is still registered, with no web caller.
+  History, like the old timeline, only shows photos tagged with someone.
+
 ## Open questions
 
 - **Chat in the bottom bar**, or in the account menu with an unread badge on

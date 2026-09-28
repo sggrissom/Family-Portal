@@ -1,13 +1,9 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
 import * as server from "../../server";
-import { personSubtitle } from "../../lib/routeHelpers";
-import { ageInMonths, isValidBirthday } from "../../lib/growthPercentiles";
 import { formatLbOz, lbOzToLbs, OZ_PER_LB, prefersLbOz, splitLbOz } from "../../lib/weightFormat";
 
 type GrowthFormData = {
-  selectedPersonId: string;
   measurementType: string;
   value: string;
   unit: string;
@@ -25,35 +21,22 @@ type GrowthFormData = {
   loading: boolean;
 };
 
-const editLbOz = (growthData?: server.GrowthData) =>
-  !!growthData &&
-  growthData.measurementType === server.Weight &&
-  prefersLbOz(growthData.value, growthData.unit);
+const editLbOz = (growthData: server.GrowthData) =>
+  growthData.measurementType === server.Weight && prefersLbOz(growthData.value, growthData.unit);
 
 const useGrowthForm = vlens.declareHook(
-  (mode: "add" | "edit", personId?: string, growthData?: server.GrowthData): GrowthFormData => ({
-    selectedPersonId: personId || growthData?.personId?.toString() || "",
-    measurementType:
-      mode === "edit" && growthData?.measurementType === server.Height
-        ? "height"
-        : mode === "edit"
-          ? "weight"
-          : "height",
-    value: growthData?.value?.toString() || "",
-    unit: growthData?.unit || "in",
+  (growthData: server.GrowthData): GrowthFormData => ({
+    measurementType: growthData.measurementType === server.Height ? "height" : "weight",
+    value: growthData.value.toString(),
+    unit: growthData.unit || "in",
     heightInputMode: "decimal",
     feet: "",
     inches: "",
-    weightInputMode: mode === "edit" && editLbOz(growthData) ? "lb-oz" : "decimal",
-    pounds:
-      mode === "edit" && editLbOz(growthData) ? splitLbOz(growthData!.value).lb.toString() : "",
-    ounces:
-      mode === "edit" && editLbOz(growthData) ? splitLbOz(growthData!.value).oz.toString() : "",
-    inputType: mode === "edit" ? "date" : "today",
-    measurementDate:
-      mode === "edit" && growthData?.measurementDate
-        ? growthData.measurementDate.split("T")[0]
-        : "",
+    weightInputMode: editLbOz(growthData) ? "lb-oz" : "decimal",
+    pounds: editLbOz(growthData) ? splitLbOz(growthData.value).lb.toString() : "",
+    ounces: editLbOz(growthData) ? splitLbOz(growthData.value).oz.toString() : "",
+    inputType: "date",
+    measurementDate: growthData.measurementDate ? growthData.measurementDate.split("T")[0] : "",
     ageYears: "",
     ageMonths: "",
     error: "",
@@ -62,22 +45,14 @@ const useGrowthForm = vlens.declareHook(
 );
 
 async function onSubmitGrowth(
-  mode: "add" | "edit",
   form: GrowthFormData,
-  growthId: number | undefined,
+  growthData: server.GrowthData,
   onSuccess: (personId: number) => void,
   event: Event
 ) {
   event.preventDefault();
   form.loading = true;
   form.error = "";
-
-  if (!form.selectedPersonId) {
-    form.error = "Please select a family member";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
 
   let actualValue: number;
   if (
@@ -129,55 +104,25 @@ async function onSubmitGrowth(
   }
 
   try {
-    if (mode === "add") {
-      const request: server.AddGrowthDataRequest = {
-        personId: parseInt(form.selectedPersonId),
-        measurementType: form.measurementType,
-        value: actualValue,
-        unit: form.unit,
-        inputType: form.inputType,
-        measurementDate: form.inputType === "date" ? form.measurementDate : null,
-        ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
-        ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
-      };
+    const request: server.UpdateGrowthDataRequest = {
+      id: growthData.id,
+      measurementType: form.measurementType,
+      value: actualValue,
+      unit: form.unit,
+      inputType: form.inputType,
+      measurementDate: form.inputType === "date" ? form.measurementDate : null,
+      ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
+      ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
+    };
 
-      let [resp, err] = await server.AddGrowthData(request);
+    const [resp, err] = await server.UpdateGrowthData(request);
 
-      if (resp) {
-        onSuccess(parseInt(form.selectedPersonId));
-      } else {
-        form.loading = false;
-        form.error = err || "Failed to save growth measurement";
-        vlens.scheduleRedraw();
-      }
+    if (resp) {
+      onSuccess(growthData.personId);
     } else {
-      if (!growthId) {
-        form.error = "Growth record ID is missing";
-        form.loading = false;
-        vlens.scheduleRedraw();
-        return;
-      }
-
-      const request: server.UpdateGrowthDataRequest = {
-        id: growthId,
-        measurementType: form.measurementType,
-        value: actualValue,
-        unit: form.unit,
-        inputType: form.inputType,
-        measurementDate: form.inputType === "date" ? form.measurementDate : null,
-        ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
-        ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
-      };
-
-      let [resp, err] = await server.UpdateGrowthData(request);
-
-      if (resp) {
-        onSuccess(parseInt(form.selectedPersonId));
-      } else {
-        form.loading = false;
-        form.error = err || "Failed to update growth measurement";
-        vlens.scheduleRedraw();
-      }
+      form.loading = false;
+      form.error = err || "Failed to update growth measurement";
+      vlens.scheduleRedraw();
     }
   } catch (error) {
     form.loading = false;
@@ -192,21 +137,11 @@ function isLbOzEntry(form: GrowthFormData): boolean {
   );
 }
 
-function isInfant(person: server.Person | undefined): boolean {
-  if (!person || !isValidBirthday(person.birthday)) return false;
-  return prefersLbOz(0, "lbs", ageInMonths(person.birthday, new Date()));
-}
-
-function onMeasurementTypeChange(
-  form: GrowthFormData,
-  people: server.Person[] | undefined,
-  newType: string
-) {
+function onMeasurementTypeChange(form: GrowthFormData, newType: string) {
   form.measurementType = newType;
   form.unit = newType === "height" ? "in" : "lbs";
   form.heightInputMode = "decimal";
-  const person = people?.find(p => p.id === parseInt(form.selectedPersonId));
-  form.weightInputMode = isInfant(person) ? "lb-oz" : "decimal";
+  form.weightInputMode = "decimal";
   form.value = "";
   form.feet = "";
   form.inches = "";
@@ -237,23 +172,13 @@ function onHeightInputModeChange(form: GrowthFormData, newMode: string) {
 }
 
 interface GrowthFormProps {
-  mode: "add" | "edit";
-  personId?: string;
-  growthData?: server.GrowthData;
-  people?: server.Person[];
+  growthData: server.GrowthData;
   onCancel: () => void;
   onSuccess: (personId: number) => void;
 }
 
-export const GrowthForm = ({
-  mode,
-  personId,
-  growthData,
-  people,
-  onCancel,
-  onSuccess,
-}: GrowthFormProps) => {
-  const form = useGrowthForm(mode, personId, growthData);
+export const GrowthForm = ({ growthData, onCancel, onSuccess }: GrowthFormProps) => {
+  const form = useGrowthForm(growthData);
 
   const getUnitOptions = () => {
     if (form.measurementType === "height") {
@@ -266,20 +191,12 @@ export const GrowthForm = ({
     }
   };
 
-  const selectedPerson =
-    people?.find(p => p.id === parseInt(form.selectedPersonId)) ||
-    (mode === "edit" && growthData ? { id: growthData.personId, name: "Selected Person" } : null);
-
   return (
     <div className="add-growth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>{mode === "add" ? "Measure Now" : "Edit Growth Measurement"}</h1>
-          <p>
-            {mode === "add"
-              ? "Track height or weight progress for your family"
-              : "Update this growth measurement record"}
-          </p>
+          <h1>Edit Growth Measurement</h1>
+          <p>Update this growth measurement record</p>
         </div>
 
         {form.error && (
@@ -290,27 +207,8 @@ export const GrowthForm = ({
 
         <form
           className="auth-form growth-form"
-          onSubmit={vlens.cachePartial(onSubmitGrowth, mode, form, growthData?.id, onSuccess)}
+          onSubmit={vlens.cachePartial(onSubmitGrowth, form, growthData, onSuccess)}
         >
-          {mode === "add" && people && (
-            <div className="form-group">
-              <label htmlFor="person">Family Member</label>
-              <select
-                id="person"
-                {...vlens.attrsBindInput(vlens.ref(form, "selectedPersonId"))}
-                required
-                disabled={form.loading}
-              >
-                <option value="">Select a family member</option>
-                {people.map(person => (
-                  <option key={person.id} value={person.id}>
-                    {person.name} ({personSubtitle(person)})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <fieldset className="form-group growth-choice-group">
             <legend>Measurement Type</legend>
             <div className="radio-group growth-radio-group">
@@ -320,7 +218,7 @@ export const GrowthForm = ({
                   name="measurementType"
                   value="height"
                   checked={form.measurementType === "height"}
-                  onChange={() => onMeasurementTypeChange(form, people, "height")}
+                  onChange={() => onMeasurementTypeChange(form, "height")}
                   disabled={form.loading}
                 />
                 <span>Height</span>
@@ -331,7 +229,7 @@ export const GrowthForm = ({
                   name="measurementType"
                   value="weight"
                   checked={form.measurementType === "weight"}
-                  onChange={() => onMeasurementTypeChange(form, people, "weight")}
+                  onChange={() => onMeasurementTypeChange(form, "weight")}
                   disabled={form.loading}
                 />
                 <span>Weight</span>
@@ -603,66 +501,58 @@ export const GrowthForm = ({
               Cancel
             </button>
             <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
-              {form.loading
-                ? "Saving..."
-                : mode === "add"
-                  ? "Save Measurement"
-                  : "Update Measurement"}
+              {form.loading ? "Saving..." : "Update Measurement"}
             </button>
           </div>
         </form>
 
-        {selectedPerson &&
-          (form.value || form.feet || form.inches || form.pounds || form.ounces) && (
-            <div className="measurement-preview">
-              <h3>Preview</h3>
-              <p>
-                {mode === "add" && <strong>{selectedPerson.name}</strong>}
-                {mode === "add" && " - "}
-                {mode === "edit" && "Updated "}
-                {form.measurementType}:{" "}
-                {form.measurementType === "height" &&
-                form.unit === "in" &&
-                form.heightInputMode === "feet-inches" ? (
-                  <>
-                    {form.feet || "0"} ft {form.inches || "0"} in
-                    {form.feet || form.inches ? (
-                      <span style="opacity: 0.7">
-                        {" "}
-                        (
-                        {(
-                          (parseFloat(form.feet) || 0) * 12 +
-                          (parseFloat(form.inches) || 0)
-                        ).toFixed(2)}{" "}
-                        in total)
-                      </span>
-                    ) : null}
-                  </>
-                ) : isLbOzEntry(form) ? (
-                  <>
-                    {formatLbOz(
-                      lbOzToLbs(parseFloat(form.pounds) || 0, parseFloat(form.ounces) || 0)
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {form.value} {form.unit}
-                  </>
-                )}
-                {form.inputType === "today" && <span> today</span>}
-                {form.inputType === "date" && form.measurementDate && (
-                  <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
-                )}
-                {form.inputType === "age" && form.ageYears && (
-                  <span>
-                    {" "}
-                    at age {form.ageYears}
-                    {form.ageMonths ? `.${form.ageMonths}` : ""} years
-                  </span>
-                )}
-              </p>
-            </div>
-          )}
+        {(form.value || form.feet || form.inches || form.pounds || form.ounces) && (
+          <div className="measurement-preview">
+            <h3>Preview</h3>
+            <p>
+              Updated
+              {form.measurementType}:{" "}
+              {form.measurementType === "height" &&
+              form.unit === "in" &&
+              form.heightInputMode === "feet-inches" ? (
+                <>
+                  {form.feet || "0"} ft {form.inches || "0"} in
+                  {form.feet || form.inches ? (
+                    <span style="opacity: 0.7">
+                      {" "}
+                      (
+                      {((parseFloat(form.feet) || 0) * 12 + (parseFloat(form.inches) || 0)).toFixed(
+                        2
+                      )}{" "}
+                      in total)
+                    </span>
+                  ) : null}
+                </>
+              ) : isLbOzEntry(form) ? (
+                <>
+                  {formatLbOz(
+                    lbOzToLbs(parseFloat(form.pounds) || 0, parseFloat(form.ounces) || 0)
+                  )}
+                </>
+              ) : (
+                <>
+                  {form.value} {form.unit}
+                </>
+              )}
+              {form.inputType === "today" && <span> today</span>}
+              {form.inputType === "date" && form.measurementDate && (
+                <span> on {new Date(form.measurementDate).toLocaleDateString()}</span>
+              )}
+              {form.inputType === "age" && form.ageYears && (
+                <span>
+                  {" "}
+                  at age {form.ageYears}
+                  {form.ageMonths ? `.${form.ageMonths}` : ""} years
+                </span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
