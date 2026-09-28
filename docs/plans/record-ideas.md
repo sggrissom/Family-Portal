@@ -5,29 +5,29 @@ a tool for running one. Nothing here is committed. It's a list to argue over.
 Each idea notes what it builds on, and "new entity" means the full checklist in
 [`../plan.md`](../plan.md#adding-a-new-domain-entity).
 
+## Status and foundations
+
+The web redesign has shipped On this day, birthday highlights, and timeline
+filters; those are no longer standalone future ideas here. The redesign
+document tracks follow-up and native parity.
+
+[Approximate dates and ages](approximate-dates.md) has its own plan. It is a
+foundation for old photos and cross-generation comparisons, with manual entry
+first and optional, reviewed AI assistance later.
+
 ## Getting more out of what's already recorded
 
 These add no new data. They present what's already stored in a new way, which
 makes them the cheapest ideas on this list.
 
-- **On this day.** A dashboard card showing what happened on this date in past
-  years: milestones, photos, measurements. Optionally sent as a push or
-  in a weekly email. For a record that's years deep, this is probably the
-  single best reason to open the app.
 - **Year in review per child.** One page per child per year, generated from
   existing data: growth over the year, milestones, the best photos, seasons and
   results. It works naturally as a birthday-week page ("Age 7").
-- **Upcoming birthdays.** Birthdays already show on the family timeline. Add
-  them to the dashboard with the age they're turning, including linked
-  households' people (grandparents).
 - **Search everything.** Search currently covers milestones only. Extend it to
   photo titles and descriptions, activity notes, entries, and events.
-- **Timeline filters.** Filter the family and person timelines by tag, type,
-  and date range. Tags exist on milestones and photos but can't narrow a
-  timeline.
 - **Photo series.** A tag like "first day of school" shown as a side-by-side
-  across years or across siblings. The compare page already aligns growth by
-  age, and this is the photo version of the same idea.
+  across years or across siblings. Same age and Growth already provide age-based context;
+  this adds deliberate recurring photo comparisons.
 - **Print / PDF export.** A per-child or per-year book laid out for printing.
   It's the "take your data with you" story in a form Grandma can hold.
 
@@ -41,7 +41,7 @@ makes them the cheapest ideas on this list.
   height and weight today.
 - **Nicknames and a short bio.** A few free-text fields per person: what they
   go by, what they're into right now. They also feed the public summary page
-  in `sharing.md` if that ships.
+  in [Sharing](sharing.md) if that ships.
 - **Dates of death / in memoriam.** Relations and linked households already
   reach grandparents. A multi-generation record needs a way to mark someone as
   passed without deleting them, and the dashboard shouldn't keep listing them
@@ -85,7 +85,7 @@ makes them the cheapest ideas on this list.
   linked households would want most.
 - **Weekly digest email.** A summary of what was added this week, sent to
   opted-in members and linked households. It reuses the mail worker and the
-  "what's new" query that on-this-day already needs.
+  recent-additions query, distinct from historical occurrence dates.
 
 ## Durability
 

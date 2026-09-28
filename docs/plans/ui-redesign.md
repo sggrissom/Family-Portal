@@ -1,5 +1,10 @@
 # UI redesign
 
+Status: the web redesign has shipped. This document retains the original design
+and the implementation notes in [Status](#status); its phases are not an open
+web backlog. Native parity is tracked in the separate iOS repository. See
+[the roadmap](../plan.md) for remaining work and future proposals.
+
 The app grew outward from people, growth, and milestones. Photos, face
 tagging, tags, chat, and activities were each added as their own page, reached
 from their own menu entry. Each one works on its own, but the app doesn't feel

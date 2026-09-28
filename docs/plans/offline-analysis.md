@@ -57,8 +57,8 @@ What that enables:
 - Trip detection: runs of photos far from home over consecutive days become a
   suggested "trip" grouping.
 
-This is unrelated to [live location sharing](location.md): it's only the
-location a photo was taken, which is already in the file. Coordinates should
+This records only the location where a photo was taken, already present in
+the file. Live location tracking is outside the product scope. Coordinates should
 still be visible only to the family, and stripped from any export or share
 that leaves it.
 
