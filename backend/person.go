@@ -18,7 +18,6 @@ func RegisterPersonMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddPerson)
 	vbeam.RegisterProc(app, ListPeople)
 	vbeam.RegisterProc(app, GetPerson)
-	vbeam.RegisterProc(app, ComparePeople)
 	vbeam.RegisterProc(app, UpdatePerson)
 	vbeam.RegisterProc(app, SetProfilePhoto)
 	vbeam.RegisterProc(app, MergePeople)
@@ -100,21 +99,6 @@ type GetPersonResponse struct {
 	GrowthData []GrowthData `json:"growthData"`
 	Milestones []Milestone  `json:"milestones"`
 	Photos     []Image      `json:"photos"`
-}
-
-type ComparePeopleRequest struct {
-	PersonIds []int `json:"personIds"`
-}
-
-type PersonComparisonData struct {
-	Person     Person       `json:"person"`
-	GrowthData []GrowthData `json:"growthData"`
-	Milestones []Milestone  `json:"milestones"`
-	Photos     []Image      `json:"photos"`
-}
-
-type ComparePeopleResponse struct {
-	People []PersonComparisonData `json:"people"`
 }
 
 type GetFamilyTimelineRequest struct {
@@ -499,57 +483,6 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 		for i := range resp.Photos {
 			resp.Photos[i].TagIds = GetPhotoTagIds(ctx.Tx, resp.Photos[i].Id)
 		}
-	}
-
-	return
-}
-
-func ComparePeople(ctx *vbeam.Context, req ComparePeopleRequest) (resp ComparePeopleResponse, err error) {
-	user, authErr := GetAuthUser(ctx)
-	if authErr != nil {
-		err = ErrAuthFailure
-		return
-	}
-
-	if len(req.PersonIds) == 0 {
-		err = errors.New("At least one person ID is required")
-		return
-	}
-
-	if len(req.PersonIds) > 5 {
-		err = errors.New("Cannot compare more than 5 people at once")
-		return
-	}
-
-	resp.People = make([]PersonComparisonData, 0, len(req.PersonIds))
-
-	for _, personId := range req.PersonIds {
-		person := GetPersonById(ctx.Tx, personId)
-
-		if !CanAccessPerson(ctx.Tx, user, person, ScopePeople, AccessView) {
-			err = fmt.Errorf("Person ID %d not found or not in your family", personId)
-			return
-		}
-
-		person.Age = calculateAge(person.Birthday)
-
-		person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
-		comparisonData := PersonComparisonData{Person: person}
-		if CanAccessPerson(ctx.Tx, user, person, ScopeGrowth, AccessView) {
-			comparisonData.GrowthData = GetPersonGrowthDataTx(ctx.Tx, personId)
-		}
-		if CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
-			milestones := GetPersonMilestonesTx(ctx.Tx, personId)
-			for i := range milestones {
-				milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestones[i].Id)
-			}
-			comparisonData.Milestones = milestones
-		}
-		if CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {
-			comparisonData.Photos = GetPersonImages(ctx.Tx, personId)
-		}
-
-		resp.People = append(resp.People, comparisonData)
 	}
 
 	return

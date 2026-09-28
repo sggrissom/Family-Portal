@@ -603,7 +603,7 @@ differs from the text above:
   option), `GetSameAge`, and `includeActivities` on `GetFamilyTimeline` were
   built with their phases rather than left as fallbacks. `UpdatePhoto` also
   takes `inputType: "keep"`, so a caption or tag edit doesn't reset the EXIF
-  time. Only `includeActivities` and `keep` are in `docs/mobile-api.md` so far.
+  time. All of these are documented in `docs/mobile-api.md`.
 - **Dates.** Entry forms send today as the device's local date with
   `inputType: "date"`, never `"today"`.
 - **Same age.** `ageMonths` is nullable: null means the person's current age,
@@ -618,8 +618,10 @@ differs from the text above:
   `when`, `checkup`, `familyGroups` (chip order and labels), `daySummary`,
   `story`, `history`, `sameAge`, `ageChart`, `familyStrip`, `appNav`.
   Wording is in `lib/copy.ts`.
-- **Not done.** `ComparePeople` is still registered, with no web caller.
-  History, like the old timeline, only shows photos tagged with someone.
+- **Compare.** `ComparePeople` is removed; `/compare` still redirects to
+  `/same-age`.
+- **Not done.** History, like the old timeline, only shows photos tagged with
+  someone.
 
 ## Open questions
 

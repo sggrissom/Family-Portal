@@ -265,14 +265,6 @@ export interface GetPersonRequest {
     id: number
 }
 
-export interface ComparePeopleRequest {
-    personIds: number[]
-}
-
-export interface ComparePeopleResponse {
-    people: PersonComparisonData[]
-}
-
 export interface UpdatePersonRequest {
     id: number
     name: string
@@ -1503,13 +1495,6 @@ export interface Relation {
     kind: RelationKind
 }
 
-export interface PersonComparisonData {
-    person: Person
-    growthData: GrowthData[]
-    milestones: Milestone[]
-    photos: Image[]
-}
-
 export interface FamilyTimelineItem {
     person: Person
     growthData: GrowthData[]
@@ -2248,10 +2233,6 @@ export async function ListPeople(data: Empty): Promise<rpc.Response<ListPeopleRe
 
 export async function GetPerson(data: GetPersonRequest): Promise<rpc.Response<GetPersonResponse>> {
     return await rpc.call<GetPersonResponse>('GetPerson', JSON.stringify(data));
-}
-
-export async function ComparePeople(data: ComparePeopleRequest): Promise<rpc.Response<ComparePeopleResponse>> {
-    return await rpc.call<ComparePeopleResponse>('ComparePeople', JSON.stringify(data));
 }
 
 export async function UpdatePerson(data: UpdatePersonRequest): Promise<rpc.Response<GetPersonResponse>> {

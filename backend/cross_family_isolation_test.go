@@ -201,10 +201,6 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 			})
 			return err
 		}},
-		{"ComparePeople", func(ctx *vbeam.Context) error {
-			_, err := ComparePeople(ctx, ComparePeopleRequest{PersonIds: []int{fx.person.Id, fx.ownPerson.Id}})
-			return err
-		}},
 		{"MergePeople", func(ctx *vbeam.Context) error {
 			_, err := MergePeople(ctx, MergePeopleRequest{
 				SourcePersonId: fx.person.Id, TargetPersonId: fx.ownPerson.Id,
