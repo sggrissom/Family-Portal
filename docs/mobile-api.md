@@ -660,7 +660,93 @@ every adult.
 
 ---
 
-## 12. Retries and idempotency
+## 12. Overviews: Home, Same age, open events
+
+Three read-only aggregates the redesigned clients render. The server decides
+what is in them — which nudges exist, which events are open, which records
+count as "at this age" — and a client renders the answer rather than deriving
+it. None of them writes, so none belongs in an offline queue; cache the last
+good response and show it, marked stale, when offline.
+
+All three take the **device's** calendar day as `today` (`YYYY-MM-DD`). The
+server's own date is a UTC day and can be a day off from the family's (§5). An
+unparseable or empty `today` falls back to the server's UTC day.
+
+### `GetDashboard`
+
+```json
+{"today": "2026-09-27"}
+```
+
+```json
+{
+  "today": "2026-09-27",
+  "people": [Person], "relations": [Relation],
+  "nudges": [{"kind": "birthday", "key": "birthday:4:2026", "text": "Mia turns 10 tomorrow", "personId": 4, "count": 0}],
+  "seasons": [{"season": SeasonSummary, "activityName": "Dance", "event": EventSummary | null, "eventTiming": "now", "canAddResults": true}],
+  "onThisDay": [{"yearsAgo": 1, "photos": [Image], "milestones": [Milestone]}],
+  "recent": {"from": "2026-09-14", "photos": [PhotoWithPeople], "milestones": [Milestone], "growth": [GrowthData]}
+}
+```
+
+- `today` echoes the day answered for. A cached dashboard whose `today` is not
+  the device's today is stale in the ways that matter: birthdays and open events.
+- `nudges` are ordered by priority. `kind` is `"measure"`, `"birthday"` or
+  `"faces"` today; render `text` for any kind, including ones added later.
+  `key` is stable per occurrence (`measure:<personId>:<lastDay>`,
+  `birthday:<personId>:<year>`, `faces:<count>`), which is what a client
+  remembers when a nudge is dismissed. Dismissals are per device.
+- `seasons` are the seasons in progress today, oldest start first. `event` is
+  the one running today, else the next, else the last, with `eventTiming`
+  `"now"`, `"next"` or `"last"`; it is `null` for a season with no events.
+  `canAddResults` is true when the caller can contribute and the event is in
+  its results window (running, or ended within three days).
+- `onThisDay` has one entry per year back (up to 30) with anything within two
+  days of today's date that year; years with nothing are left out.
+- `recent` covers the last 14 days including today; `from` is its first day.
+  Photos are capped at 120.
+
+### `ListOpenEvents`
+
+```json
+{"today": "2026-09-27"}
+```
+
+```json
+{"events": [{"event": EventSummary, "activityName": "Dance"}]}
+```
+
+Events whose results can be entered now — running today, or ended within the
+last three days — in families the caller can contribute to, newest first. The
+add sheet offers the first two as Result shortcuts.
+
+### `GetSameAge`
+
+```json
+{"ageMonths": 40, "fromPersonId": 7, "today": "2026-09-27"}
+```
+
+```json
+{
+  "ageMonths": 40, "fromPersonId": 7, "maxAgeMonths": 120,
+  "rows": [{"person": Person, "date": "2019-12-04T00:00:00Z", "height": GrowthData | null, "weight": GrowthData | null, "milestones": [Milestone], "photoIds": [1, 2]}]
+}
+```
+
+- `ageMonths` **null** starts from `fromPersonId`'s current age, or — with no
+  person — the youngest own child's. `0` is birth, not "unset". Outside
+  0–1200 the call fails.
+- The response names the age and anchor it settled on. `maxAgeMonths` is the
+  oldest age anyone has reached, which is as far as stepping older goes.
+- One row per person who has reached the age, anchor first, linked households
+  included. Pregnancies and people without a birthday are never rows.
+- Photos and milestones count within half an age step either side of the day
+  the person reached the age; height and weight are the nearest within a
+  whole step. The step is a month under two, three months to six, six after.
+
+---
+
+## 13. Retries and idempotency
 
 **There is none.** No endpoint accepts an idempotency key, and no create
 deduplicates.
@@ -688,7 +774,7 @@ creates, and it will be additive. Do not anticipate it.
 
 ---
 
-## 13. Limits
+## 14. Limits
 
 Exceed one and the response is 429 with `Retry-After` in seconds. Honor the
 header; there is no faster path.
@@ -718,7 +804,7 @@ appearance.
 
 ---
 
-## 14. What is not promised
+## 15. What is not promised
 
 - **No API versioning.** There is no `/v1/`, no deprecation window, and no
   contract test suite. The mitigation is the version gate in §7: when a change
@@ -739,7 +825,7 @@ appearance.
 
 ---
 
-## 15. Before each backend release
+## 16. Before each backend release
 
 The 1.0 plan calls for testing older supported builds against the server. In
 practice that is:

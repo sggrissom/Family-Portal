@@ -16,7 +16,15 @@ var universalLinkPaths = []string{
 	"/chat",
 	"/settings",
 	"/photos",
+	"/dashboard",
+	"/history",
+	"/growth",
+	"/same-age",
+	// Legacy; the app maps these to /history, /growth and /same-age, as
+	// appNav.legacyRedirect does.
 	"/family-timeline",
+	"/family-chart",
+	"/compare",
 	"/profile/*",
 	"/person-activities/*",
 }
