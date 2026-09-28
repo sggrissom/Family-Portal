@@ -18,7 +18,7 @@ const child = {
   birthdate: "2020-06-15",
 };
 
-const measurement = { value: "42.5", unit: "in" };
+const measurement = { value: "42.5", shown: "3 ft 6.5 in" };
 
 // The deployment outlives an attempt and signup refuses an address it has seen,
 // so a retry needs its own.
@@ -128,16 +128,14 @@ test("a new family signs up, adds a person, and records a measurement", async ({
 
   await test.step("saving shows the measurement in context", async () => {
     await expect(page).toHaveURL(/\/view-growth\/\d+$/);
-    await expect(page.locator(".growth-detail-value")).toContainText(
-      `${measurement.value} ${measurement.unit}`
-    );
+    await expect(page.locator(".growth-detail-value")).toContainText(measurement.shown);
   });
 
   await test.step("the result links to everyone at the same age", async () => {
     await page.getByRole("link", { name: /See everything at this age/ }).click();
     await expect(page).toHaveURL(/\/same-age\?age=\d+m&from=\d+$/);
     await expect(page.locator(".same-age-row").filter({ hasText: child.name })).toContainText(
-      `${measurement.value} ${measurement.unit}`
+      measurement.shown
     );
     await page.goBack();
     await expect(page).toHaveURL(/\/view-growth\/\d+$/);
@@ -148,17 +146,13 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(page).toHaveURL(/\/profile\/\d+$/);
     await expect(page.getByRole("heading", { name: child.name, level: 1 })).toBeVisible();
 
-    await expect(page.locator(".day-checkup").first()).toContainText(
-      `${measurement.value} ${measurement.unit}`
-    );
+    await expect(page.locator(".day-checkup").first()).toContainText(measurement.shown);
   });
 
   await test.step("and in the family history", async () => {
     await page.getByRole("link", { name: "History", exact: true }).first().click();
     await expect(page).toHaveURL(/\/history$/);
-    await expect(page.locator(".day-checkup").first()).toContainText(
-      `${measurement.value} ${measurement.unit}`
-    );
+    await expect(page.locator(".day-checkup").first()).toContainText(measurement.shown);
   });
 });
 
