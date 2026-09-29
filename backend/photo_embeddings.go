@@ -149,17 +149,31 @@ func noteVisionReachable(ok bool) {
 	}
 }
 
-// VisionStatus is "off" when no socket is configured, otherwise whether the
-// last call reached the daemon.
-func VisionStatus() string {
-	switch {
-	case globalVisionClient == nil:
-		return "off"
-	case visionReachable.Load():
-		return "up"
-	default:
-		return "down"
+func (c *visionClient) healthy() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://vision/healthz", nil)
+	if err != nil {
+		return false
 	}
+	r, err := c.http.Do(req)
+	if err != nil {
+		return false
+	}
+	r.Body.Close()
+	return r.StatusCode == http.StatusOK
+}
+
+func VisionStatus() string {
+	if globalVisionClient == nil {
+		return "off"
+	}
+	ok := globalVisionClient.healthy()
+	noteVisionReachable(ok)
+	if ok {
+		return "up"
+	}
+	return "down"
 }
 
 func embeddingSourceBytes(img Image) ([]byte, error) {
