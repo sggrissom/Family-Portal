@@ -16,6 +16,7 @@ import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PagedPhotoPicker, PhotoPicker } from "../../components/PhotoPicker";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { WhenControl } from "../../components/WhenControl";
+import { parseAgeFromText } from "../../lib/ageInText";
 import "./add-milestone-styles";
 import "../../components/entry-form-styles";
 
@@ -28,6 +29,11 @@ type AddMilestoneForm = {
   tagIds: number[];
   error: string;
   saving: boolean;
+  categoryTouched: boolean;
+  categorySuggested: boolean;
+  suggestedPhotoIds: number[];
+  lookupKey: string;
+  lookupTimer: number;
 };
 
 const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMilestoneForm => {
@@ -41,8 +47,56 @@ const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMile
     tagIds: [],
     error: "",
     saving: false,
+    categoryTouched: false,
+    categorySuggested: false,
+    suggestedPhotoIds: [],
+    lookupKey: "",
+    lookupTimer: 0,
   };
 });
+
+// Suggestions refresh a moment after the description, person, or date stop
+// changing: a category (unless one was picked by hand) and nearby photos.
+function scheduleLookups(form: AddMilestoneForm) {
+  const text = form.description.trim();
+  const when = whenProblem(form.when) ? null : whenRequest(form.when, new Date());
+  const key = JSON.stringify([form.personId, text, when]);
+  if (key === form.lookupKey) return;
+  form.lookupKey = key;
+  window.clearTimeout(form.lookupTimer);
+  form.lookupTimer = window.setTimeout(async () => {
+    if (text.length >= 3 && !form.categoryTouched) {
+      const [resp] = await server.SuggestMilestoneCategory({
+        description: text,
+        personId: form.personId ?? 0,
+      });
+      if (resp?.category && !form.categoryTouched && form.lookupKey === key) {
+        form.category = resp.category;
+        form.categorySuggested = true;
+      }
+    }
+    if (form.personId !== null && when && text.length >= 3) {
+      const [resp] = await server.SuggestMilestonePhotos({
+        personId: form.personId,
+        description: text,
+        inputType: when.inputType,
+        milestoneDate: when.date,
+        ageYears: when.ageYears,
+        ageMonths: when.ageMonths,
+        excludeIds: [],
+      });
+      if (form.lookupKey === key) form.suggestedPhotoIds = resp?.photoIds ?? [];
+    } else {
+      form.suggestedPhotoIds = [];
+    }
+    vlens.scheduleRedraw();
+  }, 600);
+}
+
+function applyAgeFromText(form: AddMilestoneForm, years: number, months: number) {
+  form.when = { mode: "age", date: "", ageYears: String(years), ageMonths: String(months) };
+  vlens.scheduleRedraw();
+}
 
 type AddMilestoneData = {
   people: server.Person[];
@@ -156,6 +210,8 @@ function choosePerson(form: AddMilestoneForm, personId: number) {
 
 function chooseCategory(form: AddMilestoneForm, category: string) {
   form.category = category;
+  form.categoryTouched = true;
+  form.categorySuggested = false;
   vlens.scheduleRedraw();
 }
 
@@ -202,6 +258,13 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
   const categories = CATEGORY_ORDER.map(
     value => MILESTONE_CATEGORIES.find(c => c.value === value)!
   );
+  if (BROWSER) scheduleLookups(form);
+  const statedAge = parseAgeFromText(form.description);
+  const ageAlreadyUsed =
+    statedAge &&
+    form.when.mode === "age" &&
+    form.when.ageYears === String(statedAge.years) &&
+    (form.when.ageMonths || "0") === String(statedAge.months);
 
   return (
     <div className="entry-card">
@@ -241,6 +304,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
         <div className="entry-field">
           <span className="entry-label" id="categoryLabel">
             {copy.milestone.category}
+            {form.categorySuggested && <span className="entry-suggested"> · suggested</span>}
           </span>
           <div className="category-chips" role="group" aria-labelledby="categoryLabel">
             {categories.map(category => (
@@ -264,7 +328,46 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
         <div className="entry-subject">
           <span className="entry-label">{copy.when.label}</span>
           <WhenControl when={form.when} disabled={disabled} />
+          {statedAge && !ageAlreadyUsed && (
+            <button
+              type="button"
+              className="entry-hint-button"
+              disabled={disabled}
+              onClick={vlens.cachePartial(
+                applyAgeFromText,
+                form,
+                statedAge.years,
+                statedAge.months
+              )}
+            >
+              It says “{statedAge.text}”. Record it at that age?
+            </button>
+          )}
         </div>
+
+        {form.suggestedPhotoIds.length > 0 && (
+          <div className="entry-field">
+            <span className="entry-label">Photos from around then. Attach any?</span>
+            <div className="suggested-photos">
+              {form.suggestedPhotoIds.map(id => {
+                const selected = form.photoIds.includes(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`suggested-photo${selected ? " selected" : ""}`}
+                    aria-pressed={selected}
+                    aria-label={selected ? "Don't attach this photo" : "Attach this photo"}
+                    disabled={disabled}
+                    onClick={() => onTogglePhoto(form, id)}
+                  >
+                    <img src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <details className="entry-more">
           <summary>{copy.milestone.more}</summary>

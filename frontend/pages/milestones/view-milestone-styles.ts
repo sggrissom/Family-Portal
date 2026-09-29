@@ -71,3 +71,46 @@ block(`
   text-decoration: none;
 }
 `);
+
+block(`
+.milestone-matches {
+  margin: 1.5rem 0;
+}
+`);
+
+block(`
+.milestone-matches h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+`);
+
+block(`
+.milestone-matches ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+`);
+
+block(`
+.milestone-matches a {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  align-items: baseline;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+`);
+
+block(`
+.milestone-match-text {
+  color: var(--muted);
+}
+`);

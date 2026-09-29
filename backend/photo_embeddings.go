@@ -265,6 +265,7 @@ func InitializeVisionWorker(db *vbolt.DB) {
 		vbolt.WithReadTx(db, func(tx *vbolt.Tx) { ids = append(ids, photosNeedingSuggestions(tx)...) })
 		return ids
 	})
+	startMilestoneWorker(db, client)
 	LogInfo(LogCategoryWorker, "Vision worker started", map[string]interface{}{"socket": cfg.VisionAnalysisSocket})
 }
 

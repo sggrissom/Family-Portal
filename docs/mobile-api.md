@@ -397,6 +397,13 @@ tags a contributor can accept or reject with `AcceptTagSuggestions` /
 pending suggestion by tag for a review screen. A rejected suggestion is never
 made again.
 
+Milestone entry can use three suggestion procs, all of which return an empty
+answer rather than an error when the analysis daemon is down:
+`SuggestMilestoneCategory` (`{description, personId}` → `{category}`),
+`SuggestMilestonePhotos` (the person plus `AddMilestone`'s date fields →
+`{photoIds, ranked}`), and `GetMilestoneMatches` (`{milestoneId}` → the same
+milestone in other people's records, with their ages in months).
+
 ### Timeline: `GetFamilyTimeline`
 
 ```json

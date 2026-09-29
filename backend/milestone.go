@@ -4,6 +4,7 @@ import (
 	"errors"
 	"family/cfg"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -614,6 +615,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 
 	removeAllMilestonePhotos(tx, milestone.Id)
 	removeAllMilestoneTags(tx, milestone.Id)
+	deleteMilestoneEmbeddingTx(tx, milestone.Id)
 
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
 
@@ -741,6 +743,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 
 	vbolt.TxCommit(ctx.Tx)
+	QueueMilestoneEmbedding(milestone.Id)
 	return
 }
 
@@ -816,6 +819,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 
 	vbolt.TxCommit(ctx.Tx)
+	QueueMilestoneEmbedding(milestone.Id)
 	return
 }
 
@@ -935,8 +939,42 @@ func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp Sea
 	}
 
 	milestones := SearchVisibleMilestones(ctx.Tx, query, user, limit)
+	if candidates := visibleMilestones(ctx.Tx, user); len(candidates) > 0 {
+		if scores := semanticMilestoneScores(ctx.Tx, query, candidates); scores != nil {
+			milestones = blendMilestoneResults(milestones, candidates, scores, limit)
+		}
+	}
 
 	resp.Milestones = milestones
 	resp.Query = query
 	return
+}
+
+// blendMilestoneResults puts word matches and close-in-meaning milestones in
+// one list, ordered by meaning, with word matches given a head start.
+func blendMilestoneResults(textHits, candidates []Milestone, scores map[int]float64, limit int) []Milestone {
+	const textBonus = 0.3
+	hit := map[int]bool{}
+	for _, m := range textHits {
+		hit[m.Id] = true
+	}
+	type ranked struct {
+		m     Milestone
+		score float64
+	}
+	var all []ranked
+	for _, m := range textHits {
+		all = append(all, ranked{m, scores[m.Id] + textBonus})
+	}
+	for _, m := range candidates {
+		if !hit[m.Id] && scores[m.Id] >= milestoneSearchMinScore {
+			all = append(all, ranked{m, scores[m.Id]})
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].score > all[j].score })
+	out := make([]Milestone, 0, min(limit, len(all)))
+	for _, r := range all[:min(limit, len(all))] {
+		out = append(out, r.m)
+	}
+	return out
 }

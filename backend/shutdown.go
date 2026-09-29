@@ -41,6 +41,10 @@ func ShutdownWorkers(ctx context.Context) bool {
 		LogWarn(LogCategoryWorker, "Face analysis worker did not stop before the deadline", nil)
 		clean = false
 	}
+	if !StopMilestoneWorker(ctx) {
+		LogWarn(LogCategoryWorker, "Milestone worker did not stop before the deadline", nil)
+		clean = false
+	}
 	if !StopVisionWorker(ctx) {
 		LogWarn(LogCategoryWorker, "Vision worker did not stop before the deadline", nil)
 		clean = false
