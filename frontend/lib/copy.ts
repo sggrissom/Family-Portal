@@ -132,6 +132,8 @@ export const copy = {
     next: (event: string) => `next: ${event}`,
     nothingYet: (name: string) => `Nothing recorded for ${name} yet. Use + to add something.`,
     noPhotos: "No photos yet.",
+    growingUp: "Growing up",
+    oftenWith: "Often photographed with",
     openInPhotos: "Open in Photos →",
     metric: "Measurement",
     showSiblings: "Show siblings",

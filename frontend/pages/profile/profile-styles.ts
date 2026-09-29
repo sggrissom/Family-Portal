@@ -346,3 +346,75 @@ block(`
   }
 }
 `);
+
+block(`
+.profile-avatar .profile-face {
+  border: none;
+  border-radius: 50%;
+}
+`);
+
+block(`
+.profile-growing-up,
+.profile-often-with {
+  margin-bottom: 1.25rem;
+}
+`);
+
+block(`
+.profile-growing-up h3,
+.profile-often-with h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+`);
+
+block(`
+.growing-up-strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+`);
+
+block(`
+.growing-up-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+`);
+
+block(`
+.often-with-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+`);
+
+block(`
+.often-with-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+.often-with-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+`);
