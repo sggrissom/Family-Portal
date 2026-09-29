@@ -274,6 +274,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	}
 
 	QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: job.ImageId, FamilyId: job.FamilyId})
+	QueuePhotoFeatures(job.ImageId)
 
 	outcome(true, "")
 	processingTime := time.Since(startTime)

@@ -65,7 +65,7 @@ export function historyView(
     if (wantType("photos")) {
       for (const image of item.photos ?? []) {
         if (!shown(image.photoDate) || !tagged(image.tagIds)) continue;
-        const entry = photos.get(image.id) ?? { image, people: [] };
+        const entry = photos.get(image.id) ?? { image, people: [], similar: [] };
         entry.people.push(person);
         photos.set(image.id, entry);
       }

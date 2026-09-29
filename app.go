@@ -249,6 +249,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterFaceMethods(app)
+	backend.RegisterPlaceMethods(app)
 	backend.RegisterDashboardMethods(app)
 	backend.RegisterSameAgeMethods(app)
 	backend.RegisterImportMethods(app)
@@ -280,6 +281,9 @@ func MakeApplication() *vbeam.Application {
 
 	// Initialize background face analysis worker
 	backend.InitializeAnalysisWorker(app.DB)
+
+	// Hashes, quality scores, and places for every photo
+	backend.InitializeFeaturesWorker(app.DB)
 
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs

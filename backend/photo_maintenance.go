@@ -37,6 +37,11 @@ type GetPhotoStatsResponse struct {
 	FacesDetected     int `json:"facesDetected"`
 	FacesUnknown      int `json:"facesUnknown"`
 	FacesConfirmed    int `json:"facesConfirmed"`
+	FeaturesCurrent   int `json:"featuresCurrent"`
+	FeaturesPending   int `json:"featuresPending"`
+	FeaturesQueue     int `json:"featuresQueue"`
+	WithLocation      int `json:"withLocation"`
+	SimilarGroups     int `json:"similarGroups"`
 }
 
 type ReprocessAllPhotosRequest struct{}
@@ -63,6 +68,17 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 		if isPhotoProcessed(photo) {
 			processedCount++
 		}
+		if photo.Status == 0 {
+			features, found := GetPhotoFeatures(ctx.Tx, photo.Id)
+			if featuresOutdated(features, found) {
+				resp.FeaturesPending++
+			} else {
+				resp.FeaturesCurrent++
+			}
+			if features.HasLocation {
+				resp.WithLocation++
+			}
+		}
 		switch photo.AnalysisStatus {
 		case 0:
 			resp.AnalysisPending++
@@ -75,6 +91,20 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 			}
 		case 3:
 			resp.AnalysisFailed++
+		}
+	}
+
+	resp.FeaturesQueue = FeaturesQueueLength()
+	groupSizes := map[int]int{}
+	vbolt.IterateAll(ctx.Tx, PhotoFeaturesBkt, func(_ int, f PhotoFeatures) bool {
+		if f.GroupId > 0 {
+			groupSizes[f.GroupId]++
+		}
+		return true
+	})
+	for _, size := range groupSizes {
+		if size > 1 {
+			resp.SimilarGroups++
 		}
 	}
 

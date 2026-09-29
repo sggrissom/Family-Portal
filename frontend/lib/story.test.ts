@@ -25,7 +25,13 @@ const birthday = "2023-05-02T00:00:00Z";
 describe("storyChapters", () => {
   const days = summarizeDays(
     {
-      photos: [{ image: { id: 1, photoDate: "2023-04-20T00:00:00Z" } as server.Image, people: [] }],
+      photos: [
+        {
+          image: { id: 1, photoDate: "2023-04-20T00:00:00Z" } as server.Image,
+          people: [],
+          similar: [],
+        },
+      ],
       milestones: [],
       growth: [
         growth(1, server.Height, 35, "in", "2026-05-10T00:00:00Z"),

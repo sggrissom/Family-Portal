@@ -7,6 +7,8 @@ export interface PhotoFilterState {
   selectedTagIds: number[];
   dateFrom: string;
   dateTo: string;
+  placeKey: string;
+  showSimilar: boolean;
   isFilterPanelOpen: boolean;
   people: server.Person[];
   peopleLoaded: boolean;
@@ -14,6 +16,8 @@ export interface PhotoFilterState {
   tags: server.Tag[];
   tagsLoaded: boolean;
   tagsLoading: boolean;
+  places: server.PlaceCount[];
+  placesLoaded: boolean;
 }
 
 interface NormalizedDateRange {
@@ -30,6 +34,8 @@ const createInitialState = (): PhotoFilterState => ({
   tags: [],
   tagsLoaded: false,
   tagsLoading: false,
+  places: [],
+  placesLoaded: false,
 });
 
 const photoFilterState = vlens.declareHook((): PhotoFilterState => createInitialState());
@@ -101,11 +107,30 @@ export const usePhotoFilter = () => {
     }
   };
 
+  const setPlace = (placeKey: string) => {
+    state.placeKey = placeKey;
+    changed();
+  };
+
+  const toggleShowSimilar = () => {
+    state.showSimilar = !state.showSimilar;
+    changed();
+  };
+
+  const loadPlaces = async () => {
+    if (state.placesLoaded) return;
+    const [result] = await server.ListPhotoPlaces({});
+    state.places = result?.places ?? [];
+    state.placesLoaded = true;
+    vlens.scheduleRedraw();
+  };
+
   const clearAllFilters = () => {
     state.selectedPeopleIds = [];
     state.selectedTagIds = [];
     state.dateFrom = "";
     state.dateTo = "";
+    state.placeKey = "";
     changed();
   };
 
@@ -141,6 +166,9 @@ export const usePhotoFilter = () => {
       if (!state.tagsLoaded) {
         await loadTags();
       }
+      if (!state.placesLoaded) {
+        await loadPlaces();
+      }
     }
 
     vlens.scheduleRedraw();
@@ -151,7 +179,8 @@ export const usePhotoFilter = () => {
       state.selectedPeopleIds.length > 0 ||
       state.selectedTagIds.length > 0 ||
       !!state.dateFrom ||
-      !!state.dateTo
+      !!state.dateTo ||
+      !!state.placeKey
     );
   };
 
@@ -178,6 +207,10 @@ export const usePhotoFilter = () => {
       }
     }
 
+    if (state.placeKey) {
+      parts.push(state.places.find(p => p.key === state.placeKey)?.name ?? "place");
+    }
+
     return parts.join(", ");
   };
 
@@ -194,6 +227,11 @@ export const usePhotoFilter = () => {
     tags: state.tags,
     tagsLoaded: state.tagsLoaded,
     tagsLoading: state.tagsLoading,
+    placeKey: state.placeKey,
+    places: state.places,
+    showSimilar: state.showSimilar,
+    setPlace,
+    toggleShowSimilar,
     togglePerson,
     toggleTag,
     setDateFrom,

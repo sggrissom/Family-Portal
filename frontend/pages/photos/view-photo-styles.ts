@@ -164,6 +164,59 @@ block(`
 `);
 
 block(`
+.view-photo-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.25rem;
+}
+`);
+
+block(`
+.view-photo-place-link {
+  font-size: 1rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+`);
+
+block(`
+.view-photo-place-link:hover {
+  color: var(--primary-accent);
+  text-decoration: underline;
+}
+`);
+
+block(`
+.view-photo-place .place-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  width: 100%;
+}
+`);
+
+block(`
+.view-photo-place .place-form input,
+.view-photo-place .place-form select {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+.view-photo-place .place-form input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+`);
+
+block(`
 .view-photo-description {
   font-size: 1rem;
   color: var(--text);

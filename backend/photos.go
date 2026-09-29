@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,6 +65,8 @@ type GetPhotoRequest struct {
 type GetPhotoResponse struct {
 	Image  Image    `json:"image"`
 	People []Person `json:"people"`
+	// Place is set only for members of the family that owns the photo.
+	Place *PhotoPlace `json:"place"`
 }
 
 type UpdatePhotoRequest struct {
@@ -106,11 +109,17 @@ type ListFamilyPhotosRequest struct {
 	TagIds    []int  `json:"tagIds,omitempty"`
 	DateFrom  string `json:"dateFrom,omitempty"`
 	DateTo    string `json:"dateTo,omitempty"`
+	// PlaceKey is a key from ListPhotoPlaces.
+	PlaceKey string `json:"placeKey,omitempty"`
+	// CollapseSimilar shows each group of similar photos as its best photo,
+	// with the rest listed in Similar.
+	CollapseSimilar bool `json:"collapseSimilar,omitempty"`
 }
 
 type PhotoWithPeople struct {
-	Image  Image    `json:"image"`
-	People []Person `json:"people"`
+	Image   Image    `json:"image"`
+	People  []Person `json:"people"`
+	Similar []int    `json:"similar,omitempty"`
 }
 
 type ListFamilyPhotosResponse struct {
@@ -1053,6 +1062,11 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 	resp.Image = photo
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
 	resp.People = people
+	if canSeeLocation(ctx.Tx, user, photo) {
+		if place, ok := newPlaceResolver(ctx.Tx).forPhoto(photo); ok {
+			resp.Place = &place
+		}
+	}
 	return
 }
 
@@ -1136,6 +1150,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 
 func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFacesTx(tx, photo.Id)
+	deletePhotoFeaturesTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
@@ -1277,10 +1292,12 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		}
 	}
 	stop := int64(math.MinInt64)
+	upper := photoKey{seconds: math.MaxInt64, id: math.MaxInt}
 	if dateTo != "" {
 		end, _ := time.Parse(dateOnlyLayout, dateTo)
-		if last := (photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}); start.newerThan(last) {
-			start = last
+		upper = photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}
+		if start.newerThan(upper) {
+			start = upper
 		}
 	}
 	if dateFrom != "" {
@@ -1318,14 +1335,63 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		}
 	}
 
+	resolver := newPlaceResolver(ctx.Tx)
+	passes := func(image Image) bool {
+		if image.Status == 2 || (withTag != nil && !withTag[image.Id]) {
+			return false
+		}
+		if checkAccess && !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
+			return false
+		}
+		if req.PlaceKey != "" {
+			if !canSeeLocation(ctx.Tx, user, image) {
+				return false
+			}
+			if place, ok := resolver.forPhoto(image); !ok || place.Key != req.PlaceKey {
+				return false
+			}
+		}
+		return true
+	}
+	coverShown := func(cover Image) bool {
+		if cover.PhotoDate.Unix() < stop || photoKeyOf(cover).newerThan(upper) || !passes(cover) {
+			return false
+		}
+		if len(personIds) == 0 {
+			return true
+		}
+		for _, pp := range GetPhotoPersonsByPhoto(ctx.Tx, cover.Id) {
+			if slices.Contains(personIds, pp.PersonId) {
+				return true
+			}
+		}
+		return false
+	}
+
+	groups := map[int]photoGroup{}
+	similarTo := map[int][]int{}
 	limit := min(req.Limit, maxPhotoPageSize)
 	var page []Image
 	mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
-		if image.Status == 2 || (withTag != nil && !withTag[image.Id]) {
+		if !passes(image) {
 			return true
 		}
-		if checkAccess && !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
-			return true
+		if req.CollapseSimilar {
+			if features, ok := GetPhotoFeatures(ctx.Tx, image.Id); ok {
+				if group, grouped := groupOf(ctx.Tx, features.GroupId, groups); grouped {
+					if group.cover != image.Id {
+						if cover := GetImageById(ctx.Tx, group.cover); coverShown(cover) {
+							return true
+						}
+					} else {
+						for _, id := range group.members {
+							if id != image.Id {
+								similarTo[image.Id] = append(similarTo[image.Id], id)
+							}
+						}
+					}
+				}
+			}
 		}
 		if limit > 0 && len(page) == limit {
 			resp.NextCursor = photoKeyOf(page[limit-1]).String()
@@ -1346,8 +1412,9 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		image.TagIds = GetPhotoTagIds(ctx.Tx, image.Id)
 
 		resp.Photos = append(resp.Photos, PhotoWithPeople{
-			Image:  image,
-			People: people,
+			Image:   image,
+			People:  people,
+			Similar: similarTo[image.Id],
 		})
 	}
 

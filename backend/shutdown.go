@@ -41,6 +41,10 @@ func ShutdownWorkers(ctx context.Context) bool {
 		LogWarn(LogCategoryWorker, "Face analysis worker did not stop before the deadline", nil)
 		clean = false
 	}
+	if !StopFeaturesWorker(ctx) {
+		LogWarn(LogCategoryWorker, "Photo features worker did not stop before the deadline", nil)
+		clean = false
+	}
 
 	LogInfo(LogCategoryWorker, "Background workers stopped", map[string]interface{}{
 		"clean": clean,
