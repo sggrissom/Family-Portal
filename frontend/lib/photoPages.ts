@@ -13,6 +13,8 @@ export function photosRequest(
     tagIds: [],
     dateFrom: "",
     dateTo: "",
+    placeKey: "",
+    collapseSimilar: false,
     ...fields,
   };
 }

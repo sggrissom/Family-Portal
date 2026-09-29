@@ -42,6 +42,7 @@ const growth = (
 const photo = (id: number, date: string, people: server.Person[]): server.PhotoWithPeople => ({
   image: { id, photoDate: date } as server.Image,
   people,
+  similar: [],
 });
 
 const milestone = (id: number, personId: number, date: string): server.Milestone =>

@@ -28,6 +28,7 @@ import {
 type ViewPhotoData = {
   image: server.Image | null;
   people: server.Person[] | null;
+  place: server.PhotoPlace | null;
   tags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -67,6 +68,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     {
       image: photoResp?.image ?? null,
       people: photoResp?.people ?? null,
+      place: photoResp?.place ?? null,
       tags: tagsResp?.tags ?? [],
       faces: facesResp ?? null,
       sameAge: sameAge ?? null,
@@ -124,6 +126,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
         <ViewPhotoPage
           photo={data.image}
           people={data.people || []}
+          place={data.place}
           allTags={data.tags}
           faces={data.faces}
           sameAge={data.sameAge}
@@ -140,6 +143,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
 interface ViewPhotoPageProps {
   photo: server.Image;
   people: server.Person[];
+  place: server.PhotoPlace | null;
   allTags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -356,6 +360,115 @@ async function handleSetProfilePhoto(
   }
 }
 
+type PlaceFormState = {
+  photoId: number;
+  open: boolean;
+  name: string;
+  radius: number;
+  saving: boolean;
+};
+
+const usePlaceForm = vlens.declareHook(
+  (): PlaceFormState => ({ photoId: 0, open: false, name: "", radius: 250, saving: false })
+);
+
+const PLACE_RADII = [
+  { meters: 100, label: "Just this spot" },
+  { meters: 250, label: "A house or park" },
+  { meters: 1000, label: "A neighborhood" },
+  { meters: 5000, label: "A town" },
+];
+
+async function savePlace(state: PlaceFormState, photo: server.Image) {
+  if (!state.name.trim() || state.saving) return;
+  state.saving = true;
+  vlens.scheduleRedraw();
+  const [, err] = await server.SaveFamilyPlace({
+    id: 0,
+    photoId: photo.id,
+    name: state.name.trim(),
+    radiusMeters: state.radius,
+  });
+  state.saving = false;
+  if (err) {
+    alert(err);
+    vlens.scheduleRedraw();
+    return;
+  }
+  state.open = false;
+  state.name = "";
+  core.replaceRoute(core.getRoute());
+}
+
+const PhotoPlaceLine = ({ photo, place }: { photo: server.Image; place: server.PhotoPlace }) => {
+  const form = usePlaceForm();
+  if (form.photoId !== photo.id) {
+    form.photoId = photo.id;
+    form.open = false;
+    form.name = "";
+  }
+  return (
+    <div className="view-photo-place">
+      <a href={`/photos?place=${place.key}`} className="view-photo-place-link">
+        📍 {place.name}
+      </a>
+      {place.familyPlaceId === 0 && !form.open && (
+        <button
+          className="btn btn-outline btn-small"
+          onClick={() => {
+            form.open = true;
+            vlens.scheduleRedraw();
+          }}
+        >
+          Name this place
+        </button>
+      )}
+      {form.open && (
+        <form
+          className="place-form"
+          onSubmit={e => {
+            e.preventDefault();
+            savePlace(form, photo);
+          }}
+        >
+          <input
+            type="text"
+            placeholder="Home, Grandma's house…"
+            maxLength={80}
+            value={form.name}
+            onInput={e => (form.name = e.currentTarget.value)}
+            aria-label="Place name"
+          />
+          <select
+            value={form.radius}
+            onChange={e => (form.radius = Number(e.currentTarget.value))}
+            aria-label="How big is this place?"
+          >
+            {PLACE_RADII.map(r => (
+              <option key={r.meters} value={r.meters}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="btn btn-primary btn-small" disabled={form.saving}>
+            Save
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            onClick={() => {
+              form.open = false;
+              vlens.scheduleRedraw();
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
+    </div>
+  );
+};
+
 type CropModalState = {
   isOpen: boolean;
   personId: number;
@@ -394,6 +507,7 @@ function closeCropModal(state: CropModalState) {
 const ViewPhotoPage = ({
   photo,
   people,
+  place,
   allTags,
   faces,
   sameAge,
@@ -471,6 +585,7 @@ const ViewPhotoPage = ({
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
           <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
+          {place && <PhotoPlaceLine photo={photo} place={place} />}
           {photo.description && <div className="view-photo-description">{photo.description}</div>}
 
           <div className="photo-people">

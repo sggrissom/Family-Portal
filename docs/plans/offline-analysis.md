@@ -230,12 +230,42 @@ build/family-vision -models ~/vision-models -bench backend/seedphotos -prompts p
 
 where `prompts.txt` has one `Label: phrase` per line.
 
+## Tier 1 as built
+
+- Results live in a `PhotoFeatures` record per photo rather than on `Image`,
+  so coordinates never ride along in the `Image` JSON that every photo list
+  returns. The hash, quality, and place analyzers each store a version;
+  `Image.AnalysisVersion` stays as the face analyzer's.
+- `photo_worker` queues a photo for features after resizing, and a backlog
+  worker (`backend/backlog_worker.go`) runs them one at a time, starting with a
+  sweep for anything missing or outdated.
+- Similar photos: a 64-bit dHash. Two photos group when they are within 3
+  bits anywhere in the family (re-uploads, edits) or within 12 bits and 2
+  minutes of each other (bursts). Groups are stored as a group id and merged
+  when a new photo bridges two. `ListFamilyPhotos` with `collapseSimilar`
+  returns each group's best-quality photo with the rest in `similar`; the grid
+  shows it as a "+N similar" stack that opens as a sequence in the viewer, and
+  a "Show all" toggle turns stacking off. A filtered-out cover never hides a
+  member that matches. Groups are not split when a photo is deleted or its date
+  edited, which only means a stale burst can stay stacked.
+- Places: EXIF GPS resolved against GeoNames `cities15000` (34k places, 640 KB
+  gzipped, embedded). The dataset has towns, not parks, so "Yosemite" comes
+  from a family place, not the lookup. Family places are a point and radius,
+  created from a photo's location on the photo page ("Name this place") and
+  managed in Settings; the tightest one containing a photo wins over the city.
+  Coordinates and place names are returned only to members of the family that
+  owns the photo, not to linked families. The family's own data export still
+  carries the untouched originals, EXIF included.
+- Quality: Laplacian variance for sharpness, mean brightness and clipping for
+  exposure, combined 0.7/0.3. Used only to pick a stack's cover.
+- Not built yet: suggested place tags (they belong with the auto-tag review
+  screen in step 5) and trip detection.
+
 ## Order of work
 
 1. ~~**Prototype the vision daemon locally.**~~ Done; see
    [prototype results](#prototype-results).
-2. **Tier 1.** Perceptual hash, GPS and places, quality score, and per-analyzer
-   versions. Useful on its own and independent of the prototype's outcome.
+2. ~~**Tier 1.**~~ Done; see [Tier 1 as built](#tier-1-as-built).
 3. **Vision daemon in production**, with embedding backfill, deployed like the
    face daemon.
 4. **Photo search.**

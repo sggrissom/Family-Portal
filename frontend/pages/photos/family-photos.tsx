@@ -79,6 +79,11 @@ function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
   core.setRoute(viewPhotoRoute(photoId, true));
 }
 
+function openStack(cover: server.PhotoWithPeople) {
+  saveSequence({ ids: [cover.image.id, ...(cover.similar ?? [])], backRoute: core.getRoute() });
+  core.setRoute(viewPhotoRoute(cover.image.id, true));
+}
+
 const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
   const photoFilter = usePhotoFilter();
   const photoStatus = usePhotoStatus();
@@ -129,6 +134,19 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                 onClick={photoFilter.toggleFilterPanel}
               >
                 🔍 Filter {photoFilter.hasActiveFilters() && `(${photoFilter.getFilterSummary()})`}
+              </button>
+            )}
+            {hasPhotos && (
+              <button
+                className="btn btn-secondary"
+                onClick={photoFilter.toggleShowSimilar}
+                title={
+                  photoFilter.showSimilar
+                    ? "Show each burst of similar photos as one stack"
+                    : "Show every photo, including near-duplicates"
+                }
+              >
+                {photoFilter.showSimilar ? "🗂️ Stack similar" : "🗂️ Show all"}
               </button>
             )}
             {hasPhotos && (
@@ -188,6 +206,37 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
             </div>
           </div>
 
+          {photoFilter.places.length > 0 && (
+            <div className="filter-section">
+              <h3>Filter by Place</h3>
+              <div className="places-filter">
+                <label className="tag-filter-label">
+                  <input
+                    type="radio"
+                    name="place-filter"
+                    checked={photoFilter.placeKey === ""}
+                    onChange={() => photoFilter.setPlace("")}
+                  />
+                  <span>Anywhere</span>
+                </label>
+                {photoFilter.places.map(place => (
+                  <label key={place.key} className="tag-filter-label">
+                    <input
+                      type="radio"
+                      name="place-filter"
+                      checked={photoFilter.placeKey === place.key}
+                      onChange={() => photoFilter.setPlace(place.key)}
+                    />
+                    <span>
+                      {place.key.startsWith("f") ? "📍 " : ""}
+                      {place.name} <span className="place-count">({place.count})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="filter-section">
             <h3>Filter by Date</h3>
             <div className="date-filter">
@@ -245,6 +294,15 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                       {photoWithPeople.people.some(
                         person => person.profilePhotoId === photoWithPeople.image.id
                       ) && <div className="profile-photo-badge">👤 Profile</div>}
+                      {(photoWithPeople.similar?.length ?? 0) > 0 && (
+                        <button
+                          className="similar-stack-badge"
+                          onClick={() => openStack(photoWithPeople)}
+                          title="Similar photos taken around the same time"
+                        >
+                          +{photoWithPeople.similar!.length} similar
+                        </button>
+                      )}
                       {photoWithPeople.people.length > 0 ? (
                         <div className="people-badges">
                           {photoWithPeople.people.map(person => (

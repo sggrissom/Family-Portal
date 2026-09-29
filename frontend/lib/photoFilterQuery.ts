@@ -3,9 +3,12 @@ export interface PhotoFilterCriteria {
   selectedTagIds: number[];
   dateFrom: string;
   dateTo: string;
+  placeKey: string;
+  showSimilar: boolean;
 }
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const PLACE_PATTERN = /^[cf]\d+$/;
 
 const parseIds = (value: string | null): number[] =>
   (value ?? "")
@@ -23,6 +26,8 @@ export const parseFilterQuery = (search: string): PhotoFilterCriteria => {
     selectedTagIds: parseIds(params.get("tags")),
     dateFrom: parseDate(params.get("from")),
     dateTo: parseDate(params.get("to")),
+    placeKey: PLACE_PATTERN.test(params.get("place") ?? "") ? params.get("place")! : "",
+    showSimilar: params.get("similar") === "all",
   };
 };
 
@@ -36,6 +41,8 @@ export const filterQuery = (criteria: PhotoFilterCriteria): string => {
   }
   if (criteria.dateFrom) params.set("from", criteria.dateFrom);
   if (criteria.dateTo) params.set("to", criteria.dateTo);
+  if (criteria.placeKey) params.set("place", criteria.placeKey);
+  if (criteria.showSimilar) params.set("similar", "all");
   const query = params.toString().replace(/%2C/g, ",");
   return query ? `?${query}` : "";
 };
@@ -47,4 +54,6 @@ export const serverFilters = (criteria: PhotoFilterCriteria) => ({
   tagIds: criteria.selectedTagIds,
   dateFrom: criteria.dateFrom,
   dateTo: criteria.dateTo,
+  placeKey: criteria.placeKey,
+  collapseSimilar: !criteria.showSimilar,
 });

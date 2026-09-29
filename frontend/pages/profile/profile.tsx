@@ -351,7 +351,7 @@ const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
   const person = data.person.person;
   const days = summarizeDays(
     {
-      photos: (data.person.photos ?? []).map(image => ({ image, people: [] })),
+      photos: (data.person.photos ?? []).map(image => ({ image, people: [], similar: [] })),
       growth: data.person.growthData ?? [],
       milestones: data.person.milestones ?? [],
       appearances: (data.activities.appearances ?? []).map(detail => ({

@@ -9,6 +9,7 @@ import { logError } from "../../lib/logger";
 import { FamilySelect } from "../../components/FamilySelect";
 import { FamilyLinksSection } from "../../components/FamilyLinks";
 import { FamilyMembersSection } from "../../components/FamilyMembers";
+import { FamilyPlacesSection } from "../../components/FamilyPlaces";
 import "./settings-styles";
 
 type Data = {
@@ -813,6 +814,8 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         )}
 
         {families.length > 0 && <FamilyLinksSection initialLinks={data.links} />}
+
+        {families.length > 0 && <FamilyPlacesSection />}
 
         {data.familyInfo.id > 0 && (
           <div className="settings-section">

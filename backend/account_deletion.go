@@ -208,6 +208,11 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 
 	deleteFamilyActivitiesTx(tx, familyId)
 
+	for _, place := range GetFamilyPlaces(tx, familyId) {
+		vbolt.Delete(tx, FamilyPlaceBkt, place.Id)
+		vbolt.DeleteTargetTerms(tx, FamilyPlaceByFamilyIndex, place.Id)
+	}
+
 	for _, person := range GetFamilyOwnPeople(tx, familyId) {
 		deletePersonRecordTx(tx, person)
 	}

@@ -65,6 +65,11 @@ export async function fetch(route: string, prefix: string) {
       facesDetected: 0,
       facesUnknown: 0,
       facesConfirmed: 0,
+      featuresCurrent: 0,
+      featuresPending: 0,
+      featuresQueue: 0,
+      withLocation: 0,
+      similarGroups: 0,
     });
   }
 
@@ -628,6 +633,19 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
               <div className="admin-stat-label">
                 {data.facesUnknown.toLocaleString()} unnamed, {data.facesConfirmed.toLocaleString()}{" "}
                 confirmed
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">🧮</div>
+            <div className="stat-content">
+              <h3>Photo Features</h3>
+              <div className="admin-stat-value">{data.featuresCurrent.toLocaleString()}</div>
+              <div className="admin-stat-label">
+                {data.featuresPending.toLocaleString()} pending ({data.featuresQueue} queued),{" "}
+                {data.withLocation.toLocaleString()} with location,{" "}
+                {data.similarGroups.toLocaleString()} similar groups
               </div>
             </div>
           </div>

@@ -244,6 +244,16 @@ when `app@family` starts, the worker is never created and stays off until the
 app is restarted, however healthy the daemon becomes later. Restart `family` after
 `family-face`, not before.
 
+## Photo features
+
+A pure-Go worker, always on, records a perceptual hash, a quality score, and
+the EXIF location for every processed photo (`backend/photo_features.go`).
+Nothing to deploy or configure: the city lookup is the GeoNames extract
+embedded in the binary. Each analyzer stores its own version; on startup the
+worker queues every photo whose record is missing or older, so the first start
+after an upgrade works through the whole library in the background. `/admin/photos`
+shows progress under "Photo Features".
+
 ## Host metrics
 
 `/admin` shows a Host card and folds disk pressure and proxy-measured 5xx into
