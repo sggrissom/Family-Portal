@@ -3,6 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -18,24 +19,30 @@ type Tag struct {
 	Name      string    `json:"name"`
 	Color     string    `json:"color"`
 	CreatedAt time.Time `json:"createdAt"`
+	// AutoPhrase describes photos that should get this tag, for suggestions.
+	AutoPhrase string `json:"autoPhrase"`
 }
 
 func PackTag(self *Tag, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
 	vpack.String(&self.Color, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.String(&self.AutoPhrase, buf)
+	}
 }
 
 var TagBkt = vbolt.Bucket(&cfg.Info, "tags", vpack.FInt, PackTag)
 var TagByFamilyIndex = vbolt.Index(&cfg.Info, "tags_by_family", vpack.FInt, vpack.FInt)
 
 type CreateTagRequest struct {
-	Name     string `json:"name"`
-	Color    string `json:"color"`
-	FamilyId int    `json:"familyId,omitempty"`
+	Name       string `json:"name"`
+	Color      string `json:"color"`
+	FamilyId   int    `json:"familyId,omitempty"`
+	AutoPhrase string `json:"autoPhrase,omitempty"`
 }
 
 type CreateTagResponse struct {
@@ -46,6 +53,8 @@ type UpdateTagRequest struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
+	// AutoPhrase nil leaves the phrase as it is.
+	AutoPhrase *string `json:"autoPhrase"`
 }
 
 type UpdateTagResponse struct {
@@ -138,6 +147,10 @@ func CreateTag(ctx *vbeam.Context, req CreateTagRequest) (resp CreateTagResponse
 	if err != nil {
 		return
 	}
+	phrase, err := cleanAutoPhrase(req.AutoPhrase)
+	if err != nil {
+		return
+	}
 
 	vbeam.UseWriteTx(ctx)
 
@@ -147,16 +160,24 @@ func CreateTag(ctx *vbeam.Context, req CreateTagRequest) (resp CreateTagResponse
 	}
 
 	tag := Tag{
-		Id:        vbolt.NextIntId(ctx.Tx, TagBkt),
-		FamilyId:  familyId,
-		Name:      name,
-		Color:     req.Color,
-		CreatedAt: time.Now(),
+		Id:         vbolt.NextIntId(ctx.Tx, TagBkt),
+		FamilyId:   familyId,
+		Name:       name,
+		Color:      req.Color,
+		CreatedAt:  time.Now(),
+		AutoPhrase: phrase,
 	}
 
 	vbolt.Write(ctx.Tx, TagBkt, tag.Id, &tag)
 	vbolt.SetTargetSingleTerm(ctx.Tx, TagByFamilyIndex, tag.Id, tag.FamilyId)
+	rescore := phrase != "" || isCatalogLabel(name)
+	if rescore {
+		bumpFamilySuggestionsTx(ctx.Tx, tag.FamilyId)
+	}
 	vbolt.TxCommit(ctx.Tx)
+	if rescore {
+		queueFamilySuggestions(appDb, tag.FamilyId)
+	}
 
 	resp.Tag = tag
 	return
@@ -201,14 +222,38 @@ func UpdateTag(ctx *vbeam.Context, req UpdateTagRequest) (resp UpdateTagResponse
 		return
 	}
 
+	phrase := tag.AutoPhrase
+	if req.AutoPhrase != nil {
+		if phrase, err = cleanAutoPhrase(*req.AutoPhrase); err != nil {
+			return
+		}
+	}
+	renamed := tag.Name != name && (isCatalogLabel(tag.Name) || isCatalogLabel(name))
+	phraseChanged := tag.AutoPhrase != phrase
 	tag.Name = name
 	tag.Color = req.Color
+	tag.AutoPhrase = phrase
 
 	vbolt.Write(ctx.Tx, TagBkt, tag.Id, &tag)
+	rescore := phraseChanged || renamed
+	if rescore {
+		bumpFamilySuggestionsTx(ctx.Tx, tag.FamilyId)
+	}
 	vbolt.TxCommit(ctx.Tx)
+	if rescore {
+		queueFamilySuggestions(appDb, tag.FamilyId)
+	}
 
 	resp.Tag = tag
 	return
+}
+
+func cleanAutoPhrase(phrase string) (string, error) {
+	phrase = strings.TrimSpace(phrase)
+	if len(phrase) > maxAutoPhraseChars {
+		return "", fmt.Errorf("Descriptions must be %d characters or fewer", maxAutoPhraseChars)
+	}
+	return phrase, nil
 }
 
 func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse, err error) {
@@ -236,6 +281,7 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 }
 
 func deleteTagTx(tx *vbolt.Tx, tag Tag) {
+	deleteTagSuggestionsTx(tx, tag)
 	removeMilestoneTagsByTag(tx, tag.Id)
 	removePhotoTagsByTag(tx, tag.Id)
 	vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, tag.Id, -1)

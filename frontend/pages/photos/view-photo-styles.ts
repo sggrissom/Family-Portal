@@ -470,3 +470,26 @@ block(`
   color: var(--accent);
 }
 `);
+
+block(`
+.tag-pill-view.tag-suggestion {
+  border-style: dashed;
+}
+`);
+
+block(`
+.tag-suggestion-action {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+.tag-suggestion-action:hover {
+  color: var(--primary-accent);
+}
+`);

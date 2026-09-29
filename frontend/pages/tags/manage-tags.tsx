@@ -25,6 +25,7 @@ type ManageTagsState = {
   editingId: number | null;
   editName: string;
   editColor: string;
+  editPhrase: string;
   newFamilyId: number;
   error: string;
   saving: boolean;
@@ -39,6 +40,7 @@ const useManageTagsState = vlens.declareHook(
     editingId: null,
     editName: "",
     editColor: "",
+    editPhrase: "",
     newFamilyId: 0,
     error: "",
     saving: false,
@@ -145,6 +147,18 @@ export function view(
                           }}
                           disabled={state.saving}
                         />
+                        <input
+                          type="text"
+                          className="tag-phrase-input"
+                          aria-label="Suggest this tag for photos of…"
+                          placeholder="Suggest for photos of… (optional, e.g. “kids at the lake cabin”)"
+                          maxLength={120}
+                          value={state.editPhrase}
+                          onInput={e => {
+                            state.editPhrase = e.currentTarget.value;
+                          }}
+                          disabled={state.saving}
+                        />
                       </div>
                       <button
                         className="btn btn-primary"
@@ -164,7 +178,12 @@ export function view(
                   ) : (
                     <>
                       <div className="tag-color-swatch" style={{ background: tag.color }} />
-                      <span className="tag-name">{tag.name}</span>
+                      <span className="tag-name">
+                        {tag.name}
+                        {tag.autoPhrase && (
+                          <span className="tag-phrase">suggested for “{tag.autoPhrase}”</span>
+                        )}
+                      </span>
                       <button
                         className="tag-action-btn"
                         title="Edit"
@@ -207,6 +226,7 @@ async function onCreateTag(state: ManageTagsState) {
     name,
     color: state.newColor,
     familyId: state.newFamilyId,
+    autoPhrase: "",
   });
   if (err || !resp) {
     state.error = err || "Failed to create tag";
@@ -222,6 +242,7 @@ function onStartEdit(state: ManageTagsState, tag: server.Tag) {
   state.editingId = tag.id;
   state.editName = tag.name;
   state.editColor = tag.color;
+  state.editPhrase = tag.autoPhrase ?? "";
   vlens.scheduleRedraw();
 }
 
@@ -239,7 +260,12 @@ async function onSaveTag(state: ManageTagsState, tagId: number) {
   state.error = "";
   vlens.scheduleRedraw();
 
-  const [resp, err] = await server.UpdateTag({ id: tagId, name, color: state.editColor });
+  const [resp, err] = await server.UpdateTag({
+    id: tagId,
+    name,
+    color: state.editColor,
+    autoPhrase: state.editPhrase.trim(),
+  });
   if (err || !resp) {
     state.error = err || "Failed to update tag";
   } else {

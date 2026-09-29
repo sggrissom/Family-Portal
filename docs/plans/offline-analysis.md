@@ -278,7 +278,21 @@ where `prompts.txt` has one `Label: phrase` per line.
    near 0.22); a title or description containing the words always matches.
    Without the daemon, search falls back to titles and descriptions and says
    so. Family vectors are cached in memory and dropped on any embedding write.
-5. **Auto tags** with a review screen.
+5. ~~**Auto tags**~~ with a review screen. Done. Absolute per-prompt cutoffs
+   turned out brittle (on COCO a single threshold ranged from useless to
+   overcautious by label), so a suggestion is a zero-shot classification
+   instead: a softmax (CLIP's logit scale, 100) over a built-in catalog of 16
+   labels, the family's own tag phrases, and 12 neutral background prompts
+   ("a portrait photo", "a photo of people indoors", …). A label is suggested
+   when it takes more than half the probability and its cosine is at least
+   0.24. On the seed photos that suggests Dance, Sports, and Newborn where they
+   belong and nothing for the portraits. A catalog label reuses a family tag
+   of the same name, or creates one on first acceptance. Families describe
+   their own tags on the tags page ("kids at the lake cabin"); changing a
+   phrase rescores the family's photos. Suggestions live in `/suggestions`
+   (grouped, click to exclude, accept or reject in bulk) and as dashed chips
+   on the photo page. Suggested place tags were dropped: family places and the
+   place filter already do that job without duplicating it as a tag.
 6. **Milestone features:** suggested category, photo suggestions, sibling
    matching.
 7. **Face-derived features**, as the redesigned person page needs them.
