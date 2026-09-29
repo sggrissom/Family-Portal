@@ -114,6 +114,10 @@ type ListFamilyPhotosRequest struct {
 	// CollapseSimilar shows each group of similar photos as its best photo,
 	// with the rest listed in Similar.
 	CollapseSimilar bool `json:"collapseSimilar,omitempty"`
+	// Query ranks the matching photos by how well they fit a description
+	// instead of by date. Names of visible people in it narrow the results to
+	// photos of all of them.
+	Query string `json:"query,omitempty"`
 }
 
 type PhotoWithPeople struct {
@@ -126,6 +130,10 @@ type ListFamilyPhotosResponse struct {
 	Photos []PhotoWithPeople `json:"photos"`
 	// NextCursor is empty on the last page.
 	NextCursor string `json:"nextCursor"`
+	// For a Query: the people named in it, and "semantic" or, when the vision
+	// daemon is unavailable, "text" (titles and descriptions only).
+	MatchedPersonIds []int  `json:"matchedPersonIds"`
+	SearchMode       string `json:"searchMode"`
 }
 
 type AddPeopleToPhotoRequest struct {
@@ -1285,6 +1293,19 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		return
 	}
 
+	query := strings.TrimSpace(req.Query)
+	searching := query != ""
+	searchOffset := 0
+	var requiredPeople []int
+	if searching {
+		if searchOffset, err = parseSearchCursor(req.Cursor); err != nil {
+			return
+		}
+		requiredPeople, query = peopleInQuery(GetVisiblePeople(ctx.Tx, user), query)
+		req.Cursor = ""
+		req.CollapseSimilar = false
+	}
+
 	start := photoKey{seconds: math.MaxInt64, id: math.MaxInt}
 	if req.Cursor != "" {
 		start, err = parsePhotoCursor(req.Cursor)
@@ -1309,6 +1330,9 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	personIds := req.PersonIds
 	if req.PersonId > 0 {
 		personIds = append([]int{req.PersonId}, personIds...)
+	}
+	if len(personIds) == 0 && len(requiredPeople) > 0 {
+		personIds = requiredPeople[:1]
 	}
 
 	var streams []*photoStream
@@ -1373,34 +1397,61 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	similarTo := map[int][]int{}
 	limit := min(req.Limit, maxPhotoPageSize)
 	var page []Image
-	mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
-		if !passes(image) {
+	if searching {
+		var candidates []Image
+		mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
+			if passes(image) && photoHasEveryone(ctx.Tx, image.Id, requiredPeople) {
+				candidates = append(candidates, image)
+			}
 			return true
+		})
+		resp.MatchedPersonIds = requiredPeople
+		resp.SearchMode = "semantic"
+		if query != "" {
+			vector, embedErr := embedQuery(query)
+			if embedErr != nil {
+				resp.SearchMode = "text"
+			}
+			candidates = rankPhotos(ctx.Tx, candidates, query, vector)
 		}
-		if req.CollapseSimilar {
-			if features, ok := GetPhotoFeatures(ctx.Tx, image.Id); ok {
-				if group, grouped := groupOf(ctx.Tx, features.GroupId, groups); grouped {
-					if group.cover != image.Id {
-						if cover := GetImageById(ctx.Tx, group.cover); coverShown(cover) {
-							return true
-						}
-					} else {
-						for _, id := range group.members {
-							if id != image.Id {
-								similarTo[image.Id] = append(similarTo[image.Id], id)
+		end := len(candidates)
+		if limit > 0 && searchOffset+limit < end {
+			end = searchOffset + limit
+			resp.NextCursor = fmt.Sprintf("s%d", end)
+		}
+		if searchOffset < end {
+			page = candidates[searchOffset:end]
+		}
+	} else {
+		mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
+			if !passes(image) {
+				return true
+			}
+			if req.CollapseSimilar {
+				if features, ok := GetPhotoFeatures(ctx.Tx, image.Id); ok {
+					if group, grouped := groupOf(ctx.Tx, features.GroupId, groups); grouped {
+						if group.cover != image.Id {
+							if cover := GetImageById(ctx.Tx, group.cover); coverShown(cover) {
+								return true
+							}
+						} else {
+							for _, id := range group.members {
+								if id != image.Id {
+									similarTo[image.Id] = append(similarTo[image.Id], id)
+								}
 							}
 						}
 					}
 				}
 			}
-		}
-		if limit > 0 && len(page) == limit {
-			resp.NextCursor = photoKeyOf(page[limit-1]).String()
-			return false
-		}
-		page = append(page, image)
-		return true
-	})
+			if limit > 0 && len(page) == limit {
+				resp.NextCursor = photoKeyOf(page[limit-1]).String()
+				return false
+			}
+			page = append(page, image)
+			return true
+		})
+	}
 
 	resp.Photos = make([]PhotoWithPeople, 0, len(page))
 	for _, image := range page {

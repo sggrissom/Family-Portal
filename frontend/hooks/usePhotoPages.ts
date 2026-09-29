@@ -10,6 +10,8 @@ export interface PhotoPages {
   loading: boolean;
   started: boolean;
   error: string;
+  searchMode: string;
+  matchedPersonIds: number[];
 }
 
 export const usePhotoPages = vlens.declareHook(
@@ -21,6 +23,8 @@ export const usePhotoPages = vlens.declareHook(
     loading: false,
     started: false,
     error: "",
+    searchMode: "",
+    matchedPersonIds: [],
   })
 );
 
@@ -46,6 +50,8 @@ export function seedPhotoPages(
   pages.photos = first.photos ?? [];
   pages.cursor = first.nextCursor;
   pages.started = true;
+  pages.searchMode = first.searchMode;
+  pages.matchedPersonIds = first.matchedPersonIds ?? [];
 }
 
 // Starts over when the filters differ from the ones the loaded pages were cut
@@ -85,6 +91,8 @@ export async function loadMorePhotos(pages: PhotoPages) {
     pages.cursor = resp.nextCursor;
     pages.started = true;
     pages.error = "";
+    pages.searchMode = resp.searchMode;
+    pages.matchedPersonIds = resp.matchedPersonIds ?? [];
   } else {
     pages.error = err || "Failed to load photos";
   }

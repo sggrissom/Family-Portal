@@ -1,4 +1,5 @@
 import * as preact from "preact";
+import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
@@ -32,7 +33,10 @@ export async function fetch(
 ): Promise<rpc.Response<FamilyPhotosData>> {
   const filters = serverFilters(parseFilterQuery(route.split("?")[1] ?? ""));
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<FamilyPhotosData>({ first: { photos: [], nextCursor: "" }, filters });
+    return rpc.ok<FamilyPhotosData>({
+      first: { photos: [], nextCursor: "", matchedPersonIds: [], searchMode: "" },
+      filters,
+    });
   }
 
   const [first, err] = await server.ListFamilyPhotos(
@@ -79,6 +83,19 @@ function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
   core.setRoute(viewPhotoRoute(photoId, true));
 }
 
+const useSearchDraft = vlens.declareHook(() => ({ text: "", syncedTo: "" }));
+
+function matchedNames(photos: server.PhotoWithPeople[], ids: number[]): string {
+  const names = ids.map(
+    id =>
+      photos
+        .flatMap(p => p.people)
+        .find(person => person.id === id)
+        ?.name.split(" ")[0] ?? ""
+  );
+  return names.filter(Boolean).join(" and ");
+}
+
 function openStack(cover: server.PhotoWithPeople) {
   saveSequence({ ids: [cover.image.id, ...(cover.similar ?? [])], backRoute: core.getRoute() });
   core.setRoute(viewPhotoRoute(cover.image.id, true));
@@ -95,8 +112,19 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
   const filteredPhotos = pages.photos;
   const hasMore = hasMorePhotos(pages);
   const hasFilteredPhotos = filteredPhotos.length > 0;
-  const hasPhotos = hasFilteredPhotos || photoFilter.hasActiveFilters() || !pages.started;
+  const hasPhotos =
+    hasFilteredPhotos ||
+    photoFilter.hasActiveFilters() ||
+    photoFilter.query !== "" ||
+    !pages.started;
   const countLabel = `${filteredPhotos.length}${hasMore ? "+" : ""}`;
+  const searching = photoFilter.query !== "";
+  const draft = useSearchDraft();
+  if (draft.syncedTo !== photoFilter.query) {
+    draft.text = photoFilter.query;
+    draft.syncedTo = photoFilter.query;
+  }
+  const withNames = matchedNames(filteredPhotos, pages.matchedPersonIds);
 
   if (hasFilteredPhotos) {
     filteredPhotos.forEach(photoWithPeople => {
@@ -121,9 +149,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
             <h1>Family Photos</h1>
             {hasPhotos && (
               <div className="photos-count">
-                {photoFilter.hasActiveFilters()
-                  ? `${countLabel} matching photo${countLabel !== "1" ? "s" : ""}`
-                  : `${countLabel} photo${countLabel !== "1" ? "s" : ""}`}
+                {searching
+                  ? `${countLabel} result${countLabel !== "1" ? "s" : ""}`
+                  : photoFilter.hasActiveFilters()
+                    ? `${countLabel} matching photo${countLabel !== "1" ? "s" : ""}`
+                    : `${countLabel} photo${countLabel !== "1" ? "s" : ""}`}
               </div>
             )}
           </div>
@@ -136,7 +166,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                 🔍 Filter {photoFilter.hasActiveFilters() && `(${photoFilter.getFilterSummary()})`}
               </button>
             )}
-            {hasPhotos && (
+            {hasPhotos && !searching && (
               <button
                 className="btn btn-secondary"
                 onClick={photoFilter.toggleShowSimilar}
@@ -160,6 +190,45 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
           </div>
         </div>
       </div>
+
+      {hasPhotos && (
+        <form
+          className="photo-search"
+          role="search"
+          onSubmit={e => {
+            e.preventDefault();
+            photoFilter.setQuery(draft.text);
+          }}
+        >
+          <input
+            type="search"
+            aria-label="Search photos"
+            placeholder="Search photos: “birthday cake”, “at the beach”, a name…"
+            maxLength={200}
+            value={draft.text}
+            onInput={e => (draft.text = e.currentTarget.value)}
+          />
+          <button type="submit" className="btn btn-primary">
+            Search
+          </button>
+        </form>
+      )}
+
+      {searching && (
+        <div className="photo-search-summary">
+          <span>
+            Best matches for “{photoFilter.query}”{withNames && ` with ${withNames}`}
+          </span>
+          {pages.searchMode === "text" && (
+            <span className="photo-search-note">
+              Image search is unavailable right now, so only titles and descriptions were searched.
+            </span>
+          )}
+          <button className="photo-search-clear" onClick={() => photoFilter.setQuery("")}>
+            Clear search
+          </button>
+        </div>
+      )}
 
       {hasPhotos && photoFilter.isFilterPanelOpen && (
         <div className="filter-panel">
@@ -355,10 +424,21 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
             <div className="photos-gallery">
               <div className="empty-state">
                 <div className="empty-icon">🔍</div>
-                <h2>No Photos Match Your Filters</h2>
-                <p>Try adjusting your filter criteria to see more photos.</p>
-                <button className="btn btn-primary" onClick={photoFilter.clearAllFilters}>
-                  Clear All Filters
+                <h2>
+                  {searching ? "Nothing Matched That Search" : "No Photos Match Your Filters"}
+                </h2>
+                <p>
+                  {searching
+                    ? "Try describing what's in the photo differently, or clear the search."
+                    : "Try adjusting your filter criteria to see more photos."}
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() =>
+                    searching ? photoFilter.setQuery("") : photoFilter.clearAllFilters()
+                  }
+                >
+                  {searching ? "Clear Search" : "Clear All Filters"}
                 </button>
               </div>
             </div>

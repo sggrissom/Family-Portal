@@ -14,9 +14,12 @@ describe("photo filter query", () => {
       dateTo: "2024-12-31",
       placeKey: "f7",
       showSimilar: true,
+      query: "at the beach",
     };
     const query = filterQuery(criteria);
-    expect(query).toBe("?people=3,12&tags=5&from=2024-01-01&to=2024-12-31&place=f7&similar=all");
+    expect(query).toBe(
+      "?people=3,12&tags=5&from=2024-01-01&to=2024-12-31&place=f7&similar=all&q=at+the+beach"
+    );
     expect(parseFilterQuery(query)).toEqual(criteria);
   });
 
@@ -30,6 +33,7 @@ describe("photo filter query", () => {
       dateTo: "",
       placeKey: "",
       showSimilar: false,
+      query: "",
     });
   });
 });
