@@ -10,12 +10,14 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/joho/godotenv v1.5.1
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
+	github.com/yalue/onnxruntime_go v1.36.0
 	go.hasen.dev/vbeam v0.1.1
 	go.hasen.dev/vbolt v0.2.3
 	go.hasen.dev/vpack v0.2.0
 	golang.org/x/crypto v0.34.0
 	golang.org/x/image v0.45.0
 	golang.org/x/oauth2 v0.31.0
+	golang.org/x/text v0.41.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -32,7 +34,7 @@ require (
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	go.hasen.dev/generic v0.1.2 // indirect
 	go.hasen.dev/term v0.1.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.33.0 // indirect
 )
