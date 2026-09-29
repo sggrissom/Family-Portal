@@ -9,6 +9,7 @@ export interface PhotoFilterState {
   dateTo: string;
   placeKey: string;
   showSimilar: boolean;
+  query: string;
   isFilterPanelOpen: boolean;
   people: server.Person[];
   peopleLoaded: boolean;
@@ -109,6 +110,11 @@ export const usePhotoFilter = () => {
 
   const setPlace = (placeKey: string) => {
     state.placeKey = placeKey;
+    changed();
+  };
+
+  const setQuery = (query: string) => {
+    state.query = query.trim().slice(0, 200);
     changed();
   };
 
@@ -230,6 +236,8 @@ export const usePhotoFilter = () => {
     placeKey: state.placeKey,
     places: state.places,
     showSimilar: state.showSimilar,
+    query: state.query,
+    setQuery,
     setPlace,
     toggleShowSimilar,
     togglePerson,

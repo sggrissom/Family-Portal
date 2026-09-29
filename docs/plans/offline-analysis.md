@@ -270,7 +270,14 @@ where `prompts.txt` has one `Label: phrase` per line.
    on staging since 2026-09-28; see "Vision analysis" in
    [deployment](../deployment.md). Production needs `make vision-models` and
    the unit set up with `DEPLOY_HOST=prod`.
-4. **Photo search.**
+4. ~~**Photo search.**~~ Done. `ListFamilyPhotos` takes a `query`: names of
+   visible people in it become an all-of person filter ("Maeve at the park"),
+   the rest is embedded as "a photo of …" and ranks the photos that pass the
+   other filters. A result must score at least 0.23 and within 0.05 of the
+   best match (calibrated on the seed photos, where absent subjects top out
+   near 0.22); a title or description containing the words always matches.
+   Without the daemon, search falls back to titles and descriptions and says
+   so. Family vectors are cached in memory and dropped on any embedding write.
 5. **Auto tags** with a review screen.
 6. **Milestone features:** suggested category, photo suggestions, sibling
    matching.

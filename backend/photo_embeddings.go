@@ -64,9 +64,13 @@ func familyEmbeddings(tx *vbolt.Tx, familyId int) (embeddings []PhotoEmbedding) 
 func writePhotoEmbeddingTx(tx *vbolt.Tx, e *PhotoEmbedding) {
 	vbolt.Write(tx, PhotoEmbeddingBkt, e.PhotoId, e)
 	vbolt.SetTargetSingleTerm(tx, EmbeddingByFamilyIndex, e.PhotoId, e.FamilyId)
+	invalidateFamilyVectors(e.FamilyId)
 }
 
 func deletePhotoEmbeddingTx(tx *vbolt.Tx, photoId int) {
+	if e, ok := GetPhotoEmbedding(tx, photoId); ok {
+		invalidateFamilyVectors(e.FamilyId)
+	}
 	vbolt.Delete(tx, PhotoEmbeddingBkt, photoId)
 	vbolt.DeleteTargetTerms(tx, EmbeddingByFamilyIndex, photoId)
 }
@@ -218,6 +222,7 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 		})
 		vbolt.TxCommit(tx)
 	})
+	invalidateFamilyVectors(img.FamilyId)
 	return nil
 }
 
