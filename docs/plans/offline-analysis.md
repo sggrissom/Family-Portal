@@ -84,9 +84,8 @@ Endpoints: embed an image, embed a list of texts. The app stores the vectors
 and does all comparison itself, so the daemon stays stateless like the face
 daemon.
 
-Expected cost: a few hundred MB resident, a few hundred ms per image on the
-VPS CPU. Prototype locally against the seed photos to confirm before
-committing (see [order](#order-of-work)).
+Measured cost: about 800 MB resident and 174 ms per image on staging's CPU
+(see [prototype results](#prototype-results)).
 
 ### Storage
 
@@ -165,12 +164,76 @@ No new models needed:
 - **Backfill by version.** Changing a model or prompt list bumps that
   analyzer's version, and the sweep reprocesses in the background.
 
+## Prototype results
+
+Measured 2026-09-28 with `cmd/visionanalysis` (build tag `visionanalysis`),
+which loads OpenAI CLIP ViT-B/32 and all-MiniLM-L6-v2 as ONNX exports through
+ONNX Runtime 1.29 (`github.com/yalue/onnxruntime_go`). Tokenizers and CLIP
+preprocessing are pure Go in `vision/`; they reproduce the Hugging Face
+tokenizers token for token, and the Go image embeddings match a Python
+reference pipeline at cosine ≥ 0.998.
+
+The runtime is loaded with `dlopen`, so the daemon builds anywhere with cgo
+and needs no native libraries at build time. `libonnxruntime.so` is the
+official Microsoft build (glibc 2.28 and up), fetched into the models
+directory by `scripts/fetch-vision-models.sh` along with the models, all
+pinned by checksum. The same binary and library run on both boxes, so unlike
+the face daemon there is nothing to build on the server.
+
+| | laptop (i5-8350U) | staging (E5-2697 v2, AVX only) |
+| --- | --- | --- |
+| image embedding, 2 threads | 76 ms | 174 ms |
+| image embedding, 1 thread | | 321 ms |
+| CLIP text, batch of 20 prompts | 99 ms | 239 ms |
+| MiniLM, batch of 5 sentences | 7 ms | 20 ms |
+| resident memory | 830 MB | 790 MB |
+
+Production's CPU (Xeon Gold 6240R, AVX-512) is newer than staging's, so
+staging is the pessimistic case. At 174 ms an image, a 20,000-photo backfill
+is about an hour of two cores.
+
+**Quantized models were rejected.** The int8 exports cut memory to 265 MB,
+but their embeddings sit at cosine 0.84–0.92 from the fp32 ones, top-1
+labels flipped on 3 of the 16 seed photos, and on staging's AVX-only CPU they
+were slower (217 ms) rather than faster. The daemon uses fp32; 800 MB fits
+on both boxes (staging has about 3 GB available, production about 5.5 GB).
+
+**Quality.** Zero-shot over the 16 seed photos against 20 prompts put the
+intended label first on 15; the swaddled newborn scored "portrait" 0.274
+against "newborn" 0.269. On 251 COCO validation images, labelled by
+their captions:
+
+- Search is good. Precision at 5 was 1.0 for "at the beach", "snow",
+  "riding a bike", "cake", and "cooking in the kitchen", 0.8 for "birthday",
+  "dog", and "christmas", and 0.6 for "baby".
+- Auto-tag thresholds have to be per prompt, as planned. The cosine at which
+  precision reaches about 0.9 ranged from 0.24 (snow, bike) to 0.28
+  (birthday); a single global threshold of 0.26 gave precision 0.6–1.0 with
+  recall between 0.1 and 1.0. Scoring against a neutral "a photo" baseline
+  did not help.
+- MiniLM separates milestone phrasings, but with modest margins: "First
+  steps" scored 0.53 against "took a few steps today" and 0.34 against
+  "Started walking", versus 0.24 for "First word: mama" and 0.19 for "Lost
+  first tooth". Sibling matching should pair within a category and take the
+  best match, not rely on a fixed cutoff alone.
+
+SigLIP was not tried. It uses a SentencePiece tokenizer, which would need
+its own Go port, and CLIP's results leave no gap that clearly calls for it.
+
+Tier 2 is viable on both boxes with the fp32 models. To reproduce:
+
+```bash
+scripts/fetch-vision-models.sh ~/vision-models
+make build-vision
+build/family-vision -models ~/vision-models -bench backend/seedphotos -prompts prompts.txt
+```
+
+where `prompts.txt` has one `Label: phrase` per line.
+
 ## Order of work
 
-1. **Prototype the vision daemon locally.** Run CLIP or SigLIP over the seed
-   photos, measure CPU time and memory, and check auto-tag precision on a
-   handful of prompts. This decides whether Tier 2 is viable on the VPS
-   before anything is built around it.
+1. ~~**Prototype the vision daemon locally.**~~ Done; see
+   [prototype results](#prototype-results).
 2. **Tier 1.** Perceptual hash, GPS and places, quality score, and per-analyzer
    versions. Useful on its own and independent of the prototype's outcome.
 3. **Vision daemon in production**, with embedding backfill, deployed like the

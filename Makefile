@@ -44,6 +44,13 @@ build-face:
 	  go build -tags faceanalysis -ldflags="-s -w $(VERSION_LDFLAGS)" \
 	    -o $(BUILD_DIR)/family-face ./cmd/faceanalysis/
 
+build-vision:
+	@echo "Building family-vision daemon..."
+	mkdir -p $(BUILD_DIR)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=1 \
+	  go build -tags visionanalysis -ldflags="-s -w $(VERSION_LDFLAGS)" \
+	    -o $(BUILD_DIR)/family-vision ./cmd/visionanalysis/
+
 deploy: build
 	deploy $(APP_NAME) $(DEPLOY_HOST) $(BUILD_DIR)/$(BINARY_NAME)
 
@@ -76,7 +83,7 @@ deploy-face-remote:
 	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
 
 test:
-	go test ./backend/ -v
+	go test ./backend/ ./vision/ -v
 
 test-frontend:
 	@echo "Running frontend unit tests..."
@@ -131,7 +138,8 @@ check-css:
 lint: check-css
 	@echo "Running Go linters..."
 	# Use explicit packages so linting works before release/dist has been built.
-	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e
+	go vet -tags release ./ ./backend ./cfg ./local ./cmd/verifydb ./cmd/restoredrill ./cmd/smokecheck ./cmd/e2e ./vision
+	go vet -tags visionanalysis ./vision ./cmd/visionanalysis
 	# cmd/seed is !release-only, so it needs the untagged pass to be vetted
 	# at all.
 	go vet ./cmd/seed
