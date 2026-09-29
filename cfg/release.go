@@ -11,6 +11,7 @@ const SiteURL = "https://familyrecord.app"
 const EnableFaceTagging = true
 const FaceModelsDir = "/srv/apps/family/shared/models"
 const FaceAnalysisSocket = "/run/family-face/face.sock"
+const VisionAnalysisSocket = "/run/family-vision/vision.sock"
 
 const FamilyStorageQuotaBytes = 10 << 30
 const MinFreeDiskBytes = 1 << 30

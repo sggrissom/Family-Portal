@@ -24,24 +24,28 @@ func RegisterPhotoMaintenanceMethods(app *vbeam.Application) {
 type GetPhotoStatsRequest struct{}
 
 type GetPhotoStatsResponse struct {
-	TotalPhotos       int `json:"totalPhotos"`
-	ProcessedPhotos   int `json:"processedPhotos"`
-	PendingPhotos     int `json:"pendingPhotos"`
-	AnalysisPending   int `json:"analysisPending"`
-	AnalysisAnalyzing int `json:"analysisAnalyzing"`
-	AnalysisDone      int `json:"analysisDone"`
-	AnalysisFailed    int `json:"analysisFailed"`
-	AnalysisOutdated  int `json:"analysisOutdated"`
-	AutoTaggedCount   int `json:"autoTaggedCount"`
-	PersonsWithFace   int `json:"personsWithFace"`
-	FacesDetected     int `json:"facesDetected"`
-	FacesUnknown      int `json:"facesUnknown"`
-	FacesConfirmed    int `json:"facesConfirmed"`
-	FeaturesCurrent   int `json:"featuresCurrent"`
-	FeaturesPending   int `json:"featuresPending"`
-	FeaturesQueue     int `json:"featuresQueue"`
-	WithLocation      int `json:"withLocation"`
-	SimilarGroups     int `json:"similarGroups"`
+	TotalPhotos       int    `json:"totalPhotos"`
+	ProcessedPhotos   int    `json:"processedPhotos"`
+	PendingPhotos     int    `json:"pendingPhotos"`
+	AnalysisPending   int    `json:"analysisPending"`
+	AnalysisAnalyzing int    `json:"analysisAnalyzing"`
+	AnalysisDone      int    `json:"analysisDone"`
+	AnalysisFailed    int    `json:"analysisFailed"`
+	AnalysisOutdated  int    `json:"analysisOutdated"`
+	AutoTaggedCount   int    `json:"autoTaggedCount"`
+	PersonsWithFace   int    `json:"personsWithFace"`
+	FacesDetected     int    `json:"facesDetected"`
+	FacesUnknown      int    `json:"facesUnknown"`
+	FacesConfirmed    int    `json:"facesConfirmed"`
+	FeaturesCurrent   int    `json:"featuresCurrent"`
+	FeaturesPending   int    `json:"featuresPending"`
+	FeaturesQueue     int    `json:"featuresQueue"`
+	WithLocation      int    `json:"withLocation"`
+	SimilarGroups     int    `json:"similarGroups"`
+	EmbeddingsCurrent int    `json:"embeddingsCurrent"`
+	EmbeddingsPending int    `json:"embeddingsPending"`
+	VisionQueue       int    `json:"visionQueue"`
+	VisionStatus      string `json:"visionStatus"`
 }
 
 type ReprocessAllPhotosRequest struct{}
@@ -78,6 +82,11 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 			if features.HasLocation {
 				resp.WithLocation++
 			}
+			if e, found := GetPhotoEmbedding(ctx.Tx, photo.Id); embeddingOutdated(e, found) {
+				resp.EmbeddingsPending++
+			} else {
+				resp.EmbeddingsCurrent++
+			}
 		}
 		switch photo.AnalysisStatus {
 		case 0:
@@ -95,6 +104,8 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	}
 
 	resp.FeaturesQueue = FeaturesQueueLength()
+	resp.VisionQueue = VisionQueueLength()
+	resp.VisionStatus = VisionStatus()
 	groupSizes := map[int]int{}
 	vbolt.IterateAll(ctx.Tx, PhotoFeaturesBkt, func(_ int, f PhotoFeatures) bool {
 		if f.GroupId > 0 {

@@ -1151,6 +1151,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFacesTx(tx, photo.Id)
 	deletePhotoFeaturesTx(tx, photo.Id)
+	deletePhotoEmbeddingTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)

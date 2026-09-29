@@ -70,6 +70,10 @@ export async function fetch(route: string, prefix: string) {
       featuresQueue: 0,
       withLocation: 0,
       similarGroups: 0,
+      embeddingsCurrent: 0,
+      embeddingsPending: 0,
+      visionQueue: 0,
+      visionStatus: "off",
     });
   }
 
@@ -646,6 +650,21 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                 {data.featuresPending.toLocaleString()} pending ({data.featuresQueue} queued),{" "}
                 {data.withLocation.toLocaleString()} with location,{" "}
                 {data.similarGroups.toLocaleString()} similar groups
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-stat-card">
+            <div className="admin-stat-icon">
+              {data.visionStatus === "up" ? "🟢" : data.visionStatus === "down" ? "🔴" : "⚪"}
+            </div>
+            <div className="stat-content">
+              <h3>Image Embeddings</h3>
+              <div className="admin-stat-value">{data.embeddingsCurrent.toLocaleString()}</div>
+              <div className="admin-stat-label">
+                {data.visionStatus === "off"
+                  ? "Vision daemon not configured"
+                  : `${data.embeddingsPending.toLocaleString()} pending (${data.visionQueue} queued), daemon ${data.visionStatus}`}
               </div>
             </div>
           </div>
