@@ -20,6 +20,7 @@ type ViewMilestoneData = {
   milestone: server.Milestone | null;
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
+  matches: server.MilestoneMatch[];
 };
 
 export async function fetch(
@@ -44,7 +45,8 @@ export async function fetch(
       });
     }
   }
-  return [{ milestone, person, sameAge }, ""];
+  const [matches] = await server.GetMilestoneMatches({ milestoneId: milestone.id });
+  return [{ milestone, person, sameAge, matches: matches?.matches ?? [] }, ""];
 }
 
 export function view(
@@ -68,7 +70,12 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="view-milestone-container">
-        <ViewMilestonePage milestone={data.milestone} person={data.person} sameAge={data.sameAge} />
+        <ViewMilestonePage
+          milestone={data.milestone}
+          person={data.person}
+          sameAge={data.sameAge}
+          matches={data.matches}
+        />
       </main>
       <Footer />
     </div>
@@ -96,10 +103,12 @@ const ViewMilestonePage = ({
   milestone,
   person,
   sameAge,
+  matches,
 }: {
   milestone: server.Milestone;
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
+  matches: server.MilestoneMatch[];
 }) => {
   const age =
     person && isValidBirthday(person.birthday)
@@ -143,6 +152,23 @@ const ViewMilestonePage = ({
           </button>
         </div>
       </article>
+
+      {matches.length > 0 && (
+        <section className="milestone-matches">
+          <h2>The same milestone in the family</h2>
+          <ul>
+            {matches.map(match => (
+              <li key={match.milestone.id}>
+                <a href={`/milestone/${match.milestone.id}`}>
+                  <strong>{match.person.name.split(" ")[0]}</strong>
+                  {match.ageMonths >= 0 && ` at ${formatAgeAtMeasurement(match.ageMonths)}`}
+                  <span className="milestone-match-text">{match.milestone.description}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {person && (
         <SameAgeStrip

@@ -33,15 +33,10 @@ export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
 // Errors
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -51,11 +46,16 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrPersonNotFound = "Person not found or not in your family";
 
 export interface CreateAccountRequest {
     name: string
@@ -955,6 +955,39 @@ export interface SuggestionIdsResponse {
     updated: number
 }
 
+export interface SuggestMilestoneCategoryRequest {
+    description: string
+    personId: number
+}
+
+export interface SuggestMilestoneCategoryResponse {
+    category: string
+}
+
+export interface SuggestMilestonePhotosRequest {
+    personId: number
+    description: string
+    inputType: string
+    milestoneDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+    excludeIds: number[]
+}
+
+export interface SuggestMilestonePhotosResponse {
+    photoIds: number[]
+    ranked: boolean
+}
+
+export interface GetMilestoneMatchesRequest {
+    milestoneId: number
+}
+
+export interface GetMilestoneMatchesResponse {
+    ageMonths: number
+    matches: MilestoneMatch[]
+}
+
 export interface GetDashboardRequest {
     today: string
 }
@@ -1741,6 +1774,12 @@ export interface SuggestionGroup {
     color: string
     familyId: number
     suggestions: TagSuggestion[]
+}
+
+export interface MilestoneMatch {
+    person: Person
+    milestone: Milestone
+    ageMonths: number
 }
 
 export interface DashboardNudge {
@@ -2645,6 +2684,18 @@ export async function AcceptTagSuggestions(data: SuggestionIdsRequest): Promise<
 
 export async function RejectTagSuggestions(data: SuggestionIdsRequest): Promise<rpc.Response<SuggestionIdsResponse>> {
     return await rpc.call<SuggestionIdsResponse>('RejectTagSuggestions', JSON.stringify(data));
+}
+
+export async function SuggestMilestoneCategory(data: SuggestMilestoneCategoryRequest): Promise<rpc.Response<SuggestMilestoneCategoryResponse>> {
+    return await rpc.call<SuggestMilestoneCategoryResponse>('SuggestMilestoneCategory', JSON.stringify(data));
+}
+
+export async function SuggestMilestonePhotos(data: SuggestMilestonePhotosRequest): Promise<rpc.Response<SuggestMilestonePhotosResponse>> {
+    return await rpc.call<SuggestMilestonePhotosResponse>('SuggestMilestonePhotos', JSON.stringify(data));
+}
+
+export async function GetMilestoneMatches(data: GetMilestoneMatchesRequest): Promise<rpc.Response<GetMilestoneMatchesResponse>> {
+    return await rpc.call<GetMilestoneMatchesResponse>('GetMilestoneMatches', JSON.stringify(data));
 }
 
 export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Response<GetDashboardResponse>> {

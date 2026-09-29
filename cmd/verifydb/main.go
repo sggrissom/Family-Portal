@@ -65,6 +65,7 @@ func main() {
 		counts["family_places"] = count(tx, backend.FamilyPlaceBkt)
 		counts["photo_embeddings"] = count(tx, backend.PhotoEmbeddingBkt)
 		counts["tag_suggestions"] = count(tx, backend.TagSuggestionBkt)
+		counts["milestone_embeddings"] = count(tx, backend.MilestoneEmbeddingBkt)
 		counts["chat_messages"] = count(tx, backend.ChatMessagesBkt)
 		counts["family_link"] = count(tx, backend.FamilyLinkBkt)
 		counts["activities"] = count(tx, backend.ActivityBkt)

@@ -293,8 +293,33 @@ where `prompts.txt` has one `Label: phrase` per line.
    (grouped, click to exclude, accept or reject in bulk) and as dashed chips
    on the photo page. Suggested place tags were dropped: family places and the
    place filter already do that job without duplicating it as a tag.
-6. **Milestone features:** suggested category, photo suggestions, sibling
-   matching.
+6. ~~**Milestone features:**~~ Done. Milestones get a MiniLM embedding from
+   their own backlog worker (re-embedded when the text changes).
+   - Suggested category: a family milestone at similarity 0.6 or more lends
+     its category (the family's own convention wins); otherwise the closest of
+     a few example phrasings per category. 65% agreement with the seed
+     templates' labels, whose misses are mostly genuinely ambiguous ("First
+     real smile" filed under development). It only pre-selects a chip the
+     person hasn't touched, on the web form and via `SuggestMilestoneCategory`
+     for iOS.
+   - Photo suggestions: `SuggestMilestonePhotos` takes the person and the same
+     date fields as `AddMilestone` and returns up to 8 of their photos from two
+     weeks either side, ranked by CLIP against the description (by nearness
+     in time without the daemon). The add form shows them as "Photos from
+     around then", unattached until tapped.
+   - Matching: `GetMilestoneMatches` pairs a milestone with each visible
+     person's closest milestone when each is the other's best match and the
+     similarity is at least 0.45. On twelve paraphrase pairs ("First steps" /
+     "took a few steps today", "Potty trained" / "out of diapers") the
+     mutual-best rule got all twelve; true pairs scored 0.40 to 0.77 and the
+     runner-ups at most 0.40. The milestone page lists them with each
+     person's age ("Clara at 14 mo").
+   - Search: `SearchMilestones` blends word matches with milestones at 0.35
+     or more by meaning ("walking" finds "Took five steps").
+   - Ages in the text: `parseAgeFromText` (web only) offers to record the
+     milestone at an age the description states ("at 2.5 years", "an
+     18-month-old"), ignoring durations like "for 2 weeks" or "two years
+     ago".
 7. **Face-derived features**, as the redesigned person page needs them.
 
 ## Later: an LLM pass
