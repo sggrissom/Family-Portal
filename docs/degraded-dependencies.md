@@ -1,7 +1,8 @@
 # When an optional dependency is down
 
-Two subsystems talk to something outside the process: face analysis (the dlib
-daemon over a unix socket) and push notifications (APNs). Both are optional,
+Three subsystems talk to something outside the process: face analysis (the
+dlib daemon over a unix socket), vision analysis (the CLIP/MiniLM daemon over a
+unix socket), and push notifications (APNs). Both are optional,
 both will be unavailable sometimes, and neither may take primary user data with
 them.
 
@@ -33,6 +34,19 @@ the photo worker has already marked the photo complete, and it neither blocks
 nor returns an error. `make e2e` covers this — the end-to-end run has no face
 daemon, and a photo upload still has to finish.
 
+## Vision analysis
+
+| condition | behavior |
+| --- | --- |
+| not configured (local builds) | `cfg.VisionAnalysisSocket` is empty, so no worker exists and `QueuePhotoEmbedding` is a no-op. |
+| daemon down, at startup or later | The embedding job goes back on the front of the backlog and the worker pauses, 5 seconds doubling to 5 minutes, then tries again. Nothing is marked failed. |
+| daemon rejects one image | Logged; the photo stays without an embedding until the next startup sweep. |
+| backlog | One entry per photo id at most, so it is bounded by the size of the library. |
+| shutdown | Stopped without draining; the startup sweep requeues whatever is missing. |
+
+A photo without an embedding is simply absent from features that rank by
+embedding. Uploads and every other page are unaffected.
+
 ## Push notifications
 
 | condition | behavior |
@@ -53,9 +67,11 @@ web client already has it.
   the user's own write.
 - No optional dependency may return an error that fails an otherwise-successful
   request.
-- No queue may be unbounded. All four are `chan` with a fixed capacity and a
+- No queue may be unbounded. The four `chan` queues have a fixed capacity and a
   non-blocking `select` on send, so a stalled consumer causes dropped derived
-  work rather than a stalled request.
+  work rather than a stalled request. The features and vision backlogs hold
+  photo ids, deduplicated, so they can never outgrow the library, and adding
+  to them never blocks.
 
 ## Shutdown
 

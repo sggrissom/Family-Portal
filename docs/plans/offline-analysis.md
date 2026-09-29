@@ -266,8 +266,10 @@ where `prompts.txt` has one `Label: phrase` per line.
 1. ~~**Prototype the vision daemon locally.**~~ Done; see
    [prototype results](#prototype-results).
 2. ~~**Tier 1.**~~ Done; see [Tier 1 as built](#tier-1-as-built).
-3. **Vision daemon in production**, with embedding backfill, deployed like the
-   face daemon.
+3. ~~**Vision daemon in production**~~, with embedding backfill. Done: running
+   on staging since 2026-09-28; see "Vision analysis" in
+   [deployment](../deployment.md). Production needs `make vision-models` and
+   the unit set up with `DEPLOY_HOST=prod`.
 4. **Photo search.**
 5. **Auto tags** with a review screen.
 6. **Milestone features:** suggested category, photo suggestions, sibling
