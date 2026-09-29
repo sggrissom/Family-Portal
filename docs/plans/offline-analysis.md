@@ -320,7 +320,25 @@ where `prompts.txt` has one `Label: phrase` per line.
      milestone at an age the description states ("at 2.5 years", "an
      18-month-old"), ignoring durations like "for 2 weeks" or "two years
      ago".
-7. **Face-derived features**, as the redesigned person page needs them.
+7. ~~**Face-derived features**~~. Done: `GetPersonPhotoInsights` walks a
+   person's photos once and returns
+   - a growing-up montage, the best photo per month under two and per year
+     after (per calendar year without a birthday), scored by the person's
+     face size (0.45), photo quality (0.35), how few people share the photo
+     (0.2), and a bonus for a confirmed face. The Photos tab shows it as face
+     crops labelled by age;
+   - who they are photographed with, by count then recency, linking to a
+     photo search for the two of them;
+   - a header photo: the best face from the last 18 months, shown as a face
+     crop when the person has no profile photo set.
+
+## Status
+
+All seven steps are built (PRs #104 through #110, stacked). Staging runs the
+whole stack with the vision daemon. Production has neither the daemon nor the
+models yet; see "Vision analysis" in [deployment](../deployment.md). Left for
+later: suggestions on the edit-milestone form, trip detection, and the LLM
+pass below.
 
 ## Later: an LLM pass
 

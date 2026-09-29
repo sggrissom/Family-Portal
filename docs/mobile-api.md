@@ -404,6 +404,11 @@ answer rather than an error when the analysis daemon is down:
 `{photoIds, ranked}`), and `GetMilestoneMatches` (`{milestoneId}` → the same
 milestone in other people's records, with their ages in months).
 
+`GetPersonPhotoInsights` (`{personId}`) returns `growingUp` (one photo per
+month under two, per year after, each with the person's face `box` when
+known), `oftenWith` (people and photo counts), and `header` (a recent,
+face-centred photo for people without a profile photo, or null).
+
 ### Timeline: `GetFamilyTimeline`
 
 ```json

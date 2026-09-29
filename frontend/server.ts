@@ -33,10 +33,14 @@ export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
 // Errors
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -47,15 +51,11 @@ export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrFaceNotFound = "Face not found or access denied";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
 export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 
 export interface CreateAccountRequest {
     name: string
@@ -988,6 +988,16 @@ export interface GetMilestoneMatchesResponse {
     matches: MilestoneMatch[]
 }
 
+export interface GetPersonPhotoInsightsRequest {
+    personId: number
+}
+
+export interface GetPersonPhotoInsightsResponse {
+    growingUp: PortraitPhoto[]
+    oftenWith: OftenWith[]
+    header: PortraitPhoto | null
+}
+
 export interface GetDashboardRequest {
     today: string
 }
@@ -1780,6 +1790,20 @@ export interface MilestoneMatch {
     person: Person
     milestone: Milestone
     ageMonths: number
+}
+
+export interface PortraitPhoto {
+    photoId: number
+    box: FaceBox
+    date: string
+    ageMonths: number
+    year: number
+}
+
+export interface OftenWith {
+    person: Person
+    count: number
+    lastDate: string
 }
 
 export interface DashboardNudge {
@@ -2696,6 +2720,10 @@ export async function SuggestMilestonePhotos(data: SuggestMilestonePhotosRequest
 
 export async function GetMilestoneMatches(data: GetMilestoneMatchesRequest): Promise<rpc.Response<GetMilestoneMatchesResponse>> {
     return await rpc.call<GetMilestoneMatchesResponse>('GetMilestoneMatches', JSON.stringify(data));
+}
+
+export async function GetPersonPhotoInsights(data: GetPersonPhotoInsightsRequest): Promise<rpc.Response<GetPersonPhotoInsightsResponse>> {
+    return await rpc.call<GetPersonPhotoInsightsResponse>('GetPersonPhotoInsights', JSON.stringify(data));
 }
 
 export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Response<GetDashboardResponse>> {

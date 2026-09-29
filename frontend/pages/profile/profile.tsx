@@ -6,6 +6,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { openAddSheet } from "../../components/AppNav";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
+import { FaceCrop } from "../../components/FaceCrop";
 import { DaySummaryList } from "../../components/DaySummaryList";
 import { SameAgeStrip } from "../../components/SameAgeRows";
 import {
@@ -27,7 +28,12 @@ import { Metric, chartPoints, percentileBand } from "../../lib/ageChart";
 import { latestOf, timeAgo } from "../../lib/checkup";
 import { dueSummary } from "../../lib/familyStrip";
 import { ageTitle, monthsOld } from "../../lib/sameAge";
-import { ageInMonths, computePercentileLabel, isValidBirthday } from "../../lib/growthPercentiles";
+import {
+  ageInMonths,
+  computePercentileLabel,
+  formatAgeAtMeasurement,
+  isValidBirthday,
+} from "../../lib/growthPercentiles";
 import { formatMeasurement } from "../../lib/weightFormat";
 import { formatDate, formatLongDate } from "../../lib/dateUtils";
 import { localDateString } from "../../lib/when";
@@ -39,6 +45,13 @@ type ProfileData = {
   activities: server.GetPersonSeasonResponse;
   family: server.FamilyTimelineItem[];
   sameAge: server.GetSameAgeResponse | null;
+  insights: server.GetPersonPhotoInsightsResponse;
+};
+
+const emptyInsights: server.GetPersonPhotoInsightsResponse = {
+  growingUp: [],
+  oftenWith: [],
+  header: null,
 };
 
 const emptySeason: server.GetPersonSeasonResponse = {
@@ -51,7 +64,7 @@ const emptySeason: server.GetPersonSeasonResponse = {
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ProfileData>> {
   const personId = getIdFromRoute(route) || 0;
-  const [[person, personErr], [activities], [family], [sameAge]] = await Promise.all([
+  const [[person, personErr], [activities], [family], [sameAge], [insights]] = await Promise.all([
     server.GetPerson({ id: personId }),
     server.GetPersonSeason({ personId, seasonId: 0 }),
     server.GetFamilyTimeline(timelineRequest({ skipMilestones: true, skipPhotos: true })),
@@ -60,6 +73,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       fromPersonId: personId,
       today: localDateString(new Date()),
     }),
+    server.GetPersonPhotoInsights({ personId }),
   ]);
   if (!person) return [null, personErr || "Failed to load person"];
 
@@ -68,6 +82,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     activities: activities ?? { ...emptySeason, personId },
     family: family?.people ?? [],
     sameAge: sameAge?.fromPersonId === personId ? sameAge : null,
+    insights: insights ?? emptyInsights,
   });
 }
 
@@ -131,7 +146,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
 
   return (
     <div className="profile-page">
-      <ProfileHeader person={person} />
+      <ProfileHeader person={person} fallback={data.insights.header} />
 
       {hasBirthday && (
         <Snapshot
@@ -165,7 +180,9 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
 
       <div className="profile-tab-panel" role="tabpanel">
         {state.tab === "story" && <StoryTab data={data} today={today} />}
-        {state.tab === "photos" && <PhotosTab person={person} photos={data.person.photos ?? []} />}
+        {state.tab === "photos" && (
+          <PhotosTab person={person} photos={data.person.photos ?? []} insights={data.insights} />
+        )}
         {state.tab === "growth" && hasBirthday && <GrowthTab data={data} state={state} />}
         {state.tab === "activities" && (
           <PersonActivities
@@ -185,7 +202,13 @@ function ageLine(person: server.Person): string {
   return `${age} · ${copy.person.born(formatLongDate(person.birthday))}`;
 }
 
-const ProfileHeader = ({ person }: { person: server.Person }) => {
+const ProfileHeader = ({
+  person,
+  fallback,
+}: {
+  person: server.Person;
+  fallback: server.PortraitPhoto | null;
+}) => {
   const photoStatus = usePhotoStatus();
   return (
     <header className="profile-header">
@@ -201,6 +224,14 @@ const ProfileHeader = ({ person }: { person: server.Person }) => {
             cropX={person.profileCropX}
             cropY={person.profileCropY}
             cropScale={person.profileCropScale}
+          />
+        ) : fallback ? (
+          <FaceCrop
+            photoId={fallback.photoId}
+            box={fallback.box}
+            size={84}
+            alt={`${person.name}, from a recent photo`}
+            className="profile-face"
           />
         ) : (
           <span className="profile-initial">
@@ -393,13 +424,63 @@ const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
   );
 };
 
-const PhotosTab = ({ person, photos }: { person: server.Person; photos: server.Image[] }) => {
+const firstName = (name: string) => name.split(" ")[0];
+
+function timelineLabel(portrait: server.PortraitPhoto): string {
+  if (portrait.ageMonths < 0) return String(portrait.year);
+  if (portrait.ageMonths < 24) return formatAgeAtMeasurement(portrait.ageMonths);
+  return `${portrait.ageMonths / 12} yr`;
+}
+
+const PhotosTab = ({
+  person,
+  photos,
+  insights,
+}: {
+  person: server.Person;
+  photos: server.Image[];
+  insights: server.GetPersonPhotoInsightsResponse;
+}) => {
   const sorted = [...photos].sort((a, b) => b.photoDate.localeCompare(a.photoDate));
   if (sorted.length === 0) {
     return <p className="profile-empty">{copy.person.noPhotos}</p>;
   }
   return (
     <div className="profile-photos">
+      {insights.growingUp.length > 1 && (
+        <section className="profile-growing-up">
+          <h3>{copy.person.growingUp}</h3>
+          <div className="growing-up-strip">
+            {insights.growingUp.map(portrait => (
+              <a
+                key={portrait.photoId}
+                href={`/view-photo/${portrait.photoId}`}
+                className="growing-up-item"
+              >
+                <FaceCrop photoId={portrait.photoId} box={portrait.box} size={88} alt="" />
+                <span>{timelineLabel(portrait)}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+      {insights.oftenWith.length > 0 && (
+        <section className="profile-often-with">
+          <h3>{copy.person.oftenWith}</h3>
+          <div className="often-with-chips">
+            {insights.oftenWith.map(w => (
+              <a
+                key={w.person.id}
+                className="often-with-chip"
+                href={`/photos?q=${encodeURIComponent(`${firstName(person.name)} ${firstName(w.person.name)}`)}`}
+              >
+                {w.person.name}
+                <span className="often-with-count">{w.count}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
       <a href={`/photos?people=${person.id}`} className="profile-photos-open">
         {copy.person.openInPhotos}
       </a>
