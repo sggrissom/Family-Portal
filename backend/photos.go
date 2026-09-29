@@ -67,6 +67,8 @@ type GetPhotoResponse struct {
 	People []Person `json:"people"`
 	// Place is set only for members of the family that owns the photo.
 	Place *PhotoPlace `json:"place"`
+	// Pending tag suggestions, for people who can tag the photo.
+	Suggestions []SuggestedTag `json:"suggestions"`
 }
 
 type UpdatePhotoRequest struct {
@@ -1075,6 +1077,10 @@ func GetPhoto(ctx *vbeam.Context, req GetPhotoRequest) (resp GetPhotoResponse, e
 			resp.Place = &place
 		}
 	}
+	resp.Suggestions = []SuggestedTag{}
+	if CanAccessFamily(ctx.Tx, user, photo.FamilyId, AccessContribute) {
+		resp.Suggestions = pendingPhotoSuggestions(ctx.Tx, photo.Id)
+	}
 	return
 }
 
@@ -1160,6 +1166,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFacesTx(tx, photo.Id)
 	deletePhotoFeaturesTx(tx, photo.Id)
 	deletePhotoEmbeddingTx(tx, photo.Id)
+	deletePhotoSuggestionsTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
 		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)

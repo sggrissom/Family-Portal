@@ -255,9 +255,16 @@ func InitializeVisionWorker(db *vbolt.DB) {
 	globalVisionClient = newVisionClient(cfg.VisionAnalysisSocket)
 	client := globalVisionClient
 	globalVisionWorker = newBacklogWorker("Vision worker", func(photoId int) error {
-		return embedPhoto(db, client, photoId)
+		if err := embedPhoto(db, client, photoId); err != nil {
+			return err
+		}
+		return suggestTagsForPhoto(db, client, photoId)
 	})
-	globalVisionWorker.run(func() []int { return photosNeedingEmbedding(db) })
+	globalVisionWorker.run(func() []int {
+		ids := photosNeedingEmbedding(db)
+		vbolt.WithReadTx(db, func(tx *vbolt.Tx) { ids = append(ids, photosNeedingSuggestions(tx)...) })
+		return ids
+	})
 	LogInfo(LogCategoryWorker, "Vision worker started", map[string]interface{}{"socket": cfg.VisionAnalysisSocket})
 }
 

@@ -184,6 +184,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                 🙂 Faces
               </a>
             )}
+            {hasPhotos && (
+              <a href="/suggestions" className="btn btn-secondary">
+                🏷️ Suggestions
+              </a>
+            )}
             <a href="/add-photo" className="btn btn-primary">
               📸 Add Photo
             </a>

@@ -66,6 +66,7 @@ block(`
   align-items: center;
   gap: 0.5rem;
   flex: 1;
+  flex-wrap: wrap;
 }
 `);
 block(`
@@ -104,5 +105,19 @@ block(`
   color: var(--muted);
   font-size: 0.9rem;
   padding: 1rem 0;
+}
+`);
+
+block(`
+.manage-tags-container .tag-phrase {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.manage-tags-container .tag-phrase-input {
+  flex: 1 1 100%;
 }
 `);

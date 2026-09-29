@@ -33,8 +33,15 @@ export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
 // Errors
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -44,18 +51,11 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 
 export interface CreateAccountRequest {
     name: string
@@ -726,6 +726,7 @@ export interface CreateTagRequest {
     name: string
     color: string
     familyId: number
+    autoPhrase: string
 }
 
 export interface CreateTagResponse {
@@ -736,6 +737,7 @@ export interface UpdateTagRequest {
     id: number
     name: string
     color: string
+    autoPhrase: string | null
 }
 
 export interface UpdateTagResponse {
@@ -792,6 +794,7 @@ export interface GetPhotoResponse {
     image: Image
     people: Person[]
     place: PhotoPlace | null
+    suggestions: SuggestedTag[]
 }
 
 export interface UpdatePhotoRequest {
@@ -936,6 +939,20 @@ export interface DeleteFamilyPlaceRequest {
 
 export interface ListPhotoPlacesResponse {
     places: PlaceCount[]
+}
+
+export interface GetTagSuggestionsResponse {
+    enabled: boolean
+    groups: SuggestionGroup[]
+    total: number
+}
+
+export interface SuggestionIdsRequest {
+    ids: number[]
+}
+
+export interface SuggestionIdsResponse {
+    updated: number
 }
 
 export interface GetDashboardRequest {
@@ -1639,6 +1656,7 @@ export interface Tag {
     name: string
     color: string
     createdAt: string
+    autoPhrase: string
 }
 
 export interface ChatMessage {
@@ -1657,6 +1675,12 @@ export interface PhotoPlace {
     familyPlaceId: number
     latitude: number
     longitude: number
+}
+
+export interface SuggestedTag {
+    id: number
+    label: string
+    color: string
 }
 
 export interface PhotoWithPeople {
@@ -1708,6 +1732,15 @@ export interface PlaceCount {
     key: string
     name: string
     count: number
+}
+
+export interface SuggestionGroup {
+    key: string
+    label: string
+    tagId: number
+    color: string
+    familyId: number
+    suggestions: TagSuggestion[]
 }
 
 export interface DashboardNudge {
@@ -2128,6 +2161,17 @@ export interface FaceBox {
     top: number
     right: number
     bottom: number
+}
+
+export interface TagSuggestion {
+    id: number
+    photoId: number
+    familyId: number
+    tagId: number
+    label: string
+    score: number
+    status: number
+    createdAt: string
 }
 
 export interface PerformanceStats {
@@ -2589,6 +2633,18 @@ export async function DeleteFamilyPlace(data: DeleteFamilyPlaceRequest): Promise
 
 export async function ListPhotoPlaces(data: Empty): Promise<rpc.Response<ListPhotoPlacesResponse>> {
     return await rpc.call<ListPhotoPlacesResponse>('ListPhotoPlaces', JSON.stringify(data));
+}
+
+export async function GetTagSuggestions(data: Empty): Promise<rpc.Response<GetTagSuggestionsResponse>> {
+    return await rpc.call<GetTagSuggestionsResponse>('GetTagSuggestions', JSON.stringify(data));
+}
+
+export async function AcceptTagSuggestions(data: SuggestionIdsRequest): Promise<rpc.Response<SuggestionIdsResponse>> {
+    return await rpc.call<SuggestionIdsResponse>('AcceptTagSuggestions', JSON.stringify(data));
+}
+
+export async function RejectTagSuggestions(data: SuggestionIdsRequest): Promise<rpc.Response<SuggestionIdsResponse>> {
+    return await rpc.call<SuggestionIdsResponse>('RejectTagSuggestions', JSON.stringify(data));
 }
 
 export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Response<GetDashboardResponse>> {

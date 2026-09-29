@@ -29,6 +29,7 @@ type ViewPhotoData = {
   image: server.Image | null;
   people: server.Person[] | null;
   place: server.PhotoPlace | null;
+  suggestions: server.SuggestedTag[];
   tags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -69,6 +70,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       image: photoResp?.image ?? null,
       people: photoResp?.people ?? null,
       place: photoResp?.place ?? null,
+      suggestions: photoResp?.suggestions ?? [],
       tags: tagsResp?.tags ?? [],
       faces: facesResp ?? null,
       sameAge: sameAge ?? null,
@@ -127,6 +129,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           photo={data.image}
           people={data.people || []}
           place={data.place}
+          suggestions={data.suggestions}
           allTags={data.tags}
           faces={data.faces}
           sameAge={data.sameAge}
@@ -144,6 +147,7 @@ interface ViewPhotoPageProps {
   photo: server.Image;
   people: server.Person[];
   place: server.PhotoPlace | null;
+  suggestions: server.SuggestedTag[];
   allTags: server.Tag[];
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -508,6 +512,7 @@ const ViewPhotoPage = ({
   photo,
   people,
   place,
+  suggestions,
   allTags,
   faces,
   sameAge,
@@ -639,6 +644,44 @@ const ViewPhotoPage = ({
                     </span>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {suggestions.length > 0 && (
+            <div className="photo-tags">
+              <h3>Suggested tags</h3>
+              <div className="tag-list">
+                {suggestions.map(s => (
+                  <span
+                    key={s.id}
+                    className="tag-pill-view tag-suggestion"
+                    style={{ borderColor: s.color }}
+                  >
+                    <span className="tag-color-dot" style={{ background: s.color }} />
+                    {s.label}
+                    <button
+                      className="tag-suggestion-action"
+                      aria-label={`Add tag ${s.label}`}
+                      title="Add this tag"
+                      onClick={() =>
+                        refreshAfter(photo, server.AcceptTagSuggestions({ ids: [s.id] }))
+                      }
+                    >
+                      ✓
+                    </button>
+                    <button
+                      className="tag-suggestion-action"
+                      aria-label={`Don't tag ${s.label}`}
+                      title="Not this"
+                      onClick={() =>
+                        refreshAfter(photo, server.RejectTagSuggestions({ ids: [s.id] }))
+                      }
+                    >
+                      ✗
+                    </button>
+                  </span>
+                ))}
               </div>
             </div>
           )}

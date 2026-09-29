@@ -379,6 +379,23 @@ user believes they entered.
 - `dateFrom` / `dateTo` are inclusive `YYYY-MM-DD` dates, compared against the
   UTC day of `photoDate`. A reversed range is swapped, not refused.
 - There is no total count.
+- `placeKey` (from `ListPhotoPlaces`) keeps photos taken at that place. Only
+  members of the owning family can match by place.
+- `collapseSimilar: true` returns each group of near-duplicate photos once, as
+  its best photo, with the other ids in that photo's `similar`.
+- `query` switches to search: photos are ranked by fit to the text instead of
+  by date, and `cursor`/`nextCursor` become offsets (`s60`, …), still opaque.
+  First names of visible people in the query narrow to photos with all of them;
+  they come back in `matchedPersonIds`. `searchMode` is `semantic`, or `text`
+  when image search is down and only titles and descriptions were matched.
+  `collapseSimilar` is ignored while searching.
+
+`GetPhoto` also returns `place` (null unless the caller belongs to the photo's
+family, or the photo has no location) and `suggestions`, the pending suggested
+tags a contributor can accept or reject with `AcceptTagSuggestions` /
+`RejectTagSuggestions` (`{"ids": [...]}`). `GetTagSuggestions` groups every
+pending suggestion by tag for a review screen. A rejected suggestion is never
+made again.
 
 ### Timeline: `GetFamilyTimeline`
 
