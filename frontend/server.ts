@@ -1039,6 +1039,10 @@ export interface GetPhotoStatsResponse {
     featuresQueue: number
     withLocation: number
     similarGroups: number
+    embeddingsCurrent: number
+    embeddingsPending: number
+    visionQueue: number
+    visionStatus: string
 }
 
 export interface ReprocessAllPhotosRequest {

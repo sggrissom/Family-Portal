@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build deploy smoke e2e test test-frontend test-ui test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
+.PHONY: all build build-vision deploy-vision vision-models deploy smoke e2e test test-frontend test-ui test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -81,6 +81,17 @@ deploy-face-remote:
 	mkdir -p $(BUILD_DIR)
 	scp $(DEPLOY_HOST):/tmp/family-face $(BUILD_DIR)/family-face
 	deploy $(APP_NAME)-face $(DEPLOY_HOST) $(BUILD_DIR)/family-face internal
+
+deploy-vision: build-vision
+	deploy $(APP_NAME)-vision $(DEPLOY_HOST) $(BUILD_DIR)/family-vision internal
+
+# Fetch (or verify) the vision models and ONNX Runtime on the server, into
+# the directory the family-vision unit's VISION_MODELS points at.
+VISION_MODELS_DIR ?= /srv/apps/family/shared/models/vision
+vision-models:
+	scp scripts/fetch-vision-models.sh $(DEPLOY_HOST):/tmp/fetch-vision-models.sh
+	ssh $(DEPLOY_HOST) "sudo mkdir -p $(VISION_MODELS_DIR) && sudo chown apps:apps $(VISION_MODELS_DIR) && \
+	  sudo -u apps bash /tmp/fetch-vision-models.sh $(VISION_MODELS_DIR) && rm /tmp/fetch-vision-models.sh"
 
 test:
 	go test ./backend/ ./vision/ -v

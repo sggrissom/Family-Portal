@@ -166,7 +166,7 @@ func main() {
 
 	if *port != "" {
 		go func() {
-			log.Printf("family-vision healthz on :%s", *port)
+			log.Printf("family-vision healthz on 127.0.0.1:%s", *port)
 			health := http.NewServeMux()
 			health.HandleFunc("/healthz", healthz)
 			if err := http.ListenAndServe("127.0.0.1:"+*port, health); err != nil {

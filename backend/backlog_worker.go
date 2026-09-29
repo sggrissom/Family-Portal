@@ -2,16 +2,28 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 )
 
-// backlogWorker runs one job at a time from an unbounded backlog. New jobs
-// and startup sweeps both go through the backlog, so nothing is dropped when
-// a burst of uploads arrives.
+// errRetryLater from a job puts it back at the front of the backlog and
+// pauses the worker, doubling the pause on each consecutive failure.
+var errRetryLater = errors.New("retry later")
+
+var (
+	retryPauseMin = 5 * time.Second
+	retryPauseMax = 5 * time.Minute
+)
+
+// backlogWorker runs one job at a time from a deduplicated backlog, so it
+// never holds more than one entry per job (a photo id). New jobs and startup
+// sweeps both go through it, and nothing is dropped when uploads arrive in a
+// burst.
 type backlogWorker[T comparable] struct {
 	workerLifecycle
 	name    string
-	process func(T)
+	process func(T) error
 
 	mu      sync.Mutex
 	backlog []T
@@ -19,7 +31,7 @@ type backlogWorker[T comparable] struct {
 	wake    chan struct{}
 }
 
-func newBacklogWorker[T comparable](name string, process func(T)) *backlogWorker[T] {
+func newBacklogWorker[T comparable](name string, process func(T) error) *backlogWorker[T] {
 	return &backlogWorker[T]{
 		name:    name,
 		process: process,
@@ -43,6 +55,15 @@ func (w *backlogWorker[T]) add(jobs ...T) {
 	select {
 	case w.wake <- struct{}{}:
 	default:
+	}
+}
+
+func (w *backlogWorker[T]) pushFront(job T) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.queued[job] {
+		w.queued[job] = true
+		w.backlog = append([]T{job}, w.backlog...)
 	}
 }
 
@@ -77,6 +98,7 @@ func (w *backlogWorker[T]) run(sweep func() []T) bool {
 		if sweep != nil {
 			w.add(sweep()...)
 		}
+		pause := time.Duration(0)
 		for {
 			select {
 			case <-quit:
@@ -85,7 +107,16 @@ func (w *backlogWorker[T]) run(sweep func() []T) bool {
 			default:
 			}
 			if job, ok := w.pop(); ok {
-				w.process(job)
+				if err := w.process(job); errors.Is(err, errRetryLater) {
+					w.pushFront(job)
+					pause = min(max(pause*2, retryPauseMin), retryPauseMax)
+					select {
+					case <-quit:
+					case <-time.After(pause):
+					}
+					continue
+				}
+				pause = 0
 				continue
 			}
 			select {

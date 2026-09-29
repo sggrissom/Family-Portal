@@ -285,6 +285,9 @@ func MakeApplication() *vbeam.Application {
 	// Hashes, quality scores, and places for every photo
 	backend.InitializeFeaturesWorker(app.DB)
 
+	// Image embeddings from the vision daemon, when one is configured
+	backend.InitializeVisionWorker(app.DB)
+
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs
 

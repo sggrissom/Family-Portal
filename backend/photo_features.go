@@ -345,8 +345,9 @@ func InitializeFeaturesWorker(db *vbolt.DB) {
 	if globalFeaturesWorker != nil {
 		return
 	}
-	globalFeaturesWorker = newBacklogWorker("Photo features worker", func(photoId int) {
+	globalFeaturesWorker = newBacklogWorker("Photo features worker", func(photoId int) error {
 		analyzePhotoFeatures(db, photoId)
+		return nil
 	})
 	globalFeaturesWorker.run(func() []int { return photosNeedingFeatures(db) })
 	LogInfo(LogCategoryWorker, "Photo features worker started")

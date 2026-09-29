@@ -254,6 +254,43 @@ worker queues every photo whose record is missing or older, so the first start
 after an upgrade works through the whole library in the background. `/admin/photos`
 shows progress under "Photo Features".
 
+## Vision analysis
+
+`family-vision` (`cmd/visionanalysis`, build tag `visionanalysis`) embeds
+photos with CLIP and text with CLIP or MiniLM, for search and suggestions. It
+is an `internal@family-vision` unit like the face daemon, but nothing about it
+is built on the server: ONNX Runtime is loaded at run time from the models
+directory, so `make deploy-vision` builds locally and ships the binary.
+
+First-time setup on a box:
+
+```bash
+make vision-models DEPLOY_HOST=vps      # ~700 MB into /srv/apps/family/shared/models/vision
+ssh vps 'sudo mkdir -p /srv/apps/family-vision/shared && sudo chown -R apps:apps /srv/apps/family-vision'
+ssh vps 'sudo tee /srv/apps/family-vision/shared/.env' <<'ENV'
+VISION_SOCKET=/run/family-vision/vision.sock
+VISION_MODELS=/srv/apps/family/shared/models/vision
+VISION_THREADS=2
+PORT=9877
+ENV
+ssh vps 'sudo systemctl enable internal@family-vision'
+make deploy-vision DEPLOY_HOST=vps
+```
+
+`make vision-models` is idempotent and verifies checksums, so rerunning it is
+also how to check the files. The models are not in a deploy or a backup.
+`PORT` serves only `/healthz`, on loopback. The daemon takes about 3 seconds
+to load and holds about 800 MB; `VISION_THREADS` caps its CPU at two cores.
+
+The app always has the vision worker when built with `-tags release`
+(`cfg.VisionAnalysisSocket`). Unlike face analysis there is no startup check:
+if the socket is missing the worker puts the photo back and retries with a
+backoff that grows to five minutes, so the two units can start in either
+order. `/admin/photos` shows the daemon as up, down, or not configured under
+"Image Embeddings". Embeddings are stored per photo with the model name and a
+version; a new model or a bump of `embeddingVersion` re-embeds the library in
+the background.
+
 ## Host metrics
 
 `/admin` shows a Host card and folds disk pressure and proxy-measured 5xx into
