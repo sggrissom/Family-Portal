@@ -527,9 +527,10 @@ type milestoneTemplate struct {
 	tags        []string
 }
 
-// Every child gets the templates that fall at or before their current age, so
-// the teenager has a long history and the toddler has a short one, without
-// either list being written out twice.
+// Each child gets most of the templates that fall at or before their current
+// age, so the teenager has a long history and the toddler has a short one.
+// Some are skipped and the rest land a few weeks either side of the template
+// age, so siblings compared at the same age don't share identical records.
 var childMilestones = []milestoneTemplate{
 	{0, 2, "First real smile", "development", []string{"Firsts"}},
 	{0, 4, "Rolled over unassisted", "development", []string{"Firsts"}},
@@ -584,6 +585,16 @@ func (s *seeder) childMilestones(person Person, tags map[string]Tag) {
 		date := person.Birthday.AddDate(template.years, template.months, 0)
 		if date.After(s.now) {
 			break
+		}
+		if s.rng.Float64() < 0.3 {
+			continue
+		}
+		date = date.AddDate(0, 0, s.rng.Intn(61)-30)
+		if date.After(s.now) {
+			date = s.now
+		}
+		if date.Before(person.Birthday) {
+			date = person.Birthday
 		}
 		s.milestone(person, date, template.description, template.category, lookupTags(tags, template.tags)...)
 	}

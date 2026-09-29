@@ -107,17 +107,17 @@ const LandingPage = ({ providers }: { providers: AuthProviders }) => (
       <Shot
         src="/images/screenshots/person.png"
         alt="A person's page"
-        caption="Each person has a page gathering their milestones, measurements, and photos."
+        caption="A person's page: their latest measurements, their brothers and sisters at the same age, and everything recorded about them below."
       />
       <Shot
         src="/images/screenshots/growth.png"
         alt="The family growth chart"
-        caption="Growth charted by age, one child or several on the same axes."
+        caption="Height or weight by age, for one child or several together, with optional percentile bands."
       />
       <Shot
-        src="/images/screenshots/timeline.png"
-        alt="The family timeline"
-        caption="The timeline puts everything in one list, filtered by person or by kind."
+        src="/images/screenshots/history.png"
+        alt="The family history"
+        caption="History lists milestones, measurements, photos, and results in date order, filtered by person, year, or search."
       />
     </section>
 
