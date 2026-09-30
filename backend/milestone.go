@@ -453,7 +453,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	milestone.MilestoneDate, err = parseMilestoneDate(req, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -492,7 +492,7 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, errors.New("Person not found")
 	}
 
-	milestone.MilestoneDate, err = parseMilestoneDate(req, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -565,98 +565,16 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	return nil
 }
 
-type MilestoneDateRequest interface {
-	GetInputType() string
-	GetMilestoneDate() *string
-	GetAgeYears() *int
-	GetAgeMonths() *int
-}
-
-func (req AddMilestoneRequest) GetInputType() string      { return req.InputType }
-func (req AddMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req AddMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
-func (req AddMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
-
-func (req UpdateMilestoneRequest) GetInputType() string      { return req.InputType }
-func (req UpdateMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req UpdateMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
-func (req UpdateMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
-
-func parseMilestoneDate(req MilestoneDateRequest, personBirthday time.Time) (time.Time, error) {
-	if req.GetInputType() == "today" {
-		return time.Now(), nil
-	} else if req.GetInputType() == "date" {
-		milestoneDate := req.GetMilestoneDate()
-		if milestoneDate == nil || *milestoneDate == "" {
-			return time.Time{}, errors.New("Milestone date is required when input type is 'date'")
-		}
-		return time.Parse("2006-01-02", *milestoneDate)
-	} else if req.GetInputType() == "age" {
-		ageYears := req.GetAgeYears()
-		if ageYears == nil || *ageYears < 0 {
-			return time.Time{}, errors.New("Age years must be non-negative")
-		}
-		ageMonths := 0
-		if req.GetAgeMonths() != nil {
-			if *req.GetAgeMonths() < 0 || *req.GetAgeMonths() > 11 {
-				return time.Time{}, errors.New("Age months must be between 0 and 11")
-			}
-			ageMonths = *req.GetAgeMonths()
-		}
-
-		targetDate := personBirthday.AddDate(*ageYears, ageMonths, 0)
-		return targetDate, nil
-	} else {
-		return time.Time{}, errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-}
-
-func validateAddMilestoneRequest(req AddMilestoneRequest) error {
-	if req.PersonId <= 0 {
-		return errors.New("Person ID is required")
-	}
-	if strings.TrimSpace(req.Description) == "" {
+func validateMilestoneFields(description string, category string, inputType string) error {
+	if strings.TrimSpace(description) == "" {
 		return errors.New("Description is required")
 	}
-	validCategories := []string{"development", "behavior", "health", "achievement", "first", "other"}
-	isValidCategory := false
-	for _, category := range validCategories {
-		if req.Category == category {
-			isValidCategory = true
-			break
-		}
-	}
-	if !isValidCategory {
+	switch category {
+	case "development", "behavior", "health", "achievement", "first", "other":
+	default:
 		return errors.New("Category must be one of: development, behavior, health, achievement, first, other")
 	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-	return nil
-}
-
-func validateUpdateMilestoneRequest(req UpdateMilestoneRequest) error {
-	if req.Id <= 0 {
-		return errors.New("Milestone ID is required")
-	}
-	if strings.TrimSpace(req.Description) == "" {
-		return errors.New("Description is required")
-	}
-	validCategories := []string{"development", "behavior", "health", "achievement", "first", "other"}
-	isValidCategory := false
-	for _, category := range validCategories {
-		if req.Category == category {
-			isValidCategory = true
-			break
-		}
-	}
-	if !isValidCategory {
-		return errors.New("Category must be one of: development, behavior, health, achievement, first, other")
-	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-	return nil
+	return validateEntryInputType(inputType)
 }
 
 func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMilestoneResponse, err error) {
@@ -666,7 +584,11 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		return
 	}
 
-	if err = validateAddMilestoneRequest(req); err != nil {
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
 		return
 	}
 
@@ -742,7 +664,11 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		return
 	}
 
-	if err = validateUpdateMilestoneRequest(req); err != nil {
+	if req.Id <= 0 {
+		err = errors.New("Milestone ID is required")
+		return
+	}
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
 		return
 	}
 

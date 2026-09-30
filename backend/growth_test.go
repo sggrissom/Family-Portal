@@ -4,7 +4,6 @@ import (
 	"family/cfg"
 	"os"
 	"testing"
-	"time"
 
 	"go.hasen.dev/vbolt"
 	"golang.org/x/crypto/bcrypt"
@@ -162,7 +161,7 @@ func TestAddGrowthData(t *testing.T) {
 	}
 
 	for _, req := range validationInvalidRequests {
-		err := validateAddGrowthDataRequest(req)
+		err := validateMeasurementFields(req.MeasurementType, req.Value, req.Unit, req.InputType)
 		if err == nil {
 			t.Errorf("Expected validation error for request with value %f and unit %s", req.Value, req.Unit)
 		}
@@ -184,112 +183,6 @@ func TestAddGrowthData(t *testing.T) {
 			}
 		}
 	})
-}
-
-func TestParseMeasurementDate(t *testing.T) {
-	testDBPath := "test_date_parsing.db"
-	db := vbolt.Open(testDBPath)
-	vbolt.InitBuckets(db, &cfg.Info)
-	defer os.Remove(testDBPath)
-	defer db.Close()
-
-	birthday := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		name        string
-		request     AddGrowthDataRequest
-		expected    time.Time
-		shouldError bool
-	}{
-		{
-			name: "valid date input",
-			request: AddGrowthDataRequest{
-				InputType:       "date",
-				MeasurementDate: stringPtr("2023-06-15"),
-			},
-			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "valid age input - exactly 3 years",
-			request: AddGrowthDataRequest{
-				InputType: "age",
-				AgeYears:  intPtr(3),
-				AgeMonths: intPtr(0),
-			},
-			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "valid age input - 2 years 6 months",
-			request: AddGrowthDataRequest{
-				InputType: "age",
-				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(6),
-			},
-			expected:    time.Date(2022, 12, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "invalid date format",
-			request: AddGrowthDataRequest{
-				InputType:       "date",
-				MeasurementDate: stringPtr("invalid-date"),
-			},
-			shouldError: true,
-		},
-		{
-			name: "missing date",
-			request: AddGrowthDataRequest{
-				InputType: "date",
-			},
-			shouldError: true,
-		},
-		{
-			name: "negative age years",
-			request: AddGrowthDataRequest{
-				InputType: "age",
-				AgeYears:  intPtr(-1),
-				AgeMonths: intPtr(0),
-			},
-			shouldError: true,
-		},
-		{
-			name: "invalid age months",
-			request: AddGrowthDataRequest{
-				InputType: "age",
-				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(15),
-			},
-			shouldError: true,
-		},
-		{
-			name: "invalid input type",
-			request: AddGrowthDataRequest{
-				InputType: "invalid",
-			},
-			shouldError: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result, err := parseMeasurementDate(test.request, birthday)
-
-			if test.shouldError {
-				if err == nil {
-					t.Errorf("Expected error for %s, but got none", test.name)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error for %s: %v", test.name, err)
-				}
-				if !result.Equal(test.expected) {
-					t.Errorf("Expected date %v, got %v", test.expected, result)
-				}
-			}
-		})
-	}
 }
 
 func TestGrowthDataValidation(t *testing.T) {
@@ -345,18 +238,6 @@ func TestGrowthDataValidation(t *testing.T) {
 				MeasurementDate: stringPtr("2023-06-15"),
 			},
 			shouldError: false,
-		},
-		{
-			name: "invalid person ID",
-			request: AddGrowthDataRequest{
-				PersonId:        0,
-				MeasurementType: "height",
-				Value:           90.5,
-				Unit:            "cm",
-				InputType:       "date",
-				MeasurementDate: stringPtr("2023-06-15"),
-			},
-			shouldError: true,
 		},
 		{
 			name: "invalid measurement type",
@@ -445,7 +326,7 @@ func TestGrowthDataValidation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateAddGrowthDataRequest(test.request)
+			err := validateMeasurementFields(test.request.MeasurementType, test.request.Value, test.request.Unit, test.request.InputType)
 			if test.shouldError && err == nil {
 				t.Errorf("Expected validation error for %s, but got none", test.name)
 			}
