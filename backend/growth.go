@@ -149,22 +149,13 @@ func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int)
 		return growthData, errors.New("Person not found")
 	}
 
-	growthData.MeasurementDate, err = parseMeasurementDate(AddGrowthDataRequest{
-		InputType:       req.InputType,
-		MeasurementDate: req.MeasurementDate,
-		AgeYears:        req.AgeYears,
-		AgeMonths:       req.AgeMonths,
-	}, person.Birthday)
+	growthData.MeasurementDate, err = resolveEntryDate("Measurement", req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return growthData, err
 	}
 
-	var measurementType MeasurementType
-	if req.MeasurementType == "height" {
-		measurementType = Height
-	} else if req.MeasurementType == "weight" {
-		measurementType = Weight
-	} else {
+	measurementType, ok := measurementTypes[req.MeasurementType]
+	if !ok {
 		return growthData, errors.New("Invalid measurement type")
 	}
 
@@ -208,17 +199,13 @@ func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (Grow
 		return growthData, errors.New("Person not found or not in your family")
 	}
 
-	growthData.MeasurementDate, err = parseMeasurementDate(req, person.Birthday)
+	growthData.MeasurementDate, err = resolveEntryDate("Measurement", req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return growthData, err
 	}
 
-	var measurementType MeasurementType
-	if req.MeasurementType == "height" {
-		measurementType = Height
-	} else if req.MeasurementType == "weight" {
-		measurementType = Weight
-	} else {
+	measurementType, ok := measurementTypes[req.MeasurementType]
+	if !ok {
 		return growthData, errors.New("Invalid measurement type")
 	}
 
@@ -241,33 +228,6 @@ func writeGrowthData(tx *vbolt.Tx, growthData GrowthData) {
 	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, growthData.FamilyId)
 }
 
-func parseMeasurementDate(req AddGrowthDataRequest, personBirthday time.Time) (time.Time, error) {
-	if req.InputType == "today" {
-		return time.Now(), nil
-	} else if req.InputType == "date" {
-		if req.MeasurementDate == nil || *req.MeasurementDate == "" {
-			return time.Time{}, errors.New("Measurement date is required when input type is 'date'")
-		}
-		return time.Parse("2006-01-02", *req.MeasurementDate)
-	} else if req.InputType == "age" {
-		if req.AgeYears == nil || *req.AgeYears < 0 {
-			return time.Time{}, errors.New("Age years must be non-negative")
-		}
-		ageMonths := 0
-		if req.AgeMonths != nil {
-			if *req.AgeMonths < 0 || *req.AgeMonths > 11 {
-				return time.Time{}, errors.New("Age months must be between 0 and 11")
-			}
-			ageMonths = *req.AgeMonths
-		}
-
-		targetDate := personBirthday.AddDate(*req.AgeYears, ageMonths, 0)
-		return targetDate, nil
-	} else {
-		return time.Time{}, errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-}
-
 func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowthDataResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -275,7 +235,11 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 		return
 	}
 
-	if err = validateAddGrowthDataRequest(req); err != nil {
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if err = validateMeasurementFields(req.MeasurementType, req.Value, req.Unit, req.InputType); err != nil {
 		return
 	}
 
@@ -324,7 +288,11 @@ func UpdateGrowthData(ctx *vbeam.Context, req UpdateGrowthDataRequest) (resp Upd
 		return
 	}
 
-	if err = validateUpdateGrowthDataRequest(req); err != nil {
+	if req.Id <= 0 {
+		err = errors.New("Growth data ID is required")
+		return
+	}
+	if err = validateMeasurementFields(req.MeasurementType, req.Value, req.Unit, req.InputType); err != nil {
 		return
 	}
 
@@ -374,62 +342,26 @@ func DeleteGrowthData(ctx *vbeam.Context, req DeleteGrowthDataRequest) (resp Del
 	return
 }
 
-func validateUpdateGrowthDataRequest(req UpdateGrowthDataRequest) error {
-	if req.Id <= 0 {
-		return errors.New("Growth data ID is required")
-	}
-	if req.MeasurementType != "height" && req.MeasurementType != "weight" {
+var measurementTypes = map[string]MeasurementType{"height": Height, "weight": Weight}
+
+func validateMeasurementFields(measurementType string, value float64, unit string, inputType string) error {
+	if _, ok := measurementTypes[measurementType]; !ok {
 		return errors.New("Measurement type must be 'height' or 'weight'")
 	}
-	if req.Value <= 0 {
+	if value <= 0 {
 		return errors.New("Measurement value must be positive")
 	}
-	if req.Unit == "" {
+	if unit == "" {
 		return errors.New("Unit is required")
 	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
+	if err := validateEntryInputType(inputType); err != nil {
+		return err
 	}
-
-	if req.MeasurementType == "height" {
-		if req.Unit != "cm" && req.Unit != "in" {
-			return errors.New("Height unit must be 'cm' or 'in'")
-		}
-	} else if req.MeasurementType == "weight" {
-		if req.Unit != "kg" && req.Unit != "lbs" {
-			return errors.New("Weight unit must be 'kg' or 'lbs'")
-		}
+	if measurementType == "height" && unit != "cm" && unit != "in" {
+		return errors.New("Height unit must be 'cm' or 'in'")
 	}
-
-	return nil
-}
-
-func validateAddGrowthDataRequest(req AddGrowthDataRequest) error {
-	if req.PersonId <= 0 {
-		return errors.New("Person ID is required")
+	if measurementType == "weight" && unit != "kg" && unit != "lbs" {
+		return errors.New("Weight unit must be 'kg' or 'lbs'")
 	}
-	if req.MeasurementType != "height" && req.MeasurementType != "weight" {
-		return errors.New("Measurement type must be 'height' or 'weight'")
-	}
-	if req.Value <= 0 {
-		return errors.New("Measurement value must be positive")
-	}
-	if req.Unit == "" {
-		return errors.New("Unit is required")
-	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-
-	if req.MeasurementType == "height" {
-		if req.Unit != "cm" && req.Unit != "in" {
-			return errors.New("Height unit must be 'cm' or 'in'")
-		}
-	} else if req.MeasurementType == "weight" {
-		if req.Unit != "kg" && req.Unit != "lbs" {
-			return errors.New("Weight unit must be 'kg' or 'lbs'")
-		}
-	}
-
 	return nil
 }

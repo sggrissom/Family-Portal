@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: in progress. Phase 1 done.
+Status: in progress. Phases 1–2 done.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -77,14 +77,20 @@ to parse date fields. Growth duplicates the date algorithm and constructs an
 add request inside the update path to reuse it. Add/update validators also
 repeat each feature's field rules.
 
-- [ ] Replace the getter interface and request-to-request conversion with one
+- [x] Replace the getter interface and request-to-request conversion with one
       date resolver using concrete arguments or a small internal input struct.
-- [ ] Share growth field validation between add and update, leaving their
+- [x] Share growth field validation between add and update, leaving their
       distinct ID checks at the endpoints.
-- [ ] Share milestone description/category validation between add and update.
-- [ ] Keep the existing wire request fields, JSON names, serialized records,
+- [x] Share milestone description/category validation between add and update.
+- [x] Keep the existing wire request fields, JSON names, serialized records,
       error ordering, and user-facing errors unless a separate behavior fix is
       explicitly justified.
+
+Done: `resolveEntryDate` (backend/entry_date.go) is the one date resolver for
+growth, milestones, and milestone photo suggestions; `validateMeasurementFields`
+and `validateMilestoneFields` hold each feature's field rules. Photo uploads
+still resolve ages with their own 365/30-day approximation; unifying that is a
+behavior change and was left alone.
 
 Acceptance: existing date and validation tests pass for add and update, with
 coverage for missing dates, invalid dates, missing/negative years, months outside

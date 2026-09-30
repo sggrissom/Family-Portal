@@ -276,11 +276,6 @@ type SuggestMilestonePhotosRequest struct {
 	ExcludeIds []int `json:"excludeIds,omitempty"`
 }
 
-func (req SuggestMilestonePhotosRequest) GetInputType() string      { return req.InputType }
-func (req SuggestMilestonePhotosRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req SuggestMilestonePhotosRequest) GetAgeYears() *int         { return req.AgeYears }
-func (req SuggestMilestonePhotosRequest) GetAgeMonths() *int        { return req.AgeMonths }
-
 type SuggestMilestonePhotosResponse struct {
 	PhotoIds []int `json:"photoIds"`
 	// Ranked is false when the photos are only the ones nearest the date,
@@ -302,7 +297,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		err = errors.New("Person not found or not in your family")
 		return
 	}
-	date, dateErr := parseMilestoneDate(req, person.Birthday)
+	date, dateErr := resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if dateErr != nil {
 		return
 	}
