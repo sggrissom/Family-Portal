@@ -625,8 +625,8 @@ differs from the text above:
   Wording is in `lib/copy.ts`.
 - **Compare.** `ComparePeople` is removed; `/compare` still redirects to
   `/same-age`.
-- **Not done.** History, like the old timeline, only shows photos tagged with
-  someone.
+- **Untagged photos.** Photos with nobody tagged appear in the daily mosaics
+  when no person filter is set.
 
 ## Open questions
 

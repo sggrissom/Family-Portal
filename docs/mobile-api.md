@@ -430,6 +430,10 @@ face-centred photo for people without a profile photo, or null).
   `AppearanceDetail` that `GetPersonSeason` returns and `personIds` are the
   visible people in the entry. An appearance with no `occurredAt` is dated by
   its event's start. Without the flag, `appearances` is an empty array.
+- `includeUntaggedPhotos: true` fills `untaggedPhotos` with the photos in the
+  window that have nobody tagged, from every household the caller is a member
+  of (not linked households), and counts their years in `years`. Without the
+  flag, or with `skipPhotos`, `untaggedPhotos` is an empty array.
 
 Every other list proc returns the whole set: `ListPeople`,
 `GetPersonMilestones`, `ListTags`. There is no cursor and no total count.

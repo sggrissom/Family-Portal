@@ -51,6 +51,7 @@ const timeline: server.GetFamilyTimelineResponse = {
       personIds: [2],
     },
   ],
+  untaggedPhotos: [photo(20, "2026-07-01T00:00:00Z", [9]), photo(21, "2024-07-01T00:00:00Z")],
 };
 
 const all = { personIds: [], types: HISTORY_TYPES, tagIds: [] };
@@ -66,7 +67,14 @@ describe("historyView", () => {
     const view = historyView(timeline, all, null, "2026-09-27");
     const shared = view.records.photos.find(p => p.image.id === 10)!;
     expect(shared.people.map(p => p.name)).toEqual(["Clara", "Jake"]);
-    expect(view.records.photos).toHaveLength(2);
+    expect(view.records.photos.map(p => p.image.id)).toEqual([10, 11, 20, 21]);
+  });
+
+  it("shows photos with nobody tagged in the loaded years", () => {
+    const view = historyView(timeline, all, 2024, "2026-09-27");
+    const untagged = view.records.photos.find(p => p.image.id === 20)!;
+    expect(untagged.people).toEqual([]);
+    expect(view.records.photos.map(p => p.image.id)).not.toContain(21);
   });
 
   it("filters to the chosen people", () => {
@@ -80,7 +88,7 @@ describe("historyView", () => {
   it("with tags, keeps only tagged milestones and photos", () => {
     const view = historyView(timeline, { ...all, tagIds: [9] }, null, "2026-09-27");
     expect(view.records.milestones.map(m => m.id)).toEqual([1]);
-    expect(view.records.photos.map(p => p.image.id)).toEqual([10]);
+    expect(view.records.photos.map(p => p.image.id)).toEqual([10, 20]);
     expect(view.records.growth).toEqual([]);
     expect(view.records.appearances).toEqual([]);
     expect(view.range).toBeNull();

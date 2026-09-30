@@ -52,6 +52,7 @@ describe("mergeTimeline", () => {
     relations: [],
     years: [2024, 2023],
     appearances: [],
+    untaggedPhotos: [],
   });
 
   it("appends a window's entries to each person once", () => {
@@ -76,10 +77,20 @@ describe("mergeTimeline appearances", () => {
     relations: [],
     years: [],
     appearances,
+    untaggedPhotos: [],
   });
 
   it("adds a year's appearances once", () => {
     const merged = mergeTimeline(base([appearance(1)]), base([appearance(1), appearance(2)]));
     expect(merged.appearances.map(a => a.detail.appearance.id)).toEqual([1, 2]);
+  });
+
+  it("adds a year's untagged photos once", () => {
+    const photos = (ids: number[]) => ({
+      ...base([]),
+      untaggedPhotos: ids.map(id => ({ id }) as server.Image),
+    });
+    const merged = mergeTimeline(photos([1]), photos([1, 2]));
+    expect(merged.untaggedPhotos.map(p => p.id)).toEqual([1, 2]);
   });
 });

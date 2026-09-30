@@ -29,6 +29,7 @@ export function timelineRequest(
     skipMilestones: false,
     skipPhotos: false,
     includeActivities: false,
+    includeUntaggedPhotos: false,
     ...fields,
   };
 }
@@ -110,5 +111,6 @@ export function mergeTimeline(
         a => !(base.appearances ?? []).some(b => b.detail.appearance.id === a.detail.appearance.id)
       ),
     ],
+    untaggedPhotos: mergeById(base.untaggedPhotos ?? [], more.untaggedPhotos ?? []),
   };
 }
