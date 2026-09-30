@@ -11,6 +11,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -949,6 +950,9 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	if sizeVariant == "original" && r.URL.Query().Has("download") {
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": image.OriginalFilename}))
+	}
 
 	w.Header().Set("Cache-Control", photoCacheControl)
 	w.Header().Set("ETag", fmt.Sprintf("\"%d-%s-%d-%d\"", image.Id, sizeVariant, image.CreatedAt.Unix(), image.Status))

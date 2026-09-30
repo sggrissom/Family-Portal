@@ -697,6 +697,9 @@ const ViewPhotoPage = ({
           <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
             ✏️ Edit
           </a>
+          <a href={`/api/photo/${photo.id}/original?download=1`} className="btn btn-secondary">
+            ⬇️ Download original
+          </a>
 
           {people.length > 0 && (
             <div className="profile-photo-actions">
