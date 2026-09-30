@@ -233,16 +233,19 @@ faces in group shots, and the app then stores no face positions. Deploy
 `make deploy-face-remote` before or with the app.
 
 On startup the worker re-queues every photo whose analysis is pending, was
-interrupted, or predates stored face positions (`Image.AnalysisVersion`). The
-first start after an upgrade therefore re-analyzes the whole library in the
+interrupted, previously failed, or predates stored face positions
+(`Image.AnalysisVersion`). The first start after an upgrade therefore re-analyzes the whole library in the
 background, one photo at a time. Existing tags are kept.
 
 Face analysis is optional, and degrades quietly: if the socket is missing,
-photos still upload, process, and serve. But the reachability check runs **once,
-at app startup** (`backend/photo_analysis_worker.go:75`) — if the daemon is down
-when `app@family` starts, the worker is never created and stays off until the
-app is restarted, however healthy the daemon becomes later. Restart `family` after
-`family-face`, not before.
+photos still upload, process, and serve. When enabled, the worker starts even
+without the daemon and uses the same deduplicated backlog as vision. Photo
+analysis and profile-face updates retry connection failures, timeouts, HTTP 429,
+and HTTP 5xx with exponential backoff up to five minutes. Requests are bounded
+at 60 seconds. The units can start in either order; no app restart is needed
+when the daemon returns. Invalid-image responses are marked failed and skipped
+for the rest of that run, with the admin reanalysis action or startup sweep
+allowing another attempt.
 
 ## Photo features
 
@@ -252,7 +255,11 @@ Nothing to deploy or configure: the city lookup is the GeoNames extract
 embedded in the binary. Each analyzer stores its own version; on startup the
 worker queues every photo whose record is missing or older, so the first start
 after an upgrade works through the whole library in the background. `/admin/photos`
-shows progress under "Photo Features".
+shows progress under "Photo Features". Analyzer version 2 reruns the feature
+backfill once to repair records previously marked complete after file-read
+failures. Unreadable sources now remain outdated; restoring files and requeueing
+the photo (or restarting the app) retries them. A readable image without GPS
+is a completed location result; a missing original is not.
 
 ## Vision analysis
 
@@ -283,10 +290,13 @@ also how to check the files. The models are not in a deploy or a backup.
 to load and holds about 800 MB; `VISION_THREADS` caps its CPU at two cores.
 
 The app always has the vision worker when built with `-tags release`
-(`cfg.VisionAnalysisSocket`). Unlike face analysis there is no startup check:
+(`cfg.VisionAnalysisSocket`). Like face analysis there is no startup reachability
+check:
 if the socket is missing the worker puts the photo back and retries with a
 backoff that grows to five minutes, so the two units can start in either
-order. `/admin/photos` shows the daemon as up, down, or not configured under
+order. HTTP 429 and 5xx responses also retry; invalid-image 4xx responses are
+skipped rather than blocking the backlog. `/admin/photos` shows the daemon as
+up, down, or not configured under
 "Image Embeddings". Embeddings are stored per photo with the model name and a
 version; a new model or a bump of `embeddingVersion` re-embeds the library in
 the background.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"family/cfg"
 	"fmt"
 	"image"
@@ -15,7 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/disintegration/imaging"
 	"go.hasen.dev/vbolt"
@@ -28,17 +29,14 @@ const analysisMaxDimension = 2048
 type PhotoAnalysisJob struct {
 	ImageId  int
 	FamilyId int
+	// PersonId identifies a profile-face update instead of a photo analysis.
+	PersonId int
 }
 
 type photoAnalysisWorker struct {
-	workerLifecycle
-	jobQueue chan PhotoAnalysisJob
-	db       *vbolt.DB
-	client   *http.Client
-
-	backlogMu sync.Mutex
-	backlog   []PhotoAnalysisJob
-	wake      chan struct{}
+	*backlogWorker[PhotoAnalysisJob]
+	db     *vbolt.DB
+	client *http.Client
 }
 
 var globalAnalysisWorker *photoAnalysisWorker
@@ -52,11 +50,8 @@ func GetAnalysisWorkerStats() AnalysisWorkerStats {
 	if globalAnalysisWorker == nil {
 		return AnalysisWorkerStats{}
 	}
-	globalAnalysisWorker.backlogMu.Lock()
-	backlog := len(globalAnalysisWorker.backlog)
-	globalAnalysisWorker.backlogMu.Unlock()
 	return AnalysisWorkerStats{
-		QueueLength: len(globalAnalysisWorker.jobQueue) + backlog,
+		QueueLength: globalAnalysisWorker.length(),
 		IsRunning:   globalAnalysisWorker.isRunning(),
 	}
 }
@@ -72,134 +67,56 @@ func InitializeAnalysisWorker(db *vbolt.DB) {
 		return
 	}
 
-	conn, err := net.Dial("unix", cfg.FaceAnalysisSocket)
-	if err != nil {
-		LogInfo(LogCategoryWorker, "Face daemon not reachable", map[string]interface{}{
-			"error":  err.Error(),
-			"socket": cfg.FaceAnalysisSocket,
-		})
-		return
-	}
-	conn.Close()
+	initializeAnalysisWorker(db, cfg.FaceAnalysisSocket)
+}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", cfg.FaceAnalysisSocket)
-			},
-		},
-	}
-
-	globalAnalysisWorker = &photoAnalysisWorker{
-		jobQueue: make(chan PhotoAnalysisJob, 100),
-		db:       db,
-		client:   client,
-		wake:     make(chan struct{}, 1),
-	}
-
-	quit, done, _ := globalAnalysisWorker.start()
-	go globalAnalysisWorker.processJobs(quit, done)
+func initializeAnalysisWorker(db *vbolt.DB, socket string) {
+	aw := &photoAnalysisWorker{db: db, client: newFaceClient(socket)}
+	aw.backlogWorker = newBacklogWorker("Photo analysis worker", aw.processAnalysisJob)
+	globalAnalysisWorker = aw
+	aw.run(func() []PhotoAnalysisJob {
+		return append(peopleNeedingFaceEmbeddings(db), photosNeedingAnalysis(db)...)
+	})
 	LogInfo(LogCategoryWorker, "Photo analysis worker started", map[string]interface{}{
-		"socket": cfg.FaceAnalysisSocket,
+		"socket": socket,
 	})
 }
 
-func QueuePhotoAnalysis(job PhotoAnalysisJob) {
-	if globalAnalysisWorker == nil {
-		return
+func newFaceClient(socket string) *http.Client {
+	return &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", socket)
+			},
+		},
 	}
-	select {
-	case globalAnalysisWorker.jobQueue <- job:
-		log.Printf("[FACE_ANALYSIS] Photo %d queued for analysis", job.ImageId)
-	default:
-		globalAnalysisWorker.addBacklog([]PhotoAnalysisJob{job})
-		log.Printf("[FACE_ANALYSIS] Analysis queue full; photo %d added to backlog", job.ImageId)
+}
+
+func QueuePhotoAnalysis(job PhotoAnalysisJob) {
+	if globalAnalysisWorker != nil {
+		globalAnalysisWorker.add(job)
 	}
 }
 
 func QueueAnalysisBacklog(jobs []PhotoAnalysisJob) {
-	if globalAnalysisWorker == nil {
-		return
+	if globalAnalysisWorker != nil {
+		globalAnalysisWorker.add(jobs...)
 	}
-	globalAnalysisWorker.addBacklog(jobs)
-}
-
-func (aw *photoAnalysisWorker) addBacklog(jobs []PhotoAnalysisJob) {
-	if len(jobs) == 0 {
-		return
-	}
-	aw.backlogMu.Lock()
-	aw.backlog = append(aw.backlog, jobs...)
-	aw.backlogMu.Unlock()
-	select {
-	case aw.wake <- struct{}{}:
-	default:
-	}
-}
-
-func (aw *photoAnalysisWorker) popBacklog() (PhotoAnalysisJob, bool) {
-	aw.backlogMu.Lock()
-	defer aw.backlogMu.Unlock()
-	if len(aw.backlog) == 0 {
-		return PhotoAnalysisJob{}, false
-	}
-	job := aw.backlog[0]
-	aw.backlog = aw.backlog[1:]
-	return job, true
 }
 
 func TriggerPersonFaceUpdate(personId int) {
-	if globalAnalysisWorker == nil {
-		return
+	if globalAnalysisWorker != nil {
+		globalAnalysisWorker.add(PhotoAnalysisJob{PersonId: personId})
 	}
-	if err := updatePersonEmbedding(globalAnalysisWorker.db, globalAnalysisWorker.client, personId); err != nil {
-		log.Printf("[FACE_ANALYSIS] Failed to update face embedding for person %d: %v", personId, err)
-	}
-}
-
-func (aw *photoAnalysisWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
-	defer close(done)
-	aw.backfillPersonEmbeddings(quit)
-	aw.addBacklog(photosNeedingAnalysis(aw.db))
-	for {
-		select {
-		case <-quit:
-			aw.logStopped()
-			return
-		case job := <-aw.jobQueue:
-			aw.processAnalysisJob(job)
-			continue
-		default:
-		}
-
-		if job, ok := aw.popBacklog(); ok {
-			aw.processAnalysisJob(job)
-			continue
-		}
-
-		select {
-		case <-quit:
-			aw.logStopped()
-			return
-		case job := <-aw.jobQueue:
-			aw.processAnalysisJob(job)
-		case <-aw.wake:
-		}
-	}
-}
-
-func (aw *photoAnalysisWorker) logStopped() {
-	aw.backlogMu.Lock()
-	backlog := len(aw.backlog)
-	aw.backlogMu.Unlock()
-	LogInfo(LogCategoryWorker, "Photo analysis worker stopped", map[string]interface{}{
-		"abandoned": len(aw.jobQueue) + backlog,
-	})
 }
 
 func imageNeedsAnalysis(image Image) bool {
 	switch image.AnalysisStatus {
-	case 0, 1:
+	// Retry old failures once on startup as well; older workers recorded
+	// daemon outages as permanent failures.
+	case 0, 1, 3:
 		return true
 	case 2:
 		return image.AnalysisVersion < currentAnalysisVersion
@@ -224,51 +141,41 @@ func photosNeedingAnalysis(db *vbolt.DB) (jobs []PhotoAnalysisJob) {
 	return
 }
 
-func (aw *photoAnalysisWorker) backfillPersonEmbeddings(quit <-chan struct{}) {
-	var personIds []int
-	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
+func peopleNeedingFaceEmbeddings(db *vbolt.DB) (jobs []PhotoAnalysisJob) {
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, PeopleBkt, func(_ int, p Person) bool {
 			if p.ProfilePhotoId != 0 && len(p.FaceDescriptor) != 128 {
-				personIds = append(personIds, p.Id)
+				jobs = append(jobs, PhotoAnalysisJob{PersonId: p.Id})
 			}
 			return true
 		})
 	})
-	if len(personIds) == 0 {
-		return
-	}
-
-	failed := 0
-	for _, personId := range personIds {
-		select {
-		case <-quit:
-			return
-		default:
-		}
-		if err := updatePersonEmbedding(aw.db, aw.client, personId); err != nil {
-			log.Printf("[FACE_ANALYSIS] Backfill failed for person %d: %v", personId, err)
-			failed++
-		}
-	}
-	LogInfo(LogCategoryWorker, "Face embedding backfill finished", map[string]interface{}{
-		"candidates": len(personIds),
-		"failed":     failed,
-	})
+	return
 }
 
 func StopAnalysisWorker(ctx context.Context) bool {
 	if globalAnalysisWorker == nil {
 		return true
 	}
-	return globalAnalysisWorker.stopAndWait(ctx, false)
+	return globalAnalysisWorker.stopWait(ctx)
 }
 
-func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) {
+func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
+	if job.PersonId != 0 {
+		err := updatePersonEmbedding(aw.db, aw.client, job.PersonId)
+		if errors.Is(err, errRetryLater) {
+			return errRetryLater
+		}
+		if err != nil {
+			log.Printf("[FACE_ANALYSIS] Failed to update face embedding for person %d: %v", job.PersonId, err)
+		}
+		return nil
+	}
 	log.Printf("[FACE_ANALYSIS] Starting analysis of photo %d", job.ImageId)
 
 	if err := aw.setAnalysisStatus(job.ImageId, 1); err != nil {
 		log.Printf("[FACE_ANALYSIS] Failed to set analyzing status for photo %d: %v", job.ImageId, err)
-		return
+		return nil
 	}
 
 	var img Image
@@ -276,14 +183,18 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) {
 		img = GetImageById(tx, job.ImageId)
 	})
 	if img.Id == 0 {
-		return
+		return nil
 	}
 
 	faces, err := detectFaces(aw.client, img)
 	if err != nil {
 		log.Printf("[FACE_ANALYSIS] Face detection failed for photo %d: %v", job.ImageId, err)
+		if errors.Is(err, errRetryLater) {
+			aw.setAnalysisStatus(job.ImageId, 0)
+			return errRetryLater
+		}
 		aw.setAnalysisStatus(job.ImageId, 3)
-		return
+		return nil
 	}
 
 	tagged := 0
@@ -300,6 +211,7 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) {
 		vbolt.TxCommit(tx)
 	})
 	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d: %d face(s), %d auto-tagged", job.ImageId, len(faces), tagged)
+	return nil
 }
 
 type recognizeRequest struct {
@@ -323,9 +235,12 @@ func callRecognize(client *http.Client, req recognizeRequest) (recognizeResponse
 	body, _ := json.Marshal(req)
 	resp, err := client.Post("http://face/recognize", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return result, err
+		return result, fmt.Errorf("%w: %v", errRetryLater, err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
+		return result, fmt.Errorf("%w: face daemon returned status %d", errRetryLater, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return result, fmt.Errorf("face daemon returned status %d", resp.StatusCode)
 	}

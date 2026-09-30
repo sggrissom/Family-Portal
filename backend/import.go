@@ -165,6 +165,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	resp.Errors = append(resp.Errors, peopleErrors...)
 	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
+	var importedMilestoneIds []int
 	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, familyId)
 	resp.ImportedTags = importedTags
 	resp.SkippedTags = skippedTags
@@ -183,7 +184,8 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 
 		if req.ImportMilestones && len(importData.Milestones) > 0 {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
-			importedMilestones, skippedMilestones, milestoneErrors := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
+			importedMilestones, skippedMilestones, milestoneErrors, ids := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
+			importedMilestoneIds = ids
 			resp.ImportedMilestones = importedMilestones
 			resp.SkippedMilestones = skippedMilestones
 			resp.Errors = append(resp.Errors, milestoneErrors...)
@@ -200,6 +202,9 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 
 	if !req.DryRun {
 		vbolt.TxCommit(ctx.Tx)
+		for _, id := range importedMilestoneIds {
+			QueueMilestoneEmbedding(id)
+		}
 	}
 
 	return
@@ -654,7 +659,8 @@ func isDuplicateMilestone(tx *vbolt.Tx, personId int, date time.Time, descriptio
 	return false
 }
 
-func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personIdMapping map[int]int, familyId int, tagNameToId map[string]int) (int, int, []string) {
+func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personIdMapping map[int]int, familyId int, tagNameToId map[string]int) (int, int, []string, []int) {
+	var ids []int
 	var errors []string
 	importedCount := 0
 	skippedCount := 0
@@ -695,10 +701,11 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			}
 		}
 
+		ids = append(ids, newMilestone.Id)
 		importedCount++
 	}
 
-	return importedCount, skippedCount, errors
+	return importedCount, skippedCount, errors, ids
 }
 
 // importRelations rewrites each edge onto the people this import actually

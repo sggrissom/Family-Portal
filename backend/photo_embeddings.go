@@ -111,6 +111,9 @@ func (c *visionClient) post(path string, req any, resp any) error {
 	defer r.Body.Close()
 	if r.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(r.Body, 512))
+		if r.StatusCode >= 500 || r.StatusCode == http.StatusTooManyRequests {
+			return fmt.Errorf("%w: vision daemon returned %d: %s", errRetryLater, r.StatusCode, strings.TrimSpace(string(msg)))
+		}
 		return fmt.Errorf("vision daemon returned %d: %s", r.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return json.NewDecoder(r.Body).Decode(resp)
@@ -213,6 +216,9 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 	vector, model, err := client.embedImage(data)
 	if errors.Is(err, errVisionUnavailable) {
 		noteVisionReachable(false)
+		return errRetryLater
+	}
+	if errors.Is(err, errRetryLater) {
 		return errRetryLater
 	}
 	noteVisionReachable(true)

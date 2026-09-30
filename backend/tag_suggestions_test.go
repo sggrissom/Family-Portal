@@ -40,6 +40,17 @@ func phraseVector(text string, pinned map[string]int) []float32 {
 
 func startFakePhraseVision(t *testing.T, pinned map[string]int) *visionClient {
 	t.Helper()
+	// Different fake daemons assign different vectors to the same phrase.
+	// Keep their results from leaking through the process-wide cache.
+	phraseVectors.Lock()
+	previous := phraseVectors.byText
+	phraseVectors.byText = map[string][]float32{}
+	phraseVectors.Unlock()
+	t.Cleanup(func() {
+		phraseVectors.Lock()
+		phraseVectors.byText = previous
+		phraseVectors.Unlock()
+	})
 	socket := filepath.Join(t.TempDir(), "vision.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {

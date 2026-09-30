@@ -34,7 +34,15 @@ These are proposals, not release commitments or prerequisites for launch.
 | [Approximate dates and ages](plans/approximate-dates.md) | Record partial historical knowledge honestly and preserve uncertainty in browsing and comparison. Manual entry first; optional AI estimation only after evaluation. |
 | [Video](plans/video.md) | Videos alongside photos, with private object storage for the bytes. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
-| [Offline analysis](plans/offline-analysis.md) | Local search, suggested tags, duplicate grouping, photo places, and milestone matching. |
+| [Offline analysis](plans/offline-analysis.md) | Search, tags, photo features, milestone matching, and person insights are built. Next proposals: suggested event collections and sibling comparison montages. |
+
+The two next analysis proposals are detailed in
+[Offline analysis](plans/offline-analysis.md#next-proposals-collections-and-sibling-montages):
+
+- **Suggested event collections:** reviewable historical collections inferred
+  from photo dates, people, places, and similarity (medium complexity).
+- **Sibling comparison montages:** photos side by side at a comparable age or
+  recurring occasion, with actual ages and manual photo choices (low to medium).
 
 Unscoped candidates live in [Record ideas](plans/record-ideas.md). They are
 options to evaluate, not an implementation checklist. Approximate-date support

@@ -93,7 +93,7 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 		return nil
 	}
 	vectors, err := embedSentences(client, []string{m.Description})
-	if errors.Is(err, errVisionUnavailable) {
+	if errors.Is(err, errVisionUnavailable) || errors.Is(err, errRetryLater) {
 		return errRetryLater
 	}
 	if err != nil {

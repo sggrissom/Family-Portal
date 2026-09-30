@@ -94,6 +94,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 	var resp ImportDataResponse
 	var importErr error
+	var importedMilestoneIds []int
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessContribute)
 		if resolveErr != nil {
@@ -134,7 +135,8 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 			if len(importData.Milestones) > 0 {
 				filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
-				importedMilestones, skippedMilestones, milestoneErrors := importMilestones(tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
+				importedMilestones, skippedMilestones, milestoneErrors, ids := importMilestones(tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
+				importedMilestoneIds = ids
 				resp.ImportedMilestones = importedMilestones
 				resp.SkippedMilestones = skippedMilestones
 				resp.Errors = append(resp.Errors, milestoneErrors...)
@@ -187,6 +189,9 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for _, id := range importedMilestoneIds {
+		QueueMilestoneEmbedding(id)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
