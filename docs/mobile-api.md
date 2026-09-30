@@ -609,7 +609,13 @@ quietly loses 100 of them. Enforce the caps in the UI.
 Whole-set writes replace their whole set — `SetEntryRoster`,
 `SetAppearanceResults`, `SetAppearancePhotos`, `SetEventPhotos`,
 `UpdatePhotoTags`, `UpdateMilestoneTags`. Send the complete list every time; a
-partial list is a deletion.
+partial list is a deletion. `AddMilestone` and `UpdateMilestone` take the same
+whole-set `tagIds` in the same transaction as the milestone; on update an absent
+`tagIds` leaves the tags alone and `[]` clears them.
+
+`AddCheckup` saves an optional `height` and `weight` (`{value, unit}`) against one
+date in one transaction: both are stored or neither is. `AddGrowthData` still
+saves a single measurement.
 
 ---
 

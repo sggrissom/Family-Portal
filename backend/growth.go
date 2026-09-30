@@ -12,6 +12,7 @@ import (
 
 func RegisterGrowthMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddGrowthData)
+	vbeam.RegisterProc(app, AddCheckup)
 	vbeam.RegisterProc(app, GetGrowthData)
 	vbeam.RegisterProc(app, UpdateGrowthData)
 	vbeam.RegisterProc(app, DeleteGrowthData)
@@ -37,6 +38,25 @@ type AddGrowthDataRequest struct {
 
 type AddGrowthDataResponse struct {
 	GrowthData GrowthData `json:"growthData"`
+}
+
+type CheckupValue struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+}
+
+type AddCheckupRequest struct {
+	PersonId        int           `json:"personId"`
+	InputType       string        `json:"inputType"`
+	MeasurementDate *string       `json:"measurementDate,omitempty"`
+	AgeYears        *int          `json:"ageYears,omitempty"`
+	AgeMonths       *int          `json:"ageMonths,omitempty"`
+	Height          *CheckupValue `json:"height,omitempty"`
+	Weight          *CheckupValue `json:"weight,omitempty"`
+}
+
+type AddCheckupResponse struct {
+	GrowthData []GrowthData `json:"growthData"`
 }
 
 type UpdateGrowthDataRequest struct {
@@ -191,35 +211,53 @@ func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 }
 
 func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (GrowthData, error) {
-	var growthData GrowthData
-	var err error
-
-	person := GetPersonById(tx, req.PersonId)
-	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
-		return growthData, errors.New("Person not found or not in your family")
-	}
-
-	growthData.MeasurementDate, err = resolveEntryDate("Measurement", req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if err != nil {
-		return growthData, err
-	}
-
 	measurementType, ok := measurementTypes[req.MeasurementType]
 	if !ok {
-		return growthData, errors.New("Invalid measurement type")
+		return GrowthData{}, errors.New("Invalid measurement type")
 	}
+	date, err := resolveGrowthDate(tx, req.PersonId, familyId, req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths)
+	if err != nil {
+		return GrowthData{}, err
+	}
+	return addGrowthRecord(tx, req.PersonId, familyId, measurementType, CheckupValue{req.Value, req.Unit}, date), nil
+}
 
-	growthData.Id = vbolt.NextIntId(tx, GrowthDataBkt)
-	growthData.PersonId = req.PersonId
-	growthData.FamilyId = familyId
-	growthData.MeasurementType = measurementType
-	growthData.Value = req.Value
-	growthData.Unit = req.Unit
-	growthData.CreatedAt = time.Now()
+func AddCheckupTx(tx *vbolt.Tx, req AddCheckupRequest, familyId int) ([]GrowthData, error) {
+	date, err := resolveGrowthDate(tx, req.PersonId, familyId, req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths)
+	if err != nil {
+		return nil, err
+	}
+	var records []GrowthData
+	if req.Height != nil {
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Height, *req.Height, date))
+	}
+	if req.Weight != nil {
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Weight, *req.Weight, date))
+	}
+	return records, nil
+}
 
+func resolveGrowthDate(tx *vbolt.Tx, personId int, familyId int, inputType string, date *string, ageYears *int, ageMonths *int) (time.Time, error) {
+	person := GetPersonById(tx, personId)
+	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
+		return time.Time{}, errors.New("Person not found or not in your family")
+	}
+	return resolveEntryDate("Measurement", inputType, date, ageYears, ageMonths, person.Birthday)
+}
+
+func addGrowthRecord(tx *vbolt.Tx, personId int, familyId int, measurementType MeasurementType, value CheckupValue, date time.Time) GrowthData {
+	growthData := GrowthData{
+		Id:              vbolt.NextIntId(tx, GrowthDataBkt),
+		PersonId:        personId,
+		FamilyId:        familyId,
+		MeasurementType: measurementType,
+		Value:           value.Value,
+		Unit:            value.Unit,
+		MeasurementDate: date,
+		CreatedAt:       time.Now(),
+	}
 	writeGrowthData(tx, growthData)
-
-	return growthData, nil
+	return growthData
 }
 
 func writeGrowthData(tx *vbolt.Tx, growthData GrowthData) {
@@ -257,6 +295,47 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.GrowthData = growthData
+	return
+}
+
+func AddCheckup(ctx *vbeam.Context, req AddCheckupRequest) (resp AddCheckupResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if req.Height == nil && req.Weight == nil {
+		err = errors.New("Enter a height or a weight")
+		return
+	}
+	if req.Height != nil {
+		if err = validateMeasurementFields("height", req.Height.Value, req.Height.Unit, req.InputType); err != nil {
+			return
+		}
+	}
+	if req.Weight != nil {
+		if err = validateMeasurementFields("weight", req.Weight.Value, req.Weight.Unit, req.InputType); err != nil {
+			return
+		}
+	}
+
+	familyId, err := ActingFamilyForPerson(ctx.Tx, user, req.PersonId, AccessContribute)
+	if err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+	resp.GrowthData, err = AddCheckupTx(ctx.Tx, req, familyId)
+	if err != nil {
+		return
+	}
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 

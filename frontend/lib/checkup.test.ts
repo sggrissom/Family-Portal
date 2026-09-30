@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as server from "@app/server";
 import {
   CheckupEntry,
-  checkupMeasurements,
+  checkupValues,
   defaultHeightUnit,
   defaultWeightUnit,
   describeLast,
@@ -41,20 +41,21 @@ const entry = (fields: Partial<CheckupEntry> = {}): CheckupEntry => ({
   ...fields,
 });
 
-describe("checkupMeasurements", () => {
+describe("checkupValues", () => {
   it("needs at least one of height and weight", () => {
-    expect(checkupMeasurements(entry()).error).toBe("Enter a height, a weight, or both");
+    expect(checkupValues(entry()).error).toBe("Enter a height, a weight, or both");
   });
 
   it("saves both from one entry", () => {
-    expect(checkupMeasurements(entry({ height: "38.5", weight: "32" })).measurements).toEqual([
-      { measurementType: "height", value: 38.5, unit: "in" },
-      { measurementType: "weight", value: 32, unit: "lbs" },
-    ]);
+    expect(checkupValues(entry({ height: "38.5", weight: "32" }))).toEqual({
+      height: { value: 38.5, unit: "in" },
+      weight: { value: 32, unit: "lbs" },
+      error: "",
+    });
   });
 
   it("converts feet and inches, and pounds and ounces", () => {
-    const { measurements } = checkupMeasurements(
+    const { height, weight } = checkupValues(
       entry({
         heightUnit: "ft-in",
         feet: "3",
@@ -64,24 +65,24 @@ describe("checkupMeasurements", () => {
         ounces: "8",
       })
     );
-    expect(measurements).toEqual([
-      { measurementType: "height", value: 38.5, unit: "in" },
-      { measurementType: "weight", value: 7.5, unit: "lbs" },
-    ]);
+    expect(height).toEqual({ value: 38.5, unit: "in" });
+    expect(weight).toEqual({ value: 7.5, unit: "lbs" });
   });
 
   it("keeps centimetres as centimetres", () => {
-    expect(checkupMeasurements(entry({ heightUnit: "cm", height: "98" })).measurements).toEqual([
-      { measurementType: "height", value: 98, unit: "cm" },
-    ]);
+    expect(checkupValues(entry({ heightUnit: "cm", height: "98" }))).toEqual({
+      height: { value: 98, unit: "cm" },
+      weight: null,
+      error: "",
+    });
   });
 
   it("rejects values that are not measurements", () => {
-    expect(checkupMeasurements(entry({ height: "abc" })).error).toBe("Enter a height above zero");
-    expect(checkupMeasurements(entry({ weight: "0" })).error).toBe("Enter a weight above zero");
-    expect(
-      checkupMeasurements(entry({ weightUnit: "lb-oz", pounds: "7", ounces: "16" })).error
-    ).toBe("Enter a weight in pounds and ounces under 16");
+    expect(checkupValues(entry({ height: "abc" })).error).toBe("Enter a height above zero");
+    expect(checkupValues(entry({ weight: "0" })).error).toBe("Enter a weight above zero");
+    expect(checkupValues(entry({ weightUnit: "lb-oz", pounds: "7", ounces: "16" })).error).toBe(
+      "Enter a weight in pounds and ounces under 16"
+    );
   });
 });
 
@@ -116,7 +117,7 @@ describe("units", () => {
     const next = rememberUnits(
       newUnitPrefs(),
       5,
-      [{ measurementType: "weight", value: 7.5, unit: "lbs" }],
+      { height: null, weight: { value: 7.5, unit: "lbs" } },
       entry({ heightUnit: "cm", weightUnit: "lb-oz" })
     );
     expect(next).toEqual({

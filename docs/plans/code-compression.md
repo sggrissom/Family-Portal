@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: in progress. Phases 1–2 done.
+Status: in progress. Phases 1–3 done.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -112,13 +112,13 @@ Saving height and weight currently makes separate requests. The browser tracks
 partial successes, clears saved fields after failure, and constructs a recovery
 message. Move that coordination into one database transaction.
 
-- [ ] Add a concrete `AddCheckup` RPC accepting one person, one date/age input,
+- [x] Add a concrete `AddCheckup` RPC accepting one person, one date/age input,
       and one or both measurements. Final field names can follow existing conventions.
-- [ ] Validate every supplied measurement and authorization before committing;
+- [x] Validate every supplied measurement and authorization before committing;
       resolve the shared date once and return the created records/IDs.
-- [ ] Keep `AddGrowthData` working for existing clients. Share the concrete
+- [x] Keep `AddGrowthData` working for existing clients. Share the concrete
       measurement rules and storage writes, not a generic batch-operation framework.
-- [ ] Switch the add screen to the atomic RPC and delete partial-save bookkeeping.
+- [x] Switch the add screen to the atomic RPC and delete partial-save bookkeeping.
 
 Acceptance: height only, weight only, and both succeed; an empty checkup fails;
 an invalid second measurement leaves neither saved; foreign-family writes fail;
@@ -137,18 +137,23 @@ Relevant code: `frontend/pages/milestones/add-milestone.tsx`,
 Both screens save the milestone and then call `UpdateMilestoneTags`; neither
 checks that second request's returned error before navigating away.
 
-- [ ] Include optional tag IDs in add/update requests and save the milestone,
+- [x] Include optional tag IDs in add/update requests and save the milestone,
       photo associations, and tags in the same transaction.
-- [ ] Preserve omitted/null tag IDs as unchanged on update; an explicit empty
+- [x] Preserve omitted/null tag IDs as unchanged on update; an explicit empty
       array clears tags. Omitted tags on creation produce no tags.
-- [ ] Retain `UpdateMilestoneTags` for existing clients and reuse its concrete
+- [x] Retain `UpdateMilestoneTags` for existing clients and reuse its concrete
       authorization and tag-association rules without calling the RPC handler.
-- [ ] Remove the second request from each browser save path.
-- [ ] Queue embedding work only after a successful commit.
+- [x] Remove the second request from each browser save path.
+- [x] Queue embedding work only after a successful commit.
 
 Acceptance: omitted, empty, and populated tags behave correctly; invalid or
 unauthorized associations cause no partial changes; existing clients' requests
 still work; the browser reports failure without navigating away as if saved.
+
+Done: `AddCheckup` takes optional `height`/`weight` values against one resolved
+date; `AddMilestone`/`UpdateMilestone` take `tagIds` and share
+`setMilestonePhotos`/`setMilestoneTags` with `UpdateMilestoneTags`. The edit
+milestone screen still has its own date/validation state; phase 4 replaces it.
 
 Follow [the mobile API contract](../mobile-api.md). Regenerate
 `frontend/server.ts` through the normal development tooling; do not hand-edit it.

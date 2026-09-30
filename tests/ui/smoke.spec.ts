@@ -186,6 +186,23 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
 
   await expect(page).toHaveURL(/\/view-growth\/\d+$/);
   await expect(page.locator(".growth-detail-value")).toContainText("7 lb 8 oz");
+
+  await page.getByRole("link", { name: "Growth" }).first().click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("dialog").getByRole("link", { name: "Measurement" }).click();
+  await expect(page.locator(".entry-subject")).toContainText(baby.name);
+  await page.locator("#height").fill("22");
+  await page.locator("#pounds").fill("9");
+  await page.locator("#ounces").fill("16");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("under 16");
+  await expect(page.locator("#height")).toHaveValue("22");
+
+  await page.locator("#ounces").fill("2");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page).toHaveURL(/\/view-growth\/\d+,\d+$/);
+  await expect(page.locator(".growth-detail-value")).toHaveCount(2);
+  await expect(page.locator(".growth-detail-value").last()).toContainText("9 lb 2 oz");
 });
 
 test("a person is deleted from their edit page after seeing what goes with them", async ({
