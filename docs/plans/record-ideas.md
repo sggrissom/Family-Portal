@@ -96,5 +96,3 @@ makes them the cheapest ideas on this list.
 - **Scheduled export.** A reminder to download a full export, or an automatic
   one to a destination the family picks. A record meant to last decades
   shouldn't depend on one VPS.
-- **Original photo download.** Make sure the full-resolution original can be
-  downloaded from the photo page, not only through the full export.

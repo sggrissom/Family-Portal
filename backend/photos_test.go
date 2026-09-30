@@ -2,6 +2,7 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"family/cfg"
 	"fmt"
 	"image"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -632,5 +634,47 @@ func TestUpdatePhotoKeepsDate(t *testing.T) {
 	}
 	if !resp.Image.PhotoDate.Equal(taken) {
 		t.Errorf("PhotoDate = %v, want %v unchanged", resp.Image.PhotoDate, taken)
+	}
+}
+
+func TestServePhotoOriginalDownloadNamesTheUploadedFile(t *testing.T) {
+	fx := setupMatrixFixture(t)
+	photosDir := filepath.Join(cfg.StaticDir, "photos")
+	if err := os.MkdirAll(photosDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	originalPath := filepath.Join(photosDir, "download-test_original.jpg")
+	if err := os.WriteFile(originalPath, []byte("original bytes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(originalPath) })
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		fx.photo.Status = 0
+		fx.photo.FilePath = "photos/download-test.jpg"
+		fx.photo.OriginalFilename = "Beach Day.jpg"
+		vbolt.Write(tx, ImagesBkt, fx.photo.Id, &fx.photo)
+		vbolt.TxCommit(tx)
+	})
+
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req = req.WithContext(context.WithValue(req.Context(), UserContextKey, fx.owner))
+		rec := httptest.NewRecorder()
+		servePhotoHandler(rec, req)
+		return rec
+	}
+
+	rec := get(fmt.Sprintf("/api/photo/%d/original?download=1", fx.photo.Id))
+	if rec.Code != http.StatusOK || rec.Body.String() != "original bytes" {
+		t.Fatalf("download = %d %q, want the original file", rec.Code, rec.Body.String())
+	}
+	if got, want := rec.Header().Get("Content-Disposition"), `attachment; filename="Beach Day.jpg"`; got != want {
+		t.Errorf("Content-Disposition = %q, want %q", got, want)
+	}
+
+	rec = get(fmt.Sprintf("/api/photo/%d/original", fx.photo.Id))
+	if got := rec.Header().Get("Content-Disposition"); got != "" {
+		t.Errorf("inline original sent Content-Disposition %q", got)
 	}
 }
