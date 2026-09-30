@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: in progress. Phases 1–3 done.
+Status: phases 1–4 (the first implementation scope) done; 5 and 6 open.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -169,16 +169,22 @@ screens independently manage date/age input and conversions. Parsing has already
 diverged: `Number()` in the checkup helper rejects `12abc`, while `parseFloat()`
 in the edit form accepts its numeric prefix.
 
-- [ ] Use `WhenControl` and its request/validation helpers for milestone and
+- [x] Use `WhenControl` and its request/validation helpers for milestone and
       growth editing, with initialization from the existing record.
-- [ ] Share concrete per-measurement parsing/conversion rules. Do not force a
+- [x] Share concrete per-measurement parsing/conversion rules. Do not force a
       single-measurement editor to construct a whole checkup just to validate it.
-- [ ] Make numeric acceptance consistent and explicitly test the chosen behavior
+- [x] Make numeric acceptance consistent and explicitly test the chosen behavior
       for malformed input, non-finite values, negative values, and compound units.
-- [ ] Preserve units the existing editor supports, including kilograms; do not
+- [x] Preserve units the existing editor supports, including kilograms; do not
       narrow support to the newer checkup screen's available unit buttons.
-- [ ] Keep distinct page layouts and submit operations where workflows differ.
+- [x] Keep distinct page layouts and submit operations where workflows differ.
       Remove superseded state, validation, and handlers after migrating callers.
+
+Done: `heightValue`/`weightValue` (lib/checkup.ts) are the one parser for each
+measurement; `parseAmount` accepts plain decimals only. `HeightField`,
+`WeightField`, `CategoryChips`, and `TagPicker` render both add and edit. The
+edit screens use `WhenControl`; their preview panels and radio-button state are
+gone.
 
 Acceptance: add/edit agree on date and measurement rules; existing records open
 and save without unwanted unit/date changes; feet/inches and pounds/ounces work;

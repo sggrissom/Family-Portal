@@ -279,6 +279,80 @@ test("photos upload as soon as they are picked and take a caption after", async 
   await expect(page.locator(".photo-card").filter({ hasText: caption })).toHaveCount(2);
 });
 
+test("a measurement and a milestone are edited without losing their units", async ({ page }) => {
+  const kid = { name: "UI Editor Kid", birthdate: "2020-06-15" };
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: "Add family member" }).click();
+  await page.locator("#name").fill(kid.name);
+  await page.locator("#gender").selectOption("0");
+  await page.locator("#birthdate").fill(kid.birthdate);
+  await page.getByRole("button", { name: "Add Family Member" }).click();
+  await expect(personCard(page, kid.name)).toBeVisible();
+
+  await test.step("a centimetre height opens and saves in centimetres", async () => {
+    await addFor(page, kid.name, "Measurement");
+    await page.getByRole("button", { name: "cm", exact: true }).click();
+    await page.locator("#height").fill("98");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".growth-detail-value")).toContainText("98 cm");
+
+    await page.locator(".growth-detail-actions").getByRole("link", { name: /Edit/ }).click();
+    await expect(page).toHaveURL(/\/edit-growth\/\d+$/);
+    await expect(page.getByRole("button", { name: "cm", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await expect(page.locator("#height")).toHaveValue("98");
+
+    await page.locator("#height").fill("99abc");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("above zero");
+    await expect(page.locator("#height")).toHaveValue("99abc");
+
+    await page.locator("#height").fill("99.5");
+    await page.getByLabel("When").selectOption("age");
+    await page.getByLabel("Age in years").fill("3");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page).toHaveURL(/\/profile\/\d+$/);
+    await expect(page.locator(".day-checkup").first()).toContainText("99.5 cm");
+  });
+
+  await test.step("a milestone opens with its date and saves its edits", async () => {
+    await page.getByRole("link", { name: "Home" }).first().click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.getByRole("dialog").getByRole("link", { name: "Milestone" }).click();
+    await expect(page).toHaveURL(/\/add-milestone/);
+    const chip = page.getByRole("button", { name: kid.name });
+    if ((await chip.getAttribute("aria-pressed")) !== "true") await chip.click();
+    await page.locator("#description").fill("Rode a bike");
+    await page.getByLabel("When").selectOption("date");
+    await page.getByLabel("Date", { exact: true }).fill("2024-05-04");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page).toHaveURL(/\/profile\/\d+$/);
+
+    await page.locator(".day-milestone").filter({ hasText: "Rode a bike" }).click();
+    await page.locator(".milestone-detail-actions").getByRole("link", { name: /Edit/ }).click();
+    await expect(page).toHaveURL(/\/edit-milestone\/\d+$/);
+    await expect(page.locator("#description")).toHaveValue("Rode a bike");
+    await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2024-05-04");
+
+    await page.locator("#description").fill("Rode a bike alone");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page).toHaveURL(/\/profile\/\d+$/);
+    await expect(page.locator(".day-milestone").filter({ hasText: "alone" })).toHaveCount(1);
+  });
+});
+
 async function addFor(
   page: Page,
   personName: string,

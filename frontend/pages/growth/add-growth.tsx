@@ -1,7 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import { Ref } from "vlens/refs";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import * as auth from "../../lib/authCache";
@@ -12,17 +11,14 @@ import { timelineRequest } from "../../lib/photoPages";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { WhenControl } from "../../components/WhenControl";
-import { SegmentedControl } from "../../components/SegmentedControl";
+import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
 import { When, newWhen, whenProblem, whenRequest } from "../../lib/when";
 import {
   CheckupEntry,
-  HEIGHT_UNITS,
-  HeightUnit,
-  WEIGHT_UNITS,
-  WeightUnit,
   checkupValues,
+  newEntry,
   defaultHeightUnit,
   defaultWeightUnit,
   describeLast,
@@ -72,16 +68,7 @@ type CheckupForm = {
 const useCheckupForm = vlens.declareHook(
   (initialPersonId: number | null): CheckupForm => ({
     personId: initialPersonId,
-    entry: {
-      heightUnit: "in",
-      height: "",
-      feet: "",
-      inches: "",
-      weightUnit: "lb",
-      weight: "",
-      pounds: "",
-      ounces: "",
-    },
+    entry: newEntry(),
     when: newWhen(),
     defaultsApplied: false,
     error: "",
@@ -151,22 +138,6 @@ function choosePerson(form: CheckupForm, data: AddGrowthData, personId: number) 
   form.personId = form.personId === personId ? null : personId;
   form.error = "";
   applyDefaultUnits(form, data);
-  vlens.scheduleRedraw();
-}
-
-function setHeightUnit(form: CheckupForm, unit: HeightUnit) {
-  form.entry.heightUnit = unit;
-  form.entry.height = "";
-  form.entry.feet = "";
-  form.entry.inches = "";
-  vlens.scheduleRedraw();
-}
-
-function setWeightUnit(form: CheckupForm, unit: WeightUnit) {
-  form.entry.weightUnit = unit;
-  form.entry.weight = "";
-  form.entry.pounds = "";
-  form.entry.ounces = "";
   vlens.scheduleRedraw();
 }
 
@@ -264,99 +235,24 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
           </div>
         )}
 
-        <div className="checkup-field">
-          <div className="checkup-field-head">
-            <label htmlFor={form.entry.heightUnit === "ft-in" ? "feet" : "height"}>
-              {copy.measurement.height}
-            </label>
-            <SegmentedControl
-              label={copy.measurement.heightUnit}
-              options={HEIGHT_UNITS}
-              value={form.entry.heightUnit}
-              onChange={vlens.cachePartial(setHeightUnit, form)}
-              disabled={disabled}
-            />
-          </div>
-          {form.entry.heightUnit === "ft-in" ? (
-            <div className="checkup-inputs">
-              <UnitInput
-                id="feet"
-                suffix="ft"
-                label={copy.measurement.feet}
-                bind={vlens.ref(form.entry, "feet")}
-                disabled={disabled}
-              />
-              <UnitInput
-                id="inches"
-                suffix="in"
-                label={copy.measurement.inches}
-                bind={vlens.ref(form.entry, "inches")}
-                disabled={disabled}
-              />
-            </div>
-          ) : (
-            <div className="checkup-inputs">
-              <UnitInput
-                id="height"
-                suffix={form.entry.heightUnit}
-                bind={vlens.ref(form.entry, "height")}
-                disabled={disabled}
-              />
-            </div>
-          )}
-          {lastHeight && (
-            <small className="checkup-last">
-              {describeLast(lastHeight, personAgeMonths(person, lastHeight.measurementDate), now)}
-            </small>
-          )}
-        </div>
-
-        <div className="checkup-field">
-          <div className="checkup-field-head">
-            <label htmlFor={form.entry.weightUnit === "lb-oz" ? "pounds" : "weight"}>
-              {copy.measurement.weight}
-            </label>
-            <SegmentedControl
-              label={copy.measurement.weightUnit}
-              options={WEIGHT_UNITS}
-              value={form.entry.weightUnit}
-              onChange={vlens.cachePartial(setWeightUnit, form)}
-              disabled={disabled}
-            />
-          </div>
-          {form.entry.weightUnit === "lb-oz" ? (
-            <div className="checkup-inputs">
-              <UnitInput
-                id="pounds"
-                suffix="lb"
-                label={copy.measurement.pounds}
-                bind={vlens.ref(form.entry, "pounds")}
-                disabled={disabled}
-              />
-              <UnitInput
-                id="ounces"
-                suffix="oz"
-                label={copy.measurement.ounces}
-                bind={vlens.ref(form.entry, "ounces")}
-                disabled={disabled}
-              />
-            </div>
-          ) : (
-            <div className="checkup-inputs">
-              <UnitInput
-                id="weight"
-                suffix="lb"
-                bind={vlens.ref(form.entry, "weight")}
-                disabled={disabled}
-              />
-            </div>
-          )}
-          {lastWeight && (
-            <small className="checkup-last">
-              {describeLast(lastWeight, personAgeMonths(person, lastWeight.measurementDate), now)}
-            </small>
-          )}
-        </div>
+        <HeightField
+          entry={form.entry}
+          disabled={disabled}
+          note={
+            lastHeight
+              ? describeLast(lastHeight, personAgeMonths(person, lastHeight.measurementDate), now)
+              : ""
+          }
+        />
+        <WeightField
+          entry={form.entry}
+          disabled={disabled}
+          note={
+            lastWeight
+              ? describeLast(lastWeight, personAgeMonths(person, lastWeight.measurementDate), now)
+              : ""
+          }
+        />
 
         <div className="entry-actions">
           <a href={returnPath("/dashboard")} className="btn btn-secondary" onClick={cancel}>
@@ -370,28 +266,3 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
     </div>
   );
 };
-
-interface UnitInputProps {
-  id: string;
-  suffix: string;
-  label?: string;
-  bind: Ref;
-  disabled: boolean;
-}
-
-const UnitInput = ({ id, suffix, label, bind, disabled }: UnitInputProps) => (
-  <span className="unit-input">
-    <input
-      id={id}
-      type="text"
-      inputmode="decimal"
-      autocomplete="off"
-      aria-label={label}
-      disabled={disabled}
-      {...vlens.attrsBindInput(bind)}
-    />
-    <span className="unit-input-suffix" aria-hidden="true">
-      {suffix}
-    </span>
-  </span>
-);

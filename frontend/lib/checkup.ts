@@ -1,8 +1,8 @@
 import * as server from "../server";
-import { lbOzToLbs, OZ_PER_LB, formatMeasurement, prefersLbOz } from "./weightFormat";
+import { lbOzToLbs, OZ_PER_LB, formatMeasurement, prefersLbOz, splitLbOz } from "./weightFormat";
 
 export type HeightUnit = "in" | "ft-in" | "cm";
-export type WeightUnit = "lb" | "lb-oz";
+export type WeightUnit = "lb" | "lb-oz" | "kg";
 
 export const HEIGHT_UNITS: { value: HeightUnit; label: string }[] = [
   { value: "in", label: "in" },
@@ -13,6 +13,11 @@ export const HEIGHT_UNITS: { value: HeightUnit; label: string }[] = [
 export const WEIGHT_UNITS: { value: WeightUnit; label: string }[] = [
   { value: "lb", label: "lb" },
   { value: "lb-oz", label: "lb/oz" },
+];
+
+export const EDIT_WEIGHT_UNITS: { value: WeightUnit; label: string }[] = [
+  ...WEIGHT_UNITS,
+  { value: "kg", label: "kg" },
 ];
 
 export interface CheckupEntry {
@@ -36,6 +41,39 @@ export interface UnitPrefs {
 export interface CheckupValues {
   height: server.CheckupValue | null;
   weight: server.CheckupValue | null;
+}
+
+export function newEntry(): CheckupEntry {
+  return {
+    heightUnit: "in",
+    height: "",
+    feet: "",
+    inches: "",
+    weightUnit: "lb",
+    weight: "",
+    pounds: "",
+    ounces: "",
+  };
+}
+
+export function entryForRecord(record: server.GrowthData): CheckupEntry {
+  const entry = newEntry();
+  const value = String(record.value);
+  if (record.measurementType === server.Height) {
+    entry.heightUnit = record.unit === "cm" ? "cm" : "in";
+    entry.height = value;
+  } else if (record.unit === "kg") {
+    entry.weightUnit = "kg";
+    entry.weight = value;
+  } else if (prefersLbOz(record.value, record.unit)) {
+    const { lb, oz } = splitLbOz(record.value);
+    entry.weightUnit = "lb-oz";
+    entry.pounds = String(lb);
+    entry.ounces = String(oz);
+  } else {
+    entry.weight = value;
+  }
+  return entry;
 }
 
 export function newUnitPrefs(): UnitPrefs {
@@ -104,46 +142,53 @@ function blank(...values: string[]): boolean {
   return values.every(v => v.trim() === "");
 }
 
-function number(value: string): number {
-  return value.trim() === "" ? 0 : Number(value);
+// Plain decimals only: "12", "12.5", ".5". Anything else is NaN.
+export function parseAmount(text: string): number {
+  const t = text.trim();
+  if (t === "") return 0;
+  return /^(\d+\.?\d*|\.\d+)$/.test(t) ? Number(t) : NaN;
+}
+
+type Parsed = { value: server.CheckupValue | null; error: string };
+
+export function heightValue(entry: CheckupEntry): Parsed {
+  if (entry.heightUnit === "ft-in") {
+    if (blank(entry.feet, entry.inches)) return { value: null, error: "" };
+    const total = parseAmount(entry.feet) * 12 + parseAmount(entry.inches);
+    if (!(total > 0)) return { value: null, error: "Enter a height in feet and inches" };
+    return { value: { value: total, unit: "in" }, error: "" };
+  }
+  if (blank(entry.height)) return { value: null, error: "" };
+  const value = parseAmount(entry.height);
+  if (!(value > 0)) return { value: null, error: "Enter a height above zero" };
+  return { value: { value, unit: entry.heightUnit }, error: "" };
+}
+
+export function weightValue(entry: CheckupEntry): Parsed {
+  if (entry.weightUnit === "lb-oz") {
+    if (blank(entry.pounds, entry.ounces)) return { value: null, error: "" };
+    const pounds = parseAmount(entry.pounds);
+    const ounces = parseAmount(entry.ounces);
+    if (!(ounces < OZ_PER_LB && pounds + ounces > 0)) {
+      return { value: null, error: "Enter a weight in pounds and ounces under 16" };
+    }
+    return { value: { value: lbOzToLbs(pounds, ounces), unit: "lbs" }, error: "" };
+  }
+  if (blank(entry.weight)) return { value: null, error: "" };
+  const value = parseAmount(entry.weight);
+  if (!(value > 0)) return { value: null, error: "Enter a weight above zero" };
+  return { value: { value, unit: entry.weightUnit === "kg" ? "kg" : "lbs" }, error: "" };
 }
 
 export function checkupValues(entry: CheckupEntry): CheckupValues & { error: string } {
-  const values: CheckupValues = { height: null, weight: null };
-  const fail = (error: string) => ({ height: null, weight: null, error });
-
-  if (entry.heightUnit === "ft-in") {
-    if (!blank(entry.feet, entry.inches)) {
-      const feet = number(entry.feet);
-      const inches = number(entry.inches);
-      const total = feet * 12 + inches;
-      if (!(feet >= 0 && inches >= 0 && total > 0))
-        return fail("Enter a height in feet and inches");
-      values.height = { value: total, unit: "in" };
-    }
-  } else if (!blank(entry.height)) {
-    const value = number(entry.height);
-    if (!(value > 0)) return fail("Enter a height above zero");
-    values.height = { value, unit: entry.heightUnit };
-  }
-
-  if (entry.weightUnit === "lb-oz") {
-    if (!blank(entry.pounds, entry.ounces)) {
-      const pounds = number(entry.pounds);
-      const ounces = number(entry.ounces);
-      if (!(pounds >= 0 && ounces >= 0 && ounces < OZ_PER_LB && pounds + ounces > 0)) {
-        return fail("Enter a weight in pounds and ounces under 16");
-      }
-      values.weight = { value: lbOzToLbs(pounds, ounces), unit: "lbs" };
-    }
-  } else if (!blank(entry.weight)) {
-    const value = number(entry.weight);
-    if (!(value > 0)) return fail("Enter a weight above zero");
-    values.weight = { value, unit: "lbs" };
-  }
-
-  if (!values.height && !values.weight) return fail("Enter a height, a weight, or both");
-  return { ...values, error: "" };
+  const height = heightValue(entry);
+  const weight = weightValue(entry);
+  const error =
+    height.error ||
+    weight.error ||
+    (!height.value && !weight.value ? "Enter a height, a weight, or both" : "");
+  if (error) return { height: null, weight: null, error };
+  return { height: height.value, weight: weight.value, error: "" };
 }
 
 export function timeAgo(date: string, now: Date): string {
