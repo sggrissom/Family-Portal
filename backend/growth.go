@@ -172,7 +172,7 @@ func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int)
 	growthData.Value = req.Value
 	growthData.Unit = req.Unit
 
-	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
+	writeGrowthData(tx, growthData)
 
 	return growthData, nil
 }
@@ -192,9 +192,8 @@ func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 		return err
 	}
 
-	vbolt.SetTargetSingleTerm(tx, GrowthDataByPersonIndex, growthData.Id, -1)
-	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, -1)
-
+	vbolt.DeleteTargetTerms(tx, GrowthDataByPersonIndex, growthData.Id)
+	vbolt.DeleteTargetTerms(tx, GrowthDataByFamilyIndex, growthData.Id)
 	vbolt.Delete(tx, GrowthDataBkt, growthData.Id)
 
 	return nil
@@ -231,14 +230,13 @@ func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (Grow
 	growthData.Unit = req.Unit
 	growthData.CreatedAt = time.Now()
 
-	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
-
-	updateGrowthDataIndices(tx, growthData)
+	writeGrowthData(tx, growthData)
 
 	return growthData, nil
 }
 
-func updateGrowthDataIndices(tx *vbolt.Tx, growthData GrowthData) {
+func writeGrowthData(tx *vbolt.Tx, growthData GrowthData) {
+	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
 	vbolt.SetTargetSingleTerm(tx, GrowthDataByPersonIndex, growthData.Id, growthData.PersonId)
 	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, growthData.FamilyId)
 }

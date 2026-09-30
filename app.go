@@ -102,19 +102,6 @@ func OpenDB(dbpath string) *vbolt.DB {
 	dbConnection := vbolt.Open(dbpath)
 	vbolt.InitBuckets(dbConnection, &cfg.Info)
 
-	// Migration: Populate search index for existing milestones
-	vbolt.ApplyDBProcess(dbConnection, "2025-1004-populate-milestone-search", func() {
-		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
-			// Iterate all existing milestones
-			vbolt.IterateAll(tx, backend.MilestoneBkt, func(key int, milestone backend.Milestone) bool {
-				// Populate search index for each milestone
-				backend.UpdateMilestoneSearchIndex(tx, milestone)
-				return true // Continue iteration
-			})
-			vbolt.TxCommit(tx)
-		})
-	})
-
 	// Migration: one FamilyMembership row per user, mirroring User.FamilyId.
 	// Additive only — nothing reads memberships until Stage 3 of the
 	// multi-family plan (docs/multi-family-plan.md).
@@ -149,6 +136,15 @@ func OpenDB(dbpath string) *vbolt.DB {
 	vbolt.ApplyDBProcess(dbConnection, "2026-0925-index-photo-dates", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
 			backend.BackfillPhotoDateIndexes(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
+	// Migration: milestone search terms, which imports and person merges once
+	// skipped or left stale. Supersedes 2025-1004-populate-milestone-search.
+	vbolt.ApplyDBProcess(dbConnection, "2026-0930-rebuild-milestone-search", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.RebuildMilestoneSearchIndex(tx)
 			vbolt.TxCommit(tx)
 		})
 	})
