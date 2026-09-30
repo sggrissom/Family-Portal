@@ -4,6 +4,7 @@ import (
 	"errors"
 	"family/cfg"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type AddMilestoneRequest struct {
 	AgeYears      *int    `json:"ageYears,omitempty"`
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
+	TagIds        []int   `json:"tagIds,omitempty"`
 }
 
 type AddMilestoneResponse struct {
@@ -55,6 +57,7 @@ type UpdateMilestoneRequest struct {
 	AgeYears      *int    `json:"ageYears,omitempty"`
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
+	TagIds        []int   `json:"tagIds,omitempty"`
 }
 
 type UpdateMilestoneResponse struct {
@@ -467,15 +470,12 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 
 	writeMilestone(tx, milestone)
 
-	if req.PhotoIds != nil {
-		photoIds := normalizePhotoIds(req.PhotoIds)
-		for _, photoId := range photoIds {
-			if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
-				return milestone, err
-			}
-		}
+	if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
+		return milestone, err
 	}
-
+	if err := setMilestoneTags(tx, milestone, req.TagIds); err != nil {
+		return milestone, err
+	}
 	return milestone, nil
 }
 
@@ -503,40 +503,62 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	writeMilestone(tx, milestone)
 
 	if req.PhotoIds != nil {
-		photoIds := normalizePhotoIds(req.PhotoIds)
-		for _, photoId := range photoIds {
-			if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
-				return milestone, err
-			}
+		if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
+			return milestone, err
 		}
-
-		existingPhotoIds := GetMilestonePhotoIds(tx, milestone.Id)
-		existingSet := make(map[int]struct{}, len(existingPhotoIds))
-		for _, photoId := range existingPhotoIds {
-			existingSet[photoId] = struct{}{}
+	}
+	if req.TagIds != nil {
+		if err := setMilestoneTags(tx, milestone, req.TagIds); err != nil {
+			return milestone, err
 		}
+	}
+	return milestone, nil
+}
 
-		desiredSet := make(map[int]struct{}, len(photoIds))
-		for _, photoId := range photoIds {
-			desiredSet[photoId] = struct{}{}
+func setMilestonePhotos(tx *vbolt.Tx, milestone Milestone, photoIds []int) error {
+	photoIds = normalizePhotoIds(photoIds)
+	for _, photoId := range photoIds {
+		if err := validatePhotoAccess(tx, photoId, milestone.FamilyId); err != nil {
+			return err
 		}
-
-		for photoId := range existingSet {
-			if _, keep := desiredSet[photoId]; !keep {
-				removePhotoFromMilestone(tx, milestone.Id, photoId)
-			}
+	}
+	existing := GetMilestonePhotoIds(tx, milestone.Id)
+	for _, photoId := range existing {
+		if !slices.Contains(photoIds, photoId) {
+			removePhotoFromMilestone(tx, milestone.Id, photoId)
 		}
-
-		for photoId := range desiredSet {
-			if _, exists := existingSet[photoId]; !exists {
-				if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
-					return milestone, err
-				}
+	}
+	for _, photoId := range photoIds {
+		if !slices.Contains(existing, photoId) {
+			if err := addPhotoToMilestone(tx, milestone.Id, photoId, milestone.FamilyId); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
 
-	return milestone, nil
+func setMilestoneTags(tx *vbolt.Tx, milestone Milestone, tagIds []int) error {
+	for _, tagId := range tagIds {
+		tag := getTagById(tx, tagId)
+		if tag.Id == 0 || !CanFamilyAccess(tx, milestone.FamilyId, tag.FamilyId, AccessContribute) {
+			return errors.New("Tag not found or access denied")
+		}
+	}
+	existing := GetMilestoneTagIds(tx, milestone.Id)
+	for _, tagId := range existing {
+		if !slices.Contains(tagIds, tagId) {
+			removeTagFromMilestone(tx, milestone.Id, tagId)
+		}
+	}
+	added := map[int]bool{}
+	for _, tagId := range tagIds {
+		if !slices.Contains(existing, tagId) && !added[tagId] {
+			added[tagId] = true
+			addTagToMilestone(tx, milestone.Id, tagId, milestone.FamilyId)
+		}
+	}
+	return nil
 }
 
 func getFamilyMilestones(tx *vbolt.Tx, familyId int) (milestones []Milestone) {
@@ -747,39 +769,8 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 		return
 	}
 
-	tagIds := req.TagIds
-	if tagIds == nil {
-		tagIds = []int{}
-	}
-	for _, tagId := range tagIds {
-		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || !CanFamilyAccess(ctx.Tx, milestone.FamilyId, tag.FamilyId, AccessContribute) {
-			err = errors.New("Tag not found or access denied")
-			return
-		}
-	}
-
-	existingTagIds := GetMilestoneTagIds(ctx.Tx, req.MilestoneId)
-	existingSet := make(map[int]struct{}, len(existingTagIds))
-	for _, tagId := range existingTagIds {
-		existingSet[tagId] = struct{}{}
-	}
-
-	desiredSet := make(map[int]struct{}, len(tagIds))
-	for _, tagId := range tagIds {
-		desiredSet[tagId] = struct{}{}
-	}
-
-	for tagId := range existingSet {
-		if _, keep := desiredSet[tagId]; !keep {
-			removeTagFromMilestone(ctx.Tx, req.MilestoneId, tagId)
-		}
-	}
-
-	for tagId := range desiredSet {
-		if _, exists := existingSet[tagId]; !exists {
-			addTagToMilestone(ctx.Tx, req.MilestoneId, tagId, milestone.FamilyId)
-		}
+	if err = setMilestoneTags(ctx.Tx, milestone, req.TagIds); err != nil {
+		return
 	}
 
 	vbolt.TxCommit(ctx.Tx)

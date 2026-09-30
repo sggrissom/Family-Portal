@@ -18,12 +18,11 @@ import { copy } from "../../lib/copy";
 import { When, newWhen, whenProblem, whenRequest } from "../../lib/when";
 import {
   CheckupEntry,
-  CheckupMeasurement,
   HEIGHT_UNITS,
   HeightUnit,
   WEIGHT_UNITS,
   WeightUnit,
-  checkupMeasurements,
+  checkupValues,
   defaultHeightUnit,
   defaultWeightUnit,
   describeLast,
@@ -171,14 +170,6 @@ function setWeightUnit(form: CheckupForm, unit: WeightUnit) {
   vlens.scheduleRedraw();
 }
 
-function clearSaved(entry: CheckupEntry, type: "height" | "weight") {
-  if (type === "height") {
-    entry.height = entry.feet = entry.inches = "";
-  } else {
-    entry.weight = entry.pounds = entry.ounces = "";
-  }
-}
-
 async function saveCheckup(form: CheckupForm, event: Event) {
   event.preventDefault();
   if (form.saving) return;
@@ -188,8 +179,8 @@ async function saveCheckup(form: CheckupForm, event: Event) {
     vlens.scheduleRedraw();
     return;
   }
-  const { measurements, error } = checkupMeasurements(form.entry);
-  const problem = error || whenProblem(form.when);
+  const values = checkupValues(form.entry);
+  const problem = values.error || whenProblem(form.when);
   if (problem) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -202,38 +193,26 @@ async function saveCheckup(form: CheckupForm, event: Event) {
 
   const personId = form.personId;
   const when = whenRequest(form.when, new Date());
-  const savedIds: number[] = [];
-  const saved: CheckupMeasurement[] = [];
-
-  for (const m of measurements) {
-    const [resp, err] = await server.AddGrowthData({
-      personId,
-      measurementType: m.measurementType,
-      value: m.value,
-      unit: m.unit,
-      inputType: when.inputType,
-      measurementDate: when.date,
-      ageYears: when.ageYears,
-      ageMonths: when.ageMonths,
-    });
-    if (!resp) {
-      saved.forEach(s => clearSaved(form.entry, s.measurementType));
-      const kept = saved.map(s => copy.measurement[s.measurementType].toLowerCase());
-      form.error =
-        (kept.length ? `The ${kept.join(" and ")} was saved. ` : "") +
-        (err || "That measurement could not be saved.");
-      form.saving = false;
-      vlens.scheduleRedraw();
-      return;
-    }
-    savedIds.push(resp.growthData.id);
-    saved.push(m);
+  const [resp, err] = await server.AddCheckup({
+    personId,
+    inputType: when.inputType,
+    measurementDate: when.date,
+    ageYears: when.ageYears,
+    ageMonths: when.ageMonths,
+    height: values.height,
+    weight: values.weight,
+  });
+  if (!resp) {
+    form.error = err || "That checkup could not be saved.";
+    form.saving = false;
+    vlens.scheduleRedraw();
+    return;
   }
 
-  saveUnitPrefs(rememberUnits(loadUnitPrefs(), personId, measurements, form.entry));
+  saveUnitPrefs(rememberUnits(loadUnitPrefs(), personId, values, form.entry));
   writeLastPerson(personId);
   takeReturnPath("");
-  core.setRoute(`/view-growth/${savedIds.join(",")}`);
+  core.setRoute(`/view-growth/${resp.growthData.map(g => g.id).join(",")}`);
 }
 
 function cancel(event: Event) {

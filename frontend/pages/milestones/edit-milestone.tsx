@@ -139,13 +139,13 @@ async function onSubmitMilestone(
     ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
     ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
     photoIds: form.photoIds,
+    tagIds: form.tagIds,
   };
 
   try {
     let [resp, err] = await server.UpdateMilestone(request);
 
     if (resp) {
-      await server.UpdateMilestoneTags({ milestoneId: milestone.id, tagIds: form.tagIds });
       core.setRoute(`/profile/${form.selectedPersonId}`);
     } else {
       form.loading = false;

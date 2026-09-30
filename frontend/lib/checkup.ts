@@ -33,10 +33,9 @@ export interface UnitPrefs {
   lastWeight: WeightUnit | null;
 }
 
-export interface CheckupMeasurement {
-  measurementType: "height" | "weight";
-  value: number;
-  unit: string;
+export interface CheckupValues {
+  height: server.CheckupValue | null;
+  weight: server.CheckupValue | null;
 }
 
 export function newUnitPrefs(): UnitPrefs {
@@ -81,7 +80,7 @@ export function defaultWeightUnit(
 export function rememberUnits(
   prefs: UnitPrefs,
   personId: number,
-  measurements: CheckupMeasurement[],
+  values: CheckupValues,
   entry: CheckupEntry
 ): UnitPrefs {
   const next: UnitPrefs = {
@@ -90,11 +89,11 @@ export function rememberUnits(
     lastHeight: prefs.lastHeight,
     lastWeight: prefs.lastWeight,
   };
-  if (measurements.some(m => m.measurementType === "height")) {
+  if (values.height) {
     next.height[personId] = entry.heightUnit;
     next.lastHeight = entry.heightUnit;
   }
-  if (measurements.some(m => m.measurementType === "weight")) {
+  if (values.weight) {
     next.weight[personId] = entry.weightUnit;
     next.lastWeight = entry.weightUnit;
   }
@@ -109,26 +108,23 @@ function number(value: string): number {
   return value.trim() === "" ? 0 : Number(value);
 }
 
-export function checkupMeasurements(entry: CheckupEntry): {
-  measurements: CheckupMeasurement[];
-  error: string;
-} {
-  const measurements: CheckupMeasurement[] = [];
+export function checkupValues(entry: CheckupEntry): CheckupValues & { error: string } {
+  const values: CheckupValues = { height: null, weight: null };
+  const fail = (error: string) => ({ height: null, weight: null, error });
 
   if (entry.heightUnit === "ft-in") {
     if (!blank(entry.feet, entry.inches)) {
       const feet = number(entry.feet);
       const inches = number(entry.inches);
       const total = feet * 12 + inches;
-      if (!(feet >= 0 && inches >= 0 && total > 0)) {
-        return { measurements: [], error: "Enter a height in feet and inches" };
-      }
-      measurements.push({ measurementType: "height", value: total, unit: "in" });
+      if (!(feet >= 0 && inches >= 0 && total > 0))
+        return fail("Enter a height in feet and inches");
+      values.height = { value: total, unit: "in" };
     }
   } else if (!blank(entry.height)) {
     const value = number(entry.height);
-    if (!(value > 0)) return { measurements: [], error: "Enter a height above zero" };
-    measurements.push({ measurementType: "height", value, unit: entry.heightUnit });
+    if (!(value > 0)) return fail("Enter a height above zero");
+    values.height = { value, unit: entry.heightUnit };
   }
 
   if (entry.weightUnit === "lb-oz") {
@@ -136,24 +132,18 @@ export function checkupMeasurements(entry: CheckupEntry): {
       const pounds = number(entry.pounds);
       const ounces = number(entry.ounces);
       if (!(pounds >= 0 && ounces >= 0 && ounces < OZ_PER_LB && pounds + ounces > 0)) {
-        return { measurements: [], error: "Enter a weight in pounds and ounces under 16" };
+        return fail("Enter a weight in pounds and ounces under 16");
       }
-      measurements.push({
-        measurementType: "weight",
-        value: lbOzToLbs(pounds, ounces),
-        unit: "lbs",
-      });
+      values.weight = { value: lbOzToLbs(pounds, ounces), unit: "lbs" };
     }
   } else if (!blank(entry.weight)) {
     const value = number(entry.weight);
-    if (!(value > 0)) return { measurements: [], error: "Enter a weight above zero" };
-    measurements.push({ measurementType: "weight", value, unit: "lbs" });
+    if (!(value > 0)) return fail("Enter a weight above zero");
+    values.weight = { value, unit: "lbs" };
   }
 
-  if (measurements.length === 0) {
-    return { measurements, error: "Enter a height, a weight, or both" };
-  }
-  return { measurements, error: "" };
+  if (!values.height && !values.weight) return fail("Enter a height, a weight, or both");
+  return { ...values, error: "" };
 }
 
 export function timeAgo(date: string, now: Date): string {

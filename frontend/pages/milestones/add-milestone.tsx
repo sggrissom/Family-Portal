@@ -184,6 +184,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
     ageYears: when.ageYears,
     ageMonths: when.ageMonths,
     photoIds: form.photoIds,
+    tagIds: form.tagIds,
   });
 
   if (!resp) {
@@ -193,9 +194,6 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
     return;
   }
 
-  if (form.tagIds.length > 0) {
-    await server.UpdateMilestoneTags({ milestoneId: resp.milestone.id, tagIds: form.tagIds });
-  }
   writeLastPerson(personId);
   takeReturnPath("");
   core.setRoute(`/profile/${personId}`);

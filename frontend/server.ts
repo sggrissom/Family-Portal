@@ -388,6 +388,20 @@ export interface AddGrowthDataResponse {
     growthData: GrowthData
 }
 
+export interface AddCheckupRequest {
+    personId: number
+    inputType: string
+    measurementDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+    height: CheckupValue | null
+    weight: CheckupValue | null
+}
+
+export interface AddCheckupResponse {
+    growthData: GrowthData[]
+}
+
 export interface GetGrowthDataRequest {
     id: number
 }
@@ -428,6 +442,7 @@ export interface AddMilestoneRequest {
     ageYears: number | null
     ageMonths: number | null
     photoIds: number[]
+    tagIds: number[]
 }
 
 export interface AddMilestoneResponse {
@@ -459,6 +474,7 @@ export interface UpdateMilestoneRequest {
     ageYears: number | null
     ageMonths: number | null
     photoIds: number[]
+    tagIds: number[]
 }
 
 export interface UpdateMilestoneResponse {
@@ -1623,6 +1639,11 @@ export interface RelationLabelEntry {
     group: string
 }
 
+export interface CheckupValue {
+    value: number
+    unit: string
+}
+
 export interface Activity {
     id: number
     familyId: number
@@ -2456,6 +2477,10 @@ export async function RemoveRelation(data: RemoveRelationRequest): Promise<rpc.R
 
 export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Response<AddGrowthDataResponse>> {
     return await rpc.call<AddGrowthDataResponse>('AddGrowthData', JSON.stringify(data));
+}
+
+export async function AddCheckup(data: AddCheckupRequest): Promise<rpc.Response<AddCheckupResponse>> {
+    return await rpc.call<AddCheckupResponse>('AddCheckup', JSON.stringify(data));
 }
 
 export async function GetGrowthData(data: GetGrowthDataRequest): Promise<rpc.Response<GetGrowthDataResponse>> {
