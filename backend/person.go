@@ -608,16 +608,14 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	growthData := GetPersonGrowthDataTx(ctx.Tx, req.SourcePersonId)
 	for _, gd := range growthData {
 		gd.PersonId = req.TargetPersonId
-		vbolt.Write(ctx.Tx, GrowthDataBkt, gd.Id, &gd)
-		vbolt.SetTargetSingleTerm(ctx.Tx, GrowthDataByPersonIndex, gd.Id, req.TargetPersonId)
+		writeGrowthData(ctx.Tx, gd)
 	}
 	resp.MergedGrowthCount = len(growthData)
 
 	milestones := GetPersonMilestonesTx(ctx.Tx, req.SourcePersonId)
 	for _, milestone := range milestones {
 		milestone.PersonId = req.TargetPersonId
-		vbolt.Write(ctx.Tx, MilestoneBkt, milestone.Id, &milestone)
-		vbolt.SetTargetSingleTerm(ctx.Tx, MilestoneByPersonIndex, milestone.Id, req.TargetPersonId)
+		writeMilestone(ctx.Tx, milestone)
 	}
 	resp.MergedMilestones = len(milestones)
 

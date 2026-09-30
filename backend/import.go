@@ -395,71 +395,45 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 }
 
 func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeights []ImportWeight, personIdMapping map[int]int, familyId int) (int, int, []string) {
+	type measurement struct {
+		label    string
+		personId int
+		kind     MeasurementType
+		value    float64
+		unit     string
+		date     time.Time
+	}
+	var measurements []measurement
+	for _, height := range importHeights {
+		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", height.Date})
+	}
+	for _, weight := range importWeights {
+		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", weight.Date})
+	}
+
 	var errors []string
 	importedCount := 0
 	skippedCount := 0
-
-	for _, height := range importHeights {
-		newPersonId, exists := personIdMapping[height.PersonId]
+	for _, m := range measurements {
+		newPersonId, exists := personIdMapping[m.personId]
 		if !exists {
-			errors = append(errors, fmt.Sprintf("Height measurement for unknown person ID: %d", height.PersonId))
+			errors = append(errors, fmt.Sprintf("%s measurement for unknown person ID: %d", m.label, m.personId))
 			continue
 		}
-
-		if height.Date.Year() == 1 {
+		if m.date.Year() == 1 || isDuplicateMeasurement(tx, newPersonId, m.date, m.kind, m.value) {
 			skippedCount++
 			continue
 		}
-
-		if isDuplicateMeasurement(tx, newPersonId, height.Date, Height, height.Inches) {
-			skippedCount++
-			continue
-		}
-
-		var growthData GrowthData
-		growthData.Id = vbolt.NextIntId(tx, GrowthDataBkt)
-		growthData.PersonId = newPersonId
-		growthData.FamilyId = familyId
-		growthData.MeasurementType = Height
-		growthData.Value = height.Inches
-		growthData.Unit = "in"
-		growthData.MeasurementDate = height.Date
-		growthData.CreatedAt = time.Now()
-
-		vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
-		updateGrowthDataIndices(tx, growthData)
-		importedCount++
-	}
-
-	for _, weight := range importWeights {
-		newPersonId, exists := personIdMapping[weight.PersonId]
-		if !exists {
-			errors = append(errors, fmt.Sprintf("Weight measurement for unknown person ID: %d", weight.PersonId))
-			continue
-		}
-
-		if weight.Date.Year() == 1 {
-			skippedCount++
-			continue
-		}
-
-		if isDuplicateMeasurement(tx, newPersonId, weight.Date, Weight, weight.Pounds) {
-			skippedCount++
-			continue
-		}
-
-		var growthData GrowthData
-		growthData.Id = vbolt.NextIntId(tx, GrowthDataBkt)
-		growthData.PersonId = newPersonId
-		growthData.FamilyId = familyId
-		growthData.MeasurementType = Weight
-		growthData.Value = weight.Pounds
-		growthData.Unit = "lbs"
-		growthData.MeasurementDate = weight.Date
-		growthData.CreatedAt = time.Now()
-
-		vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
-		updateGrowthDataIndices(tx, growthData)
+		writeGrowthData(tx, GrowthData{
+			Id:              vbolt.NextIntId(tx, GrowthDataBkt),
+			PersonId:        newPersonId,
+			FamilyId:        familyId,
+			MeasurementType: m.kind,
+			Value:           m.value,
+			Unit:            m.unit,
+			MeasurementDate: m.date,
+			CreatedAt:       time.Now(),
+		})
 		importedCount++
 	}
 
@@ -668,7 +642,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 	for _, milestone := range importMilestones {
 		newPersonId, exists := personIdMapping[milestone.PersonId]
 		if !exists {
-			errors = append(errors, "Milestone for unknown person ID: "+string(rune(milestone.PersonId)))
+			errors = append(errors, fmt.Sprintf("Milestone for unknown person ID: %d", milestone.PersonId))
 			continue
 		}
 
@@ -681,19 +655,16 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			continue
 		}
 
-		var newMilestone Milestone
-		newMilestone.Id = vbolt.NextIntId(tx, MilestoneBkt)
-		newMilestone.PersonId = newPersonId
-		newMilestone.FamilyId = familyId
-		newMilestone.Description = milestone.Description
-		newMilestone.Category = milestone.Category
-		newMilestone.MilestoneDate = milestone.MilestoneDate
-		newMilestone.CreatedAt = time.Now()
-
-		vbolt.Write(tx, MilestoneBkt, newMilestone.Id, &newMilestone)
-
-		vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, newMilestone.Id, newMilestone.PersonId)
-		vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, newMilestone.Id, newMilestone.FamilyId)
+		newMilestone := Milestone{
+			Id:            vbolt.NextIntId(tx, MilestoneBkt),
+			PersonId:      newPersonId,
+			FamilyId:      familyId,
+			Description:   milestone.Description,
+			Category:      milestone.Category,
+			MilestoneDate: milestone.MilestoneDate,
+			CreatedAt:     time.Now(),
+		}
+		writeMilestone(tx, newMilestone)
 
 		for _, tagName := range milestone.TagNames {
 			if tagId, ok := tagNameToId[strings.ToLower(tagName)]; ok {

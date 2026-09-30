@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: planned; no implementation in this document's PR.
+Status: in progress. Phase 1 done.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -46,19 +46,23 @@ Normal milestone creation updates the person, family, and text-search indexes.
 Import manually updates only the first two. Semantic embedding jobs do not
 populate the missing text-search index.
 
-- [ ] Route imported milestones through the existing index helper.
-- [ ] Add a regression test that imports a milestone and finds it through text
+- [x] Route imported milestones through the existing index helper.
+- [x] Add a regression test that imports a milestone and finds it through text
       search without a vision daemon, for both JSON and bundle entry points where
       practical. Verify an unrelated family cannot find it.
-- [ ] Repair already-imported records with a new, named, one-time search-index
+- [x] Repair already-imported records with a new, named, one-time search-index
       rebuild. The existing startup migration has already run on deployed databases;
       changing its body or relying on restart will not repair those databases.
-- [ ] Check nearby creation/update/import paths for duplicated write-and-index
+- [x] Check nearby creation/update/import paths for duplicated write-and-index
       knowledge. Extract only concrete per-record helpers that actual callers need.
 
 Keep import's matching, duplicate handling, and import-specific validation in
 the import flow. Do not force imports through RPC handlers. Keep transaction
 ownership with the operation's caller and enqueue background work after commit.
+
+Done: `writeMilestone`/`writeGrowthData` are the only record writers (add,
+update, import, person merge); link rows use one delete helper each; startup
+runs `2026-0930-rebuild-milestone-search`, replacing the 2025 populate step.
 
 Acceptance: imported and manually created milestones have equivalent index
 coverage; edits and deletion maintain search correctness; the repair can safely

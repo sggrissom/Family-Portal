@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"go.hasen.dev/vbolt"
@@ -87,6 +89,7 @@ func TestMilestoneImportsQueueCommittedRecords(t *testing.T) {
 					t.Fatalf("queued record not committed: %+v", m)
 				}
 			})
+			assertMilestoneSearchable(t, fx, id, "steps")
 			// Re-importing the same record should not queue duplicates.
 			if _, err := callAs(t, fx, ImportData, ImportDataRequest{JsonData: string(encoded), ImportMilestones: true, MergeStrategy: "merge_people"}); err != nil {
 				t.Fatal(err)
@@ -96,6 +99,57 @@ func TestMilestoneImportsQueueCommittedRecords(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertMilestoneSearchable(t *testing.T, fx resultsFixture, id int, query string) {
+	t.Helper()
+	var outsiderFamilyId int
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		outsider := AddUserTx(tx, CreateAccountRequest{Name: "Outsider", Email: fmt.Sprintf("outsider-%d@example.com", id)}, nil)
+		outsiderFamilyId = outsider.FamilyId
+		vbolt.TxCommit(tx)
+	})
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		found := false
+		for _, m := range SearchVisibleMilestones(tx, query, fx.owner, 10) {
+			found = found || m.Id == id
+		}
+		if !found {
+			t.Fatalf("milestone %d not found by %q", id, query)
+		}
+		if leaked := SearchMilestonesTx(tx, query, outsiderFamilyId, 10); len(leaked) != 0 {
+			t.Fatalf("unrelated family found %+v", leaked)
+		}
+	})
+}
+
+func TestRebuildMilestoneSearchIndexRepairsUnindexedRecords(t *testing.T) {
+	fx := setupResultsFixture(t)
+	legacy := Milestone{PersonId: fx.alice.Id, FamilyId: fx.familyId, Description: "Rode a bicycle", Category: "achievement", MilestoneDate: featuresEpoch, CreatedAt: featuresEpoch}
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		legacy.Id = vbolt.NextIntId(tx, MilestoneBkt)
+		vbolt.Write(tx, MilestoneBkt, legacy.Id, &legacy)
+		vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, legacy.Id, legacy.PersonId)
+		vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, legacy.Id, legacy.FamilyId)
+		vbolt.TxCommit(tx)
+	})
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := SearchMilestonesTx(tx, "bicycle", fx.familyId, 10); len(got) != 0 {
+			t.Fatalf("precondition: legacy record already searchable: %+v", got)
+		}
+	})
+	for range 2 {
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			RebuildMilestoneSearchIndex(tx)
+			vbolt.TxCommit(tx)
+		})
+	}
+	assertMilestoneSearchable(t, fx, legacy.Id, "bicycle")
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := GetMilestoneById(tx, legacy.Id); !reflect.DeepEqual(got, legacy) {
+			t.Fatalf("rebuild altered the record: %+v != %+v", got, legacy)
+		}
+	})
 }
 
 func TestPersonMergeQueuesMilestonesForTheirNewOwner(t *testing.T) {
@@ -114,6 +168,9 @@ func TestPersonMergeQueuesMilestonesForTheirNewOwner(t *testing.T) {
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if got := GetMilestoneById(tx, id); got.PersonId != fx.bob.Id {
 			t.Fatalf("queued milestone has stale owner: %+v", got)
+		}
+		if got := SearchMilestonesTx(tx, fmt.Sprintf("p:%d", fx.bob.Id), fx.familyId, 10); len(got) != 1 || got[0].Id != id {
+			t.Fatalf("merged milestone not indexed under its new owner: %+v", got)
 		}
 	})
 }
