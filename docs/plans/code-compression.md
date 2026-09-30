@@ -88,9 +88,8 @@ repeat each feature's field rules.
 
 Done: `resolveEntryDate` (backend/entry_date.go) is the one date resolver for
 growth, milestones, and milestone photo suggestions; `validateMeasurementFields`
-and `validateMilestoneFields` hold each feature's field rules. Photo uploads
-still resolve ages with their own 365/30-day approximation; unifying that is a
-behavior change and was left alone.
+and `validateMilestoneFields` hold each feature's field rules. Photo dates use it
+too (`calculatePhotoDate`), leaving only EXIF "auto" photo-specific.
 
 Acceptance: existing date and validation tests pass for add and update, with
 coverage for missing dates, invalid dates, missing/negative years, months outside

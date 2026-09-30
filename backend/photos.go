@@ -548,36 +548,13 @@ func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 }
 
 func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
-	switch inputType {
-	case "auto":
+	if inputType == "auto" {
 		if exifDate, err := extractExifDate(fileData); err == nil {
 			return exifDate, nil
 		}
 		return time.Now(), nil
-	case "today":
-		return time.Now(), nil
-	case "date":
-		if photoDate == "" {
-			return time.Time{}, errors.New("photo date is required")
-		}
-		return time.Parse("2006-01-02", photoDate)
-	case "age":
-		if ageYears == nil {
-			return time.Time{}, errors.New("age years is required")
-		}
-
-		months := 0
-		if ageMonths != nil {
-			months = *ageMonths
-		}
-
-		targetAge := time.Duration(*ageYears)*365*24*time.Hour + time.Duration(months)*30*24*time.Hour
-		photoDateTime := person.Birthday.Add(targetAge)
-
-		return photoDateTime, nil
-	default:
-		return time.Time{}, errors.New("invalid input type")
 	}
+	return resolveEntryDate("Photo", inputType, &photoDate, ageYears, ageMonths, person.Birthday)
 }
 
 func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
