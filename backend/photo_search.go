@@ -228,3 +228,39 @@ func photoHasEveryone(tx *vbolt.Tx, photoId int, personIds []int) bool {
 	}
 	return true
 }
+
+// searchPhotos ranks every photo in the listing that shows all the people
+// named in the query, and pages through the ranking by offset.
+func searchPhotos(l photoListing, query string, offset int, limit int) (page []Image, nextCursor string, matched []int, mode string) {
+	matched, query = peopleInQuery(GetVisiblePeople(l.tx, l.user), query)
+	if len(l.personIds) == 0 && len(matched) > 0 {
+		l.personIds = matched[:1]
+	}
+
+	var candidates []Image
+	l.read(l.newest, func(image Image) bool {
+		if l.passes(image) && photoHasEveryone(l.tx, image.Id, matched) {
+			candidates = append(candidates, image)
+		}
+		return true
+	})
+
+	mode = "semantic"
+	if query != "" {
+		vector, err := embedQuery(query)
+		if err != nil {
+			mode = "text"
+		}
+		candidates = rankPhotos(l.tx, candidates, query, vector)
+	}
+
+	end := len(candidates)
+	if limit > 0 && offset+limit < end {
+		end = offset + limit
+		nextCursor = fmt.Sprintf("s%d", end)
+	}
+	if offset < end {
+		page = candidates[offset:end]
+	}
+	return
+}

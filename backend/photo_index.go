@@ -2,6 +2,9 @@ package backend
 
 import (
 	"family/cfg"
+	"math"
+	"slices"
+	"time"
 
 	"go.hasen.dev/vbolt"
 	"go.hasen.dev/vpack"
@@ -158,4 +161,145 @@ func mergePhotoStreams(tx *vbolt.Tx, streams []*photoStream, start photoKey, sto
 			return
 		}
 	}
+}
+
+const maxPhotoPageSize = 200
+
+// photoListing is what browsing and searching share: which streams to read,
+// the date window, and which photos a filter lets through.
+type photoListing struct {
+	tx        *vbolt.Tx
+	user      User
+	personIds []int
+	withTag   map[int]bool
+	placeKey  string
+	places    *placeResolver
+	newest    photoKey
+	oldest    int64
+}
+
+func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, placeKey string, dateFrom string, dateTo string) photoListing {
+	l := photoListing{
+		tx:        tx,
+		user:      user,
+		personIds: personIds,
+		placeKey:  placeKey,
+		places:    newPlaceResolver(tx),
+		newest:    photoKey{seconds: math.MaxInt64, id: math.MaxInt},
+		oldest:    math.MinInt64,
+	}
+	if dateTo != "" {
+		end, _ := time.Parse(dateOnlyLayout, dateTo)
+		l.newest = photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}
+	}
+	if dateFrom != "" {
+		begin, _ := time.Parse(dateOnlyLayout, dateFrom)
+		l.oldest = begin.Unix()
+	}
+	if len(tagIds) > 0 {
+		l.withTag = make(map[int]bool)
+		for _, tagId := range tagIds {
+			for _, photoId := range GetTagPhotoIds(tx, tagId) {
+				l.withTag[photoId] = true
+			}
+		}
+	}
+	return l
+}
+
+// read visits the listing's photos newest first from start, which is clamped
+// to the date window, until visit returns false.
+func (l photoListing) read(start photoKey, visit func(Image) bool) {
+	if start.newerThan(l.newest) {
+		start = l.newest
+	}
+	var streams []*photoStream
+	if len(l.personIds) > 0 {
+		for _, personId := range l.personIds {
+			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, personId, start))
+		}
+	} else {
+		for _, familyId := range familiesVisibleTo(l.tx, l.user) {
+			streams = append(streams, newPhotoStream(ImageByFamilyDateIndex, familyId, start))
+		}
+		for _, person := range linkedPeopleVisibleTo(l.tx, l.user, ScopePhotos) {
+			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, person.Id, start))
+		}
+	}
+	mergePhotoStreams(l.tx, streams, start, l.oldest, visit)
+}
+
+// passes is the filter for a photo already read from the listing's streams.
+// Person streams are not limited to the user's families, so they need the
+// access check that family streams get from their index.
+func (l photoListing) passes(image Image) bool {
+	if image.Status == 2 || (l.withTag != nil && !l.withTag[image.Id]) {
+		return false
+	}
+	if len(l.personIds) > 0 && !CanAccessPhoto(l.tx, l.user, image, AccessView) {
+		return false
+	}
+	if l.placeKey != "" {
+		if !canSeeLocation(l.tx, l.user, image) {
+			return false
+		}
+		if place, ok := l.places.forPhoto(image); !ok || place.Key != l.placeKey {
+			return false
+		}
+	}
+	return true
+}
+
+// shows reports whether a photo read from anywhere, such as a group's cover,
+// would appear in this listing.
+func (l photoListing) shows(image Image) bool {
+	if image.PhotoDate.Unix() < l.oldest || photoKeyOf(image).newerThan(l.newest) || !l.passes(image) {
+		return false
+	}
+	if len(l.personIds) == 0 {
+		return true
+	}
+	for _, pp := range GetPhotoPersonsByPhoto(l.tx, image.Id) {
+		if slices.Contains(l.personIds, pp.PersonId) {
+			return true
+		}
+	}
+	return false
+}
+
+// browsePhotos pages through the listing by date. With collapse, a photo
+// whose similar-group cover is also listed is left out, and the cover carries
+// the rest of its group.
+func browsePhotos(l photoListing, start photoKey, limit int, collapse bool) (page []Image, similarTo map[int][]int, nextCursor string) {
+	groups := map[int]photoGroup{}
+	similarTo = map[int][]int{}
+	l.read(start, func(image Image) bool {
+		if !l.passes(image) {
+			return true
+		}
+		if collapse {
+			if features, ok := GetPhotoFeatures(l.tx, image.Id); ok {
+				if group, grouped := groupOf(l.tx, features.GroupId, groups); grouped {
+					if group.cover != image.Id {
+						if l.shows(GetImageById(l.tx, group.cover)) {
+							return true
+						}
+					} else {
+						for _, id := range group.members {
+							if id != image.Id {
+								similarTo[image.Id] = append(similarTo[image.Id], id)
+							}
+						}
+					}
+				}
+			}
+		}
+		if limit > 0 && len(page) == limit {
+			nextCursor = photoKeyOf(page[limit-1]).String()
+			return false
+		}
+		page = append(page, image)
+		return true
+	})
+	return
 }
