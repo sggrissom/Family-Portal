@@ -11,7 +11,13 @@ import { When, whenProblem, whenRequest } from "../../lib/when";
 import { ErrorPage } from "../../components/ErrorPage";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
-import { CategoryChips, TagPicker, toggleId } from "./MilestoneFields";
+import {
+  CategoryChips,
+  SuggestedPhotos,
+  TagPicker,
+  suggestPhotos,
+  toggleId,
+} from "./MilestoneFields";
 
 type EditMilestoneForm = {
   description: string;
@@ -21,6 +27,9 @@ type EditMilestoneForm = {
   tagIds: number[];
   error: string;
   saving: boolean;
+  suggestedPhotoIds: number[];
+  lookupKey: string;
+  lookupTimer: number;
 };
 
 const useEditMilestoneForm = vlens.declareHook(
@@ -37,8 +46,31 @@ const useEditMilestoneForm = vlens.declareHook(
     tagIds: [...(milestone.tagIds ?? [])],
     error: "",
     saving: false,
+    suggestedPhotoIds: [],
+    lookupKey: "",
+    lookupTimer: 0,
   })
 );
+
+// Photos from around the milestone's date that aren't attached yet, refreshed
+// a moment after the description or date stop changing.
+function scheduleLookup(form: EditMilestoneForm, milestone: server.Milestone) {
+  const text = form.description.trim();
+  const when = whenProblem(form.when) ? null : whenRequest(form.when, new Date());
+  const key = JSON.stringify([text, when]);
+  if (key === form.lookupKey) return;
+  form.lookupKey = key;
+  window.clearTimeout(form.lookupTimer);
+  form.lookupTimer = window.setTimeout(async () => {
+    const photoIds =
+      when && text.length >= 3
+        ? await suggestPhotos(milestone.personId, text, when, milestone.photoIds ?? [])
+        : [];
+    if (form.lookupKey !== key) return;
+    form.suggestedPhotoIds = photoIds;
+    vlens.scheduleRedraw();
+  }, 600);
+}
 
 type EditMilestoneData = {
   milestone: server.GetMilestoneResponse;
@@ -147,6 +179,7 @@ interface EditMilestonePageProps {
 
 const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
   const disabled = form.saving;
+  if (BROWSER) scheduleLookup(form, milestone);
   return (
     <div className="entry-card">
       <h1 className="entry-title">Edit milestone</h1>
@@ -179,6 +212,12 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           <span className="entry-label">{copy.when.label}</span>
           <WhenControl when={form.when} disabled={disabled} />
         </div>
+
+        <SuggestedPhotos
+          photoIds={form.suggestedPhotoIds}
+          selected={form.photoIds}
+          disabled={disabled}
+        />
 
         <div className="entry-field">
           <span className="entry-label">{copy.milestone.photos}</span>

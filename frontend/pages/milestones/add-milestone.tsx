@@ -16,7 +16,13 @@ import { PagedPhotoPicker, PhotoPicker } from "../../components/PhotoPicker";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
-import { CategoryChips, TagPicker, toggleId } from "./MilestoneFields";
+import {
+  CategoryChips,
+  SuggestedPhotos,
+  TagPicker,
+  suggestPhotos,
+  toggleId,
+} from "./MilestoneFields";
 
 type AddMilestoneForm = {
   personId: number | null;
@@ -74,16 +80,8 @@ function scheduleLookups(form: AddMilestoneForm) {
       }
     }
     if (form.personId !== null && when && text.length >= 3) {
-      const [resp] = await server.SuggestMilestonePhotos({
-        personId: form.personId,
-        description: text,
-        inputType: when.inputType,
-        milestoneDate: when.date,
-        ageYears: when.ageYears,
-        ageMonths: when.ageMonths,
-        excludeIds: [],
-      });
-      if (form.lookupKey === key) form.suggestedPhotoIds = resp?.photoIds ?? [];
+      const photoIds = await suggestPhotos(form.personId, text, when, []);
+      if (form.lookupKey === key) form.suggestedPhotoIds = photoIds;
     } else {
       form.suggestedPhotoIds = [];
     }
@@ -302,29 +300,11 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           )}
         </div>
 
-        {form.suggestedPhotoIds.length > 0 && (
-          <div className="entry-field">
-            <span className="entry-label">Photos from around then. Attach any?</span>
-            <div className="suggested-photos">
-              {form.suggestedPhotoIds.map(id => {
-                const selected = form.photoIds.includes(id);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`suggested-photo${selected ? " selected" : ""}`}
-                    aria-pressed={selected}
-                    aria-label={selected ? "Don't attach this photo" : "Attach this photo"}
-                    disabled={disabled}
-                    onClick={vlens.cachePartial(toggleId, form.photoIds, id)}
-                  >
-                    <img src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <SuggestedPhotos
+          photoIds={form.suggestedPhotoIds}
+          selected={form.photoIds}
+          disabled={disabled}
+        />
 
         <details className="entry-more">
           <summary>{copy.milestone.more}</summary>

@@ -336,9 +336,9 @@ where `prompts.txt` has one `Label: phrase` per line.
 
 All seven steps are built (PRs #104 through #110, stacked). Staging runs the
 whole stack with the vision daemon. Production has neither the daemon nor the
-models yet; see "Vision analysis" in [deployment](../deployment.md). Left for
-later: suggestions on the edit-milestone form, trip detection, and the LLM
-pass below.
+models yet; see "Vision analysis" in [deployment](../deployment.md). The edit-milestone
+form suggests photos too (not a category, since one is already chosen). Left
+for later: trip detection and the LLM pass below.
 
 ## Next proposals: collections and sibling montages
 
