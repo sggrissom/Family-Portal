@@ -402,7 +402,7 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Error("Expected error for missing date")
 		}
 
-		expectedError := "photo date is required"
+		expectedError := "Photo date is required"
 		if !strings.Contains(err.Error(), expectedError) {
 			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 		}
@@ -417,9 +417,15 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		expectedYear := 2022
-		if result.Year() < expectedYear || result.Year() > expectedYear+1 {
-			t.Errorf("Expected year around %d, got %d", expectedYear, result.Year())
+		if want := testPerson.Birthday.AddDate(2, 6, 0); !result.Equal(want) {
+			t.Errorf("Expected %v, the same date milestones and measurements get, got %v", want, result)
+		}
+	})
+
+	t.Run("Age months outside 0-11", func(t *testing.T) {
+		years, months := 1, 12
+		if _, err := calculatePhotoDate("age", "", &years, &months, testPerson, nil); err == nil {
+			t.Error("Expected an error for month 12, as milestones and measurements give")
 		}
 	})
 
@@ -429,7 +435,7 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Error("Expected error for missing age years")
 		}
 
-		expectedError := "age years is required"
+		expectedError := "Age years must be non-negative"
 		if !strings.Contains(err.Error(), expectedError) {
 			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 		}
@@ -441,7 +447,7 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Error("Expected error for invalid input type")
 		}
 
-		expectedError := "invalid input type"
+		expectedError := "Input type must be"
 		if !strings.Contains(err.Error(), expectedError) {
 			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 		}
