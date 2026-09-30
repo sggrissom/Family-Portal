@@ -231,11 +231,7 @@ func (s *seeder) owner(name, email, familyName, access string) (User, Family) {
 }
 
 // member creates a user who registers with an existing family's invite code,
-// which is what the signup form does. AddUserTx always grants admin, and there
-// is no point issuing anything less: CanAccessFamily falls back to
-// User.FamilyId and grants admin on a user's own household regardless of what
-// their membership row says. A limited role only bites on a family that is not
-// the user's primary one — see guest.
+// which is what the signup form does, and so joins as admin.
 func (s *seeder) member(name, email string, family Family, access string) User {
 	user := AddUserTx(s.tx, CreateAccountRequest{
 		Name:       name,
@@ -250,8 +246,7 @@ func (s *seeder) member(name, email string, family Family, access string) User {
 }
 
 // guest creates a user with a household of their own plus a secondary
-// membership in someone else's at a role below admin. That combination is the
-// only shape in which a reduced role has any effect, so it is how a caregiver
+// membership in someone else's at a role below admin, which is how a caregiver
 // or a helper who is not family gets a foothold.
 func (s *seeder) guest(name, email, ownFamily string, into Family, role AccessLevel, access string) User {
 	user, _ := s.household(name, email, ownFamily)

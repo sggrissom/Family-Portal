@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: phases 1–4 (the first implementation scope) done; 5 and 6 open.
+Status: phases 1–5 done; 6 open.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -201,16 +201,23 @@ Membership rows coexist with primary-family fallback authority.
 primary-family admin access, while `userRoleIn` returns an existing row's role.
 Family-user enumeration combines membership and the primary-family index.
 
-- [ ] Enumerate all writers, fallbacks, and legacy records before changing policy.
-- [ ] Decide and document whether primary-family membership is inherently admin
+- [x] Enumerate all writers, fallbacks, and legacy records before changing policy.
+- [x] Decide and document whether primary-family membership is inherently admin
       or whether membership rows determine roles and `User.FamilyId` only selects a
       default household. Do not silently choose during a mechanical refactor.
-- [ ] Build a permission matrix covering primary/secondary membership, missing
+- [x] Build a permission matrix covering primary/secondary membership, missing
       rows, lower roles, leave/removal, owner reassignment, and account deletion.
-- [ ] Implement any backfill/invariant repair before removing runtime fallbacks.
+- [x] Implement any backfill/invariant repair before removing runtime fallbacks.
       Preserve valid access while ensuring removed membership cannot regain it.
-- [ ] Update `docs/permissions.md`, migration comments, and fixtures to match the
+- [x] Update `docs/permissions.md`, migration comments, and fixtures to match the
       selected policy; some descriptions still reflect earlier rollout stages.
+
+Decided 2026-09-30: membership rows determine access and role; `User.FamilyId`
+only selects the default household. Fallbacks removed from `CanAccessFamily`,
+`userRoleIn`, `familiesVisibleTo`, `GetFamilyUserIds` (and the unread
+`users_by_family` index), `joinFamilyByInviteTx`, and the chat socket, after the
+`2026-0930-ensure-primary-memberships` backfill. Matrix:
+`backend/membership_matrix_test.go`.
 
 Acceptance: the matrix passes across RPC and relevant HTTP/WebSocket surfaces;
 family links remain read-only and scope-specific; primary family cannot become

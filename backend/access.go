@@ -43,7 +43,7 @@ func CanAccessFamily(tx *vbolt.Tx, user User, familyId int, need AccessLevel) bo
 			return true
 		}
 	}
-	return familyGrants(tx, user.FamilyId, familyId) >= need
+	return false
 }
 
 func RequireFamilyAccess(tx *vbolt.Tx, user User, familyId int, need AccessLevel) error {
@@ -60,35 +60,30 @@ func RequireFamilyAccessFrom(tx *vbolt.Tx, actingFamilyId int, familyId int, nee
 	return nil
 }
 
+// familiesVisibleTo lists the families the user holds a membership in,
+// primary first and the rest in id order.
 func familiesVisibleTo(tx *vbolt.Tx, user User) []int {
 	seen := make(map[int]bool)
-	var rest []int
+	var families []int
 	for _, membership := range GetUserMemberships(tx, user.Id) {
 		if membership.FamilyId == 0 || membership.Role < AccessView || seen[membership.FamilyId] {
 			continue
 		}
 		seen[membership.FamilyId] = true
-		if membership.FamilyId != user.FamilyId {
-			rest = append(rest, membership.FamilyId)
+		families = append(families, membership.FamilyId)
+	}
+	sort.Slice(families, func(i, j int) bool {
+		if (families[i] == user.FamilyId) != (families[j] == user.FamilyId) {
+			return families[i] == user.FamilyId
 		}
-	}
-	sort.Ints(rest)
-
-	var families []int
-	if user.FamilyId != 0 {
-		families = append(families, user.FamilyId)
-	}
-	return append(families, rest...)
+		return families[i] < families[j]
+	})
+	return families
 }
 
 func userRoleIn(tx *vbolt.Tx, user User, familyId int) AccessLevel {
-	if membership, found := FindMembership(tx, user.Id, familyId); found {
-		return membership.Role
-	}
-	if user.FamilyId == familyId {
-		return AccessAdmin
-	}
-	return AccessNone
+	membership, _ := FindMembership(tx, user.Id, familyId)
+	return membership.Role
 }
 
 func canAccessPersonViaLink(tx *vbolt.Tx, user User, person Person, scope LinkScope, need AccessLevel) bool {
