@@ -6,6 +6,10 @@ import {
   defaultHeightUnit,
   defaultWeightUnit,
   describeLast,
+  entryForRecord,
+  heightValue,
+  parseAmount,
+  weightValue,
   latestOf,
   newUnitPrefs,
   rememberUnits,
@@ -83,6 +87,90 @@ describe("checkupValues", () => {
     expect(checkupValues(entry({ weightUnit: "lb-oz", pounds: "7", ounces: "16" })).error).toBe(
       "Enter a weight in pounds and ounces under 16"
     );
+  });
+});
+
+describe("parseAmount", () => {
+  it("reads plain decimals and treats blank as zero", () => {
+    expect(parseAmount(" 12.5 ")).toBe(12.5);
+    expect(parseAmount(".5")).toBe(0.5);
+    expect(parseAmount("7.")).toBe(7);
+    expect(parseAmount("")).toBe(0);
+  });
+
+  it("refuses anything else rather than reading a prefix", () => {
+    for (const text of ["12abc", "Infinity", "-3", "1e3", "0x10", "12,5", "1.2.3", "."]) {
+      expect(parseAmount(text), text).toBeNaN();
+    }
+  });
+});
+
+describe("single measurements", () => {
+  it("rejects malformed, negative, and non-finite values the same way for both", () => {
+    for (const text of ["12abc", "-3", "Infinity"]) {
+      expect(heightValue(entry({ height: text })).error, text).toBe("Enter a height above zero");
+      expect(weightValue(entry({ weight: text })).error, text).toBe("Enter a weight above zero");
+    }
+    expect(heightValue(entry({ heightUnit: "ft-in", feet: "3", inches: "-2" })).error).toBe(
+      "Enter a height in feet and inches"
+    );
+    expect(weightValue(entry({ weightUnit: "lb-oz", pounds: "x", ounces: "2" })).error).toBe(
+      "Enter a weight in pounds and ounces under 16"
+    );
+  });
+
+  it("reports a blank field as no value and no error", () => {
+    expect(heightValue(entry())).toEqual({ value: null, error: "" });
+    expect(weightValue(entry({ weightUnit: "lb-oz" }))).toEqual({ value: null, error: "" });
+  });
+
+  it("combines compound units", () => {
+    expect(heightValue(entry({ heightUnit: "ft-in", feet: "4" })).value).toEqual({
+      value: 48,
+      unit: "in",
+    });
+    expect(weightValue(entry({ weightUnit: "lb-oz", ounces: "12" })).value).toEqual({
+      value: 0.75,
+      unit: "lbs",
+    });
+  });
+
+  it("keeps kilograms", () => {
+    expect(weightValue(entry({ weightUnit: "kg", weight: "14.2" })).value).toEqual({
+      value: 14.2,
+      unit: "kg",
+    });
+  });
+});
+
+describe("entryForRecord", () => {
+  const roundTrip = (record: server.GrowthData) => {
+    const e = entryForRecord(record);
+    return record.measurementType === server.Height ? heightValue(e).value : weightValue(e).value;
+  };
+
+  it("opens each stored unit in the unit it was saved in", () => {
+    expect(entryForRecord(growth(1, server.Height, 98, "cm", "2026-01-01")).heightUnit).toBe("cm");
+    expect(entryForRecord(growth(1, server.Height, 40, "in", "2026-01-01")).heightUnit).toBe("in");
+    expect(entryForRecord(growth(1, server.Weight, 14, "kg", "2026-01-01")).weightUnit).toBe("kg");
+    expect(entryForRecord(growth(1, server.Weight, 7.5, "lbs", "2026-01-01"))).toMatchObject({
+      weightUnit: "lb-oz",
+      pounds: "7",
+      ounces: "8",
+    });
+    expect(entryForRecord(growth(1, server.Weight, 40, "lbs", "2026-01-01")).weightUnit).toBe("lb");
+  });
+
+  it("saves an untouched record back unchanged", () => {
+    for (const record of [
+      growth(1, server.Height, 98.4, "cm", "2026-01-01"),
+      growth(1, server.Height, 40.25, "in", "2026-01-01"),
+      growth(1, server.Weight, 14.2, "kg", "2026-01-01"),
+      growth(1, server.Weight, 7.5, "lbs", "2026-01-01"),
+      growth(1, server.Weight, 41.3, "lbs", "2026-01-01"),
+    ]) {
+      expect(roundTrip(record)).toEqual({ value: record.value, unit: record.unit });
+    }
   });
 });
 
