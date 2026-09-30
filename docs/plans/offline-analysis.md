@@ -340,6 +340,72 @@ models yet; see "Vision analysis" in [deployment](../deployment.md). Left for
 later: suggestions on the edit-milestone form, trip detection, and the LLM
 pass below.
 
+## Next proposals: collections and sibling montages
+
+These are planned ideas, not part of the seven shipped steps above. Both use
+existing local analysis results; neither requires an LLM or an external API.
+
+### Suggested event collections
+
+Propose a collection from photos close together in time, using shared people,
+family places/cities, and semantic similarity as supporting signals. Examples
+include a birthday, dance competition, or vacation. Date gaps should be the
+primary boundary; similar scenes alone must not merge separate occasions.
+Missing GPS, faces, or embeddings should reduce confidence, not prevent a
+simple date-based proposal. Trip detection belongs here as one type of collection.
+
+- Compute proposals in the background after uploads and relevant photo edits,
+  with a versioned startup backfill. Coalesce work per family rather than
+  recomputing the same collection for every photo in an upload burst.
+- Show a proposed date range, a few representative photos, and the people and
+  place evidence that explains the grouping. Suggested labels are editable.
+- Let the family accept, rename, add/remove photos, split, merge, or dismiss a
+  proposal. Nothing becomes a recorded event automatically. Remember dismissals
+  and preserve manual membership choices when analysis reruns.
+- Link an accepted collection to an existing activity event when appropriate;
+  otherwise define a historical photo collection, not a calendar or scheduling
+  feature. Evaluate existing entities before introducing a new one.
+- Derive membership only from the owning family's photos. Linked viewers get
+  only the members they can access; GPS/place evidence stays owner-only.
+  Public sharing is a separate, explicit choice.
+- If persisted as a new entity, cover export/import, photo deletion, person
+  merge/deletion, and cross-family isolation before shipping. Approximate dates
+  should be honored once that foundation is available.
+
+**Acceptance examples:** a birthday burst yields one editable proposal; photos
+without GPS still group by date; two competitions weeks apart stay separate;
+a dismissed or manually corrected collection stays corrected after backfill.
+**Estimated complexity:** medium.
+
+### Sibling comparison montages
+
+Extend the existing per-person growing-up montage and Same age views to place
+siblings side by side: "everyone at six months", "everyone at age five", or a
+recurring occasion such as the first day of school.
+
+- Reuse `GetPersonPhotoInsights`, face positions, confirmed people tags, and
+  quality scores. For age comparisons, choose within an explicit age window
+  rather than assuming a monthly bucket's cover was taken at the exact age.
+- For recurring occasions, combine tags or semantic search with year/date
+  windows. Clearly distinguish age comparisons from event comparisons.
+- Show each person's actual age and photo date, allow a replacement photo,
+  and leave a labelled gap when there is no suitable photo. Do not imply
+  siblings reached a milestone at the same age merely because pictures look alike.
+- Work with manually tagged photos when face analysis is unavailable; use a
+  full-photo fallback when there is no trustworthy face crop. Allow the family
+  to choose a crop or confirm a proposed person match.
+- Keep person selections and photo access checks consistent with Same age.
+  Approximate dates must retain their uncertainty labels rather than displaying
+  a precise inferred age. Sharing/export remains an explicit later action.
+- Start as a view over existing data. Only persist montage selections if
+  manual choices need to survive revisits; add export/import if those become
+  records. Background precomputation is optional if measured page cost warrants it.
+
+**Acceptance examples:** siblings appear at comparable ages with actual ages
+visible; a missing month shows a gap; manual replacements survive if saved;
+a linked viewer never sees an inaccessible sibling or photo.
+**Estimated complexity:** low to medium.
+
 ## Later: an LLM pass
 
 Some things local embedding models can't do well: captions, or a monthly

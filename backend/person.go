@@ -562,7 +562,7 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 
 	vbolt.TxCommit(ctx.Tx)
 
-	go TriggerPersonFaceUpdate(req.PersonId)
+	TriggerPersonFaceUpdate(req.PersonId)
 
 	person.Age = calculateAge(person.Birthday)
 	resp.Person = person
@@ -667,6 +667,9 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	vbolt.SetTargetSingleTerm(ctx.Tx, PersonIndex, req.SourcePersonId, -1)
 
 	vbolt.TxCommit(ctx.Tx)
+	for _, m := range milestones {
+		QueueMilestoneEmbedding(m.Id)
+	}
 
 	resp.Success = true
 	targetPerson.Age = calculateAge(targetPerson.Birthday)

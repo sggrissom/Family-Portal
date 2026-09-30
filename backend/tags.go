@@ -276,7 +276,9 @@ func DeleteTag(ctx *vbeam.Context, req DeleteTagRequest) (resp DeleteTagResponse
 	}
 
 	deleteTagTx(ctx.Tx, tag)
+	bumpFamilySuggestionsTx(ctx.Tx, tag.FamilyId)
 	vbolt.TxCommit(ctx.Tx)
+	queueFamilySuggestions(appDb, tag.FamilyId)
 	return
 }
 

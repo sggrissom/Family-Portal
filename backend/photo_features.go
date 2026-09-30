@@ -22,10 +22,11 @@ import (
 
 // Each analyzer's version is stored with its result. Bumping one makes the
 // startup sweep rerun that analyzer, and only that one, over every photo.
+// Version 2 repairs records previously marked complete after a read failure.
 const (
-	hashAnalyzerVersion    = 1
-	qualityAnalyzerVersion = 1
-	placeAnalyzerVersion   = 1
+	hashAnalyzerVersion    = 2
+	qualityAnalyzerVersion = 2
+	placeAnalyzerVersion   = 2
 )
 
 const (
@@ -251,21 +252,21 @@ func featureSourceImage(img Image) (image.Image, error) {
 	return imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
 }
 
-func exifLocation(path string) (lat, lng float64, ok bool) {
+func exifLocation(path string) (lat, lng float64, ok bool, readErr error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, false, err
 	}
 	x, err := exif.Decode(bytes.NewReader(data))
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, false, nil
 	}
 	lat, lng, err = x.LatLong()
 	if err != nil || math.IsNaN(lat) || math.IsNaN(lng) || (lat == 0 && lng == 0) ||
 		math.Abs(lat) > 90 || math.Abs(lng) > 180 {
-		return 0, 0, false
+		return 0, 0, false, nil
 	}
-	return lat, lng, true
+	return lat, lng, true, nil
 }
 
 func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
@@ -287,6 +288,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 		decoded, err := featureSourceImage(img)
 		if err != nil {
 			log.Printf("[FEATURES] Could not open photo %d: %v", img.Id, err)
+			return
 		} else {
 			if next.HashVersion < hashAnalyzerVersion {
 				next.Hash = vision.DHash(decoded)
@@ -299,13 +301,18 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 	}
 	if next.PlaceVersion < placeAnalyzerVersion {
 		next.HasLocation, next.Latitude, next.Longitude, next.CityId = false, 0, 0, 0
-		if lat, lng, ok := exifLocation(getOriginalPhotoPath(img)); ok {
+		lat, lng, ok, readErr := exifLocation(getOriginalPhotoPath(img))
+		if readErr != nil {
+			log.Printf("[FEATURES] Could not read original for photo %d: %v", img.Id, readErr)
+		} else if ok {
 			next.HasLocation, next.Latitude, next.Longitude = true, lat, lng
 			if city, ok := NearestCity(lat, lng); ok {
 				next.CityId = city.Id
 			}
 		}
-		next.PlaceVersion = placeAnalyzerVersion
+		if readErr == nil {
+			next.PlaceVersion = placeAnalyzerVersion
+		}
 	}
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
