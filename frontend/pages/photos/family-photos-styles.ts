@@ -17,7 +17,7 @@ block(`
 `);
 
 block(`
-.header-content {
+.family-photos-container .header-content {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -30,15 +30,6 @@ block(`
   color: var(--muted);
   font-size: 0.875rem;
   font-weight: 500;
-}
-`);
-
-block(`
-.header-actions {
-  flex-shrink: 0;
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
 }
 `);
 
@@ -392,52 +383,6 @@ block(`
 `);
 
 block(`
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .filter-panel {
-    padding: 1rem;
-  }
-
-  .people-filter {
-    gap: 0.5rem;
-  }
-
-  .person-checkbox {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.8125rem;
-  }
-
-  .date-filter {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .date-input-group {
-    min-width: auto;
-  }
-
-  .filter-actions {
-    flex-direction: column-reverse;
-    gap: 0.5rem;
-  }
-
-  .filter-actions button {
-    width: 100%;
-  }
-}
-`);
-
-block(`
 .family-photos-container .empty-state {
   display: flex;
   flex-direction: column;
@@ -477,81 +422,223 @@ block(`
 `);
 
 block(`
-@media (max-width: 768px) {
-  .family-photos-container {
-    padding: 1rem;
-  }
-
-  .page-header h1 {
-    font-size: 1.75rem;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .header-actions {
-    align-self: stretch;
-  }
-
-  .header-actions .btn {
-    width: 100%;
-    text-align: center;
-  }
-
-  .photos-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 15px;
-  }
-
-  .photo-image-container {
-    height: 150px;
-  }
-
-  .empty-state {
-    padding: 32px 16px;
-  }
-
-  .empty-icon {
-    font-size: 3rem;
-  }
-
-  .empty-state h2 {
-    font-size: 1.25rem;
-  }
+.family-photos-container .page-header {
+  margin-bottom: 20px;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 `);
 
 block(`
-@media (max-width: 480px) {
-  .photos-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+.family-photos-container .header-content {
+  align-items: center;
+}
+`);
+
+block(`
+.family-photos-container .page-header h1 {
+  margin-bottom: 4px;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+`);
+
+block(`
+.family-photos-container .btn {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.family-photos-container .photo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+`);
+
+block(`
+.family-photos-container .photo-search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+`);
+
+block(`
+.family-photos-container .photo-search input {
+  width: 0;
+  background: var(--surface);
+}
+`);
+
+block(`
+.family-photos-container .photo-tools {
+  display: flex;
+  gap: 16px;
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.family-photos-container .photo-tools a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px 0;
+}
+`);
+
+block(`
+.family-photos-container .photo-tools a:hover {
+  color: var(--primary-accent);
+  text-decoration: underline;
+}
+`);
+
+block(`
+.family-photos-container .photo-active-filters {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+`);
+
+block(`
+.family-photos-container .similar-photos-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+`);
+
+block(`
+.family-photos-container .similar-photos-help {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+`);
+
+block(`
+.family-photos-container .photos-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+`);
+
+block(`
+.family-photos-container .photo-card {
+  position: relative;
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+`);
+
+block(`
+.family-photos-container .photo-open {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+`);
+
+block(`
+.family-photos-container .photo-open:focus-visible {
+  outline: 3px solid var(--primary-accent);
+  outline-offset: -3px;
+}
+`);
+
+block(`
+.family-photos-container .photo-image-container {
+  height: auto;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+}
+`);
+
+block(`
+.family-photos-container .photo-image-container picture,
+.family-photos-container .processing-image-wrapper {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+`);
+
+block(`
+.family-photos-container .photo-image {
+  object-fit: cover;
+}
+`);
+
+block(`
+.family-photos-container .photo-info {
+  padding: 10px 12px;
+}
+`);
+
+block(`
+.family-photos-container .photo-date {
+  margin: 0;
+}
+`);
+
+block(`
+.family-photos-container .photo-description {
+  margin-top: 6px;
+}
+`);
+
+block(`
+.family-photos-container .person-badge {
+  background: rgba(0, 0, 0, 0.65);
+  box-shadow: none;
+}
+`);
+
+block(`
+@media (max-width: 768px) {
+  .family-photos-container {
+    padding: 20px 16px 88px;
+  }
+  .family-photos-container .photo-tools {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+  .family-photos-container .photo-toolbar {
+    gap: 8px;
+  }
+  .family-photos-container .photos-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
-
-  .photo-image-container {
-    height: 120px;
+  .family-photos-container .filter-panel {
+    padding: 16px;
   }
-
-  .photo-info {
-    padding: 8px 12px;
+  .family-photos-container .date-input-group {
+    flex: 1;
+    min-width: 0;
   }
-
-  .photo-title {
-    font-size: 12px;
+  .family-photos-container .date-input-group input {
+    min-width: 0;
+    width: 100%;
   }
-
-  .photo-date,
-  .photo-description {
-    font-size: 11px;
+  .family-photos-container .photo-title {
+    font-size: 0.8125rem;
   }
-
-  .person-badge,
-  .profile-photo-badge {
-    font-size: 10px;
-    padding: 2px 6px;
+  .family-photos-container .photo-add,
+  .family-photos-container .photo-toolbar .btn {
+    padding: 10px 12px;
+    font-size: 0.875rem;
   }
 }
 `);

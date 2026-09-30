@@ -245,7 +245,7 @@ where `prompts.txt` has one `Label: phrase` per line.
   when a new photo bridges two. `ListFamilyPhotos` with `collapseSimilar`
   returns each group's best-quality photo with the rest in `similar`; the grid
   shows it as a "+N similar" stack that opens as a sequence in the viewer, and
-  a "Show all" toggle turns stacking off. A filtered-out cover never hides a
+  the “Show similar photos separately” option in Filters turns stacking off. A filtered-out cover never hides a
   member that matches. Groups are not split when a photo is deleted or its date
   edited, which only means a stale burst can stay stacked.
 - Places: EXIF GPS resolved against GeoNames `cities15000` (34k places, 640 KB
