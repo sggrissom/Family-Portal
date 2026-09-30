@@ -112,6 +112,14 @@ func photoIds(photos []PhotoWithPeople) []int {
 	return ids
 }
 
+func imageIds(images []Image) []int {
+	ids := make([]int, 0, len(images))
+	for _, image := range images {
+		ids = append(ids, image.Id)
+	}
+	return ids
+}
+
 func equalInts(a, b []int) bool {
 	if len(a) != len(b) {
 		return false
@@ -268,6 +276,65 @@ func TestFamilyTimelineWindow(t *testing.T) {
 	kid, _ = timeline(GetFamilyTimelineRequest{SkipMilestones: true, SkipPhotos: true})
 	if kid.Milestones != nil || kid.Photos != nil || len(kid.GrowthData) != 1 {
 		t.Errorf("growth only: milestones %v, photos %v, %d growth", kid.Milestones, kid.Photos, len(kid.GrowthData))
+	}
+}
+
+func TestFamilyTimelineUntaggedPhotos(t *testing.T) {
+	fx, cleanup := setupPagingFixture(t)
+	defer cleanup()
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		familyId := fx.photos[0].FamilyId
+		other := AddUserTx(tx, CreateAccountRequest{Name: "Other", Email: "other-untagged@example.com"}, nil)
+		for _, image := range []Image{
+			{Id: 100, FamilyId: familyId, Title: "untagged", PhotoDate: time.Date(2021, 5, 5, 0, 0, 0, 0, time.UTC)},
+			{Id: 101, FamilyId: other.FamilyId, Title: "theirs", PhotoDate: time.Date(2021, 5, 5, 0, 0, 0, 0, time.UTC)},
+		} {
+			vbolt.Write(tx, ImagesBkt, image.Id, &image)
+			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, image.FamilyId)
+			ReindexPhotoDates(tx, image.Id)
+		}
+		addTagToPhoto(tx, 100, 50, familyId)
+		vbolt.TxCommit(tx)
+	})
+
+	timeline := func(req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse) {
+		vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+			var err error
+			if resp, err = GetFamilyTimeline(&vbeam.Context{Tx: tx, Token: fx.token}, req); err != nil {
+				t.Fatalf("GetFamilyTimeline() error = %v", err)
+			}
+		})
+		return
+	}
+
+	resp := timeline(GetFamilyTimelineRequest{})
+	if resp.UntaggedPhotos == nil || len(resp.UntaggedPhotos) != 0 {
+		t.Errorf("without the flag, untaggedPhotos = %v, want []", resp.UntaggedPhotos)
+	}
+	if want := []int{2024}; !equalInts(resp.Years, want) {
+		t.Errorf("without the flag, years = %v, want %v", resp.Years, want)
+	}
+
+	resp = timeline(GetFamilyTimelineRequest{IncludeUntaggedPhotos: true})
+	if want := []int{100}; !equalInts(imageIds(resp.UntaggedPhotos), want) {
+		t.Errorf("untaggedPhotos = %v, want %v", imageIds(resp.UntaggedPhotos), want)
+	}
+	if len(resp.UntaggedPhotos) == 1 && !equalInts(resp.UntaggedPhotos[0].TagIds, []int{50}) {
+		t.Errorf("untagged photo tagIds = %v, want [50]", resp.UntaggedPhotos[0].TagIds)
+	}
+	if want := []int{2024, 2021}; !equalInts(resp.Years, want) {
+		t.Errorf("years = %v, want %v", resp.Years, want)
+	}
+
+	resp = timeline(GetFamilyTimelineRequest{IncludeUntaggedPhotos: true, From: "2024-01-01", To: "2024-12-31"})
+	if len(resp.UntaggedPhotos) != 0 {
+		t.Errorf("2024 window: untaggedPhotos = %v, want none", imageIds(resp.UntaggedPhotos))
+	}
+
+	resp = timeline(GetFamilyTimelineRequest{IncludeUntaggedPhotos: true, SkipPhotos: true})
+	if len(resp.UntaggedPhotos) != 0 {
+		t.Errorf("skipPhotos: untaggedPhotos = %v, want none", imageIds(resp.UntaggedPhotos))
 	}
 }
 

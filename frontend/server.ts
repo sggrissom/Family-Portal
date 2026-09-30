@@ -328,6 +328,7 @@ export interface GetFamilyTimelineRequest {
     skipMilestones: boolean
     skipPhotos: boolean
     includeActivities: boolean
+    includeUntaggedPhotos: boolean
 }
 
 export interface GetFamilyTimelineResponse {
@@ -335,6 +336,7 @@ export interface GetFamilyTimelineResponse {
     relations: Relation[]
     years: number[]
     appearances: TimelineAppearance[]
+    untaggedPhotos: Image[]
 }
 
 export interface GetPersonRelationsRequest {

@@ -72,6 +72,13 @@ export function historyView(
     }
   }
   records.photos = [...photos.values()].filter(p => wantPeople(p.people.map(person => person.id)));
+  if (wantType("photos") && filters.personIds.length === 0) {
+    for (const image of timeline.untaggedPhotos ?? []) {
+      if (shown(image.photoDate) && tagged(image.tagIds)) {
+        records.photos.push({ image, people: [], similar: [] });
+      }
+    }
+  }
 
   if (wantType("activities") && !tagsOnly) {
     records.appearances = (timeline.appearances ?? []).filter(

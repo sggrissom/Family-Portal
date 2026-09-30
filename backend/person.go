@@ -110,6 +110,9 @@ type GetFamilyTimelineRequest struct {
 	SkipPhotos     bool   `json:"skipPhotos,omitempty"`
 	// IncludeActivities adds the family's activity appearances in the window.
 	IncludeActivities bool `json:"includeActivities,omitempty"`
+	// IncludeUntaggedPhotos adds the photos in the window that have nobody
+	// tagged, from every household the caller belongs to.
+	IncludeUntaggedPhotos bool `json:"includeUntaggedPhotos,omitempty"`
 }
 
 type FamilyTimelineItem struct {
@@ -130,6 +133,8 @@ type GetFamilyTimelineResponse struct {
 	Years []int `json:"years"`
 	// Appearances is empty unless IncludeActivities was set.
 	Appearances []TimelineAppearance `json:"appearances"`
+	// UntaggedPhotos is empty unless IncludeUntaggedPhotos was set.
+	UntaggedPhotos []Image `json:"untaggedPhotos"`
 }
 
 type Person struct {
@@ -688,6 +693,28 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	return
 }
 
+func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Image {
+	photos := []Image{}
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		var photoIds []int
+		vbolt.IterateTerm(tx, ImageByFamilyDateIndex, familyId, func(photoId int, seconds int64) bool {
+			if len(GetPhotoPersonsByPhoto(tx, photoId)) == 0 && inWindow(time.Unix(seconds, 0)) {
+				photoIds = append(photoIds, photoId)
+			}
+			return true
+		})
+		for _, photoId := range photoIds {
+			photo := GetImageById(tx, photoId)
+			if photo.Id == 0 {
+				continue
+			}
+			photo.TagIds = GetPhotoTagIds(tx, photo.Id)
+			photos = append(photos, photo)
+		}
+	}
+	return photos
+}
+
 func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -766,6 +793,11 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	resp.Appearances = []TimelineAppearance{}
 	if req.IncludeActivities {
 		resp.Appearances = timelineAppearances(ctx.Tx, user, people, inWindow)
+	}
+
+	resp.UntaggedPhotos = []Image{}
+	if req.IncludeUntaggedPhotos && !req.SkipPhotos {
+		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow)
 	}
 
 	resp.Years = make([]int, 0, len(years))

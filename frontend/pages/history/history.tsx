@@ -37,6 +37,7 @@ const emptyTimeline: server.GetFamilyTimelineResponse = {
   relations: [],
   years: [],
   appearances: [],
+  untaggedPhotos: [],
 };
 
 const countEntries = (timeline: server.GetFamilyTimelineResponse) =>
@@ -46,11 +47,11 @@ const countEntries = (timeline: server.GetFamilyTimelineResponse) =>
       (item.milestones?.length ?? 0) +
       (item.growthData?.length ?? 0) +
       (item.photos?.length ?? 0),
-    (timeline.appearances ?? []).length
+    (timeline.appearances ?? []).length + (timeline.untaggedPhotos ?? []).length
   );
 
 function yearRequest(from: number, to: number): server.GetFamilyTimelineRequest {
-  return { ...yearRange(from, to), includeActivities: true };
+  return { ...yearRange(from, to), includeActivities: true, includeUntaggedPhotos: true };
 }
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<HistoryData>> {

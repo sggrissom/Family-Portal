@@ -20,7 +20,6 @@ Do not treat their original design descriptions as a list of unbuilt features.
 - [UI redesign](plans/ui-redesign.md): retained as the design reference and
   implementation record. Native iOS parity follows in its separate repository;
   verify its current status there.
-- The documented remaining web gap is photos without people tags in History.
 - Resolve the redesign's open product questions as needed: same-age windows,
   Recently added behavior, reminder defaults, and navigation validation.
 - Fix correctness bugs and rough edges in existing record features as found.
