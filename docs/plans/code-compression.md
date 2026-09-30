@@ -1,6 +1,6 @@
 # Code compression and cleanup
 
-Status: phases 1–5 done; 6 open.
+Status: phases 1–6 done.
 
 Based on a structural review of main at `0c3e690` on 2026-09-30, with deeper
 inspection of growth, milestones, imports, permissions, photos, and workers.
@@ -232,12 +232,16 @@ Relevant code: `backend/photos.go:ListFamilyPhotos`, `photo_index.go`, and
 The endpoint combines chronological paging, ranked search, two cursor formats,
 filtering, similarity collapsing, and response enrichment.
 
-- [ ] Keep the public endpoint and wire format stable.
-- [ ] Give chronological browsing and ranked search separate concrete functions.
-- [ ] Share visibility/filter predicates and response assembly where their
+- [x] Keep the public endpoint and wire format stable.
+- [x] Give chronological browsing and ranked search separate concrete functions.
+- [x] Share visibility/filter predicates and response assembly where their
       meaning is identical. Keep the intentional differences visible.
-- [ ] Keep daemon calls and database transaction lifetimes explicit during the
+- [x] Keep daemon calls and database transaction lifetimes explicit during the
       extraction. Do not add caching or change ranking as part of this refactor.
+
+Done: `ListFamilyPhotos` builds one `photoListing` (window, streams, filter)
+and calls `browsePhotos` (photo_index.go) or `searchPhotos` (photo_search.go);
+response assembly stays in the endpoint.
 
 Acceptance: existing paging/search/isolation tests pass; check person and tag
 filters, inclusive date bounds, location visibility, unavailable vision fallback,

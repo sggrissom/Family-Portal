@@ -11,12 +11,10 @@ import (
 	"image"
 	"io"
 	"log"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1286,8 +1284,6 @@ func GetPhotoStatus(ctx *vbeam.Context, req GetPhotoStatusRequest) (resp GetPhot
 	return
 }
 
-const maxPhotoPageSize = 200
-
 func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp ListFamilyPhotosResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -1300,183 +1296,44 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		return
 	}
 
-	query := strings.TrimSpace(req.Query)
-	searching := query != ""
-	searchOffset := 0
-	var requiredPeople []int
-	if searching {
-		if searchOffset, err = parseSearchCursor(req.Cursor); err != nil {
-			return
-		}
-		requiredPeople, query = peopleInQuery(GetVisiblePeople(ctx.Tx, user), query)
-		req.Cursor = ""
-		req.CollapseSimilar = false
-	}
-
-	start := photoKey{seconds: math.MaxInt64, id: math.MaxInt}
-	if req.Cursor != "" {
-		start, err = parsePhotoCursor(req.Cursor)
-		if err != nil {
-			return
-		}
-	}
-	stop := int64(math.MinInt64)
-	upper := photoKey{seconds: math.MaxInt64, id: math.MaxInt}
-	if dateTo != "" {
-		end, _ := time.Parse(dateOnlyLayout, dateTo)
-		upper = photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}
-		if start.newerThan(upper) {
-			start = upper
-		}
-	}
-	if dateFrom != "" {
-		begin, _ := time.Parse(dateOnlyLayout, dateFrom)
-		stop = begin.Unix()
-	}
-
 	personIds := req.PersonIds
 	if req.PersonId > 0 {
 		personIds = append([]int{req.PersonId}, personIds...)
 	}
-	if len(personIds) == 0 && len(requiredPeople) > 0 {
-		personIds = requiredPeople[:1]
-	}
-
-	var streams []*photoStream
-	checkAccess := len(personIds) > 0
-	if checkAccess {
-		for _, personId := range personIds {
-			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, personId, start))
-		}
-	} else {
-		for _, familyId := range familiesVisibleTo(ctx.Tx, user) {
-			streams = append(streams, newPhotoStream(ImageByFamilyDateIndex, familyId, start))
-		}
-		for _, person := range linkedPeopleVisibleTo(ctx.Tx, user, ScopePhotos) {
-			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, person.Id, start))
-		}
-	}
-
-	var withTag map[int]bool
-	if len(req.TagIds) > 0 {
-		withTag = make(map[int]bool)
-		for _, tagId := range req.TagIds {
-			for _, photoId := range GetTagPhotoIds(ctx.Tx, tagId) {
-				withTag[photoId] = true
-			}
-		}
-	}
-
-	resolver := newPlaceResolver(ctx.Tx)
-	passes := func(image Image) bool {
-		if image.Status == 2 || (withTag != nil && !withTag[image.Id]) {
-			return false
-		}
-		if checkAccess && !CanAccessPhoto(ctx.Tx, user, image, AccessView) {
-			return false
-		}
-		if req.PlaceKey != "" {
-			if !canSeeLocation(ctx.Tx, user, image) {
-				return false
-			}
-			if place, ok := resolver.forPhoto(image); !ok || place.Key != req.PlaceKey {
-				return false
-			}
-		}
-		return true
-	}
-	coverShown := func(cover Image) bool {
-		if cover.PhotoDate.Unix() < stop || photoKeyOf(cover).newerThan(upper) || !passes(cover) {
-			return false
-		}
-		if len(personIds) == 0 {
-			return true
-		}
-		for _, pp := range GetPhotoPersonsByPhoto(ctx.Tx, cover.Id) {
-			if slices.Contains(personIds, pp.PersonId) {
-				return true
-			}
-		}
-		return false
-	}
-
-	groups := map[int]photoGroup{}
-	similarTo := map[int][]int{}
+	listing := newPhotoListing(ctx.Tx, user, personIds, req.TagIds, req.PlaceKey, dateFrom, dateTo)
 	limit := min(req.Limit, maxPhotoPageSize)
+
 	var page []Image
-	if searching {
-		var candidates []Image
-		mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
-			if passes(image) && photoHasEveryone(ctx.Tx, image.Id, requiredPeople) {
-				candidates = append(candidates, image)
-			}
-			return true
-		})
-		resp.MatchedPersonIds = requiredPeople
-		resp.SearchMode = "semantic"
-		if query != "" {
-			vector, embedErr := embedQuery(query)
-			if embedErr != nil {
-				resp.SearchMode = "text"
-			}
-			candidates = rankPhotos(ctx.Tx, candidates, query, vector)
+	var similarTo map[int][]int
+	if query := strings.TrimSpace(req.Query); query != "" {
+		var offset int
+		if offset, err = parseSearchCursor(req.Cursor); err != nil {
+			return
 		}
-		end := len(candidates)
-		if limit > 0 && searchOffset+limit < end {
-			end = searchOffset + limit
-			resp.NextCursor = fmt.Sprintf("s%d", end)
-		}
-		if searchOffset < end {
-			page = candidates[searchOffset:end]
-		}
+		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode = searchPhotos(listing, query, offset, limit)
 	} else {
-		mergePhotoStreams(ctx.Tx, streams, start, stop, func(image Image) bool {
-			if !passes(image) {
-				return true
+		start := listing.newest
+		if req.Cursor != "" {
+			if start, err = parsePhotoCursor(req.Cursor); err != nil {
+				return
 			}
-			if req.CollapseSimilar {
-				if features, ok := GetPhotoFeatures(ctx.Tx, image.Id); ok {
-					if group, grouped := groupOf(ctx.Tx, features.GroupId, groups); grouped {
-						if group.cover != image.Id {
-							if cover := GetImageById(ctx.Tx, group.cover); coverShown(cover) {
-								return true
-							}
-						} else {
-							for _, id := range group.members {
-								if id != image.Id {
-									similarTo[image.Id] = append(similarTo[image.Id], id)
-								}
-							}
-						}
-					}
-				}
-			}
-			if limit > 0 && len(page) == limit {
-				resp.NextCursor = photoKeyOf(page[limit-1]).String()
-				return false
-			}
-			page = append(page, image)
-			return true
-		})
+		}
+		page, similarTo, resp.NextCursor = browsePhotos(listing, start, limit, req.CollapseSimilar)
 	}
 
 	resp.Photos = make([]PhotoWithPeople, 0, len(page))
 	for _, image := range page {
 		people := GetPhotoPeople(ctx.Tx, image.Id)
-
 		for i := range people {
 			people[i].Age = calculateAge(people[i].Birthday)
 		}
-
 		image.TagIds = GetPhotoTagIds(ctx.Tx, image.Id)
-
 		resp.Photos = append(resp.Photos, PhotoWithPeople{
 			Image:   image,
 			People:  people,
 			Similar: similarTo[image.Id],
 		})
 	}
-
 	return
 }
 
