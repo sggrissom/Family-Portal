@@ -103,8 +103,6 @@ func OpenDB(dbpath string) *vbolt.DB {
 	vbolt.InitBuckets(dbConnection, &cfg.Info)
 
 	// Migration: one FamilyMembership row per user, mirroring User.FamilyId.
-	// Additive only — nothing reads memberships until Stage 3 of the
-	// multi-family plan (docs/multi-family-plan.md).
 	vbolt.ApplyDBProcess(dbConnection, "2026-0804-backfill-family-membership", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
 			backend.BackfillFamilyMemberships(tx)
@@ -145,6 +143,15 @@ func OpenDB(dbpath string) *vbolt.DB {
 	vbolt.ApplyDBProcess(dbConnection, "2026-0930-rebuild-milestone-search", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
 			backend.RebuildMilestoneSearchIndex(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
+	// Migration: membership rows are the only authority, so every user needs a
+	// row for their primary family before the User.FamilyId fallback is gone.
+	vbolt.ApplyDBProcess(dbConnection, "2026-0930-ensure-primary-memberships", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillFamilyMemberships(tx)
 			vbolt.TxCommit(tx)
 		})
 	})

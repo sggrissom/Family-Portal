@@ -144,8 +144,6 @@ var EmailBkt = vbolt.Bucket(&cfg.Info, "email", vpack.StringZ, vpack.Int)
 
 var InviteCodeBkt = vbolt.Bucket(&cfg.Info, "invite_codes", vpack.StringZ, vpack.Int)
 
-var UsersByFamilyIndex = vbolt.Index(&cfg.Info, "users_by_family", vpack.FInt, vpack.FInt)
-
 func GetUserId(tx *vbolt.Tx, email string) (userId int) {
 	vbolt.Read(tx, EmailBkt, email, &userId)
 	return
@@ -170,12 +168,7 @@ func GetFamilyUserIds(tx *vbolt.Tx, familyId int) (userIds []int) {
 	if familyId == 0 {
 		return
 	}
-	vbolt.ReadTermTargets(tx, UsersByFamilyIndex, familyId, &userIds, vbolt.Window{})
-
-	seen := make(map[int]bool, len(userIds))
-	for _, userId := range userIds {
-		seen[userId] = true
-	}
+	seen := make(map[int]bool)
 	for _, membership := range GetFamilyMemberships(tx, familyId) {
 		if membership.UserId != 0 && !seen[membership.UserId] {
 			seen[membership.UserId] = true
@@ -217,7 +210,6 @@ func AddUserTx(tx *vbolt.Tx, req CreateAccountRequest, hash []byte) User {
 	vbolt.Write(tx, UsersBkt, user.Id, &user)
 	vbolt.Write(tx, PasswdBkt, user.Id, &hash)
 	vbolt.Write(tx, EmailBkt, user.Email, &user.Id)
-	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, user.FamilyId)
 	EnsureMembershipTx(tx, user.Id, user.FamilyId, AccessAdmin)
 
 	return user

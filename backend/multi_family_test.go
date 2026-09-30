@@ -50,7 +50,6 @@ func setupMultiFamilyFixture(t *testing.T) (multiFamilyFixture, func()) {
 		soloOwnFamily := fx.soloA.FamilyId
 		fx.soloA.FamilyId = fx.famA
 		vbolt.Write(tx, UsersBkt, fx.soloA.Id, &fx.soloA)
-		vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, fx.soloA.Id, fx.famA)
 		for _, membership := range GetUserMemberships(tx, fx.soloA.Id) {
 			if membership.FamilyId == soloOwnFamily {
 				deleteMembershipTx(tx, membership)

@@ -21,9 +21,9 @@ AccessContribute // 2
 AccessAdmin      // 3
 ```
 
-They cross the wire as those integers, not as strings. Membership in a family
-grants **admin**. A link grants **view** and can never grant more — the ceiling
-is a constant:
+They cross the wire as those integers, not as strings. A membership grants
+whatever its row's `Role` says; signup and invite codes issue **admin**. A link
+grants **view** and can never grant more — the ceiling is a constant:
 
 ```go
 const MaxLinkAccess = AccessView
@@ -37,21 +37,27 @@ still yields view. `TestLinkNeverGrantsWrites` sets exactly that trap.
 
 ## 2. Membership — your own household
 
-A user has one **primary** family (`User.FamilyId`) plus a row in
-`FamilyMembership` for every family they belong to. Registering with someone's
-invite code joins that family instead of creating one; either way the new user
-gets `AccessAdmin` in it (`AddUserTx`, `backend/users.go`).
+`FamilyMembership` rows are the only source of household authority: one row per
+family a user belongs to, carrying their `Role` there. `User.FamilyId` is the
+**primary** family, and it only picks the default household — the one a request
+without a `familyId` acts on and the one chat connects to. It grants nothing by
+itself: a primary family with no row is a family the user cannot reach, and a
+row below admin on a primary family limits the user there like anywhere else.
 
-`familiesVisibleTo` is the list of families a user is a *member* of — primary
-first, the rest sorted. Membership is the only thing that lands in that list;
-links never do.
+Every writer keeps the two in step. Signup, including with an invite code, and
+joining by invite create an admin row (`AddUserTx`, `joinFamilyByInviteTx`).
+Leaving or being removed deletes the row and, if it was the primary family,
+moves `User.FamilyId` to another membership or to a fresh household of their own
+(`detachUserFromFamilyTx`). Account deletion deletes every row. The
+`2026-0930-ensure-primary-memberships` startup step created an admin row for any
+primary family that was missing one, which is what the old fallback granted.
 
-Inside a family, membership is total. Everyone with a membership row sees every
-person, measurement, milestone, photo, activity, and chat message in it, and at
-admin can write and delete all of it. There is no per-record sharing and no
-read-only role for household members — the `Role` field on the membership row
-supports one, and `min(membership.Role, …)` in `CanAccessFamily` honours it, but
-nothing currently issues a membership below admin.
+`familiesVisibleTo` is the list of families a user holds a row in — primary
+first, the rest by id. Links never land in that list.
+
+Inside a family, membership is total at its role. Every member sees every
+person, measurement, milestone, photo, activity, and chat message in it; admin
+and contribute can write, view cannot. There is no per-record sharing.
 
 Effective access to a family:
 
@@ -63,6 +69,12 @@ CanAccessFamily(tx, user, familyId, need)
 and `familyGrants` is deliberately blunt: same family → admin, anything else →
 none. **A link never widens `CanAccessFamily`.** That is why linked households
 can't reach whole-family surfaces.
+
+`backend/membership_matrix_test.go` checks each shape — owner, invited member,
+secondary view and contribute rows, a view row on the primary family, a primary
+family with no row, an outsider, leaving, removal, owner hand-off, and account
+deletion — against `CanAccessFamily`, a view, a contribute, and an admin
+procedure, the photo handler, the family's user list, and the chat socket.
 
 ---
 
@@ -257,11 +269,6 @@ is which claim each one demonstrates:
 | `aunt@example.test` | a pending link grants nothing |
 | `outsider@example.test` | no link, no membership, empty everything |
 
-One thing the seed had to work around is worth recording, because it is not
-obvious from §2. A role below admin only has an effect on a family that is
-**not** the user's primary one. `CanAccessFamily` ends with a fallback on
-`user.FamilyId`, which grants admin unconditionally, so a `Role: AccessView`
-membership row on a user's own household is dead weight. The sitter and the
-nanny therefore each own an otherwise-empty household and hold their reduced
-membership in the Whitfields as a secondary one. `TestSeedIssuesSubAdminMemberships`
-pins that down.
+The sitter and the nanny each also own a household of their own, and hold
+their reduced membership in the Whitfields as a secondary one.
+`TestSeedIssuesSubAdminMemberships` pins that down.
