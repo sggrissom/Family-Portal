@@ -28,6 +28,7 @@ type AddMilestoneRequest struct {
 	PersonId      int     `json:"personId"`
 	Description   string  `json:"description"`
 	Category      string  `json:"category"`
+	Context       string  `json:"context,omitempty"`
 	InputType     string  `json:"inputType"`
 	MilestoneDate *string `json:"milestoneDate,omitempty"`
 	AgeYears      *int    `json:"ageYears,omitempty"`
@@ -52,6 +53,7 @@ type UpdateMilestoneRequest struct {
 	Id            int     `json:"id"`
 	Description   string  `json:"description"`
 	Category      string  `json:"category"`
+	Context       string  `json:"context,omitempty"`
 	InputType     string  `json:"inputType"`
 	MilestoneDate *string `json:"milestoneDate,omitempty"`
 	AgeYears      *int    `json:"ageYears,omitempty"`
@@ -96,6 +98,7 @@ type Milestone struct {
 	FamilyId      int       `json:"familyId"`
 	Description   string    `json:"description"`
 	Category      string    `json:"category"`
+	Context       string    `json:"context"`
 	MilestoneDate time.Time `json:"milestoneDate"`
 	CreatedAt     time.Time `json:"createdAt"`
 	PhotoIds      []int     `json:"photoIds,omitempty"`
@@ -128,7 +131,7 @@ func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
 }
 
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -136,6 +139,9 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	vpack.String(&self.Category, buf)
 	vpack.Time(&self.MilestoneDate, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.String(&self.Context, buf)
+	}
 }
 
 func PackMilestonePhoto(self *MilestonePhoto, buf *vpack.Buffer) {
@@ -287,7 +293,7 @@ func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Miles
 }
 
 func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
-	terms := milestoneSearchWords(milestone.Description)
+	terms := milestoneSearchWords(milestone.Description + " " + milestone.Context)
 	terms = append(terms,
 		fmt.Sprintf("cat:%s", milestone.Category),
 		fmt.Sprintf("y:%d", milestone.MilestoneDate.Year()),
@@ -464,8 +470,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 	milestone.Id = vbolt.NextIntId(tx, MilestoneBkt)
 	milestone.PersonId = req.PersonId
 	milestone.FamilyId = familyId
-	milestone.Description = strings.TrimSpace(req.Description)
-	milestone.Category = req.Category
+	setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 	milestone.CreatedAt = time.Now()
 
 	writeMilestone(tx, milestone)
@@ -497,8 +502,7 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, err
 	}
 
-	milestone.Description = strings.TrimSpace(req.Description)
-	milestone.Category = req.Category
+	setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 
 	writeMilestone(tx, milestone)
 
@@ -513,6 +517,40 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		}
 	}
 	return milestone, nil
+}
+
+func setMilestoneText(milestone *Milestone, description string, category string, context string) {
+	milestone.Description = strings.TrimSpace(description)
+	milestone.Category = category
+	milestone.Context = ""
+	if category == "quote" {
+		milestone.Description = unquote(milestone.Description)
+		milestone.Context = strings.TrimSpace(context)
+	}
+}
+
+// Quotes display in quotation marks, so typed ones around the whole quote go.
+var quoteMarks = map[rune]rune{'"': '"', '“': '”', '„': '“', '«': '»', '\'': '\'', '‘': '’'}
+
+func unquote(text string) string {
+	runes := []rune(text)
+	if len(runes) < 2 {
+		return text
+	}
+	opening := runes[0]
+	closing, ok := quoteMarks[opening]
+	if !ok || runes[len(runes)-1] != closing {
+		return text
+	}
+	inner := strings.TrimSpace(string(runes[1 : len(runes)-1]))
+	if inner == "" || strings.ContainsRune(inner, opening) || strings.ContainsRune(inner, closing) {
+		return text
+	}
+	return inner
+}
+
+func looksLikeQuote(text string) bool {
+	return strings.ContainsRune(`"“„«`, []rune(strings.TrimSpace(text) + " ")[0])
 }
 
 func setMilestonePhotos(tx *vbolt.Tx, milestone Milestone, photoIds []int) error {
@@ -592,9 +630,9 @@ func validateMilestoneFields(description string, category string, inputType stri
 		return errors.New("Description is required")
 	}
 	switch category {
-	case "development", "behavior", "health", "achievement", "first", "other":
+	case "development", "behavior", "health", "achievement", "first", "quote", "artwork", "other":
 	default:
-		return errors.New("Category must be one of: development, behavior, health, achievement, first, other")
+		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, artwork, other")
 	}
 	return validateEntryInputType(inputType)
 }

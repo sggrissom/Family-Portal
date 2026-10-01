@@ -13,6 +13,7 @@ import { chipOrder } from "../../lib/familyGroups";
 import { groupByMonth, summarizeDays } from "../../lib/daySummary";
 import { HISTORY_TYPES, HistoryType, historyView } from "../../lib/history";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
+import { MilestoneText } from "../../components/MilestoneText";
 import { formatDate } from "../../lib/dateUtils";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
@@ -380,7 +381,7 @@ const SearchResults = ({ state, people }: { state: HistoryState; people: server.
             {getCategoryIcon(m.category)}
           </span>
           <span>
-            <strong>{names.get(m.personId) ?? ""}</strong> {m.description}
+            <strong>{names.get(m.personId) ?? ""}</strong> <MilestoneText milestone={m} />
             <small className="history-result-date"> · {formatDate(m.milestoneDate)}</small>
           </span>
         </a>

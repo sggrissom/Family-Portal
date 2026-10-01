@@ -12,7 +12,9 @@ import { ErrorPage } from "../../components/ErrorPage";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
 import {
+  ArtworkPhotos,
   CategoryChips,
+  MilestoneTextFields,
   SuggestedPhotos,
   TagPicker,
   suggestPhotos,
@@ -22,6 +24,7 @@ import {
 type EditMilestoneForm = {
   description: string;
   category: string;
+  context: string;
   when: When;
   photoIds: number[];
   tagIds: number[];
@@ -30,12 +33,16 @@ type EditMilestoneForm = {
   suggestedPhotoIds: number[];
   lookupKey: string;
   lookupTimer: number;
+  uploading: boolean;
+  uploadError: string;
+  previews: Record<number, string>;
 };
 
 const useEditMilestoneForm = vlens.declareHook(
   (milestone: server.Milestone): EditMilestoneForm => ({
     description: milestone.description,
     category: milestone.category,
+    context: milestone.context ?? "",
     when: {
       mode: "date",
       date: milestone.milestoneDate.split("T")[0],
@@ -49,6 +56,9 @@ const useEditMilestoneForm = vlens.declareHook(
     suggestedPhotoIds: [],
     lookupKey: "",
     lookupTimer: 0,
+    uploading: false,
+    uploadError: "",
+    previews: {},
   })
 );
 
@@ -137,7 +147,7 @@ function chooseCategory(form: EditMilestoneForm, category: string) {
 
 async function save(form: EditMilestoneForm, milestone: server.Milestone, event: Event) {
   event.preventDefault();
-  if (form.saving) return;
+  if (form.saving || form.uploading) return;
 
   const problem = !form.description.trim() ? copy.milestone.needsText : whenProblem(form.when);
   if (problem) {
@@ -155,6 +165,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
     id: milestone.id,
     description: form.description.trim(),
     category: form.category,
+    context: form.context.trim(),
     inputType: when.inputType,
     milestoneDate: when.date,
     ageYears: when.ageYears,
@@ -191,16 +202,7 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           </div>
         )}
 
-        <div className="entry-field">
-          <label htmlFor="description">{copy.milestone.whatHappened}</label>
-          <textarea
-            id="description"
-            rows={3}
-            placeholder={copy.milestone.placeholder}
-            disabled={disabled}
-            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-          />
-        </div>
+        <MilestoneTextFields form={form} disabled={disabled} />
 
         <CategoryChips
           value={form.category}
@@ -212,6 +214,15 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           <span className="entry-label">{copy.when.label}</span>
           <WhenControl when={form.when} disabled={disabled} />
         </div>
+
+        {form.category === "artwork" && (
+          <ArtworkPhotos
+            form={form}
+            personId={milestone.personId}
+            familyId={milestone.familyId}
+            disabled={disabled}
+          />
+        )}
 
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}
@@ -237,7 +248,7 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           <a href={`/profile/${milestone.personId}`} className="btn btn-secondary">
             {copy.milestone.cancel}
           </a>
-          <button type="submit" className="btn btn-primary" disabled={disabled}>
+          <button type="submit" className="btn btn-primary" disabled={disabled || form.uploading}>
             {form.saving ? copy.milestone.saving : copy.milestone.save}
           </button>
         </div>

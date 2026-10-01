@@ -9,6 +9,7 @@ import { ErrorPage } from "../../components/ErrorPage";
 import { PhotoStrip } from "../../components/PhotoPicker";
 import { SameAgeStrip } from "../../components/SameAgeRows";
 import { getCategoryIcon, getCategoryLabel } from "../../lib/milestoneHelpers";
+import { MilestoneText } from "../../components/MilestoneText";
 import { formatDate } from "../../lib/dateUtils";
 import { formatAgeAtMeasurement, isValidBirthday } from "../../lib/growthPercentiles";
 import { monthsOld } from "../../lib/sameAge";
@@ -130,7 +131,10 @@ const ViewMilestonePage = ({
           <span aria-hidden="true">{getCategoryIcon(milestone.category)}</span>{" "}
           {getCategoryLabel(milestone.category)}
         </div>
-        <h1>{milestone.description}</h1>
+        <h1>
+          <MilestoneText milestone={milestone} />
+        </h1>
+        {milestone.context && <p className="milestone-detail-context">{milestone.context}</p>}
         <p className="milestone-detail-meta">
           {person && <a href={`/profile/${person.id}`}>{person.name}</a>}
           {age !== null &&
@@ -162,7 +166,9 @@ const ViewMilestonePage = ({
                 <a href={`/milestone/${match.milestone.id}`}>
                   <strong>{match.person.name.split(" ")[0]}</strong>
                   {match.ageMonths >= 0 && ` at ${formatAgeAtMeasurement(match.ageMonths)}`}
-                  <span className="milestone-match-text">{match.milestone.description}</span>
+                  <span className="milestone-match-text">
+                    <MilestoneText milestone={match.milestone} />
+                  </span>
                 </a>
               </li>
             ))}

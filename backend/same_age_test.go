@@ -123,3 +123,94 @@ func TestGetSameAge(t *testing.T) {
 		t.Errorf("negative age error = %v, want ErrInvalidAge", err)
 	}
 }
+
+func TestSameAgePortraits(t *testing.T) {
+	fx := setupResultsFixture(t)
+	// Everyone in the fixture was born 2014-03-02, so six months is 2014-09-02.
+	sixMonths := fx.alice.Birthday.AddDate(0, 6, 0)
+
+	onTheDay := fx.addPhotoAt(t, "on-the-day.jpg", sixMonths)
+	closeUp := fx.addPhotoAt(t, "close-up.jpg", sixMonths.AddDate(0, 0, 8))
+	tooLate := fx.addPhotoAt(t, "too-late.jpg", sixMonths.AddDate(0, 0, 40))
+	for _, p := range []Image{onTheDay, closeUp, tooLate} {
+		fx.tagPerson(t, p, fx.alice)
+	}
+	fx.addFace(t, closeUp, fx.alice, box(0.3, 0.2, 0.7, 0.6), FaceConfirmed)
+
+	noFace := fx.addPhotoAt(t, "no-face.jpg", sixMonths.AddDate(0, 0, 3))
+	fx.tagPerson(t, noFace, fx.bob)
+
+	resp, err := callAs(t, fx, GetSameAge, GetSameAgeRequest{AgeMonths: months(6), Today: "2026-09-27"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	portraits := map[int][]PortraitPhoto{}
+	for _, row := range resp.Rows {
+		if row.Portraits == nil {
+			t.Errorf("%s has nil portraits, want an empty list", row.Person.Name)
+		}
+		portraits[row.Person.Id] = row.Portraits
+	}
+
+	alice := portraits[fx.alice.Id]
+	if len(alice) != 2 || alice[0].PhotoId != closeUp.Id || alice[1].PhotoId != onTheDay.Id {
+		t.Fatalf("alice = %+v, want the confirmed close-up ahead of the closer photo, and nothing outside the window", alice)
+	}
+	if alice[0].Box.Right != 0.7 || !alice[0].Date.Equal(closeUp.PhotoDate) {
+		t.Errorf("close-up should carry its face box and actual date: %+v", alice[0])
+	}
+
+	bob := portraits[fx.bob.Id]
+	if len(bob) != 1 || bob[0].PhotoId != noFace.Id || bob[0].Box != (FaceBox{}) {
+		t.Errorf("bob = %+v, want the whole photo without a face box", bob)
+	}
+	if carol := portraits[fx.carol.Id]; len(carol) != 0 {
+		t.Errorf("carol = %+v, want a gap", carol)
+	}
+}
+
+func TestSameAgePortraitsRespectLinkScopes(t *testing.T) {
+	fx, cleanup := setupFamilyLinkFixture(t)
+	defer cleanup()
+	jwtKey = []byte("same-age-portraits-test-secret-key-at-least-32")
+
+	firstBirthday := fx.alice.Birthday.AddDate(1, 0, 0)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		photo := writeTestImage(tx, fx.famA, fx.userA.Id, "first-birthday.jpg")
+		photo.PhotoDate = firstBirthday
+		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
+		AddPersonToPhoto(tx, photo.Id, fx.alice.Id, fx.famA)
+		ReindexPhotoDates(tx, photo.Id)
+		vbolt.TxCommit(tx)
+	})
+
+	aliceAtOne := func() []PortraitPhoto {
+		t.Helper()
+		token, err := generateJwtTokenString(fx.userB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var resp GetSameAgeResponse
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			resp, err = GetSameAge(&vbeam.Context{Tx: tx, Token: token}, GetSameAgeRequest{AgeMonths: months(12), Today: "2026-09-27"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range resp.Rows {
+			if row.Person.Id == fx.alice.Id {
+				return row.Portraits
+			}
+		}
+		t.Fatal("the linked household got no row for alice")
+		return nil
+	}
+
+	if got := aliceAtOne(); len(got) != 1 {
+		t.Errorf("with the photos scope, portraits = %+v, want the birthday photo", got)
+	}
+	setLinkScopes(t, fx, fx.linkAB, LinkScopes{People: true})
+	if got := aliceAtOne(); len(got) != 0 {
+		t.Errorf("without the photos scope, portraits = %+v, want none", got)
+	}
+}

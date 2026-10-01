@@ -30,9 +30,18 @@ function freshEmail(): string {
 // so it has to be collected and asserted on.
 let pageErrors: string[] = [];
 
-test.beforeEach(({ page }) => {
+// Signup allows five an hour from one address and the suite signs up more often
+// than that, so each test arrives from its own address.
+let clients = 0;
+
+test.beforeEach(async ({ page }, testInfo) => {
   pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
+
+  clients++;
+  await page.setExtraHTTPHeaders({
+    "X-Forwarded-For": `10.${testInfo.workerIndex}.0.${clients}`,
+  });
 });
 
 test.afterEach(() => {
@@ -354,6 +363,47 @@ test("a measurement and a milestone are edited without losing their units", asyn
     await expect(page).toHaveURL(/\/profile\/\d+$/);
     await expect(page.locator(".day-milestone").filter({ hasText: "alone" })).toHaveCount(1);
   });
+});
+
+test("artwork is photographed from the milestone form and hangs on its own tab", async ({
+  page,
+}) => {
+  const artist = { name: "UI Artist", birthdate: "2019-09-01" };
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: "Add family member" }).click();
+  await page.locator("#name").fill(artist.name);
+  await page.locator("#gender").selectOption("1");
+  await page.locator("#birthdate").fill(artist.birthdate);
+  await page.getByRole("button", { name: "Add Family Member" }).click();
+  await expect(personCard(page, artist.name)).toBeVisible();
+
+  await addFor(page, artist.name, "Milestone");
+  await expect(page).toHaveURL(/\/add-milestone/);
+  await page.getByRole("button", { name: "Artwork" }).click();
+  await expect(page.locator("label[for=description]")).toHaveText("What did they make?");
+  await page.locator("#description").fill("Drew the whole family as dinosaurs");
+
+  await page.locator(".artwork-upload input").setInputFiles("backend/seedphotos/bubbles-park.jpg");
+  await expect(page.getByRole("button", { name: "Don't attach this photo" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/profile\/\d+$/);
+  await expect(page.getByRole("heading", { name: artist.name, level: 1 })).toBeVisible();
+  await page.getByRole("tab", { name: "Artwork" }).click();
+  await expect(page).toHaveURL(/\?tab=artwork$/);
+  const piece = page.locator(".profile-artwork-piece");
+  await expect(piece).toHaveCount(1);
+  await expect(piece).toContainText("Drew the whole family as dinosaurs");
+  await expect(piece.locator("img")).toHaveCount(1);
 });
 
 async function addFor(

@@ -228,6 +228,7 @@ type ExportMilestone struct {
 	FamilyId      int       `json:"familyId"`
 	Description   string    `json:"description"`
 	Category      string    `json:"category"`
+	Context       string    `json:"context,omitempty"`
 	MilestoneDate time.Time `json:"milestoneDate"`
 	CreatedAt     time.Time `json:"createdAt"`
 	PersonName    string    `json:"personName"`
@@ -390,6 +391,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			FamilyId:      milestone.FamilyId,
 			Description:   milestone.Description,
 			Category:      milestone.Category,
+			Context:       milestone.Context,
 			MilestoneDate: milestone.MilestoneDate,
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,

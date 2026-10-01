@@ -5,6 +5,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { SameAgeRows } from "../../components/SameAgeRows";
+import { SameAgeMontage } from "../../components/SameAgeMontage";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import { ageStep, ageTitle, nextAge, parseAgeParam, prevAge, sameAgePath } from "../../lib/sameAge";
@@ -105,7 +106,10 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
       {(data.rows ?? []).length === 0 ? (
         <p className="same-age-none">{copy.sameAge.empty}</p>
       ) : (
-        <SameAgeRows rows={data.rows} ageMonths={data.ageMonths} today={today} />
+        <>
+          <SameAgeMontage rows={data.rows} ageMonths={data.ageMonths} />
+          <SameAgeRows rows={data.rows} ageMonths={data.ageMonths} today={today} />
+        </>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 const (
@@ -60,6 +61,30 @@ func portraitScore(face *PhotoFace, quality float64, peopleInPhoto int) float64 
 		}
 	}
 	return score
+}
+
+func scorePortrait(tx *vbolt.Tx, img Image, person Person, peopleInPhoto int) candidatePortrait {
+	var face *PhotoFace
+	for _, f := range GetPhotoFacesTx(tx, img.Id) {
+		if f.PersonId == person.Id && (f.Status == FaceAuto || f.Status == FaceConfirmed) {
+			f := f
+			face = &f
+			break
+		}
+	}
+	features, _ := GetPhotoFeatures(tx, img.Id)
+	c := candidatePortrait{
+		PortraitPhoto: PortraitPhoto{
+			PhotoId: img.Id, Date: img.PhotoDate, Year: img.PhotoDate.Year(),
+			AgeMonths: timelineBucket(person.Birthday, img.PhotoDate),
+		},
+		score:   portraitScore(face, features.Quality, peopleInPhoto),
+		hasFace: face != nil,
+	}
+	if face != nil {
+		c.Box = face.Box
+	}
+	return c
 }
 
 func timelineBucket(birthday, date time.Time) int {
@@ -123,26 +148,7 @@ func GetPersonPhotoInsights(ctx *vbeam.Context, req GetPersonPhotoInsightsReques
 			}
 		}
 
-		var face *PhotoFace
-		for _, f := range GetPhotoFacesTx(ctx.Tx, img.Id) {
-			if f.PersonId == person.Id && (f.Status == FaceAuto || f.Status == FaceConfirmed) {
-				f := f
-				face = &f
-				break
-			}
-		}
-		features, _ := GetPhotoFeatures(ctx.Tx, img.Id)
-		c := candidatePortrait{
-			PortraitPhoto: PortraitPhoto{
-				PhotoId: img.Id, Date: img.PhotoDate, Year: img.PhotoDate.Year(),
-				AgeMonths: timelineBucket(person.Birthday, img.PhotoDate),
-			},
-			score:   portraitScore(face, features.Quality, len(inPhoto)),
-			hasFace: face != nil,
-		}
-		if face != nil {
-			c.Box = face.Box
-		}
+		c := scorePortrait(ctx.Tx, img, person, len(inPhoto))
 
 		key := c.AgeMonths
 		if key < 0 {
