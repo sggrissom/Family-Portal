@@ -30,9 +30,18 @@ function freshEmail(): string {
 // so it has to be collected and asserted on.
 let pageErrors: string[] = [];
 
-test.beforeEach(({ page }) => {
+// Signup allows five an hour from one address and the suite signs up more often
+// than that, so each test arrives from its own address.
+let clients = 0;
+
+test.beforeEach(async ({ page }, testInfo) => {
   pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
+
+  clients++;
+  await page.setExtraHTTPHeaders({
+    "X-Forwarded-For": `10.${testInfo.workerIndex}.0.${clients}`,
+  });
 });
 
 test.afterEach(() => {
