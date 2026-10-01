@@ -114,6 +114,10 @@ export const copy = {
     nobodyElse: "Nobody else has anything from this age yet.",
     atThisAge: (age: string) => (age === "Newborn" ? "At birth" : `At ${age}`),
     empty: "Add birthdays to compare everyone at the same age.",
+    sideBySide: "Side by side",
+    viewPhoto: "View photo",
+    noPhoto: (names: string) => `No photo near this age: ${names}`,
+    anotherPhoto: "Another photo",
   },
   milestoneDetail: {
     back: "Back",

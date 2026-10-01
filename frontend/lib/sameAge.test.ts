@@ -5,6 +5,7 @@ import {
   monthsOld,
   nextAge,
   parseAgeParam,
+  photoAge,
   prevAge,
   sameAgePath,
 } from "./sameAge";
@@ -69,5 +70,25 @@ describe("monthsOld", () => {
   it("counts whole months between two dates", () => {
     expect(monthsOld("2020-06-15T00:00:00Z", "2024-01-15T00:00:00Z")).toBe(43);
     expect(monthsOld("2020-06-15T00:00:00Z", "2024-01-14T00:00:00Z")).toBe(42);
+  });
+});
+
+describe("photoAge", () => {
+  const born = "2014-03-02T00:00:00Z";
+
+  it("counts days past the month under two", () => {
+    expect(photoAge(born, "2014-09-10T15:30:00Z")).toBe("6 months, 8 days");
+    expect(photoAge(born, "2014-09-02T08:00:00Z")).toBe("6 months");
+    expect(photoAge(born, "2014-03-03T00:00:00Z")).toBe("1 day");
+    expect(photoAge(born, "2014-03-02T00:00:00Z")).toBe("Newborn");
+    expect(photoAge(born, "2015-04-01T00:00:00Z")).toBe("1 year, 30 days");
+  });
+
+  it("drops the days from two on", () => {
+    expect(photoAge(born, "2019-05-20T00:00:00Z")).toBe("5 years 2 months");
+  });
+
+  it("says nothing for a photo before the birthday", () => {
+    expect(photoAge(born, "2014-01-01T00:00:00Z")).toBe("");
   });
 });

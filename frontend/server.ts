@@ -1874,6 +1874,7 @@ export interface SameAgeRow {
     weight: GrowthData | null
     milestones: Milestone[]
     photoIds: number[]
+    portraits: PortraitPhoto[]
 }
 
 export interface ActivityImportCounts {

@@ -53,3 +53,21 @@ export function monthsOld(birthday: string, at: string): number {
   if (then.getUTCDate() < born.getUTCDate()) months--;
   return months;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const utcDay = (date: Date) =>
+  Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+// photoAge is how old someone actually was in a photo, to the day under two.
+export function photoAge(birthday: string, at: string): string {
+  const months = monthsOld(birthday, at);
+  if (months < 0) return "";
+  if (months >= 24) return ageTitle(months);
+  const born = new Date(birthday);
+  const anchor = Date.UTC(born.getUTCFullYear(), born.getUTCMonth() + months, born.getUTCDate());
+  const days = Math.max(0, Math.round((utcDay(new Date(at)) - anchor) / DAY_MS));
+  const d = days === 1 ? "1 day" : `${days} days`;
+  if (days === 0) return ageTitle(months);
+  return months === 0 ? d : `${ageTitle(months)}, ${d}`;
+}

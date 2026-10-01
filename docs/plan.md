@@ -42,6 +42,7 @@ The two next analysis proposals are detailed in
   from photo dates, people, places, and similarity (medium complexity).
 - **Sibling comparison montages:** photos side by side at a comparable age or
   recurring occasion, with actual ages and manual photo choices (low to medium).
+  The age comparison is built on Same age; recurring occasions remain.
 
 Unscoped candidates live in [Record ideas](plans/record-ideas.md). They are
 options to evaluate, not an implementation checklist. Approximate-date support

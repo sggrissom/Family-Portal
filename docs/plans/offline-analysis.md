@@ -401,6 +401,12 @@ recurring occasion such as the first day of school.
   manual choices need to survive revisits; add export/import if those become
   records. Background precomputation is optional if measured page cost warrants it.
 
+**Status:** the age comparison is built as a montage on the Same age page.
+Each row carries `portraits`, the window's photos ranked by the growing-up
+portrait score less a distance penalty. Tiles show the actual age and date,
+people without a photo are listed as a gap, and "Another photo" cycles picks
+in page state only. Recurring occasions and saved replacements remain.
+
 **Acceptance examples:** siblings appear at comparable ages with actual ages
 visible; a missing month shows a gap; manual replacements survive if saved;
 a linked viewer never sees an inaccessible sibling or photo.
