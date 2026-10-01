@@ -661,6 +661,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			FamilyId:      familyId,
 			Description:   milestone.Description,
 			Category:      milestone.Category,
+			Context:       milestone.Context,
 			MilestoneDate: milestone.MilestoneDate,
 			CreatedAt:     time.Now(),
 		}

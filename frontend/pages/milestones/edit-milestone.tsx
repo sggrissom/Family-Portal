@@ -13,6 +13,7 @@ import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
 import {
   CategoryChips,
+  MilestoneTextFields,
   SuggestedPhotos,
   TagPicker,
   suggestPhotos,
@@ -22,6 +23,7 @@ import {
 type EditMilestoneForm = {
   description: string;
   category: string;
+  context: string;
   when: When;
   photoIds: number[];
   tagIds: number[];
@@ -36,6 +38,7 @@ const useEditMilestoneForm = vlens.declareHook(
   (milestone: server.Milestone): EditMilestoneForm => ({
     description: milestone.description,
     category: milestone.category,
+    context: milestone.context ?? "",
     when: {
       mode: "date",
       date: milestone.milestoneDate.split("T")[0],
@@ -155,6 +158,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
     id: milestone.id,
     description: form.description.trim(),
     category: form.category,
+    context: form.context.trim(),
     inputType: when.inputType,
     milestoneDate: when.date,
     ageYears: when.ageYears,
@@ -191,16 +195,7 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           </div>
         )}
 
-        <div className="entry-field">
-          <label htmlFor="description">{copy.milestone.whatHappened}</label>
-          <textarea
-            id="description"
-            rows={3}
-            placeholder={copy.milestone.placeholder}
-            disabled={disabled}
-            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-          />
-        </div>
+        <MilestoneTextFields form={form} disabled={disabled} />
 
         <CategoryChips
           value={form.category}

@@ -3,6 +3,7 @@ import * as server from "../server";
 import { Checkup, DayEvent, DaySummary, PhotoGroup, dayLabel } from "../lib/daySummary";
 import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
+import { MilestoneText } from "./MilestoneText";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageInMonths, computePercentileLabel, isValidBirthday } from "../lib/growthPercentiles";
 import { copy } from "../lib/copy";
@@ -38,7 +39,7 @@ export const DaySummaryList = ({ days, people, today, subjectId }: DaySummaryLis
               </span>
               <span>
                 {who(m.personId)}
-                {m.description}
+                <MilestoneText milestone={m} />
               </span>
             </a>
           ))}

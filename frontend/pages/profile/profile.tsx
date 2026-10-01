@@ -8,6 +8,7 @@ import { openAddSheet } from "../../components/AppNav";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
 import { FaceCrop } from "../../components/FaceCrop";
 import { DaySummaryList } from "../../components/DaySummaryList";
+import { MilestoneText, isQuote } from "../../components/MilestoneText";
 import { SameAgeStrip } from "../../components/SameAgeRows";
 import {
   AgeChart,
@@ -86,8 +87,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   });
 }
 
-type Tab = "story" | "photos" | "growth" | "activities";
-const TABS: Tab[] = ["story", "photos", "growth", "activities"];
+type Tab = "story" | "quotes" | "photos" | "growth" | "activities";
+const TABS: Tab[] = ["story", "quotes", "photos", "growth", "activities"];
 
 type ProfileState = {
   tab: Tab;
@@ -142,7 +143,12 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
   const state = useProfileState(person.id);
   const today = localDateString(new Date());
   const hasBirthday = isValidBirthday(person.birthday) && !person.isPregnancy;
-  const tabs = person.isPregnancy ? TABS.filter(t => t === "story" || t === "photos") : TABS;
+  const quotes = (data.person.milestones ?? []).filter(isQuote);
+  const tabs = TABS.filter(
+    t =>
+      (t !== "quotes" || quotes.length > 0) &&
+      (!person.isPregnancy || t === "story" || t === "photos")
+  );
 
   return (
     <div className="profile-page">
@@ -180,6 +186,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
 
       <div className="profile-tab-panel" role="tabpanel">
         {state.tab === "story" && <StoryTab data={data} today={today} />}
+        {state.tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
         {state.tab === "photos" && (
           <PhotosTab person={person} photos={data.person.photos ?? []} insights={data.insights} />
         )}
@@ -420,6 +427,34 @@ const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
           />
         </section>
       ))}
+    </div>
+  );
+};
+
+const QuotesTab = ({ person, quotes }: { person: server.Person; quotes: server.Milestone[] }) => {
+  if (quotes.length === 0) {
+    return <p className="profile-empty">{copy.person.noQuotes(firstName(person.name))}</p>;
+  }
+  const sorted = [...quotes].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate));
+  return (
+    <div className="profile-quotes">
+      {sorted.map(quote => {
+        const age = isValidBirthday(person.birthday)
+          ? monthsOld(person.birthday, quote.milestoneDate)
+          : -1;
+        return (
+          <a key={quote.id} href={`/milestone/${quote.id}`} className="profile-quote">
+            <blockquote>
+              <MilestoneText milestone={quote} />
+            </blockquote>
+            {quote.context && <p className="profile-quote-context">{quote.context}</p>}
+            <small className="profile-quote-when">
+              {age >= 0 && `${formatAgeAtMeasurement(age)} · `}
+              {formatDate(quote.milestoneDate)}
+            </small>
+          </a>
+        );
+      })}
     </div>
   );
 };
