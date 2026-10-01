@@ -2,6 +2,8 @@ name: CI + Deploy
 
 # main deploys to staging, release deploys to production. Each deploy target is
 # a GitHub environment holding its own DEPLOY_* and SMOKE_* secrets.
+# PRs into main run only build/type/lint checks. Release PRs and all pushes
+# run the full suite; a failed post-merge run blocks deployment, not later PRs.
 on:
   pull_request:
     branches: [main, release]
@@ -32,8 +34,11 @@ env:
 
 jobs:
   build-test:
+    # Keep this check name stable for existing branch protection rules.
     name: Build, Typecheck, and Test
     runs-on: ubuntu-latest
+    env:
+      FULL_CI: ${{ github.event_name == 'push' || github.base_ref == 'release' }}
 
     steps:
       - name: Checkout repo
@@ -67,15 +72,19 @@ jobs:
         run: make typecheck
 
       - name: Unit tests
+        if: env.FULL_CI == 'true'
         run: make test
 
       - name: Frontend unit tests
+        if: env.FULL_CI == 'true'
         run: make test-frontend
 
       - name: Generate coverage report
+        if: env.FULL_CI == 'true'
         run: make test-coverage
 
       - name: Upload coverage report
+        if: env.FULL_CI == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-coverage
@@ -84,6 +93,7 @@ jobs:
             build/coverage.html
 
       - name: Race detector
+        if: env.FULL_CI == 'true'
         run: make test-race
 
       # The unit tests run in-process against a local build. This runs the
@@ -91,23 +101,27 @@ jobs:
       # compile-time storage paths, mandatory config, rate limiting that cannot
       # be disabled, and Secure cookies over TLS.
       - name: Prepare the end-to-end deployment tree
+        if: env.FULL_CI == 'true'
         run: |
           sudo mkdir -p /srv/apps/family/shared/data /srv/apps/family/shared/static
           sudo chown -R "$(id -un)" /srv/apps/family/shared
 
       - name: End-to-end flows
+        if: env.FULL_CI == 'true'
         run: make e2e
 
       - name: Install the Playwright browser
+        if: env.FULL_CI == 'true'
         run: npx playwright install --with-deps chromium
 
       # The checks above talk to the server the way a script does, so they all
       # pass a frontend that throws on boot. This runs the flows in Chromium.
       - name: Browser flows
+        if: env.FULL_CI == 'true'
         run: make test-ui
 
       - name: Upload Playwright report
-        if: failure()
+        if: failure() && env.FULL_CI == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report
@@ -117,14 +131,11 @@ jobs:
       - name: Verify checks did not modify tracked files
         run: make check-clean
 
-  # Dependency and secret scanning.
-  #
-  # This runs alongside build-test rather than in front of it: a CVE published
-  # this morning in a transitive dependency should not stop the tests from
-  # reporting, and it should not stop a deploy of unrelated code either. What it
-  # should do is block a merge, which is branch protection's job. So `deploy`
-  # deliberately does not list this job in `needs`.
+  # Full scans run after merging to main and before merging to release.
+  # A skipped main-PR job satisfies an existing required check, so changing
+  # the workflow does not leave those PRs waiting for a check that never runs.
   security:
+    if: github.event_name == 'push' || github.base_ref == 'release'
     name: Dependency and secret scan
     runs-on: ubuntu-latest
 
@@ -168,10 +179,40 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # GitHub marks the workflow failed and can notify subscribers through their
+  # Actions notification settings. Keep a direct link in the run summary too.
+  report-failure:
+    name: Report post-merge validation failure
+    runs-on: ubuntu-latest
+    needs: [build-test, security]
+    if: >-
+      always() && github.event_name == 'push' &&
+      (needs.build-test.result == 'failure' || needs.security.result == 'failure')
+    steps:
+      - name: Report failed validation
+        env:
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ needs.build-test.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+        run: |
+          echo "::error::Full validation failed on $BRANCH at $COMMIT. Deployment was blocked. See $RUN_URL"
+          {
+            echo "## Post-merge validation failed"
+            echo ""
+            echo "Branch: $BRANCH; commit: $COMMIT"
+            echo ""
+            echo "Build and tests: $BUILD_RESULT; security scan: $SECURITY_RESULT"
+            echo ""
+            echo "Deployment was blocked. [Open the failed run]($RUN_URL)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   deploy:
     name: Deploy to ${{ github.ref_name == 'release' && 'production' || 'staging' }}
     runs-on: ubuntu-latest
-    needs: build-test
+    needs: [build-test, security]
     if: github.event_name == 'push'
     environment:
       name: ${{ github.ref_name == 'release' && 'production' || 'staging' }}

@@ -122,8 +122,43 @@ moment you most want logs is right after a deploy that broke something.
 
 CI deploys after the full check gate passes (`.github/workflows/test.yml`):
 `main` goes to staging (`staging.familyrecord.app`) and `release` goes to
-production (`familyrecord.app`). To ship, fast-forward `release` to a `main`
-commit that has already run on staging.
+production (`familyrecord.app`). Both the build/test job and security scan must
+pass before either deployment. To ship, open a PR from `main` to `release`
+after that commit has passed full validation and run on staging.
+
+### Merge checks and post-merge validation
+
+| Event | Checks | Deployment |
+| --- | --- | --- |
+| PR into `main` | Release build (including CSS validation), lint/formatting, TypeScript, tracked-file cleanliness | None |
+| PR into `release` | All of the above, backend and frontend tests, coverage, race detector, end-to-end and browser flows, dependency and secret scans | None |
+| Push to `main` | Full suite | Staging, only after validation passes |
+| Push to `release` | Full suite | Production, only after validation passes |
+
+The `Build, Typecheck, and Test` check keeps its existing name so current branch
+protection continues working. On PRs into `main`, `Dependency and secret scan`
+is skipped; GitHub treats a skipped job as successful even if it is required.
+Full validation runs on every merged commit. Failures mark the Actions run red,
+add a run summary with a link to the failure, and block deployment. They do not
+hold up the next PR into `main`.
+
+Configure branch protection in GitHub **Settings → Branches**:
+
+- `main`: require `Build, Typecheck, and Test`. The existing security requirement
+  can be removed (or left in place, since that job skips on main PRs).
+- `release`: require both `Build, Typecheck, and Test` and
+  `Dependency and secret scan`, require PRs, and require branches to be up to
+  date before merging. Do not allow bypasses if release validation must be
+  mandatory. Direct pushes validate before deployment, but cannot validate
+  before the commit enters the branch.
+
+Workflow YAML cannot set branch protection. The `release` branch was unprotected
+when this change was prepared, so configure that rule to enforce the release
+merge gate.
+
+For failure alerts, enable GitHub Actions notifications in your personal
+notification settings and select failed workflows only. Delivery follows your
+GitHub email/web preferences; this workflow does not send separate emails.
 
 Each target is a GitHub environment (`staging`, `production`) with its own
 secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `SMOKE_EMAIL`,
