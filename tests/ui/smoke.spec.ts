@@ -329,6 +329,9 @@ test("a measurement and a milestone are edited without losing their units", asyn
   await test.step("a milestone opens with its date and saves its edits", async () => {
     await page.getByRole("link", { name: "Home" }).first().click();
     await expect(page).toHaveURL(/\/dashboard$/);
+    // The URL changes before the dashboard renders; an Add dialog opened on
+    // the outgoing page vanishes when the dashboard replaces it.
+    await expect(personCard(page, kid.name)).toBeVisible();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("dialog").getByRole("link", { name: "Milestone" }).click();
     await expect(page).toHaveURL(/\/add-milestone/);
