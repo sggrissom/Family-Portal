@@ -492,7 +492,7 @@ who can see or edit records.
 ## Out of scope
 
 - New record types (quotes, head circumference, birth details). They're in
-  `record-ideas.md`. This redesign should make them easy to slot in: one more
+  [future backlog](../plans/future.md). This redesign should make them easy to slot in: one more
   option on the add sheet, one more summary component in History.
 - The signed-out landing page, auth pages, legal pages, and admin pages,
   beyond picking up the new header.
