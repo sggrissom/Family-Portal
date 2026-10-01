@@ -6,6 +6,9 @@ export type Density = "brief" | "balanced" | "detailed";
 
 export const DENSITIES: Density[] = ["brief", "balanced", "detailed"];
 
+export const isDensity = (value: string | null | undefined): value is Density =>
+  DENSITIES.includes(value as Density);
+
 const PHOTO_BUDGET: Record<Density, number> = { brief: 3, balanced: 7, detailed: 14 };
 const PER_DAY: Record<Density, number> = { brief: 1, balanced: 2, detailed: 4 };
 
@@ -19,6 +22,7 @@ export interface BookPhoto {
 }
 
 export interface BookMoment {
+  id: number;
   text: string;
   context: string;
   day: string;
@@ -49,6 +53,7 @@ export interface Chapter {
   title: string;
   dates: string;
   blocks: Block[];
+  items: number[];
 }
 
 export interface EditorNotes {
@@ -58,6 +63,7 @@ export interface EditorNotes {
   photosInRange: number;
   undatedPhotos: number;
   unreadyPhotos: number;
+  missing: number;
   hiddenMonths: number[];
 }
 
@@ -71,18 +77,23 @@ export interface Book {
   notes: EditorNotes;
 }
 
-export interface BookWriting {
-  introduction?: string;
-  letter?: string;
-  signature?: string;
-}
-
 export interface BookSource {
   person: server.Person;
   milestones: server.Milestone[];
   photos: server.Image[];
   growthData: server.GrowthData[];
-  writing?: BookWriting;
+}
+
+export interface Selection {
+  title: string;
+  startDate: string;
+  endDate: string;
+  coverPhotoId: number;
+  introduction: string;
+  letter: string;
+  signature: string;
+  showGrowth: boolean;
+  items: server.BookItem[];
 }
 
 const NUMBER_WORDS = [
@@ -135,6 +146,9 @@ export function shortDay(day: string): string {
   });
 }
 
+export const bookDates = (startDate: string, endDate: string) =>
+  `${longDay(dayOf(startDate))} – ${longDay(addDays(dayOf(endDate), -1))}`;
+
 function monthSpan(from: string, to: string): string {
   const fmt = (day: string, year: boolean) =>
     new Date(day + "T00:00:00Z").toLocaleDateString("en-US", {
@@ -147,8 +161,8 @@ function monthSpan(from: string, to: string): string {
   return `${fmt(from, true)} – ${fmt(to, true)}`;
 }
 
-function monthStart(birthday: string, month: number): string {
-  const born = new Date(birthday);
+function monthStart(start: string, month: number): string {
+  const born = new Date(start + "T00:00:00Z");
   return new Date(Date.UTC(born.getUTCFullYear(), born.getUTCMonth() + month, born.getUTCDate()))
     .toISOString()
     .slice(0, 10);
@@ -160,32 +174,13 @@ export function chapterTitle(from: number, to: number): string {
   return `${word(from)} to ${word(to).toLowerCase()} months`;
 }
 
-function toPhoto(image: server.Image, birthday: string): BookPhoto {
-  const day = dayOf(image.photoDate);
-  return {
-    id: image.id,
-    width: image.width,
-    height: image.height,
-    day,
-    caption: image.description || (isGeneratedTitle(image) ? "" : image.title),
-    age: photoAge(birthday, day + "T00:00:00Z"),
-  };
-}
-
 function isGeneratedTitle(image: server.Image): boolean {
   const title = (image.title ?? "").trim();
   return !title || title === image.originalFilename || /^(IMG|DSC|PXL|photo)[-_ ]?\d/i.test(title);
 }
 
-function toMoment(m: server.Milestone, birthday: string): BookMoment {
-  const day = dayOf(m.milestoneDate);
-  return {
-    text: m.description.trim(),
-    context: (m.context ?? "").trim(),
-    day,
-    age: photoAge(birthday, day + "T00:00:00Z"),
-    first: m.category === "first",
-  };
+export function originalCaption(image: server.Image): string {
+  return image.description || (isGeneratedTitle(image) ? "" : image.title);
 }
 
 // Spread picks across distinct days so one prolific afternoon cannot fill a chapter.
@@ -213,14 +208,6 @@ export function spreadPick<T extends { day: string }>(
   }
   return picked.sort((a, b) => a.day.localeCompare(b.day));
 }
-
-interface MonthBucket {
-  month: number;
-  milestones: server.Milestone[];
-  photos: BookPhoto[];
-}
-
-const bucketWeight = (b: MonthBucket) => b.milestones.length * 3 + Math.min(b.photos.length, 6);
 
 // Quiet months fold into their neighbours instead of standing alone as empty pages.
 export function groupMonths(weights: number[], target = 7, maxSpan = 3): number[][] {
@@ -251,66 +238,302 @@ export function groupMonths(weights: number[], target = 7, maxSpan = 3): number[
     .filter(g => g.length > 0);
 }
 
-function chapterBlocks(
-  milestones: server.Milestone[],
-  photos: BookPhoto[],
-  photoById: Map<number, BookPhoto>,
-  birthday: string,
-  budget: number,
-  perDay: number,
-  used: Set<number>
-): Block[] {
-  type Entry = {
-    day: string;
-    block: Block | null;
-    photo: BookPhoto | null;
-    plain: BookMoment | null;
-  };
-  const entries: Entry[] = [];
+export const itemKey = (item: { kind: server.BookItemKind; sourceId: number }) =>
+  `${item.kind}:${item.sourceId}`;
 
-  for (const m of [...milestones].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate))) {
-    const moment = toMoment(m, birthday);
-    const photo = (m.photoIds ?? []).map(id => photoById.get(id)).find(p => p && !used.has(p.id));
-    if (photo) used.add(photo.id);
-    if (m.category === "quote") {
-      entries.push({ day: moment.day, block: { kind: "quote", moment }, photo: null, plain: null });
-    } else if (m.category === "artwork" && photo) {
-      entries.push({
-        day: moment.day,
-        block: { kind: "artwork", moment, photo },
-        photo: null,
-        plain: null,
-      });
-    } else if (photo || moment.first || moment.text.length > 160 || moment.context) {
-      entries.push({
-        day: moment.day,
-        block: { kind: "moment", moment, photo: photo ?? null },
-        photo: null,
-        plain: null,
-      });
-    } else {
-      entries.push({ day: moment.day, block: null, photo: null, plain: moment });
+const BIRTHDAY = 12;
+
+interface Range {
+  start: string;
+  end: string;
+  birthday: string;
+}
+
+// slot is the month of age 0–11, or BIRTHDAY for records dated on the first birthday.
+function slotOf(range: Range, day: string): number {
+  if (day >= range.end) return BIRTHDAY;
+  if (day < range.start) return 0;
+  return Math.min(11, Math.max(0, monthsOld(range.start, day + "T00:00:00Z")));
+}
+
+export interface Resolved {
+  person: server.Person;
+  range: Range;
+  photos: Map<number, server.Image>;
+  milestones: Map<number, server.Milestone>;
+  undatedPhotos: number;
+  unreadyPhotos: number;
+}
+
+export function resolveSource(source: BookSource, startDate: string, endDate: string): Resolved {
+  const photos = new Map<number, server.Image>();
+  let undatedPhotos = 0;
+  let unreadyPhotos = 0;
+  for (const image of source.photos ?? []) {
+    if (image.status !== 0) unreadyPhotos++;
+    else if (!isRealDay(dayOf(image.photoDate))) undatedPhotos++;
+    else photos.set(image.id, image);
+  }
+  const milestones = new Map<number, server.Milestone>();
+  for (const m of source.milestones ?? []) milestones.set(m.id, m);
+  return {
+    person: source.person,
+    range: {
+      start: dayOf(startDate),
+      end: dayOf(endDate),
+      birthday: source.person.birthday,
+    },
+    photos,
+    milestones,
+    undatedPhotos,
+    unreadyPhotos,
+  };
+}
+
+const inRange = (r: Range, day: string) => isRealDay(day) && day >= r.start && day <= r.end;
+
+export function firstYearSelection(source: BookSource): Pick<Selection, "startDate" | "endDate"> {
+  const start = dayOf(source.person.birthday);
+  return { startDate: start + "T00:00:00Z", endDate: firstBirthday(start) + "T00:00:00Z" };
+}
+
+export function itemDay(r: Resolved, item: server.BookItem): string | null {
+  if (item.kind === server.BookItemMilestone) {
+    const m = r.milestones.get(item.sourceId);
+    return m ? dayOf(m.milestoneDate) : null;
+  }
+  const p = r.photos.get(item.sourceId);
+  return p ? dayOf(p.photoDate) : null;
+}
+
+export interface Candidates {
+  milestones: server.Milestone[];
+  photos: server.Image[];
+}
+
+export function candidatesIn(r: Resolved): Candidates {
+  return {
+    milestones: [...r.milestones.values()]
+      .filter(m => inRange(r.range, dayOf(m.milestoneDate)))
+      .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate) || a.id - b.id),
+    photos: [...r.photos.values()]
+      .filter(p => inRange(r.range, dayOf(p.photoDate)))
+      .sort((a, b) => a.photoDate.localeCompare(b.photoDate) || a.id - b.id),
+  };
+}
+
+function chooseCover(r: Resolved, picked: server.Image[]): number {
+  const profile = r.photos.get(r.person.profilePhotoId);
+  if (profile && inRange(r.range, dayOf(profile.photoDate))) return profile.id;
+  const older = picked.find(p => p.width >= p.height && monthsOld(r.range.start, p.photoDate) >= 2);
+  return (older ?? picked[0])?.id ?? 0;
+}
+
+export interface SuggestOptions {
+  density: Density;
+  current?: server.BookItem[];
+  excluded?: server.BookItem[];
+  coverPhotoId?: number;
+}
+
+export interface Suggestion {
+  items: server.BookItem[];
+  coverPhotoId: number;
+}
+
+// Milestones are always offered; photos are budgeted per month of age. Pinned
+// items survive, excluded ones never return, and a re-suggestion keeps the
+// order of items it keeps.
+export function suggestItems(r: Resolved, options: SuggestOptions): Suggestion {
+  const excluded = new Set((options.excluded ?? []).map(itemKey));
+  const current = new Map((options.current ?? []).map(item => [itemKey(item), item]));
+  const { milestones, photos } = candidatesIn(r);
+  const budget = PHOTO_BUDGET[options.density];
+  const perDay = PER_DAY[options.density];
+
+  const allCandidatePhotos = photos.filter(p => !excluded.has(`${server.BookItemPhoto}:${p.id}`));
+  const cover =
+    options.coverPhotoId && r.photos.has(options.coverPhotoId)
+      ? options.coverPhotoId
+      : chooseCover(
+          r,
+          allCandidatePhotos.filter(p => slotOf(r.range, dayOf(p.photoDate)) !== BIRTHDAY)
+        );
+
+  const used = new Set<number>([cover]);
+  const chosen: server.BookItem[] = [];
+
+  for (const item of current.values()) {
+    if (item.kind === server.BookItemMilestone && item.photoId) used.add(item.photoId);
+    if (item.kind === server.BookItemPhoto && item.pinned) used.add(item.sourceId);
+  }
+
+  for (const m of milestones) {
+    const key = `${server.BookItemMilestone}:${m.id}`;
+    if (excluded.has(key)) continue;
+    const kept = current.get(key);
+    if (kept) {
+      chosen.push(kept);
+      continue;
+    }
+    const photoId = (m.photoIds ?? []).find(id => r.photos.has(id) && !used.has(id)) ?? 0;
+    if (photoId) used.add(photoId);
+    chosen.push({
+      kind: server.BookItemMilestone,
+      sourceId: m.id,
+      photoId,
+      caption: "",
+      pinned: false,
+    });
+  }
+
+  type Loose = { image: server.Image; day: string };
+  const bySlot = new Map<number, Loose[]>();
+  for (const image of allCandidatePhotos) {
+    if (used.has(image.id)) continue;
+    const day = dayOf(image.photoDate);
+    const slot = slotOf(r.range, day);
+    const list = bySlot.get(slot) ?? [];
+    list.push({ image, day });
+    bySlot.set(slot, list);
+  }
+  for (const item of current.values()) {
+    if (item.kind === server.BookItemPhoto && item.pinned && r.photos.has(item.sourceId)) {
+      chosen.push(item);
+    }
+  }
+  const pinnedPerSlot = new Map<number, number>();
+  for (const item of chosen) {
+    if (item.kind !== server.BookItemPhoto) continue;
+    const slot = slotOf(r.range, itemDay(r, item)!);
+    pinnedPerSlot.set(slot, (pinnedPerSlot.get(slot) ?? 0) + 1);
+  }
+  for (const [slot, list] of bySlot) {
+    const room = Math.max(0, budget - (pinnedPerSlot.get(slot) ?? 0));
+    for (const { image } of spreadPick(list, room, perDay)) {
+      const key = `${server.BookItemPhoto}:${image.id}`;
+      chosen.push(
+        current.get(key) ?? {
+          kind: server.BookItemPhoto,
+          sourceId: image.id,
+          photoId: 0,
+          caption: "",
+          pinned: false,
+        }
+      );
     }
   }
 
-  const loose = spreadPick(
-    photos.filter(p => !used.has(p.id)),
-    budget,
-    perDay
-  );
-  loose.forEach(p => used.add(p.id));
+  const items = options.current?.length
+    ? mergeInOrder(r, options.current, chosen)
+    : heroFirst(r, chosen);
+  return { items, coverPhotoId: cover };
+}
 
-  const blocks: Block[] = [];
-  const hasPhotoMoment = entries.some(e => e.block?.kind === "moment" && e.block.photo);
-  let rest = loose;
-  if (loose.length >= 3 || (loose.length && !hasPhotoMoment)) {
-    const hero = loose.find(p => p.width >= p.height) ?? loose[0];
-    blocks.push({ kind: "hero", photo: hero });
-    rest = loose.filter(p => p !== hero);
+function byDay(r: Resolved) {
+  return (a: server.BookItem, b: server.BookItem) =>
+    (itemDay(r, a) ?? "").localeCompare(itemDay(r, b) ?? "") ||
+    a.kind - b.kind ||
+    a.sourceId - b.sourceId;
+}
+
+function heroFirst(r: Resolved, items: server.BookItem[]): server.BookItem[] {
+  const sorted = [...items].sort(byDay(r));
+  const out: server.BookItem[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const slot = slotOf(r.range, itemDay(r, sorted[i])!);
+    let j = i;
+    while (j < sorted.length && slotOf(r.range, itemDay(r, sorted[j])!) === slot) j++;
+    const segment = sorted.slice(i, j);
+    const loose = segment.filter(item => item.kind === server.BookItemPhoto);
+    const hasMomentPhoto = segment.some(
+      item => item.kind === server.BookItemMilestone && item.photoId
+    );
+    if (loose.length >= 3 || (loose.length && !hasMomentPhoto)) {
+      const hero =
+        loose.find(item => {
+          const p = r.photos.get(item.sourceId)!;
+          return p.width >= p.height;
+        }) ?? loose[0];
+      out.push(hero, ...segment.filter(item => item !== hero));
+    } else {
+      out.push(...segment);
+    }
+    i = j;
   }
-  for (const p of rest) entries.push({ day: p.day, block: null, photo: p, plain: null });
+  return out;
+}
 
-  entries.sort((a, b) => a.day.localeCompare(b.day) || rank(a) - rank(b));
+function mergeInOrder(
+  r: Resolved,
+  current: server.BookItem[],
+  chosen: server.BookItem[]
+): server.BookItem[] {
+  const chosenKeys = new Set(chosen.map(itemKey));
+  const out = current.filter(item => chosenKeys.has(itemKey(item)));
+  const present = new Set(out.map(itemKey));
+  const order = byDay(r);
+  for (const item of [...chosen].sort(order)) {
+    if (present.has(itemKey(item))) continue;
+    insertByDay(r, out, item);
+    present.add(itemKey(item));
+  }
+  return out;
+}
+
+export function insertByDay(r: Resolved, items: server.BookItem[], item: server.BookItem) {
+  const day = itemDay(r, item) ?? "";
+  const at = items.findIndex(other => (itemDay(r, other) ?? "") > day);
+  if (at < 0) items.push(item);
+  else items.splice(at, 0, item);
+}
+
+function toPhoto(image: server.Image, r: Resolved, caption?: string): BookPhoto {
+  const day = dayOf(image.photoDate);
+  return {
+    id: image.id,
+    width: image.width,
+    height: image.height,
+    day,
+    caption: caption || originalCaption(image),
+    age: photoAge(r.range.birthday, day + "T00:00:00Z"),
+  };
+}
+
+function toMoment(m: server.Milestone, r: Resolved): BookMoment {
+  const day = dayOf(m.milestoneDate);
+  return {
+    id: m.id,
+    text: m.description.trim(),
+    context: (m.context ?? "").trim(),
+    day,
+    age: photoAge(r.range.birthday, day + "T00:00:00Z"),
+    first: m.category === "first",
+  };
+}
+
+interface Entry {
+  index: number;
+  item: server.BookItem;
+  day: string;
+}
+
+function chapterBlocks(entries: Entry[], r: Resolved): Block[] {
+  const blocks: Block[] = [];
+  const loose = entries.filter(e => e.item.kind === server.BookItemPhoto);
+  const hasMomentPhoto = entries.some(
+    e => e.item.kind === server.BookItemMilestone && e.item.photoId && r.photos.has(e.item.photoId)
+  );
+  let rest = entries;
+  const first = entries[0];
+  if (first && first.item.kind === server.BookItemPhoto && (loose.length >= 3 || !hasMomentPhoto)) {
+    blocks.push({
+      kind: "hero",
+      photo: toPhoto(r.photos.get(first.item.sourceId)!, r, first.item.caption),
+    });
+    rest = entries.slice(1);
+  }
 
   let pendingPhotos: BookPhoto[] = [];
   let pendingNotes: BookMoment[] = [];
@@ -324,17 +547,29 @@ function chapterBlocks(
     if (pendingNotes.length) blocks.push({ kind: "notes", moments: pendingNotes });
     pendingNotes = [];
   };
-  for (const entry of entries) {
-    if (entry.photo) {
+
+  for (const { item } of rest) {
+    if (item.kind === server.BookItemPhoto) {
       flushNotes();
-      pendingPhotos.push(entry.photo);
-    } else if (entry.plain) {
-      flushPhotos();
-      pendingNotes.push(entry.plain);
-    } else if (entry.block) {
+      pendingPhotos.push(toPhoto(r.photos.get(item.sourceId)!, r, item.caption));
+      continue;
+    }
+    const m = r.milestones.get(item.sourceId)!;
+    const moment = toMoment(m, r);
+    const image = item.photoId ? r.photos.get(item.photoId) : undefined;
+    const photo = image ? toPhoto(image, r, item.caption) : null;
+    let block: Block | null = null;
+    if (m.category === "quote") block = { kind: "quote", moment };
+    else if (m.category === "artwork" && photo) block = { kind: "artwork", moment, photo };
+    else if (photo || moment.first || moment.text.length > 160 || moment.context || item.pinned)
+      block = { kind: "moment", moment, photo };
+    if (block) {
       flushPhotos();
       flushNotes();
-      blocks.push(entry.block);
+      blocks.push(block);
+    } else {
+      flushPhotos();
+      pendingNotes.push(moment);
     }
   }
   flushPhotos();
@@ -342,166 +577,98 @@ function chapterBlocks(
   return blocks;
 }
 
-const rank = (e: { block: Block | null; photo: BookPhoto | null }) =>
-  e.block ? 0 : e.photo ? 2 : 1;
-
-function growthPoints(
-  records: server.GrowthData[],
-  type: server.MeasurementType,
-  birthday: string
-): GrowthPoint[] {
+function growthPoints(records: server.GrowthData[], type: server.MeasurementType, r: Resolved) {
+  const born = new Date(r.range.start + "T00:00:00Z").getTime();
   return records
-    .filter(r => r.measurementType === type)
-    .map(r => {
-      const day = dayOf(r.measurementDate);
-      const months = monthsOld(birthday, day + "T00:00:00Z");
-      const born = new Date(birthday).getTime();
+    .filter(g => g.measurementType === type && inRange(r.range, dayOf(g.measurementDate)))
+    .map(g => {
+      const day = dayOf(g.measurementDate);
+      const months = monthsOld(r.range.start, day + "T00:00:00Z");
       const exact = (new Date(day + "T00:00:00Z").getTime() - born) / (30.4375 * 86400000);
       return {
         day,
         months: Math.max(0, exact),
-        value: r.value,
-        label: formatMeasurement(r.value, r.unit, months),
+        value: g.value,
+        label: formatMeasurement(g.value, g.unit, months),
       };
     })
     .sort((a, b) => a.day.localeCompare(b.day));
 }
 
-function birthFacts(
-  points: { height: GrowthPoint[]; weight: GrowthPoint[] },
-  birthDay: string
-): string[] {
+function birthFacts(points: { height: GrowthPoint[]; weight: GrowthPoint[] }, birthDay: string) {
   const lines: string[] = [];
   const early = (list: GrowthPoint[]) => list.find(p => p.day <= addDays(birthDay, 3));
-  const weight = early(points.weight);
-  const height = early(points.height);
   const when = (p: GrowthPoint) => {
     if (p.day === birthDay) return "at birth";
     const days = Math.round((Date.parse(p.day) - Date.parse(birthDay)) / 86400000);
     return `at ${days} ${days === 1 ? "day" : "days"} old`;
   };
+  const weight = early(points.weight);
+  const height = early(points.height);
   if (weight) lines.push(`Weighed ${weight.label} ${when(weight)}`);
   if (height) lines.push(`Measured ${height.label} long ${when(height)}`);
   return lines;
 }
 
-export function assembleFirstYear(source: BookSource, density: Density = "balanced"): Book {
-  const { person } = source;
-  const birthday = person.birthday;
-  const birthDay = dayOf(birthday);
-  const endDay = firstBirthday(birthday);
-  const budget = PHOTO_BUDGET[density];
-  const perDay = PER_DAY[density];
-  const inYear = (day: string) => isRealDay(day) && day >= birthDay && day < endDay;
-  const onBirthday = (day: string) => day === endDay;
+const WEIGHT: Record<number, number> = { [server.BookItemMilestone]: 3, [server.BookItemPhoto]: 1 };
 
-  let undatedPhotos = 0;
-  let unreadyPhotos = 0;
-  const photoById = new Map<number, BookPhoto>();
-  for (const image of source.photos) {
-    if (image.status !== 0) {
-      unreadyPhotos++;
-      continue;
+export function assembleBook(source: BookSource, selection: Selection): Book {
+  const r = resolveSource(source, selection.startDate, selection.endDate);
+  const { start, end } = r.range;
+
+  let missing = 0;
+  const slots: Entry[][] = Array.from({ length: BIRTHDAY + 1 }, () => []);
+  selection.items.forEach((item, index) => {
+    const day = itemDay(r, item);
+    if (day === null || !isRealDay(day)) {
+      missing++;
+      return;
     }
-    const day = dayOf(image.photoDate);
-    if (!isRealDay(day)) {
-      undatedPhotos++;
-      continue;
-    }
-    photoById.set(image.id, toPhoto(image, birthday));
-  }
-  const allPhotos = [...photoById.values()].sort(
-    (a, b) => a.day.localeCompare(b.day) || a.id - b.id
-  );
-  const yearPhotos = allPhotos.filter(p => inYear(p.day));
-  const yearMilestones = source.milestones.filter(m => inYear(dayOf(m.milestoneDate)));
+    slots[slotOf(r.range, day)].push({ index, item, day });
+  });
 
-  const used = new Set<number>();
-  const profile = person.profilePhotoId ? photoById.get(person.profilePhotoId) : undefined;
-  const cover =
-    (profile && (inYear(profile.day) || onBirthday(profile.day)) ? profile : undefined) ??
-    yearPhotos.find(p => p.width >= p.height && monthsOld(birthday, p.day + "T00:00:00Z") >= 2) ??
-    yearPhotos[0] ??
-    null;
-  if (cover) used.add(cover.id);
-
-  const buckets: MonthBucket[] = Array.from({ length: 12 }, (_, month) => ({
-    month,
-    milestones: [],
-    photos: [],
-  }));
-  for (const m of yearMilestones) {
-    const month = monthsOld(birthday, dayOf(m.milestoneDate) + "T00:00:00Z");
-    buckets[Math.min(11, Math.max(0, month))].milestones.push(m);
-  }
-  for (const p of yearPhotos) {
-    const month = monthsOld(birthday, p.day + "T00:00:00Z");
-    buckets[Math.min(11, Math.max(0, month))].photos.push(p);
-  }
-
+  const cover = r.photos.get(selection.coverPhotoId);
+  const chapters: Chapter[] = [];
   const growth = {
-    height: growthPoints(source.growthData, server.Height, birthday).filter(
-      p => inYear(p.day) || onBirthday(p.day)
-    ),
-    weight: growthPoints(source.growthData, server.Weight, birthday).filter(
-      p => inYear(p.day) || onBirthday(p.day)
-    ),
+    height: growthPoints(source.growthData ?? [], server.Height, r),
+    weight: growthPoints(source.growthData ?? [], server.Weight, r),
   };
 
-  const chapters: Chapter[] = [];
-  const writing = source.writing ?? {};
-
   const welcome: Block[] = [];
-  if (writing.introduction)
-    welcome.push({ kind: "letter", text: writing.introduction, signature: "" });
-  const facts = birthFacts(growth, birthDay);
-  facts.unshift(`Born ${longDay(birthDay)}`);
-  welcome.push({ kind: "facts", lines: facts });
-  const firstWeeks = buckets[0];
-  welcome.push(
-    ...chapterBlocks(
-      firstWeeks.milestones,
-      firstWeeks.photos,
-      photoById,
-      birthday,
-      budget,
-      perDay,
-      used
-    )
-  );
+  if (selection.introduction) {
+    welcome.push({ kind: "letter", text: selection.introduction, signature: "" });
+  }
+  welcome.push({ kind: "facts", lines: [`Born ${longDay(start)}`, ...birthFacts(growth, start)] });
+  welcome.push(...chapterBlocks(slots[0], r));
   chapters.push({
     id: "welcome",
     title: "Welcome to the world",
-    dates: monthSpan(birthDay, addDays(monthStart(birthday, 1), -1)),
+    dates: monthSpan(start, addDays(monthStart(start, 1), -1)),
     blocks: welcome,
+    items: slots[0].map(e => e.index),
   });
 
-  const later = buckets.slice(1);
-  const groups = groupMonths(later.map(bucketWeight));
-  const hiddenMonths = later.filter(b => bucketWeight(b) === 0).map(b => b.month);
-  for (const group of groups) {
-    const months = group.map(i => later[i]);
-    const from = months[0].month;
-    const to = months[months.length - 1].month;
-    const blocks = chapterBlocks(
-      months.flatMap(b => b.milestones),
-      months.flatMap(b => b.photos),
-      photoById,
-      birthday,
-      budget,
-      perDay,
-      used
-    );
-    if (!blocks.length) continue;
+  const weights = slots.slice(1, BIRTHDAY).map(entries =>
+    Math.min(
+      entries.reduce((n, e) => n + WEIGHT[e.item.kind], 0),
+      entries.filter(e => e.item.kind === server.BookItemMilestone).length * 3 + 6
+    )
+  );
+  const hiddenMonths = weights.map((w, i) => (w === 0 ? i + 1 : -1)).filter(m => m > 0);
+  for (const group of groupMonths(weights)) {
+    const from = group[0] + 1;
+    const to = group[group.length - 1] + 1;
+    const entries = group.flatMap(i => slots[i + 1]).sort((a, b) => a.index - b.index);
     chapters.push({
       id: `months-${from}`,
       title: chapterTitle(from, to),
-      dates: monthSpan(monthStart(birthday, from), addDays(monthStart(birthday, to + 1), -1)),
-      blocks,
+      dates: monthSpan(monthStart(start, from), addDays(monthStart(start, to + 1), -1)),
+      blocks: chapterBlocks(entries, r),
+      items: entries.map(e => e.index),
     });
   }
 
-  if (growth.height.length + growth.weight.length >= 2) {
+  if (selection.showGrowth && growth.height.length + growth.weight.length >= 2) {
     chapters.push({
       id: "growth",
       title: "How you grew",
@@ -513,52 +680,62 @@ export function assembleFirstYear(source: BookSource, density: Density = "balanc
           weight: growth.weight.length >= 2 ? growth.weight : [],
         },
       ],
+      items: [],
     });
   }
 
-  const birthdayMilestones = source.milestones.filter(m => onBirthday(dayOf(m.milestoneDate)));
-  const birthdayPhotos = allPhotos.filter(p => onBirthday(p.day));
-  const closing = chapterBlocks(
-    birthdayMilestones,
-    birthdayPhotos,
-    photoById,
-    birthday,
-    budget,
-    perDay,
-    used
-  );
-  if (writing.letter) {
-    closing.push({ kind: "letter", text: writing.letter, signature: writing.signature ?? "" });
+  const birthday = slots[BIRTHDAY];
+  const closing = chapterBlocks(birthday, r);
+  if (selection.letter) {
+    closing.push({ kind: "letter", text: selection.letter, signature: selection.signature });
   }
   if (closing.length) {
     chapters.push({
       id: "birthday",
-      title:
-        birthdayMilestones.length || birthdayPhotos.length ? "Turning one" : "A letter for you",
-      dates: birthdayMilestones.length || birthdayPhotos.length ? longDay(endDay) : "",
+      title: birthday.length ? "Turning one" : "A letter for you",
+      dates: birthday.length ? longDay(end) : "",
       blocks: closing,
+      items: birthday.map(e => e.index),
     });
   }
 
-  const usedMilestones = chapters
-    .flatMap(c => c.blocks)
-    .reduce((n, b) => n + ("moment" in b ? 1 : b.kind === "notes" ? b.moments.length : 0), 0);
-
+  const candidates = candidatesIn(r);
+  const placed = slots.flat();
   return {
-    name: person.name,
-    title: `${person.name}'s first year`,
-    dates: `${longDay(birthDay)} – ${longDay(addDays(endDay, -1))}`,
-    cover,
+    name: r.person.name,
+    title: selection.title || `${r.person.name}'s first year`,
+    dates: bookDates(selection.startDate, selection.endDate),
+    cover: cover ? toPhoto(cover, r) : null,
     chapters,
-    ending: `${person.name}, one year old`,
+    ending: `${r.person.name}, one year old`,
     notes: {
-      milestonesUsed: usedMilestones,
-      milestonesInRange: yearMilestones.length + birthdayMilestones.length,
-      photosUsed: used.size,
-      photosInRange: yearPhotos.length + birthdayPhotos.length,
-      undatedPhotos,
-      unreadyPhotos,
+      milestonesUsed: placed.filter(e => e.item.kind === server.BookItemMilestone).length,
+      milestonesInRange: candidates.milestones.length,
+      photosUsed:
+        placed.filter(e => e.item.kind === server.BookItemPhoto).length +
+        placed.filter(e => e.item.kind === server.BookItemMilestone && e.item.photoId).length +
+        (cover ? 1 : 0),
+      photosInRange: candidates.photos.length,
+      undatedPhotos: r.undatedPhotos,
+      unreadyPhotos: r.unreadyPhotos,
+      missing,
       hiddenMonths,
     },
+  };
+}
+
+export function draftSelection(source: BookSource, density: Density = "balanced"): Selection {
+  const range = firstYearSelection(source);
+  const r = resolveSource(source, range.startDate, range.endDate);
+  const { items, coverPhotoId } = suggestItems(r, { density });
+  return {
+    title: `${source.person.name}'s first year`,
+    ...range,
+    coverPhotoId,
+    introduction: "",
+    letter: "",
+    signature: "",
+    showGrowth: true,
+    items,
   };
 }

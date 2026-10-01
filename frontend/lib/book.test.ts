@@ -1,12 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { assembleFirstYear, chapterTitle, firstBirthday, groupMonths, spreadPick } from "./book";
-import { sampleSource } from "./bookFixtures";
+import * as server from "../server";
+import {
+  Book,
+  assembleBook,
+  chapterTitle,
+  firstBirthday,
+  groupMonths,
+  resolveSource,
+  spreadPick,
+  suggestItems,
+} from "./book";
+import { sampleBook, sampleSource } from "./bookFixtures";
+
+const build = (
+  name: "rich" | "sparse" | "uneven",
+  density: "brief" | "balanced" | "detailed" = "balanced"
+) => {
+  const { source, selection } = sampleBook(name, density);
+  return assembleBook(source, selection);
+};
+
+const photoIds = (book: Book) =>
+  book.chapters.flatMap(c =>
+    c.blocks.flatMap(block => {
+      if (block.kind === "hero") return [block.photo.id];
+      if (block.kind === "photos") return block.photos.map(p => p.id);
+      if (block.kind === "artwork") return [block.photo.id];
+      if (block.kind === "moment" && block.photo) return [block.photo.id];
+      return [];
+    })
+  );
 
 describe("the first year's range", () => {
   it("ends the day before the first birthday", () => {
     expect(firstBirthday("2024-03-14T00:00:00Z")).toBe("2025-03-14");
-    const book = assembleFirstYear(sampleSource("rich"));
-    expect(book.dates).toBe("March 14, 2024 – March 13, 2025");
+    expect(build("rich").dates).toBe("March 14, 2024 – March 13, 2025");
   });
 
   it("rolls a leap-day birthday to March 1", () => {
@@ -14,7 +42,7 @@ describe("the first year's range", () => {
   });
 
   it("keeps first-birthday records for a closing chapter", () => {
-    const book = assembleFirstYear(sampleSource("rich"));
+    const book = build("rich");
     const last = book.chapters[book.chapters.length - 1];
     expect(last.title).toBe("Turning one");
     expect(last.dates).toBe("March 14, 2025");
@@ -39,63 +67,135 @@ describe("grouping quiet months", () => {
   });
 });
 
-describe("picking photos", () => {
+describe("suggesting a draft", () => {
   it("spreads picks across days instead of one busy day", () => {
     const items = [
       ...Array.from({ length: 10 }, () => ({ day: "2024-05-01" })),
       { day: "2024-05-10" },
       { day: "2024-05-20" },
     ];
-    const days = spreadPick(items, 3).map(p => p.day);
-    expect(days).toEqual(["2024-05-01", "2024-05-10", "2024-05-20"]);
+    expect(spreadPick(items, 3).map(p => p.day)).toEqual([
+      "2024-05-01",
+      "2024-05-10",
+      "2024-05-20",
+    ]);
   });
 
   it("is deterministic and uses each photo at most once", () => {
-    const a = assembleFirstYear(sampleSource("rich"));
-    const b = assembleFirstYear(sampleSource("rich"));
-    expect(a).toEqual(b);
-    const ids = a.chapters.flatMap(c =>
-      c.blocks.flatMap(block => {
-        if (block.kind === "hero") return [block.photo.id];
-        if (block.kind === "photos") return block.photos.map(p => p.id);
-        if (block.kind === "artwork") return [block.photo.id];
-        if (block.kind === "moment" && block.photo) return [block.photo.id];
-        return [];
-      })
-    );
+    const a = build("rich");
+    expect(a).toEqual(build("rich"));
+    const ids = photoIds(a);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).not.toContain(a.cover?.id);
   });
 
   it("uses more photos as the length grows", () => {
-    const brief = assembleFirstYear(sampleSource("rich"), "brief").notes.photosUsed;
-    const detailed = assembleFirstYear(sampleSource("rich"), "detailed").notes.photosUsed;
-    expect(detailed).toBeGreaterThan(brief);
+    expect(build("rich", "detailed").notes.photosUsed).toBeGreaterThan(
+      build("rich", "brief").notes.photosUsed
+    );
   });
-});
 
-describe("sparse and uneven records", () => {
   it("keeps every recorded milestone", () => {
-    for (const sample of ["rich", "sparse", "uneven"] as const) {
-      const notes = assembleFirstYear(sampleSource(sample)).notes;
+    for (const name of ["rich", "sparse", "uneven"] as const) {
+      const notes = build(name).notes;
       expect(notes.milestonesUsed).toBe(notes.milestonesInRange);
     }
   });
 
+  it("keeps pinned photos, leaves removed ones out, and keeps the order it already had", () => {
+    const { source, selection } = sampleBook("rich", "detailed");
+    const r = resolveSource(source, selection.startDate, selection.endDate);
+    const photos = selection.items.filter(i => i.kind === server.BookItemPhoto);
+    const pinned = { ...photos[5], pinned: true };
+    const removed = photos[6];
+    const reordered = [pinned, ...selection.items.filter(i => i !== photos[5])];
+
+    const next = suggestItems(r, {
+      density: "brief",
+      current: reordered,
+      excluded: [removed],
+      coverPhotoId: selection.coverPhotoId,
+    });
+    const keys = next.items.map(i => `${i.kind}:${i.sourceId}`);
+    expect(next.items[0]).toEqual(pinned);
+    expect(keys).not.toContain(`${removed.kind}:${removed.sourceId}`);
+    expect(next.items.filter(i => i.kind === server.BookItemPhoto).length).toBeLessThan(
+      photos.length
+    );
+    expect(next.coverPhotoId).toBe(selection.coverPhotoId);
+  });
+});
+
+describe("reading a saved book", () => {
+  it("only shows what was saved, so new uploads do not rearrange it", () => {
+    const { source, selection } = sampleBook("rich");
+    const before = assembleBook(source, selection);
+    const added: server.Image = {
+      ...source.photos[0],
+      id: -999,
+      photoDate: "2024-06-01T00:00:00Z",
+    };
+    const after = assembleBook({ ...source, photos: [...source.photos, added] }, selection);
+    expect(photoIds(after)).toEqual(photoIds(before));
+  });
+
+  it("follows the saved order, so moving a photo first makes it the chapter's opening photo", () => {
+    const { source, selection } = sampleBook("rich");
+    const book = assembleBook(source, selection);
+    const chapter = book.chapters.find(c => c.blocks[0].kind === "hero" && c.items.length > 4)!;
+    const lastPhoto = [...chapter.items]
+      .reverse()
+      .find(i => selection.items[i].kind === server.BookItemPhoto)!;
+    const moved = selection.items[lastPhoto];
+    const items = selection.items.filter(i => i !== moved);
+    items.splice(chapter.items[0], 0, moved);
+
+    const reread = assembleBook(source, { ...selection, items });
+    const same = reread.chapters.find(c => c.id === chapter.id)!;
+    expect(same.blocks[0]).toMatchObject({ kind: "hero", photo: { id: moved.sourceId } });
+  });
+
+  it("drops deleted records and counts them for the editor", () => {
+    const { source, selection } = sampleBook("rich");
+    const gone = source.milestones[3].id;
+    const book = assembleBook(
+      { ...source, milestones: source.milestones.filter(m => m.id !== gone) },
+      selection
+    );
+    expect(book.notes.missing).toBe(1);
+  });
+
+  it("uses a book-only caption over the photo's own", () => {
+    const { source, selection } = sampleBook("rich");
+    const items = selection.items.map(i =>
+      i.kind === server.BookItemPhoto ? { ...i, caption: "Only in the book" } : i
+    );
+    const book = assembleBook(source, { ...selection, items });
+    const hero = book.chapters.flatMap(c => c.blocks).find(b => b.kind === "hero");
+    expect(hero).toMatchObject({ photo: { caption: "Only in the book" } });
+    expect(sampleSource("rich").photos.every(p => p.description !== "Only in the book")).toBe(true);
+  });
+
   it("says nothing about months with no records", () => {
-    const book = assembleFirstYear(sampleSource("uneven"));
+    const book = build("uneven");
     expect(book.notes.hiddenMonths.length).toBeGreaterThan(0);
     expect(book.chapters.every(c => c.blocks.length > 0)).toBe(true);
   });
 
   it("only labels a measurement as at birth when it was taken that day", () => {
-    const facts = (sample: "rich" | "sparse") =>
-      assembleFirstYear(sampleSource(sample)).chapters[0].blocks.find(b => b.kind === "facts");
+    const facts = (name: "rich" | "sparse") =>
+      build(name).chapters[0].blocks.find(b => b.kind === "facts");
     expect(facts("rich")).toMatchObject({
       lines: expect.arrayContaining(["Weighed 7 lb 4 oz at birth"]),
     });
     expect(facts("sparse")).toMatchObject({
       lines: expect.arrayContaining(["Weighed 6 lb 12.8 oz at 3 days old"]),
     });
+  });
+
+  it("leaves the growth chapter out when it is switched off", () => {
+    const { source, selection } = sampleBook("rich");
+    const book = assembleBook(source, { ...selection, showGrowth: false });
+    expect(book.chapters.map(c => c.id)).not.toContain("growth");
   });
 });

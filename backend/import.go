@@ -55,6 +55,7 @@ type ImportDataStructure struct {
 	Tags            []ExportTag       `json:"tags"`
 	Photos          []ExportPhoto     `json:"photos,omitempty"`
 	Activities      []ExportActivity  `json:"activities,omitempty"`
+	Books           []ExportBook      `json:"books,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -89,6 +90,8 @@ type ImportDataResponse struct {
 	ImportedPhotos       int                  `json:"importedPhotos"`
 	SkippedPhotos        int                  `json:"skippedPhotos"`
 	ImportedActivities   ActivityImportCounts `json:"importedActivities"`
+	ImportedBooks        int                  `json:"importedBooks"`
+	SkippedBooks         int                  `json:"skippedBooks"`
 	Errors               []string             `json:"errors,omitempty"`
 	Warnings             []string             `json:"warnings,omitempty"`
 	PersonIdMapping      map[int]int          `json:"personIdMapping,omitempty"`
@@ -195,6 +198,18 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			counts, activityWarnings := importActivities(ctx.Tx, importData.Activities, familyId, personIdMapping, nil)
 			resp.ImportedActivities = counts
 			resp.Warnings = append(resp.Warnings, activityWarnings...)
+		}
+
+		if len(importData.Books) > 0 {
+			imported, skipped, bookWarnings := importBooks(ctx.Tx, importData.Books, bookImport{
+				familyId:        familyId,
+				userId:          user.Id,
+				personIdMapping: personIdMapping,
+				milestoneIds:    matchImportedMilestones(ctx.Tx, importData.Milestones, personIdMapping),
+			})
+			resp.ImportedBooks = imported
+			resp.SkippedBooks = skipped
+			resp.Warnings = append(resp.Warnings, bookWarnings...)
 		}
 	}
 
