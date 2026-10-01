@@ -8,23 +8,26 @@ import (
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
+	"go.hasen.dev/vpack"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type bookFixture struct {
-	db        *vbolt.DB
-	owner     User
-	outsider  User
-	baby      Person
-	sibling   Person
-	stranger  Person
-	steps     Milestone
-	smile     Milestone
-	tooth     Milestone
-	early     Image
-	attached  Image
-	untagged  Image
-	otherBaby Image
+	db          *vbolt.DB
+	owner       User
+	outsider    User
+	baby        Person
+	sibling     Person
+	stranger    Person
+	steps       Milestone
+	smile       Milestone
+	tooth       Milestone
+	early       Image
+	attached    Image
+	untagged    Image
+	siblingOnly Image
+	together    Image
+	otherBaby   Image
 }
 
 func setupBookFixture(t *testing.T) bookFixture {
@@ -61,6 +64,12 @@ func setupBookFixture(t *testing.T) bookFixture {
 		fx.attached = photo(fx.owner.FamilyId, "2024-05-01", &fx.baby)
 		fx.untagged = photo(fx.owner.FamilyId, "2024-05-02", nil)
 		fx.otherBaby = photo(fx.outsider.FamilyId, "2024-05-03", &fx.stranger)
+		fx.siblingOnly = photo(fx.owner.FamilyId, "2024-05-04", &fx.sibling)
+		fx.together = photo(fx.owner.FamilyId, "2024-06-01", &fx.baby)
+		tagPersonInPhoto(tx, fx.together.Id, fx.sibling.Id, fx.owner.FamilyId)
+		for _, image := range []Image{fx.early, fx.attached, fx.untagged, fx.otherBaby, fx.siblingOnly, fx.together} {
+			ReindexPhotoDates(tx, image.Id)
+		}
 		photo(fx.owner.FamilyId, "2026-01-01", &fx.baby)
 
 		milestone := func(person Person, date, text string, photoIds ...int) Milestone {
@@ -110,9 +119,13 @@ func (fx bookFixture) content() BookContent {
 	}
 }
 
+func (fx bookFixture) firstYear(content BookContent) CreateBookRequest {
+	return CreateBookRequest{PersonIds: []int{fx.baby.Id}, Preset: BookPresetFirstYear, Content: content}
+}
+
 func (fx bookFixture) createBook(t *testing.T) Book {
 	t.Helper()
-	resp, err := bookCall(t, fx, fx.owner, CreateBook, CreateBookRequest{PersonId: fx.baby.Id, Content: fx.content()})
+	resp, err := bookCall(t, fx, fx.owner, CreateBook, fx.firstYear(fx.content()))
 	if err != nil {
 		t.Fatalf("CreateBook() = %v", err)
 	}
@@ -121,7 +134,7 @@ func (fx bookFixture) createBook(t *testing.T) Book {
 
 func TestBookSourcesCoverTheFirstYearAndItsBirthday(t *testing.T) {
 	fx := setupBookFixture(t)
-	resp, err := bookCall(t, fx, fx.owner, GetBookSources, GetBookSourcesRequest{PersonId: fx.baby.Id})
+	resp, err := bookCall(t, fx, fx.owner, GetBookSources, GetBookSourcesRequest{PersonIds: []int{fx.baby.Id}, Preset: BookPresetFirstYear})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +148,14 @@ func TestBookSourcesCoverTheFirstYearAndItsBirthday(t *testing.T) {
 	if len(texts) != 2 || texts[0] != "First smile" || texts[1] != "First steps on her birthday" {
 		t.Errorf("milestones = %v, want the smile and the birthday, not the day after or Theo's", texts)
 	}
-	if len(resp.Sources.Photos) != 2 {
-		t.Errorf("photos = %d, want the two tagged photos from the year", len(resp.Sources.Photos))
+	if len(resp.Sources.Photos) != 4 {
+		t.Errorf("photos = %d, want three of June and one of nobody", len(resp.Sources.Photos))
+	}
+	if len(resp.Sources.Untagged) != 1 || resp.Sources.Untagged[0] != fx.untagged.Id {
+		t.Errorf("untagged = %v, want the household photo with nobody in it", resp.Sources.Untagged)
+	}
+	if got := resp.Sources.PhotoPeople[fx.together.Id]; len(got) != 1 || got[0] != fx.baby.Id {
+		t.Errorf("photo people = %v, want only the book's own people", got)
 	}
 }
 
@@ -181,20 +200,20 @@ func TestBookRefusesRecordsThatAreNotTheSubjects(t *testing.T) {
 	fx := setupBookFixture(t)
 	for name, items := range map[string][]BookItem{
 		"sibling's milestone":    {{Kind: BookItemMilestone, SourceId: fx.tooth.Id}},
-		"untagged photo":         {{Kind: BookItemPhoto, SourceId: fx.untagged.Id}},
+		"sibling's photo":        {{Kind: BookItemPhoto, SourceId: fx.siblingOnly.Id}},
 		"other family's photo":   {{Kind: BookItemPhoto, SourceId: fx.otherBaby.Id}},
 		"photo not on milestone": {{Kind: BookItemMilestone, SourceId: fx.smile.Id, PhotoId: fx.early.Id}},
 		"missing milestone":      {{Kind: BookItemMilestone, SourceId: 9999}},
 	} {
 		content := fx.content()
 		content.Items = items
-		if _, err := bookCall(t, fx, fx.owner, CreateBook, CreateBookRequest{PersonId: fx.baby.Id, Content: content}); err == nil {
+		if _, err := bookCall(t, fx, fx.owner, CreateBook, fx.firstYear(content)); err == nil {
 			t.Errorf("%s: CreateBook succeeded", name)
 		}
 	}
 	content := fx.content()
 	content.CoverPhotoId = fx.otherBaby.Id
-	if _, err := bookCall(t, fx, fx.owner, CreateBook, CreateBookRequest{PersonId: fx.baby.Id, Content: content}); err == nil {
+	if _, err := bookCall(t, fx, fx.owner, CreateBook, fx.firstYear(content)); err == nil {
 		t.Error("another family's cover photo was accepted")
 	}
 }
@@ -210,7 +229,7 @@ func TestBooksStayInTheirHousehold(t *testing.T) {
 	if _, err := bookCall(t, fx, fx.outsider, GetBook, GetBookRequest{Id: book.Id}); err != ErrBookNotFound {
 		t.Errorf("outsider GetBook = %v", err)
 	}
-	if _, err := bookCall(t, fx, fx.outsider, GetBookSources, GetBookSourcesRequest{PersonId: fx.baby.Id}); err == nil {
+	if _, err := bookCall(t, fx, fx.outsider, GetBookSources, GetBookSourcesRequest{PersonIds: []int{fx.baby.Id}, Preset: BookPresetFirstYear}); err == nil {
 		t.Error("outsider read the candidates")
 	}
 	if _, err := bookCall(t, fx, fx.outsider, UpdateBook, UpdateBookRequest{Id: book.Id, Revision: 1, Content: fx.content()}); err != ErrBookNotFound {
@@ -219,12 +238,12 @@ func TestBooksStayInTheirHousehold(t *testing.T) {
 	if _, err := bookCall(t, fx, fx.outsider, DeleteBook, DeleteBookRequest{Id: book.Id}); err != ErrBookNotFound {
 		t.Errorf("outsider DeleteBook = %v", err)
 	}
-	if _, err := bookCall(t, fx, fx.outsider, CreateBook, CreateBookRequest{PersonId: fx.baby.Id, Content: fx.content()}); err == nil {
+	if _, err := bookCall(t, fx, fx.outsider, CreateBook, fx.firstYear(fx.content())); err == nil {
 		t.Error("outsider created a book of someone else's child")
 	}
 
 	mine, _ := bookCall(t, fx, fx.owner, ListBooks, ListBooksRequest{})
-	if len(mine.Books) != 1 || mine.Books[0].PersonName != "June" {
+	if len(mine.Books) != 1 || mine.Books[0].PersonNames[0] != "June" {
 		t.Errorf("owner list = %+v", mine.Books)
 	}
 }
@@ -364,4 +383,175 @@ func TestBookImportMapsPhotos(t *testing.T) {
 			t.Errorf("imported = %+v", books)
 		}
 	})
+}
+
+func TestYearBooksUseTheDatesTheyWereGiven(t *testing.T) {
+	fx := setupBookFixture(t)
+	req := CreateBookRequest{
+		PersonIds: []int{fx.baby.Id}, Preset: BookPresetYear,
+		StartDate: "2024-05-01", EndDate: "2024-06-01",
+		Content: BookContent{Items: []BookItem{{Kind: BookItemMilestone, SourceId: fx.smile.Id}}},
+	}
+	created, err := bookCall(t, fx, fx.owner, CreateBook, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.Book.StartDate.Equal(day("2024-05-01")) || !created.Book.EndDate.Equal(day("2024-06-01")) {
+		t.Errorf("range = %v – %v", created.Book.StartDate, created.Book.EndDate)
+	}
+	got, _ := bookCall(t, fx, fx.owner, GetBook, GetBookRequest{Id: created.Book.Id})
+	for _, p := range got.Sources.Photos {
+		if p.Id == fx.together.Id {
+			t.Error("June 1 is the exclusive end of a May book")
+		}
+	}
+
+	for name, bad := range map[string]CreateBookRequest{
+		"backwards":       {PersonIds: []int{fx.baby.Id}, Preset: BookPresetYear, StartDate: "2024-06-01", EndDate: "2024-05-01"},
+		"no dates":        {PersonIds: []int{fx.baby.Id}, Preset: BookPresetCustom},
+		"two in a year":   {PersonIds: []int{fx.baby.Id, fx.sibling.Id}, Preset: BookPresetYear, StartDate: "2024-01-01", EndDate: "2025-01-01"},
+		"two first years": {PersonIds: []int{fx.baby.Id, fx.sibling.Id}, Preset: BookPresetFirstYear},
+		"unknown preset":  {PersonIds: []int{fx.baby.Id}, Preset: "novel", StartDate: "2024-01-01", EndDate: "2025-01-01"},
+		"someone else's":  {PersonIds: []int{fx.baby.Id, fx.stranger.Id}, Preset: BookPresetCustom, StartDate: "2024-01-01", EndDate: "2025-01-01"},
+		"nobody":          {Preset: BookPresetCustom, StartDate: "2024-01-01", EndDate: "2025-01-01"},
+		"half a lifetime": {PersonIds: []int{fx.baby.Id}, Preset: BookPresetCustom, StartDate: "1980-01-01", EndDate: "2024-01-01"},
+	} {
+		if _, err := bookCall(t, fx, fx.owner, CreateBook, bad); err == nil {
+			t.Errorf("%s: CreateBook succeeded", name)
+		}
+	}
+}
+
+func TestFamilyBooksTakeEveryonesRecordsAndHouseholdPhotos(t *testing.T) {
+	fx := setupBookFixture(t)
+	req := CreateBookRequest{
+		PersonIds: []int{fx.baby.Id, fx.sibling.Id}, Preset: BookPresetFamilyYear,
+		StartDate: "2024-01-01", EndDate: "2025-01-01",
+		Content: BookContent{
+			Categories: []string{"photos", "milestones", "bogus"},
+			Match:      "all",
+			Items: []BookItem{
+				{Kind: BookItemMilestone, SourceId: fx.tooth.Id},
+				{Kind: BookItemMilestone, SourceId: fx.smile.Id},
+				{Kind: BookItemPhoto, SourceId: fx.siblingOnly.Id},
+				{Kind: BookItemPhoto, SourceId: fx.together.Id},
+				{Kind: BookItemPhoto, SourceId: fx.untagged.Id},
+			},
+			CoverPhotoId: fx.together.Id,
+		},
+	}
+	created, err := bookCall(t, fx, fx.owner, CreateBook, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	book := created.Book
+	if len(book.PersonIds) != 2 || book.PersonId != fx.baby.Id || len(book.Items) != 5 {
+		t.Errorf("created = %+v", book)
+	}
+	if len(book.Categories) != 2 || book.Match != "all" {
+		t.Errorf("categories = %v, match = %q", book.Categories, book.Match)
+	}
+
+	got, _ := bookCall(t, fx, fx.owner, GetBook, GetBookRequest{Id: book.Id})
+	if len(got.Sources.People) != 2 || got.Sources.PhotoPeople[fx.together.Id] == nil || len(got.Sources.PhotoPeople[fx.together.Id]) != 2 {
+		t.Errorf("sources people = %v, photo people = %v", got.Sources.People, got.Sources.PhotoPeople)
+	}
+	if got.Now.IsZero() {
+		t.Error("GetBook should say what time it is for the additions tray")
+	}
+
+	other := req
+	other.Content.Items = []BookItem{{Kind: BookItemPhoto, SourceId: fx.otherBaby.Id}}
+	other.Content.CoverPhotoId = 0
+	if _, err := bookCall(t, fx, fx.owner, CreateBook, other); err == nil {
+		t.Error("another family's photo was accepted in a family book")
+	}
+
+	for _, b := range []int{fx.baby.Id, fx.sibling.Id} {
+		vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+			if len(GetPersonBooks(tx, b)) != 1 {
+				t.Errorf("book is not indexed under person %d", b)
+			}
+		})
+	}
+
+	if _, err := bookCall(t, fx, fx.owner, DeletePerson, PersonDeletionRequest{PersonId: fx.sibling.Id}); err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		kept := GetBookById(tx, book.Id)
+		if kept.Id == 0 || len(kept.PersonIds) != 1 || kept.PersonIds[0] != fx.baby.Id {
+			t.Errorf("after deleting Theo the book is %+v, want June's alone", kept)
+		}
+	})
+}
+
+func TestMergingTwoPeopleInOneBookLeavesOne(t *testing.T) {
+	fx := setupBookFixture(t)
+	created, err := bookCall(t, fx, fx.owner, CreateBook, CreateBookRequest{
+		PersonIds: []int{fx.baby.Id, fx.sibling.Id}, Preset: BookPresetCustom,
+		StartDate: "2024-01-01", EndDate: "2025-01-01",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bookCall(t, fx, fx.owner, MergePeople, MergePeopleRequest{SourcePersonId: fx.sibling.Id, TargetPersonId: fx.baby.Id}); err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := GetBookById(tx, created.Book.Id); len(got.PersonIds) != 1 || got.PersonIds[0] != fx.baby.Id {
+			t.Errorf("person ids after merge = %v", got.PersonIds)
+		}
+	})
+}
+
+func TestReviewedAtOnlyMovesForward(t *testing.T) {
+	fx := setupBookFixture(t)
+	book := fx.createBook(t)
+	content := fx.content()
+	content.ReviewedAt = book.ReviewedAt.Add(-time.Hour)
+	updated, _ := bookCall(t, fx, fx.owner, UpdateBook, UpdateBookRequest{Id: book.Id, Revision: 1, Content: content})
+	if !updated.Book.ReviewedAt.Equal(book.ReviewedAt) {
+		t.Errorf("reviewedAt moved back to %v", updated.Book.ReviewedAt)
+	}
+	content.ReviewedAt = time.Now().Add(time.Hour)
+	updated, _ = bookCall(t, fx, fx.owner, UpdateBook, UpdateBookRequest{Id: book.Id, Revision: 2, Content: content})
+	if updated.Book.ReviewedAt.After(time.Now()) {
+		t.Errorf("reviewedAt jumped into the future: %v", updated.Book.ReviewedAt)
+	}
+}
+
+func packBookV1(self *Book, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Int(&self.PersonId, buf)
+	vpack.String(&self.Preset, buf)
+	vpack.String(&self.Title, buf)
+	vpack.Time(&self.StartDate, buf)
+	vpack.Time(&self.EndDate, buf)
+	vpack.Int(&self.CoverPhotoId, buf)
+	vpack.String(&self.Density, buf)
+	vpack.String(&self.Introduction, buf)
+	vpack.String(&self.Letter, buf)
+	vpack.String(&self.Signature, buf)
+	vpack.Bool(&self.ShowGrowth, buf)
+	vpack.Slice(&self.Items, PackBookItem, buf)
+	vpack.Slice(&self.Excluded, PackBookItem, buf)
+	vpack.Int(&self.Revision, buf)
+	vpack.Int(&self.CreatedBy, buf)
+	vpack.Time(&self.CreatedAt, buf)
+	vpack.Time(&self.UpdatedAt, buf)
+}
+
+func TestFirstVersionBooksReadAsOnePersonBooks(t *testing.T) {
+	saved := Book{Id: 7, FamilyId: 3, PersonId: 42, Preset: BookPresetFirstYear, Title: "Old", UpdatedAt: day("2026-10-01")}
+	got := vpack.FromBytes(vpack.ToBytes(&saved, packBookV1), PackBook)
+	if len(got.PersonIds) != 1 || got.PersonIds[0] != 42 || got.Match != "any" || !got.ReviewedAt.Equal(saved.UpdatedAt) {
+		t.Errorf("v1 book read as %+v", got)
+	}
+	again := vpack.FromBytes(vpack.ToBytes(got, PackBook), PackBook)
+	if len(again.PersonIds) != 1 || again.Title != "Old" {
+		t.Errorf("v2 round trip = %+v", again)
+	}
 }

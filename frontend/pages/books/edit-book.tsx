@@ -11,6 +11,7 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { photoAge } from "../../lib/sameAge";
 import {
+  CATEGORIES,
   DENSITIES,
   Density,
   Resolved,
@@ -24,6 +25,10 @@ import {
   itemDay,
   itemKey,
   originalCaption,
+  additionsSince,
+  isMulti,
+  joinNames,
+  photoDetail,
   resolveSource,
   shortDay,
   suggestItems,
@@ -45,6 +50,8 @@ type EditorState = {
   coverPhotoId: number;
   density: Density;
   showGrowth: boolean;
+  categories: string[];
+  match: string;
   items: server.BookItem[];
   excluded: server.BookItem[];
   dirty: boolean;
@@ -67,6 +74,10 @@ const useEditor = vlens.declareHook(
     coverPhotoId: resp.book.coverPhotoId,
     density: isDensity(resp.book.density) ? resp.book.density : "balanced",
     showGrowth: resp.book.showGrowth,
+    categories: resp.book.categories?.length
+      ? [...resp.book.categories]
+      : CATEGORIES.map(c => c.value),
+    match: resp.book.match || "any",
     items: [...(resp.book.items ?? [])],
     excluded: [...(resp.book.excluded ?? [])],
     dirty: false,
@@ -82,6 +93,9 @@ const useEditor = vlens.declareHook(
 
 function selectionOf(resp: server.GetBookResponse, state: EditorState): Selection {
   return {
+    preset: resp.book.preset,
+    categories: state.categories,
+    match: state.match,
     title: state.title,
     startDate: resp.book.startDate,
     endDate: resp.book.endDate,
@@ -139,7 +153,8 @@ function addItem(state: EditorState, r: Resolved, item: server.BookItem) {
   changed(state);
 }
 
-function resuggest(state: EditorState, r: Resolved) {
+function resuggest(state: EditorState, resp: server.GetBookResponse) {
+  const r = resolveSource(resp.sources, selectionOf(resp, state));
   const next = suggestItems(r, {
     density: state.density,
     current: state.items,
@@ -162,12 +177,15 @@ async function save(state: EditorState, resp: server.GetBookResponse, r: Resolve
       title: state.title,
       coverPhotoId: r.photos.has(state.coverPhotoId) ? state.coverPhotoId : 0,
       density: state.density,
+      categories: state.categories.length === CATEGORIES.length ? [] : state.categories,
+      match: state.match,
       introduction: state.introduction,
       letter: state.letter,
       signature: state.signature,
       showGrowth: state.showGrowth,
       items,
       excluded: state.excluded,
+      reviewedAt: resp.now,
     },
   });
   state.saving = false;
@@ -213,9 +231,11 @@ export function view(
 
 const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
   const state = useEditor(resp);
-  const r = resolveSource(resp.sources, resp.book.startDate, resp.book.endDate);
+  const r = resolveSource(resp.sources, selectionOf(resp, state));
   const book = assembleBook(resp.sources, selectionOf(resp, state));
-  const birthday = resp.sources.person.birthday;
+  const additions = state.saved
+    ? []
+    : additionsSince(r, resp.book.reviewedAt, state.items, state.excluded);
 
   return (
     <>
@@ -314,15 +334,87 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
             value={state.density}
             onChange={density => {
               state.density = density;
-              resuggest(state, r);
+              resuggest(state, resp);
             }}
           />
         </div>
+        <div className="book-new-people" role="group" aria-label="What to include">
+          {CATEGORIES.map(c => (
+            <label key={c.value} className="book-editor-check">
+              <input
+                type="checkbox"
+                checked={state.categories.includes(c.value)}
+                disabled={state.categories.length === 1 && state.categories.includes(c.value)}
+                onChange={() => {
+                  state.categories = state.categories.includes(c.value)
+                    ? state.categories.filter(x => x !== c.value)
+                    : [...state.categories, c.value];
+                  resuggest(state, resp);
+                }}
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+        {isMulti(r) && (
+          <div className="book-editor-row">
+            <SegmentedControl
+              label="Which photos"
+              options={[
+                { value: "any", label: "Photos of any of them" },
+                { value: "all", label: "Only photos of all of them" },
+              ]}
+              value={state.match}
+              onChange={match => {
+                state.match = match;
+                resuggest(state, resp);
+              }}
+            />
+          </div>
+        )}
         <p className="book-editor-hint">
-          Changing this picks photos again. Anything you've kept stays, and anything you've removed
-          stays out.
+          Changing these picks again. Anything you've kept stays, and anything you've removed stays
+          out.
         </p>
       </section>
+
+      {additions.length > 0 && (
+        <section className="book-editor-section book-editor-additions">
+          <h2>New since you last saved</h2>
+          <p className="book-editor-hint">
+            Added to the family record after this book was last saved. Nothing joins the book until
+            you add it.
+          </p>
+          {additions.map(item => (
+            <div key={itemKey(item)} className="book-editor-leftout">
+              <span className="book-editor-addition">
+                {item.kind === server.BookItemPhoto ? (
+                  <span className="book-editor-item-thumb">
+                    <ThumbnailImage photoId={item.sourceId} alt="" />
+                  </span>
+                ) : (
+                  <span>{r.milestones.get(item.sourceId)?.description}</span>
+                )}
+                <span className="book-editor-hint">{detailOf(r, item)}</span>
+              </span>
+              <span className="book-editor-row">
+                <button type="button" onClick={() => addItem(state, r, item)}>
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    state.excluded = [...state.excluded, { ...item, photoId: 0 }];
+                    changed(state);
+                  }}
+                >
+                  Leave out
+                </button>
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
 
       {book.notes.missing > 0 && (
         <p className="book-editor-warning">
@@ -348,7 +440,6 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
                     key={itemKey(state.items[index])}
                     state={state}
                     r={r}
-                    birthday={birthday}
                     index={index}
                     position={position}
                     chapterItems={chapter.items}
@@ -360,7 +451,7 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
           ))}
       </section>
 
-      <LeftOut state={state} r={r} birthday={birthday} />
+      <LeftOut state={state} r={r} />
 
       <EditorNotes book={book} />
 
@@ -449,10 +540,29 @@ const CoverPicker = ({ state, r }: { state: EditorState; r: Resolved }) => {
   );
 };
 
+function detailOf(r: Resolved, item: server.BookItem): string {
+  const day = itemDay(r, item) ?? "";
+  const parts = [shortDay(day)];
+  if (item.kind === server.BookItemMilestone) {
+    const m = r.milestones.get(item.sourceId);
+    const person = m ? r.person.get(m.personId) : undefined;
+    if (person && isMulti(r)) parts.push(person.name);
+    if (person && dayOf(person.birthday) <= day) {
+      parts.push(photoAge(person.birthday, day + "T00:00:00Z"));
+    }
+  } else {
+    const photo = r.photos.get(item.sourceId);
+    const tagged = (r.photoPeople.get(item.sourceId) ?? []).map(id => r.person.get(id)?.name ?? "");
+    const detail = photo ? photoDetail(r, photo) : "";
+    if (detail) parts.push(detail);
+    else if (isMulti(r)) parts.push(tagged.length ? joinNames(tagged) : "Nobody tagged");
+  }
+  return parts.join(" · ");
+}
+
 const ItemRow = ({
   state,
   r,
-  birthday,
   index,
   position,
   chapterItems,
@@ -460,7 +570,6 @@ const ItemRow = ({
 }: {
   state: EditorState;
   r: Resolved;
-  birthday: string;
   index: number;
   position: number;
   chapterItems: number[];
@@ -468,7 +577,7 @@ const ItemRow = ({
 }) => {
   const item = state.items[index];
   const day = itemDay(r, item) ?? "";
-  const when = `${shortDay(day)} · ${photoAge(birthday, day + "T00:00:00Z")}`;
+  const when = detailOf(r, item);
   const milestone = item.kind === server.BookItemMilestone ? r.milestones.get(item.sourceId) : null;
   const photo = item.kind === server.BookItemPhoto ? r.photos.get(item.sourceId) : null;
   const attached = (milestone?.photoIds ?? []).filter(id => r.photos.has(id));
@@ -569,7 +678,7 @@ const monthLabel = (day: string) =>
     timeZone: "UTC",
   });
 
-const LeftOut = ({ state, r, birthday }: { state: EditorState; r: Resolved; birthday: string }) => {
+const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
   const included = new Set(state.items.map(itemKey));
   const usedPhotos = new Set(
     state.items.filter(i => i.kind === server.BookItemMilestone && i.photoId).map(i => i.photoId)
@@ -652,7 +761,7 @@ const LeftOut = ({ state, r, birthday }: { state: EditorState; r: Resolved; birt
                       <li key={p.id}>
                         <button
                           type="button"
-                          aria-label={`Add the photo from ${shortDay(dayOf(p.photoDate))} (${photoAge(birthday, p.photoDate)})`}
+                          aria-label={`Add the photo from ${detailOf(r, { kind: server.BookItemPhoto, sourceId: p.id, photoId: 0, caption: "", pinned: false })}`}
                           onClick={() =>
                             addItem(state, r, {
                               kind: server.BookItemPhoto,

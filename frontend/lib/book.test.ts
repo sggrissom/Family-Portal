@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import * as server from "../server";
 import {
   Book,
+  additionsSince,
   assembleBook,
+  candidatesIn,
+  categoryOf,
+  sectionOf,
   chapterTitle,
   firstBirthday,
   groupMonths,
@@ -104,7 +108,7 @@ describe("suggesting a draft", () => {
 
   it("keeps pinned photos, leaves removed ones out, and keeps the order it already had", () => {
     const { source, selection } = sampleBook("rich", "detailed");
-    const r = resolveSource(source, selection.startDate, selection.endDate);
+    const r = resolveSource(source, selection);
     const photos = selection.items.filter(i => i.kind === server.BookItemPhoto);
     const pinned = { ...photos[5], pinned: true };
     const removed = photos[6];
@@ -197,5 +201,108 @@ describe("reading a saved book", () => {
     const { source, selection } = sampleBook("rich");
     const book = assembleBook(source, { ...selection, showGrowth: false });
     expect(book.chapters.map(c => c.id)).not.toContain("growth");
+  });
+});
+
+describe("books about a stretch of time", () => {
+  const family = () => sampleBook("family");
+
+  it("names calendar chapters by month", () => {
+    const { source, selection } = family();
+    const book = assembleBook(source, selection);
+    const months = book.chapters.filter(c => c.id.startsWith("together-")).map(c => c.title);
+    expect(months.length).toBeGreaterThan(1);
+    expect(months.every(t => /^[A-Z][a-z]+( – [A-Z][a-z]+)? 2025$/.test(t))).toBe(true);
+    expect(book.dates).toBe("January 1, 2025 – December 31, 2025");
+  });
+
+  it("puts a photo of both children in the shared chapters once, not in each child's section", () => {
+    const { source, selection } = family();
+    const book = assembleBook(source, selection);
+    const r = resolveSource(source, selection);
+    const both = new Set(
+      Object.entries(source.photoPeople)
+        .filter(([, people]) => people.length === 2)
+        .map(([id]) => Number(id))
+    );
+    for (const chapter of book.chapters) {
+      for (const index of chapter.items) {
+        const item = selection.items[index];
+        if (item.kind !== server.BookItemPhoto || !both.has(item.sourceId)) continue;
+        expect(chapter.id.startsWith("together-")).toBe(true);
+        expect(sectionOf(r, item)).toBe(0);
+      }
+    }
+    const ids = photoIds(book);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(book.chapters.map(c => c.title)).toEqual(expect.arrayContaining(["Juniper", "Theo"]));
+  });
+
+  it("gives each child their own section with their milestones and photos", () => {
+    const { source, selection } = family();
+    const book = assembleBook(source, selection);
+    const theo = book.chapters.find(c => c.title === "Theo")!;
+    expect(theo.dates).toBe("Age 3 to 4");
+    const people = theo.items.map(i =>
+      sectionOf(resolveSource(source, selection), selection.items[i])
+    );
+    expect(new Set(people)).toEqual(new Set([2]));
+  });
+
+  it("leaves photos with nobody tagged for the editor to add by hand", () => {
+    const { source, selection } = family();
+    const untagged = new Set(source.untagged);
+    expect(
+      selection.items.some(i => i.kind === server.BookItemPhoto && untagged.has(i.sourceId))
+    ).toBe(false);
+  });
+
+  it("can ask for only photos with everyone in them", () => {
+    const { source, selection } = family();
+    const r = resolveSource(source, { ...selection, match: "all" });
+    const picked = suggestItems(r, { density: "detailed" }).items.filter(
+      i => i.kind === server.BookItemPhoto
+    );
+    expect(picked.length).toBeGreaterThan(0);
+    expect(picked.every(i => source.photoPeople[i.sourceId].length === 2)).toBe(true);
+  });
+
+  it("follows the chosen kinds of content", () => {
+    const { source, selection } = family();
+    const r = resolveSource(source, { ...selection, categories: ["quotes"] });
+    const items = suggestItems(r, { density: "balanced" }).items;
+    expect(items.length).toBe(2);
+    expect(items.every(i => categoryOf(r, i) === "quotes")).toBe(true);
+  });
+
+  it("offers records added after the last review, and only those", () => {
+    const { source, selection } = family();
+    const r = resolveSource(source, selection);
+    const reviewedAt = "2026-06-01T00:00:00-05:00";
+    const fresh = additionsSince(r, reviewedAt, selection.items, []);
+    expect(fresh.length).toBe(0);
+
+    const late: server.Milestone = {
+      ...source.milestones[0],
+      id: 99,
+      createdAt: "2026-06-02T00:00:00Z",
+      milestoneDate: "2025-05-20T00:00:00Z",
+    };
+    const withLate = { ...source, milestones: [...source.milestones, late] };
+    const r2 = resolveSource(withLate, selection);
+    expect(additionsSince(r2, reviewedAt, selection.items, []).map(i => i.sourceId)).toEqual([99]);
+    expect(
+      additionsSince(r2, reviewedAt, selection.items, [
+        { ...additionsSince(r2, reviewedAt, selection.items, [])[0] },
+      ])
+    ).toEqual([]);
+  });
+
+  it("ends a year book the day before its end date", () => {
+    const { source, selection } = family();
+    const r = resolveSource(source, selection);
+    const nextYear = { ...source.photos[0], id: -500, photoDate: "2026-01-01T00:00:00Z" };
+    const r2 = resolveSource({ ...source, photos: [...source.photos, nextYear] }, selection);
+    expect(candidatesIn(r2).photos.length).toBe(candidatesIn(r).photos.length);
   });
 });

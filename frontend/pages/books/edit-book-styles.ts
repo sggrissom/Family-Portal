@@ -439,3 +439,39 @@ block(`
   border-color: var(--border);
 }
 `);
+
+block(`
+.book-new-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 12px;
+}
+`);
+
+block(`
+.book-new-dates {
+  margin: 16px 0;
+  font-weight: 600;
+}
+`);
+
+block(`
+.book-editor-field select {
+  padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+`);
+
+block(`
+.book-editor-addition {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+`);

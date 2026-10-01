@@ -35,6 +35,9 @@ type BookData = {
 
 export function selectionOf(book: server.Book): Selection {
   return {
+    preset: book.preset,
+    categories: book.categories ?? [],
+    match: book.match,
     title: book.title,
     startDate: book.startDate,
     endDate: book.endDate,
@@ -173,14 +176,16 @@ export const BookReader = ({ book }: { book: Book }) => (
     <nav className="book-contents" aria-label="Chapters">
       <h2>Contents</h2>
       <ol>
-        {book.chapters.map(chapter => (
-          <li key={chapter.id}>
-            <button type="button" onClick={() => scrollToChapter(chapter.id)}>
-              <span>{chapter.title}</span>
-              {chapter.dates && <span className="book-contents-dates">{chapter.dates}</span>}
-            </button>
-          </li>
-        ))}
+        {book.chapters
+          .filter(chapter => chapter.title)
+          .map(chapter => (
+            <li key={chapter.id}>
+              <button type="button" onClick={() => scrollToChapter(chapter.id)}>
+                <span>{chapter.title}</span>
+                {chapter.dates && <span className="book-contents-dates">{chapter.dates}</span>}
+              </button>
+            </li>
+          ))}
       </ol>
     </nav>
 
@@ -189,12 +194,14 @@ export const BookReader = ({ book }: { book: Book }) => (
         key={chapter.id}
         id={`chapter-${chapter.id}`}
         className="book-chapter"
-        aria-labelledby={`chapter-${chapter.id}-title`}
+        aria-labelledby={chapter.title ? `chapter-${chapter.id}-title` : undefined}
       >
-        <header className="book-chapter-head">
-          {chapter.dates && <p className="book-chapter-dates">{chapter.dates}</p>}
-          <h2 id={`chapter-${chapter.id}-title`}>{chapter.title}</h2>
-        </header>
+        {chapter.title && (
+          <header className="book-chapter-head">
+            {chapter.dates && <p className="book-chapter-dates">{chapter.dates}</p>}
+            <h2 id={`chapter-${chapter.id}-title`}>{chapter.title}</h2>
+          </header>
+        )}
         {chapter.blocks.map((block, i) => (
           <BlockView key={i} block={block} />
         ))}
@@ -291,7 +298,7 @@ const BlockView = ({ block }: { block: Block }) => {
 const When = ({ moment }: { moment: BookMoment }) => (
   <p className="book-when">
     {shortDay(moment.day)}
-    {moment.age && <span> · {moment.age}</span>}
+    {moment.detail && <span> · {moment.detail}</span>}
   </p>
 );
 
@@ -328,7 +335,7 @@ const PhotoFigure = ({
       {photo.caption && <span className="book-caption">{photo.caption}</span>}
       <span className="book-caption-when">
         {shortDay(photo.day)}
-        {photo.age && ` · ${photo.age}`}
+        {photo.detail && ` · ${photo.detail}`}
       </span>
     </figcaption>
   </figure>
