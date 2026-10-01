@@ -18,6 +18,9 @@ const (
 	sameAgePhotoCandidates = 24
 	sameAgeMaxMonths       = 100 * 12
 	daysPerMonth           = 30.4375
+	// sameAgeDistanceWeight is how much a photo at the edge of the window
+	// loses to one taken exactly at the age.
+	sameAgeDistanceWeight = 0.25
 )
 
 // sameAgeStep is how far one tap on the age control moves: a month for
@@ -62,6 +65,9 @@ type SameAgeRow struct {
 	Weight     *GrowthData `json:"weight"`
 	Milestones []Milestone `json:"milestones"`
 	PhotoIds   []int       `json:"photoIds"`
+	// Portraits are the photos in the window that best show this person,
+	// best first, for the side-by-side montage.
+	Portraits []PortraitPhoto `json:"portraits"`
 }
 
 type GetSameAgeResponse struct {
@@ -110,7 +116,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		if dayOf(target) > dayOf(today) {
 			continue
 		}
-		row := SameAgeRow{Person: item.Person, Date: target, Milestones: []Milestone{}, PhotoIds: []int{}}
+		row := SameAgeRow{Person: item.Person, Date: target, Milestones: []Milestone{}}
 
 		for _, milestone := range item.Milestones {
 			if absDuration(milestone.MilestoneDate.Sub(target)) <= recordWindow {
@@ -124,7 +130,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
 		row.Weight = nearestGrowth(item.GrowthData, Weight, target, growthWindow)
 
-		row.PhotoIds, err = nearestPhotoIds(ctx, item.Person.Id, target, recordWindow)
+		row.PhotoIds, row.Portraits, err = sameAgePhotosFor(ctx, item.Person, target, recordWindow)
 		if err != nil {
 			return
 		}
@@ -188,15 +194,15 @@ func nearestGrowth(growth []GrowthData, kind MeasurementType, target time.Time, 
 	return best
 }
 
-func nearestPhotoIds(ctx *vbeam.Context, personId int, target time.Time, window time.Duration) ([]int, error) {
+func sameAgePhotosFor(ctx *vbeam.Context, person Person, target time.Time, window time.Duration) (ids []int, portraits []PortraitPhoto, err error) {
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
-		PersonId: personId,
+		PersonId: person.Id,
 		DateFrom: dayOf(target.Add(-window)),
 		DateTo:   dayOf(target.Add(window)),
 		Limit:    sameAgePhotoCandidates,
 	})
 	if err != nil {
-		return nil, err
+		return
 	}
 	images := make([]Image, 0, len(photos.Photos))
 	for _, photo := range photos.Photos {
@@ -205,14 +211,24 @@ func nearestPhotoIds(ctx *vbeam.Context, personId int, target time.Time, window 
 	sort.SliceStable(images, func(i, j int) bool {
 		return absDuration(images[i].PhotoDate.Sub(target)) < absDuration(images[j].PhotoDate.Sub(target))
 	})
-	ids := []int{}
+
+	ids = []int{}
+	candidates := make([]candidatePortrait, 0, len(images))
 	for _, image := range images {
-		if len(ids) == sameAgePhotos {
-			break
+		if len(ids) < sameAgePhotos {
+			ids = append(ids, image.Id)
 		}
-		ids = append(ids, image.Id)
+		c := scorePortrait(ctx.Tx, image, person, len(GetPhotoPersonsByPhoto(ctx.Tx, image.Id)))
+		c.score -= sameAgeDistanceWeight * float64(absDuration(image.PhotoDate.Sub(target))) / float64(max(window, time.Hour))
+		candidates = append(candidates, c)
 	}
-	return ids, nil
+	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
+
+	portraits = []PortraitPhoto{}
+	for _, c := range candidates[:min(len(candidates), sameAgePhotos)] {
+		portraits = append(portraits, c.PortraitPhoto)
+	}
+	return
 }
 
 func (row SameAgeRow) hasRecords() bool {
