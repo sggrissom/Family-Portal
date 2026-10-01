@@ -87,8 +87,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   });
 }
 
-type Tab = "story" | "quotes" | "photos" | "growth" | "activities";
-const TABS: Tab[] = ["story", "quotes", "photos", "growth", "activities"];
+type Tab = "story" | "quotes" | "artwork" | "photos" | "growth" | "activities";
+const TABS: Tab[] = ["story", "quotes", "artwork", "photos", "growth", "activities"];
 
 type ProfileState = {
   tab: Tab;
@@ -144,9 +144,11 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
   const today = localDateString(new Date());
   const hasBirthday = isValidBirthday(person.birthday) && !person.isPregnancy;
   const quotes = (data.person.milestones ?? []).filter(isQuote);
+  const artwork = (data.person.milestones ?? []).filter(m => m.category === "artwork");
   const tabs = TABS.filter(
     t =>
       (t !== "quotes" || quotes.length > 0) &&
+      (t !== "artwork" || artwork.length > 0) &&
       (!person.isPregnancy || t === "story" || t === "photos")
   );
 
@@ -187,6 +189,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
       <div className="profile-tab-panel" role="tabpanel">
         {state.tab === "story" && <StoryTab data={data} today={today} />}
         {state.tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
+        {state.tab === "artwork" && <ArtworkTab person={person} artwork={artwork} />}
         {state.tab === "photos" && (
           <PhotosTab person={person} photos={data.person.photos ?? []} insights={data.insights} />
         )}
@@ -451,6 +454,46 @@ const QuotesTab = ({ person, quotes }: { person: server.Person; quotes: server.M
             <small className="profile-quote-when">
               {age >= 0 && `${formatAgeAtMeasurement(age)} · `}
               {formatDate(quote.milestoneDate)}
+            </small>
+          </a>
+        );
+      })}
+    </div>
+  );
+};
+
+const ArtworkTab = ({
+  person,
+  artwork,
+}: {
+  person: server.Person;
+  artwork: server.Milestone[];
+}) => {
+  if (artwork.length === 0) {
+    return <p className="profile-empty">{copy.person.noArtwork(firstName(person.name))}</p>;
+  }
+  const sorted = [...artwork].sort((a, b) => b.milestoneDate.localeCompare(a.milestoneDate));
+  return (
+    <div className="profile-artwork">
+      {sorted.map(piece => {
+        const age = isValidBirthday(person.birthday)
+          ? monthsOld(person.birthday, piece.milestoneDate)
+          : -1;
+        const cover = piece.photoIds?.[0];
+        const more = (piece.photoIds?.length ?? 0) - 1;
+        return (
+          <a key={piece.id} href={`/milestone/${piece.id}`} className="profile-artwork-piece">
+            <div className="profile-artwork-frame">
+              {cover ? (
+                <ThumbnailImage photoId={cover} alt={piece.description} />
+              ) : (
+                <span aria-hidden="true">🎨</span>
+              )}
+              {more > 0 && <span className="profile-artwork-more">+{more}</span>}
+            </div>
+            <span className="profile-artwork-title">{piece.description}</span>
+            <small className="profile-artwork-when">
+              {age >= 0 ? formatAgeAtMeasurement(age) : formatDate(piece.milestoneDate)}
             </small>
           </a>
         );

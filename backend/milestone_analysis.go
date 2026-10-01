@@ -170,6 +170,7 @@ var categoryExamples = map[string][]string{
 	"health":      {"had a fever", "doctor checkup and vaccines", "broke a bone", "got stitches", "lost a tooth", "got braces", "allergic reaction"},
 	"achievement": {"won an award", "learned to ride a bike", "finished a big project", "made the team", "passed a test", "potty trained"},
 	"first":       {"first day of school", "first haircut", "first time at the beach", "first plane trip", "first sleepover", "first job"},
+	"artwork":     {"drew a picture", "painted a picture of our family", "made a clay sculpture", "brought home a craft from school", "built a lego creation", "colored a drawing"},
 }
 
 var categoryVectors = struct {

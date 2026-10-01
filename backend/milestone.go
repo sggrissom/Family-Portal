@@ -630,9 +630,9 @@ func validateMilestoneFields(description string, category string, inputType stri
 		return errors.New("Description is required")
 	}
 	switch category {
-	case "development", "behavior", "health", "achievement", "first", "quote", "other":
+	case "development", "behavior", "health", "achievement", "first", "quote", "artwork", "other":
 	default:
-		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, other")
+		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, artwork, other")
 	}
 	return validateEntryInputType(inputType)
 }

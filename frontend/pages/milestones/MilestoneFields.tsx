@@ -3,6 +3,8 @@ import * as vlens from "vlens";
 import * as server from "../../server";
 import { copy } from "../../lib/copy";
 import { WhenRequest } from "../../lib/when";
+import { photoFileProblem } from "../../lib/photoUploadQueue";
+import { uploadPhoto } from "../../lib/photoUpload";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import "./add-milestone-styles";
 import "../../components/entry-form-styles";
@@ -10,6 +12,7 @@ import "../../components/entry-form-styles";
 const CATEGORY_ORDER = [
   "first",
   "quote",
+  "artwork",
   "development",
   "achievement",
   "behavior",
@@ -35,17 +38,20 @@ interface MilestoneTextFieldsProps {
 
 export const MilestoneTextFields = ({ form, disabled, textareaRef }: MilestoneTextFieldsProps) => {
   const isQuote = form.category === "quote";
+  const [label, placeholder] = isQuote
+    ? [copy.milestone.whatTheySaid, copy.milestone.quotePlaceholder]
+    : form.category === "artwork"
+      ? [copy.milestone.whatTheyMade, copy.milestone.artworkPlaceholder]
+      : [copy.milestone.whatHappened, copy.milestone.placeholder];
   return (
     <>
       <div className="entry-field">
-        <label htmlFor="description">
-          {isQuote ? copy.milestone.whatTheySaid : copy.milestone.whatHappened}
-        </label>
+        <label htmlFor="description">{label}</label>
         <textarea
           id="description"
           ref={textareaRef}
           rows={3}
-          placeholder={isQuote ? copy.milestone.quotePlaceholder : copy.milestone.placeholder}
+          placeholder={placeholder}
           disabled={disabled}
           {...vlens.attrsBindInput(vlens.ref(form, "description"))}
         />
@@ -65,6 +71,92 @@ export const MilestoneTextFields = ({ form, disabled, textareaRef }: MilestoneTe
     </>
   );
 };
+
+export type ArtworkUpload = {
+  photoIds: number[];
+  uploading: boolean;
+  uploadError: string;
+  previews: Record<number, string>;
+};
+
+async function uploadArtworkPhotos(
+  form: ArtworkUpload,
+  personId: number,
+  familyId: number,
+  event: Event
+) {
+  const input = event.currentTarget as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+  form.uploadError = files.map(photoFileProblem).find(Boolean) ?? "";
+  if (form.uploadError) {
+    vlens.scheduleRedraw();
+    return;
+  }
+  form.uploading = true;
+  vlens.scheduleRedraw();
+  try {
+    for (const file of files) {
+      const image = await uploadPhoto(file, [personId], familyId);
+      form.previews[image.id] = URL.createObjectURL(file);
+      if (!form.photoIds.includes(image.id)) form.photoIds.push(image.id);
+      vlens.scheduleRedraw();
+    }
+  } catch (err) {
+    form.uploadError = err instanceof Error ? err.message : String(err);
+  }
+  form.uploading = false;
+  vlens.scheduleRedraw();
+}
+
+interface ArtworkPhotosProps {
+  form: ArtworkUpload;
+  personId: number | null;
+  familyId: number;
+  disabled: boolean;
+}
+
+// A drawing rarely has the artist's face in it, so the person-filtered picker
+// won't find it: artwork gets an upload right here, tagged to the artist.
+export const ArtworkPhotos = ({ form, personId, familyId, disabled }: ArtworkPhotosProps) => (
+  <div className="entry-field">
+    <span className="entry-label">{copy.milestone.artworkPhotos}</span>
+    <div className="suggested-photos">
+      {form.photoIds.map(id => (
+        <button
+          key={id}
+          type="button"
+          className="suggested-photo selected"
+          aria-pressed={true}
+          aria-label="Don't attach this photo"
+          disabled={disabled}
+          onClick={vlens.cachePartial(toggleId, form.photoIds, id)}
+        >
+          <img src={form.previews[id] ?? `/api/photo/${id}/thumb`} alt="" loading="lazy" />
+        </button>
+      ))}
+      <label className={`artwork-upload${disabled || personId === null ? " disabled" : ""}`}>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={disabled || form.uploading || personId === null}
+          onChange={
+            personId === null
+              ? undefined
+              : vlens.cachePartial(uploadArtworkPhotos, form, personId, familyId)
+          }
+        />
+        {form.uploading ? copy.milestone.uploadingArtworkPhoto : copy.milestone.addArtworkPhoto}
+      </label>
+    </div>
+    {form.uploadError && (
+      <div className="error-message" role="alert">
+        {form.uploadError}
+      </div>
+    )}
+  </div>
+);
 
 interface CategoryChipsProps {
   value: string;
