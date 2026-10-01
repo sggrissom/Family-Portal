@@ -118,8 +118,8 @@ func TestDescribeHealthCoversEverySignal(t *testing.T) {
 	body := describeHealth(health)
 	for _, want := range []string{
 		"JWT_SECRET_KEY",
-		"3 error(s)",
-		"7 request(s) returned 5xx",
+		"3 unreviewed error(s)",
+		"7 unreviewed request(s) returned 5xx",
 		"processing worker is not running",
 		"1 failed to process",
 		"2 stuck processing",

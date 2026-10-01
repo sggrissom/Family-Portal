@@ -2,6 +2,7 @@ package backend
 
 import (
 	"family/cfg"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -210,5 +211,59 @@ func TestBackupTroubleStaysQuietWithoutMetrics(t *testing.T) {
 	// registered" here would put a permanent alarm on every development box.
 	if backupTrouble(BackupProblems{}) {
 		t.Error("backupTrouble() = true with no metrics service; unknown is not the same as broken")
+	}
+}
+
+func TestReviewLogFailuresKeepsNewFailuresAndOriginalLogs(t *testing.T) {
+	now := time.Now().UTC()
+	old := now.Add(-time.Hour)
+	newer := now.Add(-time.Minute)
+	withLogDir(t, map[string]string{"review.log": fmt.Sprintf(`2026/09/30 20:00:00 {"timestamp":%q,"level":"ERROR","message":"old"}
+2026/09/30 20:00:00 {"timestamp":%q,"level":"INFO","httpStatus":500}
+2026/09/30 20:00:00 {"timestamp":%q,"level":"ERROR","message":"expired session","data":{"code":"AUTH_ERROR"}}
+2026/09/30 20:00:00 {"timestamp":%q,"level":"ERROR","message":"new"}
+2026/09/30 20:00:00 {"timestamp":%q,"level":"INFO","httpStatus":503}
+`, old.Format(time.RFC3339Nano), old.Format(time.RFC3339Nano), newer.Format(time.RFC3339Nano), newer.Format(time.RFC3339Nano), newer.Format(time.RFC3339Nano))})
+	db := logTestDB(t, "test_review_logs.db")
+	token := adminContext(t, db)
+	regular, _ := generateAuthJwt(User{Id: 2}, httptest.NewRecorder())
+	ctx := &vbeam.Context{Tx: vbolt.ReadTx(db), Token: regular}
+	if _, err := ReviewLogFailures(ctx, ReviewLogFailuresRequest{Through: old}); err != ErrAdminRequired {
+		t.Fatalf("non-admin: %v", err)
+	}
+	vbeam.CloseContext(ctx)
+	ctx = &vbeam.Context{Tx: vbolt.ReadTx(db), Token: token}
+	if _, err := ReviewLogFailures(ctx, ReviewLogFailuresRequest{Through: now.Add(time.Hour)}); err == nil {
+		t.Fatal("accepted future cutoff")
+	}
+	vbeam.CloseContext(ctx)
+	ctx = &vbeam.Context{Tx: vbolt.ReadTx(db), Token: token}
+	resp, err := ReviewLogFailures(ctx, ReviewLogFailuresRequest{Through: old})
+	vbeam.CloseContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Logs.Errors != 1 || resp.Logs.Requests5xx != 1 || !resp.Logs.LatestFailureAt.Equal(newer) {
+		t.Fatalf("new failures were hidden: %+v", resp.Logs)
+	}
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		if !reviewedLogsThrough(tx).Equal(old) {
+			t.Fatal("review cutoff was not persisted exactly")
+		}
+	})
+	ctx = &vbeam.Context{Tx: vbolt.ReadTx(db), Token: token}
+	_, err = ReviewLogFailures(ctx, ReviewLogFailuresRequest{Through: old.Add(-time.Minute)})
+	vbeam.CloseContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		if !reviewedLogsThrough(tx).Equal(old) {
+			t.Fatal("stale review moved cutoff backwards")
+		}
+	})
+	original := collectLogProblems(time.Time{})
+	if original.Errors != 2 || original.Requests5xx != 2 {
+		t.Fatalf("logs were deleted or auth still counts: %+v", original)
 	}
 }

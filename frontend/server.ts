@@ -1322,6 +1322,10 @@ export interface SystemHealthResponse {
     backups: BackupProblems
 }
 
+export interface ReviewLogFailuresRequest {
+    through: string
+}
+
 export interface WeeklyDigestResponse {
     since: string
     windowDays: number
@@ -2102,6 +2106,8 @@ export interface ConfigProblem {
 }
 
 export interface LogProblems {
+    latestFailureAt: string
+    reviewedThrough: string
     windowHours: number
     errors: number
     recentErrors: PublicLogEntry[]
@@ -2859,6 +2865,10 @@ export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<Syst
 
 export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
     return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function ReviewLogFailures(data: ReviewLogFailuresRequest): Promise<rpc.Response<SystemHealthResponse>> {
+    return await rpc.call<SystemHealthResponse>('ReviewLogFailures', JSON.stringify(data));
 }
 
 export async function GetWeeklyDigest(data: Empty): Promise<rpc.Response<WeeklyDigestResponse>> {

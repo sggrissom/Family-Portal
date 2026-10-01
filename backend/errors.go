@@ -89,10 +89,13 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 	if r != nil {
 		data["method"] = r.Method
 		data["path"] = r.URL.Path
-		LogErrorWithRequest(r, LogCategorySystem, err.Error(), data)
-	} else {
-		LogErrorSimple(LogCategorySystem, err.Error(), data)
 	}
+	// A rejected request (for example, an expired session) is not a server failure.
+	level := logLevelError
+	if statusCode >= 400 && statusCode < 500 {
+		level = logLevelWarn
+	}
+	logStructured(level, logCategorySystem, err.Error(), data, r)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
