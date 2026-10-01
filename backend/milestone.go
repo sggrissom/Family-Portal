@@ -4,6 +4,7 @@ import (
 	"errors"
 	"family/cfg"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type AddMilestoneRequest struct {
 	AgeYears      *int    `json:"ageYears,omitempty"`
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
+	TagIds        []int   `json:"tagIds,omitempty"`
 }
 
 type AddMilestoneResponse struct {
@@ -55,6 +57,7 @@ type UpdateMilestoneRequest struct {
 	AgeYears      *int    `json:"ageYears,omitempty"`
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
+	TagIds        []int   `json:"tagIds,omitempty"`
 }
 
 type UpdateMilestoneResponse struct {
@@ -182,34 +185,19 @@ func GetPersonMilestonesTx(tx *vbolt.Tx, personId int) []Milestone {
 }
 
 func GetMilestonePhotoIds(tx *vbolt.Tx, milestoneId int) []int {
-	var milestonePhotoIds []int
-	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
-	if len(milestonePhotoIds) == 0 {
-		return []int{}
+	links := milestonePhotoLinks(tx, MilestonePhotoByMilestoneIndex, milestoneId)
+	photoIds := make([]int, 0, len(links))
+	for _, link := range links {
+		photoIds = append(photoIds, link.PhotoId)
 	}
-
-	var milestonePhotos []MilestonePhoto
-	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
-
-	photoIds := make([]int, 0, len(milestonePhotos))
-	for _, milestonePhoto := range milestonePhotos {
-		photoIds = append(photoIds, milestonePhoto.PhotoId)
-	}
-
 	return photoIds
 }
 
 func GetMilestoneTagIds(tx *vbolt.Tx, milestoneId int) []int {
-	var mtIds []int
-	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
-	if len(mtIds) == 0 {
-		return []int{}
-	}
-	var mts []MilestoneTag
-	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
-	tagIds := make([]int, 0, len(mts))
-	for _, mt := range mts {
-		tagIds = append(tagIds, mt.TagId)
+	links := milestoneTagLinks(tx, MilestoneTagByMilestoneIndex, milestoneId)
+	tagIds := make([]int, 0, len(links))
+	for _, link := range links {
+		tagIds = append(tagIds, link.TagId)
 	}
 	return tagIds
 }
@@ -248,23 +236,25 @@ func SearchVisibleMilestones(tx *vbolt.Tx, query string, user User, limit int) [
 	})
 }
 
-func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Milestone) bool) (milestones []Milestone) {
-	words := strings.Fields(strings.ToLower(query))
+func milestoneSearchWords(text string) []string {
+	words := strings.Fields(strings.ToLower(text))
 	terms := make([]string, 0, len(words))
-
 	for _, word := range words {
 		word = strings.Trim(word, ".,!?;:()[]{}\"'")
 		if len(word) >= 3 {
 			terms = append(terms, word)
 		}
 	}
+	return terms
+}
 
+func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Milestone) bool) (milestones []Milestone) {
+	terms := milestoneSearchWords(query)
 	if len(terms) == 0 {
 		return []Milestone{}
 	}
 
 	milestoneIdMap := make(map[int]bool)
-
 	for _, term := range terms {
 		var ids []int
 		vbolt.ReadTermTargets(tx, MilestoneSearchIndex, term, &ids, vbolt.Window{Limit: limit * 2})
@@ -297,24 +287,28 @@ func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Miles
 }
 
 func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
-	terms := make([]string, 0, 10)
-
-	words := strings.Fields(strings.ToLower(milestone.Description))
-	for _, word := range words {
-		word = strings.Trim(word, ".,!?;:()[]{}\"'")
-		if len(word) >= 3 {
-			terms = append(terms, word)
-		}
-	}
-
-	terms = append(terms, fmt.Sprintf("cat:%s", milestone.Category))
-
-	terms = append(terms, fmt.Sprintf("y:%d", milestone.MilestoneDate.Year()))
-	terms = append(terms, fmt.Sprintf("m:%s", milestone.MilestoneDate.Format("2006.01")))
-
-	terms = append(terms, fmt.Sprintf("p:%d", milestone.PersonId))
-
+	terms := milestoneSearchWords(milestone.Description)
+	terms = append(terms,
+		fmt.Sprintf("cat:%s", milestone.Category),
+		fmt.Sprintf("y:%d", milestone.MilestoneDate.Year()),
+		fmt.Sprintf("m:%s", milestone.MilestoneDate.Format("2006.01")),
+		fmt.Sprintf("p:%d", milestone.PersonId),
+	)
 	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, terms, milestone.MilestoneDate)
+}
+
+func RebuildMilestoneSearchIndex(tx *vbolt.Tx) {
+	vbolt.IterateAll(tx, MilestoneBkt, func(_ int, milestone Milestone) bool {
+		UpdateMilestoneSearchIndex(tx, milestone)
+		return true
+	})
+}
+
+func writeMilestone(tx *vbolt.Tx, milestone Milestone) {
+	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
+	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, milestone.PersonId)
+	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
+	UpdateMilestoneSearchIndex(tx, milestone)
 }
 
 func normalizePhotoIds(photoIds []int) []int {
@@ -343,149 +337,113 @@ func validatePhotoAccess(tx *vbolt.Tx, photoId int, familyId int) error {
 	return nil
 }
 
+func milestonePhotoLinks(tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], key int) (links []MilestonePhoto) {
+	var ids []int
+	vbolt.ReadTermTargets(tx, index, key, &ids, vbolt.Window{})
+	if len(ids) > 0 {
+		vbolt.ReadSlice(tx, MilestonePhotoBkt, ids, &links)
+	}
+	return
+}
+
+func deleteMilestonePhotoLink(tx *vbolt.Tx, link MilestonePhoto) {
+	vbolt.Delete(tx, MilestonePhotoBkt, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestonePhotoByMilestoneIndex, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestonePhotoByPhotoIndex, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestonePhotoByFamilyIndex, link.Id)
+}
+
 func addPhotoToMilestone(tx *vbolt.Tx, milestoneId int, photoId int, familyId int) error {
 	if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
 		return err
 	}
-
-	existingPhotoIds := GetMilestonePhotoIds(tx, milestoneId)
-	for _, existingId := range existingPhotoIds {
-		if existingId == photoId {
+	for _, link := range milestonePhotoLinks(tx, MilestonePhotoByMilestoneIndex, milestoneId) {
+		if link.PhotoId == photoId {
 			return nil
 		}
 	}
 
-	milestonePhoto := MilestonePhoto{
+	link := MilestonePhoto{
 		Id:          vbolt.NextIntId(tx, MilestonePhotoBkt),
 		MilestoneId: milestoneId,
 		PhotoId:     photoId,
 		FamilyId:    familyId,
 		CreatedAt:   time.Now(),
 	}
-
-	vbolt.Write(tx, MilestonePhotoBkt, milestonePhoto.Id, &milestonePhoto)
-	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, milestoneId)
-	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, photoId)
-	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, familyId)
+	vbolt.Write(tx, MilestonePhotoBkt, link.Id, &link)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, link.Id, milestoneId)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, link.Id, photoId)
+	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, link.Id, familyId)
 	return nil
 }
 
 func removePhotoFromMilestone(tx *vbolt.Tx, milestoneId int, photoId int) {
-	var milestonePhotoIds []int
-	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
-	if len(milestonePhotoIds) == 0 {
-		return
-	}
-
-	var milestonePhotos []MilestonePhoto
-	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
-	for _, milestonePhoto := range milestonePhotos {
-		if milestonePhoto.PhotoId != photoId {
-			continue
+	for _, link := range milestonePhotoLinks(tx, MilestonePhotoByMilestoneIndex, milestoneId) {
+		if link.PhotoId == photoId {
+			deleteMilestonePhotoLink(tx, link)
 		}
-		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
 	}
 }
 
 func removeAllMilestonePhotos(tx *vbolt.Tx, milestoneId int) {
-	var milestonePhotoIds []int
-	vbolt.ReadTermTargets(tx, MilestonePhotoByMilestoneIndex, milestoneId, &milestonePhotoIds, vbolt.Window{})
-	if len(milestonePhotoIds) == 0 {
-		return
-	}
-
-	var milestonePhotos []MilestonePhoto
-	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
-	for _, milestonePhoto := range milestonePhotos {
-		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
+	for _, link := range milestonePhotoLinks(tx, MilestonePhotoByMilestoneIndex, milestoneId) {
+		deleteMilestonePhotoLink(tx, link)
 	}
 }
 
 func removePhotoFromMilestones(tx *vbolt.Tx, photoId int) {
-	var milestonePhotoIds []int
-	vbolt.ReadTermTargets(tx, MilestonePhotoByPhotoIndex, photoId, &milestonePhotoIds, vbolt.Window{})
-	if len(milestonePhotoIds) == 0 {
-		return
-	}
-
-	var milestonePhotos []MilestonePhoto
-	vbolt.ReadSlice(tx, MilestonePhotoBkt, milestonePhotoIds, &milestonePhotos)
-	for _, milestonePhoto := range milestonePhotos {
-		vbolt.Delete(tx, MilestonePhotoBkt, milestonePhoto.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByPhotoIndex, milestonePhoto.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestonePhotoByFamilyIndex, milestonePhoto.Id, -1)
+	for _, link := range milestonePhotoLinks(tx, MilestonePhotoByPhotoIndex, photoId) {
+		deleteMilestonePhotoLink(tx, link)
 	}
 }
 
+func milestoneTagLinks(tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], key int) (links []MilestoneTag) {
+	var ids []int
+	vbolt.ReadTermTargets(tx, index, key, &ids, vbolt.Window{})
+	if len(ids) > 0 {
+		vbolt.ReadSlice(tx, MilestoneTagBkt, ids, &links)
+	}
+	return
+}
+
+func deleteMilestoneTagLink(tx *vbolt.Tx, link MilestoneTag) {
+	vbolt.Delete(tx, MilestoneTagBkt, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneTagByMilestoneIndex, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneTagByTagIndex, link.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneTagByFamilyIndex, link.Id)
+}
+
 func addTagToMilestone(tx *vbolt.Tx, milestoneId int, tagId int, familyId int) {
-	mt := MilestoneTag{
+	link := MilestoneTag{
 		Id:          vbolt.NextIntId(tx, MilestoneTagBkt),
 		MilestoneId: milestoneId,
 		TagId:       tagId,
 		FamilyId:    familyId,
 		CreatedAt:   time.Now(),
 	}
-	vbolt.Write(tx, MilestoneTagBkt, mt.Id, &mt)
-	vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, milestoneId)
-	vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, tagId)
-	vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, familyId)
+	vbolt.Write(tx, MilestoneTagBkt, link.Id, &link)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, link.Id, milestoneId)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, link.Id, tagId)
+	vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, link.Id, familyId)
 }
 
 func removeTagFromMilestone(tx *vbolt.Tx, milestoneId int, tagId int) {
-	var mtIds []int
-	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
-	if len(mtIds) == 0 {
-		return
-	}
-	var mts []MilestoneTag
-	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
-	for _, mt := range mts {
-		if mt.TagId != tagId {
-			continue
+	for _, link := range milestoneTagLinks(tx, MilestoneTagByMilestoneIndex, milestoneId) {
+		if link.TagId == tagId {
+			deleteMilestoneTagLink(tx, link)
 		}
-		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
 	}
 }
 
 func removeAllMilestoneTags(tx *vbolt.Tx, milestoneId int) {
-	var mtIds []int
-	vbolt.ReadTermTargets(tx, MilestoneTagByMilestoneIndex, milestoneId, &mtIds, vbolt.Window{})
-	if len(mtIds) == 0 {
-		return
-	}
-	var mts []MilestoneTag
-	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
-	for _, mt := range mts {
-		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
+	for _, link := range milestoneTagLinks(tx, MilestoneTagByMilestoneIndex, milestoneId) {
+		deleteMilestoneTagLink(tx, link)
 	}
 }
 
 func removeMilestoneTagsByTag(tx *vbolt.Tx, tagId int) {
-	var mtIds []int
-	vbolt.ReadTermTargets(tx, MilestoneTagByTagIndex, tagId, &mtIds, vbolt.Window{})
-	if len(mtIds) == 0 {
-		return
-	}
-	var mts []MilestoneTag
-	vbolt.ReadSlice(tx, MilestoneTagBkt, mtIds, &mts)
-	for _, mt := range mts {
-		vbolt.Delete(tx, MilestoneTagBkt, mt.Id)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByTagIndex, mt.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, MilestoneTagByFamilyIndex, mt.Id, -1)
+	for _, link := range milestoneTagLinks(tx, MilestoneTagByTagIndex, tagId) {
+		deleteMilestoneTagLink(tx, link)
 	}
 }
 
@@ -498,7 +456,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	milestone.MilestoneDate, err = parseMilestoneDate(req, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -510,26 +468,15 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 	milestone.Category = req.Category
 	milestone.CreatedAt = time.Now()
 
-	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
+	writeMilestone(tx, milestone)
 
-	updateMilestoneIndices(tx, milestone)
-
-	if req.PhotoIds != nil {
-		photoIds := normalizePhotoIds(req.PhotoIds)
-		for _, photoId := range photoIds {
-			if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
-				return milestone, err
-			}
-		}
+	if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
+		return milestone, err
 	}
-
+	if err := setMilestoneTags(tx, milestone, req.TagIds); err != nil {
+		return milestone, err
+	}
 	return milestone, nil
-}
-
-func updateMilestoneIndices(tx *vbolt.Tx, milestone Milestone) {
-	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, milestone.PersonId)
-	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
-	UpdateMilestoneSearchIndex(tx, milestone)
 }
 
 func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (Milestone, error) {
@@ -545,7 +492,7 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, errors.New("Person not found")
 	}
 
-	milestone.MilestoneDate, err = parseMilestoneDate(req, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -553,45 +500,65 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	milestone.Description = strings.TrimSpace(req.Description)
 	milestone.Category = req.Category
 
-	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
-
-	UpdateMilestoneSearchIndex(tx, milestone)
+	writeMilestone(tx, milestone)
 
 	if req.PhotoIds != nil {
-		photoIds := normalizePhotoIds(req.PhotoIds)
-		for _, photoId := range photoIds {
-			if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
-				return milestone, err
-			}
+		if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
+			return milestone, err
 		}
-
-		existingPhotoIds := GetMilestonePhotoIds(tx, milestone.Id)
-		existingSet := make(map[int]struct{}, len(existingPhotoIds))
-		for _, photoId := range existingPhotoIds {
-			existingSet[photoId] = struct{}{}
+	}
+	if req.TagIds != nil {
+		if err := setMilestoneTags(tx, milestone, req.TagIds); err != nil {
+			return milestone, err
 		}
+	}
+	return milestone, nil
+}
 
-		desiredSet := make(map[int]struct{}, len(photoIds))
-		for _, photoId := range photoIds {
-			desiredSet[photoId] = struct{}{}
+func setMilestonePhotos(tx *vbolt.Tx, milestone Milestone, photoIds []int) error {
+	photoIds = normalizePhotoIds(photoIds)
+	for _, photoId := range photoIds {
+		if err := validatePhotoAccess(tx, photoId, milestone.FamilyId); err != nil {
+			return err
 		}
-
-		for photoId := range existingSet {
-			if _, keep := desiredSet[photoId]; !keep {
-				removePhotoFromMilestone(tx, milestone.Id, photoId)
-			}
+	}
+	existing := GetMilestonePhotoIds(tx, milestone.Id)
+	for _, photoId := range existing {
+		if !slices.Contains(photoIds, photoId) {
+			removePhotoFromMilestone(tx, milestone.Id, photoId)
 		}
-
-		for photoId := range desiredSet {
-			if _, exists := existingSet[photoId]; !exists {
-				if err := addPhotoToMilestone(tx, milestone.Id, photoId, familyId); err != nil {
-					return milestone, err
-				}
+	}
+	for _, photoId := range photoIds {
+		if !slices.Contains(existing, photoId) {
+			if err := addPhotoToMilestone(tx, milestone.Id, photoId, milestone.FamilyId); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
 
-	return milestone, nil
+func setMilestoneTags(tx *vbolt.Tx, milestone Milestone, tagIds []int) error {
+	for _, tagId := range tagIds {
+		tag := getTagById(tx, tagId)
+		if tag.Id == 0 || !CanFamilyAccess(tx, milestone.FamilyId, tag.FamilyId, AccessContribute) {
+			return errors.New("Tag not found or access denied")
+		}
+	}
+	existing := GetMilestoneTagIds(tx, milestone.Id)
+	for _, tagId := range existing {
+		if !slices.Contains(tagIds, tagId) {
+			removeTagFromMilestone(tx, milestone.Id, tagId)
+		}
+	}
+	added := map[int]bool{}
+	for _, tagId := range tagIds {
+		if !slices.Contains(existing, tagId) && !added[tagId] {
+			added[tagId] = true
+			addTagToMilestone(tx, milestone.Id, tagId, milestone.FamilyId)
+		}
+	}
+	return nil
 }
 
 func getFamilyMilestones(tx *vbolt.Tx, familyId int) (milestones []Milestone) {
@@ -609,111 +576,27 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 		return err
 	}
 
-	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, -1)
-	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, -1)
-	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, []string{}, time.Time{})
-
 	removeAllMilestonePhotos(tx, milestone.Id)
 	removeAllMilestoneTags(tx, milestone.Id)
 	deleteMilestoneEmbeddingTx(tx, milestone.Id)
-
+	vbolt.DeleteTargetTerms(tx, MilestoneByPersonIndex, milestone.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneByFamilyIndex, milestone.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneSearchIndex, milestone.Id)
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
 
 	return nil
 }
 
-type MilestoneDateRequest interface {
-	GetInputType() string
-	GetMilestoneDate() *string
-	GetAgeYears() *int
-	GetAgeMonths() *int
-}
-
-func (req AddMilestoneRequest) GetInputType() string      { return req.InputType }
-func (req AddMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req AddMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
-func (req AddMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
-
-func (req UpdateMilestoneRequest) GetInputType() string      { return req.InputType }
-func (req UpdateMilestoneRequest) GetMilestoneDate() *string { return req.MilestoneDate }
-func (req UpdateMilestoneRequest) GetAgeYears() *int         { return req.AgeYears }
-func (req UpdateMilestoneRequest) GetAgeMonths() *int        { return req.AgeMonths }
-
-func parseMilestoneDate(req MilestoneDateRequest, personBirthday time.Time) (time.Time, error) {
-	if req.GetInputType() == "today" {
-		return time.Now(), nil
-	} else if req.GetInputType() == "date" {
-		milestoneDate := req.GetMilestoneDate()
-		if milestoneDate == nil || *milestoneDate == "" {
-			return time.Time{}, errors.New("Milestone date is required when input type is 'date'")
-		}
-		return time.Parse("2006-01-02", *milestoneDate)
-	} else if req.GetInputType() == "age" {
-		ageYears := req.GetAgeYears()
-		if ageYears == nil || *ageYears < 0 {
-			return time.Time{}, errors.New("Age years must be non-negative")
-		}
-		ageMonths := 0
-		if req.GetAgeMonths() != nil {
-			if *req.GetAgeMonths() < 0 || *req.GetAgeMonths() > 11 {
-				return time.Time{}, errors.New("Age months must be between 0 and 11")
-			}
-			ageMonths = *req.GetAgeMonths()
-		}
-
-		targetDate := personBirthday.AddDate(*ageYears, ageMonths, 0)
-		return targetDate, nil
-	} else {
-		return time.Time{}, errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-}
-
-func validateAddMilestoneRequest(req AddMilestoneRequest) error {
-	if req.PersonId <= 0 {
-		return errors.New("Person ID is required")
-	}
-	if strings.TrimSpace(req.Description) == "" {
+func validateMilestoneFields(description string, category string, inputType string) error {
+	if strings.TrimSpace(description) == "" {
 		return errors.New("Description is required")
 	}
-	validCategories := []string{"development", "behavior", "health", "achievement", "first", "other"}
-	isValidCategory := false
-	for _, category := range validCategories {
-		if req.Category == category {
-			isValidCategory = true
-			break
-		}
-	}
-	if !isValidCategory {
+	switch category {
+	case "development", "behavior", "health", "achievement", "first", "other":
+	default:
 		return errors.New("Category must be one of: development, behavior, health, achievement, first, other")
 	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-	return nil
-}
-
-func validateUpdateMilestoneRequest(req UpdateMilestoneRequest) error {
-	if req.Id <= 0 {
-		return errors.New("Milestone ID is required")
-	}
-	if strings.TrimSpace(req.Description) == "" {
-		return errors.New("Description is required")
-	}
-	validCategories := []string{"development", "behavior", "health", "achievement", "first", "other"}
-	isValidCategory := false
-	for _, category := range validCategories {
-		if req.Category == category {
-			isValidCategory = true
-			break
-		}
-	}
-	if !isValidCategory {
-		return errors.New("Category must be one of: development, behavior, health, achievement, first, other")
-	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-	return nil
+	return validateEntryInputType(inputType)
 }
 
 func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMilestoneResponse, err error) {
@@ -723,7 +606,11 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		return
 	}
 
-	if err = validateAddMilestoneRequest(req); err != nil {
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
 		return
 	}
 
@@ -799,7 +686,11 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		return
 	}
 
-	if err = validateUpdateMilestoneRequest(req); err != nil {
+	if req.Id <= 0 {
+		err = errors.New("Milestone ID is required")
+		return
+	}
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
 		return
 	}
 
@@ -878,39 +769,8 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 		return
 	}
 
-	tagIds := req.TagIds
-	if tagIds == nil {
-		tagIds = []int{}
-	}
-	for _, tagId := range tagIds {
-		tag := getTagById(ctx.Tx, tagId)
-		if tag.Id == 0 || !CanFamilyAccess(ctx.Tx, milestone.FamilyId, tag.FamilyId, AccessContribute) {
-			err = errors.New("Tag not found or access denied")
-			return
-		}
-	}
-
-	existingTagIds := GetMilestoneTagIds(ctx.Tx, req.MilestoneId)
-	existingSet := make(map[int]struct{}, len(existingTagIds))
-	for _, tagId := range existingTagIds {
-		existingSet[tagId] = struct{}{}
-	}
-
-	desiredSet := make(map[int]struct{}, len(tagIds))
-	for _, tagId := range tagIds {
-		desiredSet[tagId] = struct{}{}
-	}
-
-	for tagId := range existingSet {
-		if _, keep := desiredSet[tagId]; !keep {
-			removeTagFromMilestone(ctx.Tx, req.MilestoneId, tagId)
-		}
-	}
-
-	for tagId := range desiredSet {
-		if _, exists := existingSet[tagId]; !exists {
-			addTagToMilestone(ctx.Tx, req.MilestoneId, tagId, milestone.FamilyId)
-		}
+	if err = setMilestoneTags(ctx.Tx, milestone, req.TagIds); err != nil {
+		return
 	}
 
 	vbolt.TxCommit(ctx.Tx)

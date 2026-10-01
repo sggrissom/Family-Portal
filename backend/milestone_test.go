@@ -4,7 +4,6 @@ import (
 	"family/cfg"
 	"os"
 	"testing"
-	"time"
 
 	"go.hasen.dev/vbolt"
 	"golang.org/x/crypto/bcrypt"
@@ -271,116 +270,6 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 	})
 }
 
-func TestParseMilestoneDate(t *testing.T) {
-	birthday := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		name        string
-		request     AddMilestoneRequest
-		expected    time.Time
-		shouldError bool
-	}{
-		{
-			name: "valid date input",
-			request: AddMilestoneRequest{
-				InputType:     "date",
-				MilestoneDate: stringPtr("2023-06-15"),
-			},
-			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "valid age input - exactly 3 years",
-			request: AddMilestoneRequest{
-				InputType: "age",
-				AgeYears:  intPtr(3),
-				AgeMonths: intPtr(0),
-			},
-			expected:    time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "valid age input - 2 years 6 months",
-			request: AddMilestoneRequest{
-				InputType: "age",
-				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(6),
-			},
-			expected:    time.Date(2022, 12, 15, 0, 0, 0, 0, time.UTC),
-			shouldError: false,
-		},
-		{
-			name: "today input type",
-			request: AddMilestoneRequest{
-				InputType: "today",
-			},
-			shouldError: false,
-		},
-		{
-			name: "invalid date format",
-			request: AddMilestoneRequest{
-				InputType:     "date",
-				MilestoneDate: stringPtr("invalid-date"),
-			},
-			shouldError: true,
-		},
-		{
-			name: "missing date",
-			request: AddMilestoneRequest{
-				InputType: "date",
-			},
-			shouldError: true,
-		},
-		{
-			name: "negative age years",
-			request: AddMilestoneRequest{
-				InputType: "age",
-				AgeYears:  intPtr(-1),
-				AgeMonths: intPtr(0),
-			},
-			shouldError: true,
-		},
-		{
-			name: "invalid age months",
-			request: AddMilestoneRequest{
-				InputType: "age",
-				AgeYears:  intPtr(2),
-				AgeMonths: intPtr(15),
-			},
-			shouldError: true,
-		},
-		{
-			name: "invalid input type",
-			request: AddMilestoneRequest{
-				InputType: "invalid",
-			},
-			shouldError: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result, err := parseMilestoneDate(test.request, birthday)
-
-			if test.shouldError {
-				if err == nil {
-					t.Errorf("Expected error for %s, but got none", test.name)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error for %s: %v", test.name, err)
-				}
-				if test.request.InputType != "today" && !result.Equal(test.expected) {
-					t.Errorf("Expected date %v, got %v", test.expected, result)
-				}
-				if test.request.InputType == "today" && result.IsZero() {
-					t.Error("Expected today to return non-zero time")
-				}
-			}
-		})
-	}
-}
-
 func TestMilestoneValidation(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -451,16 +340,6 @@ func TestMilestoneValidation(t *testing.T) {
 			shouldError: false,
 		},
 		{
-			name: "invalid person ID",
-			request: AddMilestoneRequest{
-				PersonId:    0,
-				Description: "Test milestone",
-				Category:    "development",
-				InputType:   "today",
-			},
-			shouldError: true,
-		},
-		{
 			name: "empty description",
 			request: AddMilestoneRequest{
 				PersonId:    1,
@@ -504,7 +383,7 @@ func TestMilestoneValidation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateAddMilestoneRequest(test.request)
+			err := validateMilestoneFields(test.request.Description, test.request.Category, test.request.InputType)
 			if test.shouldError && err == nil {
 				t.Errorf("Expected validation error for %s, but got none", test.name)
 			}

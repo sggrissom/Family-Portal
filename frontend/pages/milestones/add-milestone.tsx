@@ -6,7 +6,6 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
-import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
@@ -17,8 +16,13 @@ import { PagedPhotoPicker, PhotoPicker } from "../../components/PhotoPicker";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
-import "./add-milestone-styles";
-import "../../components/entry-form-styles";
+import {
+  CategoryChips,
+  SuggestedPhotos,
+  TagPicker,
+  suggestPhotos,
+  toggleId,
+} from "./MilestoneFields";
 
 type AddMilestoneForm = {
   personId: number | null;
@@ -76,16 +80,8 @@ function scheduleLookups(form: AddMilestoneForm) {
       }
     }
     if (form.personId !== null && when && text.length >= 3) {
-      const [resp] = await server.SuggestMilestonePhotos({
-        personId: form.personId,
-        description: text,
-        inputType: when.inputType,
-        milestoneDate: when.date,
-        ageYears: when.ageYears,
-        ageMonths: when.ageMonths,
-        excludeIds: [],
-      });
-      if (form.lookupKey === key) form.suggestedPhotoIds = resp?.photoIds ?? [];
+      const photoIds = await suggestPhotos(form.personId, text, when, []);
+      if (form.lookupKey === key) form.suggestedPhotoIds = photoIds;
     } else {
       form.suggestedPhotoIds = [];
     }
@@ -184,6 +180,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
     ageYears: when.ageYears,
     ageMonths: when.ageMonths,
     photoIds: form.photoIds,
+    tagIds: form.tagIds,
   });
 
   if (!resp) {
@@ -193,9 +190,6 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
     return;
   }
 
-  if (form.tagIds.length > 0) {
-    await server.UpdateMilestoneTags({ milestoneId: resp.milestone.id, tagIds: form.tagIds });
-  }
   writeLastPerson(personId);
   takeReturnPath("");
   core.setRoute(`/profile/${personId}`);
@@ -215,23 +209,6 @@ function chooseCategory(form: AddMilestoneForm, category: string) {
   vlens.scheduleRedraw();
 }
 
-function onToggleTag(form: AddMilestoneForm, tagId: number) {
-  const idx = form.tagIds.indexOf(tagId);
-  if (idx >= 0) form.tagIds.splice(idx, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
-function onTogglePhoto(form: AddMilestoneForm, photoId: number) {
-  const idx = form.photoIds.indexOf(photoId);
-  if (idx >= 0) {
-    form.photoIds.splice(idx, 1);
-  } else {
-    form.photoIds.push(photoId);
-  }
-  vlens.scheduleRedraw();
-}
-
 function cancel(event: Event) {
   event.preventDefault();
   core.setRoute(takeReturnPath("/dashboard"));
@@ -245,8 +222,6 @@ function focusOnMount(el: HTMLElement | null) {
   requestAnimationFrame(() => el.focus());
 }
 
-const CATEGORY_ORDER = ["first", "development", "achievement", "behavior", "health", "other"];
-
 interface AddMilestonePageProps {
   form: AddMilestoneForm;
   people: server.Person[];
@@ -255,9 +230,6 @@ interface AddMilestonePageProps {
 
 const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
   const disabled = form.saving;
-  const categories = CATEGORY_ORDER.map(
-    value => MILESTONE_CATEGORIES.find(c => c.value === value)!
-  );
   if (BROWSER) scheduleLookups(form);
   const statedAge = parseAgeFromText(form.description);
   const ageAlreadyUsed =
@@ -301,29 +273,12 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           />
         </div>
 
-        <div className="entry-field">
-          <span className="entry-label" id="categoryLabel">
-            {copy.milestone.category}
-            {form.categorySuggested && <span className="entry-suggested"> · suggested</span>}
-          </span>
-          <div className="category-chips" role="group" aria-labelledby="categoryLabel">
-            {categories.map(category => (
-              <button
-                key={category.value}
-                type="button"
-                className={
-                  form.category === category.value ? "category-chip selected" : "category-chip"
-                }
-                aria-pressed={form.category === category.value ? "true" : "false"}
-                disabled={disabled}
-                onClick={vlens.cachePartial(chooseCategory, form, category.value)}
-              >
-                <span aria-hidden="true">{category.icon}</span>
-                {category.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <CategoryChips
+          value={form.category}
+          suggested={form.categorySuggested}
+          onChange={vlens.cachePartial(chooseCategory, form)}
+          disabled={disabled}
+        />
 
         <div className="entry-subject">
           <span className="entry-label">{copy.when.label}</span>
@@ -345,29 +300,11 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           )}
         </div>
 
-        {form.suggestedPhotoIds.length > 0 && (
-          <div className="entry-field">
-            <span className="entry-label">Photos from around then. Attach any?</span>
-            <div className="suggested-photos">
-              {form.suggestedPhotoIds.map(id => {
-                const selected = form.photoIds.includes(id);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`suggested-photo${selected ? " selected" : ""}`}
-                    aria-pressed={selected}
-                    aria-label={selected ? "Don't attach this photo" : "Attach this photo"}
-                    disabled={disabled}
-                    onClick={() => onTogglePhoto(form, id)}
-                  >
-                    <img src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <SuggestedPhotos
+          photoIds={form.suggestedPhotoIds}
+          selected={form.photoIds}
+          disabled={disabled}
+        />
 
         <details className="entry-more">
           <summary>{copy.milestone.more}</summary>
@@ -379,7 +316,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
                   pageKey="milestone-photos"
                   filters={{ personIds: [form.personId] }}
                   selectedIds={form.photoIds}
-                  onToggle={photoId => onTogglePhoto(form, photoId)}
+                  onToggle={vlens.cachePartial(toggleId, form.photoIds)}
                   disabled={disabled}
                   emptyText="No photos found for this person"
                 />
@@ -387,38 +324,14 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
                 <PhotoPicker
                   photos={[]}
                   selectedIds={form.photoIds}
-                  onToggle={photoId => onTogglePhoto(form, photoId)}
+                  onToggle={vlens.cachePartial(toggleId, form.photoIds)}
                   disabled={disabled}
                   emptyText="Pick a person to see their photos"
                 />
               )}
             </div>
 
-            {tags.length > 0 && (
-              <div className="entry-field">
-                <span className="entry-label" id="tagPickerLabel">
-                  {copy.milestone.tags}
-                </span>
-                <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-                  {tags.map(tag => {
-                    const selected = form.tagIds.includes(tag.id);
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        className={`tag-pill${selected ? " selected" : ""}`}
-                        style={{ borderColor: tag.color }}
-                        aria-pressed={selected}
-                        onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
-                      >
-                        <span className="tag-color-dot" style={{ background: tag.color }} />
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <TagPicker tags={tags} selected={form.tagIds} disabled={disabled} />
           </div>
         </details>
 

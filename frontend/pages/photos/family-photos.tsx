@@ -157,66 +157,55 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
               </div>
             )}
           </div>
-          <div className="header-actions">
-            {hasPhotos && (
-              <button
-                className="btn btn-secondary filter-toggle"
-                onClick={photoFilter.toggleFilterPanel}
-              >
-                🔍 Filter {photoFilter.hasActiveFilters() && `(${photoFilter.getFilterSummary()})`}
-              </button>
-            )}
-            {hasPhotos && !searching && (
-              <button
-                className="btn btn-secondary"
-                onClick={photoFilter.toggleShowSimilar}
-                title={
-                  photoFilter.showSimilar
-                    ? "Show each burst of similar photos as one stack"
-                    : "Show every photo, including near-duplicates"
-                }
-              >
-                {photoFilter.showSimilar ? "🗂️ Stack similar" : "🗂️ Show all"}
-              </button>
-            )}
-            {hasPhotos && (
-              <a href="/faces" className="btn btn-secondary">
-                🙂 Faces
-              </a>
-            )}
-            {hasPhotos && (
-              <a href="/suggestions" className="btn btn-secondary">
-                🏷️ Suggestions
-              </a>
-            )}
-            <a href="/add-photo" className="btn btn-primary">
-              📸 Add Photo
-            </a>
-          </div>
+          <a href="/add-photo" className="btn btn-primary photo-add">
+            + Add photos
+          </a>
         </div>
       </div>
 
       {hasPhotos && (
-        <form
-          className="photo-search"
-          role="search"
-          onSubmit={e => {
-            e.preventDefault();
-            photoFilter.setQuery(draft.text);
-          }}
-        >
-          <input
-            type="search"
-            aria-label="Search photos"
-            placeholder="Search photos: “birthday cake”, “at the beach”, a name…"
-            maxLength={200}
-            value={draft.text}
-            onInput={e => (draft.text = e.currentTarget.value)}
-          />
-          <button type="submit" className="btn btn-primary">
-            Search
+        <div className="photo-toolbar">
+          <form
+            className="photo-search"
+            role="search"
+            onSubmit={e => {
+              e.preventDefault();
+              photoFilter.setQuery(draft.text);
+            }}
+          >
+            <input
+              type="search"
+              aria-label="Search photos"
+              placeholder="Search names, places, moments…"
+              maxLength={200}
+              value={draft.text}
+              onInput={e => (draft.text = e.currentTarget.value)}
+            />
+            <button type="submit" className="btn btn-primary">
+              Search
+            </button>
+          </form>
+          <button
+            className="btn btn-secondary filter-toggle"
+            aria-expanded={photoFilter.isFilterPanelOpen}
+            aria-controls="photo-filters"
+            onClick={photoFilter.toggleFilterPanel}
+          >
+            Filters{photoFilter.hasActiveFilters() && " •"}
           </button>
-        </form>
+          <nav className="photo-tools" aria-label="Photo tools">
+            <a href="/faces">Faces</a>
+            <a href="/suggestions">Suggestions</a>
+          </nav>
+          {photoFilter.hasActiveFilters() && (
+            <div className="photo-active-filters">
+              <span>{photoFilter.getFilterSummary()}</span>
+              <button className="photo-search-clear" onClick={photoFilter.clearAllFilters}>
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {searching && (
@@ -236,7 +225,24 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
       )}
 
       {hasPhotos && photoFilter.isFilterPanelOpen && (
-        <div className="filter-panel">
+        <div className="filter-panel" id="photo-filters">
+          <div className="filter-section">
+            <h3>Similar photos</h3>
+            <label className="similar-photos-option">
+              <input
+                type="checkbox"
+                checked={photoFilter.showSimilar}
+                disabled={searching}
+                onChange={photoFilter.toggleShowSimilar}
+              />
+              <span>Show similar photos separately</span>
+            </label>
+            <p className="similar-photos-help">
+              {searching
+                ? "Search shows individual matches. This setting applies when browsing."
+                : "Similar shots are grouped by default. Tap a photo’s similar badge to browse the group."}
+            </p>
+          </div>
           <div className="filter-section">
             <h3>Filter by People</h3>
             <div className="people-filter">
@@ -355,66 +361,79 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
               <div className="photos-gallery has-photos">
                 {filteredPhotos.map((photoWithPeople, index) => (
                   <div key={photoWithPeople.image.id} className="photo-card">
-                    <div className="photo-image-container">
-                      <ThumbnailImage
-                        photoId={photoWithPeople.image.id}
-                        alt={photoWithPeople.image.title}
-                        className="photo-image"
-                        loading={index < 6 ? "eager" : "lazy"}
-                        fetchpriority={index < 3 ? "high" : "auto"}
-                        onClick={() => openPhoto(photoWithPeople.image.id, filteredPhotos)}
-                        status={photoStatus.getStatus(photoWithPeople.image.id)}
-                      />
-                      {photoWithPeople.people.some(
-                        person => person.profilePhotoId === photoWithPeople.image.id
-                      ) && <div className="profile-photo-badge">👤 Profile</div>}
-                      {(photoWithPeople.similar?.length ?? 0) > 0 && (
-                        <button
-                          className="similar-stack-badge"
-                          onClick={() => openStack(photoWithPeople)}
-                          title="Similar photos taken around the same time"
-                        >
-                          +{photoWithPeople.similar!.length} similar
-                        </button>
-                      )}
-                      {photoWithPeople.people.length > 0 ? (
-                        <div className="people-badges">
-                          {photoWithPeople.people.map(person => (
-                            <div key={person.id} className="person-badge">
-                              {person.name}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="people-badges">
-                          <div className="person-badge family-badge">Family Photo</div>
-                        </div>
-                      )}
-                    </div>
-                    {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
-                      <div className="tag-badges">
-                        {photoWithPeople.image.tagIds.map(tagId => {
-                          const tag = photoFilter.tags.find(t => t.id === tagId);
-                          return tag ? (
-                            <span
-                              key={tagId}
-                              className="tag-badge"
-                              style={{ background: tag.color }}
-                              title={tag.name}
-                            />
-                          ) : null;
-                        })}
+                    <a
+                      className="photo-open"
+                      href={viewPhotoRoute(photoWithPeople.image.id, true)}
+                      aria-label={`View ${photoWithPeople.image.title}`}
+                      onClick={e => {
+                        e.preventDefault();
+                        openPhoto(photoWithPeople.image.id, filteredPhotos);
+                      }}
+                    >
+                      <div className="photo-image-container">
+                        <ThumbnailImage
+                          photoId={photoWithPeople.image.id}
+                          alt={photoWithPeople.image.title}
+                          className="photo-image"
+                          loading={index < 6 ? "eager" : "lazy"}
+                          fetchpriority={index < 3 ? "high" : "auto"}
+                          status={photoStatus.getStatus(photoWithPeople.image.id)}
+                        />
+                        {photoWithPeople.people.some(
+                          person => person.profilePhotoId === photoWithPeople.image.id
+                        ) && <div className="profile-photo-badge">👤 Profile</div>}
+                        {photoWithPeople.people.length > 0 ? (
+                          <div className="people-badges">
+                            {photoWithPeople.people.map(person => (
+                              <div key={person.id} className="person-badge">
+                                {person.name}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="people-badges">
+                            <div className="person-badge family-badge">Family Photo</div>
+                          </div>
+                        )}
                       </div>
+                      {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
+                        <div className="tag-badges">
+                          {photoWithPeople.image.tagIds.map(tagId => {
+                            const tag = photoFilter.tags.find(t => t.id === tagId);
+                            return tag ? (
+                              <span
+                                key={tagId}
+                                className="tag-badge"
+                                style={{ background: tag.color }}
+                                title={tag.name}
+                              />
+                            ) : null;
+                          })}
+                        </div>
+                      )}
+                      <div className="photo-info">
+                        {!/^Photo from [A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(
+                          photoWithPeople.image.title
+                        ) && <h3 className="photo-title">{photoWithPeople.image.title}</h3>}
+                        <div className="photo-date">
+                          {formatPhotoDate(photoWithPeople.image.photoDate)}
+                        </div>
+                        {photoWithPeople.image.description && (
+                          <div className="photo-description">
+                            {photoWithPeople.image.description}
+                          </div>
+                        )}
+                      </div>
+                    </a>
+                    {(photoWithPeople.similar?.length ?? 0) > 0 && (
+                      <button
+                        className="similar-stack-badge"
+                        onClick={() => openStack(photoWithPeople)}
+                        title="Similar photos taken around the same time"
+                      >
+                        +{photoWithPeople.similar!.length} similar
+                      </button>
                     )}
-                    <div className="photo-info">
-                      <h3 className="photo-title">{photoWithPeople.image.title}</h3>
-                      <div className="photo-date">
-                        {formatPhotoDate(photoWithPeople.image.photoDate)}
-                      </div>
-                      {photoWithPeople.image.description && (
-                        <div className="photo-description">{photoWithPeople.image.description}</div>
-                      )}
-                    </div>
                   </div>
                 ))}
               </div>

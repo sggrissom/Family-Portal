@@ -122,8 +122,43 @@ moment you most want logs is right after a deploy that broke something.
 
 CI deploys after the full check gate passes (`.github/workflows/test.yml`):
 `main` goes to staging (`staging.familyrecord.app`) and `release` goes to
-production (`familyrecord.app`). To ship, fast-forward `release` to a `main`
-commit that has already run on staging.
+production (`familyrecord.app`). Both the build/test job and security scan must
+pass before either deployment. To ship, open a PR from `main` to `release`
+after that commit has passed full validation and run on staging.
+
+### Merge checks and post-merge validation
+
+| Event | Checks | Deployment |
+| --- | --- | --- |
+| PR into `main` | Release build (including CSS validation), lint/formatting, TypeScript, tracked-file cleanliness | None |
+| PR into `release` | All of the above, backend and frontend tests, coverage, race detector, end-to-end and browser flows, dependency and secret scans | None |
+| Push to `main` | Full suite | Staging, only after validation passes |
+| Push to `release` | Full suite | Production, only after validation passes |
+
+The `Build, Typecheck, and Test` check keeps its existing name so current branch
+protection continues working. On PRs into `main`, `Dependency and secret scan`
+is skipped; GitHub treats a skipped job as successful even if it is required.
+Full validation runs on every merged commit. Failures mark the Actions run red,
+add a run summary with a link to the failure, and block deployment. They do not
+hold up the next PR into `main`.
+
+Configure branch protection in GitHub **Settings → Branches**:
+
+- `main`: require `Build, Typecheck, and Test`. The existing security requirement
+  can be removed (or left in place, since that job skips on main PRs).
+- `release`: require both `Build, Typecheck, and Test` and
+  `Dependency and secret scan`, require PRs, and require branches to be up to
+  date before merging. Do not allow bypasses if release validation must be
+  mandatory. Direct pushes validate before deployment, but cannot validate
+  before the commit enters the branch.
+
+Workflow YAML cannot set branch protection. The `release` branch was unprotected
+when this change was prepared, so configure that rule to enforce the release
+merge gate.
+
+For failure alerts, enable GitHub Actions notifications in your personal
+notification settings and select failed workflows only. Delivery follows your
+GitHub email/web preferences; this workflow does not send separate emails.
 
 Each target is a GitHub environment (`staging`, `production`) with its own
 secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `SMOKE_EMAIL`,
@@ -233,16 +268,19 @@ faces in group shots, and the app then stores no face positions. Deploy
 `make deploy-face-remote` before or with the app.
 
 On startup the worker re-queues every photo whose analysis is pending, was
-interrupted, or predates stored face positions (`Image.AnalysisVersion`). The
-first start after an upgrade therefore re-analyzes the whole library in the
+interrupted, previously failed, or predates stored face positions
+(`Image.AnalysisVersion`). The first start after an upgrade therefore re-analyzes the whole library in the
 background, one photo at a time. Existing tags are kept.
 
 Face analysis is optional, and degrades quietly: if the socket is missing,
-photos still upload, process, and serve. But the reachability check runs **once,
-at app startup** (`backend/photo_analysis_worker.go:75`) — if the daemon is down
-when `app@family` starts, the worker is never created and stays off until the
-app is restarted, however healthy the daemon becomes later. Restart `family` after
-`family-face`, not before.
+photos still upload, process, and serve. When enabled, the worker starts even
+without the daemon and uses the same deduplicated backlog as vision. Photo
+analysis and profile-face updates retry connection failures, timeouts, HTTP 429,
+and HTTP 5xx with exponential backoff up to five minutes. Requests are bounded
+at 60 seconds. The units can start in either order; no app restart is needed
+when the daemon returns. Invalid-image responses are marked failed and skipped
+for the rest of that run, with the admin reanalysis action or startup sweep
+allowing another attempt.
 
 ## Photo features
 
@@ -252,7 +290,11 @@ Nothing to deploy or configure: the city lookup is the GeoNames extract
 embedded in the binary. Each analyzer stores its own version; on startup the
 worker queues every photo whose record is missing or older, so the first start
 after an upgrade works through the whole library in the background. `/admin/photos`
-shows progress under "Photo Features".
+shows progress under "Photo Features". Analyzer version 2 reruns the feature
+backfill once to repair records previously marked complete after file-read
+failures. Unreadable sources now remain outdated; restoring files and requeueing
+the photo (or restarting the app) retries them. A readable image without GPS
+is a completed location result; a missing original is not.
 
 ## Vision analysis
 
@@ -283,10 +325,13 @@ also how to check the files. The models are not in a deploy or a backup.
 to load and holds about 800 MB; `VISION_THREADS` caps its CPU at two cores.
 
 The app always has the vision worker when built with `-tags release`
-(`cfg.VisionAnalysisSocket`). Unlike face analysis there is no startup check:
+(`cfg.VisionAnalysisSocket`). Like face analysis there is no startup reachability
+check:
 if the socket is missing the worker puts the photo back and retries with a
 backoff that grows to five minutes, so the two units can start in either
-order. `/admin/photos` shows the daemon as up, down, or not configured under
+order. HTTP 429 and 5xx responses also retry; invalid-image 4xx responses are
+skipped rather than blocking the backlog. `/admin/photos` shows the daemon as
+up, down, or not configured under
 "Image Embeddings". Embeddings are stored per photo with the model name and a
 version; a new model or a bump of `embeddingVersion` re-embeds the library in
 the background.

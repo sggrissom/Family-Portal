@@ -151,7 +151,6 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 
 	vbolt.Delete(tx, PasswdBkt, user.Id)
 	vbolt.Delete(tx, EmailBkt, user.Email)
-	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, -1)
 	vbolt.Delete(tx, UsersBkt, user.Id)
 
 	return

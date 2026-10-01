@@ -142,7 +142,6 @@ func detachUserFromFamilyTx(tx *vbolt.Tx, user User, familyId int) {
 
 	user.FamilyId = replacement
 	vbolt.Write(tx, UsersBkt, user.Id, &user)
-	vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, replacement)
 }
 
 func ListFamilyMembers(ctx *vbeam.Context, req ListFamilyMembersRequest) (resp ListFamilyMembersResponse, err error) {

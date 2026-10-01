@@ -273,14 +273,34 @@ const BackupResult = ({ result }: { result: server.VerifyBackupPathResponse }) =
   </div>
 );
 
-const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
+const useReviewState = vlens.declareHook(() => ({
+  saving: false,
+  error: "",
+  health: null as server.SystemHealthResponse | null,
+}));
+
+const Problems = ({ health: initialHealth }: { health: server.SystemHealthResponse }) => {
+  const state = useReviewState();
+  const health = state.health ?? initialHealth;
+  const review = async () => {
+    state.saving = true;
+    state.error = "";
+    vlens.scheduleRedraw();
+    const [result, error] = await server.ReviewLogFailures({
+      through: health.logs.latestFailureAt,
+    });
+    state.saving = false;
+    if (error) state.error = error;
+    else if (result) state.health = result;
+    vlens.scheduleRedraw();
+  };
   if (health.healthy) {
     return (
       <div className="problems problems-clear">
         <span className="problems-icon">✅</span>
         <span>
-          Nothing to report. No errors in the last {health.logs.windowHours}h, no failed photos, no
-          configuration problems.
+          Nothing to report. No unreviewed errors in the last {health.logs.windowHours}h, no failed
+          photos, no configuration problems.
         </span>
       </div>
     );
@@ -294,6 +314,21 @@ const Problems = ({ health }: { health: server.SystemHealthResponse }) => {
       <BackupIssues backups={health.backups} />
       <HostIssues host={health.host} />
       <LogIssues logs={health.logs} />
+      {(health.logs.errors > 0 || health.logs.requests5xx > 0) && (
+        <div className="admin-actions">
+          <button
+            className="admin-btn admin-btn-secondary"
+            disabled={state.saving}
+            onClick={review}
+          >
+            {state.saving ? "Saving…" : "Mark log failures reviewed"}
+          </button>
+          <p className="problem-note">
+            Stops health alerts about these log failures. Logs are kept; new failures still count.
+          </p>
+        </div>
+      )}
+      {state.error && <p className="admin-notice">{state.error}</p>}
       <PhotoIssues photos={health.photos} />
       <PushIssues push={health.push} />
       <MailIssues mail={health.mail} />
@@ -388,7 +423,7 @@ const LogIssues = ({ logs }: { logs: server.LogProblems }) => {
 
   return (
     <div className="problem-group">
-      <h3>Logs, last {logs.windowHours}h</h3>
+      <h3>Unreviewed logs, last {logs.windowHours}h</h3>
       <ul className="problem-list">
         {logs.errors > 0 && (
           <li>

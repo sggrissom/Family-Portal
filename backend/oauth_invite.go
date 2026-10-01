@@ -68,7 +68,7 @@ func joinFamilyByInviteTx(tx *vbolt.Tx, user User, inviteCode string) (User, boo
 	if family.Id == 0 {
 		return user, false
 	}
-	if _, alreadyMember := FindMembership(tx, user.Id, family.Id); alreadyMember || user.FamilyId == family.Id {
+	if _, alreadyMember := FindMembership(tx, user.Id, family.Id); alreadyMember {
 		return user, false
 	}
 
@@ -76,7 +76,6 @@ func joinFamilyByInviteTx(tx *vbolt.Tx, user User, inviteCode string) (User, boo
 	if user.FamilyId == 0 {
 		user.FamilyId = family.Id
 		vbolt.Write(tx, UsersBkt, user.Id, &user)
-		vbolt.SetTargetSingleTerm(tx, UsersByFamilyIndex, user.Id, user.FamilyId)
 	}
 	return user, true
 }

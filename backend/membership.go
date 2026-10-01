@@ -90,7 +90,7 @@ func ensureMembershipTx(tx *vbolt.Tx, userId int, familyId int, role AccessLevel
 
 func BackfillFamilyMemberships(tx *vbolt.Tx) (created int) {
 	vbolt.IterateAll(tx, UsersBkt, func(userId int, user User) bool {
-		if user.FamilyId == 0 {
+		if user.FamilyId == 0 || GetFamily(tx, user.FamilyId).Id == 0 {
 			return true
 		}
 		if _, found := FindMembership(tx, user.Id, user.FamilyId); found {

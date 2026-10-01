@@ -202,9 +202,13 @@ same scratch deployment `make e2e` uses. Playwright starts and stops it through
 `npx playwright install chromium`. A failing run leaves a trace, a screenshot,
 and a video under `build/playwright-report`, which CI uploads as an artifact.
 
-CI runs formatting, `go vet`, backend tests, TypeScript checks, CSS validation,
-a release build, the race detector, coverage, `make e2e`, `make test-ui`, and a
-guard that fails if any check modified a tracked file.
+PRs into `main` run a release build, CSS validation, formatting/`go vet`,
+TypeScript checks, and a guard against modifying tracked files. Release PRs and
+pushes to either branch also run backend/frontend tests, the race detector,
+coverage, `make e2e`, `make test-ui`, and dependency/secret scans. After merge,
+a failed full run reports the error and blocks deployment. See
+[merge checks and notifications](docs/deployment.md#merge-checks-and-post-merge-validation)
+for the required branch protection and GitHub notification settings.
 
 ## Deployment and operations
 

@@ -430,6 +430,10 @@ face-centred photo for people without a profile photo, or null).
   `AppearanceDetail` that `GetPersonSeason` returns and `personIds` are the
   visible people in the entry. An appearance with no `occurredAt` is dated by
   its event's start. Without the flag, `appearances` is an empty array.
+- `includeUntaggedPhotos: true` fills `untaggedPhotos` with the photos in the
+  window that have nobody tagged, from every household the caller is a member
+  of (not linked households), and counts their years in `years`. Without the
+  flag, or with `skipPhotos`, `untaggedPhotos` is an empty array.
 
 Every other list proc returns the whole set: `ListPeople`,
 `GetPersonMilestones`, `ListTags`. There is no cursor and no total count.
@@ -609,7 +613,13 @@ quietly loses 100 of them. Enforce the caps in the UI.
 Whole-set writes replace their whole set — `SetEntryRoster`,
 `SetAppearanceResults`, `SetAppearancePhotos`, `SetEventPhotos`,
 `UpdatePhotoTags`, `UpdateMilestoneTags`. Send the complete list every time; a
-partial list is a deletion.
+partial list is a deletion. `AddMilestone` and `UpdateMilestone` take the same
+whole-set `tagIds` in the same transaction as the milestone; on update an absent
+`tagIds` leaves the tags alone and `[]` clears them.
+
+`AddCheckup` saves an optional `height` and `weight` (`{value, unit}`) against one
+date in one transaction: both are stored or neither is. `AddGrowthData` still
+saves a single measurement.
 
 ---
 

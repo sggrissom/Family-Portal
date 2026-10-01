@@ -328,6 +328,7 @@ export interface GetFamilyTimelineRequest {
     skipMilestones: boolean
     skipPhotos: boolean
     includeActivities: boolean
+    includeUntaggedPhotos: boolean
 }
 
 export interface GetFamilyTimelineResponse {
@@ -335,6 +336,7 @@ export interface GetFamilyTimelineResponse {
     relations: Relation[]
     years: number[]
     appearances: TimelineAppearance[]
+    untaggedPhotos: Image[]
 }
 
 export interface GetPersonRelationsRequest {
@@ -388,6 +390,20 @@ export interface AddGrowthDataResponse {
     growthData: GrowthData
 }
 
+export interface AddCheckupRequest {
+    personId: number
+    inputType: string
+    measurementDate: string | null
+    ageYears: number | null
+    ageMonths: number | null
+    height: CheckupValue | null
+    weight: CheckupValue | null
+}
+
+export interface AddCheckupResponse {
+    growthData: GrowthData[]
+}
+
 export interface GetGrowthDataRequest {
     id: number
 }
@@ -428,6 +444,7 @@ export interface AddMilestoneRequest {
     ageYears: number | null
     ageMonths: number | null
     photoIds: number[]
+    tagIds: number[]
 }
 
 export interface AddMilestoneResponse {
@@ -459,6 +476,7 @@ export interface UpdateMilestoneRequest {
     ageYears: number | null
     ageMonths: number | null
     photoIds: number[]
+    tagIds: number[]
 }
 
 export interface UpdateMilestoneResponse {
@@ -1304,6 +1322,10 @@ export interface SystemHealthResponse {
     backups: BackupProblems
 }
 
+export interface ReviewLogFailuresRequest {
+    through: string
+}
+
 export interface WeeklyDigestResponse {
     since: string
     windowDays: number
@@ -1621,6 +1643,11 @@ export interface RelationLabelEntry {
     personId: number
     label: string
     group: string
+}
+
+export interface CheckupValue {
+    value: number
+    unit: string
 }
 
 export interface Activity {
@@ -2079,6 +2106,8 @@ export interface ConfigProblem {
 }
 
 export interface LogProblems {
+    latestFailureAt: string
+    reviewedThrough: string
     windowHours: number
     errors: number
     recentErrors: PublicLogEntry[]
@@ -2458,6 +2487,10 @@ export async function AddGrowthData(data: AddGrowthDataRequest): Promise<rpc.Res
     return await rpc.call<AddGrowthDataResponse>('AddGrowthData', JSON.stringify(data));
 }
 
+export async function AddCheckup(data: AddCheckupRequest): Promise<rpc.Response<AddCheckupResponse>> {
+    return await rpc.call<AddCheckupResponse>('AddCheckup', JSON.stringify(data));
+}
+
 export async function GetGrowthData(data: GetGrowthDataRequest): Promise<rpc.Response<GetGrowthDataResponse>> {
     return await rpc.call<GetGrowthDataResponse>('GetGrowthData', JSON.stringify(data));
 }
@@ -2832,6 +2865,10 @@ export async function GetSystemAnalytics(data: Empty): Promise<rpc.Response<Syst
 
 export async function GetSystemHealth(data: Empty): Promise<rpc.Response<SystemHealthResponse>> {
     return await rpc.call<SystemHealthResponse>('GetSystemHealth', JSON.stringify(data));
+}
+
+export async function ReviewLogFailures(data: ReviewLogFailuresRequest): Promise<rpc.Response<SystemHealthResponse>> {
+    return await rpc.call<SystemHealthResponse>('ReviewLogFailures', JSON.stringify(data));
 }
 
 export async function GetWeeklyDigest(data: Empty): Promise<rpc.Response<WeeklyDigestResponse>> {

@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 func getAllowedOrigins() []string {
@@ -490,6 +491,14 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 				"error": err.Error(),
 			})
 			http.Error(w, "Authentication failed", http.StatusUnauthorized)
+			return
+		}
+		var member bool
+		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+			member = CanAccessFamily(tx, user, user.FamilyId, AccessView)
+		})
+		if !member {
+			http.Error(w, "Not a member of this family", http.StatusForbidden)
 			return
 		}
 

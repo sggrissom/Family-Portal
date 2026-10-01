@@ -152,10 +152,10 @@ func describeHealth(health SystemHealthResponse) string {
 		add("Logs: could not be read")
 	}
 	if health.Logs.Errors > 0 {
-		add("Logs: %d error(s) in the last %dh", health.Logs.Errors, health.Logs.WindowHours)
+		add("Logs: %d unreviewed error(s) in the last %dh", health.Logs.Errors, health.Logs.WindowHours)
 	}
 	if health.Logs.Requests5xx > 0 {
-		add("Logs: %d request(s) returned 5xx", health.Logs.Requests5xx)
+		add("Logs: %d unreviewed request(s) returned 5xx", health.Logs.Requests5xx)
 	}
 	if health.Photos.WorkerStopped {
 		add("Photos: the processing worker is not running")

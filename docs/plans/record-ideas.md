@@ -23,11 +23,15 @@ makes them the cheapest ideas on this list.
 - **Year in review per child.** One page per child per year, generated from
   existing data: growth over the year, milestones, the best photos, seasons and
   results. It works naturally as a birthday-week page ("Age 7").
-- **Search everything.** Search currently covers milestones only. Extend it to
-  photo titles and descriptions, activity notes, entries, and events.
-- **Photo series.** A tag like "first day of school" shown as a side-by-side
-  across years or across siblings. Same age and Growth already provide age-based context;
-  this adds deliberate recurring photo comparisons.
+- **Search everything.** Photo and milestone search now include local semantic
+  matching. Extend unified search to activity notes, entries, and events.
+- **Sibling comparison montages / photo series.** Photos side by side at a
+  comparable age, or a recurring occasion such as the first day of school,
+  with face crops, quality-based defaults, and manual replacements. See the
+  [detailed proposal](offline-analysis.md#sibling-comparison-montages).
+- **Suggested event collections.** Reviewable photo groupings for birthdays,
+  competitions, and trips, inferred from time, people, place, and similarity.
+  See the [detailed proposal](offline-analysis.md#suggested-event-collections).
 - **Print / PDF export.** A per-child or per-year book laid out for printing.
   It's the "take your data with you" story in a form Grandma can hold.
 
@@ -92,5 +96,3 @@ makes them the cheapest ideas on this list.
 - **Scheduled export.** A reminder to download a full export, or an automatic
   one to a destination the family picks. A record meant to last decades
   shouldn't depend on one VPS.
-- **Original photo download.** Make sure the full-resolution original can be
-  downloaded from the photo page, not only through the full export.

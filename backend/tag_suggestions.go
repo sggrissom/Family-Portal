@@ -21,7 +21,7 @@ import (
 // Bump autoTagVersion when the catalog, the background prompts, or the
 // thresholds change; every photo's suggestions are then recomputed.
 const (
-	autoTagVersion     = 1
+	autoTagVersion     = 2
 	suggestMinProb     = 0.5
 	suggestMinCosine   = 0.24
 	suggestLogitScale  = 100.0
@@ -272,11 +272,13 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 	var embedding PhotoEmbedding
 	var found, outdated bool
 	var targets []suggestionTarget
+	var generation string
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		img = GetImageById(tx, photoId)
 		embedding, found = GetPhotoEmbedding(tx, photoId)
 		if img.Id != 0 {
 			outdated = suggestionsOutdated(tx, img.Id, img.FamilyId)
+			generation = suggestKey(tx, img.FamilyId)
 			targets = suggestionTargets(tx, img.FamilyId)
 		}
 	})
@@ -293,19 +295,33 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 		noteVisionReachable(false)
 		return errRetryLater
 	}
+	if errors.Is(err, errRetryLater) {
+		return errRetryLater
+	}
 	if err != nil {
 		log.Printf("[VISION] Could not embed tag phrases: %v", err)
 		return nil
 	}
 	scores := scoreLabels(embedding.Vector, vectors[:len(targets)], vectors[len(targets):])
+	stale := false
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		img := GetImageById(tx, photoId)
-		if img.Id == 0 {
+		if img.Id == 0 || img.Status != 0 {
+			return
+		}
+		if suggestKey(tx, img.FamilyId) != generation {
+			stale = true
 			return
 		}
 		existing := map[string]bool{}
 		for _, s := range photoSuggestions(tx, img.Id) {
+			// Only reviewed decisions survive a new scoring pass. Pending results
+			// are replaced, including their scores, against the current prompt pool.
+			if s.Status == SuggestionPending {
+				deleteSuggestionTx(tx, s.Id)
+				continue
+			}
 			existing[suggestionKeyOf(s)] = true
 			existing["label:"+strings.ToLower(s.Label)] = true
 		}
@@ -327,10 +343,12 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 				Status: SuggestionPending, CreatedAt: time.Now(),
 			})
 		}
-		key := suggestKey(tx, img.FamilyId)
-		vbolt.Write(tx, SuggestStateBkt, img.Id, &key)
+		vbolt.Write(tx, SuggestStateBkt, img.Id, &generation)
 		vbolt.TxCommit(tx)
 	})
+	if stale {
+		return errRetryLater
+	}
 	return nil
 }
 

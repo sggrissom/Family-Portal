@@ -12,6 +12,7 @@ import (
 
 func RegisterGrowthMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, AddGrowthData)
+	vbeam.RegisterProc(app, AddCheckup)
 	vbeam.RegisterProc(app, GetGrowthData)
 	vbeam.RegisterProc(app, UpdateGrowthData)
 	vbeam.RegisterProc(app, DeleteGrowthData)
@@ -37,6 +38,25 @@ type AddGrowthDataRequest struct {
 
 type AddGrowthDataResponse struct {
 	GrowthData GrowthData `json:"growthData"`
+}
+
+type CheckupValue struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+}
+
+type AddCheckupRequest struct {
+	PersonId        int           `json:"personId"`
+	InputType       string        `json:"inputType"`
+	MeasurementDate *string       `json:"measurementDate,omitempty"`
+	AgeYears        *int          `json:"ageYears,omitempty"`
+	AgeMonths       *int          `json:"ageMonths,omitempty"`
+	Height          *CheckupValue `json:"height,omitempty"`
+	Weight          *CheckupValue `json:"weight,omitempty"`
+}
+
+type AddCheckupResponse struct {
+	GrowthData []GrowthData `json:"growthData"`
 }
 
 type UpdateGrowthDataRequest struct {
@@ -149,22 +169,13 @@ func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int)
 		return growthData, errors.New("Person not found")
 	}
 
-	growthData.MeasurementDate, err = parseMeasurementDate(AddGrowthDataRequest{
-		InputType:       req.InputType,
-		MeasurementDate: req.MeasurementDate,
-		AgeYears:        req.AgeYears,
-		AgeMonths:       req.AgeMonths,
-	}, person.Birthday)
+	growthData.MeasurementDate, err = resolveEntryDate("Measurement", req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return growthData, err
 	}
 
-	var measurementType MeasurementType
-	if req.MeasurementType == "height" {
-		measurementType = Height
-	} else if req.MeasurementType == "weight" {
-		measurementType = Weight
-	} else {
+	measurementType, ok := measurementTypes[req.MeasurementType]
+	if !ok {
 		return growthData, errors.New("Invalid measurement type")
 	}
 
@@ -172,7 +183,7 @@ func UpdateGrowthDataTx(tx *vbolt.Tx, req UpdateGrowthDataRequest, familyId int)
 	growthData.Value = req.Value
 	growthData.Unit = req.Unit
 
-	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
+	writeGrowthData(tx, growthData)
 
 	return growthData, nil
 }
@@ -192,82 +203,67 @@ func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 		return err
 	}
 
-	vbolt.SetTargetSingleTerm(tx, GrowthDataByPersonIndex, growthData.Id, -1)
-	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, -1)
-
+	vbolt.DeleteTargetTerms(tx, GrowthDataByPersonIndex, growthData.Id)
+	vbolt.DeleteTargetTerms(tx, GrowthDataByFamilyIndex, growthData.Id)
 	vbolt.Delete(tx, GrowthDataBkt, growthData.Id)
 
 	return nil
 }
 
 func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (GrowthData, error) {
-	var growthData GrowthData
-	var err error
-
-	person := GetPersonById(tx, req.PersonId)
-	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
-		return growthData, errors.New("Person not found or not in your family")
+	measurementType, ok := measurementTypes[req.MeasurementType]
+	if !ok {
+		return GrowthData{}, errors.New("Invalid measurement type")
 	}
-
-	growthData.MeasurementDate, err = parseMeasurementDate(req, person.Birthday)
+	date, err := resolveGrowthDate(tx, req.PersonId, familyId, req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths)
 	if err != nil {
-		return growthData, err
+		return GrowthData{}, err
 	}
-
-	var measurementType MeasurementType
-	if req.MeasurementType == "height" {
-		measurementType = Height
-	} else if req.MeasurementType == "weight" {
-		measurementType = Weight
-	} else {
-		return growthData, errors.New("Invalid measurement type")
-	}
-
-	growthData.Id = vbolt.NextIntId(tx, GrowthDataBkt)
-	growthData.PersonId = req.PersonId
-	growthData.FamilyId = familyId
-	growthData.MeasurementType = measurementType
-	growthData.Value = req.Value
-	growthData.Unit = req.Unit
-	growthData.CreatedAt = time.Now()
-
-	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
-
-	updateGrowthDataIndices(tx, growthData)
-
-	return growthData, nil
+	return addGrowthRecord(tx, req.PersonId, familyId, measurementType, CheckupValue{req.Value, req.Unit}, date), nil
 }
 
-func updateGrowthDataIndices(tx *vbolt.Tx, growthData GrowthData) {
+func AddCheckupTx(tx *vbolt.Tx, req AddCheckupRequest, familyId int) ([]GrowthData, error) {
+	date, err := resolveGrowthDate(tx, req.PersonId, familyId, req.InputType, req.MeasurementDate, req.AgeYears, req.AgeMonths)
+	if err != nil {
+		return nil, err
+	}
+	var records []GrowthData
+	if req.Height != nil {
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Height, *req.Height, date))
+	}
+	if req.Weight != nil {
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Weight, *req.Weight, date))
+	}
+	return records, nil
+}
+
+func resolveGrowthDate(tx *vbolt.Tx, personId int, familyId int, inputType string, date *string, ageYears *int, ageMonths *int) (time.Time, error) {
+	person := GetPersonById(tx, personId)
+	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
+		return time.Time{}, errors.New("Person not found or not in your family")
+	}
+	return resolveEntryDate("Measurement", inputType, date, ageYears, ageMonths, person.Birthday)
+}
+
+func addGrowthRecord(tx *vbolt.Tx, personId int, familyId int, measurementType MeasurementType, value CheckupValue, date time.Time) GrowthData {
+	growthData := GrowthData{
+		Id:              vbolt.NextIntId(tx, GrowthDataBkt),
+		PersonId:        personId,
+		FamilyId:        familyId,
+		MeasurementType: measurementType,
+		Value:           value.Value,
+		Unit:            value.Unit,
+		MeasurementDate: date,
+		CreatedAt:       time.Now(),
+	}
+	writeGrowthData(tx, growthData)
+	return growthData
+}
+
+func writeGrowthData(tx *vbolt.Tx, growthData GrowthData) {
+	vbolt.Write(tx, GrowthDataBkt, growthData.Id, &growthData)
 	vbolt.SetTargetSingleTerm(tx, GrowthDataByPersonIndex, growthData.Id, growthData.PersonId)
 	vbolt.SetTargetSingleTerm(tx, GrowthDataByFamilyIndex, growthData.Id, growthData.FamilyId)
-}
-
-func parseMeasurementDate(req AddGrowthDataRequest, personBirthday time.Time) (time.Time, error) {
-	if req.InputType == "today" {
-		return time.Now(), nil
-	} else if req.InputType == "date" {
-		if req.MeasurementDate == nil || *req.MeasurementDate == "" {
-			return time.Time{}, errors.New("Measurement date is required when input type is 'date'")
-		}
-		return time.Parse("2006-01-02", *req.MeasurementDate)
-	} else if req.InputType == "age" {
-		if req.AgeYears == nil || *req.AgeYears < 0 {
-			return time.Time{}, errors.New("Age years must be non-negative")
-		}
-		ageMonths := 0
-		if req.AgeMonths != nil {
-			if *req.AgeMonths < 0 || *req.AgeMonths > 11 {
-				return time.Time{}, errors.New("Age months must be between 0 and 11")
-			}
-			ageMonths = *req.AgeMonths
-		}
-
-		targetDate := personBirthday.AddDate(*req.AgeYears, ageMonths, 0)
-		return targetDate, nil
-	} else {
-		return time.Time{}, errors.New("Input type must be 'today', 'date' or 'age'")
-	}
 }
 
 func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowthDataResponse, err error) {
@@ -277,7 +273,11 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 		return
 	}
 
-	if err = validateAddGrowthDataRequest(req); err != nil {
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if err = validateMeasurementFields(req.MeasurementType, req.Value, req.Unit, req.InputType); err != nil {
 		return
 	}
 
@@ -295,6 +295,47 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 	vbolt.TxCommit(ctx.Tx)
 
 	resp.GrowthData = growthData
+	return
+}
+
+func AddCheckup(ctx *vbeam.Context, req AddCheckupRequest) (resp AddCheckupResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	if req.PersonId <= 0 {
+		err = errors.New("Person ID is required")
+		return
+	}
+	if req.Height == nil && req.Weight == nil {
+		err = errors.New("Enter a height or a weight")
+		return
+	}
+	if req.Height != nil {
+		if err = validateMeasurementFields("height", req.Height.Value, req.Height.Unit, req.InputType); err != nil {
+			return
+		}
+	}
+	if req.Weight != nil {
+		if err = validateMeasurementFields("weight", req.Weight.Value, req.Weight.Unit, req.InputType); err != nil {
+			return
+		}
+	}
+
+	familyId, err := ActingFamilyForPerson(ctx.Tx, user, req.PersonId, AccessContribute)
+	if err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+	resp.GrowthData, err = AddCheckupTx(ctx.Tx, req, familyId)
+	if err != nil {
+		return
+	}
+
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 
@@ -326,7 +367,11 @@ func UpdateGrowthData(ctx *vbeam.Context, req UpdateGrowthDataRequest) (resp Upd
 		return
 	}
 
-	if err = validateUpdateGrowthDataRequest(req); err != nil {
+	if req.Id <= 0 {
+		err = errors.New("Growth data ID is required")
+		return
+	}
+	if err = validateMeasurementFields(req.MeasurementType, req.Value, req.Unit, req.InputType); err != nil {
 		return
 	}
 
@@ -376,62 +421,26 @@ func DeleteGrowthData(ctx *vbeam.Context, req DeleteGrowthDataRequest) (resp Del
 	return
 }
 
-func validateUpdateGrowthDataRequest(req UpdateGrowthDataRequest) error {
-	if req.Id <= 0 {
-		return errors.New("Growth data ID is required")
-	}
-	if req.MeasurementType != "height" && req.MeasurementType != "weight" {
+var measurementTypes = map[string]MeasurementType{"height": Height, "weight": Weight}
+
+func validateMeasurementFields(measurementType string, value float64, unit string, inputType string) error {
+	if _, ok := measurementTypes[measurementType]; !ok {
 		return errors.New("Measurement type must be 'height' or 'weight'")
 	}
-	if req.Value <= 0 {
+	if value <= 0 {
 		return errors.New("Measurement value must be positive")
 	}
-	if req.Unit == "" {
+	if unit == "" {
 		return errors.New("Unit is required")
 	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
+	if err := validateEntryInputType(inputType); err != nil {
+		return err
 	}
-
-	if req.MeasurementType == "height" {
-		if req.Unit != "cm" && req.Unit != "in" {
-			return errors.New("Height unit must be 'cm' or 'in'")
-		}
-	} else if req.MeasurementType == "weight" {
-		if req.Unit != "kg" && req.Unit != "lbs" {
-			return errors.New("Weight unit must be 'kg' or 'lbs'")
-		}
+	if measurementType == "height" && unit != "cm" && unit != "in" {
+		return errors.New("Height unit must be 'cm' or 'in'")
 	}
-
-	return nil
-}
-
-func validateAddGrowthDataRequest(req AddGrowthDataRequest) error {
-	if req.PersonId <= 0 {
-		return errors.New("Person ID is required")
+	if measurementType == "weight" && unit != "kg" && unit != "lbs" {
+		return errors.New("Weight unit must be 'kg' or 'lbs'")
 	}
-	if req.MeasurementType != "height" && req.MeasurementType != "weight" {
-		return errors.New("Measurement type must be 'height' or 'weight'")
-	}
-	if req.Value <= 0 {
-		return errors.New("Measurement value must be positive")
-	}
-	if req.Unit == "" {
-		return errors.New("Unit is required")
-	}
-	if req.InputType != "today" && req.InputType != "date" && req.InputType != "age" {
-		return errors.New("Input type must be 'today', 'date' or 'age'")
-	}
-
-	if req.MeasurementType == "height" {
-		if req.Unit != "cm" && req.Unit != "in" {
-			return errors.New("Height unit must be 'cm' or 'in'")
-		}
-	} else if req.MeasurementType == "weight" {
-		if req.Unit != "kg" && req.Unit != "lbs" {
-			return errors.New("Weight unit must be 'kg' or 'lbs'")
-		}
-	}
-
 	return nil
 }

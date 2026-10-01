@@ -1,46 +1,76 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
-import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
+import { copy } from "../../lib/copy";
+import { When, whenProblem, whenRequest } from "../../lib/when";
 import { ErrorPage } from "../../components/ErrorPage";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
-import "./add-milestone-styles";
+import { WhenControl } from "../../components/WhenControl";
+import {
+  CategoryChips,
+  SuggestedPhotos,
+  TagPicker,
+  suggestPhotos,
+  toggleId,
+} from "./MilestoneFields";
 
 type EditMilestoneForm = {
-  selectedPersonId: string;
   description: string;
   category: string;
-  inputType: string;
-  milestoneDate: string;
-  ageYears: string;
-  ageMonths: string;
+  when: When;
   photoIds: number[];
   tagIds: number[];
   error: string;
-  loading: boolean;
+  saving: boolean;
+  suggestedPhotoIds: number[];
+  lookupKey: string;
+  lookupTimer: number;
 };
 
 const useEditMilestoneForm = vlens.declareHook(
-  (milestone?: server.Milestone): EditMilestoneForm => ({
-    selectedPersonId: milestone?.personId?.toString() || "",
-    description: milestone?.description || "",
-    category: milestone?.category || "development",
-    inputType: "date",
-    milestoneDate: milestone?.milestoneDate ? milestone.milestoneDate.split("T")[0] : "",
-    ageYears: "",
-    ageMonths: "",
-    photoIds: milestone?.photoIds ?? [],
-    tagIds: milestone?.tagIds ?? [],
+  (milestone: server.Milestone): EditMilestoneForm => ({
+    description: milestone.description,
+    category: milestone.category,
+    when: {
+      mode: "date",
+      date: milestone.milestoneDate.split("T")[0],
+      ageYears: "",
+      ageMonths: "",
+    },
+    photoIds: [...(milestone.photoIds ?? [])],
+    tagIds: [...(milestone.tagIds ?? [])],
     error: "",
-    loading: false,
+    saving: false,
+    suggestedPhotoIds: [],
+    lookupKey: "",
+    lookupTimer: 0,
   })
 );
+
+// Photos from around the milestone's date that aren't attached yet, refreshed
+// a moment after the description or date stop changing.
+function scheduleLookup(form: EditMilestoneForm, milestone: server.Milestone) {
+  const text = form.description.trim();
+  const when = whenProblem(form.when) ? null : whenRequest(form.when, new Date());
+  const key = JSON.stringify([text, when]);
+  if (key === form.lookupKey) return;
+  form.lookupKey = key;
+  window.clearTimeout(form.lookupTimer);
+  form.lookupTimer = window.setTimeout(async () => {
+    const photoIds =
+      when && text.length >= 3
+        ? await suggestPhotos(milestone.personId, text, when, milestone.photoIds ?? [])
+        : [];
+    if (form.lookupKey !== key) return;
+    form.suggestedPhotoIds = photoIds;
+    vlens.scheduleRedraw();
+  }, 600);
+}
 
 type EditMilestoneData = {
   milestone: server.GetMilestoneResponse;
@@ -82,7 +112,7 @@ export function view(
       <ErrorPage
         title="Milestone Not Found"
         message="The milestone you're trying to edit could not be found"
-        containerClass="add-milestone-container"
+        containerClass="entry-container"
       />
     );
   }
@@ -92,311 +122,126 @@ export function view(
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="add-milestone-container">
-        <EditMilestonePage form={form} milestone={milestone} allTags={data.tags} />
+      <main id="app" className="entry-container">
+        <EditMilestonePage form={form} milestone={milestone} tags={data.tags} />
       </main>
       <Footer />
     </div>
   );
 }
 
-async function onSubmitMilestone(
-  form: EditMilestoneForm,
-  milestone: server.Milestone,
-  event: Event
-) {
+function chooseCategory(form: EditMilestoneForm, category: string) {
+  form.category = category;
+  vlens.scheduleRedraw();
+}
+
+async function save(form: EditMilestoneForm, milestone: server.Milestone, event: Event) {
   event.preventDefault();
-  form.loading = true;
+  if (form.saving) return;
+
+  const problem = !form.description.trim() ? copy.milestone.needsText : whenProblem(form.when);
+  if (problem) {
+    form.error = problem;
+    vlens.scheduleRedraw();
+    return;
+  }
+
+  form.saving = true;
   form.error = "";
+  vlens.scheduleRedraw();
 
-  if (!form.description.trim()) {
-    form.error = "Please enter a description";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (form.inputType === "date" && !form.milestoneDate) {
-    form.error = "Please select a date";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
-    form.error = "Please enter a valid age";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  const request: server.UpdateMilestoneRequest = {
+  const when = whenRequest(form.when, new Date());
+  const [resp, err] = await server.UpdateMilestone({
     id: milestone.id,
     description: form.description.trim(),
     category: form.category,
-    inputType: form.inputType,
-    milestoneDate: form.inputType === "date" ? form.milestoneDate : null,
-    ageYears: form.inputType === "age" ? parseInt(form.ageYears) : null,
-    ageMonths: form.inputType === "age" && form.ageMonths ? parseInt(form.ageMonths) : null,
+    inputType: when.inputType,
+    milestoneDate: when.date,
+    ageYears: when.ageYears,
+    ageMonths: when.ageMonths,
     photoIds: form.photoIds,
-  };
-
-  try {
-    let [resp, err] = await server.UpdateMilestone(request);
-
-    if (resp) {
-      await server.UpdateMilestoneTags({ milestoneId: milestone.id, tagIds: form.tagIds });
-      core.setRoute(`/profile/${form.selectedPersonId}`);
-    } else {
-      form.loading = false;
-      form.error = err || "Failed to update milestone";
-      vlens.scheduleRedraw();
-    }
-  } catch (error) {
-    form.loading = false;
-    form.error = "Network error. Please try again.";
+    tagIds: form.tagIds,
+  });
+  if (!resp) {
+    form.error = err || "That milestone could not be saved. Please try again.";
+    form.saving = false;
     vlens.scheduleRedraw();
+    return;
   }
-}
-
-function onCategoryChange(form: EditMilestoneForm, newCategory: string) {
-  form.category = newCategory;
-  vlens.scheduleRedraw();
-}
-
-function onInputTypeChange(form: EditMilestoneForm, newType: string) {
-  form.inputType = newType;
-  vlens.scheduleRedraw();
-}
-
-function onToggleTag(form: EditMilestoneForm, tagId: number) {
-  const idx = form.tagIds.indexOf(tagId);
-  if (idx >= 0) form.tagIds.splice(idx, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
-function onTogglePhoto(form: EditMilestoneForm, photoId: number) {
-  const idx = form.photoIds.indexOf(photoId);
-  if (idx >= 0) {
-    form.photoIds.splice(idx, 1);
-  } else {
-    form.photoIds.push(photoId);
-  }
-  vlens.scheduleRedraw();
+  core.setRoute(`/profile/${milestone.personId}`);
 }
 
 interface EditMilestonePageProps {
   form: EditMilestoneForm;
   milestone: server.Milestone;
-  allTags: server.Tag[];
+  tags: server.Tag[];
 }
 
-const EditMilestonePage = ({ form, milestone, allTags }: EditMilestonePageProps) => {
+const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
+  const disabled = form.saving;
+  if (BROWSER) scheduleLookup(form, milestone);
   return (
-    <div className="add-milestone-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Edit Milestone</h1>
-          <p>Update this milestone record</p>
-        </div>
+    <div className="entry-card">
+      <h1 className="entry-title">Edit milestone</h1>
 
+      <form className="entry-form" onSubmit={vlens.cachePartial(save, form, milestone)} noValidate>
         {form.error && (
           <div className="error-message" role="alert">
             {form.error}
           </div>
         )}
 
-        <form
-          className="auth-form"
-          onSubmit={vlens.cachePartial(onSubmitMilestone, form, milestone)}
-        >
-          <div className="form-group">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-              placeholder="Describe what happened..."
-              rows={3}
-              required
-              disabled={form.loading}
-            />
-          </div>
+        <div className="entry-field">
+          <label htmlFor="description">{copy.milestone.whatHappened}</label>
+          <textarea
+            id="description"
+            rows={3}
+            placeholder={copy.milestone.placeholder}
+            disabled={disabled}
+            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+          />
+        </div>
 
-          <div className="form-group">
-            <label>Category</label>
-            <div className="category-grid">
-              {MILESTONE_CATEGORIES.map(option => (
-                <label key={option.value} className="category-option">
-                  <input
-                    type="radio"
-                    name="category"
-                    value={option.value}
-                    checked={form.category === option.value}
-                    onChange={() => onCategoryChange(form, option.value)}
-                    disabled={form.loading}
-                  />
-                  <span className="category-card">
-                    <span className="category-icon">{option.icon}</span>
-                    <span className="category-label">{option.label}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
+        <CategoryChips
+          value={form.category}
+          onChange={vlens.cachePartial(chooseCategory, form)}
+          disabled={disabled}
+        />
 
-          <div className="form-group">
-            <label>Photos (optional)</label>
-            <PagedPhotoPicker
-              pageKey="milestone-photos"
-              filters={{ personIds: [milestone.personId] }}
-              selectedIds={form.photoIds}
-              onToggle={photoId => onTogglePhoto(form, photoId)}
-              disabled={form.loading}
-              emptyText="No photos found for this person"
-            />
-          </div>
+        <div className="entry-subject">
+          <span className="entry-label">{copy.when.label}</span>
+          <WhenControl when={form.when} disabled={disabled} />
+        </div>
 
-          {allTags.length > 0 && (
-            <div className="form-group">
-              <span className="form-group-caption" id="tagPickerLabel">
-                Tags
-              </span>
-              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-                {allTags.map(tag => {
-                  const selected = form.tagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`tag-pill${selected ? " selected" : ""}`}
-                      style={{ borderColor: tag.color }}
-                      aria-pressed={selected}
-                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
-                    >
-                      <span className="tag-color-dot" style={{ background: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+        <SuggestedPhotos
+          photoIds={form.suggestedPhotoIds}
+          selected={form.photoIds}
+          disabled={disabled}
+        />
 
-          <div className="form-group">
-            <label>When did this happen?</label>
-            <div className="radio-group">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="today"
-                  checked={form.inputType === "today"}
-                  onChange={() => onInputTypeChange(form, "today")}
-                  disabled={form.loading}
-                />
-                <span>Today</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="date"
-                  checked={form.inputType === "date"}
-                  onChange={() => onInputTypeChange(form, "date")}
-                  disabled={form.loading}
-                />
-                <span>Specific Date</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="age"
-                  checked={form.inputType === "age"}
-                  onChange={() => onInputTypeChange(form, "age")}
-                  disabled={form.loading}
-                />
-                <span>At Age</span>
-              </label>
-            </div>
-          </div>
+        <div className="entry-field">
+          <span className="entry-label">{copy.milestone.photos}</span>
+          <PagedPhotoPicker
+            pageKey="milestone-photos"
+            filters={{ personIds: [milestone.personId] }}
+            selectedIds={form.photoIds}
+            onToggle={vlens.cachePartial(toggleId, form.photoIds)}
+            disabled={disabled}
+            emptyText="No photos found for this person"
+          />
+        </div>
 
-          {form.inputType === "date" && (
-            <div className="form-group">
-              <label htmlFor="date">Milestone Date</label>
-              <input
-                id="date"
-                type="date"
-                {...vlens.attrsBindInput(vlens.ref(form, "milestoneDate"))}
-                max={new Date().toISOString().split("T")[0]}
-                required
-                disabled={form.loading}
-              />
-            </div>
-          )}
+        <TagPicker tags={tags} selected={form.tagIds} disabled={disabled} />
 
-          {form.inputType === "age" && (
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label htmlFor="ageYears">Age (Years)</label>
-                <input
-                  id="ageYears"
-                  type="number"
-                  min="0"
-                  max="100"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
-                  placeholder="5"
-                  required
-                  disabled={form.loading}
-                />
-              </div>
-              <div className="form-group flex-1">
-                <label htmlFor="ageMonths">Months</label>
-                <input
-                  id="ageMonths"
-                  type="number"
-                  min="0"
-                  max="11"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
-                  placeholder="0"
-                  disabled={form.loading}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="form-actions">
-            <a href={`/profile/${form.selectedPersonId}`} className="btn btn-secondary">
-              Cancel
-            </a>
-            <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
-              {form.loading ? "Saving..." : "Update Milestone"}
-            </button>
-          </div>
-        </form>
-
-        {form.description && (
-          <div className="milestone-preview">
-            <h3>Preview</h3>
-            <p>
-              <strong>{form.category.charAt(0).toUpperCase() + form.category.slice(1)}:</strong>{" "}
-              {form.description}
-              {form.inputType === "today" && <span> (today)</span>}
-              {form.inputType === "date" && form.milestoneDate && (
-                <span> ({new Date(form.milestoneDate).toLocaleDateString()})</span>
-              )}
-              {form.inputType === "age" && form.ageYears && (
-                <span>
-                  {" "}
-                  (at age {form.ageYears}
-                  {form.ageMonths ? `.${form.ageMonths}` : ""} years)
-                </span>
-              )}
-            </p>
-          </div>
-        )}
-      </div>
+        <div className="entry-actions">
+          <a href={`/profile/${milestone.personId}`} className="btn btn-secondary">
+            {copy.milestone.cancel}
+          </a>
+          <button type="submit" className="btn btn-primary" disabled={disabled}>
+            {form.saving ? copy.milestone.saving : copy.milestone.save}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

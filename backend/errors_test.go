@@ -1,7 +1,9 @@
 package backend
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -412,6 +414,24 @@ func TestErrorResponseJSONFormat(t *testing.T) {
 	for _, forbidden := range []string{`"details"`, "Test details"} {
 		if strings.Contains(responseBody, forbidden) {
 			t.Errorf("Response contains %q, which belongs in the log: %s", forbidden, responseBody)
+		}
+	}
+}
+
+func TestRejectedRequestsDoNotLogServerFailures(t *testing.T) {
+	var output bytes.Buffer
+	original := log.Writer()
+	log.SetOutput(&output)
+	defer log.SetOutput(original)
+	for _, status := range []int{400, 401, 403, 404, 409, 429, 500, 503} {
+		output.Reset()
+		RespondWithError(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/photo/62/xlarge", nil), NewAppError(ErrCodeAuth, "Authentication required"), status)
+		want := `"level":"WARN"`
+		if status >= 500 {
+			want = `"level":"ERROR"`
+		}
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("status %d: %s", status, output.String())
 		}
 	}
 }

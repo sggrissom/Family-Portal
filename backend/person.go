@@ -110,6 +110,9 @@ type GetFamilyTimelineRequest struct {
 	SkipPhotos     bool   `json:"skipPhotos,omitempty"`
 	// IncludeActivities adds the family's activity appearances in the window.
 	IncludeActivities bool `json:"includeActivities,omitempty"`
+	// IncludeUntaggedPhotos adds the photos in the window that have nobody
+	// tagged, from every household the caller belongs to.
+	IncludeUntaggedPhotos bool `json:"includeUntaggedPhotos,omitempty"`
 }
 
 type FamilyTimelineItem struct {
@@ -130,6 +133,8 @@ type GetFamilyTimelineResponse struct {
 	Years []int `json:"years"`
 	// Appearances is empty unless IncludeActivities was set.
 	Appearances []TimelineAppearance `json:"appearances"`
+	// UntaggedPhotos is empty unless IncludeUntaggedPhotos was set.
+	UntaggedPhotos []Image `json:"untaggedPhotos"`
 }
 
 type Person struct {
@@ -562,7 +567,7 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 
 	vbolt.TxCommit(ctx.Tx)
 
-	go TriggerPersonFaceUpdate(req.PersonId)
+	TriggerPersonFaceUpdate(req.PersonId)
 
 	person.Age = calculateAge(person.Birthday)
 	resp.Person = person
@@ -608,16 +613,14 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	growthData := GetPersonGrowthDataTx(ctx.Tx, req.SourcePersonId)
 	for _, gd := range growthData {
 		gd.PersonId = req.TargetPersonId
-		vbolt.Write(ctx.Tx, GrowthDataBkt, gd.Id, &gd)
-		vbolt.SetTargetSingleTerm(ctx.Tx, GrowthDataByPersonIndex, gd.Id, req.TargetPersonId)
+		writeGrowthData(ctx.Tx, gd)
 	}
 	resp.MergedGrowthCount = len(growthData)
 
 	milestones := GetPersonMilestonesTx(ctx.Tx, req.SourcePersonId)
 	for _, milestone := range milestones {
 		milestone.PersonId = req.TargetPersonId
-		vbolt.Write(ctx.Tx, MilestoneBkt, milestone.Id, &milestone)
-		vbolt.SetTargetSingleTerm(ctx.Tx, MilestoneByPersonIndex, milestone.Id, req.TargetPersonId)
+		writeMilestone(ctx.Tx, milestone)
 	}
 	resp.MergedMilestones = len(milestones)
 
@@ -667,6 +670,9 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	vbolt.SetTargetSingleTerm(ctx.Tx, PersonIndex, req.SourcePersonId, -1)
 
 	vbolt.TxCommit(ctx.Tx)
+	for _, m := range milestones {
+		QueueMilestoneEmbedding(m.Id)
+	}
 
 	resp.Success = true
 	targetPerson.Age = calculateAge(targetPerson.Birthday)
@@ -685,6 +691,28 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	})
 
 	return
+}
+
+func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Image {
+	photos := []Image{}
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		var photoIds []int
+		vbolt.IterateTerm(tx, ImageByFamilyDateIndex, familyId, func(photoId int, seconds int64) bool {
+			if len(GetPhotoPersonsByPhoto(tx, photoId)) == 0 && inWindow(time.Unix(seconds, 0)) {
+				photoIds = append(photoIds, photoId)
+			}
+			return true
+		})
+		for _, photoId := range photoIds {
+			photo := GetImageById(tx, photoId)
+			if photo.Id == 0 {
+				continue
+			}
+			photo.TagIds = GetPhotoTagIds(tx, photo.Id)
+			photos = append(photos, photo)
+		}
+	}
+	return photos
 }
 
 func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse, err error) {
@@ -765,6 +793,11 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 	resp.Appearances = []TimelineAppearance{}
 	if req.IncludeActivities {
 		resp.Appearances = timelineAppearances(ctx.Tx, user, people, inWindow)
+	}
+
+	resp.UntaggedPhotos = []Image{}
+	if req.IncludeUntaggedPhotos && !req.SkipPhotos {
+		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow)
 	}
 
 	resp.Years = make([]int, 0, len(years))

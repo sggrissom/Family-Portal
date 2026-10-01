@@ -123,13 +123,7 @@ func TestSeedIssuesSubAdminMemberships(t *testing.T) {
 			}
 		}
 
-		// A guest's reduced role only bites because the Whitfield family is not
-		// their primary one; CanAccessFamily grants admin on a user's own
-		// household whatever the membership row says.
 		sitter := seedUser(t, tx, "sitter@example.test")
-		if sitter.FamilyId == dad.FamilyId {
-			t.Fatal("the read-only guest's primary family is the Whitfield family, which would grant them admin")
-		}
 		if !CanAccessFamily(tx, sitter, dad.FamilyId, AccessView) {
 			t.Error("the read-only guest cannot view the Whitfield family")
 		}
