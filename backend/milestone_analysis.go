@@ -223,6 +223,10 @@ func SuggestMilestoneCategory(ctx *vbeam.Context, req SuggestMilestoneCategoryRe
 	if len(text) < 3 || len(text) > 500 {
 		return
 	}
+	if looksLikeQuote(text) {
+		resp.Category = "quote"
+		return
+	}
 	vectors, embedErr := embedSentences(globalVisionClient, []string{text})
 	if embedErr != nil {
 		return

@@ -13,6 +13,7 @@ import { chipLabels, chipOrder } from "../../lib/familyGroups";
 import { compactAge, dueSummary } from "../../lib/familyStrip";
 import { dayKey, dayLabel, summarizeDays } from "../../lib/daySummary";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
+import { MilestoneText } from "../../components/MilestoneText";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import "./dashboard-styles";
@@ -179,7 +180,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                       {getCategoryIcon(m.category)}
                     </span>
                     <span>
-                      <strong>{names.get(m.personId) ?? ""}</strong> {m.description}
+                      <strong>{names.get(m.personId) ?? ""}</strong> <MilestoneText milestone={m} />
                     </span>
                   </a>
                 ))}

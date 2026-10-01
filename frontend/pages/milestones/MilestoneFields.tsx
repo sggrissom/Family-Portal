@@ -7,7 +7,15 @@ import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import "./add-milestone-styles";
 import "../../components/entry-form-styles";
 
-const CATEGORY_ORDER = ["first", "development", "achievement", "behavior", "health", "other"];
+const CATEGORY_ORDER = [
+  "first",
+  "quote",
+  "development",
+  "achievement",
+  "behavior",
+  "health",
+  "other",
+];
 const CATEGORIES = CATEGORY_ORDER.map(value => MILESTONE_CATEGORIES.find(c => c.value === value)!);
 
 export function toggleId(ids: number[], id: number) {
@@ -16,6 +24,47 @@ export function toggleId(ids: number[], id: number) {
   else ids.push(id);
   vlens.scheduleRedraw();
 }
+
+type MilestoneText = { description: string; category: string; context: string };
+
+interface MilestoneTextFieldsProps {
+  form: MilestoneText;
+  disabled: boolean;
+  textareaRef?: (el: HTMLTextAreaElement | null) => void;
+}
+
+export const MilestoneTextFields = ({ form, disabled, textareaRef }: MilestoneTextFieldsProps) => {
+  const isQuote = form.category === "quote";
+  return (
+    <>
+      <div className="entry-field">
+        <label htmlFor="description">
+          {isQuote ? copy.milestone.whatTheySaid : copy.milestone.whatHappened}
+        </label>
+        <textarea
+          id="description"
+          ref={textareaRef}
+          rows={3}
+          placeholder={isQuote ? copy.milestone.quotePlaceholder : copy.milestone.placeholder}
+          disabled={disabled}
+          {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+        />
+      </div>
+      {isQuote && (
+        <div className="entry-field">
+          <label htmlFor="context">{copy.milestone.context}</label>
+          <input
+            id="context"
+            type="text"
+            placeholder={copy.milestone.contextPlaceholder}
+            disabled={disabled}
+            {...vlens.attrsBindInput(vlens.ref(form, "context"))}
+          />
+        </div>
+      )}
+    </>
+  );
+};
 
 interface CategoryChipsProps {
   value: string;

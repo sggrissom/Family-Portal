@@ -397,8 +397,16 @@ tags a contributor can accept or reject with `AcceptTagSuggestions` /
 pending suggestion by tag for a review screen. A rejected suggestion is never
 made again.
 
+A milestone's `category` is one of `development`, `behavior`, `health`,
+`achievement`, `first`, `quote`, `other`. A quote's `description` is the exact
+words, without quotation marks: the server drops marks typed around the whole
+quote, and clients add them when displaying. `context` (where or why it was
+said) is kept only for quotes; `AddMilestone` and `UpdateMilestone` clear it
+for any other category, and an update without it clears it too.
+
 Milestone entry can use three suggestion procs, all of which return an empty
-answer rather than an error when the analysis daemon is down:
+answer rather than an error when the analysis daemon is down, except that text
+opening with a double quotation mark is suggested as `quote` without it:
 `SuggestMilestoneCategory` (`{description, personId}` → `{category}`),
 `SuggestMilestonePhotos` (the person plus `AddMilestone`'s date fields →
 `{photoIds, ranked}`), and `GetMilestoneMatches` (`{milestoneId}` → the same

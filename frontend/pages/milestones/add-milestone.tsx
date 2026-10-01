@@ -18,6 +18,7 @@ import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
 import {
   CategoryChips,
+  MilestoneTextFields,
   SuggestedPhotos,
   TagPicker,
   suggestPhotos,
@@ -28,6 +29,7 @@ type AddMilestoneForm = {
   personId: number | null;
   description: string;
   category: string;
+  context: string;
   when: When;
   photoIds: number[];
   tagIds: number[];
@@ -46,6 +48,7 @@ const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMile
     personId,
     description: "",
     category: "first",
+    context: "",
     when: newWhen(),
     photoIds: [],
     tagIds: [],
@@ -175,6 +178,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
     personId,
     description: form.description.trim(),
     category: form.category,
+    context: form.context.trim(),
     inputType: when.inputType,
     milestoneDate: when.date,
     ageYears: when.ageYears,
@@ -261,17 +265,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           </div>
         )}
 
-        <div className="entry-field">
-          <label htmlFor="description">{copy.milestone.whatHappened}</label>
-          <textarea
-            id="description"
-            ref={focusOnMount}
-            rows={3}
-            placeholder={copy.milestone.placeholder}
-            disabled={disabled}
-            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-          />
-        </div>
+        <MilestoneTextFields form={form} disabled={disabled} textareaRef={focusOnMount} />
 
         <CategoryChips
           value={form.category}

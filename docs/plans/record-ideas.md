@@ -58,9 +58,11 @@ makes them the cheapest ideas on this list.
 
 ## New kinds of entries
 
-- **Quotes.** "Things they said" is one of the most-kept parts of a family
-  record and doesn't fit a milestone well. At minimum this is a milestone
-  category. A first-class entry with speaker and context is nicer.
+- **Quotes.** Built as a `quote` milestone category with an optional context
+  line, rendered in quotation marks and collected on a Quotes tab per person.
+  A milestone already carries the person, date or age, photos, tags, search,
+  and export, so a separate entity would only have duplicated them. Remaining:
+  a review pass to convert older quotes filed under behavior.
 - **Annual interview.** The same ten questions every birthday (favorite food,
   best friend, what do you want to be) and a view comparing answers across
   years. New entity, small.

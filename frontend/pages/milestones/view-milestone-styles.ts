@@ -34,6 +34,13 @@ block(`
 `);
 
 block(`
+.milestone-detail-context {
+  margin: 0;
+  font-style: italic;
+}
+`);
+
+block(`
 .milestone-detail-category {
   color: var(--muted);
   font-size: 0.85rem;

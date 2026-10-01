@@ -6,6 +6,7 @@ export const MILESTONE_CATEGORIES = [
   { value: "health", label: "Health", icon: "🏥" },
   { value: "achievement", label: "Achievement", icon: "🏆" },
   { value: "first", label: "First Time", icon: "⭐" },
+  { value: "quote", label: "Quote", icon: "💬" },
   { value: "other", label: "Other", icon: "📝" },
 ] as const;
 

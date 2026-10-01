@@ -418,3 +418,45 @@ block(`
   font-size: 0.8rem;
 }
 `);
+
+block(`
+.profile-quotes {
+  display: grid;
+  gap: 12px;
+}
+`);
+
+block(`
+.profile-quote {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+`);
+
+block(`
+.profile-quote blockquote {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+`);
+
+block(`
+.profile-quote-context {
+  margin: 0;
+  color: var(--muted);
+}
+`);
+
+block(`
+.profile-quote-when {
+  color: var(--muted);
+}
+`);

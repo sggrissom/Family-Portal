@@ -439,6 +439,7 @@ export interface AddMilestoneRequest {
     personId: number
     description: string
     category: string
+    context: string
     inputType: string
     milestoneDate: string | null
     ageYears: number | null
@@ -471,6 +472,7 @@ export interface UpdateMilestoneRequest {
     id: number
     description: string
     category: string
+    context: string
     inputType: string
     milestoneDate: string | null
     ageYears: number | null
@@ -1587,6 +1589,7 @@ export interface Milestone {
     familyId: number
     description: string
     category: string
+    context: string
     milestoneDate: string
     createdAt: string
     photoIds: number[]

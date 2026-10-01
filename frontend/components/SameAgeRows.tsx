@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as server from "../server";
 import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
+import { MilestoneText } from "./MilestoneText";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageTitle, monthsOld, sameAgePath } from "../lib/sameAge";
 import { copy } from "../lib/copy";
@@ -64,7 +65,8 @@ export const SameAgeRows = ({ rows, ageMonths, today, photoLimit = 6 }: SameAgeR
             )}
             {(row.milestones ?? []).map(m => (
               <a key={m.id} href={`/milestone/${m.id}`} className="same-age-milestone">
-                <span aria-hidden="true">{getCategoryIcon(m.category)}</span> {m.description}
+                <span aria-hidden="true">{getCategoryIcon(m.category)}</span>{" "}
+                <MilestoneText milestone={m} />
               </a>
             ))}
           </div>
