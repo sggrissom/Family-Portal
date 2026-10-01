@@ -97,7 +97,7 @@ coverage for missing dates, invalid dates, missing/negative years, months outsid
 `today` and `AddDate` behavior in this refactor. Changes to time zones, leap-day
 policy, or date precision belong in separate behavior changes.
 
-This does not implement [approximate dates](approximate-dates.md), nor require a
+This does not implement [approximate dates](../plans/future.md#approximate-dates-and-ages), nor require a
 general date representation designed for that future feature.
 
 ## 3. Make a user save one transaction
