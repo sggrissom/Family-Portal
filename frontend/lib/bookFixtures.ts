@@ -1,15 +1,33 @@
 import * as server from "../server";
-import { BookSource, Density, Selection, draftSelection } from "./book";
+import {
+  BookPlan,
+  BookSource,
+  Density,
+  PRESETS,
+  Selection,
+  draftSelection,
+  firstYearPlan,
+} from "./book";
 
 type Writing = { introduction?: string; letter?: string; signature?: string };
-type SampleSource = BookSource & { writing?: Writing };
 
-export type Sample = "rich" | "sparse" | "uneven";
+interface SampleSource {
+  people: server.Person[];
+  milestones: server.Milestone[];
+  photos: server.Image[];
+  growthData: server.GrowthData[];
+  tags?: Record<number, number[]>;
+  untagged?: number[];
+  writing?: Writing;
+}
+
+export type Sample = "rich" | "sparse" | "uneven" | "family";
 
 export const SAMPLES: { value: Sample; label: string }[] = [
   { value: "rich", label: "Rich" },
   { value: "sparse", label: "Sparse" },
   { value: "uneven", label: "Uneven" },
+  { value: "family", label: "Family year" },
 ];
 
 export const isSample = (value: string | null): value is Sample =>
@@ -26,13 +44,13 @@ function day(offset: number): string {
   return d.toISOString();
 }
 
-function person(name: string, profilePhotoId = 0): server.Person {
+function person(name: string, profilePhotoId = 0, id = 1, birthday = BIRTHDAY): server.Person {
   return {
-    id: 0,
+    id,
     familyId: 0,
     name,
     gender: 1,
-    birthday: BIRTHDAY,
+    birthday,
     age: "",
     profilePhotoId,
     profileCropX: 50,
@@ -45,10 +63,10 @@ function person(name: string, profilePhotoId = 0): server.Person {
 
 type M = [offset: number, category: string, text: string, context?: string, photo?: number];
 
-function milestones(list: M[]): server.Milestone[] {
+function milestones(list: M[], personId = 1, firstId = 1): server.Milestone[] {
   return list.map(([offset, category, description, context, photo], i) => ({
-    id: i + 1,
-    personId: 0,
+    id: firstId + i,
+    personId,
     familyId: 0,
     description,
     category,
@@ -83,10 +101,14 @@ function photos(list: P[]): server.Image[] {
   }));
 }
 
-function growth(list: [offset: number, kind: "h" | "w", value: number][]): server.GrowthData[] {
+function growth(
+  list: [offset: number, kind: "h" | "w", value: number][],
+  personId = 1,
+  firstId = 1
+): server.GrowthData[] {
   return list.map(([offset, kind, value], i) => ({
-    id: i + 1,
-    personId: 0,
+    id: firstId + i,
+    personId,
     familyId: 0,
     measurementType: kind === "h" ? server.Height : server.Weight,
     value,
@@ -141,7 +163,7 @@ function rich(): SampleSource {
     ...burst(-80, 341, 6),
   ];
   return {
-    person: person("Juniper", -7),
+    people: [person("Juniper", -7)],
     photos: photos(ph),
     milestones: milestones([
       [
@@ -206,7 +228,7 @@ function rich(): SampleSource {
 
 function sparse(): SampleSource {
   return {
-    person: person("Theo"),
+    people: [person("Theo")],
     photos: photos([
       [-1, 1, "tall"],
       [-2, 95, "wide"],
@@ -229,7 +251,7 @@ function sparse(): SampleSource {
 
 function uneven(): SampleSource {
   return {
-    person: person("Rosie", -3),
+    people: [person("Rosie", -3)],
     photos: photos([
       ...burst(-1, 0, 6),
       ...burst(-10, 4, 9),
@@ -258,29 +280,172 @@ function uneven(): SampleSource {
   };
 }
 
+function family(): SampleSource {
+  const theo = "2021-06-01T00:00:00Z";
+  const jan1 = 293;
+  const at = (days: number) => jan1 + days;
+  const together: P[] = [
+    [-1, at(0), "wide", "New Year's morning"],
+    [-2, at(45), "wide"],
+    [-3, at(90), "square", "Easter egg hunt"],
+    [-4, at(150), "wide", "First swim of the summer"],
+    [-5, at(152), "tall"],
+    [-6, at(200), "wide", "Camping at the lake"],
+    [-7, at(203), "wide"],
+    [-8, at(240), "square", "First day of school"],
+    [-9, at(303), "wide", "Halloween — a dragon and a very small pumpkin"],
+    [-10, at(357), "wide", "Christmas morning"],
+    [-11, at(358), "tall"],
+  ];
+  const june: P[] = [
+    [-20, at(20), "tall"],
+    [-21, at(72), "wide"],
+    [-22, at(130), "square", "Strawberry picking"],
+    [-23, at(210), "tall"],
+    [-24, at(280), "wide"],
+  ];
+  const theoOnly: P[] = [
+    [-30, at(15), "wide", "Snow fort"],
+    [-31, at(100), "tall"],
+    [-32, at(185), "wide", "Training wheels off"],
+    [-33, at(260), "square"],
+  ];
+  const nobody: P[] = [
+    [-40, at(33), "wide", "Grandma's birthday dinner"],
+    [-41, at(330), "wide"],
+  ];
+  const tags: Record<number, number[]> = {};
+  together.forEach(([id]) => (tags[id] = [1, 2]));
+  june.forEach(([id]) => (tags[id] = [1]));
+  theoOnly.forEach(([id]) => (tags[id] = [2]));
+  nobody.forEach(([id]) => (tags[id] = []));
+  return {
+    people: [person("Juniper", 0, 1), person("Theo", 0, 2, theo)],
+    photos: photos([...together, ...june, ...theoOnly, ...nobody]),
+    tags,
+    untagged: nobody.map(([id]) => id),
+    milestones: [
+      ...milestones(
+        [
+          [at(10), "first", "Said her first full sentence: “Doggy go outside.”"],
+          [
+            at(60),
+            "quote",
+            "I'm not little, I'm medium.",
+            "When asked if she was too little for the slide.",
+          ],
+          [at(125), "first", "Climbed out of the crib. The crib's days are numbered.", "", -22],
+          [at(222), "development", "Counts to ten, skipping seven every time."],
+          [at(300), "artwork", "Self-portrait with seven arms", "Drawn at preschool.", -24],
+        ],
+        1,
+        1
+      ),
+      ...milestones(
+        [
+          [at(5), "achievement", "Learned to zip his own coat."],
+          [at(98), "quote", "Why do worms come out when it rains? Are they thirsty?"],
+          [
+            at(185),
+            "first",
+            "Rode his bike without training wheels.",
+            "Two laps of the cul-de-sac before he noticed.",
+            -32,
+          ],
+          [at(240), "first", "First day of kindergarten. Didn't look back."],
+          [
+            at(320),
+            "other",
+            "Lost his first tooth and immediately asked about the tooth fairy's salary.",
+          ],
+        ],
+        2,
+        20
+      ),
+    ],
+    growthData: [
+      ...growth(
+        [
+          [at(10), "w", 24.5],
+          [at(200), "w", 27.1],
+          [at(10), "h", 33],
+          [at(200), "h", 35.5],
+        ],
+        1,
+        1
+      ),
+      ...growth(
+        [
+          [at(40), "w", 38],
+          [at(250), "w", 41.5],
+          [at(40), "h", 41],
+          [at(250), "h", 43.2],
+        ],
+        2,
+        20
+      ),
+    ],
+    writing: {
+      introduction: "Another year of the four of us. Here is what we managed to write down.",
+      letter: "To Juniper and Theo: you made this year loud, sticky and wonderful.",
+      signature: "Love, Mom and Dad",
+    },
+  };
+}
+
 function sample(name: Sample): SampleSource {
   if (name === "sparse") return sparse();
   if (name === "uneven") return uneven();
+  if (name === "family") return family();
   return rich();
 }
 
+function toSource(raw: SampleSource): BookSource {
+  const photoPeople: Record<number, number[]> = {};
+  for (const photo of raw.photos)
+    photoPeople[photo.id] = raw.tags?.[photo.id] ?? [raw.people[0].id];
+  return {
+    people: raw.people,
+    milestones: raw.milestones,
+    photos: raw.photos,
+    growthData: raw.growthData,
+    photoPeople,
+    untagged: raw.untagged ?? [],
+  };
+}
+
 export function sampleSource(name: Sample): BookSource {
-  const { writing, ...source } = sample(name);
-  return source;
+  return toSource(sample(name));
+}
+
+export function samplePlan(name: Sample, density: Density = "balanced"): BookPlan {
+  const raw = sample(name);
+  if (name !== "family") return firstYearPlan(raw.people[0], density);
+  return {
+    preset: PRESETS.familyYear,
+    title: "Our 2025",
+    startDate: "2025-01-01",
+    endDate: "2026-01-01",
+    categories: [],
+    match: "any",
+    showGrowth: true,
+    density,
+  };
 }
 
 export function sampleBook(
   name: Sample,
   density: Density = "balanced"
 ): { source: BookSource; selection: Selection } {
-  const { writing, ...source } = sample(name);
+  const raw = sample(name);
+  const source = toSource(raw);
   return {
     source,
     selection: {
-      ...draftSelection(source, density),
-      introduction: writing?.introduction ?? "",
-      letter: writing?.letter ?? "",
-      signature: writing?.signature ?? "",
+      ...draftSelection(source, samplePlan(name, density)),
+      introduction: raw.writing?.introduction ?? "",
+      letter: raw.writing?.letter ?? "",
+      signature: raw.writing?.signature ?? "",
     },
   };
 }

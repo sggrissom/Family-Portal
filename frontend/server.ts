@@ -1070,7 +1070,10 @@ export interface ListBooksResponse {
 }
 
 export interface GetBookSourcesRequest {
-    personId: number
+    personIds: number[]
+    preset: string
+    startDate: string
+    endDate: string
 }
 
 export interface GetBookSourcesResponse {
@@ -1087,10 +1090,14 @@ export interface GetBookResponse {
     book: Book
     sources: BookSources
     canEdit: boolean
+    now: string
 }
 
 export interface CreateBookRequest {
-    personId: number
+    personIds: number[]
+    preset: string
+    startDate: string
+    endDate: string
     content: BookContent
 }
 
@@ -1942,8 +1949,9 @@ export interface SameAgeRow {
 
 export interface BookSummary {
     id: number
-    personId: number
-    personName: string
+    personIds: number[]
+    personNames: string[]
+    preset: string
     title: string
     startDate: string
     endDate: string
@@ -1952,22 +1960,27 @@ export interface BookSummary {
 }
 
 export interface BookSources {
-    person: Person
+    people: Person[]
     milestones: Milestone[]
     photos: Image[]
     growthData: GrowthData[]
+    photoPeople: Record<number, number[]>
+    untagged: number[]
 }
 
 export interface Book {
     id: number
     familyId: number
     personId: number
+    personIds: number[]
     preset: string
     title: string
     startDate: string
     endDate: string
     coverPhotoId: number
     density: string
+    categories: string[]
+    match: string
     introduction: string
     letter: string
     signature: string
@@ -1978,18 +1991,22 @@ export interface Book {
     createdBy: number
     createdAt: string
     updatedAt: string
+    reviewedAt: string
 }
 
 export interface BookContent {
     title: string
     coverPhotoId: number
     density: string
+    categories: string[]
+    match: string
     introduction: string
     letter: string
     signature: string
     showGrowth: boolean
     items: BookItem[]
     excluded: BookItem[]
+    reviewedAt: string
 }
 
 export interface ActivityImportCounts {
