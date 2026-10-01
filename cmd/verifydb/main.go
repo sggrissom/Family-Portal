@@ -77,6 +77,7 @@ func main() {
 		counts["activity_results"] = count(tx, backend.ResultBkt)
 		counts["appearance_photos"] = count(tx, backend.AppearancePhotoBkt)
 		counts["activity_event_photos"] = count(tx, backend.EventPhotoBkt)
+		counts["books"] = count(tx, backend.BookBkt)
 
 		report = backend.ScanPhotoConsistency(tx, *staticDir, 0)
 	})

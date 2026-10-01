@@ -22,6 +22,7 @@ type PersonDeletionSummary struct {
 	Results        int    `json:"results"`
 	Relations      int    `json:"relations"`
 	SharedFamilies int    `json:"sharedFamilies"`
+	Books          int    `json:"books"`
 }
 
 type DeletePersonResponse struct {
@@ -64,6 +65,7 @@ func personDeletionSummary(tx *vbolt.Tx, person Person) PersonDeletionSummary {
 		Results:        len(GetPersonResults(tx, person.Id)),
 		Relations:      len(GetPersonRelationsTx(tx, person.Id)),
 		SharedFamilies: sharedFamilies,
+		Books:          len(GetPersonBooks(tx, person.Id)),
 	}
 }
 

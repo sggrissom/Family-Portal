@@ -663,6 +663,7 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 
 	resp.MergedEntries, resp.MergedResults = movePersonActivitiesTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	repointUserPersonTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	movePersonBooksTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 
 	movePersonRelationsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	deletePersonRostersTx(ctx.Tx, req.SourcePersonId)
