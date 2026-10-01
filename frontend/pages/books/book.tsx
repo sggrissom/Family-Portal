@@ -16,117 +16,118 @@ import {
   DENSITIES,
   Density,
   GrowthPoint,
-  assembleFirstYear,
+  Selection,
+  assembleBook,
+  isDensity,
   shortDay,
 } from "../../lib/book";
-import {
-  SAMPLES,
-  Sample,
-  isPlaceholderPhoto,
-  isSample,
-  sampleSource,
-} from "../../lib/bookFixtures";
+import { SAMPLES, Sample, isPlaceholderPhoto, isSample, sampleBook } from "../../lib/bookFixtures";
 import "./book-styles";
 
 type BookData = {
   source: BookSource;
-  personId: number | null;
+  selection: Selection;
+  bookId: number;
+  canEdit: boolean;
   sample: Sample | null;
   density: Density;
 };
 
-const isDensity = (value: string | null): value is Density => DENSITIES.includes(value as Density);
+export function selectionOf(book: server.Book): Selection {
+  return {
+    title: book.title,
+    startDate: book.startDate,
+    endDate: book.endDate,
+    coverPhotoId: book.coverPhotoId,
+    introduction: book.introduction,
+    letter: book.letter,
+    signature: book.signature,
+    showGrowth: book.showGrowth,
+    items: book.items ?? [],
+  };
+}
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<BookData>> {
   const params = new URLSearchParams(route.split("?")[1] ?? "");
-  const density = params.get("density");
   const sample = params.get("sample");
-  const base = { density: isDensity(density) ? density : "balanced" } as const;
   if (isSample(sample)) {
-    return rpc.ok({ ...base, source: sampleSource(sample), personId: null, sample });
+    const density = params.get("density");
+    const chosen = isDensity(density) ? density : "balanced";
+    return rpc.ok({
+      ...sampleBook(sample, chosen),
+      bookId: 0,
+      canEdit: false,
+      sample,
+      density: chosen,
+    });
   }
-  const personId = getIdFromRoute(route) || 0;
-  const [resp, err] = await server.GetPerson({ id: personId });
-  if (!resp) return [null, err || "Failed to load person"];
+  const [resp, err] = await server.GetBook({ id: getIdFromRoute(route) || 0 });
+  if (!resp) return [null, err || "Failed to load book"];
   return rpc.ok({
-    ...base,
-    source: {
-      person: resp.person,
-      milestones: resp.milestones ?? [],
-      photos: resp.photos ?? [],
-      growthData: resp.growthData ?? [],
-    },
-    personId,
+    source: resp.sources,
+    selection: selectionOf(resp.book),
+    bookId: resp.book.id,
+    canEdit: resp.canEdit,
     sample: null,
+    density: isDensity(resp.book.density) ? resp.book.density : "balanced",
   });
 }
 
-function bookPath(data: BookData, change: { sample?: Sample | "mine"; density?: Density }) {
-  const sample = change.sample ?? data.sample ?? "mine";
-  const density = change.density ?? data.density;
-  const params = new URLSearchParams();
-  if (sample !== "mine") params.set("sample", sample);
+function samplePath(sample: Sample, density: Density) {
+  const params = new URLSearchParams({ sample });
   if (density !== "balanced") params.set("density", density);
-  const query = params.toString();
-  const base = `/book/${data.personId ?? "sample"}`;
-  return query ? `${base}?${query}` : base;
+  return `/book/sample?${params}`;
 }
 
 export function view(route: string, prefix: string, data: BookData): preact.ComponentChild {
   if (!requireAuthInView()) return;
-  const person = data.source.person;
-  if (!person.birthday || person.isPregnancy) {
-    return (
-      <div>
-        <Header isHome={false} />
-        <main id="app" className="book-missing">
-          <p>A first-year book needs {person.name}'s birthday.</p>
-        </main>
-      </div>
-    );
-  }
-  const book = assembleFirstYear(data.source, data.density);
+  const book = assembleBook(data.source, data.selection);
   return (
     <div className="book-page">
       <Header isHome={false} />
-      <PrototypeBar data={data} />
+      {data.sample ? (
+        <SampleBar sample={data.sample} density={data.density} />
+      ) : (
+        <nav className="book-reader-bar" aria-label="Book">
+          <a href="/books">← Books</a>
+          {data.canEdit && (
+            <a className="book-reader-edit" href={`/edit-book/${data.bookId}`}>
+              Edit book
+            </a>
+          )}
+        </nav>
+      )}
       <main id="app">
         <BookReader book={book} />
-        <EditorNotes book={book} />
+        {data.sample && <EditorNotes book={book} />}
       </main>
     </div>
   );
 }
 
-const PrototypeBar = ({ data }: { data: BookData }) => {
-  const sources: { value: Sample | "mine"; label: string }[] = [
-    ...(data.personId ? [{ value: "mine" as const, label: "Real data" }] : []),
-    ...SAMPLES,
-  ];
-  return (
-    <div className="book-proto-bar">
-      <span className="book-proto-tag">Prototype</span>
-      <SegmentedControl
-        label="Content"
-        options={sources}
-        value={data.sample ?? "mine"}
-        onChange={sample => core.replaceRoute(bookPath(data, { sample }))}
-      />
-      <SegmentedControl
-        label="Length"
-        options={DENSITIES.map(d => ({ value: d, label: d[0].toUpperCase() + d.slice(1) }))}
-        value={data.density}
-        onChange={density => core.replaceRoute(bookPath(data, { density }))}
-      />
-    </div>
-  );
-};
+const SampleBar = ({ sample, density }: { sample: Sample; density: Density }) => (
+  <div className="book-proto-bar">
+    <span className="book-proto-tag">Sample</span>
+    <SegmentedControl
+      label="Sample"
+      options={SAMPLES}
+      value={sample}
+      onChange={next => core.replaceRoute(samplePath(next, density))}
+    />
+    <SegmentedControl
+      label="Length"
+      options={DENSITIES.map(d => ({ value: d, label: d[0].toUpperCase() + d.slice(1) }))}
+      value={density}
+      onChange={next => core.replaceRoute(samplePath(sample, next))}
+    />
+  </div>
+);
 
-const EditorNotes = ({ book }: { book: Book }) => {
+export const EditorNotes = ({ book }: { book: Book }) => {
   const n = book.notes;
   return (
     <details className="book-editor-notes">
-      <summary>What went into this draft</summary>
+      <summary>What went into this book</summary>
       <ul>
         <li>
           {n.milestonesUsed} of {n.milestonesInRange} records from the year
@@ -134,11 +135,14 @@ const EditorNotes = ({ book }: { book: Book }) => {
         <li>
           {n.photosUsed} of {n.photosInRange} photos from the year
         </li>
+        {n.missing > 0 && (
+          <li>{n.missing} items were deleted or are no longer visible to you and are skipped</li>
+        )}
         {n.undatedPhotos > 0 && <li>{n.undatedPhotos} photos have no date and were left out</li>}
         {n.unreadyPhotos > 0 && <li>{n.unreadyPhotos} photos are still processing or failed</li>}
         {n.hiddenMonths.length > 0 && (
           <li>
-            Nothing recorded at {n.hiddenMonths.map(m => `${m} months`).join(", ")}; those months
+            Nothing included at {n.hiddenMonths.map(m => `${m} months`).join(", ")}; those months
             are folded into their neighbours
           </li>
         )}

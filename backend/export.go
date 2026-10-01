@@ -205,6 +205,7 @@ type ExportDataStructure struct {
 	Tags            []ExportTag       `json:"tags"`
 	Photos          []ExportPhoto     `json:"photos,omitempty"`
 	Activities      []ExportActivity  `json:"activities,omitempty"`
+	Books           []ExportBook      `json:"books,omitempty"`
 	ExportDate      time.Time         `json:"export_date"`
 	TotalHeights    int               `json:"total_heights"`
 	TotalWeights    int               `json:"total_weights"`
@@ -220,6 +221,7 @@ type ExportDataStructure struct {
 	TotalEntries     int `json:"total_entries,omitempty"`
 	TotalAppearances int `json:"total_appearances,omitempty"`
 	TotalResults     int `json:"total_results,omitempty"`
+	TotalBooks       int `json:"total_books,omitempty"`
 }
 
 type ExportMilestone struct {
@@ -409,6 +411,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.Activities = buildActivityExport(tx, familyId, personNames)
 	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=
 		countExportedActivities(exportData.Activities)
+
+	exportData.Books = buildBookExport(tx, familyId)
+	exportData.TotalBooks = len(exportData.Books)
 
 	exportData.Heights = heights
 	exportData.Weights = weights

@@ -262,6 +262,9 @@ const ProfileHeader = ({
         <a href={`/edit-person/${person.id}`} className="btn btn-secondary">
           ✏️ Edit
         </a>
+        <a href="/books" className="btn btn-secondary">
+          📖 Books
+        </a>
         <button type="button" className="btn btn-primary profile-add-button" onClick={openAddSheet}>
           + {copy.nav.add}
         </button>

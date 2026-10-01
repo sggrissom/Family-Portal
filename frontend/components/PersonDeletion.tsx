@@ -97,6 +97,9 @@ function removalLines(summary: server.PersonDeletionSummary): string[] {
   if (summary.relations > 0) {
     lines.push(plural(summary.relations, "relationship", "relationships"));
   }
+  if (summary.books > 0) {
+    lines.push(plural(summary.books, "book", "books"));
+  }
   if (summary.sharedFamilies > 0) {
     lines.push(`sharing with ${plural(summary.sharedFamilies, "other family", "other families")}`);
   }

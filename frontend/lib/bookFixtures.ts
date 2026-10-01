@@ -1,5 +1,8 @@
 import * as server from "../server";
-import { BookSource } from "./book";
+import { BookSource, Density, Selection, draftSelection } from "./book";
+
+type Writing = { introduction?: string; letter?: string; signature?: string };
+type SampleSource = BookSource & { writing?: Writing };
 
 export type Sample = "rich" | "sparse" | "uneven";
 
@@ -98,7 +101,7 @@ function burst(startId: number, offset: number, count: number): P[] {
   return Array.from({ length: count }, (_, i) => [startId - i, offset, shapes[i % shapes.length]]);
 }
 
-function rich(): BookSource {
+function rich(): SampleSource {
   const ph: P[] = [
     [-1, 0, "wide", "Ten minutes old"],
     [-2, 1, "tall", "Going home"],
@@ -201,7 +204,7 @@ function rich(): BookSource {
   };
 }
 
-function sparse(): BookSource {
+function sparse(): SampleSource {
   return {
     person: person("Theo"),
     photos: photos([
@@ -224,7 +227,7 @@ function sparse(): BookSource {
   };
 }
 
-function uneven(): BookSource {
+function uneven(): SampleSource {
   return {
     person: person("Rosie", -3),
     photos: photos([
@@ -255,8 +258,29 @@ function uneven(): BookSource {
   };
 }
 
-export function sampleSource(sample: Sample): BookSource {
-  if (sample === "sparse") return sparse();
-  if (sample === "uneven") return uneven();
+function sample(name: Sample): SampleSource {
+  if (name === "sparse") return sparse();
+  if (name === "uneven") return uneven();
   return rich();
+}
+
+export function sampleSource(name: Sample): BookSource {
+  const { writing, ...source } = sample(name);
+  return source;
+}
+
+export function sampleBook(
+  name: Sample,
+  density: Density = "balanced"
+): { source: BookSource; selection: Selection } {
+  const { writing, ...source } = sample(name);
+  return {
+    source,
+    selection: {
+      ...draftSelection(source, density),
+      introduction: writing?.introduction ?? "",
+      letter: writing?.letter ?? "",
+      signature: writing?.signature ?? "",
+    },
+  };
 }

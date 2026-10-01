@@ -179,6 +179,19 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			resp.Warnings = append(resp.Warnings, activityWarnings...)
 		}
 
+		if len(importData.Books) > 0 {
+			imported, skipped, bookWarnings := importBooks(tx, importData.Books, bookImport{
+				familyId:        familyId,
+				userId:          user.Id,
+				personIdMapping: personIdMapping,
+				milestoneIds:    matchImportedMilestones(tx, importData.Milestones, personIdMapping),
+				photoIds:        photoIdMapping,
+			})
+			resp.ImportedBooks = imported
+			resp.SkippedBooks = skipped
+			resp.Warnings = append(resp.Warnings, bookWarnings...)
+		}
+
 		resp.SkippedPeople = len(importData.People) - resp.ImportedPeople - resp.MergedPeople
 
 		vbolt.TxCommit(tx)

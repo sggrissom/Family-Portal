@@ -32,6 +32,10 @@ export const RelationParent: RelationKind = 0;
 export const RelationSibling: RelationKind = 1;
 export const RelationPartner: RelationKind = 2;
 
+export type BookItemKind = number;
+export const BookItemMilestone: BookItemKind = 0;
+export const BookItemPhoto: BookItemKind = 1;
+
 // Errors
 export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrFaceNotFound = "Face not found or access denied";
@@ -56,6 +60,8 @@ export const ErrLinkExists = "These families are already linked in that directio
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
 export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
 
 export interface CreateAccountRequest {
     name: string
@@ -315,6 +321,7 @@ export interface PersonDeletionSummary {
     results: number
     relations: number
     sharedFamilies: number
+    books: number
 }
 
 export interface DeletePersonResponse {
@@ -1053,6 +1060,57 @@ export interface GetSameAgeResponse {
     rows: SameAgeRow[]
 }
 
+export interface ListBooksRequest {
+    familyId: number
+}
+
+export interface ListBooksResponse {
+    books: BookSummary[]
+    canEdit: boolean
+}
+
+export interface GetBookSourcesRequest {
+    personId: number
+}
+
+export interface GetBookSourcesResponse {
+    sources: BookSources
+    startDate: string
+    endDate: string
+}
+
+export interface GetBookRequest {
+    id: number
+}
+
+export interface GetBookResponse {
+    book: Book
+    sources: BookSources
+    canEdit: boolean
+}
+
+export interface CreateBookRequest {
+    personId: number
+    content: BookContent
+}
+
+export interface BookResponse {
+    book: Book
+}
+
+export interface UpdateBookRequest {
+    id: number
+    revision: number
+    content: BookContent
+}
+
+export interface DeleteBookRequest {
+    id: number
+}
+
+export interface DeleteBookResponse {
+}
+
 export interface ImportDataRequest {
     jsonData: string
     filterFamilyIds: number[]
@@ -1080,6 +1138,8 @@ export interface ImportDataResponse {
     importedPhotos: number
     skippedPhotos: number
     importedActivities: ActivityImportCounts
+    importedBooks: number
+    skippedBooks: number
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
@@ -1880,6 +1940,58 @@ export interface SameAgeRow {
     portraits: PortraitPhoto[]
 }
 
+export interface BookSummary {
+    id: number
+    personId: number
+    personName: string
+    title: string
+    startDate: string
+    endDate: string
+    coverPhotoId: number
+    updatedAt: string
+}
+
+export interface BookSources {
+    person: Person
+    milestones: Milestone[]
+    photos: Image[]
+    growthData: GrowthData[]
+}
+
+export interface Book {
+    id: number
+    familyId: number
+    personId: number
+    preset: string
+    title: string
+    startDate: string
+    endDate: string
+    coverPhotoId: number
+    density: string
+    introduction: string
+    letter: string
+    signature: string
+    showGrowth: boolean
+    items: BookItem[]
+    excluded: BookItem[]
+    revision: number
+    createdBy: number
+    createdAt: string
+    updatedAt: string
+}
+
+export interface BookContent {
+    title: string
+    coverPhotoId: number
+    density: string
+    introduction: string
+    letter: string
+    signature: string
+    showGrowth: boolean
+    items: BookItem[]
+    excluded: BookItem[]
+}
+
 export interface ActivityImportCounts {
     activities: number
     seasons: number
@@ -2268,6 +2380,14 @@ export interface TagSuggestion {
     score: number
     status: number
     createdAt: string
+}
+
+export interface BookItem {
+    kind: BookItemKind
+    sourceId: number
+    photoId: number
+    caption: string
+    pinned: boolean
 }
 
 export interface PerformanceStats {
@@ -2773,6 +2893,30 @@ export async function ListOpenEvents(data: ListOpenEventsRequest): Promise<rpc.R
 
 export async function GetSameAge(data: GetSameAgeRequest): Promise<rpc.Response<GetSameAgeResponse>> {
     return await rpc.call<GetSameAgeResponse>('GetSameAge', JSON.stringify(data));
+}
+
+export async function ListBooks(data: ListBooksRequest): Promise<rpc.Response<ListBooksResponse>> {
+    return await rpc.call<ListBooksResponse>('ListBooks', JSON.stringify(data));
+}
+
+export async function GetBookSources(data: GetBookSourcesRequest): Promise<rpc.Response<GetBookSourcesResponse>> {
+    return await rpc.call<GetBookSourcesResponse>('GetBookSources', JSON.stringify(data));
+}
+
+export async function GetBook(data: GetBookRequest): Promise<rpc.Response<GetBookResponse>> {
+    return await rpc.call<GetBookResponse>('GetBook', JSON.stringify(data));
+}
+
+export async function CreateBook(data: CreateBookRequest): Promise<rpc.Response<BookResponse>> {
+    return await rpc.call<BookResponse>('CreateBook', JSON.stringify(data));
+}
+
+export async function UpdateBook(data: UpdateBookRequest): Promise<rpc.Response<BookResponse>> {
+    return await rpc.call<BookResponse>('UpdateBook', JSON.stringify(data));
+}
+
+export async function DeleteBook(data: DeleteBookRequest): Promise<rpc.Response<DeleteBookResponse>> {
+    return await rpc.call<DeleteBookResponse>('DeleteBook', JSON.stringify(data));
 }
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
