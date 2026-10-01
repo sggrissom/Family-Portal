@@ -629,9 +629,17 @@ func (h *harness) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// SingleHostReverseProxy leaves the inbound Host header alone, which is
-	// what Caddy does and what the WebSocket origin check depends on.
-	proxy := httputil.NewSingleHostReverseProxy(target)
+	// The inbound Host header is kept, which is what Caddy does and what the
+	// WebSocket origin check depends on. X-Forwarded-For passes through
+	// untouched so the UI suite can arrive as several clients rather than
+	// sharing one rate-limit bucket.
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.Host = pr.In.Host
+			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
+		},
+	}
 	proxy.ErrorLog = log.New(h.log, "proxy: ", log.LstdFlags)
 	front := httptest.NewUnstartedServer(proxy)
 	// A browser rejects this self-signed certificate on the sockets it opens
