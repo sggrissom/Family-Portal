@@ -79,6 +79,8 @@ async function main() {
     guarded("/verify-email", () => import("@app/pages/auth/verify-email")),
     guarded("/dashboard", () => import("@app/pages/dashboard/dashboard")),
     guarded("/same-age", () => import("@app/pages/same-age/same-age")),
+    guarded("/books", () => import("@app/pages/books/books")),
+    guarded("/book/", () => import("@app/pages/books/book")),
     guarded("/milestone/", () => import("@app/pages/milestones/view-milestone")),
     guarded("/history", () => import("@app/pages/history/history")),
     guarded("/chat", () => import("@app/pages/chat/chat")),
