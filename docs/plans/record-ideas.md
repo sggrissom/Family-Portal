@@ -69,8 +69,13 @@ makes them the cheapest ideas on this list.
 - **Letters to the future.** A parent writes a letter to a child that stays
   sealed until a chosen date or age. New entity, and it needs a notification
   when it opens. It means a lot to families and the build is small.
-- **Artwork and documents.** Report cards, certificates, drawings. These can be
-  photos with a kind or tag plus a dedicated view, rather than a new pipeline.
+- **Artwork and documents.** Built as an `artwork` milestone category, like
+  quotes: the milestone carries the person, date or age, and description, and
+  the photos of the piece attach to it. Choosing Artwork offers an upload right
+  in the form, tagged to the artist, and a person's pieces collect on an
+  Artwork tab. Remaining: documents (report cards, certificates) still go under
+  achievement with a photo; give them a category of their own if that proves
+  too loose.
 - **Health record lite.** Vaccinations, allergies, doctor visits. It fits the
   record, and "health" is already a milestone category. It also brings real
   sensitivity and scope creep, so it needs discussion before building.

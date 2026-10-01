@@ -398,7 +398,9 @@ pending suggestion by tag for a review screen. A rejected suggestion is never
 made again.
 
 A milestone's `category` is one of `development`, `behavior`, `health`,
-`achievement`, `first`, `quote`, `other`. A quote's `description` is the exact
+`achievement`, `first`, `quote`, `artwork`, `other`. Artwork is something the
+person made (a drawing, a painting, a craft), recorded as a milestone with the
+photos of it attached; clients gather it on an Artwork tab. A quote's `description` is the exact
 words, without quotation marks: the server drops marks typed around the whole
 quote, and clients add them when displaying. `context` (where or why it was
 said) is kept only for quotes; `AddMilestone` and `UpdateMilestone` clear it

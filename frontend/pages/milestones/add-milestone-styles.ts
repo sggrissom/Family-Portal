@@ -122,3 +122,44 @@ block(`
   display: block;
 }
 `);
+
+block(`
+.artwork-upload {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  padding: 6px;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+  cursor: pointer;
+}
+`);
+
+block(`
+.artwork-upload.disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+`);
+
+block(`
+.artwork-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+`);
+
+block(`
+.artwork-upload:focus-within {
+  outline: 2px solid var(--primary-accent);
+  outline-offset: 2px;
+}
+`);

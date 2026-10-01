@@ -17,6 +17,7 @@ import { PersonChips, scrollSelectedChipIntoView } from "../../components/Person
 import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
 import {
+  ArtworkPhotos,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
@@ -40,6 +41,9 @@ type AddMilestoneForm = {
   suggestedPhotoIds: number[];
   lookupKey: string;
   lookupTimer: number;
+  uploading: boolean;
+  uploadError: string;
+  previews: Record<number, string>;
 };
 
 const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMilestoneForm => {
@@ -59,6 +63,9 @@ const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMile
     suggestedPhotoIds: [],
     lookupKey: "",
     lookupTimer: 0,
+    uploading: false,
+    uploadError: "",
+    previews: {},
   };
 });
 
@@ -154,7 +161,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
 
 async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
   event.preventDefault();
-  if (form.saving) return;
+  if (form.saving || form.uploading) return;
 
   const personId = form.personId;
   const problem =
@@ -294,6 +301,15 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           )}
         </div>
 
+        {form.category === "artwork" && (
+          <ArtworkPhotos
+            form={form}
+            personId={form.personId}
+            familyId={people.find(p => p.id === form.personId)?.familyId ?? 0}
+            disabled={disabled}
+          />
+        )}
+
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}
           selected={form.photoIds}
@@ -333,7 +349,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           <a href={returnPath("/dashboard")} className="btn btn-secondary" onClick={cancel}>
             {copy.milestone.cancel}
           </a>
-          <button type="submit" className="btn btn-primary" disabled={disabled}>
+          <button type="submit" className="btn btn-primary" disabled={disabled || form.uploading}>
             {form.saving ? copy.milestone.saving : copy.milestone.save}
           </button>
         </div>
