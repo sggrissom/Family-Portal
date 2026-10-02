@@ -183,10 +183,7 @@ describe("reading a saved book", () => {
   it("says nothing about months with no records", () => {
     const book = build("uneven");
     expect(book.notes.hiddenMonths.length).toBeGreaterThan(0);
-<<<<<<< HEAD
-=======
     expect(book.notes.hiddenMonths.every(m => /^\d+ months? old$/.test(m))).toBe(true);
->>>>>>> main
     expect(book.chapters.every(c => c.blocks.length > 0)).toBe(true);
   });
 
@@ -253,8 +250,6 @@ describe("books about a stretch of time", () => {
     expect(new Set(people)).toEqual(new Set([2]));
   });
 
-<<<<<<< HEAD
-=======
   it("charts growth across the book's own year, not the first year of life", () => {
     const { source, selection } = family();
     const growth = assembleBook(source, selection)
@@ -274,7 +269,6 @@ describe("books about a stretch of time", () => {
     }
   });
 
->>>>>>> main
   it("leaves photos with nobody tagged for the editor to add by hand", () => {
     const { source, selection } = family();
     const untagged = new Set(source.untagged);

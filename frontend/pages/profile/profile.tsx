@@ -268,14 +268,6 @@ const ProfileHeader = ({
         <a href="/books" className="btn btn-secondary">
           📖 Books
         </a>
-<<<<<<< HEAD
-        <a href="/books" className="btn btn-secondary">
-          📖 Books
-        </a>
-        <button type="button" className="btn btn-primary profile-add-button" onClick={openAddSheet}>
-          + {copy.nav.add}
-        </button>
-=======
         {canContribute(person.familyId) && (
           <button
             type="button"
@@ -285,7 +277,6 @@ const ProfileHeader = ({
             + {copy.nav.add}
           </button>
         )}
->>>>>>> main
       </div>
     </header>
   );
