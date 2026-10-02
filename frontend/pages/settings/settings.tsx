@@ -554,6 +554,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
   const mergeForm = useMergeForm();
+  const mergeable = data.people.filter(person => auth.canAdmin(person.familyId));
   const passwordForm = useChangePasswordForm();
   const deleteForm = useDeleteAccountForm();
   const appearance = useAppearanceSettings();
@@ -843,6 +844,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   <FamilySelect
                     id="exportFamilyId"
                     label="Family to export"
+                    minRole={auth.ROLE_VIEW}
                     value={exportForm.familyId}
                     onChange={familyId => {
                       exportForm.familyId = familyId;
@@ -909,7 +911,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           </div>
         )}
 
-        {data.familyInfo.id > 0 && data.people.length > 1 && (
+        {data.familyInfo.id > 0 && mergeable.length > 1 && (
           <div className="settings-section">
             <h2>Advanced Data Management</h2>
             <div className="settings-card merge-card">
@@ -935,7 +937,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               )}
 
               {!mergeForm.showConfirmation && (
-                <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, data.people)}>
+                <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, mergeable)}>
                   <div className="merge-selectors">
                     <div className="form-group">
                       <label htmlFor="sourcePerson">Merge From (will be deleted)</label>
@@ -952,7 +954,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         required
                       >
                         <option value="0">Select person to merge from...</option>
-                        {data.people.map(person => (
+                        {mergeable.map(person => (
                           <option key={person.id} value={person.id}>
                             {person.name}
                           </option>
@@ -977,7 +979,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         required
                       >
                         <option value="0">Select person to merge into...</option>
-                        {data.people.map(person => (
+                        {mergeable.map(person => (
                           <option key={person.id} value={person.id}>
                             {person.name}
                           </option>

@@ -4,6 +4,7 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { canContribute } from "../../lib/authCache";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { ErrorPage } from "../../components/ErrorPage";
 import { PhotoStrip } from "../../components/PhotoPicker";
@@ -143,18 +144,20 @@ const ViewMilestonePage = ({
           {` · ${formatDate(milestone.milestoneDate)}`}
         </p>
         <PhotoStrip photoIds={milestone.photoIds} />
-        <div className="milestone-detail-actions">
-          <a href={`/edit-milestone/${milestone.id}`} className="btn btn-secondary">
-            ✏️ {copy.milestoneDetail.edit}
-          </a>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => deleteMilestone(milestone)}
-          >
-            🗑️ {copy.milestoneDetail.delete}
-          </button>
-        </div>
+        {canContribute(milestone.familyId) && (
+          <div className="milestone-detail-actions">
+            <a href={`/edit-milestone/${milestone.id}`} className="btn btn-secondary">
+              ✏️ {copy.milestoneDetail.edit}
+            </a>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => deleteMilestone(milestone)}
+            >
+              🗑️ {copy.milestoneDetail.delete}
+            </button>
+          </div>
+        )}
       </article>
 
       {matches.length > 0 && (

@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../server";
 import { FamilySelect } from "./FamilySelect";
+import { ROLE_ADMIN, canAdmin } from "../lib/authCache";
 import "./family-links-styles";
 
 const SCOPE_LABELS: { key: keyof server.LinkScopes; label: string; hint: string }[] = [
@@ -189,6 +190,7 @@ const FamilyLinkCard = ({ state, link }: FamilyLinkCardProps) => {
   const scopes = state.edits[link.id] ?? link.scopes;
   const dirty = state.edits[link.id] !== undefined;
   const pending = link.status === server.LinkPending;
+  const manageable = canAdmin(link.outgoing ? link.fromFamilyId : link.toFamilyId);
 
   return (
     <div className="family-link-card">
@@ -212,7 +214,7 @@ const FamilyLinkCard = ({ state, link }: FamilyLinkCardProps) => {
           <ScopeCheckboxes
             idPrefix={`link-${link.id}`}
             scopes={scopes}
-            disabled={state.busy}
+            disabled={state.busy || !manageable}
             onChange={next => {
               state.edits = { ...state.edits, [link.id]: next };
             }}
@@ -228,7 +230,7 @@ const FamilyLinkCard = ({ state, link }: FamilyLinkCardProps) => {
       )}
 
       <div className="family-link-actions">
-        {pending && !link.outgoing && (
+        {manageable && pending && !link.outgoing && (
           <button
             type="button"
             className="btn btn-primary"
@@ -243,7 +245,7 @@ const FamilyLinkCard = ({ state, link }: FamilyLinkCardProps) => {
             Waiting for {other} to accept. Nothing is shared until they do.
           </span>
         )}
-        {link.outgoing && dirty && (
+        {manageable && link.outgoing && dirty && (
           <button
             type="button"
             className="btn btn-primary"
@@ -253,14 +255,16 @@ const FamilyLinkCard = ({ state, link }: FamilyLinkCardProps) => {
             Save changes
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={state.busy}
-          onClick={vlens.cachePartial(onRevokeLink, state, link)}
-        >
-          {pending && !link.outgoing ? "Decline" : "Disconnect"}
-        </button>
+        {manageable && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={state.busy}
+            onClick={vlens.cachePartial(onRevokeLink, state, link)}
+          >
+            {pending && !link.outgoing ? "Decline" : "Disconnect"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -307,6 +311,7 @@ export const FamilyLinksSection = ({
           <FamilySelect
             id="linkFromFamily"
             label="Share from"
+            minRole={ROLE_ADMIN}
             value={state.familyId}
             disabled={state.busy}
             onChange={familyId => {

@@ -157,9 +157,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
               </div>
             )}
           </div>
-          <a href="/add-photo" className="btn btn-primary photo-add">
-            + Add photos
-          </a>
+          {auth.canContributeAnywhere() && (
+            <a href="/add-photo" className="btn btn-primary photo-add">
+              + Add photos
+            </a>
+          )}
         </div>
       </div>
 
@@ -472,10 +474,14 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
             <div className="empty-state">
               <div className="empty-icon">📸</div>
               <h2>No Family Photos Yet</h2>
-              <p>Start capturing your family memories by adding your first photo.</p>
-              <a href="/add-photo" className="btn btn-primary">
-                Add First Photo
-              </a>
+              {auth.canContributeAnywhere() && (
+                <>
+                  <p>Start capturing your family memories by adding your first photo.</p>
+                  <a href="/add-photo" className="btn btn-primary">
+                    Add First Photo
+                  </a>
+                </>
+              )}
             </div>
           </div>
         )}

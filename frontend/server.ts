@@ -37,14 +37,15 @@ export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
 
 // Errors
-export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -54,14 +55,13 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
 
 export interface CreateAccountRequest {
     name: string
@@ -1916,6 +1916,7 @@ export interface DashboardSeason {
     activityName: string
     event: EventSummary | null
     eventTiming: string
+    canContribute: boolean
     canAddResults: boolean
 }
 

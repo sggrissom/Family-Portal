@@ -135,9 +135,11 @@ const GrowthPage = ({ data }: { data: GrowthPageData }) => {
     <div className="growth-page">
       <div className="growth-page-head">
         <h1>{copy.growthPage.title}</h1>
-        <a href="/add-growth" className="btn btn-primary">
-          {copy.growthPage.measure}
-        </a>
+        {auth.canContributeAnywhere() && (
+          <a href="/add-growth" className="btn btn-primary">
+            {copy.growthPage.measure}
+          </a>
+        )}
       </div>
 
       {data.people.length === 0 ? (

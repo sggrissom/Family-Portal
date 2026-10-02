@@ -48,7 +48,7 @@ export const PersonActivities = ({ data }: { data: PersonActivitiesData }) => {
   const person = data.people.find(p => p.id === personId);
   const name = person?.name ?? "This person";
 
-  const ownsPerson = !!person && auth.getFamilies().some(family => family.id === person.familyId);
+  const ownsPerson = !!person && auth.canContribute(person.familyId);
 
   const seasons = data.season.seasons ?? [];
   const entries = data.season.entries ?? [];

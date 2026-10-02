@@ -48,7 +48,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   if (!resp) return [null, err];
 
   const people = chipOrder(
-    resp.people.map(item => item.person),
+    resp.people.map(item => item.person).filter(person => auth.canContribute(person.familyId)),
     resp.relations || [],
     auth.getAuth()?.familyId ?? 0
   );

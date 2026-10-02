@@ -416,7 +416,7 @@ const PhotoPlaceLine = ({ photo, place }: { photo: server.Image; place: server.P
       <a href={`/photos?place=${place.key}`} className="view-photo-place-link">
         📍 {place.name}
       </a>
-      {place.familyPlaceId === 0 && !form.open && (
+      {place.familyPlaceId === 0 && !form.open && auth.canContribute(photo.familyId) && (
         <button
           className="btn btn-outline btn-small"
           onClick={() => {
@@ -522,6 +522,10 @@ const ViewPhotoPage = ({
 }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
+  const profileCandidates =
+    auth.roleIn(photo.familyId) >= auth.ROLE_VIEW
+      ? people.filter(person => auth.canContribute(person.familyId))
+      : [];
 
   if (position) {
     bindArrowKeys(position, () => cropModalState.isOpen);
@@ -694,17 +698,19 @@ const ViewPhotoPage = ({
         </div>
 
         <div className="photo-actions">
-          <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
-            ✏️ Edit
-          </a>
+          {auth.canContribute(photo.familyId) && (
+            <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
+              ✏️ Edit
+            </a>
+          )}
           <a href={`/api/photo/${photo.id}/original?download=1`} className="btn btn-secondary">
             ⬇️ Download original
           </a>
 
-          {people.length > 0 && (
+          {profileCandidates.length > 0 && (
             <div className="profile-photo-actions">
               <h4>Set as Profile Photo:</h4>
-              {people.map(person => (
+              {profileCandidates.map(person => (
                 <div key={person.id} className="profile-action">
                   {person.profilePhotoId === photo.id ? (
                     <button
@@ -726,9 +732,11 @@ const ViewPhotoPage = ({
             </div>
           )}
 
-          <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo, backRoute)}>
-            🗑️ Delete
-          </button>
+          {auth.canAdmin(photo.familyId) && (
+            <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo, backRoute)}>
+              🗑️ Delete
+            </button>
+          )}
         </div>
       </div>
 

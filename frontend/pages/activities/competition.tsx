@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
@@ -170,6 +171,7 @@ export function view(
 
   const labels = labelsFor(data.activity);
   const dates = formatDateRange(event.startDate, event.endDate);
+  const editable = auth.canContribute(event.familyId);
   const where = [event.host, event.location].filter(part => part).join(" · ");
 
   return (
@@ -198,7 +200,7 @@ export function view(
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>Photos</h2>
-            {!state.editingEventPhotos && (
+            {editable && !state.editingEventPhotos && (
               <button
                 className="btn btn-secondary"
                 onClick={vlens.cachePartial(onStartEventPhotos, state)}
@@ -251,7 +253,7 @@ export function view(
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>{labels.appearancePlural}</h2>
-            {!state.adding && (
+            {editable && !state.adding && (
               <button
                 className="btn btn-primary"
                 onClick={vlens.cachePartial(onShowAddForm, state, data)}
@@ -264,7 +266,7 @@ export function view(
 
           {state.adding && <AddAppearanceForm state={state} data={data} labels={labels} />}
 
-          {data.entries.length === 0 && !state.adding && (
+          {editable && data.entries.length === 0 && !state.adding && (
             <p className="form-hint">
               This season has no {labels.entryPlural.toLowerCase()} yet — add one on the season page
               first.
@@ -325,7 +327,13 @@ export function view(
                       </div>
                     </div>
                   ) : (
-                    <AppearanceRow state={state} data={data} detail={detail} labels={labels} />
+                    <AppearanceRow
+                      state={state}
+                      data={data}
+                      detail={detail}
+                      labels={labels}
+                      editable={editable}
+                    />
                   )}
                 </li>
               ))}
@@ -343,11 +351,13 @@ const AppearanceRow = ({
   data,
   detail,
   labels,
+  editable,
 }: {
   state: CompetitionState;
   data: CompetitionPageData;
   detail: server.AppearanceDetail;
   labels: ActivityLabels;
+  editable: boolean;
 }) => {
   const entry = detail.entry;
   const traits = [entry.format, entry.style, entry.division, entry.level]
@@ -366,42 +376,44 @@ const AppearanceRow = ({
         {detail.appearance.notes && <p className="event-notes">{detail.appearance.notes}</p>}
         <PhotoStrip photoIds={detail.photoIds} />
       </div>
-      <span className="event-item-actions">
-        <button
-          className="btn btn-secondary btn-small"
-          onClick={vlens.cachePartial(onStartEditResults, state, detail)}
-          disabled={state.saving}
-        >
-          {(detail.results ?? []).length === 0 ? "Add results" : "Edit results"}
-        </button>
-        <button
-          className="icon-btn"
-          title={`Photos of this ${labels.appearance.toLowerCase()}`}
-          aria-label={`Photos of this ${labels.appearance.toLowerCase()}`}
-          onClick={vlens.cachePartial(onStartAppearancePhotos, state, detail)}
-          disabled={state.saving}
-        >
-          📸
-        </button>
-        <button
-          className="icon-btn"
-          title={`Edit ${labels.appearance.toLowerCase()}`}
-          aria-label={`Edit ${labels.appearance.toLowerCase()}`}
-          onClick={vlens.cachePartial(onStartEdit, state, detail)}
-          disabled={state.saving}
-        >
-          ✏️
-        </button>
-        <button
-          className="icon-btn"
-          title={`Delete ${labels.appearance.toLowerCase()}`}
-          aria-label={`Delete ${labels.appearance.toLowerCase()}`}
-          onClick={vlens.cachePartial(onDeleteAppearance, state, detail, labels)}
-          disabled={state.saving}
-        >
-          🗑️
-        </button>
-      </span>
+      {editable && (
+        <span className="event-item-actions">
+          <button
+            className="btn btn-secondary btn-small"
+            onClick={vlens.cachePartial(onStartEditResults, state, detail)}
+            disabled={state.saving}
+          >
+            {(detail.results ?? []).length === 0 ? "Add results" : "Edit results"}
+          </button>
+          <button
+            className="icon-btn"
+            title={`Photos of this ${labels.appearance.toLowerCase()}`}
+            aria-label={`Photos of this ${labels.appearance.toLowerCase()}`}
+            onClick={vlens.cachePartial(onStartAppearancePhotos, state, detail)}
+            disabled={state.saving}
+          >
+            📸
+          </button>
+          <button
+            className="icon-btn"
+            title={`Edit ${labels.appearance.toLowerCase()}`}
+            aria-label={`Edit ${labels.appearance.toLowerCase()}`}
+            onClick={vlens.cachePartial(onStartEdit, state, detail)}
+            disabled={state.saving}
+          >
+            ✏️
+          </button>
+          <button
+            className="icon-btn"
+            title={`Delete ${labels.appearance.toLowerCase()}`}
+            aria-label={`Delete ${labels.appearance.toLowerCase()}`}
+            onClick={vlens.cachePartial(onDeleteAppearance, state, detail, labels)}
+            disabled={state.saving}
+          >
+            🗑️
+          </button>
+        </span>
+      )}
     </>
   );
 };

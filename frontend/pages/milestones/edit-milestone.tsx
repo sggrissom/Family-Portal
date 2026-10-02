@@ -8,7 +8,8 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { copy } from "../../lib/copy";
 import { When, whenProblem, whenRequest } from "../../lib/when";
-import { ErrorPage } from "../../components/ErrorPage";
+import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
+import { canContribute } from "../../lib/authCache";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
 import {
@@ -125,6 +126,10 @@ export function view(
         containerClass="entry-container"
       />
     );
+  }
+
+  if (!canContribute(milestone.familyId)) {
+    return <ViewOnlyPage backLink={`/milestone/${milestone.id}`} />;
   }
 
   const form = useEditMilestoneForm(milestone);

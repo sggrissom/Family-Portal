@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import { getFamilies } from "../lib/authCache";
+import { ROLE_CONTRIBUTE, getFamilies } from "../lib/authCache";
 
 interface FamilySelectProps {
   id: string;
@@ -8,6 +8,7 @@ interface FamilySelectProps {
   onChange: (familyId: number) => void;
   disabled?: boolean;
   label?: string;
+  minRole?: number;
 }
 
 export const FamilySelect = ({
@@ -16,8 +17,9 @@ export const FamilySelect = ({
   onChange,
   disabled,
   label = "Family",
+  minRole = ROLE_CONTRIBUTE,
 }: FamilySelectProps): preact.ComponentChild => {
-  const families = getFamilies();
+  const families = getFamilies().filter(family => family.role >= minRole);
   if (families.length < 2) {
     return null;
   }

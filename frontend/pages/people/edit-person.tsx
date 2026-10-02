@@ -5,6 +5,8 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { canContribute } from "../../lib/authCache";
+import { ViewOnlyPage } from "../../components/ErrorPage";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { toDateInputValue } from "../../lib/dateUtils";
 import { PersonSharingSection } from "../../components/PersonSharing";
@@ -63,6 +65,10 @@ export function view(
         <Footer />
       </div>
     );
+  }
+
+  if (!canContribute(data.person.familyId)) {
+    return <ViewOnlyPage backLink={`/profile/${data.person.id}`} />;
   }
 
   const form = useEditPersonForm();

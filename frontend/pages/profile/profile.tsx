@@ -4,6 +4,7 @@ import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { canContribute } from "../../lib/authCache";
 import { openAddSheet } from "../../components/AppNav";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
 import { FaceCrop } from "../../components/FaceCrop";
@@ -259,15 +260,23 @@ const ProfileHeader = ({
         </p>
       </div>
       <div className="profile-actions">
-        <a href={`/edit-person/${person.id}`} className="btn btn-secondary">
-          ✏️ Edit
-        </a>
+        {canContribute(person.familyId) && (
+          <a href={`/edit-person/${person.id}`} className="btn btn-secondary">
+            ✏️ Edit
+          </a>
+        )}
         <a href="/books" className="btn btn-secondary">
           📖 Books
         </a>
-        <button type="button" className="btn btn-primary profile-add-button" onClick={openAddSheet}>
-          + {copy.nav.add}
-        </button>
+        {canContribute(person.familyId) && (
+          <button
+            type="button"
+            className="btn btn-primary profile-add-button"
+            onClick={openAddSheet}
+          >
+            + {copy.nav.add}
+          </button>
+        )}
       </div>
     </header>
   );
@@ -637,9 +646,11 @@ const GrowthTab = ({ data, state }: { data: ProfileData; state: ProfileState }) 
             {copy.person.showSiblings}
           </label>
         )}
-        <a href={`/add-growth/${person.id}`} className="btn btn-primary">
-          {copy.person.measure}
-        </a>
+        {canContribute(person.familyId) && (
+          <a href={`/add-growth/${person.id}`} className="btn btn-primary">
+            {copy.person.measure}
+          </a>
+        )}
       </div>
 
       {main.points.length === 0 ? (

@@ -4,6 +4,7 @@ import * as server from "../../server";
 import { timelineRequest } from "../../lib/photoPages";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
+import { canContribute } from "../../lib/authCache";
 import { formatDate } from "../../lib/dateUtils";
 import { formatMeasurement } from "../../lib/weightFormat";
 import { ErrorPage } from "../../components/ErrorPage";
@@ -173,24 +174,26 @@ const ViewGrowthPage = ({
             {percentileLabel && <span className="percentile-badge">{percentileLabel}</span>}
           </div>
         </div>
-        <div className="growth-detail-actions">
-          <a href={`/edit-growth/${growthData.id}`} className="btn btn-secondary">
-            ✏️ Edit
-          </a>
-          <button
-            className="btn btn-danger"
-            onClick={() =>
-              handleDeleteGrowthData(
-                growthData.id,
-                growthData.measurementType,
-                growthData.value,
-                growthData.unit
-              )
-            }
-          >
-            🗑️ Delete
-          </button>
-        </div>
+        {canContribute(growthData.familyId) && (
+          <div className="growth-detail-actions">
+            <a href={`/edit-growth/${growthData.id}`} className="btn btn-secondary">
+              ✏️ Edit
+            </a>
+            <button
+              className="btn btn-danger"
+              onClick={() =>
+                handleDeleteGrowthData(
+                  growthData.id,
+                  growthData.measurementType,
+                  growthData.value,
+                  growthData.unit
+                )
+              }
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {!hasBirthday ? (

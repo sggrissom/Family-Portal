@@ -296,9 +296,11 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
                   </div>
                 </>
               )}
-              <a href="/manage-tags" className="history-manage-tags">
-                {copy.history.manageTags}
-              </a>
+              {auth.canContributeAnywhere() && (
+                <a href="/manage-tags" className="history-manage-tags">
+                  {copy.history.manageTags}
+                </a>
+              )}
             </div>
           </details>
           {filtered && (

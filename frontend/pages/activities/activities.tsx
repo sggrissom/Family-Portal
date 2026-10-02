@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
@@ -135,6 +136,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
 
   const activity = selectedActivity(state);
   const labels = labelsForKind(activity?.kind ?? "");
+  const editable = auth.canContribute(state.familyId);
 
   return (
     <div>
@@ -148,6 +150,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
 
         <FamilySelect
           id="activitiesFamilyId"
+          minRole={auth.ROLE_VIEW}
           value={state.familyId}
           onChange={familyId => {
             void selectFamily(state, familyId);
@@ -164,7 +167,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>Programs</h2>
-            {!state.addingActivity && (
+            {editable && !state.addingActivity && (
               <button
                 className="btn btn-secondary"
                 onClick={vlens.cachePartial(onShowActivityForm, state)}
@@ -179,7 +182,10 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
 
           {state.activities.length === 0 ? (
             <div className="empty-state">
-              <p>No programs yet. Add one — "Dance", "Soccer" — to start a season.</p>
+              <p>
+                No programs yet.
+                {editable && ' Add one — "Dance", "Soccer" — to start a season.'}
+              </p>
             </div>
           ) : (
             <div className="activity-chips">
@@ -201,26 +207,28 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                       <strong>{a.name}</strong>
                       <small>{activityKindName(a.kind)}</small>
                     </button>
-                    <span className="activity-chip-actions">
-                      <button
-                        className="icon-btn"
-                        title="Rename program"
-                        aria-label="Rename program"
-                        onClick={vlens.cachePartial(onStartEditActivity, state, a)}
-                        disabled={state.saving}
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="icon-btn"
-                        title="Delete program"
-                        aria-label="Delete program"
-                        onClick={vlens.cachePartial(onDeleteActivity, state, a)}
-                        disabled={state.saving}
-                      >
-                        🗑️
-                      </button>
-                    </span>
+                    {editable && (
+                      <span className="activity-chip-actions">
+                        <button
+                          className="icon-btn"
+                          title="Rename program"
+                          aria-label="Rename program"
+                          onClick={vlens.cachePartial(onStartEditActivity, state, a)}
+                          disabled={state.saving}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="icon-btn"
+                          title="Delete program"
+                          aria-label="Delete program"
+                          onClick={vlens.cachePartial(onDeleteActivity, state, a)}
+                          disabled={state.saving}
+                        >
+                          🗑️
+                        </button>
+                      </span>
+                    )}
                   </div>
                 )
               )}
@@ -232,7 +240,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
           <section className="activities-section">
             <div className="activities-section-head">
               <h2>{activity.name} seasons</h2>
-              {!state.addingSeason && (
+              {editable && !state.addingSeason && (
                 <button
                   className="btn btn-primary"
                   onClick={vlens.cachePartial(onShowSeasonForm, state)}
@@ -273,26 +281,28 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                         {season.notes && <p className="season-notes">{season.notes}</p>}
                         <span className="season-open">Open season →</span>
                       </a>
-                      <span className="season-item-actions">
-                        <button
-                          className="icon-btn"
-                          title="Edit season"
-                          aria-label="Edit season"
-                          onClick={vlens.cachePartial(onStartEditSeason, state, season)}
-                          disabled={state.saving}
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Delete season"
-                          aria-label="Delete season"
-                          onClick={vlens.cachePartial(onDeleteSeason, state, season)}
-                          disabled={state.saving}
-                        >
-                          🗑️
-                        </button>
-                      </span>
+                      {editable && (
+                        <span className="season-item-actions">
+                          <button
+                            className="icon-btn"
+                            title="Edit season"
+                            aria-label="Edit season"
+                            onClick={vlens.cachePartial(onStartEditSeason, state, season)}
+                            disabled={state.saving}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Delete season"
+                            aria-label="Delete season"
+                            onClick={vlens.cachePartial(onDeleteSeason, state, season)}
+                            disabled={state.saving}
+                          >
+                            🗑️
+                          </button>
+                        </span>
+                      )}
                     </li>
                   )
                 )}

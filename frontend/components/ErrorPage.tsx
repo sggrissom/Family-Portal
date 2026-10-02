@@ -32,3 +32,18 @@ export const ErrorPage = ({
     </div>
   );
 };
+
+export const ViewOnlyPage = ({
+  backLink,
+  backLabel = "Go back",
+}: {
+  backLink: string;
+  backLabel?: string;
+}) => (
+  <ErrorPage
+    title="View only"
+    message="You can see this, but you don't have permission to change it."
+    backLink={backLink}
+    backLabel={backLabel}
+  />
+);
