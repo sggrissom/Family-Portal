@@ -76,6 +76,7 @@ func TestSeedProducesData(t *testing.T) {
 		{"results", summary.Results, 10},
 		{"chat messages", summary.ChatMessages, 10},
 		{"photos", summary.Photos, 16},
+		{"books", summary.Books, 4},
 	}
 	for _, check := range checks {
 		if check.count < check.least {
@@ -342,6 +343,44 @@ func TestSeedProfilePhotosAreVisible(t *testing.T) {
 			}
 			if !CanAccessPhoto(tx, dad, GetImageById(tx, person.ProfilePhotoId), AccessView) {
 				t.Errorf("dad cannot load %s's profile photo", entry.name)
+			}
+		}
+	})
+}
+
+// Each seeded book should open with something on its pages, and every item
+// should come back from the sources the book page loads.
+func TestSeedBooksHaveContent(t *testing.T) {
+	db, summary, cleanup := seedForTest(t)
+	defer cleanup()
+
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		mom := seedUser(t, tx, "mom@example.test")
+		books := GetFamilyBooks(tx, mom.FamilyId)
+		if len(books) != summary.Books {
+			t.Fatalf("found %d books in the Whitfields, seeded %d", len(books), summary.Books)
+		}
+		for _, book := range books {
+			if len(book.Items) == 0 {
+				t.Errorf("%q has no items", book.Title)
+			}
+			sources := bookSourcesTx(tx, mom, book.FamilyId, func() (people []Person) {
+				for _, id := range book.PersonIds {
+					people = append(people, GetPersonById(tx, id))
+				}
+				return
+			}(), book.StartDate, readLimit(book.Preset, book.EndDate), bookPhotoIds(book))
+			found := map[BookItemKind]map[int]bool{BookItemMilestone: {}, BookItemPhoto: {}}
+			for _, m := range sources.Milestones {
+				found[BookItemMilestone][m.Id] = true
+			}
+			for _, p := range sources.Photos {
+				found[BookItemPhoto][p.Id] = true
+			}
+			for _, item := range book.Items {
+				if !found[item.Kind][item.SourceId] {
+					t.Errorf("%q item %+v is missing from its sources", book.Title, item)
+				}
 			}
 		}
 	})
