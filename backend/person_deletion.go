@@ -65,7 +65,7 @@ func personDeletionSummary(tx *vbolt.Tx, person Person) PersonDeletionSummary {
 		Results:        len(GetPersonResults(tx, person.Id)),
 		Relations:      len(GetPersonRelationsTx(tx, person.Id)),
 		SharedFamilies: sharedFamilies,
-		Books:          len(GetPersonBooks(tx, person.Id)),
+		Books:          len(soleSubjectBooks(tx, person.Id)),
 	}
 }
 

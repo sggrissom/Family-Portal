@@ -5,8 +5,9 @@ import {
   Density,
   PRESETS,
   Selection,
+  dayOf,
   draftSelection,
-  firstYearPlan,
+  firstBirthday,
 } from "./book";
 
 type Writing = { introduction?: string; letter?: string; signature?: string };
@@ -416,6 +417,20 @@ function toSource(raw: SampleSource): BookSource {
 
 export function sampleSource(name: Sample): BookSource {
   return toSource(sample(name));
+}
+
+function firstYearPlan(person: server.Person, density: Density): BookPlan {
+  const start = dayOf(person.birthday);
+  return {
+    preset: PRESETS.firstYear,
+    title: `${person.name}'s first year`,
+    startDate: start,
+    endDate: firstBirthday(start),
+    categories: [],
+    match: "any",
+    showGrowth: true,
+    density,
+  };
 }
 
 export function samplePlan(name: Sample, density: Density = "balanced"): BookPlan {

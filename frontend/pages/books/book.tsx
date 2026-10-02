@@ -13,7 +13,7 @@ import {
   BookMoment,
   BookPhoto,
   BookSource,
-  DENSITIES,
+  DENSITY_OPTIONS,
   Density,
   GrowthPoint,
   Selection,
@@ -119,7 +119,7 @@ const SampleBar = ({ sample, density }: { sample: Sample; density: Density }) =>
     />
     <SegmentedControl
       label="Length"
-      options={DENSITIES.map(d => ({ value: d, label: d[0].toUpperCase() + d.slice(1) }))}
+      options={DENSITY_OPTIONS}
       value={density}
       onChange={next => core.replaceRoute(samplePath(sample, next))}
     />
@@ -145,8 +145,8 @@ export const EditorNotes = ({ book }: { book: Book }) => {
         {n.unreadyPhotos > 0 && <li>{n.unreadyPhotos} photos are still processing or failed</li>}
         {n.hiddenMonths.length > 0 && (
           <li>
-            Nothing included at {n.hiddenMonths.map(m => `${m} months`).join(", ")}; those months
-            are folded into their neighbours
+            Nothing included for {n.hiddenMonths.join(", ")}; those months are folded into their
+            neighbours
           </li>
         )}
       </ul>
@@ -285,10 +285,22 @@ const BlockView = ({ block }: { block: Block }) => {
       return (
         <div className="book-growth">
           {block.weight.length > 0 && (
-            <GrowthChart label="Weight" points={block.weight} color="var(--weight-color)" />
+            <GrowthChart
+              label="Weight"
+              points={block.weight}
+              color="var(--weight-color)"
+              span={block.span}
+              ticks={block.ticks}
+            />
           )}
           {block.height.length > 0 && (
-            <GrowthChart label="Length" points={block.height} color="var(--height-color)" />
+            <GrowthChart
+              label={block.heightLabel}
+              points={block.height}
+              color="var(--height-color)"
+              span={block.span}
+              ticks={block.ticks}
+            />
           )}
         </div>
       );
@@ -381,10 +393,14 @@ const GrowthChart = ({
   label,
   points,
   color,
+  span,
+  ticks,
 }: {
   label: string;
   points: GrowthPoint[];
   color: string;
+  span: [number, number];
+  ticks: [string, string];
 }) => {
   const w = 320;
   const h = 150;
@@ -392,9 +408,11 @@ const GrowthChart = ({
   const values = points.map(p => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = max - min || 1;
-  const x = (m: number) => pad.l + (Math.min(12, m) / 12) * (w - pad.l - pad.r);
-  const y = (v: number) => h - pad.b - ((v - min) / span) * (h - pad.t - pad.b);
+  const range = max - min || 1;
+  const [from, to] = span;
+  const x = (m: number) =>
+    pad.l + ((Math.min(to, Math.max(from, m)) - from) / (to - from || 1)) * (w - pad.l - pad.r);
+  const y = (v: number) => h - pad.b - ((v - min) / range) * (h - pad.t - pad.b);
   const path = points.map((p, i) => `${i ? "L" : "M"}${x(p.months)},${y(p.value)}`).join(" ");
   const first = points[0];
   const last = points[points.length - 1];
@@ -425,10 +443,10 @@ const GrowthChart = ({
           {last.label}
         </text>
         <text x={pad.l} y={h - 4} className="book-growth-tick">
-          birth
+          {ticks[0]}
         </text>
         <text x={w - pad.r} y={h - 4} text-anchor="end" className="book-growth-tick">
-          one year
+          {ticks[1]}
         </text>
       </svg>
       <figcaption>

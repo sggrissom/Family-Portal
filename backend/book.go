@@ -190,6 +190,17 @@ func replacePersonId(ids []int, from, to int) []int {
 	return out
 }
 
+// soleSubjectBooks are the books deleting this person would delete with them.
+func soleSubjectBooks(tx *vbolt.Tx, personId int) []Book {
+	books := []Book{}
+	for _, book := range GetPersonBooks(tx, personId) {
+		if len(replacePersonId(book.PersonIds, personId, 0)) == 0 {
+			books = append(books, book)
+		}
+	}
+	return books
+}
+
 // A book about several people loses one of them; a book with nobody left goes.
 func deletePersonBooksTx(tx *vbolt.Tx, personId int) {
 	for _, book := range GetPersonBooks(tx, personId) {
@@ -678,23 +689,17 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 		selected[p.Id] = true
 	}
 	photoOk := map[int]bool{}
-	checkedPhotos := map[int]bool{}
 	allowedPhoto := func(photoId int) bool {
-		if checkedPhotos[photoId] {
-			return photoOk[photoId]
+		if ok, checked := photoOk[photoId]; checked {
+			return ok
 		}
-		checkedPhotos[photoId] = true
 		image := GetImageById(tx, photoId)
-		if !CanAccessPhoto(tx, user, image, AccessView) {
-			return false
-		}
 		rows := GetPhotoPersonsByPhoto(tx, photoId)
 		ok := len(rows) == 0 && image.FamilyId == book.FamilyId
 		for _, row := range rows {
-			if selected[row.PersonId] {
-				ok = true
-			}
+			ok = ok || selected[row.PersonId]
 		}
+		ok = ok && CanAccessPhoto(tx, user, image, AccessView)
 		photoOk[photoId] = ok
 		return ok
 	}
@@ -713,9 +718,6 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 		}
 		milestonePhotos[id] = attached
 		return true
-	}
-	visible := func(photoId int) bool {
-		return CanAccessPhoto(tx, user, GetImageById(tx, photoId), AccessView)
 	}
 
 	who := peopleNames(people)
@@ -737,7 +739,7 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 				return errors.New("A milestone in this book does not belong to " + who)
 			}
 			if item.PhotoId != 0 {
-				if !milestonePhotos[item.SourceId][item.PhotoId] || !visible(item.PhotoId) {
+				if !milestonePhotos[item.SourceId][item.PhotoId] || !CanAccessPhoto(tx, user, GetImageById(tx, item.PhotoId), AccessView) {
 					return errors.New("A milestone's photo is not attached to it")
 				}
 				clean.PhotoId = item.PhotoId
@@ -764,7 +766,7 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 
 	book.CoverPhotoId = 0
 	if content.CoverPhotoId != 0 {
-		if !(usedPhotos[content.CoverPhotoId] && visible(content.CoverPhotoId)) && !allowedPhoto(content.CoverPhotoId) {
+		if !usedPhotos[content.CoverPhotoId] && !allowedPhoto(content.CoverPhotoId) {
 			return errors.New("The cover photo is not of " + who)
 		}
 		book.CoverPhotoId = content.CoverPhotoId

@@ -475,6 +475,11 @@ func TestFamilyBooksTakeEveryonesRecordsAndHouseholdPhotos(t *testing.T) {
 		})
 	}
 
+	summary, _ := bookCall(t, fx, fx.owner, GetPersonDeletionSummary, PersonDeletionRequest{PersonId: fx.sibling.Id})
+	if summary.Books != 0 {
+		t.Errorf("deletion summary counts %d books, but the family book outlives Theo", summary.Books)
+	}
+
 	if _, err := bookCall(t, fx, fx.owner, DeletePerson, PersonDeletionRequest{PersonId: fx.sibling.Id}); err != nil {
 		t.Fatal(err)
 	}
