@@ -12,8 +12,14 @@ import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { photoAge } from "../../lib/sameAge";
 import {
   CATEGORIES,
+<<<<<<< HEAD
   DENSITIES,
   Density,
+=======
+  DENSITY_OPTIONS,
+  Density,
+  MATCH_OPTIONS,
+>>>>>>> main
   Resolved,
   Selection,
   assembleBook,
@@ -28,10 +34,20 @@ import {
   additionsSince,
   isMulti,
   joinNames,
+<<<<<<< HEAD
+=======
+  milestoneItem,
+  monthName,
+  newItem,
+>>>>>>> main
   photoDetail,
   resolveSource,
   shortDay,
   suggestItems,
+<<<<<<< HEAD
+=======
+  toggled,
+>>>>>>> main
 } from "../../lib/book";
 import { EditorNotes } from "./book";
 import "./book-styles";
@@ -138,10 +154,16 @@ function updateItem(state: EditorState, index: number, patch: Partial<server.Boo
   changed(state);
 }
 
+<<<<<<< HEAD
 function removeItem(state: EditorState, index: number) {
   const item = state.items[index];
   state.items = state.items.filter((_, i) => i !== index);
   state.excluded = [...state.excluded, { ...item, caption: "", pinned: false, photoId: 0 }];
+=======
+function leaveOut(state: EditorState, item: server.BookItem) {
+  state.items = state.items.filter(i => itemKey(i) !== itemKey(item));
+  state.excluded = [...state.excluded, newItem(item.kind, item.sourceId)];
+>>>>>>> main
   changed(state);
 }
 
@@ -231,8 +253,14 @@ export function view(
 
 const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
   const state = useEditor(resp);
+<<<<<<< HEAD
   const r = resolveSource(resp.sources, selectionOf(resp, state));
   const book = assembleBook(resp.sources, selectionOf(resp, state));
+=======
+  const selection = selectionOf(resp, state);
+  const r = resolveSource(resp.sources, selection);
+  const book = assembleBook(resp.sources, selection);
+>>>>>>> main
   const additions = state.saved
     ? []
     : additionsSince(r, resp.book.reviewedAt, state.items, state.excluded);
@@ -330,7 +358,11 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
         <div className="book-editor-row">
           <SegmentedControl
             label="Length"
+<<<<<<< HEAD
             options={DENSITIES.map(d => ({ value: d, label: d[0].toUpperCase() + d.slice(1) }))}
+=======
+            options={DENSITY_OPTIONS}
+>>>>>>> main
             value={state.density}
             onChange={density => {
               state.density = density;
@@ -346,9 +378,13 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
                 checked={state.categories.includes(c.value)}
                 disabled={state.categories.length === 1 && state.categories.includes(c.value)}
                 onChange={() => {
+<<<<<<< HEAD
                   state.categories = state.categories.includes(c.value)
                     ? state.categories.filter(x => x !== c.value)
                     : [...state.categories, c.value];
+=======
+                  state.categories = toggled(state.categories, c.value);
+>>>>>>> main
                   resuggest(state, resp);
                 }}
               />
@@ -360,10 +396,14 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
           <div className="book-editor-row">
             <SegmentedControl
               label="Which photos"
+<<<<<<< HEAD
               options={[
                 { value: "any", label: "Photos of any of them" },
                 { value: "all", label: "Only photos of all of them" },
               ]}
+=======
+              options={MATCH_OPTIONS}
+>>>>>>> main
               value={state.match}
               onChange={match => {
                 state.match = match;
@@ -401,6 +441,7 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
                 <button type="button" onClick={() => addItem(state, r, item)}>
                   Add
                 </button>
+<<<<<<< HEAD
                 <button
                   type="button"
                   onClick={() => {
@@ -408,6 +449,9 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
                     changed(state);
                   }}
                 >
+=======
+                <button type="button" onClick={() => leaveOut(state, item)}>
+>>>>>>> main
                   Leave out
                 </button>
               </span>
@@ -663,7 +707,11 @@ const ItemRow = ({
         >
           {item.pinned ? "Kept" : "Keep"}
         </button>
+<<<<<<< HEAD
         <button type="button" onClick={() => removeItem(state, index)}>
+=======
+        <button type="button" onClick={() => leaveOut(state, item)}>
+>>>>>>> main
           Remove
         </button>
       </div>
@@ -671,6 +719,7 @@ const ItemRow = ({
   );
 };
 
+<<<<<<< HEAD
 const monthLabel = (day: string) =>
   new Date(day + "T00:00:00Z").toLocaleDateString("en-US", {
     month: "long",
@@ -678,6 +727,8 @@ const monthLabel = (day: string) =>
     timeZone: "UTC",
   });
 
+=======
+>>>>>>> main
 const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
   const included = new Set(state.items.map(itemKey));
   const usedPhotos = new Set(
@@ -725,7 +776,11 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                 vlens.scheduleRedraw();
               }}
             >
+<<<<<<< HEAD
               <span>{monthLabel(key + "-01")}</span>
+=======
+              <span>{monthName(key + "-01")}</span>
+>>>>>>> main
               <span className="book-editor-hint">{parts.join(" · ")}</span>
             </button>
             {open && (
@@ -739,6 +794,7 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                         · {shortDay(dayOf(m.milestoneDate))}
                       </span>
                     </span>
+<<<<<<< HEAD
                     <button
                       type="button"
                       onClick={() =>
@@ -751,12 +807,16 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                         })
                       }
                     >
+=======
+                    <button type="button" onClick={() => addItem(state, r, milestoneItem(r, m))}>
+>>>>>>> main
                       Add
                     </button>
                   </div>
                 ))}
                 {group.photos.length > 0 && (
                   <ul className="book-editor-thumbs">
+<<<<<<< HEAD
                     {group.photos.map(p => (
                       <li key={p.id}>
                         <button
@@ -777,6 +837,23 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                         </button>
                       </li>
                     ))}
+=======
+                    {group.photos.map(p => {
+                      const item = newItem(server.BookItemPhoto, p.id);
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            aria-label={`Add the photo from ${detailOf(r, item)}`}
+                            onClick={() => addItem(state, r, item)}
+                          >
+                            <ThumbnailImage photoId={p.id} alt="" />
+                            <span className="book-editor-add">+</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+>>>>>>> main
                   </ul>
                 )}
               </div>

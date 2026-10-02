@@ -140,16 +140,18 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                       {copy.home.eventTiming[s.eventTiming] ?? ""}: {s.event.name} ·{" "}
                       {dayLabel(dayKey(s.event.startDate), data.today)}
                     </a>
-                    <div className="home-season-actions">
-                      <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
-                        {copy.home.addPhotos}
-                      </a>
-                      {s.canAddResults && (
-                        <a href={`/competition/${s.event.id}`} className="btn btn-primary">
-                          {copy.home.addResults}
+                    {s.canContribute && (
+                      <div className="home-season-actions">
+                        <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
+                          {copy.home.addPhotos}
                         </a>
-                      )}
-                    </div>
+                        {s.canAddResults && (
+                          <a href={`/competition/${s.event.id}`} className="btn btn-primary">
+                            {copy.home.addResults}
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -250,12 +252,14 @@ const FamilyStrip = ({
           </a>
         );
       })}
-      <a href="/add-person" className="family-strip-person family-strip-add">
-        <span className="family-strip-avatar" aria-hidden="true">
-          +
-        </span>
-        <span className="family-strip-name">{copy.home.addPerson}</span>
-      </a>
+      {auth.canContributeAnywhere() && (
+        <a href="/add-person" className="family-strip-person family-strip-add">
+          <span className="family-strip-avatar" aria-hidden="true">
+            +
+          </span>
+          <span className="family-strip-name">{copy.home.addPerson}</span>
+        </a>
+      )}
     </nav>
   );
 };

@@ -14,7 +14,8 @@ import {
   heightValue,
   weightValue,
 } from "../../lib/checkup";
-import { ErrorPage } from "../../components/ErrorPage";
+import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
+import { canContribute } from "../../lib/authCache";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { WhenControl } from "../../components/WhenControl";
@@ -73,6 +74,10 @@ export function view(
         containerClass="entry-container"
       />
     );
+  }
+
+  if (!canContribute(data.growthData.familyId)) {
+    return <ViewOnlyPage backLink={`/view-growth/${data.growthData.id}`} />;
   }
 
   const form = useEditGrowthForm(data.growthData);

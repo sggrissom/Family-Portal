@@ -9,6 +9,22 @@ export const DENSITIES: Density[] = ["brief", "balanced", "detailed"];
 export const isDensity = (value: string | null | undefined): value is Density =>
   DENSITIES.includes(value as Density);
 
+<<<<<<< HEAD
+=======
+export const DENSITY_OPTIONS = DENSITIES.map(d => ({
+  value: d,
+  label: d[0].toUpperCase() + d.slice(1),
+}));
+
+export const MATCH_OPTIONS = [
+  { value: "any", label: "Photos of any of them" },
+  { value: "all", label: "Only photos of all of them" },
+];
+
+export const toggled = <T>(list: T[], value: T): T[] =>
+  list.includes(value) ? list.filter(x => x !== value) : [...list, value];
+
+>>>>>>> main
 export type Category = "milestones" | "quotes" | "artwork" | "photos";
 
 export const CATEGORIES: { value: Category; label: string }[] = [
@@ -62,7 +78,18 @@ export type Block =
   | { kind: "notes"; moments: BookMoment[] }
   | { kind: "facts"; lines: string[] }
   | { kind: "letter"; text: string; signature: string }
+<<<<<<< HEAD
   | { kind: "growth"; height: GrowthPoint[]; weight: GrowthPoint[] };
+=======
+  | {
+      kind: "growth";
+      height: GrowthPoint[];
+      weight: GrowthPoint[];
+      heightLabel: string;
+      span: [number, number];
+      ticks: [string, string];
+    };
+>>>>>>> main
 
 export interface Chapter {
   id: string;
@@ -138,13 +165,24 @@ export const dayOf = (iso: string) => (iso ?? "").slice(0, 10);
 
 export const isRealDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && day > "1000";
 
+<<<<<<< HEAD
 export function addYears(day: string, n: number): string {
   const d = new Date(day + "T00:00:00Z");
   return new Date(Date.UTC(d.getUTCFullYear() + n, d.getUTCMonth(), d.getUTCDate()))
+=======
+export function addMonths(day: string, n: number): string {
+  const d = new Date(day + "T00:00:00Z");
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()))
+>>>>>>> main
     .toISOString()
     .slice(0, 10);
 }
 
+<<<<<<< HEAD
+=======
+export const addYears = (day: string, n: number) => addMonths(day, n * 12);
+
+>>>>>>> main
 export const firstBirthday = (birthday: string) => addYears(dayOf(birthday), 1);
 
 export function addDays(day: string, n: number): string {
@@ -153,6 +191,7 @@ export function addDays(day: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+<<<<<<< HEAD
 export function longDay(day: string): string {
   return new Date(day + "T00:00:00Z").toLocaleDateString("en-US", {
     month: "long",
@@ -169,10 +208,23 @@ export function shortDay(day: string): string {
     timeZone: "UTC",
   });
 }
+=======
+const formatDay = (day: string, options: Intl.DateTimeFormatOptions) =>
+  new Date(day + "T00:00:00Z").toLocaleDateString("en-US", { ...options, timeZone: "UTC" });
+
+export const longDay = (day: string) =>
+  formatDay(day, { month: "long", day: "numeric", year: "numeric" });
+
+export const shortDay = (day: string) => formatDay(day, { month: "long", day: "numeric" });
+
+export const monthName = (day: string, year = true) =>
+  formatDay(day, { month: "long", year: year ? "numeric" : undefined });
+>>>>>>> main
 
 export const bookDates = (startDate: string, endDate: string) =>
   `${longDay(dayOf(startDate))} – ${longDay(addDays(dayOf(endDate), -1))}`;
 
+<<<<<<< HEAD
 const monthName = (day: string, year: boolean) =>
   new Date(day + "T00:00:00Z").toLocaleDateString("en-US", {
     month: "long",
@@ -192,6 +244,12 @@ function monthStart(start: string, month: number): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + month, d.getUTCDate()))
     .toISOString()
     .slice(0, 10);
+=======
+export function monthSpan(from: string, to: string): string {
+  if (from.slice(0, 7) === to.slice(0, 7)) return monthName(from);
+  if (from.slice(0, 4) === to.slice(0, 4)) return `${monthName(from, false)} – ${monthName(to)}`;
+  return `${monthName(from)} – ${monthName(to)}`;
+>>>>>>> main
 }
 
 const firstOfMonth = (day: string) => day.slice(0, 8) + "01";
@@ -273,7 +331,11 @@ export function groupMonths(weights: number[], target = 7, maxSpan = 3): number[
 export const itemKey = (item: { kind: server.BookItemKind; sourceId: number }) =>
   `${item.kind}:${item.sourceId}`;
 
+<<<<<<< HEAD
 const newItem = (kind: server.BookItemKind, sourceId: number): server.BookItem => ({
+=======
+export const newItem = (kind: server.BookItemKind, sourceId: number): server.BookItem => ({
+>>>>>>> main
   kind,
   sourceId,
   photoId: 0,
@@ -282,7 +344,10 @@ const newItem = (kind: server.BookItemKind, sourceId: number): server.BookItem =
 });
 
 export interface Resolved {
+<<<<<<< HEAD
   preset: string;
+=======
+>>>>>>> main
   people: server.Person[];
   person: Map<number, server.Person>;
   start: string;
@@ -322,7 +387,10 @@ export function resolveSource(source: BookSource, selection: Selection): Resolve
   const end = dayOf(selection.endDate);
   const firstYear = selection.preset === PRESETS.firstYear;
   return {
+<<<<<<< HEAD
     preset: selection.preset,
+=======
+>>>>>>> main
     people,
     person: new Map(people.map(p => [p.id, p])),
     start,
@@ -394,6 +462,20 @@ export function photoMatches(r: Resolved, id: number): boolean {
   return r.match === "all" ? tagged.length === r.people.length : true;
 }
 
+<<<<<<< HEAD
+=======
+// The milestone with the first of its photos the book can show and has not used yet.
+export function milestoneItem(
+  r: Resolved,
+  m: server.Milestone,
+  used = new Set<number>()
+): server.BookItem {
+  const item = newItem(server.BookItemMilestone, m.id);
+  item.photoId = (m.photoIds ?? []).find(id => r.photos.has(id) && !used.has(id)) ?? 0;
+  return item;
+}
+
+>>>>>>> main
 export interface Candidates {
   milestones: server.Milestone[];
   photos: server.Image[];
@@ -470,6 +552,7 @@ export function suggestItems(r: Resolved, options: SuggestOptions): Suggestion {
 
   for (const m of milestones) {
     const key = `${server.BookItemMilestone}:${m.id}`;
+<<<<<<< HEAD
     const kept = current.get(key);
     const item = kept ?? newItem(server.BookItemMilestone, m.id);
     if (excluded.has(key) || item.pinned || !r.categories.has(categoryOf(r, item))) continue;
@@ -477,6 +560,11 @@ export function suggestItems(r: Resolved, options: SuggestOptions): Suggestion {
       item.photoId = (m.photoIds ?? []).find(id => r.photos.has(id) && !used.has(id)) ?? 0;
       if (item.photoId) used.add(item.photoId);
     }
+=======
+    const item = current.get(key) ?? milestoneItem(r, m, used);
+    if (excluded.has(key) || item.pinned || !r.categories.has(categoryOf(r, item))) continue;
+    if (item.photoId) used.add(item.photoId);
+>>>>>>> main
     chosen.push(item);
   }
 
@@ -520,6 +608,19 @@ function byDay(r: Resolved) {
     a.sourceId - b.sourceId;
 }
 
+<<<<<<< HEAD
+=======
+// A chapter opens on a full-width photo when it has several loose photos, or
+// loose photos and no milestone photo to lead with.
+function wantsHero(r: Resolved, items: server.BookItem[]): boolean {
+  const loose = items.filter(item => item.kind === server.BookItemPhoto).length;
+  const momentPhoto = items.some(
+    item => item.kind === server.BookItemMilestone && item.photoId && r.photos.has(item.photoId)
+  );
+  return loose >= 3 || (loose > 0 && !momentPhoto);
+}
+
+>>>>>>> main
 // heroFirst moves each month's best opening photo to the front of that month.
 function heroFirst(r: Resolved, items: server.BookItem[]): server.BookItem[] {
   const sorted = [...items].sort(byDay(r));
@@ -530,9 +631,14 @@ function heroFirst(r: Resolved, items: server.BookItem[]): server.BookItem[] {
   }
   const heroes = new Map<string, server.BookItem>();
   for (const [key, group] of groups) {
+<<<<<<< HEAD
     const loose = group.filter(item => item.kind === server.BookItemPhoto);
     const momentPhoto = group.some(item => item.kind === server.BookItemMilestone && item.photoId);
     if (loose.length >= 3 || (loose.length && !momentPhoto)) {
+=======
+    if (wantsHero(r, group)) {
+      const loose = group.filter(item => item.kind === server.BookItemPhoto);
+>>>>>>> main
       heroes.set(
         key,
         loose.find(item => {
@@ -622,6 +728,7 @@ interface Entry {
 
 function chapterBlocks(entries: Entry[], r: Resolved): Block[] {
   const blocks: Block[] = [];
+<<<<<<< HEAD
   const loose = entries.filter(e => e.item.kind === server.BookItemPhoto);
   const hasMomentPhoto = entries.some(
     e => e.item.kind === server.BookItemMilestone && e.item.photoId && r.photos.has(e.item.photoId)
@@ -629,6 +736,17 @@ function chapterBlocks(entries: Entry[], r: Resolved): Block[] {
   let rest = entries;
   const first = entries[0];
   if (first && first.item.kind === server.BookItemPhoto && (loose.length >= 3 || !hasMomentPhoto)) {
+=======
+  let rest = entries;
+  const first = entries[0];
+  if (
+    first?.item.kind === server.BookItemPhoto &&
+    wantsHero(
+      r,
+      entries.map(e => e.item)
+    )
+  ) {
+>>>>>>> main
     blocks.push({
       kind: "hero",
       photo: toPhoto(r.photos.get(first.item.sourceId)!, r, first.item.caption),
@@ -678,15 +796,30 @@ function chapterBlocks(entries: Entry[], r: Resolved): Block[] {
   return blocks;
 }
 
+<<<<<<< HEAD
+=======
+const exactMonths = (from: string, day: string) =>
+  (Date.parse(day + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) / (30.4375 * 86400000);
+
+// Growth is charted against age, or against the book's own dates for someone
+// without a birthday.
+const ageOrigin = (r: Resolved, person: server.Person) =>
+  isRealDay(dayOf(person.birthday)) ? dayOf(person.birthday) : r.start;
+
+>>>>>>> main
 function growthPoints(
   records: server.GrowthData[],
   type: server.MeasurementType,
   r: Resolved,
   person: server.Person
 ): GrowthPoint[] {
+<<<<<<< HEAD
   const birthday = dayOf(person.birthday);
   const from = isRealDay(birthday) ? birthday : r.start;
   const born = new Date(from + "T00:00:00Z").getTime();
+=======
+  const from = ageOrigin(r, person);
+>>>>>>> main
   return records
     .filter(
       g =>
@@ -696,6 +829,7 @@ function growthPoints(
     )
     .map(g => {
       const day = dayOf(g.measurementDate);
+<<<<<<< HEAD
       const months = monthsOld(from, day + "T00:00:00Z");
       const exact = (new Date(day + "T00:00:00Z").getTime() - born) / (30.4375 * 86400000);
       return {
@@ -703,6 +837,13 @@ function growthPoints(
         months: Math.max(0, exact),
         value: g.value,
         label: formatMeasurement(g.value, g.unit, months),
+=======
+      return {
+        day,
+        months: Math.max(0, exactMonths(from, day)),
+        value: g.value,
+        label: formatMeasurement(g.value, g.unit, monthsOld(from, day + "T00:00:00Z")),
+>>>>>>> main
       };
     })
     .sort((a, b) => a.day.localeCompare(b.day));
@@ -712,10 +853,22 @@ function growthBlock(source: BookSource, r: Resolved, person: server.Person): Bl
   const height = growthPoints(source.growthData ?? [], server.Height, r, person);
   const weight = growthPoints(source.growthData ?? [], server.Weight, r, person);
   if (height.length < 2 && weight.length < 2) return null;
+<<<<<<< HEAD
+=======
+  const from = ageOrigin(r, person);
+>>>>>>> main
   return {
     kind: "growth",
     height: height.length >= 2 ? height : [],
     weight: weight.length >= 2 ? weight : [],
+<<<<<<< HEAD
+=======
+    heightLabel: r.firstYear ? "Length" : "Height",
+    span: [Math.max(0, exactMonths(from, r.start)), exactMonths(from, r.end)],
+    ticks: r.firstYear
+      ? ["birth", "one year"]
+      : [monthName(r.start), monthName(addDays(r.end, -1))],
+>>>>>>> main
   };
 }
 
@@ -768,7 +921,11 @@ function calendarChapters(r: Resolved, entries: Entry[], idPrefix: string): Chap
     const picked = group.flatMap(i => slots.get(i) ?? []).sort((a, b) => a.index - b.index);
     return {
       id: `${idPrefix}${from}`,
+<<<<<<< HEAD
       title: monthSpan(monthStart(base, from), monthStart(base, to)),
+=======
+      title: monthSpan(addMonths(base, from), addMonths(base, to)),
+>>>>>>> main
       dates: "",
       blocks: chapterBlocks(picked, r),
       items: picked.map(e => e.index),
@@ -781,7 +938,11 @@ function hiddenCalendarMonths(r: Resolved, entries: Entry[]): string[] {
   const base = firstOfMonth(r.start);
   const hidden: string[] = [];
   for (let slot = 0; slot < r.months; slot++) {
+<<<<<<< HEAD
     if (!used.has(slot)) hidden.push(monthName(monthStart(base, slot), true));
+=======
+    if (!used.has(slot)) hidden.push(monthName(addMonths(base, slot)));
+>>>>>>> main
   }
   return hidden;
 }
@@ -814,13 +975,23 @@ function firstYearChapters(
   chapters.push({
     id: "welcome",
     title: "Welcome to the world",
+<<<<<<< HEAD
     dates: monthSpan(r.start, addDays(monthStart(r.start, 1), -1)),
+=======
+    dates: monthSpan(r.start, addDays(addMonths(r.start, 1), -1)),
+>>>>>>> main
     blocks: welcome,
     items: welcomeEntries.map(e => e.index),
   });
 
   const weights = slotWeights(slots, 1, 11);
+<<<<<<< HEAD
   const hiddenMonths = weights.map((w, i) => (w === 0 ? `${i + 1} months` : "")).filter(Boolean);
+=======
+  const hiddenMonths = weights
+    .map((w, i) => (w > 0 ? "" : i === 0 ? "1 month old" : `${i + 1} months old`))
+    .filter(Boolean);
+>>>>>>> main
   for (const group of groupMonths(weights)) {
     const from = group[0] + 1;
     const to = group[group.length - 1] + 1;
@@ -828,7 +999,11 @@ function firstYearChapters(
     chapters.push({
       id: `months-${from}`,
       title: chapterTitle(from, to),
+<<<<<<< HEAD
       dates: monthSpan(monthStart(r.start, from), addDays(monthStart(r.start, to + 1), -1)),
+=======
+      dates: monthSpan(addMonths(r.start, from), addDays(addMonths(r.start, to + 1), -1)),
+>>>>>>> main
       blocks: chapterBlocks(picked, r),
       items: picked.map(e => e.index),
     });
@@ -927,10 +1102,16 @@ export function assembleBook(source: BookSource, selection: Selection): Book {
     else entries.push({ index, item, day });
   });
 
+<<<<<<< HEAD
   const { chapters, hiddenMonths } =
     r.firstYear && r.people.length === 1
       ? firstYearChapters(source, selection, r, entries)
       : periodChapters(source, selection, r, entries);
+=======
+  const { chapters, hiddenMonths } = r.firstYear
+    ? firstYearChapters(source, selection, r, entries)
+    : periodChapters(source, selection, r, entries);
+>>>>>>> main
 
   const candidates = candidatesIn(r);
   const cover = r.photos.get(selection.coverPhotoId);
@@ -991,6 +1172,7 @@ export function draftSelection(source: BookSource, plan: BookPlan): Selection {
   return { ...base, items, coverPhotoId };
 }
 
+<<<<<<< HEAD
 export function firstYearPlan(person: server.Person, density: Density = "balanced"): BookPlan {
   const start = dayOf(person.birthday);
   return {
@@ -1005,6 +1187,8 @@ export function firstYearPlan(person: server.Person, density: Density = "balance
   };
 }
 
+=======
+>>>>>>> main
 // additionsSince lists records the editor has not seen yet: added to the family
 // record after the book was last reviewed, and neither in the book nor left out.
 export function additionsSince(
@@ -1020,11 +1204,16 @@ export function additionsSince(
   const { milestones, photos } = candidatesIn(r);
   const out: server.BookItem[] = [];
   for (const m of milestones) {
+<<<<<<< HEAD
     const item = newItem(server.BookItemMilestone, m.id);
     if (isNew(m.createdAt) && !known.has(itemKey(item))) {
       item.photoId = (m.photoIds ?? []).find(id => r.photos.has(id)) ?? 0;
       out.push(item);
     }
+=======
+    const item = milestoneItem(r, m);
+    if (isNew(m.createdAt) && !known.has(itemKey(item))) out.push(item);
+>>>>>>> main
   }
   for (const p of photos) {
     const item = newItem(server.BookItemPhoto, p.id);

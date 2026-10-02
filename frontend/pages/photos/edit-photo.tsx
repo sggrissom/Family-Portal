@@ -6,6 +6,7 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
+import { ViewOnlyPage } from "../../components/ErrorPage";
 import "./edit-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
@@ -102,6 +103,10 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
         <Footer />
       </div>
     );
+  }
+
+  if (!auth.canContribute(data.photo.image.familyId)) {
+    return <ViewOnlyPage backLink={`/view-photo/${data.photo.image.id}`} />;
   }
 
   const form = useEditPhotoForm(data.photo.image);

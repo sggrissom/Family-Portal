@@ -120,11 +120,11 @@ export async function fetch(
   if (!tags) return [null, tagsErr];
 
   const ordered = chipOrder(
-    people.people || [],
+    (people.people || []).filter(person => auth.canContribute(person.familyId)),
     people.relations || [],
     auth.getAuth()?.familyId ?? 0
   );
-  return [{ people: ordered, tags: tags.tags }, ""];
+  return [{ people: ordered, tags: tags.tags.filter(tag => auth.canContribute(tag.familyId)) }, ""];
 }
 
 export function view(route: string, prefix: string, data: AddMilestoneData): preact.ComponentChild {

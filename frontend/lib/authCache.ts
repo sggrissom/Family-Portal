@@ -42,6 +42,30 @@ export function getFamilies(): FamilyRef[] {
   return [{ id: _auth.familyId, name: "", role: 3, isPrimary: true }];
 }
 
+export const ROLE_VIEW = 1;
+export const ROLE_CONTRIBUTE = 2;
+export const ROLE_ADMIN = 3;
+
+export function roleIn(familyId: number): number {
+  return getFamilies().find(family => family.id === familyId)?.role ?? 0;
+}
+
+export function canContribute(familyId: number): boolean {
+  return roleIn(familyId) >= ROLE_CONTRIBUTE;
+}
+
+export function canAdmin(familyId: number): boolean {
+  return roleIn(familyId) >= ROLE_ADMIN;
+}
+
+export function contributableFamilies(): FamilyRef[] {
+  return getFamilies().filter(family => family.role >= ROLE_CONTRIBUTE);
+}
+
+export function canContributeAnywhere(): boolean {
+  return contributableFamilies().length > 0;
+}
+
 export function clearAuth() {
   _auth = null;
   localStorage.removeItem("auth-cache");

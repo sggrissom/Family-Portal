@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
@@ -185,6 +186,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
 
   const labels = labelsFor(overview.activity);
   const dates = formatDateRange(overview.season.startDate, overview.season.endDate);
+  const editable = auth.canContribute(overview.season.familyId);
 
   return (
     <div>
@@ -210,7 +212,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>{labels.eventPlural}</h2>
-            {!state.addingEvent && (
+            {editable && !state.addingEvent && (
               <button
                 className="btn btn-primary"
                 onClick={vlens.cachePartial(onShowEventForm, state)}
@@ -234,8 +236,8 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
           {state.events.length === 0 ? (
             <div className="empty-state">
               <p>
-                No {labels.eventPlural.toLowerCase()} yet. Add the first one to start recording
-                results.
+                No {labels.eventPlural.toLowerCase()} yet.
+                {editable && " Add the first one to start recording results."}
               </p>
             </div>
           ) : (
@@ -253,7 +255,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
                   </li>
                 ) : (
                   <li key={event.id} className="event-item">
-                    <EventRow state={state} event={event} labels={labels} />
+                    <EventRow state={state} event={event} labels={labels} editable={editable} />
                   </li>
                 )
               )}
@@ -264,7 +266,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>{labels.entryPlural}</h2>
-            {!state.addingEntry && (
+            {editable && !state.addingEntry && (
               <button
                 className="btn btn-primary"
                 onClick={vlens.cachePartial(onShowEntryForm, state)}
@@ -309,7 +311,13 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
                   </li>
                 ) : (
                   <li key={entryView.entry.id} className="event-item">
-                    <EntryRow state={state} data={data} entryView={entryView} labels={labels} />
+                    <EntryRow
+                      state={state}
+                      data={data}
+                      entryView={entryView}
+                      labels={labels}
+                      editable={editable}
+                    />
                   </li>
                 )
               )}
@@ -326,10 +334,12 @@ const EventRow = ({
   state,
   event,
   labels,
+  editable,
 }: {
   state: SeasonState;
   event: server.Event;
   labels: ActivityLabels;
+  editable: boolean;
 }) => {
   const dates = formatDateRange(event.startDate, event.endDate);
   const where = [event.host, event.location].filter(part => part).join(" · ");
@@ -353,26 +363,28 @@ const EventRow = ({
         </span>
         {event.notes && <p className="event-notes">{event.notes}</p>}
       </div>
-      <span className="event-item-actions">
-        <button
-          className="icon-btn"
-          title={`Edit ${labels.event.toLowerCase()}`}
-          aria-label={`Edit ${labels.event.toLowerCase()}`}
-          onClick={vlens.cachePartial(onStartEditEvent, state, event)}
-          disabled={state.saving}
-        >
-          ✏️
-        </button>
-        <button
-          className="icon-btn"
-          title={`Delete ${labels.event.toLowerCase()}`}
-          aria-label={`Delete ${labels.event.toLowerCase()}`}
-          onClick={vlens.cachePartial(onDeleteEvent, state, event, labels)}
-          disabled={state.saving}
-        >
-          🗑️
-        </button>
-      </span>
+      {editable && (
+        <span className="event-item-actions">
+          <button
+            className="icon-btn"
+            title={`Edit ${labels.event.toLowerCase()}`}
+            aria-label={`Edit ${labels.event.toLowerCase()}`}
+            onClick={vlens.cachePartial(onStartEditEvent, state, event)}
+            disabled={state.saving}
+          >
+            ✏️
+          </button>
+          <button
+            className="icon-btn"
+            title={`Delete ${labels.event.toLowerCase()}`}
+            aria-label={`Delete ${labels.event.toLowerCase()}`}
+            onClick={vlens.cachePartial(onDeleteEvent, state, event, labels)}
+            disabled={state.saving}
+          >
+            🗑️
+          </button>
+        </span>
+      )}
     </>
   );
 };
@@ -497,11 +509,13 @@ const EntryRow = ({
   data,
   entryView,
   labels,
+  editable,
 }: {
   state: SeasonState;
   data: SeasonPageData;
   entryView: server.EntryView;
   labels: ActivityLabels;
+  editable: boolean;
 }) => {
   const entry = entryView.entry;
   const traits = [entry.format, entry.style, entry.division, entry.level]
@@ -529,26 +543,28 @@ const EntryRow = ({
         </span>
         {entry.notes && <p className="event-notes">{entry.notes}</p>}
       </div>
-      <span className="event-item-actions">
-        <button
-          className="icon-btn"
-          title={`Edit ${labels.entry.toLowerCase()}`}
-          aria-label={`Edit ${labels.entry.toLowerCase()}`}
-          onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
-          disabled={state.saving}
-        >
-          ✏️
-        </button>
-        <button
-          className="icon-btn"
-          title={`Delete ${labels.entry.toLowerCase()}`}
-          aria-label={`Delete ${labels.entry.toLowerCase()}`}
-          onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
-          disabled={state.saving}
-        >
-          🗑️
-        </button>
-      </span>
+      {editable && (
+        <span className="event-item-actions">
+          <button
+            className="icon-btn"
+            title={`Edit ${labels.entry.toLowerCase()}`}
+            aria-label={`Edit ${labels.entry.toLowerCase()}`}
+            onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
+            disabled={state.saving}
+          >
+            ✏️
+          </button>
+          <button
+            className="icon-btn"
+            title={`Delete ${labels.entry.toLowerCase()}`}
+            aria-label={`Delete ${labels.entry.toLowerCase()}`}
+            onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
+            disabled={state.saving}
+          >
+            🗑️
+          </button>
+        </span>
+      )}
     </>
   );
 };

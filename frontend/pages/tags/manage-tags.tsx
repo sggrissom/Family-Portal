@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
@@ -184,24 +185,28 @@ export function view(
                           <span className="tag-phrase">suggested for “{tag.autoPhrase}”</span>
                         )}
                       </span>
-                      <button
-                        className="tag-action-btn"
-                        title="Edit"
-                        aria-label={`Edit tag ${tag.name}`}
-                        onClick={vlens.cachePartial(onStartEdit, state, tag)}
-                        disabled={state.saving}
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="tag-action-btn"
-                        title="Delete"
-                        aria-label={`Delete tag ${tag.name}`}
-                        onClick={vlens.cachePartial(onDeleteTag, state, tag.id)}
-                        disabled={state.saving}
-                      >
-                        🗑️
-                      </button>
+                      {auth.canContribute(tag.familyId) && (
+                        <button
+                          className="tag-action-btn"
+                          title="Edit"
+                          aria-label={`Edit tag ${tag.name}`}
+                          onClick={vlens.cachePartial(onStartEdit, state, tag)}
+                          disabled={state.saving}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                      {auth.canAdmin(tag.familyId) && (
+                        <button
+                          className="tag-action-btn"
+                          title="Delete"
+                          aria-label={`Delete tag ${tag.name}`}
+                          onClick={vlens.cachePartial(onDeleteTag, state, tag.id)}
+                          disabled={state.saving}
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

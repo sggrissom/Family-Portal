@@ -2,6 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../server";
 import { FamilySelect } from "./FamilySelect";
+import { ROLE_CONTRIBUTE, ROLE_VIEW } from "../lib/authCache";
 import "./family-members-styles";
 
 type FamilyMembersState = {
@@ -106,9 +107,10 @@ export const FamilyMembersSection = ({
       <h2>Family Members</h2>
       <div className="settings-card">
         <p className="section-description">
-          Everyone here can see and edit this family's people, photos, measurements and milestones.
-          Removing someone — or leaving yourself — takes effect immediately and leaves all of that
-          content with the family.
+          Members can see and edit this family's people, photos, measurements and milestones, except
+          those marked view only, who can see everything but change nothing. Removing someone — or
+          leaving yourself — takes effect immediately and leaves all of that content with the
+          family.
         </p>
 
         {state.error && (
@@ -120,6 +122,7 @@ export const FamilyMembersSection = ({
         <FamilySelect
           id="membersFamilyId"
           label="Family"
+          minRole={ROLE_VIEW}
           value={state.familyId}
           disabled={state.busy}
           onChange={familyId => {
@@ -139,6 +142,12 @@ export const FamilyMembersSection = ({
               <div className="family-member-actions">
                 {member.isOwner && <span className="family-member-badge">Owner</span>}
                 {member.isSelf && <span className="family-member-badge">You</span>}
+                {member.role === ROLE_VIEW && (
+                  <span className="family-member-badge">View only</span>
+                )}
+                {member.role === ROLE_CONTRIBUTE && (
+                  <span className="family-member-badge">Contributor</span>
+                )}
                 {callerIsOwner && !member.isSelf && (
                   <button
                     type="button"

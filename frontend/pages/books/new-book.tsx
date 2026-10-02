@@ -9,14 +9,24 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import {
   CATEGORIES,
   Category,
+<<<<<<< HEAD
   DENSITIES,
   Density,
+=======
+  DENSITY_OPTIONS,
+  Density,
+  MATCH_OPTIONS,
+>>>>>>> main
   PRESETS,
   addDays,
   bookDates,
   dayOf,
   draftSelection,
   firstBirthday,
+<<<<<<< HEAD
+=======
+  toggled,
+>>>>>>> main
 } from "../../lib/book";
 import {
   Period,
@@ -249,12 +259,16 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
 
   const togglePerson = (id: number) => {
     if (single) update(form, { personIds: [id], age: 0 });
+<<<<<<< HEAD
     else
       update(form, {
         personIds: form.personIds.includes(id)
           ? form.personIds.filter(p => p !== id)
           : [...form.personIds, id],
       });
+=======
+    else update(form, { personIds: toggled(form.personIds, id) });
+>>>>>>> main
   };
 
   return (
@@ -290,10 +304,14 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
           <div className="book-editor-row">
             <SegmentedControl
               label="Which photos"
+<<<<<<< HEAD
               options={[
                 { value: "any", label: "Photos of any of them" },
                 { value: "all", label: "Only photos of all of them" },
               ]}
+=======
+              options={MATCH_OPTIONS}
+>>>>>>> main
               value={form.match}
               onChange={match => update(form, { match })}
             />
@@ -390,6 +408,7 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
               <input
                 type="checkbox"
                 checked={form.categories.includes(c.value)}
+<<<<<<< HEAD
                 onChange={() =>
                   update(form, {
                     categories: form.categories.includes(c.value)
@@ -397,6 +416,9 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
                       : [...form.categories, c.value],
                   })
                 }
+=======
+                onChange={() => update(form, { categories: toggled(form.categories, c.value) })}
+>>>>>>> main
               />
               {c.label}
             </label>
@@ -413,7 +435,11 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
         <div className="book-editor-row">
           <SegmentedControl
             label="How many photos"
+<<<<<<< HEAD
             options={DENSITIES.map(d => ({ value: d, label: d[0].toUpperCase() + d.slice(1) }))}
+=======
+            options={DENSITY_OPTIONS}
+>>>>>>> main
             value={form.density}
             onChange={density => update(form, { density })}
           />

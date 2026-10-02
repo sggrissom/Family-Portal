@@ -71,13 +71,15 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
         ))}
       </ul>
       <div className="app-topbar-actions">
-        <button
-          type="button"
-          className="app-add-button"
-          onClick={vlens.cachePartial(openSheet, state)}
-        >
-          <span aria-hidden="true">+</span> {copy.nav.add}
-        </button>
+        {auth.canContributeAnywhere() && (
+          <button
+            type="button"
+            className="app-add-button"
+            onClick={vlens.cachePartial(openSheet, state)}
+          >
+            <span aria-hidden="true">+</span> {copy.nav.add}
+          </button>
+        )}
         <div className="account">
           <button
             type="button"
@@ -119,14 +121,16 @@ export const BottomNav = () => {
   return (
     <nav className="app-bottombar" aria-label="Quick navigation">
       {items.slice(0, 2).map(link)}
-      <button
-        type="button"
-        className="app-bottombar-add"
-        aria-label={copy.nav.add}
-        onClick={vlens.cachePartial(openSheet, state)}
-      >
-        <span aria-hidden="true">+</span>
-      </button>
+      {auth.canContributeAnywhere() && (
+        <button
+          type="button"
+          className="app-bottombar-add"
+          aria-label={copy.nav.add}
+          onClick={vlens.cachePartial(openSheet, state)}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      )}
       {items.slice(2).map(link)}
     </nav>
   );
@@ -285,7 +289,11 @@ async function openSheet(state: NavState) {
   ]);
   openEvents = events?.events ?? [];
   if (!resp) return;
-  familyPeople = chipOrder(resp.people || [], resp.relations || [], auth.getAuth()?.familyId ?? 0);
+  familyPeople = chipOrder(
+    (resp.people || []).filter(person => auth.canContribute(person.familyId)),
+    resp.relations || [],
+    auth.getAuth()?.familyId ?? 0
+  );
   if (state.sheetOpen) {
     state.selectedPersonId = defaultPerson(familyPeople);
   }

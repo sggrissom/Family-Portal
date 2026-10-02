@@ -5,8 +5,14 @@ import {
   Density,
   PRESETS,
   Selection,
+<<<<<<< HEAD
   draftSelection,
   firstYearPlan,
+=======
+  dayOf,
+  draftSelection,
+  firstBirthday,
+>>>>>>> main
 } from "./book";
 
 type Writing = { introduction?: string; letter?: string; signature?: string };
@@ -418,6 +424,23 @@ export function sampleSource(name: Sample): BookSource {
   return toSource(sample(name));
 }
 
+<<<<<<< HEAD
+=======
+function firstYearPlan(person: server.Person, density: Density): BookPlan {
+  const start = dayOf(person.birthday);
+  return {
+    preset: PRESETS.firstYear,
+    title: `${person.name}'s first year`,
+    startDate: start,
+    endDate: firstBirthday(start),
+    categories: [],
+    match: "any",
+    showGrowth: true,
+    density,
+  };
+}
+
+>>>>>>> main
 export function samplePlan(name: Sample, density: Density = "balanced"): BookPlan {
   const raw = sample(name);
   if (name !== "family") return firstYearPlan(raw.people[0], density);

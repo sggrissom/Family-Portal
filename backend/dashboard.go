@@ -54,6 +54,7 @@ type DashboardSeason struct {
 	ActivityName  string        `json:"activityName"`
 	Event         *EventSummary `json:"event"`
 	EventTiming   string        `json:"eventTiming"`
+	CanContribute bool          `json:"canContribute"`
 	CanAddResults bool          `json:"canAddResults"`
 }
 
@@ -242,8 +243,9 @@ func seasonsInProgress(tx *vbolt.Tx, user User, today time.Time) []DashboardSeas
 				continue
 			}
 			entry := DashboardSeason{
-				Season:       seasonSummary(tx, season),
-				ActivityName: GetActivityById(tx, season.ActivityId).Name,
+				Season:        seasonSummary(tx, season),
+				ActivityName:  GetActivityById(tx, season.ActivityId).Name,
+				CanContribute: canContribute,
 			}
 			if event, timing := pickSeasonEvent(GetSeasonEvents(tx, season.Id), today); event != nil {
 				summary := eventSummary(*event)

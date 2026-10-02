@@ -110,6 +110,7 @@ type SeedSummary struct {
 	Results      int
 	ChatMessages int
 	Photos       int
+	Books        int
 	// PhotoJobs carry the bytes for photos whose variants still need
 	// rendering. Pass them to ProcessSeedPhotos once the tx has committed.
 	PhotoJobs []PhotoProcessingJob
@@ -974,6 +975,11 @@ func (s *seeder) build(scale int) {
 	s.milestone(meera, s.now.AddDate(-3, 0, 0), "Finished the master's degree, finally", "achievement", tags["School"])
 	s.milestone(meera, s.now.AddDate(0, -5, 0), "Announced the pregnancy at Sunday dinner", "first", tags["Firsts"])
 
+	s.milestone(esme, s.now.AddDate(0, -10, 0), "Moved up to pointe shoes", "achievement", tags["Sports"])
+	s.milestone(esme, s.now.AddDate(0, -6, -3), "Ballet is just running, but fancy", "quote", tags["Funny"])
+	s.milestone(esme, s.now.AddDate(0, -4, 0), "Painted the poster for the studio recital", "artwork")
+	s.milestone(esme, s.now.AddDate(0, -2, 1), "First place solo at Spring Regionals", "achievement", tags["Sports"])
+
 	s.milestone(gerald, s.now.AddDate(-1, -6, 0), "Retired after 38 years", "achievement", elderTags["Keepsakes"])
 	s.milestone(rosalind, s.now.AddDate(0, -4, 0), "Drove out to see all five grandchildren in one weekend", "first", elderTags["Visits"])
 
@@ -1004,7 +1010,7 @@ func (s *seeder) build(scale int) {
 	s.profile(maeve, newborn, 42, 30, 1.8)
 	s.photo(w, mom, "newborn-feet.jpg", "Ten tiny toes",
 		"", maeveBorn.AddDate(0, 0, 12), []Person{maeve})
-	s.photo(w, dad, "baptism.jpg", "Maeve's baptism",
+	baptism := s.photo(w, dad, "baptism.jpg", "Maeve's baptism",
 		"Slept through the whole thing, then screamed at the reception.", maeveBorn.AddDate(0, 3, 0),
 		[]Person{maeve, owen, meera, gerald, rosalind})
 
@@ -1026,7 +1032,7 @@ func (s *seeder) build(scale int) {
 		"Rowan spent most of it under the parachute.", s.now.AddDate(0, -4, -10), []Person{rowan}, tags["School"])
 	s.profile(rowan, fieldDay, 34, 58, 2.2)
 
-	s.photo(w, mom, "bubbles-park.jpg", "Bubbles at the park",
+	bubbles := s.photo(w, mom, "bubbles-park.jpg", "Bubbles at the park",
 		"", s.now.AddDate(0, 0, -20), []Person{maeve}, tags["Funny"])
 	s.photo(w, mom, "bubbles-closeup.jpg", "More bubbles",
 		"", s.now.AddDate(0, 0, -20), []Person{maeve})
@@ -1046,6 +1052,15 @@ func (s *seeder) build(scale int) {
 	s.profile(bridget, bridgetShot, 87, 31, 1.6)
 	s.photo(coles.Id, aunt, "chess-with-grandpa.jpg", "Chess with Grandpa Cole",
 		"Sam has decided the knight is the only piece worth moving.", s.now.AddDate(0, -2, -12), []Person{samCole})
+
+	// Books -------------------------------------------------------------------
+	s.books(mom, dad, kids, maeve, esme, seedBookPhotos{
+		newborn:  newborn.Id,
+		baptism:  baptism.Id,
+		ballet:   ballet.Id,
+		fieldDay: fieldDay.Id,
+		bubbles:  bubbles.Id,
+	})
 
 	// Chat --------------------------------------------------------------------
 	transcript := []struct {

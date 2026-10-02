@@ -151,6 +151,7 @@ func report(dbPath, password string, summary backend.SeedSummary) {
 		{"activity results", summary.Results},
 		{"chat messages", summary.ChatMessages},
 		{"photos", summary.Photos},
+		{"books", summary.Books},
 	}
 	var parts []string
 	for _, count := range counts {
