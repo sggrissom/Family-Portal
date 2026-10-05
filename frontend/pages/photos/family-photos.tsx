@@ -1,3 +1,4 @@
+import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -67,16 +68,6 @@ interface FamilyPhotosPageProps {
   user: auth.AuthCache;
   data: FamilyPhotosData;
 }
-
-const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return "";
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  } catch {
-    return "";
-  }
-};
 
 function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });

@@ -1,3 +1,4 @@
+import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -79,18 +80,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     "",
   ];
 }
-
-const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return "";
-  if (dateString.includes("T") && dateString.endsWith("Z")) {
-    const dateParts = dateString.split("T")[0].split("-");
-    const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1;
-    const day = parseInt(dateParts[2]);
-    return new Date(year, month, day).toLocaleDateString();
-  }
-  return new Date(dateString).toLocaleDateString();
-};
 
 export function view(route: string, prefix: string, data: ViewPhotoData): preact.ComponentChild {
   const currentAuth = auth.getAuth();

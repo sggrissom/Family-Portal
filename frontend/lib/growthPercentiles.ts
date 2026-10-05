@@ -1,3 +1,5 @@
+import { localDateString } from "./when";
+
 export interface PercentileRow {
   month: number;
   p3: number;
@@ -334,16 +336,19 @@ export function computePercentileLabel(
 
 export function isValidBirthday(birthday: string | undefined | null): birthday is string {
   if (!birthday) return false;
-  const year = new Date(birthday).getFullYear();
+  const year = new Date(birthday).getUTCFullYear();
   return year > 1000;
 }
 
 export function ageInMonths(birthday: string | Date, measurementDate: string | Date): number {
-  const birth = new Date(birthday);
-  const measure = new Date(measurementDate);
-  const yearDiff = measure.getFullYear() - birth.getFullYear();
-  const monthDiff = measure.getMonth() - birth.getMonth();
-  const dayDiff = measure.getDate() - birth.getDate();
+  // Strings are stored record dates; Date objects represent a local calendar day.
+  const birth = new Date(typeof birthday === "string" ? birthday : localDateString(birthday));
+  const measure = new Date(
+    typeof measurementDate === "string" ? measurementDate : localDateString(measurementDate)
+  );
+  const yearDiff = measure.getUTCFullYear() - birth.getUTCFullYear();
+  const monthDiff = measure.getUTCMonth() - birth.getUTCMonth();
+  const dayDiff = measure.getUTCDate() - birth.getUTCDate();
   return yearDiff * 12 + monthDiff + dayDiff / 30.4375;
 }
 
