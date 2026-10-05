@@ -538,7 +538,7 @@ func extractExifDate(fileData []byte) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("no DateTime found in EXIF: %w", err)
 	}
 
-	return tm, nil
+	return wallClockUTC(tm), nil
 }
 
 func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
@@ -548,12 +548,17 @@ func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 }
 
+// For "auto", photoDate is the uploader's local day, used when the file has
+// no EXIF date.
 func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
 	if inputType == "auto" {
 		if exifDate, err := extractExifDate(fileData); err == nil {
 			return exifDate, nil
 		}
-		return time.Now(), nil
+		if fallback, err := time.Parse("2006-01-02", photoDate); err == nil {
+			return fallback, nil
+		}
+		return wallClockUTC(time.Now().UTC()), nil
 	}
 	return resolveEntryDate("Photo", inputType, &photoDate, ageYears, ageMonths, person.Birthday)
 }

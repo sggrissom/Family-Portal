@@ -16,7 +16,7 @@ func validateEntryInputType(inputType string) error {
 func resolveEntryDate(noun string, inputType string, date *string, ageYears *int, ageMonths *int, birthday time.Time) (time.Time, error) {
 	switch inputType {
 	case "today":
-		return time.Now(), nil
+		return dayStart(time.Now().UTC()), nil
 	case "date":
 		if date == nil || *date == "" {
 			return time.Time{}, errors.New(noun + " date is required when input type is 'date'")
@@ -33,7 +33,7 @@ func resolveEntryDate(noun string, inputType string, date *string, ageYears *int
 			}
 			months = *ageMonths
 		}
-		return birthday.AddDate(*ageYears, months, 0), nil
+		return dayStart(birthday).AddDate(*ageYears, months, 0), nil
 	}
 	return time.Time{}, validateEntryInputType(inputType)
 }

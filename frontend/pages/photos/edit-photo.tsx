@@ -148,8 +148,8 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
       id: photo.id,
       title: form.title.trim(),
       description: form.description.trim(),
-      inputType: form.inputType,
-      photoDate: form.photoDate,
+      inputType: form.inputType === "today" ? "date" : form.inputType,
+      photoDate: form.inputType === "today" ? localDateString(new Date()) : form.photoDate,
       ageYears: form.ageYears ? parseInt(form.ageYears) : null,
       ageMonths: form.ageMonths ? parseInt(form.ageMonths) : null,
     };

@@ -1,4 +1,5 @@
 import * as server from "../server";
+import { localDateString } from "./when";
 import { usePhotoStatus } from "../hooks/usePhotoStatus";
 
 async function uploadErrorMessage(response: Response): Promise<string> {
@@ -25,6 +26,7 @@ export async function uploadPhoto(
     formData.append("familyId", String(familyId));
   }
   formData.append("inputType", "auto");
+  formData.append("photoDate", localDateString(new Date()));
   formData.append("photo", file);
 
   const response = await window.fetch("/api/upload-photo", {
