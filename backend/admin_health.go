@@ -165,7 +165,9 @@ func collectSystemHealth(tx *vbolt.Tx) (resp SystemHealthResponse) {
 			Proxy4xx:      int(host.App.Traffic.Error4xx),
 			WindowSeconds: int(host.App.Traffic.WindowSeconds),
 		}
-		resp.Backups = backupProblems(host.App.Backups)
+		if !isStagingSite() {
+			resp.Backups = backupProblems(host.App.Backups)
+		}
 	}
 
 	push := GetPushWorkerStats()

@@ -142,3 +142,11 @@ func TestDescribeHealthNeverSendsAnEmptyList(t *testing.T) {
 		t.Errorf("expected a fallback line, got: %q", body)
 	}
 }
+
+func TestDescribeHealthLinksToThisSite(t *testing.T) {
+	t.Setenv("SITE_ROOT", "https://staging.familyrecord.app")
+	body := describeHealth(SystemHealthResponse{})
+	if !strings.Contains(body, "https://staging.familyrecord.app/admin") {
+		t.Errorf("body should link to SITE_ROOT, got: %q", body)
+	}
+}
