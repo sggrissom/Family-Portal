@@ -60,7 +60,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     return rpc.ok<HistoryData>({ timeline: emptyTimeline, loaded: [] });
   }
 
-  const thisYear = new Date().getUTCFullYear();
+  const thisYear = new Date().getFullYear();
   const [first, err] = await server.GetFamilyTimeline(
     timelineRequest({ from: `${thisYear}-01-01`, includeActivities: true })
   );

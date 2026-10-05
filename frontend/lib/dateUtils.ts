@@ -55,19 +55,15 @@ export const calculateAge = (birthdayString: string, targetDateString: string): 
 
 export const formatDate = (dateString: string): string => {
   if (!dateString) return "";
-  if (dateString.includes("T") && dateString.endsWith("Z")) {
-    const dateParts = dateString.split("T")[0].split("-");
-    const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1;
-    const day = parseInt(dateParts[2]);
-    return new Date(year, month, day).toLocaleDateString();
-  }
-  return new Date(dateString).toLocaleDateString();
+  // Record dates use their UTC calendar day; timestamps use formatDateTime.
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { timeZone: "UTC" });
 };
 
 export const isRealDate = (dateString: string | null | undefined): dateString is string => {
   if (!dateString) return false;
-  const year = new Date(dateString).getFullYear();
+  const year = new Date(dateString).getUTCFullYear();
   return !isNaN(year) && year > 1000;
 };
 

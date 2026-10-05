@@ -1,3 +1,5 @@
+import { localDateString } from "../../lib/when";
+import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -182,18 +184,6 @@ interface EditPhotoPageProps {
   allTags: server.Tag[];
 }
 
-const formatPhotoDate = (dateString: string) => {
-  if (!dateString) return "";
-  if (dateString.includes("T") && dateString.endsWith("Z")) {
-    const dateParts = dateString.split("T")[0].split("-");
-    const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1;
-    const day = parseInt(dateParts[2]);
-    return new Date(year, month, day).toLocaleDateString();
-  }
-  return new Date(dateString).toLocaleDateString();
-};
-
 const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
   return (
     <div className="edit-photo-page">
@@ -301,7 +291,7 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
                 id="date"
                 type="date"
                 {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                max={new Date().toISOString().split("T")[0]}
+                max={localDateString(new Date())}
                 required
                 disabled={form.loading}
               />
