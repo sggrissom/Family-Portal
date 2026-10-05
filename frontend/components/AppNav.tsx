@@ -23,17 +23,28 @@ const DESTINATIONS: { key: Destination; href: string; icon: string }[] = [
   { key: "photos", href: "/photos", icon: "🖼️" },
   { key: "growth", href: "/growth", icon: "📈" },
   { key: "history", href: "/history", icon: "📅" },
+  { key: "books", href: "/books", icon: "📖" },
+  { key: "sameAge", href: "/same-age", icon: "👶" },
+  { key: "activities", href: "/activities", icon: "🏆" },
   { key: "chat", href: "/chat", icon: "💬" },
 ];
 
-const BOTTOM_BAR: Destination[] = ["home", "photos", "growth", "chat"];
+const TOP_BAR: Destination[] = ["home", "photos", "growth", "history", "books"];
+const BOTTOM_BAR: Destination[] = ["home", "photos", "growth"];
+const MORE: Destination[] = ["history", "books", "sameAge", "activities", "chat"];
+
+function destination(key: Destination) {
+  return DESTINATIONS.find(d => d.key === key)!;
+}
 
 interface NavState {
   accountOpen: boolean;
   sheetOpen: boolean;
+  moreOpen: boolean;
   selectedPersonId: number | null;
   faceCount: number | null;
   dialog: ModalDialogState;
+  moreDialog: ModalDialogState;
 }
 
 let familyPeople: server.Person[] | null = null;
@@ -43,11 +54,14 @@ const useNav = vlens.declareHook((): NavState => {
   const state: NavState = {
     accountOpen: false,
     sheetOpen: false,
+    moreOpen: false,
     selectedPersonId: null,
     faceCount: null,
     dialog: newModalDialog(),
+    moreDialog: newModalDialog(),
   };
   state.dialog.onDismiss = () => closeSheet(state);
+  state.moreDialog.onDismiss = () => closeMore(state);
   return state;
 });
 
@@ -58,7 +72,7 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
   return (
     <>
       <ul className="app-topbar-links">
-        {DESTINATIONS.map(d => (
+        {TOP_BAR.map(destination).map(d => (
           <li key={d.key}>
             <a
               href={d.href}
@@ -69,6 +83,19 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
             </a>
           </li>
         ))}
+        <li>
+          <button
+            type="button"
+            className={active && !TOP_BAR.includes(active) ? "active" : ""}
+            aria-haspopup="dialog"
+            onClick={vlens.cachePartial(openMore, state)}
+          >
+            {copy.nav.more}{" "}
+            <span className="app-topbar-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+        </li>
       </ul>
       <div className="app-topbar-actions">
         {auth.canContributeAnywhere() && (
@@ -102,7 +129,8 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
 export const BottomNav = () => {
   const state = useNav();
   const active = activeDestination(window.location.pathname);
-  const items = BOTTOM_BAR.map(key => DESTINATIONS.find(d => d.key === key)!);
+  const items = BOTTOM_BAR.map(destination);
+  const moreActive = active !== null && MORE.includes(active);
 
   const link = (d: (typeof DESTINATIONS)[number]) => (
     <a
@@ -132,7 +160,67 @@ export const BottomNav = () => {
         </button>
       )}
       {items.slice(2).map(link)}
+      <button
+        type="button"
+        className={moreActive ? "app-bottombar-item active" : "app-bottombar-item"}
+        aria-haspopup="dialog"
+        onClick={vlens.cachePartial(openMore, state)}
+      >
+        <span className="app-bottombar-icon" aria-hidden="true">
+          ☰
+        </span>
+        <span>{copy.nav.more}</span>
+      </button>
     </nav>
+  );
+};
+
+export const MoreSheet = () => {
+  const state = useNav();
+  if (!state.moreOpen) return null;
+  const active = activeDestination(window.location.pathname);
+
+  return (
+    <div className="add-sheet-backdrop" onClick={vlens.cachePartial(moreBackdropClicked, state)}>
+      <div
+        className="add-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="moreSheetTitle"
+        {...attrsModalDialog(state.moreDialog)}
+      >
+        <div className="add-sheet-header">
+          <h2 id="moreSheetTitle">{copy.moreSheet.title}</h2>
+          <button
+            type="button"
+            className="add-sheet-close"
+            aria-label={copy.addSheet.close}
+            onClick={vlens.cachePartial(closeMore, state)}
+          >
+            ×
+          </button>
+        </div>
+        <nav className="add-sheet-options" aria-label={copy.moreSheet.title}>
+          {MORE.map(destination).map(d => (
+            <a
+              key={d.key}
+              href={d.href}
+              className={TOP_BAR.includes(d.key) ? "more-sheet-mobile-only" : ""}
+              aria-current={d.key === active ? "page" : undefined}
+              onClick={vlens.cachePartial(closeMore, state)}
+            >
+              <span className="add-sheet-icon" aria-hidden="true">
+                {d.icon}
+              </span>
+              <span className="more-sheet-label">
+                {copy.nav[d.key]}
+                <span>{copy.moreSheet.blurbs[d.key]}</span>
+              </span>
+            </a>
+          ))}
+        </nav>
+      </div>
+    </div>
   );
 };
 
@@ -234,12 +322,6 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
       <strong>{user.name}</strong>
     </div>
     <ul>
-      <li className="account-menu-history">
-        <a href="/history">{copy.nav.history}</a>
-      </li>
-      <li>
-        <a href="/activities">{copy.account.activities}</a>
-      </li>
       <li>
         <a href="/manage-tags">{copy.account.tags}</a>
       </li>
@@ -278,6 +360,7 @@ export function openAddSheet() {
 
 async function openSheet(state: NavState) {
   closeAccount(state);
+  closeMore(state);
   state.sheetOpen = true;
   state.selectedPersonId = defaultPerson(familyPeople ?? []);
   vlens.scheduleRedraw();
@@ -306,6 +389,26 @@ function closeSheet(state: NavState) {
   state.sheetOpen = false;
   closeModalDialog(state.dialog);
   vlens.scheduleRedraw();
+}
+
+function openMore(state: NavState) {
+  closeAccount(state);
+  closeSheet(state);
+  state.moreOpen = true;
+  vlens.scheduleRedraw();
+}
+
+function closeMore(state: NavState) {
+  if (!state.moreOpen) return;
+  state.moreOpen = false;
+  closeModalDialog(state.moreDialog);
+  vlens.scheduleRedraw();
+}
+
+function moreBackdropClicked(state: NavState, event: MouseEvent) {
+  if (event.target === event.currentTarget) {
+    closeMore(state);
+  }
 }
 
 function backdropClicked(state: NavState, event: MouseEvent) {

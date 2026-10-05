@@ -1,4 +1,12 @@
-export type Destination = "home" | "photos" | "growth" | "history" | "chat";
+export type Destination =
+  | "home"
+  | "photos"
+  | "growth"
+  | "history"
+  | "books"
+  | "sameAge"
+  | "activities"
+  | "chat";
 
 const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/dashboard", "home"],
@@ -10,6 +18,15 @@ const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/view-growth", "growth"],
   ["/edit-growth", "growth"],
   ["/history", "history"],
+  ["/books", "books"],
+  ["/book", "books"],
+  ["/new-book", "books"],
+  ["/edit-book", "books"],
+  ["/same-age", "sameAge"],
+  ["/activities", "activities"],
+  ["/season", "activities"],
+  ["/competition", "activities"],
+  ["/routine", "activities"],
   ["/chat", "chat"],
 ];
 
