@@ -294,7 +294,7 @@ func importPhotos(
 		image.FileSize = int(size)
 		image.Title = photo.Title
 		image.Description = photo.Description
-		image.PhotoDate = photo.PhotoDate
+		image.PhotoDate = wallClockUTC(photo.PhotoDate)
 		image.Status = 0
 		image.CreatedAt = time.Now()
 

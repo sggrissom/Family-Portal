@@ -379,8 +379,8 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		if time.Since(result) > time.Minute {
-			t.Error("Expected result to be close to current time")
+		if result != dayStart(result) || time.Since(result) > 24*time.Hour {
+			t.Errorf("Expected today's UTC calendar day, got %v", result)
 		}
 	})
 
@@ -463,8 +463,15 @@ func TestCalculatePhotoDate(t *testing.T) {
 			t.Errorf("Expected no error with auto fallback, got %v", err)
 		}
 
-		if time.Since(result) > time.Minute {
-			t.Error("Expected result to be close to current time for auto fallback")
+		if time.Since(result) > time.Minute || result.Location() != time.UTC {
+			t.Errorf("Expected the current UTC time for auto fallback, got %v", result)
+		}
+	})
+
+	t.Run("Auto input type uses the uploader's day without EXIF", func(t *testing.T) {
+		result, err := calculatePhotoDate("auto", "2024-12-31", nil, nil, testPerson, []byte("not an image"))
+		if err != nil || result != time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC) {
+			t.Errorf("got %v, %v; want the supplied local day", result, err)
 		}
 	})
 }

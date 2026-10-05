@@ -396,8 +396,8 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 		person.FamilyId = familyId
 		person.Name = importPerson.Name
 		person.Gender = GenderType(importPerson.Gender)
-		person.Birthday = importPerson.Birthday
-		person.Age = calculateAge(importPerson.Birthday)
+		person.Birthday = dayStart(importPerson.Birthday)
+		person.Age = calculateAge(person.Birthday)
 
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		updatePersonIndex(tx, person)
@@ -420,10 +420,10 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 	}
 	var measurements []measurement
 	for _, height := range importHeights {
-		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", height.Date})
+		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", dayStart(height.Date)})
 	}
 	for _, weight := range importWeights {
-		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", weight.Date})
+		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", dayStart(weight.Date)})
 	}
 
 	var errors []string
@@ -664,6 +664,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 		if milestone.MilestoneDate.Year() == 1 {
 			continue
 		}
+		milestone.MilestoneDate = dayStart(milestone.MilestoneDate)
 
 		if isDuplicateMilestone(tx, newPersonId, milestone.MilestoneDate, milestone.Description) {
 			skippedCount++

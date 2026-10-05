@@ -54,10 +54,14 @@ func TestResolveEntryDate(t *testing.T) {
 		})
 	}
 
-	before := time.Now()
+	before := dayStart(time.Now().UTC())
 	got, err := resolveEntryDate("Measurement", "today", nil, nil, nil, birthday)
-	if err != nil || got.Before(before) || got.After(time.Now()) {
-		t.Fatalf("today = %v, %v", got, err)
+	if err != nil || got.Before(before) || got.After(dayStart(time.Now().UTC())) || got != dayStart(got) {
+		t.Fatalf("today = %v, %v; want a UTC-midnight day", got, err)
+	}
+	instantBirthday := time.Date(2020, 6, 15, 23, 30, 0, 0, time.FixedZone("CDT", -5*3600))
+	if got, _ := resolveEntryDate("Milestone", "age", nil, intPtr(1), intPtr(0), instantBirthday); got != time.Date(2021, 6, 15, 0, 0, 0, 0, time.UTC) {
+		t.Fatalf("age from a non-midnight birthday = %v, want the birthday's calendar day", got)
 	}
 	if _, err := resolveEntryDate("Measurement", "date", nil, nil, nil, birthday); err == nil || !strings.HasPrefix(err.Error(), "Measurement date is required") {
 		t.Fatalf("measurement missing-date error = %v", err)

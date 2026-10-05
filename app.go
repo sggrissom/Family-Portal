@@ -156,6 +156,15 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: record dates become exact calendar days and photo dates
+	// UTC-labelled wall-clock times (docs/reviews/date-timezone-audit.md).
+	vbolt.ApplyDBProcess(dbConnection, "2026-1005-normalize-record-dates", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.NormalizeStoredRecordDates(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 
