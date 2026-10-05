@@ -45,20 +45,40 @@ an instant and can cross midnight relative to the viewer.
 - Book day arithmetic and display use explicit UTC days.
 - Timestamp formatting and chat grouping intentionally use local time.
 
+## Explicit calendar-date storage
+
+A follow-up made the convention a storage guarantee instead of a display rule.
+
+- Record dates (birthdays, measurements, milestones, season and event dates,
+  appearances) are always stored as UTC midnight of the day they name. Every
+  write path normalizes: entry dates (including `inputType: "today"` and age
+  offsets from a birthday), activity dates, and JSON and bundle imports.
+- Photo dates are the local wall-clock time of capture, stored with a UTC
+  label. EXIF `DateTimeOriginal` is read as a wall clock, ignoring the server's
+  zone and any Canon timezone, so the UTC day of `photoDate` is the day the
+  photo was taken where it was taken. No capture timezone is needed to recover
+  the day.
+- Automatic uploads take an optional `photoDate` (the uploader's local day) as
+  the fallback when the file has no EXIF date. The web sends it, and the photo
+  editor's "today" sends the viewer's local date.
+- Migration `2026-1005-normalize-record-dates` rewrites stored values. vpack
+  keeps each time's UTC offset, so each value is read in the offset it was
+  saved with: record dates become that day at UTC midnight, and photo dates keep
+  their wall clock relabelled as UTC. Values already in UTC (the server's own
+  zone) keep the UTC day the web already shows, so no visible web date changes
+  for them. The photo date index and milestone search index are rebuilt.
+
 ## Remaining limitations
 
-- Legacy API `inputType: "today"` uses `time.Now()` on the server. Clients must
-  send `inputType: "date"` with their local date as documented in `mobile-api.md`.
-- Automatic photo uploads without readable EXIF still fall back to the server's
-  current instant; the resulting UTC photo day can differ from the uploader's
-  local day. A future API change should accept a client-supplied fallback date
-  while retaining EXIF precedence. This change does not guess the client's zone.
-- Server-generated `Person.Age` and requests that omit `today` still use the
-  server clock. Other clients should supply dates or calculate local current age.
-- EXIF/photo storage does not provide a universal original capture timezone;
-  UTC photo-day consistency does not recover a missing original local date.
-- No historical dates are migrated. Previously stored incorrect dates cannot be
-  reliably repaired without the intended calendar date.
+- `inputType: "today"` and requests that omit `today` still use the server's
+  UTC day. Clients should send their local date.
+- A photo without EXIF and without a client `photoDate` falls back to the
+  server's current UTC time.
+- Records whose day was already wrong when saved, such as an evening `"today"`
+  entry that the server put on the next UTC day, are not repaired. The
+  intended day was never recorded.
+- Photos keep their capture wall clock, not the true instant, so photos taken
+  in different zones order by local clock time.
 
 ## Verification
 

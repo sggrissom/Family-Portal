@@ -323,21 +323,33 @@ formatting or the UI prints *Jan 1, 1*.
 **Date-only fields are `YYYY-MM-DD` strings**, parsed with `time.Parse`, which
 yields UTC midnight.
 
+**Record dates are calendar days, not instants.** `birthday`,
+`measurementDate`, `milestoneDate`, and the activity `startDate`, `endDate` and
+`occurredAt` always arrive as UTC midnight of the day they name. Read their UTC
+year, month and day and never convert them to the device's zone.
+
+**`photoDate` is the local wall-clock time of capture, labelled UTC.** An EXIF
+`2024-07-04 21:30` arrives as `2024-07-04T21:30:00Z`. Its UTC components are the
+day and time the photo was taken where it was taken. Do not convert it to the
+device's zone either.
+
 ### The one that actually bites
 
 Growth records, milestones, and photo dates take an `inputType`:
 
 | `inputType` | Fields | Server behavior |
 | --- | --- | --- |
-| `"today"` | none | `time.Now()` — **the server's clock, in the server's zone** |
+| `"today"` | none | the server's current **UTC** day |
 | `"date"` | `measurementDate: "YYYY-MM-DD"` | parsed as given |
 | `"age"` | `ageYears`, `ageMonths` (0–11) | birthday + that offset |
 | `"keep"` | none | `UpdatePhoto` only: the photo's date is left as it is |
+| `"auto"` | `photoDate: "YYYY-MM-DD"` (optional) | photos only: the EXIF capture time, else `photoDate`, else the server's current UTC time |
 
 **Send `"date"` with the device's local calendar date. Never send `"today"`.**
 The server is not in the user's time zone, so `"today"` from a phone at 8pm can
 land on tomorrow. `"date"` is the only form where the record matches the day the
-user believes they entered.
+user believes they entered. With `"auto"`, send the device's local day as
+`photoDate` so a photo without EXIF still lands on the uploader's day.
 
 ---
 
