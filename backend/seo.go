@@ -4,6 +4,7 @@ import (
 	"family/cfg"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -19,6 +20,18 @@ func RegisterSEOHandlers(app *vbeam.Application) {
 // to staging, which runs the same release binary under another SITE_ROOT.
 func isProductionSite() bool {
 	return os.Getenv("SITE_ROOT") == cfg.SiteURL
+}
+
+// Local builds are excluded so they keep checking everything production does.
+func isStagingSite() bool {
+	return cfg.IsRelease && !isProductionSite()
+}
+
+func siteRoot() string {
+	if root := os.Getenv("SITE_ROOT"); root != "" {
+		return strings.TrimRight(root, "/")
+	}
+	return cfg.SiteURL
 }
 
 func addIndexingPolicy(w http.ResponseWriter) {

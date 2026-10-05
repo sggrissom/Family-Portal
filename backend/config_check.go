@@ -29,12 +29,21 @@ var apnsEnvVars = []string{
 }
 
 func CheckProductionConfig(dbPath, staticDir, logDir string) []ConfigIssue {
+	return checkConfig(isStagingSite(), dbPath, staticDir, logDir)
+}
+
+// Staging has no Apple Sign In and is not backed up, so neither is checked there.
+func checkConfig(staging bool, dbPath, staticDir, logDir string) []ConfigIssue {
 	var issues []ConfigIssue
 	issues = append(issues, checkSiteRoot()...)
 	issues = append(issues, checkGoogleOAuth()...)
-	issues = append(issues, checkAppleOAuth()...)
+	if !staging {
+		issues = append(issues, checkAppleOAuth()...)
+	}
 	issues = append(issues, checkMail()...)
-	issues = append(issues, checkBackupToken()...)
+	if !staging {
+		issues = append(issues, checkBackupToken()...)
+	}
 	issues = append(issues, checkAPNs()...)
 	issues = append(issues, checkIOSAppID()...)
 	issues = append(issues, checkMetrics()...)

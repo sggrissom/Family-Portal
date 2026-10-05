@@ -136,6 +136,27 @@ func TestCheckProductionConfigReportsEveryProblemAtOnce(t *testing.T) {
 	}
 }
 
+func TestCheckConfigSkipsAppleAndBackupOnStaging(t *testing.T) {
+	env := validConfigEnv()
+	env["SITE_ROOT"] = "https://staging.familyrecord.app"
+	env["BACKUP_TOKEN"] = ""
+	applyEnv(t, env)
+	for _, name := range appleEnvVars {
+		t.Setenv(name, "")
+	}
+	t.Setenv("APPLE_CLIENT_ID", "com.familyrecord.app")
+	dbPath, staticDir, logDir := storageDirs(t)
+
+	if issues := checkConfig(true, dbPath, staticDir, logDir); len(issues) > 0 {
+		t.Fatalf("checkConfig(staging) reported %s, want none", settingsWithIssues(issues))
+	}
+
+	issues := checkConfig(false, dbPath, staticDir, logDir)
+	if !hasIssue(issues, "BACKUP_TOKEN") || !hasIssue(issues, "APPLE_TEAM_ID") {
+		t.Fatalf("checkConfig(production) reported %s, want BACKUP_TOKEN and Apple issues", settingsWithIssues(issues))
+	}
+}
+
 func TestCheckProductionConfigValidatesSiteRoot(t *testing.T) {
 	tests := []struct {
 		name      string

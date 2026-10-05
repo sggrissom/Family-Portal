@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"family/cfg"
 	"fmt"
 	"strings"
 	"sync"
@@ -85,6 +84,9 @@ func (hm *healthMonitor) check() {
 		return
 	}
 
+	if isStagingSite() {
+		subject = "[staging] " + subject
+	}
 	if err := QueueMail(MailJob{To: to, Subject: subject, Body: body, Kind: "health-alert"}); err != nil {
 		LogErrorSimple(LogCategoryWorker, "Could not queue a health alert", map[string]interface{}{
 			"error": err.Error(),
@@ -198,7 +200,7 @@ func describeHealth(health SystemHealthResponse) string {
 	}
 
 	return fmt.Sprintf("The health check found:\n\n%s\n\nFull detail: %s/admin\n",
-		strings.Join(lines, "\n"), cfg.SiteURL)
+		strings.Join(lines, "\n"), siteRoot())
 }
 
 func StopHealthMonitor(ctx context.Context) bool {
