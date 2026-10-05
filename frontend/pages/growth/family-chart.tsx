@@ -1,3 +1,4 @@
+import { localDateString } from "../../lib/when";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -70,7 +71,7 @@ const useGrowthPageState = vlens.declareHook(
 const CHILD_MONTHS = 18 * 12;
 
 function defaultSelection(data: GrowthPageData): number[] {
-  const now = new Date().toISOString();
+  const now = localDateString(new Date());
   const familyId = auth.getAuth()?.familyId ?? 0;
   const kids = data.people.filter(
     p => p.familyId === familyId && monthsOld(p.birthday, now) < CHILD_MONTHS

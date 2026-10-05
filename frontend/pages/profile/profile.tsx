@@ -208,7 +208,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
 function ageLine(person: server.Person): string {
   if (person.isPregnancy) return dueSummary(person.birthday, new Date());
   if (!isValidBirthday(person.birthday)) return "";
-  const months = monthsOld(person.birthday, new Date().toISOString());
+  const months = monthsOld(person.birthday, localDateString(new Date()));
   const age = ageTitle(months >= 216 ? months - (months % 12) : months);
   return `${age} · ${copy.person.born(formatLongDate(person.birthday))}`;
 }
@@ -590,14 +590,14 @@ const CHILD_MONTHS = 18 * 12;
 const GrowthTab = ({ data, state }: { data: ProfileData; state: ProfileState }) => {
   const person = data.person.person;
   const growth = data.person.growthData ?? [];
-  const nowMonths = monthsOld(person.birthday, new Date().toISOString());
+  const nowMonths = monthsOld(person.birthday, localDateString(new Date()));
 
   const siblings = data.family.filter(
     item =>
       item.person.id !== person.id &&
       !item.person.isPregnancy &&
       isValidBirthday(item.person.birthday) &&
-      monthsOld(item.person.birthday, new Date().toISOString()) < CHILD_MONTHS
+      monthsOld(item.person.birthday, localDateString(new Date())) < CHILD_MONTHS
   );
 
   const main: AgeSeries = {

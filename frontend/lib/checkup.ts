@@ -1,3 +1,4 @@
+import { localDateString } from "./when";
 import * as server from "../server";
 import { lbOzToLbs, OZ_PER_LB, formatMeasurement, prefersLbOz, splitLbOz } from "./weightFormat";
 
@@ -192,7 +193,11 @@ export function checkupValues(entry: CheckupEntry): CheckupValues & { error: str
 }
 
 export function timeAgo(date: string, now: Date): string {
-  const days = Math.floor((now.getTime() - new Date(date).getTime()) / 86_400_000);
+  // Compare calendar days, not elapsed 24-hour periods (which vary across DST).
+  const record = new Date(date);
+  const recordDay = Date.UTC(record.getUTCFullYear(), record.getUTCMonth(), record.getUTCDate());
+  const today = new Date(localDateString(now)).getTime();
+  const days = Math.round((today - recordDay) / 86_400_000);
   if (days < 1) return "today";
   if (days === 1) return "yesterday";
   if (days < 14) return `${days} days ago`;
