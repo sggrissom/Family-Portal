@@ -35,8 +35,15 @@ block(`
 `);
 
 block(`
-.app-topbar-links a {
+.app-topbar-links a,
+.app-topbar-links button {
   display: block;
+  border: none;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+  cursor: pointer;
   padding: 8px 12px;
   border-radius: 8px;
   color: var(--muted);
@@ -46,16 +53,46 @@ block(`
 `);
 
 block(`
-.app-topbar-links a:hover {
+.app-topbar-links a:hover,
+.app-topbar-links button:hover {
   background: var(--hover-bg);
   color: var(--text);
 }
 `);
 
 block(`
-.app-topbar-links a.active {
+.app-topbar-links a.active,
+.app-topbar-links button.active {
   background: var(--accent-soft);
   color: var(--text);
+}
+`);
+
+block(`
+@media (min-width: 720px) and (max-width: 959px) {
+  .app-topbar .brand-name {
+    display: none;
+  }
+
+  .app-topbar-links {
+    margin-left: 4px;
+  }
+
+  .app-topbar-links a,
+  .app-topbar-links button {
+    padding: 8px;
+  }
+
+  .app-add-button {
+    padding: 8px 10px;
+  }
+}
+`);
+
+block(`
+.app-topbar-caret {
+  font-size: 0.75em;
+  line-height: 1;
 }
 `);
 
@@ -221,12 +258,6 @@ block(`
 `);
 
 block(`
-.account-menu-history {
-  display: none;
-}
-`);
-
-block(`
 .app-bottombar {
   display: none;
 }
@@ -237,10 +268,6 @@ block(`
   .app-topbar-links,
   .app-add-button {
     display: none;
-  }
-
-  .account-menu-history {
-    display: block;
   }
 
   .app-bottombar {
@@ -267,10 +294,14 @@ block(`
   align-items: center;
   gap: 2px;
   padding: 6px 0;
+  border: none;
+  background: transparent;
   color: var(--muted);
+  font: inherit;
   font-size: 0.72rem;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
 }
 `);
 
@@ -438,5 +469,36 @@ block(`
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 500;
+}
+`);
+
+block(`
+.more-sheet-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+`);
+
+block(`
+.more-sheet-label span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+`);
+
+block(`
+.add-sheet-options a[aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+`);
+
+block(`
+@media (min-width: 720px) {
+  .more-sheet-mobile-only {
+    display: none !important;
+  }
 }
 `);

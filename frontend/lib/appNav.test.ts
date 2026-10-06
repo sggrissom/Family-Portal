@@ -10,12 +10,17 @@ describe("activeDestination", () => {
     expect(activeDestination("/growth")).toBe("growth");
     expect(activeDestination("/view-growth/9")).toBe("growth");
     expect(activeDestination("/history")).toBe("history");
+    expect(activeDestination("/books")).toBe("books");
+    expect(activeDestination("/book/4")).toBe("books");
+    expect(activeDestination("/same-age")).toBe("sameAge");
+    expect(activeDestination("/season/2")).toBe("activities");
     expect(activeDestination("/chat")).toBe("chat");
   });
 
   it("does not match a longer word that shares a prefix", () => {
     expect(activeDestination("/photos-archive")).toBeNull();
     expect(activeDestination("/growthy")).toBeNull();
+    expect(activeDestination("/bookmarks")).toBeNull();
   });
 
   it("leaves pages outside the bar unmarked", () => {
