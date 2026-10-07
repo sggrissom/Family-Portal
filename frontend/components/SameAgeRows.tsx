@@ -28,14 +28,25 @@ interface SameAgeRowsProps {
   ageMonths: number;
   today: string;
   photoLimit?: number;
+  hideEmpty?: boolean;
 }
 
-export const SameAgeRows = ({ rows, ageMonths, today, photoLimit = 6 }: SameAgeRowsProps) => {
+export const SameAgeRows = ({
+  rows,
+  ageMonths,
+  today,
+  photoLimit = 6,
+  hideEmpty = false,
+}: SameAgeRowsProps) => {
+  // Resolve names against the full comparison before hiding empty rows.
+  // Otherwise two people named Alex can become indistinguishable when
+  // only one of them has records at the selected age.
   const names = chipLabels(rows.map(r => r.person));
+  const visible = hideEmpty ? rows.filter(hasSameAgeRecords) : rows;
 
   return (
     <div className="same-age-rows">
-      {rows.map(row =>
+      {visible.map(row =>
         hasSameAgeRecords(row) ? (
           <div key={row.person.id} className="same-age-row">
             <div className="same-age-row-head">

@@ -166,8 +166,8 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
             {copy.sameAge.peopleWithRecords(recorded.length)}
             {recorded.length === 1 && ` · ${copy.sameAge.onlyOne}`}
           </p>
-          <SameAgeMontage rows={recorded} ageMonths={data.ageMonths} showMissing={false} />
-          <SameAgeRows rows={recorded} ageMonths={data.ageMonths} today={today} />
+          <SameAgeMontage rows={rows} ageMonths={data.ageMonths} showMissing={false} />
+          <SameAgeRows rows={rows} ageMonths={data.ageMonths} today={today} hideEmpty />
           {missing > 0 && <p className="same-age-none">{copy.sameAge.missingRecords(missing)}</p>}
         </>
       )}
