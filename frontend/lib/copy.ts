@@ -182,6 +182,7 @@ export const copy = {
     noQuotes: (name: string) => `No quotes from ${name} yet.`,
     noArtwork: (name: string) => `No artwork from ${name} yet.`,
     growingUp: "Growing up",
+    seeGrowingUp: "See the full timeline →",
     oftenWith: "Often photographed with",
     openInPhotos: "Open in Photos →",
     metric: "Measurement",
