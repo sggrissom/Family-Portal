@@ -529,3 +529,46 @@ block(`
   color: var(--muted);
 }
 `);
+
+block(`
+.growing-up-preview {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+`);
+
+block(`
+.growing-up-preview h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+`);
+
+block(`
+.growing-up-preview-link {
+  display: block;
+  color: var(--accent);
+  text-decoration: none;
+}
+`);
+
+block(`
+.growing-up-preview-more {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+`);
+
+block(`
+.growing-up-preview-link:hover .growing-up-preview-more {
+  text-decoration: underline;
+}
+`);
+
+block(`
+#growing-up-heading {
+  scroll-margin-top: 80px;
+}
+`);
