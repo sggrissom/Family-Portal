@@ -1,6 +1,5 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -9,13 +8,18 @@ import { SameAgeMontage } from "../../components/SameAgeMontage";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import {
-  ageStep,
   ageTitle,
   hasSameAgeRecords,
   nearbyRecordedAge,
   parseAgeParam,
   sameAgePath,
 } from "../../lib/sameAge";
+import {
+  sameAgeNavigation,
+  selectSameAge,
+  recordedAgeIndex,
+  type SameAgeNavigation,
+} from "../../lib/sameAgeNavigation";
 import "./same-age-styles";
 
 export async function fetch(route: string, prefix: string) {
@@ -28,10 +32,7 @@ export async function fetch(route: string, prefix: string) {
   });
 }
 
-type SliderState = { value: number | null };
-const useSlider = vlens.declareHook(
-  (data: server.GetSameAgeResponse): SliderState => ({ value: null })
-);
+const useNavigation = vlens.declareHook(sameAgeNavigation);
 
 export function view(
   route: string,
@@ -51,43 +52,33 @@ export function view(
   );
 }
 
-function goTo(data: server.GetSameAgeResponse, ageMonths: number) {
-  core.replaceRoute(sameAgePath(ageMonths, data.fromPersonId));
+function goTo(state: SameAgeNavigation, age: number) {
+  void selectSameAge(
+    state,
+    age,
+    ageMonths =>
+      server.GetSameAge({
+        ageMonths,
+        fromPersonId: state.data.fromPersonId,
+        today: localDateString(new Date()),
+      }),
+    ageMonths =>
+      history.replaceState(history.state, "", sameAgePath(ageMonths, state.data.fromPersonId)),
+    vlens.scheduleRedraw
+  );
 }
 
-function snap(ageMonths: number): number {
-  const step = ageStep(ageMonths);
-  return Math.round(ageMonths / step) * step;
-}
-
-function sliderInput(slider: SliderState, event: Event) {
-  const input = event.target as HTMLInputElement;
-  slider.value = Math.min(Number(input.max), snap(Number(input.value)));
-  vlens.scheduleRedraw();
-}
-
-function sliderChange(slider: SliderState, data: server.GetSameAgeResponse) {
-  if (slider.value !== null && slider.value !== data.ageMonths) goTo(data, slider.value);
-}
-
-const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
-  const slider = useSlider(data);
-  const shown = slider.value ?? data.ageMonths;
+export const SameAgePage = ({ data: initial }: { data: server.GetSameAgeResponse }) => {
+  const navigation = useNavigation(initial);
+  const data = navigation.data;
+  const shown = navigation.previewAge ?? navigation.selectedAge;
   const today = localDateString(new Date());
-  const max = Math.max(data.maxAgeMonths, data.ageMonths);
   const rows = data.rows ?? [];
   const recorded = rows.filter(hasSameAgeRecords);
   const ages = data.availableAges ?? [];
-  const younger = nearbyRecordedAge(
-    ages.map(a => a.ageMonths),
-    data.ageMonths,
-    -1
-  );
-  const older = nearbyRecordedAge(
-    ages.map(a => a.ageMonths),
-    data.ageMonths,
-    1
-  );
+  const ageMonths = ages.map(a => a.ageMonths);
+  const younger = nearbyRecordedAge(ageMonths, navigation.selectedAge, -1);
+  const older = nearbyRecordedAge(ageMonths, navigation.selectedAge, 1);
   const missing = rows.length - recorded.length;
 
   return (
@@ -98,12 +89,12 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
         <label className="same-age-browse">
           {copy.sameAge.recordedAges}
           <select
-            value={data.ageMonths}
-            onChange={event => goTo(data, Number((event.target as HTMLSelectElement).value))}
+            value={navigation.selectedAge}
+            onChange={event => goTo(navigation, Number((event.target as HTMLSelectElement).value))}
           >
-            {!ages.some(a => a.ageMonths === data.ageMonths) && (
-              <option value={data.ageMonths}>
-                {ageTitle(data.ageMonths)} —{" "}
+            {!ages.some(a => a.ageMonths === navigation.selectedAge) && (
+              <option value={navigation.selectedAge}>
+                {ageTitle(navigation.selectedAge)} —{" "}
                 {recorded.length
                   ? copy.sameAge.peopleWithRecords(recorded.length)
                   : copy.sameAge.noRecords}
@@ -118,59 +109,82 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
         </label>
       )}
       <div className="same-age-control">
-        <span className="same-age-at">{copy.sameAge.at}</span>
         <button
           type="button"
           className="same-age-step"
           aria-label={copy.sameAge.youngerWithRecords}
           disabled={younger === null}
-          onClick={() => younger !== null && goTo(data, younger)}
+          onClick={() => younger !== null && goTo(navigation, younger)}
         >
           ◀
         </button>
         <strong className="same-age-age" aria-live="polite">
-          {ageTitle(shown)}
+          {copy.sameAge.at} {ageTitle(shown)}
         </strong>
         <button
           type="button"
           className="same-age-step"
           aria-label={copy.sameAge.olderWithRecords}
           disabled={older === null}
-          onClick={() => older !== null && goTo(data, older)}
+          onClick={() => older !== null && goTo(navigation, older)}
         >
           ▶
         </button>
       </div>
-      <input
-        type="range"
-        className="same-age-slider"
-        aria-label={copy.sameAge.title}
-        min={0}
-        max={max}
-        value={shown}
-        onInput={vlens.cachePartial(sliderInput, slider)}
-        onChange={() => sliderChange(slider, data)}
-      />
-
-      {recorded.length === 0 ? (
-        <p className="same-age-empty" role="status">
-          {data.peopleCount === 0
-            ? copy.sameAge.empty
-            : ages.length
-              ? copy.sameAge.nothingAtAge
-              : copy.sameAge.noSavedRecords}
-        </p>
-      ) : (
+      {ages.length > 1 && (
         <>
-          <p className="same-age-none" role="status">
-            {copy.sameAge.peopleWithRecords(recorded.length)}
-            {recorded.length === 1 && ` · ${copy.sameAge.onlyOne}`}
-          </p>
-          <SameAgeMontage rows={rows} ageMonths={data.ageMonths} showMissing={false} />
-          <SameAgeRows rows={rows} ageMonths={data.ageMonths} today={today} hideEmpty />
-          {missing > 0 && <p className="same-age-none">{copy.sameAge.missingRecords(missing)}</p>}
+          <input
+            type="range"
+            className="same-age-slider"
+            aria-label={copy.sameAge.recordedAges}
+            aria-valuetext={ageTitle(shown)}
+            min={0}
+            max={ages.length - 1}
+            step={1}
+            value={recordedAgeIndex(ageMonths, shown)}
+            onInput={event => {
+              navigation.previewAge = ageMonths[Number((event.target as HTMLInputElement).value)];
+              vlens.scheduleRedraw();
+            }}
+            onChange={event =>
+              goTo(navigation, ageMonths[Number((event.target as HTMLInputElement).value)])
+            }
+          />
+          <p className="same-age-none same-age-slider-help">{copy.sameAge.sliderHelp}</p>
         </>
       )}
+      <div className="same-age-load-status" role="status" aria-live="polite">
+        {navigation.loading && copy.sameAge.loading}
+        {navigation.error && (
+          <>
+            <span>{navigation.error}</span>{" "}
+            <button type="button" onClick={() => goTo(navigation, navigation.selectedAge)}>
+              {copy.sameAge.retry}
+            </button>
+          </>
+        )}
+      </div>
+      <div className="same-age-results" aria-busy={navigation.loading}>
+        {navigation.error ? null : recorded.length === 0 ? (
+          <p className="same-age-empty" role="status">
+            {data.peopleCount === 0
+              ? copy.sameAge.empty
+              : ages.length
+                ? copy.sameAge.nothingAtAge
+                : copy.sameAge.noSavedRecords}
+          </p>
+        ) : (
+          <>
+            <p className="same-age-none" role="status">
+              {copy.sameAge.peopleWithRecords(recorded.length)}
+              {recorded.length === 1 && ` · ${copy.sameAge.onlyOne}`}
+            </p>
+            <SameAgeMontage rows={rows} ageMonths={data.ageMonths} showMissing={false} />
+            <SameAgeRows rows={rows} ageMonths={data.ageMonths} today={today} hideEmpty />
+            {missing > 0 && <p className="same-age-none">{copy.sameAge.missingRecords(missing)}</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 };
