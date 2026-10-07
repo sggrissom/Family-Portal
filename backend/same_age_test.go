@@ -184,6 +184,7 @@ func TestSameAgePortraitsRespectLinkScopes(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
+	photosAllowed := true
 	aliceAtOne := func() []PortraitPhoto {
 		t.Helper()
 		token, err := generateJwtTokenString(fx.userB)
@@ -192,10 +193,16 @@ func TestSameAgePortraitsRespectLinkScopes(t *testing.T) {
 		}
 		var resp GetSameAgeResponse
 		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-			resp, err = GetSameAge(&vbeam.Context{Tx: tx, Token: token}, GetSameAgeRequest{AgeMonths: months(12), Today: "2026-09-27"})
+			resp, err = GetSameAge(&vbeam.Context{Tx: tx, Token: token}, GetSameAgeRequest{IncludeAvailableAges: true, AgeMonths: months(12), Today: "2026-09-27"})
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if photosAllowed && len(resp.AvailableAges) == 0 {
+			t.Error("the photo scope should make saved ages available")
+		}
+		if !photosAllowed && len(resp.AvailableAges) != 0 {
+			t.Errorf("ages leaked without the photo scope: %+v", resp.AvailableAges)
 		}
 		for _, row := range resp.Rows {
 			if row.Person.Id == fx.alice.Id {
@@ -210,7 +217,92 @@ func TestSameAgePortraitsRespectLinkScopes(t *testing.T) {
 		t.Errorf("with the photos scope, portraits = %+v, want the birthday photo", got)
 	}
 	setLinkScopes(t, fx, fx.linkAB, LinkScopes{People: true})
+	photosAllowed = false
 	if got := aliceAtOne(); len(got) != 0 {
 		t.Errorf("without the photos scope, portraits = %+v, want none", got)
 	}
+}
+
+func TestSameAgeBrowse(t *testing.T) {
+	fx := setupResultsFixture(t)
+	date := fx.alice.Birthday.AddDate(0, 6, 0)
+	photo := fx.addPhotoAt(t, "shared-six-months.jpg", date)
+	fx.tagPerson(t, photo, fx.alice)
+	fx.tagPerson(t, photo, fx.bob)
+	// Many photos of one child must not inflate the number of people.
+	extra := fx.addPhotoAt(t, "another-six-months.jpg", date)
+	fx.tagPerson(t, extra, fx.alice)
+	later := fx.addPhotoAt(t, "one-person-later.jpg", date.AddDate(1, 0, 0))
+	fx.tagPerson(t, later, fx.alice)
+
+	resp, err := callAs(t, fx, GetSameAge, GetSameAgeRequest{IncludeAvailableAges: true, Today: "2026-09-27"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.AgeMonths != 6 {
+		t.Fatalf("default age = %d, want the two-person comparison at six months", resp.AgeMonths)
+	}
+	found := false
+	for _, option := range resp.AvailableAges {
+		if option.AgeMonths == 6 {
+			found = true
+			if option.PeopleCount != 2 {
+				t.Errorf("six months count = %d, want 2 people", option.PeopleCount)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("photo-only age was not offered")
+	}
+
+	explicit, err := callAs(t, fx, GetSameAge, GetSameAgeRequest{IncludeAvailableAges: true, AgeMonths: months(0), Today: "2026-09-27"})
+	if err != nil || explicit.AgeMonths != 0 {
+		t.Fatalf("explicit newborn age changed: %+v, %v", explicit, err)
+	}
+	contextual, err := callAs(t, fx, GetSameAge, GetSameAgeRequest{IncludeAvailableAges: true, FromPersonId: fx.alice.Id, Today: "2026-09-27"})
+	if err != nil || contextual.AgeMonths != monthsBetween(fx.alice.Birthday, day("2026-09-27")) {
+		t.Fatalf("contextual age changed: %+v, %v", contextual, err)
+	}
+}
+
+func TestBestSameAge(t *testing.T) {
+	options := []SameAgeOption{{6, 2}, {12, 2}, {18, 1}}
+	if got := bestSameAge(options, 16); got != 12 {
+		t.Errorf("best = %d, want closest two-person age 12", got)
+	}
+	if got := bestSameAge(nil, 16); got != 16 {
+		t.Errorf("empty fallback = %d, want 16", got)
+	}
+}
+
+func TestSameAgeOptionsIgnoreHiddenAndInvalidRecords(t *testing.T) {
+	fx, cleanup := setupIsolationFixture(t)
+	defer cleanup()
+	token, err := generateJwtTokenString(fx.outsider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, err := GetSameAge(&vbeam.Context{Tx: tx, Token: token}, GetSameAgeRequest{IncludeAvailableAges: true, Today: "2026-09-27"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(resp.AvailableAges) != 0 {
+			t.Errorf("outsider sees ages: %+v", resp.AvailableAges)
+		}
+	})
+	token, err = generateJwtTokenString(fx.owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		person := fx.person
+		people := []FamilyTimelineItem{{Person: person, Milestones: []Milestone{
+			{MilestoneDate: person.Birthday.AddDate(0, 0, -1)},
+			{MilestoneDate: day("2030-01-01")},
+		}}}
+		if got := sameAgeOptions(&vbeam.Context{Tx: tx}, fx.owner, people, day("2026-09-27")); len(got) != 0 {
+			t.Errorf("invalid record ages = %+v", got)
+		}
+	})
 }

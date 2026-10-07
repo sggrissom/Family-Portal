@@ -127,6 +127,18 @@ export const copy = {
   result: "Result",
   sameAge: {
     title: "Same age",
+    intro: "Explore photos, milestones and measurements from similar ages.",
+    recordedAges: "Browse ages with records",
+    youngerWithRecords: "Younger age with records",
+    olderWithRecords: "Older age with records",
+    peopleWithRecords: (n: number) => `${n} ${n === 1 ? "person has" : "people have"} records`,
+    onlyOne: "Try another age to compare more people.",
+    missingRecords: (n: number) =>
+      `${n} other ${n === 1 ? "person has" : "people have"} no records near this age.`,
+    noSavedRecords:
+      "No photos, milestones or measurements to compare yet. Add records to a family member’s profile to get started.",
+    nothingAtAge:
+      "No saved records near this age. Choose an age with records above, or move the slider to explore.",
     at: "At",
     older: "Older",
     younger: "Younger",

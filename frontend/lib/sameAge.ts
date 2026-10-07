@@ -1,3 +1,5 @@
+import type { SameAgeRow } from "../server";
+
 export function ageStep(ageMonths: number): number {
   if (ageMonths < 24) return 1;
   if (ageMonths < 72) return 3;
@@ -70,4 +72,25 @@ export function photoAge(birthday: string, at: string): string {
   const d = days === 1 ? "1 day" : `${days} days`;
   if (days === 0) return ageTitle(months);
   return months === 0 ? d : `${ageTitle(months)}, ${d}`;
+}
+
+// Shared by the page and the compact profile strip.
+export function hasSameAgeRecords(row: SameAgeRow): boolean {
+  return (
+    !!row.height ||
+    !!row.weight ||
+    (row.milestones ?? []).length > 0 ||
+    (row.photoIds ?? []).length > 0 ||
+    (row.portraits ?? []).length > 0
+  );
+}
+
+export function nearbyRecordedAge(
+  ages: number[],
+  current: number,
+  direction: -1 | 1
+): number | null {
+  const matches = ages.filter(age => (direction < 0 ? age < current : age > current));
+  if (!matches.length) return null;
+  return direction < 0 ? Math.max(...matches) : Math.min(...matches);
 }

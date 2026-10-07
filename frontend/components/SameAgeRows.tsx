@@ -4,7 +4,7 @@ import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
 import { MilestoneText } from "./MilestoneText";
 import { formatMeasurement } from "../lib/weightFormat";
-import { ageTitle, monthsOld, sameAgePath } from "../lib/sameAge";
+import { ageTitle, hasSameAgeRecords, monthsOld, sameAgePath } from "../lib/sameAge";
 import { copy } from "../lib/copy";
 import "./same-age-styles";
 
@@ -14,15 +14,6 @@ function whenLabel(row: server.SameAgeRow, ageMonths: number, today: string): st
   if (monthsOld(row.person.birthday, today + "T00:00:00Z") === ageMonths) return copy.sameAge.now;
   const date = new Date(row.date);
   return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-}
-
-function hasRecords(row: server.SameAgeRow): boolean {
-  return (
-    !!row.height ||
-    !!row.weight ||
-    (row.milestones ?? []).length > 0 ||
-    (row.photoIds ?? []).length > 0
-  );
 }
 
 function measurements(row: server.SameAgeRow): string {
@@ -45,7 +36,7 @@ export const SameAgeRows = ({ rows, ageMonths, today, photoLimit = 6 }: SameAgeR
   return (
     <div className="same-age-rows">
       {rows.map(row =>
-        hasRecords(row) ? (
+        hasSameAgeRecords(row) ? (
           <div key={row.person.id} className="same-age-row">
             <div className="same-age-row-head">
               <a href={`/profile/${row.person.id}`} className="same-age-name">
@@ -92,7 +83,9 @@ interface SameAgeStripProps {
 
 export const SameAgeStrip = ({ data, today, exceptPersonId, hideWhenEmpty }: SameAgeStripProps) => {
   if (!data) return null;
-  const others = (data.rows ?? []).filter(r => r.person.id !== exceptPersonId && hasRecords(r));
+  const others = (data.rows ?? []).filter(
+    r => r.person.id !== exceptPersonId && hasSameAgeRecords(r)
+  );
   if (hideWhenEmpty && others.length === 0) return null;
   return (
     <section className="same-age-strip">
