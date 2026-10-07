@@ -158,6 +158,46 @@ func appleTestDB(t *testing.T) *vbolt.DB {
 
 /* ---------- setup ---------- */
 
+func TestSetupAppleOAuthStaging(t *testing.T) {
+	originalWeb, originalIOS := appleWebConfig, appleIOSClientID
+	t.Cleanup(func() {
+		appleWebConfig, appleIOSClientID = originalWeb, originalIOS
+	})
+
+	for _, tc := range []struct {
+		name     string
+		siteRoot string
+		partial  bool
+		wantErr  bool
+	}{
+		{"staging without credentials", "https://staging.familyrecord.app", false, !cfg.IsRelease},
+		{"production without credentials", cfg.SiteURL, false, true},
+		{"staging with partial credentials", "https://staging.familyrecord.app", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, name := range appleEnvVars {
+				t.Setenv(name, "")
+			}
+			t.Setenv("SITE_ROOT", tc.siteRoot)
+			t.Setenv("APPLE_IOS_CLIENT_ID", "app.familyrecord.ios")
+			if tc.partial {
+				t.Setenv("APPLE_CLIENT_ID", "app.familyrecord.web")
+			}
+			// Ensure an earlier setup cannot leave the web provider enabled.
+			appleWebConfig = &appleOAuthConfig{}
+			if err := SetupAppleOAuth(); (err != nil) != tc.wantErr {
+				t.Fatalf("SetupAppleOAuth() error = %v, want error = %v", err, tc.wantErr)
+			}
+			if appleWebConfig != nil {
+				t.Fatal("web provider should remain disabled")
+			}
+			if appleIOSClientID != "app.familyrecord.ios" {
+				t.Fatal("native audience should still be registered")
+			}
+		})
+	}
+}
+
 func TestSetupAppleOAuth(t *testing.T) {
 	keyPath := writeTestApplePrivateKey(t)
 

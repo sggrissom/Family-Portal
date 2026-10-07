@@ -88,6 +88,11 @@ func SetupAppleOAuth() error {
 	keyPath := os.Getenv("APPLE_KEY_PATH")
 
 	if clientID == "" && teamID == "" && keyID == "" && keyPath == "" {
+		// Staging intentionally has no Apple web credentials. Keep the provider
+		// disabled without reporting an expected setup failure on every deploy.
+		if isStagingSite() {
+			return nil
+		}
 		return errors.New("Apple Sign In not configured. Set APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_KEY_PATH to enable")
 	}
 
