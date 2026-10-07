@@ -24,21 +24,18 @@ block(`
 
 block(`
 .same-age-control {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 10px;
-}
-`);
-
-block(`
-.same-age-at {
-  color: var(--muted);
+  height: 72px;
 }
 `);
 
 block(`
 .same-age-age {
-  min-width: 10ch;
+  min-width: 0;
+  line-height: 1.3;
   text-align: center;
   font-size: 1.15rem;
 }
@@ -46,8 +43,8 @@ block(`
 
 block(`
 .same-age-step {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--surface);
@@ -100,5 +97,33 @@ block(`
   border-radius: 14px;
   background: var(--surface);
   color: var(--muted);
+}
+`);
+
+block(`
+.same-age-results {
+  display: grid;
+  gap: 14px;
+}
+`);
+
+block(`
+.same-age-results[aria-busy="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+`);
+
+block(`
+.same-age-load-status {
+  min-height: 1.5em;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+`);
+
+block(`
+.same-age-slider-help {
+  font-size: 0.85rem;
 }
 `);
