@@ -19,9 +19,10 @@ function nextPick(picks: Picks, row: server.SameAgeRow) {
 interface SameAgeMontageProps {
   rows: server.SameAgeRow[];
   ageMonths: number;
+  showMissing?: boolean;
 }
 
-export const SameAgeMontage = ({ rows, ageMonths }: SameAgeMontageProps) => {
+export const SameAgeMontage = ({ rows, ageMonths, showMissing = true }: SameAgeMontageProps) => {
   const picks = usePicks(ageMonths);
   const pictured = rows.filter(r => (r.portraits ?? []).length > 0);
   if (pictured.length < 2) return null;
@@ -56,7 +57,7 @@ export const SameAgeMontage = ({ rows, ageMonths }: SameAgeMontageProps) => {
           );
         })}
       </div>
-      {missing.length > 0 && (
+      {showMissing && missing.length > 0 && (
         <p className="same-age-gap">
           {copy.sameAge.noPhoto(missing.map(r => names.get(r.person.id)).join(", "))}
         </p>

@@ -69,3 +69,36 @@ block(`
   accent-color: var(--primary-accent);
 }
 `);
+
+block(`
+.same-age-browse {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.same-age-browse select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+`);
+
+block(`
+.same-age-empty {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+}
+`);

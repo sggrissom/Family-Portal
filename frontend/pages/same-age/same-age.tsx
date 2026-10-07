@@ -8,12 +8,20 @@ import { SameAgeRows } from "../../components/SameAgeRows";
 import { SameAgeMontage } from "../../components/SameAgeMontage";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
-import { ageStep, ageTitle, nextAge, parseAgeParam, prevAge, sameAgePath } from "../../lib/sameAge";
+import {
+  ageStep,
+  ageTitle,
+  hasSameAgeRecords,
+  nearbyRecordedAge,
+  parseAgeParam,
+  sameAgePath,
+} from "../../lib/sameAge";
 import "./same-age-styles";
 
 export async function fetch(route: string, prefix: string) {
   const params = new URLSearchParams(route.split("?")[1] ?? "");
   return server.GetSameAge({
+    includeAvailableAges: true,
     ageMonths: parseAgeParam(params.get("age")),
     fromPersonId: parseInt(params.get("from") ?? "") || 0,
     today: localDateString(new Date()),
@@ -21,7 +29,9 @@ export async function fetch(route: string, prefix: string) {
 }
 
 type SliderState = { value: number | null };
-const useSlider = vlens.declareHook((): SliderState => ({ value: null }));
+const useSlider = vlens.declareHook(
+  (data: server.GetSameAgeResponse): SliderState => ({ value: null })
+);
 
 export function view(
   route: string,
@@ -51,7 +61,8 @@ function snap(ageMonths: number): number {
 }
 
 function sliderInput(slider: SliderState, event: Event) {
-  slider.value = snap(parseInt((event.target as HTMLInputElement).value));
+  const input = event.target as HTMLInputElement;
+  slider.value = Math.min(Number(input.max), snap(Number(input.value)));
   vlens.scheduleRedraw();
 }
 
@@ -60,22 +71,60 @@ function sliderChange(slider: SliderState, data: server.GetSameAgeResponse) {
 }
 
 const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
-  const slider = useSlider();
+  const slider = useSlider(data);
   const shown = slider.value ?? data.ageMonths;
   const today = localDateString(new Date());
   const max = Math.max(data.maxAgeMonths, data.ageMonths);
+  const rows = data.rows ?? [];
+  const recorded = rows.filter(hasSameAgeRecords);
+  const ages = data.availableAges ?? [];
+  const younger = nearbyRecordedAge(
+    ages.map(a => a.ageMonths),
+    data.ageMonths,
+    -1
+  );
+  const older = nearbyRecordedAge(
+    ages.map(a => a.ageMonths),
+    data.ageMonths,
+    1
+  );
+  const missing = rows.length - recorded.length;
 
   return (
     <div className="same-age-page">
       <h1>{copy.sameAge.title}</h1>
+      <p className="same-age-none">{copy.sameAge.intro}</p>
+      {ages.length > 0 && (
+        <label className="same-age-browse">
+          {copy.sameAge.recordedAges}
+          <select
+            value={data.ageMonths}
+            onChange={event => goTo(data, Number((event.target as HTMLSelectElement).value))}
+          >
+            {!ages.some(a => a.ageMonths === data.ageMonths) && (
+              <option value={data.ageMonths}>
+                {ageTitle(data.ageMonths)} —{" "}
+                {recorded.length
+                  ? copy.sameAge.peopleWithRecords(recorded.length)
+                  : copy.sameAge.noRecords}
+              </option>
+            )}
+            {ages.map(age => (
+              <option key={age.ageMonths} value={age.ageMonths}>
+                {ageTitle(age.ageMonths)} — {copy.sameAge.peopleWithRecords(age.peopleCount)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="same-age-control">
         <span className="same-age-at">{copy.sameAge.at}</span>
         <button
           type="button"
           className="same-age-step"
-          aria-label={copy.sameAge.younger}
-          disabled={data.ageMonths <= 0}
-          onClick={() => goTo(data, prevAge(data.ageMonths))}
+          aria-label={copy.sameAge.youngerWithRecords}
+          disabled={younger === null}
+          onClick={() => younger !== null && goTo(data, younger)}
         >
           ◀
         </button>
@@ -85,9 +134,9 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
         <button
           type="button"
           className="same-age-step"
-          aria-label={copy.sameAge.older}
-          disabled={data.ageMonths >= max}
-          onClick={() => goTo(data, nextAge(data.ageMonths, max))}
+          aria-label={copy.sameAge.olderWithRecords}
+          disabled={older === null}
+          onClick={() => older !== null && goTo(data, older)}
         >
           ▶
         </button>
@@ -103,12 +152,23 @@ const SameAgePage = ({ data }: { data: server.GetSameAgeResponse }) => {
         onChange={() => sliderChange(slider, data)}
       />
 
-      {(data.rows ?? []).length === 0 ? (
-        <p className="same-age-none">{copy.sameAge.empty}</p>
+      {recorded.length === 0 ? (
+        <p className="same-age-empty" role="status">
+          {data.peopleCount === 0
+            ? copy.sameAge.empty
+            : ages.length
+              ? copy.sameAge.nothingAtAge
+              : copy.sameAge.noSavedRecords}
+        </p>
       ) : (
         <>
-          <SameAgeMontage rows={data.rows} ageMonths={data.ageMonths} />
-          <SameAgeRows rows={data.rows} ageMonths={data.ageMonths} today={today} />
+          <p className="same-age-none" role="status">
+            {copy.sameAge.peopleWithRecords(recorded.length)}
+            {recorded.length === 1 && ` · ${copy.sameAge.onlyOne}`}
+          </p>
+          <SameAgeMontage rows={recorded} ageMonths={data.ageMonths} showMissing={false} />
+          <SameAgeRows rows={recorded} ageMonths={data.ageMonths} today={today} />
+          {missing > 0 && <p className="same-age-none">{copy.sameAge.missingRecords(missing)}</p>}
         </>
       )}
     </div>

@@ -1048,12 +1048,15 @@ export interface ListOpenEventsResponse {
 }
 
 export interface GetSameAgeRequest {
+    includeAvailableAges?: boolean
     ageMonths: number | null
     fromPersonId: number
     today: string
 }
 
 export interface GetSameAgeResponse {
+    availableAges: SameAgeOption[]
+    peopleCount: number
     ageMonths: number
     fromPersonId: number
     maxAgeMonths: number
@@ -1936,6 +1939,11 @@ export interface DashboardRecent {
 export interface OpenEvent {
     event: EventSummary
     activityName: string
+}
+
+export interface SameAgeOption {
+    ageMonths: number
+    peopleCount: number
 }
 
 export interface SameAgeRow {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ageStep,
   ageTitle,
+  hasSameAgeRecords,
+  nearbyRecordedAge,
   monthsOld,
   nextAge,
   parseAgeParam,
@@ -90,5 +92,37 @@ describe("photoAge", () => {
 
   it("says nothing for a photo before the birthday", () => {
     expect(photoAge(born, "2014-01-01T00:00:00Z")).toBe("");
+  });
+});
+
+describe("browsing saved ages", () => {
+  it("skips gaps, handles off-grid links, and stops at either end", () => {
+    const ages = [0, 6, 42, 78];
+    expect(nearbyRecordedAge(ages, 6, 1)).toBe(42);
+    expect(nearbyRecordedAge(ages, 41, -1)).toBe(6);
+    expect(nearbyRecordedAge(ages, 41, 1)).toBe(42);
+    expect(nearbyRecordedAge(ages, 0, -1)).toBeNull();
+    expect(nearbyRecordedAge(ages, 78, 1)).toBeNull();
+    expect(nearbyRecordedAge([], 12, 1)).toBeNull();
+  });
+
+  it("hides empty records while retaining each supported kind of content", () => {
+    const empty = {
+      height: null,
+      weight: null,
+      milestones: [],
+      photoIds: [],
+      portraits: [],
+    } as any;
+    expect(hasSameAgeRecords(empty)).toBe(false);
+    for (const record of [
+      { height: { value: 0 } },
+      { weight: { value: 10 } },
+      { milestones: [{ id: 1 }] },
+      { photoIds: [1] },
+      { portraits: [{ photoId: 1 }] },
+    ]) {
+      expect(hasSameAgeRecords({ ...empty, ...record })).toBe(true);
+    }
   });
 });
