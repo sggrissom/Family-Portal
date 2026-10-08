@@ -30,6 +30,7 @@ These are proposals, not release commitments or prerequisites for launch.
 
 | Plan | Purpose |
 | --- | --- |
+| [Same age portraits](plans/same-age-portraits/plan.md) | Make Same age a focused portrait comparison, with newborn shortcuts, secondary Details, and a contextual link from Growing up. |
 | [Approximate dates and ages](plans/approximate-dates.md) | Record partial historical knowledge honestly and preserve uncertainty in browsing and comparison. Manual entry first; optional AI estimation only after evaluation. |
 | [Video](plans/video.md) | Videos alongside photos, with private object storage for the bytes. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |

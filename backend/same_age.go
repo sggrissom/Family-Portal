@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 func RegisterSameAgeMethods(app *vbeam.Application) {
@@ -21,6 +22,8 @@ const (
 	// sameAgeDistanceWeight is how much a photo at the edge of the window
 	// loses to one taken exactly at the age.
 	sameAgeDistanceWeight = 0.25
+	// Newborn photos are from the day of birth through day 27.
+	sameAgeNewbornDays = 28
 )
 
 // sameAgeStep is how far one tap on the age control moves: a month for
@@ -50,9 +53,25 @@ func monthsDuration(months float64) time.Duration {
 	return time.Duration(months * daysPerMonth * 24 * float64(time.Hour))
 }
 
+// sameAgePhotoDays is the inclusive day range for photos at an age, shared by
+// results and age discovery.
+func sameAgePhotoDays(birthday time.Time, ageMonths int) (from, to string) {
+	if ageMonths == 0 {
+		return dayOf(birthday), dayOf(birthday.AddDate(0, 0, sameAgeNewbornDays-1))
+	}
+	target := birthday.AddDate(0, ageMonths, 0)
+	window := sameAgeRecordWindow(ageMonths)
+	return max(dayOf(birthday), dayOf(target.Add(-window))), dayOf(target.Add(window))
+}
+
 type GetSameAgeRequest struct {
-	// AgeMonths null starts from the person's current age, or the youngest
-	// child's when no person is given.
+	// IncludeAvailableAges opts the full browse page into discovering saved
+	// ages. Profile strips avoid scanning the photo history.
+	IncludeAvailableAges bool `json:"includeAvailableAges,omitempty"`
+	// Details picks the starting age by all records rather than portraits.
+	Details bool `json:"details,omitempty"`
+	// AgeMonths null starts from the person's current age. With age discovery
+	// and no person given, start at the richest comparison instead.
 	AgeMonths    *int   `json:"ageMonths"`
 	FromPersonId int    `json:"fromPersonId"`
 	Today        string `json:"today"`
@@ -70,11 +89,19 @@ type SameAgeRow struct {
 	Portraits []PortraitPhoto `json:"portraits"`
 }
 
+type SameAgeOption struct {
+	AgeMonths   int `json:"ageMonths"`
+	PeopleCount int `json:"peopleCount"`
+}
+
 type GetSameAgeResponse struct {
-	AgeMonths    int          `json:"ageMonths"`
-	FromPersonId int          `json:"fromPersonId"`
-	MaxAgeMonths int          `json:"maxAgeMonths"`
-	Rows         []SameAgeRow `json:"rows"`
+	AvailableAges []SameAgeOption `json:"availableAges"`
+	PortraitAges  []SameAgeOption `json:"portraitAges"`
+	PeopleCount   int             `json:"peopleCount"`
+	AgeMonths     int             `json:"ageMonths"`
+	FromPersonId  int             `json:"fromPersonId"`
+	MaxAgeMonths  int             `json:"maxAgeMonths"`
+	Rows          []SameAgeRow    `json:"rows"`
 }
 
 var ErrInvalidAge = errors.New("Age must be between 0 and 100 years")
@@ -106,6 +133,21 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 	}
 
 	resp.FromPersonId, resp.AgeMonths = sameAgeDefaults(ctx, user, candidates, req, today)
+	resp.PeopleCount = len(candidates)
+	resp.AvailableAges = []SameAgeOption{}
+	resp.PortraitAges = []SameAgeOption{}
+	if req.IncludeAvailableAges {
+		resp.AvailableAges, resp.PortraitAges = sameAgeOptions(ctx, user, candidates, today)
+	}
+	// A direct visit starts at the richest comparison for the view. Contextual
+	// links and explicit ages keep their requested age, even without records.
+	if req.AgeMonths == nil && req.FromPersonId == 0 {
+		if req.Details || len(resp.PortraitAges) == 0 {
+			resp.AgeMonths = bestSameAge(resp.AvailableAges, resp.AgeMonths)
+		} else {
+			resp.AgeMonths = bestSameAge(resp.PortraitAges, resp.AgeMonths)
+		}
+	}
 	resp.Rows = []SameAgeRow{}
 
 	recordWindow := sameAgeRecordWindow(resp.AgeMonths)
@@ -130,7 +172,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
 		row.Weight = nearestGrowth(item.GrowthData, Weight, target, growthWindow)
 
-		row.PhotoIds, row.Portraits, err = sameAgePhotosFor(ctx, item.Person, target, recordWindow)
+		row.PhotoIds, row.Portraits, err = sameAgePhotosFor(ctx, item.Person, resp.AgeMonths)
 		if err != nil {
 			return
 		}
@@ -194,11 +236,17 @@ func nearestGrowth(growth []GrowthData, kind MeasurementType, target time.Time, 
 	return best
 }
 
-func sameAgePhotosFor(ctx *vbeam.Context, person Person, target time.Time, window time.Duration) (ids []int, portraits []PortraitPhoto, err error) {
+func sameAgePhotosFor(ctx *vbeam.Context, person Person, ageMonths int) (ids []int, portraits []PortraitPhoto, err error) {
+	target := person.Birthday.AddDate(0, ageMonths, 0)
+	window := sameAgeRecordWindow(ageMonths)
+	if ageMonths == 0 {
+		window = sameAgeNewbornDays * 24 * time.Hour
+	}
+	from, to := sameAgePhotoDays(person.Birthday, ageMonths)
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
 		PersonId: person.Id,
-		DateFrom: dayOf(target.Add(-window)),
-		DateTo:   dayOf(target.Add(window)),
+		DateFrom: from,
+		DateTo:   to,
 		Limit:    sameAgePhotoCandidates,
 	})
 	if err != nil {
@@ -255,4 +303,88 @@ func sortSameAgeRows(rows []SameAgeRow, fromPersonId int) {
 		}
 		return rows[i].Person.Birthday.After(rows[j].Person.Birthday)
 	})
+}
+
+// Count people, rather than entries, so a burst of photos for one child
+// cannot outweigh an age where several family members can be compared.
+// Use the same windows as the rows; only record-bearing ages on the age
+// control's grid are offered as shortcuts. Portrait ages count photos alone.
+func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, today time.Time) (records []SameAgeOption, portraits []SameAgeOption) {
+	recordCounts, portraitCounts := map[int]int{}, map[int]int{}
+	for _, item := range people {
+		seen, pictured := map[int]bool{}, map[int]bool{}
+		add := func(date time.Time, growth bool, photo bool) {
+			if date.Before(item.Person.Birthday) || dayOf(date) > dayOf(today) {
+				return
+			}
+			age := monthsBetween(item.Person.Birthday, date)
+			for m := max(0, age-12); m <= min(sameAgeMaxMonths, age+12); m++ {
+				if m%sameAgeStep(m) != 0 {
+					continue
+				}
+				target := item.Person.Birthday.AddDate(0, m, 0)
+				if dayOf(target) > dayOf(today) {
+					continue
+				}
+				if photo {
+					from, to := sameAgePhotoDays(item.Person.Birthday, m)
+					if day := dayOf(date); day >= from && day <= to {
+						seen[m] = true
+						pictured[m] = true
+					}
+					continue
+				}
+				window := sameAgeRecordWindow(m)
+				if growth {
+					window = sameAgeGrowthWindow(m)
+				}
+				if absDuration(date.Sub(target)) <= window {
+					seen[m] = true
+				}
+			}
+		}
+		for _, m := range item.Milestones {
+			add(m.MilestoneDate, false, false)
+		}
+		for _, g := range item.GrowthData {
+			if g.MeasurementType == Height || g.MeasurementType == Weight {
+				add(g.MeasurementDate, true, false)
+			}
+		}
+		// The index supplies dates without loading the whole photo timeline.
+		// Apply the listing's visibility/deleted-photo filter before counting.
+		listing := newPhotoListing(ctx.Tx, user, []int{item.Person.Id}, nil, "", "", "")
+		vbolt.IterateTerm(ctx.Tx, ImageByPersonDateIndex, item.Person.Id, func(id int, seconds int64) bool {
+			if listing.passes(GetImageById(ctx.Tx, id)) {
+				add(time.Unix(seconds, 0), false, true)
+			}
+			return true
+		})
+		for m := range seen {
+			recordCounts[m]++
+		}
+		for m := range pictured {
+			portraitCounts[m]++
+		}
+	}
+	return sameAgeOptionList(recordCounts), sameAgeOptionList(portraitCounts)
+}
+
+func sameAgeOptionList(counts map[int]int) []SameAgeOption {
+	options := make([]SameAgeOption, 0, len(counts))
+	for m, count := range counts {
+		options = append(options, SameAgeOption{AgeMonths: m, PeopleCount: count})
+	}
+	sort.Slice(options, func(i, j int) bool { return options[i].AgeMonths < options[j].AgeMonths })
+	return options
+}
+
+func bestSameAge(options []SameAgeOption, fallback int) int {
+	best, count := fallback, 0
+	for _, option := range options {
+		if option.PeopleCount > count || (option.PeopleCount == count && math.Abs(float64(option.AgeMonths-fallback)) < math.Abs(float64(best-fallback))) {
+			best, count = option.AgeMonths, option.PeopleCount
+		}
+	}
+	return best
 }

@@ -3,7 +3,7 @@ import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
 import { applyPageMetadata } from "./lib/pageMetadata";
 import { VerifyEmailBanner } from "./components/VerifyEmailBanner";
-import { AddSheet, BottomNav, TopNav } from "./components/AppNav";
+import { AddSheet, BottomNav, MoreSheet, TopNav } from "./components/AppNav";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -40,7 +40,7 @@ const Brand = ({ href }: { href: string }) => (
         <path d="M156 286 H286" />
       </g>
     </svg>
-    Family Record
+    <span className="brand-name">Family Record</span>
   </a>
 );
 
@@ -64,6 +64,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
         </header>
         <BottomNav />
         <AddSheet />
+        <MoreSheet />
       </>
     );
   }

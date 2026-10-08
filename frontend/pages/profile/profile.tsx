@@ -71,6 +71,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     server.GetPersonSeason({ personId, seasonId: 0 }),
     server.GetFamilyTimeline(timelineRequest({ skipMilestones: true, skipPhotos: true })),
     server.GetSameAge({
+      includeAvailableAges: false,
+      details: false,
       ageMonths: null,
       fromPersonId: personId,
       today: localDateString(new Date()),
@@ -188,7 +190,20 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
       </div>
 
       <div className="profile-tab-panel" role="tabpanel">
-        {state.tab === "story" && <StoryTab data={data} today={today} />}
+        {state.tab === "story" && (
+          <StoryTab
+            data={data}
+            today={today}
+            onShowTimeline={() => {
+              chooseTab(state, person.id, "photos");
+              requestAnimationFrame(() => {
+                const heading = document.getElementById("growing-up-heading");
+                heading?.focus({ preventScroll: true });
+                heading?.scrollIntoView({ block: "start" });
+              });
+            }}
+          />
+        )}
         {state.tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
         {state.tab === "artwork" && <ArtworkTab person={person} artwork={artwork} />}
         {state.tab === "photos" && (
@@ -400,8 +415,17 @@ const Snapshot = ({
   );
 };
 
-const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
+const StoryTab = ({
+  data,
+  today,
+  onShowTimeline,
+}: {
+  data: ProfileData;
+  today: string;
+  onShowTimeline: () => void;
+}) => {
   const person = data.person.person;
+  const hasPreview = data.insights.growingUp.length > 1;
   const days = summarizeDays(
     {
       photos: (data.person.photos ?? []).map(image => ({ image, people: [], similar: [] })),
@@ -428,18 +452,35 @@ const StoryTab = ({ data, today }: { data: ProfileData; today: string }) => {
 
   return (
     <div className="story">
-      {chapters.map(chapter => (
+      {chapters.map((chapter, index) => (
         <section key={String(chapter.age)} className="story-chapter">
           <div className="story-chapter-head">
             <h2>{chapterTitle(chapter.age)}</h2>
             {chapter.grew && <span className="story-grew">{chapter.grew}</span>}
           </div>
           <DaySummaryList
-            days={chapter.days}
+            days={index === 0 && hasPreview ? chapter.days.slice(0, 3) : chapter.days}
             people={[person]}
             today={today}
             subjectId={person.id}
           />
+          {index === 0 && hasPreview && (
+            <>
+              <GrowingUpPreview
+                personId={person.id}
+                portraits={data.insights.growingUp}
+                onShowTimeline={onShowTimeline}
+              />
+              {chapter.days.length > 3 && (
+                <DaySummaryList
+                  days={chapter.days.slice(3)}
+                  people={[person]}
+                  today={today}
+                  subjectId={person.id}
+                />
+              )}
+            </>
+          )}
         </section>
       ))}
     </div>
@@ -522,6 +563,49 @@ function timelineLabel(portrait: server.PortraitPhoto): string {
   return `${portrait.ageMonths / 12} yr`;
 }
 
+// Spread the preview across the whole timeline, including its first and last photos.
+const GrowingUpPreview = ({
+  personId,
+  portraits,
+  onShowTimeline,
+}: {
+  personId: number;
+  portraits: server.PortraitPhoto[];
+  onShowTimeline: () => void;
+}) => {
+  if (portraits.length < 2) return null;
+  const count = Math.min(5, portraits.length);
+  const picks = Array.from(
+    { length: count },
+    (_, i) => portraits[Math.round((i * (portraits.length - 1)) / (count - 1))]
+  );
+  return (
+    <section className="growing-up-preview" aria-label={copy.person.growingUp}>
+      <h3>{copy.person.growingUp}</h3>
+      <a
+        className="growing-up-preview-link"
+        href={`/profile/${personId}?tab=photos`}
+        onClick={e => {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onShowTimeline();
+        }}
+      >
+        <div className="growing-up-strip">
+          {picks.map(portrait => (
+            <span key={portrait.photoId} className="growing-up-item">
+              <FaceCrop photoId={portrait.photoId} box={portrait.box} size={48} alt="" />
+              <span>{timelineLabel(portrait)}</span>
+            </span>
+          ))}
+        </div>
+        <span className="growing-up-preview-more">{copy.person.seeGrowingUp}</span>
+      </a>
+    </section>
+  );
+};
+
 const PhotosTab = ({
   person,
   photos,
@@ -539,12 +623,14 @@ const PhotosTab = ({
     <div className="profile-photos">
       {insights.growingUp.length > 1 && (
         <section className="profile-growing-up">
-          <h3>{copy.person.growingUp}</h3>
+          <h3 id="growing-up-heading" tabIndex={-1}>
+            {copy.person.growingUp}
+          </h3>
           <div className="growing-up-strip">
             {insights.growingUp.map(portrait => (
               <a
                 key={portrait.photoId}
-                href={`/view-photo/${portrait.photoId}`}
+                href={`/view-photo/${portrait.photoId}?person=${person.id}`}
                 className="growing-up-item"
               >
                 <FaceCrop photoId={portrait.photoId} box={portrait.box} size={88} alt="" />

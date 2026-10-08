@@ -1,3 +1,5 @@
+import type { SameAgeRow } from "../server";
+
 export function ageStep(ageMonths: number): number {
   if (ageMonths < 24) return 1;
   if (ageMonths < 72) return 3;
@@ -27,13 +29,27 @@ export function parseAgeParam(value: string | null): number | null {
   return parseInt(match[1] ?? "0") * 12 + parseInt(match[2] ?? "0");
 }
 
-export function sameAgePath(ageMonths: number | null, fromPersonId: number): string {
+export type SameAgeView = "portraits" | "details";
+
+export function parseViewParam(value: string | null): SameAgeView {
+  return value === "details" ? "details" : "portraits";
+}
+
+export function sameAgePath(
+  ageMonths: number | null,
+  fromPersonId: number,
+  view: SameAgeView = "portraits"
+): string {
   const params = new URLSearchParams();
   if (ageMonths !== null && ageMonths >= 0) params.set("age", `${ageMonths}m`);
   if (fromPersonId > 0) params.set("from", String(fromPersonId));
+  if (view === "details") params.set("view", view);
   const query = params.toString();
   return query ? `/same-age?${query}` : "/same-age";
 }
+
+export const AGE_SHORTCUTS = [0, 3, 6, 12];
+export const NEWBORN_DAYS = 28;
 
 export function ageTitle(ageMonths: number): string {
   if (ageMonths <= 0) return "Newborn";
@@ -70,4 +86,52 @@ export function photoAge(birthday: string, at: string): string {
   const d = days === 1 ? "1 day" : `${days} days`;
   if (days === 0) return ageTitle(months);
   return months === 0 ? d : `${ageTitle(months)}, ${d}`;
+}
+
+export function ageHeading(ageMonths: number): string {
+  return ageMonths <= 0 ? "Everyone as newborns" : `Everyone at ${ageTitle(ageMonths)}`;
+}
+
+// Newborn through day 27, otherwise the nearest age on the age grid.
+export function sameAgeForPhoto(birthday: string, at: string): number | null {
+  const born = utcDay(new Date(birthday));
+  const days = Math.round((utcDay(new Date(at)) - born) / DAY_MS);
+  if (isNaN(days) || days < 0) return null;
+  if (days < NEWBORN_DAYS) return 0;
+  const months = monthsOld(birthday, at);
+  const b = new Date(birthday);
+  const distance = (m: number) =>
+    Math.abs(
+      utcDay(new Date(at)) - Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + m, b.getUTCDate())
+    );
+  const before = Math.max(1, prevAge(months + 1));
+  const after = nextAge(months, Infinity);
+  return distance(after) < distance(before) ? after : before;
+}
+
+export function portraitOrder(rows: SameAgeRow[]): SameAgeRow[] {
+  return [...rows].sort(
+    (a, b) => a.person.birthday.localeCompare(b.person.birthday) || a.person.id - b.person.id
+  );
+}
+
+// Shared by the page and the compact profile strip.
+export function hasSameAgeRecords(row: SameAgeRow): boolean {
+  return (
+    !!row.height ||
+    !!row.weight ||
+    (row.milestones ?? []).length > 0 ||
+    (row.photoIds ?? []).length > 0 ||
+    (row.portraits ?? []).length > 0
+  );
+}
+
+export function nearbyRecordedAge(
+  ages: number[],
+  current: number,
+  direction: -1 | 1
+): number | null {
+  const matches = ages.filter(age => (direction < 0 ? age < current : age > current));
+  if (!matches.length) return null;
+  return direction < 0 ? Math.max(...matches) : Math.min(...matches);
 }
