@@ -22,6 +22,8 @@ const (
 	// sameAgeDistanceWeight is how much a photo at the edge of the window
 	// loses to one taken exactly at the age.
 	sameAgeDistanceWeight = 0.25
+	// Newborn photos are from the day of birth through day 27.
+	sameAgeNewbornDays = 28
 )
 
 // sameAgeStep is how far one tap on the age control moves: a month for
@@ -51,10 +53,23 @@ func monthsDuration(months float64) time.Duration {
 	return time.Duration(months * daysPerMonth * 24 * float64(time.Hour))
 }
 
+// sameAgePhotoDays is the inclusive day range for photos at an age, shared by
+// results and age discovery.
+func sameAgePhotoDays(birthday time.Time, ageMonths int) (from, to string) {
+	if ageMonths == 0 {
+		return dayOf(birthday), dayOf(birthday.AddDate(0, 0, sameAgeNewbornDays-1))
+	}
+	target := birthday.AddDate(0, ageMonths, 0)
+	window := sameAgeRecordWindow(ageMonths)
+	return max(dayOf(birthday), dayOf(target.Add(-window))), dayOf(target.Add(window))
+}
+
 type GetSameAgeRequest struct {
 	// IncludeAvailableAges opts the full browse page into discovering saved
 	// ages. Profile strips avoid scanning the photo history.
 	IncludeAvailableAges bool `json:"includeAvailableAges,omitempty"`
+	// Details picks the starting age by all records rather than portraits.
+	Details bool `json:"details,omitempty"`
 	// AgeMonths null starts from the person's current age. With age discovery
 	// and no person given, start at the richest comparison instead.
 	AgeMonths    *int   `json:"ageMonths"`
@@ -81,6 +96,7 @@ type SameAgeOption struct {
 
 type GetSameAgeResponse struct {
 	AvailableAges []SameAgeOption `json:"availableAges"`
+	PortraitAges  []SameAgeOption `json:"portraitAges"`
 	PeopleCount   int             `json:"peopleCount"`
 	AgeMonths     int             `json:"ageMonths"`
 	FromPersonId  int             `json:"fromPersonId"`
@@ -119,13 +135,18 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 	resp.FromPersonId, resp.AgeMonths = sameAgeDefaults(ctx, user, candidates, req, today)
 	resp.PeopleCount = len(candidates)
 	resp.AvailableAges = []SameAgeOption{}
+	resp.PortraitAges = []SameAgeOption{}
 	if req.IncludeAvailableAges {
-		resp.AvailableAges = sameAgeOptions(ctx, user, candidates, today)
+		resp.AvailableAges, resp.PortraitAges = sameAgeOptions(ctx, user, candidates, today)
 	}
-	// A direct visit starts at the richest comparison. Contextual links and
-	// explicit ages keep their requested age, including ages without records.
+	// A direct visit starts at the richest comparison for the view. Contextual
+	// links and explicit ages keep their requested age, even without records.
 	if req.AgeMonths == nil && req.FromPersonId == 0 {
-		resp.AgeMonths = bestSameAge(resp.AvailableAges, resp.AgeMonths)
+		if req.Details || len(resp.PortraitAges) == 0 {
+			resp.AgeMonths = bestSameAge(resp.AvailableAges, resp.AgeMonths)
+		} else {
+			resp.AgeMonths = bestSameAge(resp.PortraitAges, resp.AgeMonths)
+		}
 	}
 	resp.Rows = []SameAgeRow{}
 
@@ -151,7 +172,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
 		row.Weight = nearestGrowth(item.GrowthData, Weight, target, growthWindow)
 
-		row.PhotoIds, row.Portraits, err = sameAgePhotosFor(ctx, item.Person, target, recordWindow)
+		row.PhotoIds, row.Portraits, err = sameAgePhotosFor(ctx, item.Person, resp.AgeMonths)
 		if err != nil {
 			return
 		}
@@ -215,11 +236,17 @@ func nearestGrowth(growth []GrowthData, kind MeasurementType, target time.Time, 
 	return best
 }
 
-func sameAgePhotosFor(ctx *vbeam.Context, person Person, target time.Time, window time.Duration) (ids []int, portraits []PortraitPhoto, err error) {
+func sameAgePhotosFor(ctx *vbeam.Context, person Person, ageMonths int) (ids []int, portraits []PortraitPhoto, err error) {
+	target := person.Birthday.AddDate(0, ageMonths, 0)
+	window := sameAgeRecordWindow(ageMonths)
+	if ageMonths == 0 {
+		window = sameAgeNewbornDays * 24 * time.Hour
+	}
+	from, to := sameAgePhotoDays(person.Birthday, ageMonths)
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
 		PersonId: person.Id,
-		DateFrom: dayOf(target.Add(-window)),
-		DateTo:   dayOf(target.Add(window)),
+		DateFrom: from,
+		DateTo:   to,
 		Limit:    sameAgePhotoCandidates,
 	})
 	if err != nil {
@@ -281,11 +308,11 @@ func sortSameAgeRows(rows []SameAgeRow, fromPersonId int) {
 // Count people, rather than entries, so a burst of photos for one child
 // cannot outweigh an age where several family members can be compared.
 // Use the same windows as the rows; only record-bearing ages on the age
-// control's grid are offered as shortcuts.
-func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, today time.Time) []SameAgeOption {
-	counts := map[int]int{}
+// control's grid are offered as shortcuts. Portrait ages count photos alone.
+func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, today time.Time) (records []SameAgeOption, portraits []SameAgeOption) {
+	recordCounts, portraitCounts := map[int]int{}, map[int]int{}
 	for _, item := range people {
-		seen := map[int]bool{}
+		seen, pictured := map[int]bool{}, map[int]bool{}
 		add := func(date time.Time, growth bool, photo bool) {
 			if date.Before(item.Person.Birthday) || dayOf(date) > dayOf(today) {
 				return
@@ -299,15 +326,19 @@ func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, 
 				if dayOf(target) > dayOf(today) {
 					continue
 				}
+				if photo {
+					from, to := sameAgePhotoDays(item.Person.Birthday, m)
+					if day := dayOf(date); day >= from && day <= to {
+						seen[m] = true
+						pictured[m] = true
+					}
+					continue
+				}
 				window := sameAgeRecordWindow(m)
 				if growth {
 					window = sameAgeGrowthWindow(m)
 				}
-				matches := absDuration(date.Sub(target)) <= window
-				if photo {
-					matches = dayOf(date) >= dayOf(target.Add(-window)) && dayOf(date) <= dayOf(target.Add(window))
-				}
-				if matches {
+				if absDuration(date.Sub(target)) <= window {
 					seen[m] = true
 				}
 			}
@@ -330,9 +361,16 @@ func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, 
 			return true
 		})
 		for m := range seen {
-			counts[m]++
+			recordCounts[m]++
+		}
+		for m := range pictured {
+			portraitCounts[m]++
 		}
 	}
+	return sameAgeOptionList(recordCounts), sameAgeOptionList(portraitCounts)
+}
+
+func sameAgeOptionList(counts map[int]int) []SameAgeOption {
 	options := make([]SameAgeOption, 0, len(counts))
 	for m, count := range counts {
 		options = append(options, SameAgeOption{AgeMonths: m, PeopleCount: count})

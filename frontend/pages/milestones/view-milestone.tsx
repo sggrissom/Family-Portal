@@ -41,6 +41,8 @@ export async function fetch(
     const age = monthsOld(person.birthday, milestone.milestoneDate);
     if (age >= 0) {
       [sameAge] = await server.GetSameAge({
+        includeAvailableAges: false,
+        details: false,
         ageMonths: age,
         fromPersonId: person.id,
         today: localDateString(new Date()),

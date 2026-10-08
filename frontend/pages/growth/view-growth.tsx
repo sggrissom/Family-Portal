@@ -205,7 +205,9 @@ const ViewGrowthPage = ({
           <div className="family-comparison-head">
             <h2>Compared to Family</h2>
             {ageMonths !== null && ageMonths >= 0 && (
-              <a href={sameAgePath(Math.floor(ageMonths), person.id)}>{copy.sameAge.seeAll}</a>
+              <a href={sameAgePath(Math.floor(ageMonths), person.id, "details")}>
+                {copy.sameAge.seeAll}
+              </a>
             )}
           </div>
           {comparisons.length === 0 ? (

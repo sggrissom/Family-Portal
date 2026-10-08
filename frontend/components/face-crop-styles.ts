@@ -27,3 +27,10 @@ block(`
   object-fit: cover;
 }
 `);
+
+block(`
+.face-crop.face-crop-fluid {
+  width: 100%;
+  aspect-ratio: 1;
+}
+`);

@@ -71,6 +71,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     server.GetPersonSeason({ personId, seasonId: 0 }),
     server.GetFamilyTimeline(timelineRequest({ skipMilestones: true, skipPhotos: true })),
     server.GetSameAge({
+      includeAvailableAges: false,
+      details: false,
       ageMonths: null,
       fromPersonId: personId,
       today: localDateString(new Date()),
@@ -628,7 +630,7 @@ const PhotosTab = ({
             {insights.growingUp.map(portrait => (
               <a
                 key={portrait.photoId}
-                href={`/view-photo/${portrait.photoId}`}
+                href={`/view-photo/${portrait.photoId}?person=${person.id}`}
                 className="growing-up-item"
               >
                 <FaceCrop photoId={portrait.photoId} box={portrait.box} size={88} alt="" />

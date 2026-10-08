@@ -1,7 +1,7 @@
 # Same age: portrait-first comparison
 
-Status: proposed; this document does not implement the feature or make it a
-release prerequisite.
+Status: first iteration implemented. Newborn is birth through day 27; Portraits
+orders people oldest first; "See everything at this age" links open Details.
 
 ## Purpose
 
