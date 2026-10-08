@@ -142,7 +142,7 @@ test("a new family signs up, adds a person, and records a measurement", async ({
 
   await test.step("the result links to everyone at the same age", async () => {
     await page.getByRole("link", { name: /See everything at this age/ }).click();
-    await expect(page).toHaveURL(/\/same-age\?age=\d+m&from=\d+$/);
+    await expect(page).toHaveURL(/\/same-age\?age=\d+m&from=\d+&view=details$/);
     await expect(page.locator(".same-age-row").filter({ hasText: child.name })).toContainText(
       measurement.shown
     );

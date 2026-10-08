@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SameAgeRow } from "../server";
 import {
   ageStep,
   ageTitle,
@@ -10,6 +11,10 @@ import {
   photoAge,
   prevAge,
   sameAgePath,
+  ageHeading,
+  parseViewParam,
+  portraitOrder,
+  sameAgeForPhoto,
 } from "./sameAge";
 
 describe("stepping the age", () => {
@@ -124,5 +129,51 @@ describe("browsing saved ages", () => {
     ]) {
       expect(hasSameAgeRecords({ ...empty, ...record })).toBe(true);
     }
+  });
+});
+
+describe("portrait comparisons", () => {
+  const born = "2020-02-15T00:00:00Z";
+
+  it("treats the day of birth through day 27 as newborn", () => {
+    expect(sameAgeForPhoto(born, "2020-02-15T23:30:00Z")).toBe(0);
+    expect(sameAgeForPhoto(born, "2020-03-13T08:00:00Z")).toBe(0);
+    expect(sameAgeForPhoto(born, "2020-03-14T08:00:00Z")).toBe(1);
+    expect(sameAgeForPhoto(born, "2020-02-14T12:00:00Z")).toBeNull();
+    expect(sameAgeForPhoto("0001-01-01T00:00:00Z", "invalid")).toBeNull();
+  });
+
+  it("maps later photos to the nearest age on the control's grid", () => {
+    expect(sameAgeForPhoto(born, "2020-05-15T00:00:00Z")).toBe(3);
+    expect(sameAgeForPhoto(born, "2020-08-27T00:00:00Z")).toBe(6);
+    expect(sameAgeForPhoto(born, "2020-09-05T00:00:00Z")).toBe(7);
+    expect(sameAgeForPhoto(born, "2022-07-20T00:00:00Z")).toBe(30);
+    expect(sameAgeForPhoto(born, "2022-08-25T00:00:00Z")).toBe(30);
+    expect(sameAgeForPhoto(born, "2022-10-20T00:00:00Z")).toBe(33);
+  });
+
+  it("keeps the view in the URL only when it is not the default", () => {
+    expect(sameAgePath(0, 7, "details")).toBe("/same-age?age=0m&from=7&view=details");
+    expect(sameAgePath(0, 7, "portraits")).toBe("/same-age?age=0m&from=7");
+    expect(parseViewParam("details")).toBe("details");
+    expect(parseViewParam(null)).toBe("portraits");
+    expect(parseViewParam("other")).toBe("portraits");
+  });
+
+  it("names the age being shown", () => {
+    expect(ageHeading(0)).toBe("Everyone as newborns");
+    expect(ageHeading(6)).toBe("Everyone at 6 months");
+    expect(ageHeading(12)).toBe("Everyone at 1 year");
+  });
+
+  it("orders people oldest first regardless of who has records", () => {
+    const row = (id: number, birthday: string, portraits = 0) =>
+      ({ person: { id, birthday }, portraits: Array(portraits) }) as unknown as SameAgeRow;
+    const ordered = portraitOrder([
+      row(3, "2021-01-01"),
+      row(1, "2015-05-05", 2),
+      row(2, "2018-03-03"),
+    ]);
+    expect(ordered.map(r => r.person.id)).toEqual([1, 2, 3]);
   });
 });

@@ -164,6 +164,18 @@ block(`
 `);
 
 block(`
+.view-photo-compare {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+`);
+
+block(`
 .view-photo-place {
   display: flex;
   flex-wrap: wrap;

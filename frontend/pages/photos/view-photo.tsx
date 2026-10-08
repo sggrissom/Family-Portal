@@ -12,7 +12,8 @@ import { FaceCrop } from "../../components/FaceCrop";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { SameAgeStrip } from "../../components/SameAgeRows";
 import { isValidBirthday } from "../../lib/growthPercentiles";
-import { monthsOld } from "../../lib/sameAge";
+import { monthsOld, sameAgeForPhoto, sameAgePath } from "../../lib/sameAge";
+import { copy } from "../../lib/copy";
 import { localDateString } from "../../lib/when";
 import "./view-photo-styles";
 
@@ -35,6 +36,7 @@ type ViewPhotoData = {
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
   childId: number;
+  compareHref: string;
 };
 
 const CHILD_MAX_MONTHS = 18 * 12;
@@ -46,6 +48,14 @@ function firstChildIn(people: server.Person[], photoDate: string): [number, numb
     if (age >= 0 && age < CHILD_MAX_MONTHS) return [person.id, age];
   }
   return [0, 0];
+}
+
+function compareHref(route: string, people: server.Person[], photoDate: string): string {
+  const personId = parseInt(new URLSearchParams(route.split("?")[1] ?? "").get("person") ?? "");
+  const person = people.find(p => p.id === personId);
+  if (!person || person.isPregnancy || !isValidBirthday(person.birthday)) return "";
+  const age = sameAgeForPhoto(person.birthday, photoDate);
+  return age === null ? "" : sameAgePath(age, person.id);
 }
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ViewPhotoData>> {
@@ -60,6 +70,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     server.GetPhotoFaces({ photoId }),
     childId
       ? server.GetSameAge({
+          includeAvailableAges: false,
+          details: false,
           ageMonths: childAge,
           fromPersonId: childId,
           today: localDateString(new Date()),
@@ -76,6 +88,9 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       faces: facesResp ?? null,
       sameAge: sameAge ?? null,
       childId,
+      compareHref: photoResp
+        ? compareHref(route, photoResp.people ?? [], photoResp.image.photoDate)
+        : "",
     },
     "",
   ];
@@ -123,6 +138,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           faces={data.faces}
           sameAge={data.sameAge}
           childId={data.childId}
+          compareHref={data.compareHref}
           position={position}
           backRoute={sequence?.backRoute || "/photos"}
         />
@@ -141,6 +157,7 @@ interface ViewPhotoPageProps {
   faces: server.GetPhotoFacesResponse | null;
   sameAge: server.GetSameAgeResponse | null;
   childId: number;
+  compareHref: string;
   position: SequencePosition | null;
   backRoute: string;
 }
@@ -506,6 +523,7 @@ const ViewPhotoPage = ({
   faces,
   sameAge,
   childId,
+  compareHref,
   position,
   backRoute,
 }: ViewPhotoPageProps) => {
@@ -583,6 +601,11 @@ const ViewPhotoPage = ({
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
           <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
+          {compareHref && (
+            <a href={compareHref} className="view-photo-compare">
+              {copy.sameAge.compareAtThisAge} →
+            </a>
+          )}
           {place && <PhotoPlaceLine photo={photo} place={place} />}
           {photo.description && <div className="view-photo-description">{photo.description}</div>}
 

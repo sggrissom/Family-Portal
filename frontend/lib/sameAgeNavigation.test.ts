@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GetSameAgeResponse } from "../server";
 import { nearbyRecordedAge } from "./sameAge";
-import { recordedAgeIndex, sameAgeNavigation, selectSameAge } from "./sameAgeNavigation";
+import { sameAgeNavigation, selectSameAge } from "./sameAgeNavigation";
 
 const response = (ageMonths: number): GetSameAgeResponse => ({
   ageMonths,
@@ -9,6 +9,7 @@ const response = (ageMonths: number): GetSameAgeResponse => ({
   maxAgeMonths: 400,
   peopleCount: 2,
   rows: [],
+  portraitAges: [],
   availableAges: [6, 12, 18].map(ageMonths => ({ ageMonths, peopleCount: 2 })),
 });
 
@@ -89,13 +90,5 @@ describe("Same Age navigation", () => {
     await selectSameAge(state, 12, async () => [response(12), ""], vi.fn(), vi.fn());
     expect(state.error).toBe("");
     expect(state.data.ageMonths).toBe(12);
-  });
-
-  it("positions contextual ages on the slider without offering empty years", () => {
-    const ages = [0, 6, 12, 72];
-    expect(recordedAgeIndex(ages, 6)).toBe(1);
-    expect(recordedAgeIndex(ages, 11)).toBe(2);
-    expect(recordedAgeIndex(ages, 400)).toBe(3);
-    expect(recordedAgeIndex([], 400)).toBe(0);
   });
 });

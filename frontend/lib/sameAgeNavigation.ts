@@ -1,19 +1,23 @@
 import type { GetSameAgeResponse } from "../server";
+import type { SameAgeView } from "./sameAge";
 
 export interface SameAgeNavigation {
   data: GetSameAgeResponse;
+  view: SameAgeView;
   selectedAge: number;
-  previewAge: number | null;
   loading: boolean;
   error: string;
   request: number;
 }
 
-export function sameAgeNavigation(data: GetSameAgeResponse): SameAgeNavigation {
+export function sameAgeNavigation(
+  data: GetSameAgeResponse,
+  view: SameAgeView = "portraits"
+): SameAgeNavigation {
   return {
     data,
+    view,
     selectedAge: data.ageMonths,
-    previewAge: null,
     loading: false,
     error: "",
     request: 0,
@@ -32,7 +36,6 @@ export async function selectSameAge(
   updateURL: (age: number) => void,
   redraw: () => void
 ): Promise<void> {
-  state.previewAge = null;
   if (age === state.selectedAge && state.loading) return;
   if (age === state.data.ageMonths && !state.loading && !state.error) {
     state.selectedAge = age;
@@ -50,7 +53,11 @@ export async function selectSameAge(
     if (request !== state.request) return;
     if (data) {
       // Discovery is needed only on the first load, not on every age change.
-      state.data = { ...data, availableAges: state.data.availableAges };
+      state.data = {
+        ...data,
+        availableAges: state.data.availableAges,
+        portraitAges: state.data.portraitAges,
+      };
     } else {
       state.error = error || "Could not load records. Please try again.";
     }
@@ -62,14 +69,4 @@ export async function selectSameAge(
     state.loading = false;
     redraw();
   }
-}
-
-// Contextual links may use an age between the recorded slider positions.
-// Put the thumb at the closest position without changing the linked age.
-export function recordedAgeIndex(ages: number[], age: number): number {
-  let best = 0;
-  for (let i = 1; i < ages.length; i++) {
-    if (Math.abs(ages[i] - age) < Math.abs(ages[best] - age)) best = i;
-  }
-  return best;
 }

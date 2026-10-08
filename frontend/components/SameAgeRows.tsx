@@ -102,7 +102,9 @@ export const SameAgeStrip = ({ data, today, exceptPersonId, hideWhenEmpty }: Sam
     <section className="same-age-strip">
       <div className="same-age-strip-head">
         <h2>{copy.sameAge.atThisAge(ageTitle(data.ageMonths))}</h2>
-        <a href={sameAgePath(data.ageMonths, data.fromPersonId)}>{copy.sameAge.seeAll}</a>
+        <a href={sameAgePath(data.ageMonths, data.fromPersonId, "details")}>
+          {copy.sameAge.seeAll}
+        </a>
       </div>
       {others.length > 0 ? (
         <SameAgeRows rows={others} ageMonths={data.ageMonths} today={today} photoLimit={4} />
