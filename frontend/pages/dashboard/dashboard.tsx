@@ -140,16 +140,20 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                       {copy.home.eventTiming[s.eventTiming] ?? ""}: {s.event.name} ·{" "}
                       {dayLabel(dayKey(s.event.startDate), data.today)}
                     </a>
-                    {s.canContribute && (
+                    {s.canContribute && s.canAddResults ? (
                       <div className="home-season-actions">
                         <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
                           {copy.home.addPhotos}
                         </a>
-                        {s.canAddResults && (
-                          <a href={`/competition/${s.event.id}`} className="btn btn-primary">
-                            {copy.home.addResults}
-                          </a>
-                        )}
+                        <a href={`/competition/${s.event.id}`} className="btn btn-primary">
+                          {copy.home.addResults}
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="home-season-actions">
+                        <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
+                          {copy.home.viewEvent}
+                        </a>
                       </div>
                     )}
                   </>

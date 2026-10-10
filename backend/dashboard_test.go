@@ -138,6 +138,12 @@ func TestPickSeasonEvent(t *testing.T) {
 	if event, timing := pickSeasonEvent(events, day("2026-09-06")); event.Id != 1 || timing != "now" {
 		t.Errorf("during an event: got %d %q", event.Id, timing)
 	}
+	if event, timing := pickSeasonEvent(events, day("2026-09-09")); event.Id != 1 || timing != "last" {
+		t.Errorf("catch-up window with another event scheduled: got %d %q", event.Id, timing)
+	}
+	if event, timing := pickSeasonEvent(events, day("2026-09-10")); event.Id != 2 || timing != "next" {
+		t.Errorf("after the catch-up window: got %d %q", event.Id, timing)
+	}
 	if event, timing := pickSeasonEvent(events, day("2026-09-27")); event.Id != 2 || timing != "next" {
 		t.Errorf("between events: got %d %q", event.Id, timing)
 	}
@@ -146,6 +152,54 @@ func TestPickSeasonEvent(t *testing.T) {
 	}
 	if event, _ := pickSeasonEvent(nil, day("2026-12-01")); event != nil {
 		t.Errorf("no events: got %d", event.Id)
+	}
+}
+
+func TestDashboardSeasonEventPrompts(t *testing.T) {
+	fx := setupResultsFixture(t)
+	recent := fx.createEvent(t, fx.season.Id, "October weekend", "", "2026-10-09")
+	fx.as(t, func(ctx *vbeam.Context) {
+		start := "2026-10-09"
+		end := "2026-10-10"
+		if _, err := UpdateEvent(ctx, UpdateEventRequest{Id: recent.Id, Name: recent.Name, StartDate: &start, EndDate: &end}); err != nil {
+			t.Fatalf("UpdateEvent() error = %v", err)
+		}
+	})
+	next := fx.createEvent(t, fx.season.Id, "November competition", "", "2026-11-14")
+
+	for _, tt := range []struct {
+		date   string
+		event  int
+		timing string
+		prompt bool
+	}{
+		{"2026-10-08", recent.Id, "next", false},
+		{"2026-10-09", recent.Id, "now", true},
+		{"2026-10-10", recent.Id, "now", true},
+		{"2026-10-11", recent.Id, "last", true},
+		{"2026-10-13", recent.Id, "last", true},
+		{"2026-10-14", next.Id, "next", false},
+		{"2026-11-14", next.Id, "now", true},
+		{"2026-11-17", next.Id, "last", true},
+		{"2026-11-18", next.Id, "last", false},
+	} {
+		t.Run(tt.date, func(t *testing.T) {
+			vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+				for _, entry := range seasonsInProgress(tx, fx.owner, day(tt.date)) {
+					if entry.Season.Id != fx.season.Id {
+						continue
+					}
+					if entry.Event == nil || entry.Event.Id != tt.event || entry.EventTiming != tt.timing {
+						t.Fatalf("dashboard event = %+v (%s), want %d (%s)", entry.Event, entry.EventTiming, tt.event, tt.timing)
+					}
+					if !entry.CanContribute || entry.CanAddResults != tt.prompt {
+						t.Errorf("contribution permissions = %v, prompt = %v; want true, %v", entry.CanContribute, entry.CanAddResults, tt.prompt)
+					}
+					return
+				}
+				t.Fatal("active season missing from dashboard")
+			})
+		})
 	}
 }
 

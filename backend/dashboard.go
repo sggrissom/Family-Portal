@@ -204,8 +204,8 @@ func eventEnd(event Event) time.Time {
 	return event.EndDate
 }
 
-// pickSeasonEvent is the event running today, else the next one, else the
-// most recent one.
+// pickSeasonEvent keeps an event on the dashboard while it is running and
+// during the post-event catch-up window, before previewing the next one.
 func pickSeasonEvent(events []Event, today time.Time) (*Event, string) {
 	var next, last *Event
 	for i := range events {
@@ -220,6 +220,9 @@ func pickSeasonEvent(events []Event, today time.Time) (*Event, string) {
 		} else if last == nil || eventEnd(*event).After(eventEnd(*last)) {
 			last = event
 		}
+	}
+	if last != nil && inResultWindow(*last, today) {
+		return last, "last"
 	}
 	if next != nil {
 		return next, "next"

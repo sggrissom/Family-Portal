@@ -119,6 +119,7 @@ export const copy = {
     checkupTitle: "Measured",
     addPhotos: "Add photos",
     addResults: "Add results",
+    viewEvent: "View event",
     turned: (name: string, age: number) => `${name} turned ${age}`,
     photoCount: (n: number) => (n === 1 ? "1 photo" : `${n} photos`),
     yearsAgo: (n: number) => (n === 1 ? "1 year ago" : `${n} years ago`),
