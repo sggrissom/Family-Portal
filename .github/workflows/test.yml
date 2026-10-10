@@ -20,16 +20,11 @@ on:
 permissions:
   contents: read
 
-# Pinned to an exact patch release, not the `1.25` minor. `setup-go` resolves a
-# minor to whatever it already finds in the runner's tool cache, which is the Go
-# the image happened to ship with and is usually several patches behind — so the
-# security job scanned a stdlib that was missing published fixes and failed on
-# five of them (net/http, net/url, crypto/tls, encoding/xml, html/template) that
-# a current 1.25 had already patched. An exact version makes every job build the
-# same toolchain, and makes the next stdlib advisory a one-line, reviewable bump
-# instead of a silent difference between the runner image and the release notes.
+# Pin an exact patched toolchain so validation, security scans, and deployment
+# all use the same standard library instead of the runner's cached minor release.
+# Go 1.26.9 fixes the stdlib advisories reported against Go 1.25.14.
 env:
-  GO_VERSION: '1.25.14'
+  GO_VERSION: '1.26.9'
   NODE_VERSION: '20'
 
 jobs:
