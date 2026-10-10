@@ -377,17 +377,24 @@ func birthdayNudge(person Person, today time.Time) (rankedNudge, bool) {
 
 	when := "on " + next.Weekday().String()
 	priority := 3
+	key := fmt.Sprintf("birthday:%d:%d", person.Id, next.Year())
 	switch days {
 	case 0:
 		when = "today"
 		priority = 0
+		// Dismissing the advance reminder must not hide the birthday itself.
+		key += ":today"
 	case 1:
 		when = "tomorrow"
 	}
+	text := fmt.Sprintf("%s turns %d %s", firstName(person.Name), next.Year()-birthday.Year(), when)
+	if days == 0 {
+		text = "🎂 Happy birthday! " + text
+	}
 	return rankedNudge{DashboardNudge{
 		Kind:     "birthday",
-		Key:      fmt.Sprintf("birthday:%d:%d", person.Id, next.Year()),
-		Text:     fmt.Sprintf("%s turns %d %s", firstName(person.Name), next.Year()-birthday.Year(), when),
+		Key:      key,
+		Text:     text,
 		PersonId: person.Id,
 	}, priority}, true
 }
