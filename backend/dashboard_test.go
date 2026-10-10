@@ -68,7 +68,7 @@ func TestBirthdayNudge(t *testing.T) {
 	}{
 		{"within the week", today, "Jake turns 7 on Saturday"},
 		{"tomorrow", day("2026-10-02"), "Jake turns 7 tomorrow"},
-		{"today", day("2026-10-03"), "Jake turns 7 today"},
+		{"today", day("2026-10-03"), "🎂 Happy birthday! Jake turns 7 today"},
 		{"too far off", day("2026-09-20"), ""},
 		{"just passed", day("2026-10-04"), ""},
 	}
@@ -104,6 +104,27 @@ func TestBirthdayTodayOutranksOtherNudges(t *testing.T) {
 	}
 	if one, _ := faceNudge(1); one.Text != "1 photo has faces to review" {
 		t.Errorf("single face text = %q", one.Text)
+	}
+}
+
+func TestBirthdayTodayHasIndependentDismissalKey(t *testing.T) {
+	person := Person{Id: 3, Name: "Jake", Birthday: day("2019-10-03")}
+	upcoming, _ := birthdayNudge(person, day("2026-09-27"))
+	tomorrow, _ := birthdayNudge(person, day("2026-10-02"))
+	birthday, _ := birthdayNudge(person, day("2026-10-03"))
+	nextYear, _ := birthdayNudge(person, day("2027-10-03"))
+
+	if upcoming.Key != "birthday:3:2026" || tomorrow.Key != upcoming.Key {
+		t.Errorf("advance reminders should share their existing dismissal key: %q, %q", upcoming.Key, tomorrow.Key)
+	}
+	if birthday.Key != "birthday:3:2026:today" || birthday.Key == upcoming.Key {
+		t.Errorf("birthday banner should have its own dismissal key: %q", birthday.Key)
+	}
+	if nextYear.Key == birthday.Key {
+		t.Error("dismissing this year's birthday should not hide next year's banner")
+	}
+	if birthday.Kind != "birthday" || birthday.PersonId != person.Id {
+		t.Errorf("birthday banner should still link to the person's profile: %+v", birthday)
 	}
 }
 

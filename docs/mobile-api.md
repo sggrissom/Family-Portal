@@ -755,8 +755,10 @@ unparseable or empty `today` falls back to the server's UTC day.
 - `nudges` are ordered by priority. `kind` is `"measure"`, `"birthday"` or
   `"faces"` today; render `text` for any kind, including ones added later.
   `key` is stable per occurrence (`measure:<personId>:<lastDay>`,
-  `birthday:<personId>:<year>`, `faces:<count>`), which is what a client
-  remembers when a nudge is dismissed. Dismissals are per device.
+  `birthday:<personId>:<year>`, `birthday:<personId>:<year>:today`,
+  `faces:<count>`), which is what a client remembers when a nudge is dismissed.
+  The birthday-day banner has its own key so dismissing an advance reminder
+  does not hide the celebration. Dismissals are per device.
 - `seasons` are the seasons in progress today, oldest start first. `event` is
   the one running today, else the next, else the last, with `eventTiming`
   `"now"`, `"next"` or `"last"`; it is `null` for a season with no events.
