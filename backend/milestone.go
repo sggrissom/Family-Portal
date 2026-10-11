@@ -89,6 +89,7 @@ type SearchMilestonesRequest struct {
 
 type SearchMilestonesResponse struct {
 	Milestones []Milestone `json:"milestones"`
+	Interviews []Interview `json:"interviews"`
 	Query      string      `json:"query"`
 }
 
@@ -875,6 +876,7 @@ func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp Sea
 	}
 
 	resp.Milestones = milestones
+	resp.Interviews = interviewsOfAnswers(ctx.Tx, milestones)
 	resp.Query = query
 	return
 }

@@ -189,6 +189,7 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 		deletePhotoRecordTx(tx, photo)
 	}
 
+	deleteFamilyInterviewsTx(tx, familyId)
 	for _, milestone := range getFamilyMilestones(tx, familyId) {
 		_ = DeleteMilestoneTx(tx, milestone.Id, familyId)
 	}

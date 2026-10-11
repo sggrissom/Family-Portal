@@ -4,6 +4,7 @@ import { Checkup, DayEvent, DaySummary, PhotoGroup, dayLabel } from "../lib/dayS
 import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
 import { MilestoneText } from "./MilestoneText";
+import { InterviewCards } from "./InterviewCard";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageInMonths, computePercentileLabel, isValidBirthday } from "../lib/growthPercentiles";
 import { copy } from "../lib/copy";
@@ -14,9 +15,16 @@ interface DaySummaryListProps {
   people: server.Person[];
   today: string;
   subjectId?: number;
+  interviews?: Map<number, server.Interview>;
 }
 
-export const DaySummaryList = ({ days, people, today, subjectId }: DaySummaryListProps) => {
+export const DaySummaryList = ({
+  days,
+  people,
+  today,
+  subjectId,
+  interviews,
+}: DaySummaryListProps) => {
   const byId = new Map(people.map(p => [p.id, p]));
   const names = chipLabels(people);
   const name = (id: number) => names.get(id) ?? "Someone";
@@ -43,6 +51,12 @@ export const DaySummaryList = ({ days, people, today, subjectId }: DaySummaryLis
               </span>
             </a>
           ))}
+          <InterviewCards
+            groups={day.interviews}
+            people={byId}
+            interviews={interviews ?? new Map()}
+            subjectId={subjectId}
+          />
           {day.events.map(e => (
             <EventCard key={`e${e.event.id}`} dayEvent={e} name={name} subjectId={subjectId} />
           ))}

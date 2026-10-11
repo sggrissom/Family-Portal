@@ -37,17 +37,28 @@ export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
 
 // Errors
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
 export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrInterviewNotFound = "Interview not found or not in your family";
 export const ErrInterviewInProgress = "There's already an interview in progress for this person";
 export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -57,17 +68,6 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
-export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 
 export interface CreateAccountRequest {
     name: string
@@ -266,6 +266,7 @@ export interface GetPersonResponse {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+    interviews: Interview[]
 }
 
 export interface ListPeopleResponse {
@@ -328,6 +329,7 @@ export interface PersonDeletionSummary {
     relations: number
     sharedFamilies: number
     books: number
+    interviews: number
 }
 
 export interface DeletePersonResponse {
@@ -513,6 +515,7 @@ export interface SearchMilestonesRequest {
 
 export interface SearchMilestonesResponse {
     milestones: Milestone[]
+    interviews: Interview[]
     query: string
 }
 
@@ -1559,6 +1562,8 @@ export interface WeeklyDigestResponse {
     windowDays: number
     photos: number
     milestones: number
+    interviews: number
+    answers: number
     measurements: number
     messages: number
     people: DigestPerson[]
@@ -1843,6 +1848,23 @@ export interface Image {
     tagIds: number[]
 }
 
+export interface Interview {
+    id: number
+    familyId: number
+    personId: number
+    date: string
+    title: string
+    source: string
+    status: string
+    questionIds: number[]
+    skippedIds: number[]
+    photoId: number
+    notes: string
+    createdAt: string
+    completedAt: string
+    version: number
+}
+
 export interface Relation {
     id: number
     fromId: number
@@ -1855,6 +1877,7 @@ export interface FamilyTimelineItem {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+    interviews: Interview[]
 }
 
 export interface TimelineAppearance {
@@ -1908,23 +1931,6 @@ export interface InterviewQuestionInput {
     maxAgeYears: number
     defaultKey: string
     archived: boolean
-}
-
-export interface Interview {
-    id: number
-    familyId: number
-    personId: number
-    date: string
-    title: string
-    source: string
-    status: string
-    questionIds: number[]
-    skippedIds: number[]
-    photoId: number
-    notes: string
-    createdAt: string
-    completedAt: string
-    version: number
 }
 
 export interface PreviousAnswer {
@@ -2151,6 +2157,7 @@ export interface DashboardNudge {
     text: string
     personId: number
     count: number
+    interviewId: number
 }
 
 export interface DashboardSeason {
@@ -2166,6 +2173,7 @@ export interface DashboardYear {
     yearsAgo: number
     photos: Image[]
     milestones: Milestone[]
+    interviews: Interview[]
 }
 
 export interface DashboardRecent {
@@ -2173,6 +2181,7 @@ export interface DashboardRecent {
     photos: PhotoWithPeople[]
     milestones: Milestone[]
     growth: GrowthData[]
+    interviews: Interview[]
 }
 
 export interface OpenEvent {
@@ -2191,6 +2200,7 @@ export interface SameAgeRow {
     height: GrowthData | null
     weight: GrowthData | null
     milestones: Milestone[]
+    interviews: Interview[]
     photoIds: number[]
     portraits: PortraitPhoto[]
 }

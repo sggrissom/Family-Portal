@@ -590,6 +590,10 @@ const Digest = ({ digest }: { digest: server.WeeklyDigestResponse }) => {
         <DiagnosticItem label="Photos" value={countOf(digest.photos, "photo", "photos")} />
         <DiagnosticItem label="Moments" value={countOf(digest.milestones, "moment", "moments")} />
         <DiagnosticItem
+          label="Interviews"
+          value={`${countOf(digest.interviews, "interview", "interviews")}, ${countOf(digest.answers, "answer", "answers")}`}
+        />
+        <DiagnosticItem
           label="Measurements"
           value={countOf(digest.measurements, "measurement", "measurements")}
         />

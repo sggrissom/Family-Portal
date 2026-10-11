@@ -3,6 +3,8 @@ import * as server from "../server";
 import { chipLabels } from "../lib/familyGroups";
 import { getCategoryIcon } from "../lib/milestoneHelpers";
 import { MilestoneText } from "./MilestoneText";
+import { InterviewCards } from "./InterviewCard";
+import { groupInterviewAnswers, interviewsById } from "../lib/interviews";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageTitle, hasSameAgeRecords, monthsOld, sameAgePath } from "../lib/sameAge";
 import { copy } from "../lib/copy";
@@ -65,7 +67,13 @@ export const SameAgeRows = ({
                 ))}
               </div>
             )}
-            {(row.milestones ?? []).map(m => (
+            <InterviewCards
+              groups={groupInterviewAnswers(row.milestones ?? []).groups}
+              people={new Map([[row.person.id, row.person]])}
+              interviews={interviewsById(row.interviews)}
+              subjectId={row.person.id}
+            />
+            {groupInterviewAnswers(row.milestones ?? []).loose.map(m => (
               <a key={m.id} href={`/milestone/${m.id}`} className="same-age-milestone">
                 <span aria-hidden="true">{getCategoryIcon(m.category)}</span>{" "}
                 <MilestoneText milestone={m} />

@@ -37,11 +37,12 @@ type GetDashboardRequest struct {
 }
 
 type DashboardNudge struct {
-	Kind     string `json:"kind"`
-	Key      string `json:"key"`
-	Text     string `json:"text"`
-	PersonId int    `json:"personId"`
-	Count    int    `json:"count"`
+	Kind        string `json:"kind"`
+	Key         string `json:"key"`
+	Text        string `json:"text"`
+	PersonId    int    `json:"personId"`
+	Count       int    `json:"count"`
+	InterviewId int    `json:"interviewId,omitempty"`
 }
 
 type rankedNudge struct {
@@ -62,6 +63,7 @@ type DashboardYear struct {
 	YearsAgo   int         `json:"yearsAgo"`
 	Photos     []Image     `json:"photos"`
 	Milestones []Milestone `json:"milestones"`
+	Interviews []Interview `json:"interviews"`
 }
 
 type DashboardRecent struct {
@@ -69,6 +71,7 @@ type DashboardRecent struct {
 	Photos     []PhotoWithPeople `json:"photos"`
 	Milestones []Milestone       `json:"milestones"`
 	Growth     []GrowthData      `json:"growth"`
+	Interviews []Interview       `json:"interviews"`
 }
 
 type GetDashboardResponse struct {
@@ -148,6 +151,8 @@ func dashboardRecent(ctx *vbeam.Context, today time.Time, items []FamilyTimeline
 		}
 	}
 
+	recent.Interviews = interviewsOfAnswers(ctx.Tx, recent.Milestones)
+
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
 		DateFrom: from, DateTo: to, Limit: dashboardRecentPhotos,
 	})
@@ -170,6 +175,8 @@ func onThisDay(ctx *vbeam.Context, today time.Time, items []FamilyTimelineItem) 
 				}
 			}
 		}
+
+		year.Interviews = interviewsOfAnswers(ctx.Tx, year.Milestones)
 
 		var photos ListFamilyPhotosResponse
 		photos, err = ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
@@ -450,6 +457,9 @@ func dashboardNudges(tx *vbolt.Tx, user User, today time.Time, items []FamilyTim
 			continue
 		}
 		if nudge, ok := measureNudge(item.Person, item.GrowthData, today); ok {
+			nudges = append(nudges, nudge)
+		}
+		if nudge, ok := interviewNudge(tx, item.Person, personInterviews(tx, item.Person.Id), today); ok {
 			nudges = append(nudges, nudge)
 		}
 	}

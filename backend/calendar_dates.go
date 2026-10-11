@@ -54,6 +54,9 @@ func NormalizeStoredRecordDates(tx *vbolt.Tx) (changed int) {
 		end := normalizedDay(&e.EndDate)
 		return start || end
 	})
+	changed += normalizeBucket(tx, InterviewBkt, func(i *Interview) bool {
+		return normalizedDay(&i.Date)
+	})
 	changed += normalizeBucket(tx, AppearanceBkt, func(a *Appearance) bool {
 		return normalizedDay(&a.OccurredAt)
 	})

@@ -104,6 +104,7 @@ type SeedSummary struct {
 	Shares       int
 	Tags         int
 	Milestones   int
+	Interviews   int
 	Measurements int
 	Activities   int
 	Events       int
@@ -962,6 +963,7 @@ func (s *seeder) build(scale int) {
 	for _, kid := range kids {
 		s.childMilestones(kid, tags)
 		s.growthSeries(kid, scale)
+		s.interviews(kid)
 	}
 	s.growthSeries(owen, scale)
 	s.growthSeries(meera, scale)
