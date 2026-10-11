@@ -37,21 +37,28 @@ export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
 
 // Errors
-export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
-export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrInterviewNotFound = "Interview not found or not in your family";
+export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -61,10 +68,6 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrFaceNotFound = "Face not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -545,6 +548,83 @@ export interface MergeInterviewQuestionsRequest {
     fromId: number
     intoId: number
     revision: number
+}
+
+export interface GetInterviewSetupRequest {
+    personId: number
+}
+
+export interface GetInterviewSetupResponse {
+    person: Person
+    questions: InterviewQuestion[]
+    inProgress: Interview
+    answered: number
+}
+
+export interface StartInterviewRequest {
+    personId: number
+    date: string
+    questionIds: number[]
+    defaultKeys: string[]
+    oneOffQuestions: string[]
+}
+
+export interface InterviewResponse {
+    interview: Interview
+}
+
+export interface GetInterviewRequest {
+    id: number
+}
+
+export interface GetInterviewResponse {
+    interview: Interview
+    person: Person
+    questions: InterviewQuestion[]
+    answers: Milestone[]
+    previous: Record<number, PreviousAnswer[]>
+}
+
+export interface SaveInterviewAnswerRequest {
+    interviewId: number
+    questionId: number
+    answer: string
+    skipped: boolean
+}
+
+export interface SaveInterviewAnswerResponse {
+    interview: Interview
+    answer: Milestone
+}
+
+export interface AddInterviewQuestionRequest {
+    interviewId: number
+    text: string
+    afterQuestionId: number
+    keep: boolean
+}
+
+export interface AddInterviewQuestionResponse {
+    interview: Interview
+    question: InterviewQuestion
+}
+
+export interface UpdateInterviewRequest {
+    id: number
+    version: number
+    date: string
+    title: string
+    notes: string
+    photoId: number
+    status: string
+}
+
+export interface DeleteInterviewRequest {
+    id: number
+}
+
+export interface DeleteInterviewResponse {
+    personId: number
 }
 
 export interface ListActivitiesRequest {
@@ -1785,6 +1865,31 @@ export interface InterviewQuestionInput {
     archived: boolean
 }
 
+export interface Interview {
+    id: number
+    familyId: number
+    personId: number
+    date: string
+    title: string
+    source: string
+    status: string
+    questionIds: number[]
+    skippedIds: number[]
+    photoId: number
+    notes: string
+    createdAt: string
+    completedAt: string
+    version: number
+}
+
+export interface PreviousAnswer {
+    interviewId: number
+    milestoneId: number
+    date: string
+    ageYears: number
+    text: string
+}
+
 export interface Activity {
     id: number
     familyId: number
@@ -2753,6 +2858,34 @@ export async function SaveInterviewQuestions(data: SaveInterviewQuestionsRequest
 
 export async function MergeInterviewQuestions(data: MergeInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
     return await rpc.call<InterviewQuestionsResponse>('MergeInterviewQuestions', JSON.stringify(data));
+}
+
+export async function GetInterviewSetup(data: GetInterviewSetupRequest): Promise<rpc.Response<GetInterviewSetupResponse>> {
+    return await rpc.call<GetInterviewSetupResponse>('GetInterviewSetup', JSON.stringify(data));
+}
+
+export async function StartInterview(data: StartInterviewRequest): Promise<rpc.Response<InterviewResponse>> {
+    return await rpc.call<InterviewResponse>('StartInterview', JSON.stringify(data));
+}
+
+export async function GetInterview(data: GetInterviewRequest): Promise<rpc.Response<GetInterviewResponse>> {
+    return await rpc.call<GetInterviewResponse>('GetInterview', JSON.stringify(data));
+}
+
+export async function SaveInterviewAnswer(data: SaveInterviewAnswerRequest): Promise<rpc.Response<SaveInterviewAnswerResponse>> {
+    return await rpc.call<SaveInterviewAnswerResponse>('SaveInterviewAnswer', JSON.stringify(data));
+}
+
+export async function AddInterviewQuestion(data: AddInterviewQuestionRequest): Promise<rpc.Response<AddInterviewQuestionResponse>> {
+    return await rpc.call<AddInterviewQuestionResponse>('AddInterviewQuestion', JSON.stringify(data));
+}
+
+export async function UpdateInterview(data: UpdateInterviewRequest): Promise<rpc.Response<InterviewResponse>> {
+    return await rpc.call<InterviewResponse>('UpdateInterview', JSON.stringify(data));
+}
+
+export async function DeleteInterview(data: DeleteInterviewRequest): Promise<rpc.Response<DeleteInterviewResponse>> {
+    return await rpc.call<DeleteInterviewResponse>('DeleteInterview', JSON.stringify(data));
 }
 
 export async function ListActivities(data: ListActivitiesRequest): Promise<rpc.Response<ListActivitiesResponse>> {
