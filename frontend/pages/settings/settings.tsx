@@ -341,7 +341,7 @@ async function onDeleteAccountClicked(form: DeleteAccountForm, event: Event) {
 
   if (
     !confirm(
-      "Delete your account? This cannot be undone. Any family you are the only member of is deleted with everything in it — people, photos, measurements and milestones."
+      "Delete your account? This cannot be undone. Any family you are the only member of is deleted with everything in it — people, photos, measurements and moments."
     )
   ) {
     return;
@@ -829,7 +829,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="data-management-actions">
                 <div className="data-action">
                   <h4>Export Data</h4>
-                  <p>Download your family's data including people, milestones, and measurements.</p>
+                  <p>Download your family's data including people, moments, and measurements.</p>
 
                   {exportForm.success && (
                     <div className="success-message">Data exported successfully!</div>
@@ -866,7 +866,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                       <div className="export-mode-label">
                         <span>Data only</span>
                         <span className="export-mode-desc">
-                          JSON file — people, relationships, heights, weights, milestones, tags
+                          JSON file — people, relationships, heights, weights, moments, tags
                         </span>
                       </div>
                     </label>
@@ -921,9 +921,9 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
 
               <h4>Merge People</h4>
               <p className="section-description">
-                Combine two person records into one. All data (milestones, growth records, photos)
-                from the source person will be moved to the target person, and the source person
-                will be permanently deleted.
+                Combine two person records into one. All data (moments, growth records, photos) from
+                the source person will be moved to the target person, and the source person will be
+                permanently deleted.
               </p>
 
               {mergeForm.success && (
@@ -1142,7 +1142,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               Deleting your account removes your sign-in, your sessions, your registered devices and
               your chat messages. Records stay with any family that still has another member in it.
               A family you are the only member of is deleted along with everything in it — people,
-              photos, measurements and milestones. Export your data first if you want to keep it.{" "}
+              photos, measurements and moments. Export your data first if you want to keep it.{" "}
               <a href="/privacy">The privacy page</a> lists exactly what goes and what stays.
             </p>
 

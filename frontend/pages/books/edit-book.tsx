@@ -287,8 +287,8 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
       <section className="book-editor-section">
         <h2>Your words</h2>
         <p className="book-editor-hint">
-          These live only in this book. Memories worth keeping are better added as milestones, so
-          they appear everywhere.
+          These live only in this book. Memories worth keeping are better added as moments, so they
+          appear everywhere.
         </p>
         <label className="book-editor-field">
           <span>Introduction</span>
@@ -452,7 +452,7 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
       <section className="book-editor-section book-editor-danger">
         {state.confirmDelete ? (
           <p>
-            Delete this book? The photos and milestones stay in the family record.{" "}
+            Delete this book? The photos and moments stay in the family record.{" "}
             <button
               type="button"
               className="btn btn-danger"
@@ -628,7 +628,7 @@ const ItemRow = ({
         )}
         {milestone && (
           <a className="book-editor-original" href={`/edit-milestone/${milestone.id}`}>
-            Edit the original milestone
+            Edit the original moment
           </a>
         )}
       </div>
@@ -697,7 +697,7 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
         const open = !!state.openMonths[key];
         const parts = [
           group.milestones.length &&
-            `${group.milestones.length} milestone${group.milestones.length === 1 ? "" : "s"}`,
+            `${group.milestones.length} moment${group.milestones.length === 1 ? "" : "s"}`,
           group.photos.length &&
             `${group.photos.length} photo${group.photos.length === 1 ? "" : "s"}`,
         ].filter(Boolean);

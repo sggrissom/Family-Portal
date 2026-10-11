@@ -336,13 +336,13 @@ const ImportPage = ({ form }: ImportPageProps) => {
             {form.result.importedMilestones > 0 && (
               <div className="stat">
                 <span className="stat-number">{form.result.importedMilestones}</span>
-                <span className="stat-label">Milestones Imported</span>
+                <span className="stat-label">Moments Imported</span>
               </div>
             )}
             {form.result.skippedMilestones > 0 && (
               <div className="stat">
                 <span className="stat-number">{form.result.skippedMilestones}</span>
-                <span className="stat-label">Milestones Skipped</span>
+                <span className="stat-label">Moments Skipped</span>
               </div>
             )}
             {form.result.importedTags > 0 && (
@@ -550,8 +550,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
                             vlens.scheduleRedraw();
                           }}
                         />
-                        <span>Import Milestones</span>
-                        <small>Include milestone data in the import</small>
+                        <span>Import Moments</span>
+                        <small>Include moments in the import</small>
                       </label>
                     </div>
 

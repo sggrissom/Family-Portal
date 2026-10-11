@@ -302,7 +302,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		err = errors.New("Person not found or not in your family")
 		return
 	}
-	date, dateErr := resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	date, dateErr := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if dateErr != nil {
 		return
 	}

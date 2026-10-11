@@ -136,7 +136,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
   if (data.people.length === 0) {
     return (
       <NoFamilyMembersPage
-        message="Please add family members before adding milestones"
+        message="Please add family members before adding moments"
         containerClass="entry-container"
       />
     );
@@ -196,7 +196,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
 
   if (!resp) {
     form.saving = false;
-    form.error = err || "That milestone could not be saved. Please try again.";
+    form.error = err || "That moment could not be saved. Please try again.";
     vlens.scheduleRedraw();
     return;
   }

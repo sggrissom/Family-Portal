@@ -736,11 +736,11 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 		switch item.Kind {
 		case BookItemMilestone:
 			if !checkMilestone(item.SourceId) {
-				return errors.New("A milestone in this book does not belong to " + who)
+				return errors.New("A moment in this book does not belong to " + who)
 			}
 			if item.PhotoId != 0 {
 				if !milestonePhotos[item.SourceId][item.PhotoId] || !CanAccessPhoto(tx, user, GetImageById(tx, item.PhotoId), AccessView) {
-					return errors.New("A milestone's photo is not attached to it")
+					return errors.New("A moment's photo is not attached to it")
 				}
 				clean.PhotoId = item.PhotoId
 				usedPhotos[item.PhotoId] = true

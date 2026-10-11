@@ -588,10 +588,7 @@ const Digest = ({ digest }: { digest: server.WeeklyDigestResponse }) => {
 
       <dl className="diagnostics-grid">
         <DiagnosticItem label="Photos" value={countOf(digest.photos, "photo", "photos")} />
-        <DiagnosticItem
-          label="Milestones"
-          value={countOf(digest.milestones, "milestone", "milestones")}
-        />
+        <DiagnosticItem label="Moments" value={countOf(digest.milestones, "moment", "moments")} />
         <DiagnosticItem
           label="Measurements"
           value={countOf(digest.measurements, "measurement", "measurements")}

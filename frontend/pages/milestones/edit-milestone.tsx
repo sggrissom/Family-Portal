@@ -95,7 +95,7 @@ export async function fetch(
   const milestoneId = getIdFromRoute(route);
 
   if (!milestoneId) {
-    return [null, "Milestone ID is required"];
+    return [null, "Moment ID is required"];
   }
 
   const [milestone, milestoneErr] = await server.GetMilestone({ id: milestoneId });
@@ -121,8 +121,8 @@ export function view(
   if (!milestone) {
     return (
       <ErrorPage
-        title="Milestone Not Found"
-        message="The milestone you're trying to edit could not be found"
+        title="Moment Not Found"
+        message="The moment you're trying to edit could not be found"
         containerClass="entry-container"
       />
     );
@@ -179,7 +179,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
     tagIds: form.tagIds,
   });
   if (!resp) {
-    form.error = err || "That milestone could not be saved. Please try again.";
+    form.error = err || "That moment could not be saved. Please try again.";
     form.saving = false;
     vlens.scheduleRedraw();
     return;

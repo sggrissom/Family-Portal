@@ -82,9 +82,9 @@ const TermsPage = () => (
     <h2>Families and shared content</h2>
     <p>
       Every member of a family can see and edit that family's records. When someone leaves a family
-      or deletes their account, the family's people, growth records, milestones, and photos stay
-      with the family; their own chat messages go with them. A family that nobody is left in is
-      deleted along with its contents, because nothing could ever reach it again. The{" "}
+      or deletes their account, the family's people, growth records, moments, and photos stay with
+      the family; their own chat messages go with them. A family that nobody is left in is deleted
+      along with its contents, because nothing could ever reach it again. The{" "}
       <a href="/privacy">privacy page</a> spells this out in full.
     </p>
     <p>

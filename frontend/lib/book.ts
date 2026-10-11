@@ -25,7 +25,7 @@ export const toggled = <T>(list: T[], value: T): T[] =>
 export type Category = "milestones" | "quotes" | "artwork" | "photos";
 
 export const CATEGORIES: { value: Category; label: string }[] = [
-  { value: "milestones", label: "Milestones" },
+  { value: "milestones", label: "Moments" },
   { value: "quotes", label: "Quotes" },
   { value: "artwork", label: "Artwork" },
   { value: "photos", label: "Photos" },

@@ -75,7 +75,7 @@ function plural(count: number, one: string, many: string): string {
 function removalLines(summary: server.PersonDeletionSummary): string[] {
   const lines: string[] = [];
   if (summary.milestones > 0) {
-    lines.push(plural(summary.milestones, "milestone", "milestones"));
+    lines.push(plural(summary.milestones, "moment", "moments"));
   }
   if (summary.growthRecords > 0) {
     lines.push(plural(summary.growthRecords, "measurement", "measurements"));

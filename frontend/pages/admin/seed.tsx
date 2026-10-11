@@ -118,7 +118,7 @@ async function createSeedData(state: SeedPageState) {
 async function removeSeedData(state: SeedPageState, run: server.SeedRunInfo) {
   const confirmed = confirm(
     `Delete the ${run.accounts} accounts seeded under ${run.domain}?\n\n` +
-      "Everything those accounts own — people, milestones, measurements, photos, chat — goes with " +
+      "Everything those accounts own — people, moments, measurements, photos, chat — goes with " +
       "them. Accounts this run did not create are left alone."
   );
   if (!confirmed) return;
@@ -339,7 +339,7 @@ const SeedPage = ({ data }: SeedPageProps) => {
               </table>
             </div>
             <p className="seed-note">
-              {state.created.people} people, {state.created.milestones} milestones,{" "}
+              {state.created.people} people, {state.created.milestones} moments,{" "}
               {state.created.measurements} measurements, {state.created.chatMessages} chat messages.
             </p>
           </div>
