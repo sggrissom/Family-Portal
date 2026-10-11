@@ -17,7 +17,7 @@ import { PersonChips, scrollSelectedChipIntoView } from "../../components/Person
 import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
 import {
-  ArtworkPhotos,
+  MilestonePhotoUploads,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
@@ -240,7 +240,7 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
-  const disabled = form.saving;
+  const disabled = form.saving || form.uploading;
   if (BROWSER) scheduleLookups(form);
   const statedAge = parseAgeFromText(form.description);
   const ageAlreadyUsed =
@@ -301,14 +301,13 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           )}
         </div>
 
-        {form.category === "artwork" && (
-          <ArtworkPhotos
-            form={form}
-            personId={form.personId}
-            familyId={people.find(p => p.id === form.personId)?.familyId ?? 0}
-            disabled={disabled}
-          />
-        )}
+        <MilestonePhotoUploads
+          isArtwork={form.category === "artwork"}
+          form={form}
+          personId={form.personId}
+          familyId={people.find(p => p.id === form.personId)?.familyId ?? 0}
+          disabled={disabled}
+        />
 
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}

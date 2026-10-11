@@ -72,15 +72,15 @@ export const MilestoneTextFields = ({ form, disabled, textareaRef }: MilestoneTe
   );
 };
 
-export type ArtworkUpload = {
+export type MilestonePhotoUpload = {
   photoIds: number[];
   uploading: boolean;
   uploadError: string;
   previews: Record<number, string>;
 };
 
-async function uploadArtworkPhotos(
-  form: ArtworkUpload,
+async function uploadMilestonePhotos(
+  form: MilestonePhotoUpload,
   personId: number,
   familyId: number,
   event: Event
@@ -88,6 +88,7 @@ async function uploadArtworkPhotos(
   const input = event.currentTarget as HTMLInputElement;
   const files = Array.from(input.files ?? []);
   input.value = "";
+  if (form.uploading || files.length === 0) return;
   form.uploadError = files.map(photoFileProblem).find(Boolean) ?? "";
   if (form.uploadError) {
     vlens.scheduleRedraw();
@@ -109,18 +110,26 @@ async function uploadArtworkPhotos(
   vlens.scheduleRedraw();
 }
 
-interface ArtworkPhotosProps {
-  form: ArtworkUpload;
+interface MilestonePhotoUploadsProps {
+  form: MilestonePhotoUpload;
   personId: number | null;
   familyId: number;
   disabled: boolean;
+  isArtwork?: boolean;
 }
 
-// A drawing rarely has the artist's face in it, so the person-filtered picker
-// won't find it: artwork gets an upload right here, tagged to the artist.
-export const ArtworkPhotos = ({ form, personId, familyId, disabled }: ArtworkPhotosProps) => (
+// Upload and attach photos without leaving the milestone, tagged to its person.
+export const MilestonePhotoUploads = ({
+  form,
+  personId,
+  familyId,
+  disabled,
+  isArtwork = false,
+}: MilestonePhotoUploadsProps) => (
   <div className="entry-field">
-    <span className="entry-label">{copy.milestone.artworkPhotos}</span>
+    <span className="entry-label">
+      {isArtwork ? copy.milestone.artworkPhotos : copy.milestone.photos}
+    </span>
     <div className="suggested-photos">
       {form.photoIds.map(id => (
         <button
@@ -144,10 +153,14 @@ export const ArtworkPhotos = ({ form, personId, familyId, disabled }: ArtworkPho
           onChange={
             personId === null
               ? undefined
-              : vlens.cachePartial(uploadArtworkPhotos, form, personId, familyId)
+              : vlens.cachePartial(uploadMilestonePhotos, form, personId, familyId)
           }
         />
-        {form.uploading ? copy.milestone.uploadingArtworkPhoto : copy.milestone.addArtworkPhoto}
+        {form.uploading
+          ? "Uploading photos…"
+          : isArtwork
+            ? copy.milestone.addArtworkPhoto
+            : "Add new photos"}
       </label>
     </div>
     {form.uploadError && (
