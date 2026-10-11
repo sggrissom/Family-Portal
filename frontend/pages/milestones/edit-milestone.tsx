@@ -13,7 +13,7 @@ import { canContribute } from "../../lib/authCache";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
 import {
-  ArtworkPhotos,
+  MilestonePhotoUploads,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
@@ -194,7 +194,7 @@ interface EditMilestonePageProps {
 }
 
 const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
-  const disabled = form.saving;
+  const disabled = form.saving || form.uploading;
   if (BROWSER) scheduleLookup(form, milestone);
   return (
     <div className="entry-card">
@@ -220,14 +220,13 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           <WhenControl when={form.when} disabled={disabled} />
         </div>
 
-        {form.category === "artwork" && (
-          <ArtworkPhotos
-            form={form}
-            personId={milestone.personId}
-            familyId={milestone.familyId}
-            disabled={disabled}
-          />
-        )}
+        <MilestonePhotoUploads
+          isArtwork={form.category === "artwork"}
+          form={form}
+          personId={milestone.personId}
+          familyId={milestone.familyId}
+          disabled={disabled}
+        />
 
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}
