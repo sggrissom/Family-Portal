@@ -50,9 +50,19 @@ export const InterviewsTab = ({ bundle }: { bundle: server.GetPersonInterviewsRe
       <div className="iv-empty">
         <p>{t.empty(name)}</p>
         {editable && (
-          <a className="btn btn-primary" href={`/interview/new/${person.id}`}>
-            {t.startFirst}
-          </a>
+          <>
+            <a className="btn btn-primary" href={`/interview/new/${person.id}`}>
+              {t.startFirst}
+            </a>
+            <p className="iv-tab-links">
+              <a className="iv-link" href={`/interview/past/${person.id}`}>
+                {t.typeIn}
+              </a>
+              <a className="iv-link" href={`/interview/import?person=${person.id}`}>
+                {t.pasteIn}
+              </a>
+            </p>
+          </>
         )}
       </div>
     );

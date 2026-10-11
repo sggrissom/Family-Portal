@@ -38,6 +38,9 @@ export function view(
           </div>
           {canContributeAnywhere() && (
             <div className="iv-family-links">
+              <a className="iv-link" href="/interview/import">
+                {t.pasteIn}
+              </a>
               <a className="iv-link" href="/interview-questions">
                 {t.editQuestions}
               </a>
@@ -103,6 +106,11 @@ const PersonRow = ({ row }: { row: server.FamilyInterviewRow }) => {
         </span>
       </a>
       <span className="iv-family-actions">
+        {editable && (
+          <a className="iv-link" href={`/interview/past/${p.id}`}>
+            {t.typeIn}
+          </a>
+        )}
         {row.due && !row.inProgress.id && <span className="iv-badge">{t.due}</span>}
         {editable &&
           (row.inProgress.id ? (
