@@ -83,6 +83,7 @@ async function main() {
     guarded("/book/", () => import("@app/pages/books/book")),
     guarded("/edit-book/", () => import("@app/pages/books/edit-book")),
     guarded("/new-book", () => import("@app/pages/books/new-book")),
+    guarded("/interview-questions", () => import("@app/pages/interviews/questions")),
     guarded("/milestone/", () => import("@app/pages/milestones/view-milestone")),
     guarded("/history", () => import("@app/pages/history/history")),
     guarded("/chat", () => import("@app/pages/chat/chat")),

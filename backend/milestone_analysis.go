@@ -243,6 +243,9 @@ func SuggestMilestoneCategory(ctx *vbeam.Context, req SuggestMilestoneCategoryRe
 	if CanAccessFamily(ctx.Tx, user, familyId, AccessView) {
 		best, bestScore := "", categoryNeighborMinScore
 		for _, m := range getFamilyMilestones(ctx.Tx, familyId) {
+			if m.Category == CategoryInterview {
+				continue
+			}
 			if e, ok := GetMilestoneEmbedding(ctx.Tx, m.Id); ok && !milestoneEmbeddingOutdated(m, e, true) {
 				if s := float64(vision.Dot(query, e.Vector)); s >= bestScore {
 					best, bestScore = m.Category, s

@@ -88,6 +88,63 @@ export const copy = {
     cancel: "Cancel",
     pickPerson: "Pick who this is about",
     needsText: "Say what happened",
+    editTitle: "Edit moment",
+  },
+  interview: {
+    title: "Annual interview",
+    editAnswer: "Edit answer",
+    answerDateHint: "The date follows the interview. Change it from the interview page.",
+    questions: {
+      title: "Interview questions",
+      intro:
+        "The questions you ask at each interview. Rewording one keeps its answers from earlier years lined up.",
+      save: "Save changes",
+      saving: "Saving…",
+      saved: "All changes saved",
+      unsaved: "Unsaved changes",
+      addQuestion: "Add a question",
+      addQuestionPlaceholder: "What's your favorite…?",
+      addSection: "Add a section",
+      sectionPlaceholder: "Section name",
+      renameSection: (name: string) => `Rename section ${name}`,
+      questionText: "Question",
+      ages: "Ages",
+      minAge: "Youngest age",
+      maxAge: "Oldest age",
+      anyAge: "any age",
+      ageRange: (min: number, max: number) =>
+        min && max
+          ? `ages ${min}–${max}`
+          : min
+            ? `ages ${min}+`
+            : max
+              ? `up to age ${max}`
+              : "any age",
+      moveUp: "Move up",
+      moveDown: "Move down",
+      moveTo: "Move to section",
+      retire: "Retire",
+      restore: "Restore",
+      delete: "Delete",
+      mergeInto: "Merge into…",
+      mergeHint: "Save your changes before merging.",
+      confirmMerge: (from: string, into: string) =>
+        `Move every answer to "${from}" onto "${into}" and retire "${from}"? Answers keep the wording they were asked with.`,
+      retired: (n: number) => `Retired questions (${n})`,
+      retiredHint: "Retired questions aren't offered for new interviews. Their answers stay.",
+      asked: (n: number) => (n === 0 ? "never asked" : n === 1 ? "asked once" : `asked ${n} times`),
+      suggested: (n: number) =>
+        n === 1 ? "1 new suggested question" : `${n} new suggested questions`,
+      add: "Add",
+      addAll: "Add all",
+      reset: "Reset to defaults",
+      confirmReset:
+        "Restore every retired built-in question and add any that are missing? Your own questions stay.",
+      placeholders: "Use {name} and {age} to fill in the child's name and age.",
+      emptySection: "No questions in this section yet.",
+      dragHandle: "Drag to reorder",
+      edit: "Edit",
+    },
   },
   photos: {
     title: "Photos",

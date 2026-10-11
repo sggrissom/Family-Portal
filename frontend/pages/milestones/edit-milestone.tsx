@@ -195,10 +195,13 @@ interface EditMilestonePageProps {
 
 const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
   const disabled = form.saving || form.uploading;
-  if (BROWSER) scheduleLookup(form, milestone);
+  const isAnswer = milestone.category === "interview";
+  if (BROWSER && !isAnswer) scheduleLookup(form, milestone);
   return (
     <div className="entry-card">
-      <h1 className="entry-title">Edit milestone</h1>
+      <h1 className="entry-title">
+        {isAnswer ? copy.interview.editAnswer : copy.milestone.editTitle}
+      </h1>
 
       <form className="entry-form" onSubmit={vlens.cachePartial(save, form, milestone)} noValidate>
         {form.error && (
@@ -207,18 +210,33 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           </div>
         )}
 
-        <MilestoneTextFields form={form} disabled={disabled} />
+        {isAnswer ? (
+          <div className="entry-field">
+            <label htmlFor="description">{milestone.context}</label>
+            <textarea
+              id="description"
+              rows={2}
+              disabled={disabled}
+              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+            />
+            <span className="entry-hint">{copy.interview.answerDateHint}</span>
+          </div>
+        ) : (
+          <>
+            <MilestoneTextFields form={form} disabled={disabled} />
 
-        <CategoryChips
-          value={form.category}
-          onChange={vlens.cachePartial(chooseCategory, form)}
-          disabled={disabled}
-        />
+            <CategoryChips
+              value={form.category}
+              onChange={vlens.cachePartial(chooseCategory, form)}
+              disabled={disabled}
+            />
 
-        <div className="entry-subject">
-          <span className="entry-label">{copy.when.label}</span>
-          <WhenControl when={form.when} disabled={disabled} />
-        </div>
+            <div className="entry-subject">
+              <span className="entry-label">{copy.when.label}</span>
+              <WhenControl when={form.when} disabled={disabled} />
+            </div>
+          </>
+        )}
 
         <MilestonePhotoUploads
           isArtwork={form.category === "artwork"}
