@@ -63,7 +63,7 @@ export function view(
   if (!data.milestone) {
     return (
       <ErrorPage
-        title="Milestone Not Found"
+        title="Moment Not Found"
         message={copy.milestoneDetail.notFound}
         containerClass="view-milestone-container"
       />
@@ -99,7 +99,7 @@ async function deleteMilestone(milestone: server.Milestone) {
   if (resp?.success) {
     core.setRoute(`/profile/${milestone.personId}`);
   } else {
-    alert(err || "That milestone could not be deleted.");
+    alert(err || "That moment could not be deleted.");
   }
 }
 
@@ -164,7 +164,7 @@ const ViewMilestonePage = ({
 
       {matches.length > 0 && (
         <section className="milestone-matches">
-          <h2>The same milestone in the family</h2>
+          <h2>The same moment in the family</h2>
           <ul>
             {matches.map(match => (
               <li key={match.milestone.id}>

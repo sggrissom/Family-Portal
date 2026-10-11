@@ -409,6 +409,9 @@ tags a contributor can accept or reject with `AcceptTagSuggestions` /
 pending suggestion by tag for a review screen. A rejected suggestion is never
 made again.
 
+Clients call a milestone a "moment": the API, routes and stored data keep the
+`milestone` name, but every label a person reads says Moment.
+
 A milestone's `category` is one of `development`, `behavior`, `health`,
 `achievement`, `first`, `quote`, `artwork`, `other`. Artwork is something the
 person made (a drawing, a painting, a craft), recorded as a milestone with the

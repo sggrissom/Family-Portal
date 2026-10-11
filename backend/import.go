@@ -657,7 +657,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 	for _, milestone := range importMilestones {
 		newPersonId, exists := personIdMapping[milestone.PersonId]
 		if !exists {
-			errors = append(errors, fmt.Sprintf("Milestone for unknown person ID: %d", milestone.PersonId))
+			errors = append(errors, fmt.Sprintf("Moment for unknown person ID: %d", milestone.PersonId))
 			continue
 		}
 

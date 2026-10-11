@@ -211,10 +211,10 @@ func GetMilestoneTagIds(tx *vbolt.Tx, milestoneId int) []int {
 func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Milestone, error) {
 	milestone := GetMilestoneById(tx, milestoneId)
 	if milestone.Id == 0 {
-		return milestone, errors.New("Milestone not found")
+		return milestone, errors.New("Moment not found")
 	}
 	if !CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView) {
-		return milestone, errors.New("Access denied: milestone belongs to another family")
+		return milestone, errors.New("Access denied: moment belongs to another family")
 	}
 	return milestone, nil
 }
@@ -222,10 +222,10 @@ func GetMilestoneByIdAndFamily(tx *vbolt.Tx, milestoneId int, familyId int) (Mil
 func GetMilestoneForUser(tx *vbolt.Tx, milestoneId int, user User, need AccessLevel) (Milestone, error) {
 	milestone := GetMilestoneById(tx, milestoneId)
 	if milestone.Id == 0 {
-		return milestone, errors.New("Milestone not found")
+		return milestone, errors.New("Moment not found")
 	}
 	if !CanAccessRecordOfPerson(tx, user, milestone.FamilyId, milestone.PersonId, ScopeMilestones, need) {
-		return milestone, errors.New("Access denied: milestone belongs to another family")
+		return milestone, errors.New("Access denied: moment belongs to another family")
 	}
 	return milestone, nil
 }
@@ -462,7 +462,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -497,7 +497,7 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, errors.New("Person not found")
 	}
 
-	milestone.MilestoneDate, err = resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
@@ -702,7 +702,7 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 	}
 
 	if req.Id <= 0 {
-		err = errors.New("Milestone ID is required")
+		err = errors.New("Moment ID is required")
 		return
 	}
 
@@ -725,7 +725,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 	}
 
 	if req.Id <= 0 {
-		err = errors.New("Milestone ID is required")
+		err = errors.New("Moment ID is required")
 		return
 	}
 	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
@@ -760,7 +760,7 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 	}
 
 	if req.Id <= 0 {
-		err = errors.New("Milestone ID is required")
+		err = errors.New("Moment ID is required")
 		return
 	}
 
@@ -796,7 +796,7 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 	}
 
 	if req.MilestoneId <= 0 {
-		err = errors.New("Milestone ID is required")
+		err = errors.New("Moment ID is required")
 		return
 	}
 

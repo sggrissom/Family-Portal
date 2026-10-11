@@ -36,7 +36,7 @@ export const copy = {
     whoFor: "Who is this for?",
     photos: "Photos",
     measurement: "Measurement",
-    milestone: "Milestone",
+    milestone: "Moment",
     close: "Close",
   },
   when: {
@@ -66,7 +66,7 @@ export const copy = {
     pickPerson: "Pick who was measured",
   },
   milestone: {
-    title: "Milestone",
+    title: "Moment",
     who: "Who is this about?",
     whatHappened: "What happened?",
     placeholder: "Wrote her name for the first time",
@@ -145,7 +145,7 @@ export const copy = {
     missingRecords: (n: number) =>
       `${n} other ${n === 1 ? "person has" : "people have"} no records near this age.`,
     noSavedRecords:
-      "No photos, milestones or measurements to compare yet. Add records to a family member’s profile to get started.",
+      "No photos, moments or measurements to compare yet. Add records to a family member’s profile to get started.",
     nothingAtAge: "No saved records near this age. Try another age.",
     noPortraits: (age: string) =>
       age === "Newborn" ? "No newborn photos yet." : `No photos from around ${age} yet.`,
@@ -172,8 +172,8 @@ export const copy = {
     back: "Back",
     edit: "Edit",
     delete: "Delete",
-    confirmDelete: (text: string) => `Delete this milestone: "${text}"?`,
-    notFound: "That milestone could not be found.",
+    confirmDelete: (text: string) => `Delete this moment: "${text}"?`,
+    notFound: "That moment could not be found.",
     atAge: (age: string) => `at ${age}`,
   },
   person: {
@@ -210,16 +210,16 @@ export const copy = {
     tags: "Tags",
     manageTags: "Manage tags →",
     clear: "Clear",
-    search: "Search milestones",
-    searchPlaceholder: "Search milestones",
+    search: "Search moments",
+    searchPlaceholder: "Search moments",
     years: "Jump to year",
     empty: "Nothing recorded yet. Use + to add the first thing.",
     noMatches: "Nothing matches these filters.",
     loadYear: (year: number) => `Load ${year}`,
     resultsFor: (query: string, n: number) =>
-      `${n === 1 ? "1 milestone" : `${n} milestones`} matching "${query}"`,
+      `${n === 1 ? "1 moment" : `${n} moments`} matching "${query}"`,
     types: {
-      milestones: "Milestones",
+      milestones: "Moments",
       measurements: "Measurements",
       photos: "Photos",
       activities: "Activities",

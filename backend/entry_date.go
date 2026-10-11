@@ -12,7 +12,7 @@ func validateEntryInputType(inputType string) error {
 	return nil
 }
 
-// noun names the date in the missing-date error, e.g. "Milestone".
+// noun names the date in the missing-date error, e.g. "Moment".
 func resolveEntryDate(noun string, inputType string, date *string, ageYears *int, ageMonths *int, birthday time.Time) (time.Time, error) {
 	switch inputType {
 	case "today":

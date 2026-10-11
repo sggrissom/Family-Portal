@@ -219,7 +219,7 @@ const OverviewView = ({ data }: { data: server.AnalyticsOverviewResponse }) => {
 
         <div className="metric-card">
           <div className="metric-value">{data.totalMilestones.toLocaleString()}</div>
-          <div className="metric-label">Total Milestones</div>
+          <div className="metric-label">Total Moments</div>
         </div>
 
         <div className="metric-card">
@@ -316,7 +316,7 @@ const UsersView = ({ data }: { data: server.UserAnalyticsResponse }) => {
             <div key={index} className="family-row">
               <span className="analytics-family-name">{family.familyName}</span>
               <span className="family-stats">
-                {family.totalPhotos} photos, {family.totalMilestones} milestones
+                {family.totalPhotos} photos, {family.totalMilestones} moments
               </span>
               <span className="family-score">Score: {family.score}</span>
               <span className="family-active">Last: {family.lastActive || "Never"}</span>
@@ -339,7 +339,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
 
         <div className="metric-card">
           <div className="metric-value">{data.averageMilestonesPerPerson.toFixed(1)}</div>
-          <div className="metric-label">Avg Milestones per Person</div>
+          <div className="metric-label">Avg Moments per Person</div>
         </div>
       </div>
 
@@ -350,7 +350,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
         </div>
 
         <div className="chart-card">
-          <h3>Milestones by Category</h3>
+          <h3>Moments by Category</h3>
           <SimplePieChart data={data.milestonesByCategory} />
         </div>
 
@@ -367,7 +367,7 @@ const ContentView = ({ data }: { data: server.ContentAnalyticsResponse }) => {
                 <span className="analytics-family-name">{family.familyName}</span>
                 <div className="family-content-stats">
                   <span>{family.photos} photos</span>
-                  <span>{family.milestones} milestones</span>
+                  <span>{family.milestones} moments</span>
                   <span>{family.people} people</span>
                 </div>
               </div>
@@ -505,7 +505,7 @@ const StackedBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
                   <div
                     className="bar-segment milestones"
                     style={{ height: `${milestonesPercent}%` }}
-                    title={`${item.milestones} milestones`}
+                    title={`${item.milestones} moments`}
                   />
                 )}
                 {item.logins > 0 && (
@@ -529,7 +529,7 @@ const StackedBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
         </div>
         <div className="legend-item">
           <div className="legend-color milestones"></div>
-          <span>Milestones</span>
+          <span>Moments</span>
         </div>
         <div className="legend-item">
           <div className="legend-color logins"></div>
@@ -558,7 +558,7 @@ const SimpleBarChart = ({ data }: { data: server.ActivitySummary[] }) => {
             <div
               className="bar"
               style={{ height: `${height}%` }}
-              title={`${item.date}: ${item.photos} photos, ${item.milestones} milestones, ${item.logins} logins`}
+              title={`${item.date}: ${item.photos} photos, ${item.milestones} moments, ${item.logins} logins`}
             />
             <div className="bar-label">{item.date.slice(-2)}</div>
           </div>

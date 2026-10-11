@@ -96,7 +96,7 @@ const LandingPage = ({ providers }: { providers: AuthProviders }) => (
       <ul>
         <li>Each family member, with birth dates and how everyone is related.</li>
         <li>Height and weight over time, in metric or imperial, charted per person or together.</li>
-        <li>Milestones: first steps, a lost tooth, the first day of a school year.</li>
+        <li>Moments: first steps, a lost tooth, something funny they said, a drawing they made.</li>
         <li>Photos with captions, dates, tags, and a note of who is in them.</li>
         <li>Sports seasons and dance years: the games, the teams, and how they placed.</li>
         <li>A message thread for the family, and a timeline of everything in date order.</li>
@@ -117,7 +117,7 @@ const LandingPage = ({ providers }: { providers: AuthProviders }) => (
       <Shot
         src="/images/screenshots/history.png"
         alt="The family history"
-        caption="History lists milestones, measurements, photos, and results in date order, filtered by person, year, or search."
+        caption="History lists moments, measurements, photos, and results in date order, filtered by person, year, or search."
       />
     </section>
 

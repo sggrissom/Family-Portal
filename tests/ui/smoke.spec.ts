@@ -288,7 +288,7 @@ test("photos upload as soon as they are picked and take a caption after", async 
   await expect(page.locator(".photo-card").filter({ hasText: caption })).toHaveCount(2);
 });
 
-test("a measurement and a milestone are edited without losing their units", async ({ page }) => {
+test("a measurement and a moment are edited without losing their units", async ({ page }) => {
   const kid = { name: "UI Editor Kid", birthdate: "2020-06-15" };
 
   await page.goto("/create-account");
@@ -335,14 +335,14 @@ test("a measurement and a milestone are edited without losing their units", asyn
     await expect(page.locator(".day-checkup").first()).toContainText("99.5 cm");
   });
 
-  await test.step("a milestone opens with its date and saves its edits", async () => {
+  await test.step("a moment opens with its date and saves its edits", async () => {
     await page.getByRole("link", { name: "Home" }).first().click();
     await expect(page).toHaveURL(/\/dashboard$/);
     // The URL changes before the dashboard renders; an Add dialog opened on
     // the outgoing page vanishes when the dashboard replaces it.
     await expect(personCard(page, kid.name)).toBeVisible();
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await page.getByRole("dialog").getByRole("link", { name: "Milestone" }).click();
+    await page.getByRole("dialog").getByRole("link", { name: "Moment" }).click();
     await expect(page).toHaveURL(/\/add-milestone/);
     const chip = page.getByRole("button", { name: kid.name });
     if ((await chip.getAttribute("aria-pressed")) !== "true") await chip.click();
@@ -365,9 +365,7 @@ test("a measurement and a milestone are edited without losing their units", asyn
   });
 });
 
-test("artwork is photographed from the milestone form and hangs on its own tab", async ({
-  page,
-}) => {
+test("artwork is photographed from the moment form and hangs on its own tab", async ({ page }) => {
   const artist = { name: "UI Artist", birthdate: "2019-09-01" };
 
   await page.goto("/create-account");
@@ -386,7 +384,7 @@ test("artwork is photographed from the milestone form and hangs on its own tab",
   await page.getByRole("button", { name: "Add Family Member" }).click();
   await expect(personCard(page, artist.name)).toBeVisible();
 
-  await addFor(page, artist.name, "Milestone");
+  await addFor(page, artist.name, "Moment");
   await expect(page).toHaveURL(/\/add-milestone/);
   await page.getByRole("button", { name: "Artwork" }).click();
   await expect(page.locator("label[for=description]")).toHaveText("What did they make?");
@@ -406,11 +404,7 @@ test("artwork is photographed from the milestone form and hangs on its own tab",
   await expect(piece.locator("img")).toHaveCount(1);
 });
 
-async function addFor(
-  page: Page,
-  personName: string,
-  kind: "Photos" | "Measurement" | "Milestone"
-) {
+async function addFor(page: Page, personName: string, kind: "Photos" | "Measurement" | "Moment") {
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: personName }).click();
