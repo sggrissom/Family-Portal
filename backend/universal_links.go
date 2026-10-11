@@ -27,6 +27,9 @@ var universalLinkPaths = []string{
 	"/compare",
 	"/profile/*",
 	"/person-activities/*",
+	// A record's own page; the iOS widgets open these, and a push can too.
+	"/view-photo/*",
+	"/milestone/*",
 }
 
 var universalLinkExcludedPaths = []string{
