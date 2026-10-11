@@ -110,6 +110,20 @@ export const InterviewsTab = ({ bundle }: { bundle: server.GetPersonInterviewsRe
         ))}
       </ul>
 
+      {editable && (
+        <p className="iv-tab-links">
+          <a className="iv-link" href={`/interview/past/${person.id}`}>
+            {t.typeIn}
+          </a>
+          <a className="iv-link" href={`/interview/import?person=${person.id}`}>
+            {t.pasteIn}
+          </a>
+          <a className="iv-link" href="/interview/compare">
+            {copy.interview.compare.link}
+          </a>
+        </p>
+      )}
+
       {state.view === "years" ? (
         <YearsView bundle={bundle} />
       ) : (
@@ -238,7 +252,14 @@ const QuestionCards = ({
         const latest = tl.points[tl.points.length - 1];
         return (
           <section key={tl.question.id} className="iv-card">
-            <h3>{latest?.answer.context || tl.question.text}</h3>
+            <h3>
+              <a
+                href={`/interview/compare?question=${tl.question.id}`}
+                title={copy.interview.compare.link}
+              >
+                {latest?.answer.context || tl.question.text}
+              </a>
+            </h3>
             <ol className="iv-timeline">
               {tl.points.map((p, i) => {
                 const prev = tl.points[i - 1];

@@ -38,6 +38,9 @@ export function view(
           </div>
           {canContributeAnywhere() && (
             <div className="iv-family-links">
+              <a className="iv-link" href="/interview/compare">
+                {copy.interview.compare.link}
+              </a>
               <a className="iv-link" href="/interview/import">
                 {t.pasteIn}
               </a>

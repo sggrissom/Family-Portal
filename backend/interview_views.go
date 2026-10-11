@@ -11,6 +11,7 @@ import (
 func RegisterInterviewViewMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetPersonInterviews)
 	vbeam.RegisterProc(app, GetFamilyInterviews)
+	vbeam.RegisterProc(app, CompareInterviewAnswers)
 }
 
 const (
@@ -181,6 +182,113 @@ func GetFamilyInterviews(ctx *vbeam.Context, req GetFamilyInterviewsRequest) (re
 			return a.Child
 		}
 		return a.Person.Birthday.Before(b.Person.Birthday)
+	})
+	return
+}
+
+type CompareInterviewAnswersRequest struct {
+	QuestionId int   `json:"questionId"`
+	PersonIds  []int `json:"personIds"`
+}
+
+type CompareRow struct {
+	Person  Person           `json:"person"`
+	Answers []PreviousAnswer `json:"answers"`
+}
+
+type CompareInterviewAnswersResponse struct {
+	Question  InterviewQuestion   `json:"question"`
+	Questions []InterviewQuestion `json:"questions"`
+	Rows      []CompareRow        `json:"rows"`
+}
+
+// CompareInterviewAnswers lays one question's answers out by age for each
+// person, so siblings (or a parent's own childhood interview) line up.
+func CompareInterviewAnswers(ctx *vbeam.Context, req CompareInterviewAnswersRequest) (resp CompareInterviewAnswersResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+	familyId := 0
+	if req.QuestionId > 0 {
+		familyId = GetInterviewQuestionById(ctx.Tx, req.QuestionId).FamilyId
+	} else if familyId, err = ResolveActingFamily(ctx.Tx, user, 0, AccessView); err != nil {
+		return
+	}
+
+	visible := map[int]Person{}
+	canSee := func(personId int) (Person, bool) {
+		if p, ok := visible[personId]; ok {
+			return p, p.Id > 0
+		}
+		p := GetPersonById(ctx.Tx, personId)
+		if !CanAccessPerson(ctx.Tx, user, p, ScopeMilestones, AccessView) {
+			p = Person{}
+		}
+		visible[personId] = p
+		return p, p.Id > 0
+	}
+
+	resp.Questions = []InterviewQuestion{}
+	for _, q := range familyQuestions(ctx.Tx, familyId) {
+		for _, m := range questionAnswers(ctx.Tx, q.Id) {
+			if _, ok := canSee(m.PersonId); ok {
+				resp.Questions = append(resp.Questions, q)
+				break
+			}
+		}
+	}
+	if len(resp.Questions) == 0 {
+		if req.QuestionId > 0 {
+			err = ErrInterviewQuestionNotFound
+		}
+		resp.Rows = []CompareRow{}
+		return
+	}
+	for _, q := range resp.Questions {
+		if q.Id == req.QuestionId {
+			resp.Question = q
+		}
+	}
+	if resp.Question.Id == 0 {
+		if req.QuestionId > 0 {
+			err = ErrInterviewQuestionNotFound
+			return
+		}
+		resp.Question = resp.Questions[0]
+	}
+
+	wanted := map[int]bool{}
+	for _, id := range req.PersonIds {
+		wanted[id] = true
+	}
+	rows := map[int]*CompareRow{}
+	var order []int
+	for _, m := range questionAnswers(ctx.Tx, resp.Question.Id) {
+		person, ok := canSee(m.PersonId)
+		if !ok || (len(wanted) > 0 && !wanted[person.Id]) {
+			continue
+		}
+		row := rows[person.Id]
+		if row == nil {
+			row = &CompareRow{Person: person, Answers: []PreviousAnswer{}}
+			rows[person.Id] = row
+			order = append(order, person.Id)
+		}
+		row.Answers = append(row.Answers, PreviousAnswer{
+			InterviewId: m.InterviewId, MilestoneId: m.Id, Date: m.MilestoneDate,
+			AgeYears: ageYearsAt(person.Birthday, m.MilestoneDate), Text: m.Description,
+		})
+	}
+	resp.Rows = []CompareRow{}
+	for _, id := range order {
+		row := rows[id]
+		sort.Slice(row.Answers, func(i, j int) bool { return row.Answers[i].Date.Before(row.Answers[j].Date) })
+		resp.Rows = append(resp.Rows, *row)
+	}
+	sort.SliceStable(resp.Rows, func(i, j int) bool {
+		return resp.Rows[i].Person.Birthday.Before(resp.Rows[j].Person.Birthday)
 	})
 	return
 }

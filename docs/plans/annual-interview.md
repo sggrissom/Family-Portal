@@ -1,7 +1,8 @@
 # Annual interview
 
-Status: planned; not implemented. Replaces the one-paragraph "Annual
-interview" idea in `record-ideas.md`.
+Status: phases 1–6 built on web (PRs #157–#162). Phase 7 (iOS) is not
+started. Replaces the one-paragraph "Annual interview" idea in
+`record-ideas.md`.
 
 ## Goal
 

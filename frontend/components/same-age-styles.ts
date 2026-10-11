@@ -332,3 +332,13 @@ block(`
   cursor: pointer;
 }
 `);
+
+block(`
+.same-age-compare {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+`);

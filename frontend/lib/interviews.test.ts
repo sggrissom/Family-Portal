@@ -4,6 +4,7 @@ import {
   ALSO_ASKED,
   ageYearsAt,
   changesSincePrevious,
+  compareByAge,
   duplicateRefs,
   importDrafts,
   importRequest,
@@ -285,5 +286,31 @@ describe("folding answers into interview cards", () => {
     expect(days).toHaveLength(1);
     expect(days[0].milestones.map(x => x.id)).toEqual([3]);
     expect(days[0].interviews.map(g => g.answers.length)).toEqual([2]);
+  });
+});
+
+describe("compareByAge", () => {
+  it("lines each person's answers up by age", () => {
+    const row = (id: number, name: string, answers: [number, string][]) =>
+      ({
+        person: { id, name } as server.Person,
+        answers: answers.map(([ageYears, text], i) => ({
+          ageYears,
+          text,
+          milestoneId: id * 10 + i,
+          date: "",
+        })),
+      }) as server.CompareRow;
+    const groups = compareByAge([
+      row(1, "Clara", [
+        [6, "pizza"],
+        [7, "tacos"],
+      ]),
+      row(2, "Ben", [[6, "sushi"]]),
+    ]);
+    expect(groups.map(g => [g.age, g.answers.map(a => `${a.person.name}: ${a.text}`)])).toEqual([
+      [6, ["Clara: pizza", "Ben: sushi"]],
+      [7, ["Clara: tacos"]],
+    ]);
   });
 });

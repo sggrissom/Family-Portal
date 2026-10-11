@@ -1258,3 +1258,71 @@ block(`
   }
 }
 `);
+
+block(`
+.iv-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+`);
+
+block(`
+.iv-compare-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0.5rem 0 1.25rem;
+}
+`);
+
+block(`
+.iv-compare {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+`);
+
+block(`
+.iv-compare-age {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+`);
+
+block(`
+.iv-compare-age.current {
+  border-color: var(--accent);
+}
+`);
+
+block(`
+.iv-compare-age h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.iv-compare-age ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+`);
+
+block(`
+.iv-compare-age li {
+  padding: 0.15rem 0;
+}
+`);
+
+block(`
+.iv-compare-age a {
+  color: var(--text);
+}
+`);

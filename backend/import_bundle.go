@@ -173,6 +173,18 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var interviewIds map[int]int
+		if len(personIdMapping) > 0 {
+			interviews := interviewImport{
+				familyId: familyId, personIdMapping: personIdMapping, tagNameToId: tagNameToId, photoIds: photoIdMapping,
+			}.run(tx, importData.InterviewQuestions, importData.Interviews, importData.Milestones)
+			interviewIds = interviews.interviewIds
+			resp.ImportedInterviews = interviews.imported
+			resp.SkippedInterviews = interviews.skipped
+			resp.Warnings = append(resp.Warnings, interviews.warnings...)
+			importedMilestoneIds = append(importedMilestoneIds, interviews.answerIds...)
+		}
+
 		if len(importData.Activities) > 0 {
 			counts, activityWarnings := importActivities(tx, importData.Activities, familyId, personIdMapping, photoIdMapping)
 			resp.ImportedActivities = counts
@@ -186,6 +198,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 				personIdMapping: personIdMapping,
 				milestoneIds:    matchImportedMilestones(tx, importData.Milestones, personIdMapping),
 				photoIds:        photoIdMapping,
+				interviewIds:    interviewIds,
 			})
 			resp.ImportedBooks = imported
 			resp.SkippedBooks = skipped

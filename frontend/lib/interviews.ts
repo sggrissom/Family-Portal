@@ -419,3 +419,28 @@ export function shortQuestion(context: string): string {
 export function interviewsById(interviews: server.Interview[] | null | undefined) {
   return new Map((interviews ?? []).map(i => [i.id, i]));
 }
+
+export type AgeGroup = {
+  age: number;
+  answers: { person: server.Person; text: string; date: string; milestoneId: number }[];
+};
+
+export function compareByAge(rows: server.CompareRow[]): AgeGroup[] {
+  const groups = new Map<number, AgeGroup>();
+  for (const row of rows) {
+    for (const a of row.answers ?? []) {
+      let group = groups.get(a.ageYears);
+      if (!group) {
+        group = { age: a.ageYears, answers: [] };
+        groups.set(a.ageYears, group);
+      }
+      group.answers.push({
+        person: row.person,
+        text: a.text,
+        date: a.date,
+        milestoneId: a.milestoneId,
+      });
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.age - b.age);
+}

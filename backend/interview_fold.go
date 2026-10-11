@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbolt"
@@ -88,4 +89,62 @@ func interviewNudge(tx *vbolt.Tx, person Person, interviews []Interview, today t
 		Text:     fmt.Sprintf("🎤 Time for %s's annual interview", name),
 		PersonId: person.Id,
 	}, 4}, true
+}
+
+type BookInterviewChange struct {
+	QuestionId int    `json:"questionId"`
+	Before     string `json:"before"`
+	After      string `json:"after"`
+}
+
+// BookInterview is a finished interview as a book lays it out: its questions
+// as they were asked, its answers, and what changed since the one before.
+type BookInterview struct {
+	Interview Interview             `json:"interview"`
+	Questions []InterviewQuestion   `json:"questions"`
+	Answers   []Milestone           `json:"answers"`
+	Changes   []BookInterviewChange `json:"changes"`
+}
+
+func sameAnswer(a, b string) bool {
+	return strings.Join(strings.Fields(strings.ToLower(strings.Trim(a, ".!?"))), " ") ==
+		strings.Join(strings.Fields(strings.ToLower(strings.Trim(b, ".!?"))), " ")
+}
+
+func bookInterviews(tx *vbolt.Tx, person Person, inRange func(time.Time) bool) []BookInterview {
+	interviews := personInterviews(tx, person.Id)
+	sortInterviewsByDate(interviews)
+	var out []BookInterview
+	var previous map[int]string
+	for _, interview := range interviews {
+		if interview.Status != InterviewComplete || interview.FamilyId != person.FamilyId {
+			continue
+		}
+		answers := interviewAnswers(tx, interview.Id)
+		if len(answers) == 0 {
+			continue
+		}
+		byQuestion := map[int]string{}
+		for _, a := range answers {
+			byQuestion[a.QuestionId] = a.Description
+		}
+		if inRange(interview.Date) {
+			entry := BookInterview{
+				Interview: interview,
+				Questions: interviewQuestionsFor(tx, interview, person),
+				Answers:   answers,
+				Changes:   []BookInterviewChange{},
+			}
+			for _, id := range interview.QuestionIds {
+				now, answered := byQuestion[id]
+				before, had := previous[id]
+				if answered && had && !sameAnswer(now, before) {
+					entry.Changes = append(entry.Changes, BookInterviewChange{QuestionId: id, Before: before, After: now})
+				}
+			}
+			out = append(out, entry)
+		}
+		previous = byQuestion
+	}
+	return out
 }

@@ -414,6 +414,7 @@ function toSource(raw: SampleSource): BookSource {
     growthData: raw.growthData,
     photoPeople,
     untagged: raw.untagged ?? [],
+    interviews: [],
   };
 }
 

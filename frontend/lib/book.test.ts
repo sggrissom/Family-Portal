@@ -326,3 +326,86 @@ describe("books about a stretch of time", () => {
     expect(candidatesIn(r2).photos.length).toBe(candidatesIn(r).photos.length);
   });
 });
+
+describe("interviews in a book", () => {
+  const person = {
+    id: 1,
+    name: "Clara Whitfield",
+    birthday: "2018-05-10T00:00:00Z",
+  } as server.Person;
+  const interview: server.BookInterview = {
+    interview: {
+      id: 40,
+      personId: 1,
+      date: "2025-05-12T00:00:00Z",
+      title: "",
+      photoId: 0,
+      createdAt: "2025-05-12T00:00:00Z",
+    } as server.Interview,
+    questions: [
+      { id: 1, section: "Favorites", text: "What's your favorite food?" },
+      { id: 2, section: "Favorites", text: "What's your favorite color?" },
+      { id: 3, section: "People", text: "Who is your best friend?" },
+    ] as server.InterviewQuestion[],
+    answers: [
+      { id: 7, questionId: 1, context: "What's your favorite food?", description: "tacos" },
+      { id: 8, questionId: 3, context: "Who is your best friend?", description: "Lily" },
+    ] as server.Milestone[],
+    changes: [{ questionId: 1, before: "pizza", after: "tacos" }],
+  };
+  const source = {
+    people: [person],
+    milestones: [],
+    photos: [],
+    growthData: [],
+    photoPeople: {},
+    untagged: [],
+    interviews: [interview],
+  } as server.BookSources;
+  const selection = {
+    preset: "year",
+    title: "",
+    startDate: "2025-01-01",
+    endDate: "2026-01-01",
+    coverPhotoId: 0,
+    introduction: "",
+    letter: "",
+    signature: "",
+    showGrowth: false,
+    categories: [] as string[],
+    match: "any",
+    items: [] as server.BookItem[],
+  };
+
+  it("are suggested unless the category is off, and lay out as a Q&A spread", () => {
+    const r = resolveSource(source, selection);
+    const { items } = suggestItems(r, { density: "balanced" });
+    expect(items.map(i => [i.kind, i.sourceId])).toEqual([[server.BookItemInterview, 40]]);
+    expect(categoryOf(r, items[0])).toBe("interviews");
+
+    const off = resolveSource(source, { ...selection, categories: ["milestones", "photos"] });
+    expect(suggestItems(off, { density: "balanced" }).items).toEqual([]);
+
+    const book = assembleBook(source, { ...selection, items });
+    const spread = book.chapters.flatMap(c => c.blocks).find(b => b.kind === "interview");
+    expect(spread?.kind === "interview" && spread.spread).toEqual({
+      title: "Annual interview",
+      day: "2025-05-12",
+      detail: "7 years",
+      photo: null,
+      sections: [
+        { name: "Favorites", rows: [{ question: "What's your favorite food?", answer: "tacos" }] },
+        { name: "People", rows: [{ question: "Who is your best friend?", answer: "Lily" }] },
+      ],
+      changes: [{ question: "What's your favorite food?", before: "pizza", after: "tacos" }],
+    });
+  });
+
+  it("are offered as additions since the last review", () => {
+    const r = resolveSource(source, selection);
+    expect(additionsSince(r, "2025-01-01T00:00:00Z", [], []).map(i => i.kind)).toEqual([
+      server.BookItemInterview,
+    ]);
+    expect(candidatesIn(r).interviews).toHaveLength(1);
+  });
+});
