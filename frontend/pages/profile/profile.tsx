@@ -21,6 +21,7 @@ import {
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { initial } from "../../components/PersonChips";
 import { PersonActivities } from "../activities/person";
+import { InterviewsTab, hasInterviewTab } from "../interviews/person-tab";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
@@ -48,6 +49,7 @@ type ProfileData = {
   family: server.FamilyTimelineItem[];
   sameAge: server.GetSameAgeResponse | null;
   insights: server.GetPersonPhotoInsightsResponse;
+  interviews: server.GetPersonInterviewsResponse | null;
 };
 
 const emptyInsights: server.GetPersonPhotoInsightsResponse = {
@@ -66,19 +68,21 @@ const emptySeason: server.GetPersonSeasonResponse = {
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<ProfileData>> {
   const personId = getIdFromRoute(route) || 0;
-  const [[person, personErr], [activities], [family], [sameAge], [insights]] = await Promise.all([
-    server.GetPerson({ id: personId }),
-    server.GetPersonSeason({ personId, seasonId: 0 }),
-    server.GetFamilyTimeline(timelineRequest({ skipMilestones: true, skipPhotos: true })),
-    server.GetSameAge({
-      includeAvailableAges: false,
-      details: false,
-      ageMonths: null,
-      fromPersonId: personId,
-      today: localDateString(new Date()),
-    }),
-    server.GetPersonPhotoInsights({ personId }),
-  ]);
+  const [[person, personErr], [activities], [family], [sameAge], [insights], [interviews]] =
+    await Promise.all([
+      server.GetPerson({ id: personId }),
+      server.GetPersonSeason({ personId, seasonId: 0 }),
+      server.GetFamilyTimeline(timelineRequest({ skipMilestones: true, skipPhotos: true })),
+      server.GetSameAge({
+        includeAvailableAges: false,
+        details: false,
+        ageMonths: null,
+        fromPersonId: personId,
+        today: localDateString(new Date()),
+      }),
+      server.GetPersonPhotoInsights({ personId }),
+      server.GetPersonInterviews({ personId }),
+    ]);
   if (!person) return [null, personErr || "Failed to load person"];
 
   return rpc.ok<ProfileData>({
@@ -87,11 +91,12 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     family: family?.people ?? [],
     sameAge: sameAge?.fromPersonId === personId ? sameAge : null,
     insights: insights ?? emptyInsights,
+    interviews: interviews ?? null,
   });
 }
 
-type Tab = "story" | "quotes" | "artwork" | "photos" | "growth" | "activities";
-const TABS: Tab[] = ["story", "quotes", "artwork", "photos", "growth", "activities"];
+type Tab = "story" | "quotes" | "artwork" | "interviews" | "photos" | "growth" | "activities";
+const TABS: Tab[] = ["story", "quotes", "artwork", "interviews", "photos", "growth", "activities"];
 
 type ProfileState = {
   tab: Tab;
@@ -152,6 +157,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
     t =>
       (t !== "quotes" || quotes.length > 0) &&
       (t !== "artwork" || artwork.length > 0) &&
+      (t !== "interviews" || hasInterviewTab(data.interviews, person.familyId)) &&
       (!person.isPregnancy || t === "story" || t === "photos")
   );
 
@@ -206,6 +212,9 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
         )}
         {state.tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
         {state.tab === "artwork" && <ArtworkTab person={person} artwork={artwork} />}
+        {state.tab === "interviews" && data.interviews && (
+          <InterviewsTab bundle={data.interviews} />
+        )}
         {state.tab === "photos" && (
           <PhotosTab person={person} photos={data.person.photos ?? []} insights={data.insights} />
         )}

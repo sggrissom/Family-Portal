@@ -121,3 +121,36 @@ block(`
   color: var(--muted);
 }
 `);
+
+block(`
+.milestone-detail-question {
+  color: var(--muted);
+  font-size: 1.05rem;
+  margin: 0.25rem 0 -0.25rem;
+}
+`);
+
+block(`
+.milestone-interview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  font-size: 0.95rem;
+}
+`);
+
+block(`
+.milestone-interview-steps {
+  display: flex;
+  gap: 1rem;
+}
+`);
+
+block(`
+.milestone-interview a {
+  color: var(--accent);
+  text-decoration: none;
+}
+`);

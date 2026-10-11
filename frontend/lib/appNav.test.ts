@@ -15,6 +15,9 @@ describe("activeDestination", () => {
     expect(activeDestination("/same-age")).toBe("sameAge");
     expect(activeDestination("/season/2")).toBe("activities");
     expect(activeDestination("/chat")).toBe("chat");
+    expect(activeDestination("/interviews")).toBe("interviews");
+    expect(activeDestination("/interview/5/ask")).toBe("interviews");
+    expect(activeDestination("/interview-questions")).toBe("interviews");
   });
 
   it("does not match a longer word that shares a prefix", () => {
