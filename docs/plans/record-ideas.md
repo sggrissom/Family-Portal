@@ -63,9 +63,10 @@ makes them the cheapest ideas on this list.
   A milestone already carries the person, date or age, photos, tags, search,
   and export, so a separate entity would only have duplicated them. Remaining:
   a review pass to convert older quotes filed under behavior.
-- **Annual interview.** The same ten questions every birthday (favorite food,
-  best friend, what do you want to be) and a view comparing answers across
-  years. New entity, small.
+- **Annual interview.** The same questions every year (favorite food, best
+  friend, what do you want to be) and views comparing answers across years.
+  Planned in [annual-interview.md](annual-interview.md): each answer is a
+  moment, grouped under an interview.
 - **Letters to the future.** A parent writes a letter to a child that stays
   sealed until a chosen date or age. New entity, and it needs a notification
   when it opens. It means a lot to families and the build is small.
