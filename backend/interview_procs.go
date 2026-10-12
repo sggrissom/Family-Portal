@@ -124,6 +124,7 @@ type GetInterviewSetupRequest struct {
 type GetInterviewSetupResponse struct {
 	Person     Person              `json:"person"`
 	Questions  []InterviewQuestion `json:"questions"`
+	Retired    []InterviewQuestion `json:"retired"`
 	InProgress Interview           `json:"inProgress"`
 	Answered   int                 `json:"answered"`
 }
@@ -140,8 +141,11 @@ func GetInterviewSetup(ctx *vbeam.Context, req GetInterviewSetupRequest) (resp G
 	}
 	resp.Person = GetPersonById(ctx.Tx, req.PersonId)
 	resp.Questions = []InterviewQuestion{}
+	resp.Retired = []InterviewQuestion{}
 	for _, q := range interviewQuestionsResponse(ctx.Tx, familyId).Questions {
-		if !q.Archived {
+		if q.Archived {
+			resp.Retired = append(resp.Retired, q)
+		} else {
 			resp.Questions = append(resp.Questions, q)
 		}
 	}

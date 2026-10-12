@@ -4,6 +4,9 @@ import {
   ALSO_ASKED,
   ageYearsAt,
   changesSincePrevious,
+  duplicateRefs,
+  importDrafts,
+  importRequest,
   columnLabel,
   filterTimelines,
   interviewGrid,
@@ -196,5 +199,48 @@ describe("over-time views", () => {
   it("normalizes case, punctuation and accents", () => {
     expect(normalizeAnswer("  Crème brûlée!! ")).toBe("creme brulee");
     expect(columnLabel(bundle.interviews[2], bundle.person)).toBe("Age 7 · 2025");
+  });
+});
+
+describe("import review", () => {
+  const proposals = [
+    {
+      header: "2019",
+      date: "",
+      ageYears: -1,
+      rows: [
+        { raw: "Fav food", answer: "pasta", ref: "key:fav-food", confidence: "exact" },
+        { raw: "Favorite dinosaur", answer: "T. rex", ref: "", confidence: "none" },
+        { raw: "Notes from the day", answer: "", ref: "", confidence: "none" },
+        { raw: "Food again", answer: "rice", ref: "key:fav-food", confidence: "close" },
+      ],
+    },
+  ] as server.ImportProposal[];
+
+  it("starts unmatched answers as new questions, blank lines as ignored, and flags duplicates", () => {
+    const [draft] = importDrafts(proposals, "2019-06-01");
+    expect(draft.date).toBe("2019-06-01");
+    expect(draft.rows.map(r => r.choice)).toEqual([
+      "key:fav-food",
+      "new",
+      "ignore",
+      "key:fav-food",
+    ]);
+    expect([...duplicateRefs(draft)]).toEqual(["key:fav-food"]);
+    draft.rows[3].choice = "ignore";
+    expect(duplicateRefs(draft).size).toBe(0);
+
+    draft.rows[1].keep = false;
+    const req = importRequest(7, [draft]);
+    expect(req.interviews[0].answers).toEqual([
+      { ref: "key:fav-food", answer: "pasta", newText: "", keep: false },
+      { ref: "", answer: "T. rex", newText: "Favorite dinosaur", keep: false },
+    ]);
+  });
+
+  it("leaves skipped interviews out", () => {
+    const drafts = importDrafts(proposals, "");
+    drafts[0].skip = true;
+    expect(importRequest(7, drafts).interviews).toEqual([]);
   });
 });

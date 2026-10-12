@@ -86,6 +86,8 @@ async function main() {
     guarded("/interviews", () => import("@app/pages/interviews/interviews")),
     guarded("/interview-questions", () => import("@app/pages/interviews/questions")),
     guarded("/interview/new/", () => import("@app/pages/interviews/setup")),
+    guarded("/interview/past/", () => import("@app/pages/interviews/past")),
+    guarded("/interview/import", () => import("@app/pages/interviews/import")),
     guarded("/interview/", () => import("@app/pages/interviews/interview")),
     guarded("/milestone/", () => import("@app/pages/milestones/view-milestone")),
     guarded("/history", () => import("@app/pages/history/history")),

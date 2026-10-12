@@ -296,3 +296,77 @@ export function rowLabel(row: GridRow): string {
   }
   return row.question.text.replace("{name}", "you").replace("{age}", "your age");
 }
+
+export function questionRef(q: server.InterviewQuestion): string {
+  return q.id ? `id:${q.id}` : `key:${q.defaultKey}`;
+}
+
+export type ImportDraftRow = {
+  raw: string;
+  answer: string;
+  choice: string;
+  confidence: string;
+  keep: boolean;
+};
+
+export type ImportDraft = {
+  header: string;
+  date: string;
+  skip: boolean;
+  rows: ImportDraftRow[];
+};
+
+export function importDrafts(
+  proposals: server.ImportProposal[],
+  fallbackDate: string
+): ImportDraft[] {
+  return proposals.map(p => ({
+    header: p.header,
+    date: p.date || fallbackDate,
+    skip: false,
+    rows: (p.rows ?? []).map(r => ({
+      raw: r.raw,
+      answer: r.answer,
+      choice: r.ref || (r.answer.trim() ? "new" : "ignore"),
+      confidence: r.confidence,
+      keep: true,
+    })),
+  }));
+}
+
+export function duplicateRefs(draft: ImportDraft): Set<string> {
+  const seen = new Set<string>();
+  const dups = new Set<string>();
+  for (const row of draft.rows) {
+    if (row.choice === "new" || row.choice === "ignore" || !row.answer.trim()) continue;
+    if (seen.has(row.choice)) dups.add(row.choice);
+    seen.add(row.choice);
+  }
+  return dups;
+}
+
+export function importRequest(
+  personId: number,
+  drafts: ImportDraft[]
+): server.ImportInterviewsRequest {
+  return {
+    personId,
+    interviews: drafts
+      .filter(d => !d.skip)
+      .map(d => ({
+        inputType: "date",
+        date: d.date,
+        ageYears: 0,
+        ageMonths: 0,
+        title: "",
+        notes: "",
+        answers: d.rows
+          .filter(r => r.choice !== "ignore" && r.answer.trim())
+          .map(r =>
+            r.choice === "new"
+              ? { ref: "", answer: r.answer, newText: r.raw, keep: r.keep }
+              : { ref: r.choice, answer: r.answer, newText: "", keep: false }
+          ),
+      })),
+  };
+}
