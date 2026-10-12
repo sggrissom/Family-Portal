@@ -22,12 +22,13 @@ export const MATCH_OPTIONS = [
 export const toggled = <T>(list: T[], value: T): T[] =>
   list.includes(value) ? list.filter(x => x !== value) : [...list, value];
 
-export type Category = "milestones" | "quotes" | "artwork" | "photos";
+export type Category = "milestones" | "quotes" | "artwork" | "interviews" | "photos";
 
 export const CATEGORIES: { value: Category; label: string }[] = [
-  { value: "milestones", label: "Milestones" },
+  { value: "milestones", label: "Moments" },
   { value: "quotes", label: "Quotes" },
   { value: "artwork", label: "Artwork" },
+  { value: "interviews", label: "Interviews" },
   { value: "photos", label: "Photos" },
 ];
 
@@ -66,8 +67,18 @@ export interface GrowthPoint {
   label: string;
 }
 
+export interface InterviewSpread {
+  title: string;
+  day: string;
+  detail: string;
+  photo: BookPhoto | null;
+  sections: { name: string; rows: { question: string; answer: string }[] }[];
+  changes: { question: string; before: string; after: string }[];
+}
+
 export type Block =
   | { kind: "hero"; photo: BookPhoto }
+  | { kind: "interview"; spread: InterviewSpread }
   | { kind: "photos"; photos: BookPhoto[] }
   | { kind: "moment"; moment: BookMoment; photo: BookPhoto | null }
   | { kind: "quote"; moment: BookMoment }
@@ -292,6 +303,7 @@ export interface Resolved {
   months: number;
   photos: Map<number, server.Image>;
   milestones: Map<number, server.Milestone>;
+  interviews: Map<number, server.BookInterview>;
   photoPeople: Map<number, number[]>;
   untagged: Set<number>;
   categories: Set<string>;
@@ -313,6 +325,8 @@ export function resolveSource(source: BookSource, selection: Selection): Resolve
   }
   const milestones = new Map<number, server.Milestone>();
   for (const m of source.milestones ?? []) milestones.set(m.id, m);
+  const interviews = new Map<number, server.BookInterview>();
+  for (const i of source.interviews ?? []) interviews.set(i.interview.id, i);
   const photoPeople = new Map<number, number[]>();
   for (const [id, people] of Object.entries(source.photoPeople ?? {})) {
     photoPeople.set(Number(id), people ?? []);
@@ -331,6 +345,7 @@ export function resolveSource(source: BookSource, selection: Selection): Resolve
     months: firstYear ? 12 : Math.max(1, monthIndex(addDays(end, -1)) - monthIndex(start) + 1),
     photos,
     milestones,
+    interviews,
     photoPeople,
     untagged: new Set(source.untagged ?? []),
     categories: new Set(
@@ -358,6 +373,10 @@ function slotOf(r: Resolved, day: string): number {
 }
 
 export function itemDay(r: Resolved, item: server.BookItem): string | null {
+  if (item.kind === server.BookItemInterview) {
+    const i = r.interviews.get(item.sourceId);
+    return i ? dayOf(i.interview.date) : null;
+  }
   if (item.kind === server.BookItemMilestone) {
     const m = r.milestones.get(item.sourceId);
     return m ? dayOf(m.milestoneDate) : null;
@@ -368,6 +387,7 @@ export function itemDay(r: Resolved, item: server.BookItem): string | null {
 
 export function categoryOf(r: Resolved, item: server.BookItem): Category {
   if (item.kind === server.BookItemPhoto) return "photos";
+  if (item.kind === server.BookItemInterview) return "interviews";
   const category = r.milestones.get(item.sourceId)?.category;
   if (category === "quote") return "quotes";
   if (category === "artwork") return "artwork";
@@ -380,6 +400,9 @@ export const isMulti = (r: Resolved) => r.people.length > 1;
 // moments together (0), everything about one person in that person's section.
 export function sectionOf(r: Resolved, item: server.BookItem): number {
   if (!isMulti(r)) return 0;
+  if (item.kind === server.BookItemInterview) {
+    return r.interviews.get(item.sourceId)?.interview.personId ?? 0;
+  }
   if (item.kind === server.BookItemMilestone) {
     return r.milestones.get(item.sourceId)?.personId ?? 0;
   }
@@ -407,10 +430,14 @@ export function milestoneItem(
 export interface Candidates {
   milestones: server.Milestone[];
   photos: server.Image[];
+  interviews: server.BookInterview[];
 }
 
 export function candidatesIn(r: Resolved): Candidates {
   return {
+    interviews: [...r.interviews.values()]
+      .filter(i => inRange(r, dayOf(i.interview.date)))
+      .sort((a, b) => a.interview.date.localeCompare(b.interview.date)),
     milestones: [...r.milestones.values()]
       .filter(m => inRange(r, dayOf(m.milestoneDate)))
       .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate) || a.id - b.id),
@@ -455,7 +482,7 @@ const bucketOf = (r: Resolved, item: server.BookItem) =>
 export function suggestItems(r: Resolved, options: SuggestOptions): Suggestion {
   const excluded = new Set((options.excluded ?? []).map(itemKey));
   const current = new Map((options.current ?? []).map(item => [itemKey(item), item]));
-  const { milestones, photos } = candidatesIn(r);
+  const { milestones, photos, interviews } = candidatesIn(r);
   const budget = PHOTO_BUDGET[options.density];
   const room = (section: number) =>
     !isMulti(r) ? budget : section === 0 ? Math.ceil(budget / 2) : Math.ceil(budget / 3);
@@ -483,6 +510,14 @@ export function suggestItems(r: Resolved, options: SuggestOptions): Suggestion {
     const item = current.get(key) ?? milestoneItem(r, m, used);
     if (excluded.has(key) || item.pinned || !r.categories.has(categoryOf(r, item))) continue;
     if (item.photoId) used.add(item.photoId);
+    chosen.push(item);
+  }
+
+  for (const i of interviews) {
+    const key = `${server.BookItemInterview}:${i.interview.id}`;
+    const item = current.get(key) ?? newItem(server.BookItemInterview, i.interview.id);
+    if (excluded.has(key) || item.pinned || !r.categories.has("interviews")) continue;
+    if (i.interview.photoId) used.add(i.interview.photoId);
     chosen.push(item);
   }
 
@@ -629,6 +664,41 @@ function toMoment(m: server.Milestone, r: Resolved): BookMoment {
   };
 }
 
+function interviewSpread(i: server.BookInterview, r: Resolved): InterviewSpread {
+  const person = r.person.get(i.interview.personId);
+  const day = dayOf(i.interview.date);
+  const born = person ? dayOf(person.birthday) : "";
+  const answers = new Map((i.answers ?? []).map(a => [a.questionId, a]));
+  const sections: InterviewSpread["sections"] = [];
+  for (const q of i.questions ?? []) {
+    const a = answers.get(q.id);
+    if (!a) continue;
+    let section = sections.find(s => s.name === q.section);
+    if (!section) {
+      section = { name: q.section, rows: [] };
+      sections.push(section);
+    }
+    section.rows.push({ question: a.context || q.text, answer: a.description });
+  }
+  const label = (id: number) =>
+    answers.get(id)?.context || (i.questions ?? []).find(q => q.id === id)?.text || "";
+  const photo = r.photos.get(i.interview.photoId);
+  const name =
+    person && isMulti(r) ? `${person.name.split(" ")[0]}'s interview` : "Annual interview";
+  return {
+    title: i.interview.title || name,
+    day,
+    detail: isRealDay(born) && day >= born ? photoAge(born, day + "T00:00:00Z") : "",
+    photo: photo ? toPhoto(photo, r) : null,
+    sections,
+    changes: (i.changes ?? []).map(c => ({
+      question: label(c.questionId),
+      before: c.before,
+      after: c.after,
+    })),
+  };
+}
+
 interface Entry {
   index: number;
   item: server.BookItem;
@@ -667,6 +737,14 @@ function chapterBlocks(entries: Entry[], r: Resolved): Block[] {
   };
 
   for (const { item } of rest) {
+    if (item.kind === server.BookItemInterview) {
+      const interview = r.interviews.get(item.sourceId);
+      if (!interview) continue;
+      flushPhotos();
+      flushNotes();
+      blocks.push({ kind: "interview", spread: interviewSpread(interview, r) });
+      continue;
+    }
     if (item.kind === server.BookItemPhoto) {
       flushNotes();
       pendingPhotos.push(toPhoto(r.photos.get(item.sourceId)!, r, item.caption));
@@ -763,7 +841,11 @@ function birthFacts(source: BookSource, r: Resolved, person: server.Person): str
   return lines;
 }
 
-const WEIGHT: Record<number, number> = { [server.BookItemMilestone]: 3, [server.BookItemPhoto]: 1 };
+const WEIGHT: Record<number, number> = {
+  [server.BookItemMilestone]: 3,
+  [server.BookItemPhoto]: 1,
+  [server.BookItemInterview]: 6,
+};
 
 function bySlot(r: Resolved, entries: Entry[]): Map<number, Entry[]> {
   const slots = new Map<number, Entry[]>();
@@ -1031,8 +1113,12 @@ export function additionsSince(
   const isNew = (createdAt: string) => Date.parse(createdAt) > since;
   const known = new Set([...items, ...excluded].map(itemKey));
   const usedPhotos = new Set(items.map(i => i.photoId).filter(Boolean));
-  const { milestones, photos } = candidatesIn(r);
+  const { milestones, photos, interviews } = candidatesIn(r);
   const out: server.BookItem[] = [];
+  for (const i of interviews) {
+    const item = newItem(server.BookItemInterview, i.interview.id);
+    if (isNew(i.interview.createdAt) && !known.has(itemKey(item))) out.push(item);
+  }
   for (const m of milestones) {
     const item = milestoneItem(r, m);
     if (isNew(m.createdAt) && !known.has(itemKey(item))) out.push(item);

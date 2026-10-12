@@ -47,20 +47,24 @@ type ImportWeight struct {
 }
 
 type ImportDataStructure struct {
-	People          []ImportPerson    `json:"people"`
-	Relations       []ExportRelation  `json:"relations,omitempty"`
-	Heights         []ImportHeight    `json:"heights"`
-	Weights         []ImportWeight    `json:"weights"`
-	Milestones      []ExportMilestone `json:"milestones"`
-	Tags            []ExportTag       `json:"tags"`
-	Photos          []ExportPhoto     `json:"photos,omitempty"`
-	Activities      []ExportActivity  `json:"activities,omitempty"`
-	Books           []ExportBook      `json:"books,omitempty"`
-	ExportDate      time.Time         `json:"export_date"`
-	TotalHeights    int               `json:"total_heights"`
-	TotalWeights    int               `json:"total_weights"`
-	TotalPeople     int               `json:"total_people"`
-	TotalMilestones int               `json:"total_milestones"`
+	People     []ImportPerson    `json:"people"`
+	Relations  []ExportRelation  `json:"relations,omitempty"`
+	Heights    []ImportHeight    `json:"heights"`
+	Weights    []ImportWeight    `json:"weights"`
+	Milestones []ExportMilestone `json:"milestones"`
+	Tags       []ExportTag       `json:"tags"`
+	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Activities []ExportActivity  `json:"activities,omitempty"`
+	Books      []ExportBook      `json:"books,omitempty"`
+
+	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
+	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+
+	ExportDate      time.Time `json:"export_date"`
+	TotalHeights    int       `json:"total_heights"`
+	TotalWeights    int       `json:"total_weights"`
+	TotalPeople     int       `json:"total_people"`
+	TotalMilestones int       `json:"total_milestones"`
 }
 
 type ImportDataRequest struct {
@@ -92,6 +96,8 @@ type ImportDataResponse struct {
 	ImportedActivities   ActivityImportCounts `json:"importedActivities"`
 	ImportedBooks        int                  `json:"importedBooks"`
 	SkippedBooks         int                  `json:"skippedBooks"`
+	ImportedInterviews   int                  `json:"importedInterviews"`
+	SkippedInterviews    int                  `json:"skippedInterviews"`
 	Errors               []string             `json:"errors,omitempty"`
 	Warnings             []string             `json:"warnings,omitempty"`
 	PersonIdMapping      map[int]int          `json:"personIdMapping,omitempty"`
@@ -169,6 +175,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 
 	var importedMilestoneIds []int
+	var interviewIds map[int]int
 	tagNameToId, importedTags, skippedTags := importTags(ctx.Tx, importData.Tags, familyId)
 	resp.ImportedTags = importedTags
 	resp.SkippedTags = skippedTags
@@ -192,6 +199,15 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			resp.ImportedMilestones = importedMilestones
 			resp.SkippedMilestones = skippedMilestones
 			resp.Errors = append(resp.Errors, milestoneErrors...)
+
+			interviews := interviewImport{
+				familyId: familyId, personIdMapping: personIdMapping, tagNameToId: tagNameToId,
+			}.run(ctx.Tx, importData.InterviewQuestions, importData.Interviews, importData.Milestones)
+			interviewIds = interviews.interviewIds
+			resp.ImportedInterviews = interviews.imported
+			resp.SkippedInterviews = interviews.skipped
+			resp.Warnings = append(resp.Warnings, interviews.warnings...)
+			importedMilestoneIds = append(importedMilestoneIds, interviews.answerIds...)
 		}
 
 		if req.ImportActivities && len(importData.Activities) > 0 {
@@ -206,6 +222,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 				userId:          user.Id,
 				personIdMapping: personIdMapping,
 				milestoneIds:    matchImportedMilestones(ctx.Tx, importData.Milestones, personIdMapping),
+				interviewIds:    interviewIds,
 			})
 			resp.ImportedBooks = imported
 			resp.SkippedBooks = skipped
@@ -655,9 +672,12 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 	skippedCount := 0
 
 	for _, milestone := range importMilestones {
+		if milestone.InterviewId > 0 || milestone.Category == CategoryInterview {
+			continue
+		}
 		newPersonId, exists := personIdMapping[milestone.PersonId]
 		if !exists {
-			errors = append(errors, fmt.Sprintf("Milestone for unknown person ID: %d", milestone.PersonId))
+			errors = append(errors, fmt.Sprintf("Moment for unknown person ID: %d", milestone.PersonId))
 			continue
 		}
 

@@ -83,6 +83,7 @@ type SameAgeRow struct {
 	Height     *GrowthData `json:"height"`
 	Weight     *GrowthData `json:"weight"`
 	Milestones []Milestone `json:"milestones"`
+	Interviews []Interview `json:"interviews"`
 	PhotoIds   []int       `json:"photoIds"`
 	// Portraits are the photos in the window that best show this person,
 	// best first, for the side-by-side montage.
@@ -168,6 +169,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		sort.Slice(row.Milestones, func(i, j int) bool {
 			return row.Milestones[i].MilestoneDate.Before(row.Milestones[j].MilestoneDate)
 		})
+		row.Interviews = interviewsOfAnswers(ctx.Tx, row.Milestones)
 
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
 		row.Weight = nearestGrowth(item.GrowthData, Weight, target, growthWindow)

@@ -205,8 +205,8 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
         <fieldset className="form-section">
           <legend>Your family profile</legend>
           <p className="section-hint">
-            We’ll add you as the first adult in this family so photos, milestones, and family
-            timelines can include you too.
+            We’ll add you as the first adult in this family so photos, moments, and family timelines
+            can include you too.
           </p>
 
           <div className="form-group">

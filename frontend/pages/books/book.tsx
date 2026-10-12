@@ -11,6 +11,7 @@ import {
   Block,
   Book,
   BookMoment,
+  InterviewSpread,
   BookPhoto,
   BookSource,
   DENSITY_OPTIONS,
@@ -234,6 +235,8 @@ const BlockView = ({ block }: { block: Block }) => {
       );
     case "moment":
       return <MomentView moment={block.moment} photo={block.photo} />;
+    case "interview":
+      return <InterviewSpreadView spread={block.spread} />;
     case "quote":
       return (
         <blockquote className="book-quote">
@@ -458,3 +461,54 @@ const GrowthChart = ({
     </figure>
   );
 };
+
+const InterviewSpreadView = ({ spread }: { spread: InterviewSpread }) => (
+  <section className="book-interview">
+    <header className="book-interview-head">
+      {spread.photo && (
+        <BookImage photo={spread.photo} className="book-interview-photo" sizes="160px" />
+      )}
+      <div>
+        <h3>{spread.title}</h3>
+        <p className="book-when">
+          {shortDay(spread.day)}
+          {spread.detail && <span> · {spread.detail}</span>}
+        </p>
+      </div>
+    </header>
+    <div
+      className={spread.changes.length ? "book-interview-body has-changes" : "book-interview-body"}
+    >
+      <div className="book-interview-answers">
+        {spread.sections.map(section => (
+          <div key={section.name} className="book-interview-section">
+            <h4>{section.name}</h4>
+            <dl>
+              {section.rows.map((row, i) => (
+                <div key={i}>
+                  <dt>{row.question}</dt>
+                  <dd>{row.answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+      {spread.changes.length > 0 && (
+        <aside className="book-interview-changes">
+          <h4>What changed</h4>
+          <ul>
+            {spread.changes.map((c, i) => (
+              <li key={i}>
+                <span>{c.question}</span>
+                <span>
+                  <s>{c.before}</s> → <strong>{c.after}</strong>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
+    </div>
+  </section>
+);

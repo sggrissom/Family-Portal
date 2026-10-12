@@ -7,7 +7,7 @@ import "./family-links-styles";
 
 const SCOPE_LABELS: { key: keyof server.LinkScopes; label: string; hint: string }[] = [
   { key: "people", label: "People", hint: "Required — the people you choose to share" },
-  { key: "milestones", label: "Milestones", hint: "Their milestones and the tags on them" },
+  { key: "milestones", label: "Moments", hint: "Their moments and the tags on them" },
   { key: "photos", label: "Photos", hint: "Photos they appear in" },
   { key: "growth", label: "Measurements", hint: "Height and weight history" },
   {

@@ -14,6 +14,8 @@ import { compactAge, dueSummary } from "../../lib/familyStrip";
 import { dayKey, dayLabel, summarizeDays } from "../../lib/daySummary";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { MilestoneText } from "../../components/MilestoneText";
+import { InterviewCards } from "../../components/InterviewCard";
+import { groupInterviewAnswers, interviewsById } from "../../lib/interviews";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import "./dashboard-styles";
@@ -73,6 +75,10 @@ function nudgeAction(nudge: server.DashboardNudge): string {
       return "/faces";
     case "measure":
       return `/add-growth/${nudge.personId}`;
+    case "interview":
+      return `/interview/new/${nudge.personId}`;
+    case "interview-continue":
+      return `/interview/${nudge.interviewId}/ask`;
     default:
       return `/profile/${nudge.personId}`;
   }
@@ -88,6 +94,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
     ...chipOrder(people, data.relations || [], familyId),
   ];
   const names = chipLabels(people);
+  const peopleById = new Map(people.map(p => [p.id, p]));
   const dismissed = readDismissed();
   const nudges = (data.nudges || []).filter(n => !dismissed.includes(n.key)).slice(0, MAX_NUDGES);
   const recent = summarizeDays(
@@ -140,16 +147,20 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                       {copy.home.eventTiming[s.eventTiming] ?? ""}: {s.event.name} ·{" "}
                       {dayLabel(dayKey(s.event.startDate), data.today)}
                     </a>
-                    {s.canContribute && (
+                    {s.canContribute && s.canAddResults ? (
                       <div className="home-season-actions">
                         <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
                           {copy.home.addPhotos}
                         </a>
-                        {s.canAddResults && (
-                          <a href={`/competition/${s.event.id}`} className="btn btn-primary">
-                            {copy.home.addResults}
-                          </a>
-                        )}
+                        <a href={`/competition/${s.event.id}`} className="btn btn-primary">
+                          {copy.home.addResults}
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="home-season-actions">
+                        <a href={`/competition/${s.event.id}`} className="btn btn-secondary">
+                          {copy.home.viewEvent}
+                        </a>
                       </div>
                     )}
                   </>
@@ -176,7 +187,12 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
                     ))}
                   </div>
                 )}
-                {(year.milestones || []).map(m => (
+                <InterviewCards
+                  groups={groupInterviewAnswers(year.milestones || []).groups}
+                  people={peopleById}
+                  interviews={interviewsById(year.interviews)}
+                />
+                {groupInterviewAnswers(year.milestones || []).loose.map(m => (
                   <a key={m.id} href={`/milestone/${m.id}`} className="day-milestone">
                     <span className="day-milestone-icon" aria-hidden="true">
                       {getCategoryIcon(m.category)}
@@ -200,7 +216,12 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
         {recent.length === 0 ? (
           <p className="home-empty">{copy.home.nothingRecent}</p>
         ) : (
-          <DaySummaryList days={recent} people={people} today={data.today} />
+          <DaySummaryList
+            days={recent}
+            people={people}
+            today={data.today}
+            interviews={interviewsById(data.recent.interviews)}
+          />
         )}
       </section>
     </div>

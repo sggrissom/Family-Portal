@@ -1160,6 +1160,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 
 	removePhotoFromMilestones(tx, photo.Id)
 	removePhotoFromActivities(tx, photo.Id)
+	removePhotoFromInterviews(tx, photo)
 	removeAllPhotoTags(tx, photo.Id)
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)

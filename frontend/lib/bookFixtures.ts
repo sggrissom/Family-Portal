@@ -76,6 +76,8 @@ function milestones(list: M[], personId = 1, firstId = 1): server.Milestone[] {
     createdAt: day(offset),
     photoIds: photo ? [photo] : [],
     tagIds: [],
+    interviewId: 0,
+    questionId: 0,
   }));
 }
 
@@ -412,6 +414,7 @@ function toSource(raw: SampleSource): BookSource {
     growthData: raw.growthData,
     photoPeople,
     untagged: raw.untagged ?? [],
+    interviews: [],
   };
 }
 

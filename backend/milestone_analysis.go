@@ -58,7 +58,15 @@ func GetMilestoneEmbedding(tx *vbolt.Tx, milestoneId int) (e MilestoneEmbedding,
 
 func milestoneEmbeddingOutdated(m Milestone, e MilestoneEmbedding, found bool) bool {
 	return !found || e.Model != sentenceModelId || e.Version < milestoneEmbedVersion ||
-		e.Text != m.Description || e.PersonId != m.PersonId || len(e.Vector) == 0
+		e.Text != milestoneEmbedText(m) || e.PersonId != m.PersonId || len(e.Vector) == 0
+}
+
+// An interview answer alone ("pizza") says little, so its question goes with it.
+func milestoneEmbedText(m Milestone) string {
+	if m.Category == CategoryInterview && m.Context != "" {
+		return m.Context + ": " + m.Description
+	}
+	return m.Description
 }
 
 func deleteMilestoneEmbeddingTx(tx *vbolt.Tx, milestoneId int) {
@@ -92,7 +100,8 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 	if m.Id == 0 || !milestoneEmbeddingOutdated(m, current, found) {
 		return nil
 	}
-	vectors, err := embedSentences(client, []string{m.Description})
+	text := milestoneEmbedText(m)
+	vectors, err := embedSentences(client, []string{text})
 	if errors.Is(err, errVisionUnavailable) || errors.Is(err, errRetryLater) {
 		return errRetryLater
 	}
@@ -106,7 +115,7 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 		}
 		e := MilestoneEmbedding{
 			MilestoneId: m.Id, PersonId: m.PersonId, FamilyId: m.FamilyId,
-			Model: sentenceModelId, Version: milestoneEmbedVersion, Text: m.Description, Vector: vectors[0],
+			Model: sentenceModelId, Version: milestoneEmbedVersion, Text: text, Vector: vectors[0],
 		}
 		vbolt.Write(tx, MilestoneEmbeddingBkt, m.Id, &e)
 		vbolt.TxCommit(tx)
@@ -243,6 +252,9 @@ func SuggestMilestoneCategory(ctx *vbeam.Context, req SuggestMilestoneCategoryRe
 	if CanAccessFamily(ctx.Tx, user, familyId, AccessView) {
 		best, bestScore := "", categoryNeighborMinScore
 		for _, m := range getFamilyMilestones(ctx.Tx, familyId) {
+			if m.Category == CategoryInterview {
+				continue
+			}
 			if e, ok := GetMilestoneEmbedding(ctx.Tx, m.Id); ok && !milestoneEmbeddingOutdated(m, e, true) {
 				if s := float64(vision.Dot(query, e.Vector)); s >= bestScore {
 					best, bestScore = m.Category, s
@@ -302,7 +314,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		err = errors.New("Person not found or not in your family")
 		return
 	}
-	date, dateErr := resolveEntryDate("Milestone", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	date, dateErr := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if dateErr != nil {
 		return
 	}

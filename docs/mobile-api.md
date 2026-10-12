@@ -409,6 +409,9 @@ tags a contributor can accept or reject with `AcceptTagSuggestions` /
 pending suggestion by tag for a review screen. A rejected suggestion is never
 made again.
 
+Clients call a milestone a "moment": the API, routes and stored data keep the
+`milestone` name, but every label a person reads says Moment.
+
 A milestone's `category` is one of `development`, `behavior`, `health`,
 `achievement`, `first`, `quote`, `artwork`, `other`. Artwork is something the
 person made (a drawing, a painting, a craft), recorded as a milestone with the
@@ -755,8 +758,10 @@ unparseable or empty `today` falls back to the server's UTC day.
 - `nudges` are ordered by priority. `kind` is `"measure"`, `"birthday"` or
   `"faces"` today; render `text` for any kind, including ones added later.
   `key` is stable per occurrence (`measure:<personId>:<lastDay>`,
-  `birthday:<personId>:<year>`, `faces:<count>`), which is what a client
-  remembers when a nudge is dismissed. Dismissals are per device.
+  `birthday:<personId>:<year>`, `birthday:<personId>:<year>:today`,
+  `faces:<count>`), which is what a client remembers when a nudge is dismissed.
+  The birthday-day banner has its own key so dismissing an advance reminder
+  does not hide the celebration. Dismissals are per device.
 - `seasons` are the seasons in progress today, oldest start first. `event` is
   the one running today, else the next, else the last, with `eventTiming`
   `"now"`, `"next"` or `"last"`; it is `null` for a season with no events.

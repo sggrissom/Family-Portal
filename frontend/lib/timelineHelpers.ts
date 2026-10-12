@@ -17,7 +17,7 @@ export function getAgeInYears(ageString: string): number {
 }
 
 export async function handleDeleteMilestone(id: number, description: string): Promise<void> {
-  const confirmed = confirm(`Are you sure you want to delete this milestone: "${description}"?`);
+  const confirmed = confirm(`Are you sure you want to delete this moment: "${description}"?`);
 
   if (confirmed) {
     try {
@@ -26,7 +26,7 @@ export async function handleDeleteMilestone(id: number, description: string): Pr
       if (resp && resp.success) {
         window.location.reload();
       } else {
-        alert(err || "Failed to delete milestone");
+        alert(err || "Failed to delete moment");
       }
     } catch (error) {
       alert("Network error. Please try again.");

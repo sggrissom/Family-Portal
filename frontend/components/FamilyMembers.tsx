@@ -37,7 +37,7 @@ async function refresh(state: FamilyMembersState) {
 async function onRemoveMember(state: FamilyMembersState, member: server.FamilyMemberView) {
   if (
     !confirm(
-      `Remove ${member.name} from this family? They lose access immediately. Anything they added — people, photos, measurements, milestones — stays with the family.`
+      `Remove ${member.name} from this family? They lose access immediately. Anything they added — people, photos, measurements, moments — stays with the family.`
     )
   ) {
     return;
@@ -107,7 +107,7 @@ export const FamilyMembersSection = ({
       <h2>Family Members</h2>
       <div className="settings-card">
         <p className="section-description">
-          Members can see and edit this family's people, photos, measurements and milestones, except
+          Members can see and edit this family's people, photos, measurements and moments, except
           those marked view only, who can see everything but change nothing. Removing someone — or
           leaving yourself — takes effect immediately and leaves all of that content with the
           family.

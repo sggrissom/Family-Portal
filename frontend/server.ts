@@ -35,21 +35,24 @@ export const RelationPartner: RelationKind = 2;
 export type BookItemKind = number;
 export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
+export const BookItemInterview: BookItemKind = 2;
 
 // Errors
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrBookNotFound = "Book not found or not in your family";
 export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -59,9 +62,13 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrInterviewNotFound = "Interview not found or not in your family";
+export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrPersonNotFound = "Person not found or not in your family";
 
 export interface CreateAccountRequest {
     name: string
@@ -260,6 +267,7 @@ export interface GetPersonResponse {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+    interviews: Interview[]
 }
 
 export interface ListPeopleResponse {
@@ -322,6 +330,7 @@ export interface PersonDeletionSummary {
     relations: number
     sharedFamilies: number
     books: number
+    interviews: number
 }
 
 export interface DeletePersonResponse {
@@ -507,6 +516,7 @@ export interface SearchMilestonesRequest {
 
 export interface SearchMilestonesResponse {
     milestones: Milestone[]
+    interviews: Interview[]
     query: string
 }
 
@@ -516,6 +526,165 @@ export interface UpdateMilestoneTagsRequest {
 }
 
 export interface UpdateMilestoneTagsResponse {
+}
+
+export interface GetInterviewQuestionsRequest {
+    familyId: number
+}
+
+export interface InterviewQuestionsResponse {
+    familyId: number
+    revision: number
+    questions: InterviewQuestion[]
+    suggested: InterviewQuestion[]
+    defaults: InterviewQuestion[]
+    usage: Record<number, QuestionUsage>
+}
+
+export interface SaveInterviewQuestionsRequest {
+    familyId: number
+    revision: number
+    questions: InterviewQuestionInput[]
+    deleteIds: number[]
+}
+
+export interface MergeInterviewQuestionsRequest {
+    fromId: number
+    intoId: number
+    revision: number
+}
+
+export interface GetInterviewSetupRequest {
+    personId: number
+}
+
+export interface GetInterviewSetupResponse {
+    person: Person
+    questions: InterviewQuestion[]
+    retired: InterviewQuestion[]
+    inProgress: Interview
+    answered: number
+}
+
+export interface StartInterviewRequest {
+    personId: number
+    date: string
+    questionIds: number[]
+    defaultKeys: string[]
+    oneOffQuestions: string[]
+}
+
+export interface InterviewResponse {
+    interview: Interview
+}
+
+export interface GetInterviewRequest {
+    id: number
+}
+
+export interface GetInterviewResponse {
+    interview: Interview
+    person: Person
+    questions: InterviewQuestion[]
+    answers: Milestone[]
+    previous: Record<number, PreviousAnswer[]>
+}
+
+export interface SaveInterviewAnswerRequest {
+    interviewId: number
+    questionId: number
+    answer: string
+    skipped: boolean
+}
+
+export interface SaveInterviewAnswerResponse {
+    interview: Interview
+    answer: Milestone
+}
+
+export interface AddInterviewQuestionRequest {
+    interviewId: number
+    text: string
+    afterQuestionId: number
+    keep: boolean
+}
+
+export interface AddInterviewQuestionResponse {
+    interview: Interview
+    question: InterviewQuestion
+}
+
+export interface UpdateInterviewRequest {
+    id: number
+    version: number
+    date: string
+    title: string
+    notes: string
+    photoId: number
+    status: string
+}
+
+export interface DeleteInterviewRequest {
+    id: number
+}
+
+export interface DeleteInterviewResponse {
+    personId: number
+}
+
+export interface GetPersonInterviewsRequest {
+    personId: number
+}
+
+export interface GetPersonInterviewsResponse {
+    person: Person
+    interviews: Interview[]
+    answers: Milestone[]
+    questions: InterviewQuestion[]
+}
+
+export interface GetFamilyInterviewsRequest {
+    today: string
+}
+
+export interface GetFamilyInterviewsResponse {
+    people: FamilyInterviewRow[]
+}
+
+export interface CompareInterviewAnswersRequest {
+    questionId: number
+    personIds: number[]
+}
+
+export interface CompareInterviewAnswersResponse {
+    question: InterviewQuestion
+    questions: InterviewQuestion[]
+    rows: CompareRow[]
+}
+
+export interface PreviewInterviewImportRequest {
+    personId: number
+    text: string
+    csv: boolean
+}
+
+export interface PreviewInterviewImportResponse {
+    proposals: ImportProposal[]
+    questions: InterviewQuestion[]
+}
+
+export interface ImportInterviewsRequest {
+    personId: number
+    interviews: HistoricalInterview[]
+}
+
+export interface ImportInterviewsResponse {
+    interviews: Interview[]
+}
+
+export interface SaveHistoricalInterviewRequest {
+    personId: number
+    interview: HistoricalInterview
 }
 
 export interface ListActivitiesRequest {
@@ -1152,6 +1321,8 @@ export interface ImportDataResponse {
     importedActivities: ActivityImportCounts
     importedBooks: number
     skippedBooks: number
+    importedInterviews: number
+    skippedInterviews: number
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
@@ -1405,6 +1576,8 @@ export interface WeeklyDigestResponse {
     windowDays: number
     photos: number
     milestones: number
+    interviews: number
+    answers: number
     measurements: number
     messages: number
     people: DigestPerson[]
@@ -1666,6 +1839,8 @@ export interface Milestone {
     createdAt: string
     photoIds: number[]
     tagIds: number[]
+    interviewId: number
+    questionId: number
 }
 
 export interface Image {
@@ -1687,6 +1862,23 @@ export interface Image {
     tagIds: number[]
 }
 
+export interface Interview {
+    id: number
+    familyId: number
+    personId: number
+    date: string
+    title: string
+    source: string
+    status: string
+    questionIds: number[]
+    skippedIds: number[]
+    photoId: number
+    notes: string
+    createdAt: string
+    completedAt: string
+    version: number
+}
+
 export interface Relation {
     id: number
     fromId: number
@@ -1699,6 +1891,7 @@ export interface FamilyTimelineItem {
     growthData: GrowthData[]
     milestones: Milestone[]
     photos: Image[]
+    interviews: Interview[]
 }
 
 export interface TimelineAppearance {
@@ -1723,6 +1916,75 @@ export interface RelationLabelEntry {
 export interface CheckupValue {
     value: number
     unit: string
+}
+
+export interface InterviewQuestion {
+    id: number
+    familyId: number
+    text: string
+    section: string
+    position: number
+    minAgeYears: number
+    maxAgeYears: number
+    defaultKey: string
+    archived: boolean
+    oneOff: boolean
+    createdAt: string
+}
+
+export interface QuestionUsage {
+    interviews: number
+    answers: number
+}
+
+export interface InterviewQuestionInput {
+    id: number
+    text: string
+    section: string
+    minAgeYears: number
+    maxAgeYears: number
+    defaultKey: string
+    archived: boolean
+}
+
+export interface PreviousAnswer {
+    interviewId: number
+    milestoneId: number
+    date: string
+    ageYears: number
+    text: string
+}
+
+export interface FamilyInterviewRow {
+    person: Person
+    last: Interview
+    count: number
+    inProgress: Interview
+    answered: number
+    due: boolean
+    child: boolean
+}
+
+export interface CompareRow {
+    person: Person
+    answers: PreviousAnswer[]
+}
+
+export interface ImportProposal {
+    header: string
+    date: string
+    ageYears: number
+    rows: ImportRow[]
+}
+
+export interface HistoricalInterview {
+    inputType: string
+    date: string
+    ageYears: number
+    ageMonths: number
+    title: string
+    notes: string
+    answers: ImportAnswer[]
 }
 
 export interface Activity {
@@ -1914,6 +2176,7 @@ export interface DashboardNudge {
     text: string
     personId: number
     count: number
+    interviewId: number
 }
 
 export interface DashboardSeason {
@@ -1929,6 +2192,7 @@ export interface DashboardYear {
     yearsAgo: number
     photos: Image[]
     milestones: Milestone[]
+    interviews: Interview[]
 }
 
 export interface DashboardRecent {
@@ -1936,6 +2200,7 @@ export interface DashboardRecent {
     photos: PhotoWithPeople[]
     milestones: Milestone[]
     growth: GrowthData[]
+    interviews: Interview[]
 }
 
 export interface OpenEvent {
@@ -1954,6 +2219,7 @@ export interface SameAgeRow {
     height: GrowthData | null
     weight: GrowthData | null
     milestones: Milestone[]
+    interviews: Interview[]
     photoIds: number[]
     portraits: PortraitPhoto[]
 }
@@ -1977,6 +2243,7 @@ export interface BookSources {
     growthData: GrowthData[]
     photoPeople: Record<number, number[]>
     untagged: number[]
+    interviews: BookInterview[]
 }
 
 export interface Book {
@@ -2344,6 +2611,20 @@ export interface AdminMobileVersionPlatform {
     warnings: string[]
 }
 
+export interface ImportRow {
+    raw: string
+    answer: string
+    ref: string
+    confidence: string
+}
+
+export interface ImportAnswer {
+    ref: string
+    answer: string
+    newText: string
+    keep: boolean
+}
+
 export interface Entry {
     id: number
     seasonId: number
@@ -2408,6 +2689,13 @@ export interface TagSuggestion {
     score: number
     status: number
     createdAt: string
+}
+
+export interface BookInterview {
+    interview: Interview
+    questions: InterviewQuestion[]
+    answers: Milestone[]
+    changes: BookInterviewChange[]
 }
 
 export interface BookItem {
@@ -2495,6 +2783,12 @@ export interface HostRelease {
     sha: string
     deployed_at: string
     current: boolean
+}
+
+export interface BookInterviewChange {
+    questionId: number
+    before: string
+    after: string
 }
 
 export interface EndpointStats {
@@ -2681,6 +2975,70 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
+}
+
+export async function GetInterviewQuestions(data: GetInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('GetInterviewQuestions', JSON.stringify(data));
+}
+
+export async function SaveInterviewQuestions(data: SaveInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('SaveInterviewQuestions', JSON.stringify(data));
+}
+
+export async function MergeInterviewQuestions(data: MergeInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('MergeInterviewQuestions', JSON.stringify(data));
+}
+
+export async function GetInterviewSetup(data: GetInterviewSetupRequest): Promise<rpc.Response<GetInterviewSetupResponse>> {
+    return await rpc.call<GetInterviewSetupResponse>('GetInterviewSetup', JSON.stringify(data));
+}
+
+export async function StartInterview(data: StartInterviewRequest): Promise<rpc.Response<InterviewResponse>> {
+    return await rpc.call<InterviewResponse>('StartInterview', JSON.stringify(data));
+}
+
+export async function GetInterview(data: GetInterviewRequest): Promise<rpc.Response<GetInterviewResponse>> {
+    return await rpc.call<GetInterviewResponse>('GetInterview', JSON.stringify(data));
+}
+
+export async function SaveInterviewAnswer(data: SaveInterviewAnswerRequest): Promise<rpc.Response<SaveInterviewAnswerResponse>> {
+    return await rpc.call<SaveInterviewAnswerResponse>('SaveInterviewAnswer', JSON.stringify(data));
+}
+
+export async function AddInterviewQuestion(data: AddInterviewQuestionRequest): Promise<rpc.Response<AddInterviewQuestionResponse>> {
+    return await rpc.call<AddInterviewQuestionResponse>('AddInterviewQuestion', JSON.stringify(data));
+}
+
+export async function UpdateInterview(data: UpdateInterviewRequest): Promise<rpc.Response<InterviewResponse>> {
+    return await rpc.call<InterviewResponse>('UpdateInterview', JSON.stringify(data));
+}
+
+export async function DeleteInterview(data: DeleteInterviewRequest): Promise<rpc.Response<DeleteInterviewResponse>> {
+    return await rpc.call<DeleteInterviewResponse>('DeleteInterview', JSON.stringify(data));
+}
+
+export async function GetPersonInterviews(data: GetPersonInterviewsRequest): Promise<rpc.Response<GetPersonInterviewsResponse>> {
+    return await rpc.call<GetPersonInterviewsResponse>('GetPersonInterviews', JSON.stringify(data));
+}
+
+export async function GetFamilyInterviews(data: GetFamilyInterviewsRequest): Promise<rpc.Response<GetFamilyInterviewsResponse>> {
+    return await rpc.call<GetFamilyInterviewsResponse>('GetFamilyInterviews', JSON.stringify(data));
+}
+
+export async function CompareInterviewAnswers(data: CompareInterviewAnswersRequest): Promise<rpc.Response<CompareInterviewAnswersResponse>> {
+    return await rpc.call<CompareInterviewAnswersResponse>('CompareInterviewAnswers', JSON.stringify(data));
+}
+
+export async function PreviewInterviewImport(data: PreviewInterviewImportRequest): Promise<rpc.Response<PreviewInterviewImportResponse>> {
+    return await rpc.call<PreviewInterviewImportResponse>('PreviewInterviewImport', JSON.stringify(data));
+}
+
+export async function ImportInterviews(data: ImportInterviewsRequest): Promise<rpc.Response<ImportInterviewsResponse>> {
+    return await rpc.call<ImportInterviewsResponse>('ImportInterviews', JSON.stringify(data));
+}
+
+export async function SaveHistoricalInterview(data: SaveHistoricalInterviewRequest): Promise<rpc.Response<InterviewResponse>> {
+    return await rpc.call<InterviewResponse>('SaveHistoricalInterview', JSON.stringify(data));
 }
 
 export async function ListActivities(data: ListActivitiesRequest): Promise<rpc.Response<ListActivitiesResponse>> {

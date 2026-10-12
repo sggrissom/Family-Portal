@@ -46,6 +46,7 @@ describe("mergeTimeline", () => {
     growthData: [],
     milestones: milestones.map(id => ({ id }) as server.Milestone),
     photos: (photos && photos.map(id => ({ id }) as server.Image)) as server.Image[],
+    interviews: [],
   });
   const timeline = (people: server.FamilyTimelineItem[]): server.GetFamilyTimelineResponse => ({
     people,

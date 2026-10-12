@@ -16,6 +16,7 @@ import { formatAgeAtMeasurement, isValidBirthday } from "../../lib/growthPercent
 import { monthsOld } from "../../lib/sameAge";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
+import { interviewTitle } from "../../lib/interviews";
 import "./view-milestone-styles";
 
 type ViewMilestoneData = {
@@ -23,6 +24,7 @@ type ViewMilestoneData = {
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
   matches: server.MilestoneMatch[];
+  interview: server.GetInterviewResponse | null;
 };
 
 export async function fetch(
@@ -49,8 +51,12 @@ export async function fetch(
       });
     }
   }
+  if (milestone.interviewId) {
+    const [interview] = await server.GetInterview({ id: milestone.interviewId });
+    return [{ milestone, person, sameAge, matches: [], interview: interview ?? null }, ""];
+  }
   const [matches] = await server.GetMilestoneMatches({ milestoneId: milestone.id });
-  return [{ milestone, person, sameAge, matches: matches?.matches ?? [] }, ""];
+  return [{ milestone, person, sameAge, matches: matches?.matches ?? [], interview: null }, ""];
 }
 
 export function view(
@@ -63,7 +69,7 @@ export function view(
   if (!data.milestone) {
     return (
       <ErrorPage
-        title="Milestone Not Found"
+        title="Moment Not Found"
         message={copy.milestoneDetail.notFound}
         containerClass="view-milestone-container"
       />
@@ -79,6 +85,7 @@ export function view(
           person={data.person}
           sameAge={data.sameAge}
           matches={data.matches}
+          interview={data.interview}
         />
       </main>
       <Footer />
@@ -99,7 +106,7 @@ async function deleteMilestone(milestone: server.Milestone) {
   if (resp?.success) {
     core.setRoute(`/profile/${milestone.personId}`);
   } else {
-    alert(err || "That milestone could not be deleted.");
+    alert(err || "That moment could not be deleted.");
   }
 }
 
@@ -108,12 +115,15 @@ const ViewMilestonePage = ({
   person,
   sameAge,
   matches,
+  interview,
 }: {
   milestone: server.Milestone;
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
   matches: server.MilestoneMatch[];
+  interview: server.GetInterviewResponse | null;
 }) => {
+  const isAnswer = milestone.category === "interview";
   const age =
     person && isValidBirthday(person.birthday)
       ? monthsOld(person.birthday, milestone.milestoneDate)
@@ -134,10 +144,16 @@ const ViewMilestonePage = ({
           <span aria-hidden="true">{getCategoryIcon(milestone.category)}</span>{" "}
           {getCategoryLabel(milestone.category)}
         </div>
+        {isAnswer && milestone.context && (
+          <p className="milestone-detail-question">{milestone.context}</p>
+        )}
         <h1>
           <MilestoneText milestone={milestone} />
         </h1>
-        {milestone.context && <p className="milestone-detail-context">{milestone.context}</p>}
+        {!isAnswer && milestone.context && (
+          <p className="milestone-detail-context">{milestone.context}</p>
+        )}
+        {interview && <InterviewContext milestone={milestone} interview={interview} />}
         <p className="milestone-detail-meta">
           {person && <a href={`/profile/${person.id}`}>{person.name}</a>}
           {age !== null &&
@@ -164,7 +180,7 @@ const ViewMilestonePage = ({
 
       {matches.length > 0 && (
         <section className="milestone-matches">
-          <h2>The same milestone in the family</h2>
+          <h2>The same moment in the family</h2>
           <ul>
             {matches.map(match => (
               <li key={match.milestone.id}>
@@ -189,5 +205,32 @@ const ViewMilestonePage = ({
         />
       )}
     </div>
+  );
+};
+
+const InterviewContext = ({
+  milestone,
+  interview,
+}: {
+  milestone: server.Milestone;
+  interview: server.GetInterviewResponse;
+}) => {
+  const byQuestion = new Map((interview.answers ?? []).map(a => [a.questionId, a]));
+  const answered = interview.interview.questionIds
+    .map(id => byQuestion.get(id))
+    .filter((a): a is server.Milestone => !!a);
+  const at = answered.findIndex(a => a.id === milestone.id);
+  const prev = at > 0 ? answered[at - 1] : null;
+  const next = at >= 0 && at < answered.length - 1 ? answered[at + 1] : null;
+  return (
+    <nav className="milestone-interview">
+      <a href={`/interview/${interview.interview.id}`}>
+        {copy.interview.answerOf(interviewTitle(interview.interview, interview.person))}
+      </a>
+      <span className="milestone-interview-steps">
+        {prev && <a href={`/milestone/${prev.id}`}>{copy.interview.previousAnswer}</a>}
+        {next && <a href={`/milestone/${next.id}`}>{copy.interview.nextAnswer}</a>}
+      </span>
+    </nav>
   );
 };

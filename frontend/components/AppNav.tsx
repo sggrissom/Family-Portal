@@ -26,12 +26,13 @@ const DESTINATIONS: { key: Destination; href: string; icon: string }[] = [
   { key: "books", href: "/books", icon: "📖" },
   { key: "sameAge", href: "/same-age", icon: "👶" },
   { key: "activities", href: "/activities", icon: "🏆" },
+  { key: "interviews", href: "/interviews", icon: "🎤" },
   { key: "chat", href: "/chat", icon: "💬" },
 ];
 
 const TOP_BAR: Destination[] = ["home", "photos", "growth", "history", "books"];
 const BOTTOM_BAR: Destination[] = ["home", "photos", "growth"];
-const MORE: Destination[] = ["history", "books", "sameAge", "activities", "chat"];
+const MORE: Destination[] = ["history", "books", "sameAge", "activities", "interviews", "chat"];
 
 function destination(key: Destination) {
   return DESTINATIONS.find(d => d.key === key)!;

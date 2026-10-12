@@ -67,7 +67,7 @@ export function view(
       <Header isHome={false} />
       <main id="app" className="manage-tags-container">
         <h1>Manage Tags</h1>
-        <p>Create and manage tags to organize your family's milestones and photos.</p>
+        <p>Create and manage tags to organize your family's moments and photos.</p>
 
         {state.error && (
           <div className="manage-tags-error" role="alert">
@@ -285,7 +285,7 @@ async function onSaveTag(state: ManageTagsState, tagId: number) {
 async function onDeleteTag(state: ManageTagsState, tagId: number) {
   const tag = state.tags.find(t => t.id === tagId);
   const name = tag?.name || "this tag";
-  if (!confirm(`Delete "${name}"? It will be removed from all milestones and photos.`)) return;
+  if (!confirm(`Delete "${name}"? It will be removed from all moments and photos.`)) return;
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();

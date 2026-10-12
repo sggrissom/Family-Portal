@@ -17,7 +17,7 @@ import { PersonChips, scrollSelectedChipIntoView } from "../../components/Person
 import { WhenControl } from "../../components/WhenControl";
 import { parseAgeFromText } from "../../lib/ageInText";
 import {
-  ArtworkPhotos,
+  MilestonePhotoUploads,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
@@ -136,7 +136,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
   if (data.people.length === 0) {
     return (
       <NoFamilyMembersPage
-        message="Please add family members before adding milestones"
+        message="Please add family members before adding moments"
         containerClass="entry-container"
       />
     );
@@ -196,7 +196,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
 
   if (!resp) {
     form.saving = false;
-    form.error = err || "That milestone could not be saved. Please try again.";
+    form.error = err || "That moment could not be saved. Please try again.";
     vlens.scheduleRedraw();
     return;
   }
@@ -240,7 +240,7 @@ interface AddMilestonePageProps {
 }
 
 const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
-  const disabled = form.saving;
+  const disabled = form.saving || form.uploading;
   if (BROWSER) scheduleLookups(form);
   const statedAge = parseAgeFromText(form.description);
   const ageAlreadyUsed =
@@ -301,14 +301,13 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           )}
         </div>
 
-        {form.category === "artwork" && (
-          <ArtworkPhotos
-            form={form}
-            personId={form.personId}
-            familyId={people.find(p => p.id === form.personId)?.familyId ?? 0}
-            disabled={disabled}
-          />
-        )}
+        <MilestonePhotoUploads
+          isArtwork={form.category === "artwork"}
+          form={form}
+          personId={form.personId}
+          familyId={people.find(p => p.id === form.personId)?.familyId ?? 0}
+          disabled={disabled}
+        />
 
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}

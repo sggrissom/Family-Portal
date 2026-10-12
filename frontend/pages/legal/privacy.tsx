@@ -68,7 +68,7 @@ const PrivacyPage = () => (
             <td>Height and weight measurements with the date each was taken.</td>
           </tr>
           <tr>
-            <td>Milestones and activities</td>
+            <td>Moments and activities</td>
             <td>
               Dated events with a description and category; sports and hobby seasons, competitions,
               routines, and results.
@@ -176,7 +176,7 @@ const PrivacyPage = () => (
     <ul>
       <li>
         A family is the unit of privacy. Every member of your family can see all of that family's
-        people, growth records, milestones, photos, activities, and chat. There are no per-member
+        people, growth records, moments, photos, activities, and chat. There are no per-member
         restrictions inside a family.
       </li>
       <li>
@@ -186,7 +186,7 @@ const PrivacyPage = () => (
       </li>
       <li>
         A family can invite another family to link, and a link shares only the specific people and
-        the specific categories it names — for example milestones and photos for one child, without
+        the specific categories it names — for example moments and photos for one child, without
         growth measurements. Chat is never shared by a link. A link grants nothing until it is
         accepted and nothing once it is revoked.
       </li>
@@ -234,7 +234,7 @@ const PrivacyPage = () => (
     </ul>
     <p>What stays:</p>
     <ul>
-      <li>People, growth records, milestones, photos, and tags stay with the family.</li>
+      <li>People, growth records, moments, photos, and tags stay with the family.</li>
     </ul>
     <div className="legal-callout">
       <p>

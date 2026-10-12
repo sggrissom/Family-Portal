@@ -13,7 +13,7 @@ import { canContribute } from "../../lib/authCache";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import { WhenControl } from "../../components/WhenControl";
 import {
-  ArtworkPhotos,
+  MilestonePhotoUploads,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
@@ -95,7 +95,7 @@ export async function fetch(
   const milestoneId = getIdFromRoute(route);
 
   if (!milestoneId) {
-    return [null, "Milestone ID is required"];
+    return [null, "Moment ID is required"];
   }
 
   const [milestone, milestoneErr] = await server.GetMilestone({ id: milestoneId });
@@ -121,8 +121,8 @@ export function view(
   if (!milestone) {
     return (
       <ErrorPage
-        title="Milestone Not Found"
-        message="The milestone you're trying to edit could not be found"
+        title="Moment Not Found"
+        message="The moment you're trying to edit could not be found"
         containerClass="entry-container"
       />
     );
@@ -179,7 +179,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
     tagIds: form.tagIds,
   });
   if (!resp) {
-    form.error = err || "That milestone could not be saved. Please try again.";
+    form.error = err || "That moment could not be saved. Please try again.";
     form.saving = false;
     vlens.scheduleRedraw();
     return;
@@ -194,11 +194,14 @@ interface EditMilestonePageProps {
 }
 
 const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
-  const disabled = form.saving;
-  if (BROWSER) scheduleLookup(form, milestone);
+  const disabled = form.saving || form.uploading;
+  const isAnswer = milestone.category === "interview";
+  if (BROWSER && !isAnswer) scheduleLookup(form, milestone);
   return (
     <div className="entry-card">
-      <h1 className="entry-title">Edit milestone</h1>
+      <h1 className="entry-title">
+        {isAnswer ? copy.interview.editAnswer : copy.milestone.editTitle}
+      </h1>
 
       <form className="entry-form" onSubmit={vlens.cachePartial(save, form, milestone)} noValidate>
         {form.error && (
@@ -207,27 +210,41 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           </div>
         )}
 
-        <MilestoneTextFields form={form} disabled={disabled} />
+        {isAnswer ? (
+          <div className="entry-field">
+            <label htmlFor="description">{milestone.context}</label>
+            <textarea
+              id="description"
+              rows={2}
+              disabled={disabled}
+              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+            />
+            <span className="entry-hint">{copy.interview.answerDateHint}</span>
+          </div>
+        ) : (
+          <>
+            <MilestoneTextFields form={form} disabled={disabled} />
 
-        <CategoryChips
-          value={form.category}
-          onChange={vlens.cachePartial(chooseCategory, form)}
+            <CategoryChips
+              value={form.category}
+              onChange={vlens.cachePartial(chooseCategory, form)}
+              disabled={disabled}
+            />
+
+            <div className="entry-subject">
+              <span className="entry-label">{copy.when.label}</span>
+              <WhenControl when={form.when} disabled={disabled} />
+            </div>
+          </>
+        )}
+
+        <MilestonePhotoUploads
+          isArtwork={form.category === "artwork"}
+          form={form}
+          personId={milestone.personId}
+          familyId={milestone.familyId}
           disabled={disabled}
         />
-
-        <div className="entry-subject">
-          <span className="entry-label">{copy.when.label}</span>
-          <WhenControl when={form.when} disabled={disabled} />
-        </div>
-
-        {form.category === "artwork" && (
-          <ArtworkPhotos
-            form={form}
-            personId={milestone.personId}
-            familyId={milestone.familyId}
-            disabled={disabled}
-          />
-        )}
 
         <SuggestedPhotos
           photoIds={form.suggestedPhotoIds}

@@ -28,6 +28,8 @@ type WeeklyDigestResponse struct {
 	WindowDays   int            `json:"windowDays"`
 	Photos       int            `json:"photos"`
 	Milestones   int            `json:"milestones"`
+	Interviews   int            `json:"interviews"`
+	Answers      int            `json:"answers"`
 	Measurements int            `json:"measurements"`
 	Messages     int            `json:"messages"`
 	People       []DigestPerson `json:"people"`
@@ -73,8 +75,20 @@ func GetWeeklyDigest(ctx *vbeam.Context, req Empty) (resp WeeklyDigestResponse, 
 	})
 
 	vbolt.IterateAll(ctx.Tx, MilestoneBkt, func(key int, milestone Milestone) bool {
-		if milestone.CreatedAt.After(since) {
+		if !milestone.CreatedAt.After(since) {
+			return true
+		}
+		if milestone.Category == CategoryInterview {
+			resp.Answers++
+		} else {
 			resp.Milestones++
+		}
+		return true
+	})
+
+	vbolt.IterateAll(ctx.Tx, InterviewBkt, func(key int, interview Interview) bool {
+		if interview.CreatedAt.After(since) {
+			resp.Interviews++
 		}
 		return true
 	})
@@ -127,6 +141,8 @@ func GetWeeklyDigest(ctx *vbeam.Context, req Empty) (resp WeeklyDigestResponse, 
 
 	resp.Quiet = resp.Photos == 0 &&
 		resp.Milestones == 0 &&
+		resp.Interviews == 0 &&
+		resp.Answers == 0 &&
 		resp.Measurements == 0 &&
 		resp.Messages == 0 &&
 		len(resp.People) == 0

@@ -1,4 +1,5 @@
 import * as server from "../server";
+import { InterviewGroup, groupInterviewAnswers } from "./interviews";
 
 export interface PhotoGroup {
   count: number;
@@ -26,6 +27,7 @@ export interface DaySummary {
   day: string;
   birthdays: Birthday[];
   milestones: server.Milestone[];
+  interviews: InterviewGroup[];
   events: DayEvent[];
   checkups: Checkup[];
   photos: PhotoGroup | null;
@@ -87,7 +89,15 @@ export function summarizeDays(
   const summary = (day: string) => {
     let found = days.get(day);
     if (!found) {
-      found = { day, birthdays: [], milestones: [], events: [], checkups: [], photos: null };
+      found = {
+        day,
+        birthdays: [],
+        milestones: [],
+        interviews: [],
+        events: [],
+        checkups: [],
+        photos: null,
+      };
       days.set(day, found);
     }
     return found;
@@ -99,9 +109,14 @@ export function summarizeDays(
     }
   }
 
-  for (const milestone of records.milestones) {
+  const { groups, loose } = groupInterviewAnswers(records.milestones);
+  for (const milestone of loose) {
     const day = dayKey(milestone.milestoneDate);
     if (day) summary(day).milestones.push(milestone);
+  }
+  for (const group of groups) {
+    const day = dayKey(group.date);
+    if (day) summary(day).interviews.push(group);
   }
 
   for (const appearance of records.appearances ?? []) {

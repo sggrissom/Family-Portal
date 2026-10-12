@@ -23,6 +23,7 @@ type PersonDeletionSummary struct {
 	Relations      int    `json:"relations"`
 	SharedFamilies int    `json:"sharedFamilies"`
 	Books          int    `json:"books"`
+	Interviews     int    `json:"interviews"`
 }
 
 type DeletePersonResponse struct {
@@ -66,6 +67,7 @@ func personDeletionSummary(tx *vbolt.Tx, person Person) PersonDeletionSummary {
 		Relations:      len(GetPersonRelationsTx(tx, person.Id)),
 		SharedFamilies: sharedFamilies,
 		Books:          len(soleSubjectBooks(tx, person.Id)),
+		Interviews:     len(personInterviews(tx, person.Id)),
 	}
 }
 
@@ -100,6 +102,7 @@ func DeletePerson(ctx *vbeam.Context, req PersonDeletionRequest) (resp DeletePer
 }
 
 func deletePersonTx(tx *vbolt.Tx, person Person) {
+	deletePersonInterviewsTx(tx, person.Id)
 	for _, milestone := range GetPersonMilestonesTx(tx, person.Id) {
 		_ = DeleteMilestoneTx(tx, milestone.Id, milestone.FamilyId)
 	}

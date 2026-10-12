@@ -71,6 +71,7 @@ func TestSeedProducesData(t *testing.T) {
 		{"shares", summary.Shares, 10},
 		{"tags", summary.Tags, 6},
 		{"milestones", summary.Milestones, 100},
+		{"interviews", summary.Interviews, 10},
 		{"measurements", summary.Measurements, 300},
 		{"activities", summary.Activities, 3},
 		{"results", summary.Results, 10},

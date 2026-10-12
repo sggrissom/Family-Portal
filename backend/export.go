@@ -197,23 +197,27 @@ type ExportPhoto struct {
 }
 
 type ExportDataStructure struct {
-	People          []ImportPerson    `json:"people"`
-	Relations       []ExportRelation  `json:"relations"`
-	Heights         []ImportHeight    `json:"heights"`
-	Weights         []ImportWeight    `json:"weights"`
-	Milestones      []ExportMilestone `json:"milestones"`
-	Tags            []ExportTag       `json:"tags"`
-	Photos          []ExportPhoto     `json:"photos,omitempty"`
-	Activities      []ExportActivity  `json:"activities,omitempty"`
-	Books           []ExportBook      `json:"books,omitempty"`
-	ExportDate      time.Time         `json:"export_date"`
-	TotalHeights    int               `json:"total_heights"`
-	TotalWeights    int               `json:"total_weights"`
-	TotalPeople     int               `json:"total_people"`
-	TotalRelations  int               `json:"total_relations"`
-	TotalMilestones int               `json:"total_milestones"`
-	TotalTags       int               `json:"total_tags"`
-	TotalPhotos     int               `json:"total_photos,omitempty"`
+	People     []ImportPerson    `json:"people"`
+	Relations  []ExportRelation  `json:"relations"`
+	Heights    []ImportHeight    `json:"heights"`
+	Weights    []ImportWeight    `json:"weights"`
+	Milestones []ExportMilestone `json:"milestones"`
+	Tags       []ExportTag       `json:"tags"`
+	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Activities []ExportActivity  `json:"activities,omitempty"`
+	Books      []ExportBook      `json:"books,omitempty"`
+
+	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
+	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+
+	ExportDate      time.Time `json:"export_date"`
+	TotalHeights    int       `json:"total_heights"`
+	TotalWeights    int       `json:"total_weights"`
+	TotalPeople     int       `json:"total_people"`
+	TotalRelations  int       `json:"total_relations"`
+	TotalMilestones int       `json:"total_milestones"`
+	TotalTags       int       `json:"total_tags"`
+	TotalPhotos     int       `json:"total_photos,omitempty"`
 
 	TotalActivities  int `json:"total_activities,omitempty"`
 	TotalSeasons     int `json:"total_seasons,omitempty"`
@@ -222,6 +226,7 @@ type ExportDataStructure struct {
 	TotalAppearances int `json:"total_appearances,omitempty"`
 	TotalResults     int `json:"total_results,omitempty"`
 	TotalBooks       int `json:"total_books,omitempty"`
+	TotalInterviews  int `json:"total_interviews,omitempty"`
 }
 
 type ExportMilestone struct {
@@ -235,6 +240,8 @@ type ExportMilestone struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	PersonName    string    `json:"personName"`
 	TagNames      []string  `json:"tagNames,omitempty"`
+	InterviewId   int       `json:"interviewId,omitempty"`
+	QuestionId    int       `json:"questionId,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -398,6 +405,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,
 			TagNames:      tagNames,
+			InterviewId:   milestone.InterviewId,
+			QuestionId:    milestone.QuestionId,
 		}
 	}
 
@@ -414,6 +423,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	exportData.Books = buildBookExport(tx, familyId)
 	exportData.TotalBooks = len(exportData.Books)
+
+	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
+	exportData.TotalInterviews = len(exportData.Interviews)
 
 	exportData.Heights = heights
 	exportData.Weights = weights

@@ -11,6 +11,7 @@ import { PersonChips } from "../../components/PersonChips";
 import { useTagCache } from "../../hooks/useTagCache";
 import { chipOrder } from "../../lib/familyGroups";
 import { groupByMonth, summarizeDays } from "../../lib/daySummary";
+import { interviewTitle, interviewsById, shortQuestion } from "../../lib/interviews";
 import { HISTORY_TYPES, HistoryType, historyView } from "../../lib/history";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { MilestoneText } from "../../components/MilestoneText";
@@ -106,6 +107,7 @@ type HistoryState = {
   tagIds: number[];
   query: string;
   results: server.Milestone[] | null;
+  resultInterviews: Map<number, server.Interview>;
   searching: boolean;
 };
 
@@ -121,6 +123,7 @@ const useHistoryState = vlens.declareHook(
     tagIds: [],
     query: "",
     results: null,
+    resultInterviews: new Map(),
     searching: false,
   })
 );
@@ -189,6 +192,7 @@ async function search(state: HistoryState, event: Event) {
   vlens.scheduleRedraw();
   const [result] = await server.SearchMilestones({ query, limit: 50 });
   state.results = result?.milestones ?? [];
+  state.resultInterviews = interviewsById(result?.interviews);
   state.searching = false;
   vlens.scheduleRedraw();
 }
@@ -224,6 +228,7 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
     today
   );
   const days = summarizeDays(shown.records, shown.birthdayPeople, shown.range ?? undefined);
+  const interviews = interviewsById((state.timeline.people ?? []).flatMap(i => i.interviews ?? []));
   const months = groupByMonth(days);
   const filtered =
     state.personIds.length > 0 ||
@@ -339,7 +344,12 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
             <section key={month.month} className="history-month">
               {firstMonthOfYear.has(month.month) && <span id={`year-${month.month.slice(0, 4)}`} />}
               <h2 className="history-month-label">{month.label}</h2>
-              <DaySummaryList days={month.days} people={everyone} today={today} />
+              <DaySummaryList
+                days={month.days}
+                people={everyone}
+                today={today}
+                interviews={interviews}
+              />
             </section>
           ))}
 
@@ -368,6 +378,7 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
 
 const SearchResults = ({ state, people }: { state: HistoryState; people: server.Person[] }) => {
   const names = new Map(people.map(p => [p.id, p.name]));
+  const byId = new Map(people.map(p => [p.id, p]));
   const results = state.results ?? [];
   return (
     <section className="history-results">
@@ -383,11 +394,33 @@ const SearchResults = ({ state, people }: { state: HistoryState; people: server.
             {getCategoryIcon(m.category)}
           </span>
           <span>
-            <strong>{names.get(m.personId) ?? ""}</strong> <MilestoneText milestone={m} />
-            <small className="history-result-date"> · {formatDate(m.milestoneDate)}</small>
+            <strong>{names.get(m.personId) ?? ""}</strong>{" "}
+            {m.interviewId ? (
+              <>
+                {shortQuestion(m.context)}: {m.description}
+                <small className="history-result-date">
+                  {" "}
+                  · {answerSource(m, state.resultInterviews, byId.get(m.personId))}
+                </small>
+              </>
+            ) : (
+              <>
+                <MilestoneText milestone={m} />
+                <small className="history-result-date"> · {formatDate(m.milestoneDate)}</small>
+              </>
+            )}
           </span>
         </a>
       ))}
     </section>
   );
 };
+
+function answerSource(
+  m: server.Milestone,
+  interviews: Map<number, server.Interview>,
+  person: server.Person | undefined
+): string {
+  const interview = interviews.get(m.interviewId);
+  return interview && person ? interviewTitle(interview, person) : formatDate(m.milestoneDate);
+}

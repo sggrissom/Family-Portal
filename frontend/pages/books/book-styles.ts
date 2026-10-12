@@ -806,3 +806,143 @@ block(`
   color: var(--ink-soft);
 }
 `);
+
+block(`
+.book-interview {
+  margin: 24px auto;
+  padding: 24px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  break-inside: avoid;
+}
+`);
+
+block(`
+.book-interview-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+`);
+
+block(`
+.book-interview-head h3 {
+  margin: 0;
+  font-family: var(--book-serif);
+  font-size: 1.6rem;
+  font-weight: 400;
+}
+`);
+
+block(`
+.book-interview-photo {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: none;
+}
+`);
+
+block(`
+.book-interview-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+`);
+
+block(`
+.book-interview-body.has-changes {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+`);
+
+block(`
+.book-interview-section h4,
+.book-interview-changes h4 {
+  margin: 14px 0 6px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+`);
+
+block(`
+.book-interview-section dl {
+  margin: 0;
+}
+`);
+
+block(`
+.book-interview-section dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+`);
+
+block(`
+.book-interview-section dt {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+`);
+
+block(`
+.book-interview-section dd {
+  margin: 0;
+  font-family: var(--book-serif);
+  font-size: 1.08rem;
+}
+`);
+
+block(`
+.book-interview-changes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+`);
+
+block(`
+.book-interview-changes li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  font-size: 0.92rem;
+}
+`);
+
+block(`
+.book-interview-changes li > span:first-child {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+`);
+
+block(`
+.book-interview-changes s {
+  color: var(--ink-soft);
+}
+`);
+
+block(`
+@media (max-width: 640px) {
+  .book-interview-body.has-changes {
+    grid-template-columns: 1fr;
+  }
+  .book-interview-section dl > div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+`);

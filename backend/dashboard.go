@@ -37,11 +37,12 @@ type GetDashboardRequest struct {
 }
 
 type DashboardNudge struct {
-	Kind     string `json:"kind"`
-	Key      string `json:"key"`
-	Text     string `json:"text"`
-	PersonId int    `json:"personId"`
-	Count    int    `json:"count"`
+	Kind        string `json:"kind"`
+	Key         string `json:"key"`
+	Text        string `json:"text"`
+	PersonId    int    `json:"personId"`
+	Count       int    `json:"count"`
+	InterviewId int    `json:"interviewId,omitempty"`
 }
 
 type rankedNudge struct {
@@ -62,6 +63,7 @@ type DashboardYear struct {
 	YearsAgo   int         `json:"yearsAgo"`
 	Photos     []Image     `json:"photos"`
 	Milestones []Milestone `json:"milestones"`
+	Interviews []Interview `json:"interviews"`
 }
 
 type DashboardRecent struct {
@@ -69,6 +71,7 @@ type DashboardRecent struct {
 	Photos     []PhotoWithPeople `json:"photos"`
 	Milestones []Milestone       `json:"milestones"`
 	Growth     []GrowthData      `json:"growth"`
+	Interviews []Interview       `json:"interviews"`
 }
 
 type GetDashboardResponse struct {
@@ -148,6 +151,8 @@ func dashboardRecent(ctx *vbeam.Context, today time.Time, items []FamilyTimeline
 		}
 	}
 
+	recent.Interviews = interviewsOfAnswers(ctx.Tx, recent.Milestones)
+
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
 		DateFrom: from, DateTo: to, Limit: dashboardRecentPhotos,
 	})
@@ -170,6 +175,8 @@ func onThisDay(ctx *vbeam.Context, today time.Time, items []FamilyTimelineItem) 
 				}
 			}
 		}
+
+		year.Interviews = interviewsOfAnswers(ctx.Tx, year.Milestones)
 
 		var photos ListFamilyPhotosResponse
 		photos, err = ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
@@ -204,8 +211,8 @@ func eventEnd(event Event) time.Time {
 	return event.EndDate
 }
 
-// pickSeasonEvent is the event running today, else the next one, else the
-// most recent one.
+// pickSeasonEvent keeps an event on the dashboard while it is running and
+// during the post-event catch-up window, before previewing the next one.
 func pickSeasonEvent(events []Event, today time.Time) (*Event, string) {
 	var next, last *Event
 	for i := range events {
@@ -220,6 +227,9 @@ func pickSeasonEvent(events []Event, today time.Time) (*Event, string) {
 		} else if last == nil || eventEnd(*event).After(eventEnd(*last)) {
 			last = event
 		}
+	}
+	if last != nil && inResultWindow(*last, today) {
+		return last, "last"
 	}
 	if next != nil {
 		return next, "next"
@@ -377,17 +387,24 @@ func birthdayNudge(person Person, today time.Time) (rankedNudge, bool) {
 
 	when := "on " + next.Weekday().String()
 	priority := 3
+	key := fmt.Sprintf("birthday:%d:%d", person.Id, next.Year())
 	switch days {
 	case 0:
 		when = "today"
 		priority = 0
+		// Dismissing the advance reminder must not hide the birthday itself.
+		key += ":today"
 	case 1:
 		when = "tomorrow"
 	}
+	text := fmt.Sprintf("%s turns %d %s", firstName(person.Name), next.Year()-birthday.Year(), when)
+	if days == 0 {
+		text = "🎂 Happy birthday! " + text
+	}
 	return rankedNudge{DashboardNudge{
 		Kind:     "birthday",
-		Key:      fmt.Sprintf("birthday:%d:%d", person.Id, next.Year()),
-		Text:     fmt.Sprintf("%s turns %d %s", firstName(person.Name), next.Year()-birthday.Year(), when),
+		Key:      key,
+		Text:     text,
 		PersonId: person.Id,
 	}, priority}, true
 }
@@ -440,6 +457,9 @@ func dashboardNudges(tx *vbolt.Tx, user User, today time.Time, items []FamilyTim
 			continue
 		}
 		if nudge, ok := measureNudge(item.Person, item.GrowthData, today); ok {
+			nudges = append(nudges, nudge)
+		}
+		if nudge, ok := interviewNudge(tx, item.Person, personInterviews(tx, item.Person.Id), today); ok {
 			nudges = append(nudges, nudge)
 		}
 	}

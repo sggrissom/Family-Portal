@@ -199,3 +199,10 @@ block(`
   padding-bottom: 4px;
 }
 `);
+
+block(`
+.entry-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
