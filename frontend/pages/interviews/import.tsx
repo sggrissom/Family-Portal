@@ -1,3 +1,8 @@
+import {
+  acknowledgeInterviewRequest,
+  callInterview,
+  interviewRequestId,
+} from "../../lib/interviewSave";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
@@ -193,6 +198,7 @@ const ReviewStep = ({ state, person }: { state: ImportState; person: server.Pers
               <h2>{draft.header || t.interviewN(i + 1)}</h2>
               <label>
                 {t.date}
+                {!draft.date && <span className="iv-hint">{t.knownDateHint}</span>}
                 <input
                   type="date"
                   value={draft.date}
@@ -242,6 +248,9 @@ const ReviewStep = ({ state, person }: { state: ImportState; person: server.Pers
                           vlens.scheduleRedraw();
                         }}
                       >
+                        <option value="" disabled>
+                          {t.chooseQuestion}
+                        </option>
                         <option value={NEW}>{t.newQuestion}</option>
                         <option value={IGNORE}>{t.ignore}</option>
                         {sections.map(section => (
@@ -350,11 +359,13 @@ async function preview(state: ImportState) {
   state.busy = true;
   state.error = "";
   vlens.scheduleRedraw();
-  const [resp, err] = await server.PreviewInterviewImport({
-    personId: state.personId,
-    text: state.text,
-    csv: state.csv,
-  });
+  const [resp, err] = await callInterview(
+    server.PreviewInterviewImport({
+      personId: state.personId,
+      text: state.text,
+      csv: state.csv,
+    })
+  );
   state.busy = false;
   if (!resp) {
     state.error = err || t.readFailed;
@@ -374,6 +385,11 @@ async function runImport(state: ImportState) {
     vlens.scheduleRedraw();
     return;
   }
+  if (state.drafts.some(d => !d.skip && d.rows.some(r => r.answer.trim() && !r.choice))) {
+    state.error = t.needsMatch;
+    vlens.scheduleRedraw();
+    return;
+  }
   const dup = state.drafts.findIndex(d => !d.skip && duplicateRefs(d).size > 0);
   if (dup >= 0) {
     state.error = t.hasDuplicates(dup + 1);
@@ -383,13 +399,22 @@ async function runImport(state: ImportState) {
   state.busy = true;
   state.error = "";
   vlens.scheduleRedraw();
-  const [resp, err] = await server.ImportInterviews(importRequest(state.personId, state.drafts));
+  const [resp, err] = await callInterview(
+    server.ImportInterviews({
+      ...importRequest(state.personId, state.drafts),
+      requestId: interviewRequestId(
+        `import:${state.personId}`,
+        importRequest(state.personId, state.drafts)
+      ),
+    })
+  );
   state.busy = false;
   if (!resp) {
     state.error = err || t.importFailed;
     vlens.scheduleRedraw();
     return;
   }
+  acknowledgeInterviewRequest(`import:${state.personId}`);
   state.saved = resp.interviews ?? [];
   state.step = "done";
   vlens.scheduleRedraw();

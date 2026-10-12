@@ -72,6 +72,16 @@ export function clearAuth() {
 }
 
 export async function logout() {
+  const prefix = `interview-draft:${_auth?.id ?? 0}:`;
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+  if (
+    keys.length &&
+    !confirm(
+      "This device has unsaved interview answers. Signing out will remove them. Sign out anyway?"
+    )
+  )
+    return;
+  for (const key of keys) localStorage.removeItem(key);
   try {
     await fetch("/api/logout", {
       method: "POST",

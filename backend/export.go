@@ -207,8 +207,9 @@ type ExportDataStructure struct {
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
-	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
-	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+	InterviewQuestionList *InterviewQuestionList    `json:"interviewQuestionList,omitempty"`
+	InterviewQuestions    []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
+	Interviews            []ExportInterview         `json:"interviews,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -242,6 +243,7 @@ type ExportMilestone struct {
 	TagNames      []string  `json:"tagNames,omitempty"`
 	InterviewId   int       `json:"interviewId,omitempty"`
 	QuestionId    int       `json:"questionId,omitempty"`
+	PhotoIds      []int     `json:"photoIds,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -407,6 +409,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			TagNames:      tagNames,
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
+			PhotoIds:      GetMilestonePhotoIds(tx, milestone.Id),
 		}
 	}
 
@@ -424,6 +427,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.Books = buildBookExport(tx, familyId)
 	exportData.TotalBooks = len(exportData.Books)
 
+	list := familyQuestionList(tx, familyId)
+	exportData.InterviewQuestionList = &list
 	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
 	exportData.TotalInterviews = len(exportData.Interviews)
 

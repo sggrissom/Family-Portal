@@ -42,8 +42,8 @@ describe("ageYearsAt", () => {
   it("counts whole years, turning over on the birthday itself", () => {
     expect(ageYearsAt(person.birthday, "2025-05-09T00:00:00Z")).toBe(6);
     expect(ageYearsAt(person.birthday, "2025-05-10T00:00:00Z")).toBe(7);
-    expect(ageYearsAt(person.birthday, "2017-01-01T00:00:00Z")).toBe(0);
-    expect(ageYearsAt("", "2025-05-10T00:00:00Z")).toBe(0);
+    expect(ageYearsAt(person.birthday, "2017-01-01T00:00:00Z")).toBe(-1);
+    expect(ageYearsAt("", "2025-05-10T00:00:00Z")).toBe(-1);
   });
 });
 
@@ -141,7 +141,7 @@ describe("over-time views", () => {
     ],
     answers: [
       a(1, 1, 10, "Pizza"),
-      a(2, 2, 10, "pizza!"),
+      a(2, 2, 10, "pizza"),
       a(3, 3, 10, "Tacos"),
       a(4, 1, 11, "blue"),
       a(5, 3, 11, "Blue"),
@@ -169,7 +169,7 @@ describe("over-time views", () => {
     const timelines = questionTimelines(bundle);
     expect(timelines[0].points.map(p => [p.age, p.answer.description])).toEqual([
       [5, "Pizza"],
-      [6, "pizza!"],
+      [6, "pizza"],
       [7, "Tacos"],
     ]);
     expect(timelines.map(t => [t.streak, t.distinct])).toEqual([
@@ -196,12 +196,15 @@ describe("over-time views", () => {
       10: [prev(2, "2024-05-10T00:00:00Z", "pizza"), prev(1, "2023-05-10T00:00:00Z", "pizza")],
       11: [prev(1, "2023-05-10T00:00:00Z", "green")],
     });
-    expect(changes.map(c => [c.before, c.after])).toEqual([["pizza", "Tacos"]]);
+    expect(changes.map(c => [c.before, c.after])).toEqual([
+      ["pizza", "Tacos"],
+      ["green", "blue"],
+    ]);
     expect(changesSincePrevious(qs, answers, {})).toEqual([]);
   });
 
-  it("normalizes case, punctuation and accents", () => {
-    expect(normalizeAnswer("  Crème brûlée!! ")).toBe("creme brulee");
+  it("normalizes case and whitespace without losing punctuation or accents", () => {
+    expect(normalizeAnswer("  Crème brûlée!! ")).toBe("crème brûlée!!");
     expect(columnLabel(bundle.interviews[2], bundle.person)).toBe("Age 7 · 2025");
   });
 });
@@ -223,13 +226,10 @@ describe("import review", () => {
 
   it("starts unmatched answers as new questions, blank lines as ignored, and flags duplicates", () => {
     const [draft] = importDrafts(proposals, "2019-06-01");
-    expect(draft.date).toBe("2019-06-01");
-    expect(draft.rows.map(r => r.choice)).toEqual([
-      "key:fav-food",
-      "new",
-      "ignore",
-      "key:fav-food",
-    ]);
+    expect(draft.date).toBe("");
+    expect(draft.rows.map(r => r.choice)).toEqual(["key:fav-food", "new", "ignore", ""]);
+    expect([...duplicateRefs(draft)]).toEqual([]);
+    draft.rows[3].choice = "key:fav-food";
     expect([...duplicateRefs(draft)]).toEqual(["key:fav-food"]);
     draft.rows[3].choice = "ignore";
     expect(duplicateRefs(draft).size).toBe(0);
@@ -237,8 +237,14 @@ describe("import review", () => {
     draft.rows[1].keep = false;
     const req = importRequest(7, [draft]);
     expect(req.interviews[0].answers).toEqual([
-      { ref: "key:fav-food", answer: "pasta", newText: "", keep: false },
-      { ref: "", answer: "T. rex", newText: "Favorite dinosaur", keep: false },
+      { ref: "key:fav-food", answer: "pasta", newText: "", keep: false, rawQuestion: "Fav food" },
+      {
+        ref: "",
+        answer: "T. rex",
+        newText: "Favorite dinosaur",
+        keep: false,
+        rawQuestion: "Favorite dinosaur",
+      },
     ]);
   });
 

@@ -421,7 +421,7 @@ func TestNormalMomentFormsCannotTouchInterviewAnswers(t *testing.T) {
 	}
 
 	updated, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{
-		Id: answer.Id, Description: " pepperoni pizza ", Category: CategoryInterview, InputType: "date", MilestoneDate: &day,
+		Id: answer.Id, InterviewVersion: 0, Description: " pepperoni pizza ", Category: CategoryInterview, InputType: "date", MilestoneDate: &day,
 	})
 	if err != nil {
 		t.Fatal(err)

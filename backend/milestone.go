@@ -50,16 +50,17 @@ type GetPersonMilestonesResponse struct {
 }
 
 type UpdateMilestoneRequest struct {
-	Id            int     `json:"id"`
-	Description   string  `json:"description"`
-	Category      string  `json:"category"`
-	Context       string  `json:"context,omitempty"`
-	InputType     string  `json:"inputType"`
-	MilestoneDate *string `json:"milestoneDate,omitempty"`
-	AgeYears      *int    `json:"ageYears,omitempty"`
-	AgeMonths     *int    `json:"ageMonths,omitempty"`
-	PhotoIds      []int   `json:"photoIds,omitempty"`
-	TagIds        []int   `json:"tagIds,omitempty"`
+	InterviewVersion int     `json:"interviewVersion,omitempty"`
+	Id               int     `json:"id"`
+	Description      string  `json:"description"`
+	Category         string  `json:"category"`
+	Context          string  `json:"context,omitempty"`
+	InputType        string  `json:"inputType"`
+	MilestoneDate    *string `json:"milestoneDate,omitempty"`
+	AgeYears         *int    `json:"ageYears,omitempty"`
+	AgeMonths        *int    `json:"ageMonths,omitempty"`
+	PhotoIds         []int   `json:"photoIds,omitempty"`
+	TagIds           []int   `json:"tagIds,omitempty"`
 }
 
 type UpdateMilestoneResponse struct {
@@ -67,7 +68,8 @@ type UpdateMilestoneResponse struct {
 }
 
 type DeleteMilestoneRequest struct {
-	Id int `json:"id"`
+	InterviewVersion int `json:"interviewVersion,omitempty"`
+	Id               int `json:"id"`
 }
 
 type DeleteMilestoneResponse struct {
@@ -79,7 +81,8 @@ type GetMilestoneRequest struct {
 }
 
 type GetMilestoneResponse struct {
-	Milestone Milestone `json:"milestone"`
+	Milestone        Milestone `json:"milestone"`
+	InterviewVersion int       `json:"interviewVersion,omitempty"`
 }
 
 type SearchMilestonesRequest struct {
@@ -274,7 +277,7 @@ func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Miles
 	milestoneIdMap := make(map[int]bool)
 	for _, term := range terms {
 		var ids []int
-		vbolt.ReadTermTargets(tx, MilestoneSearchIndex, term, &ids, vbolt.Window{Limit: limit * 2})
+		vbolt.ReadTermTargets(tx, MilestoneSearchIndex, term, &ids, vbolt.Window{Limit: max(0, limit*2)})
 		for _, id := range ids {
 			milestoneIdMap[id] = true
 		}
@@ -290,11 +293,11 @@ func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Miles
 		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &allMilestones)
 	}
 
-	milestones = make([]Milestone, 0, limit)
+	milestones = make([]Milestone, 0, max(0, limit))
 	for _, milestone := range allMilestones {
 		if canSee(milestone) {
 			milestones = append(milestones, milestone)
-			if len(milestones) >= limit {
+			if limit > 0 && len(milestones) >= limit {
 				break
 			}
 		}
@@ -521,6 +524,19 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, ErrInterviewCategory
 	}
 	if milestone.Category == CategoryInterview {
+		i := GetInterviewById(tx, milestone.InterviewId)
+		if i.Id == 0 || req.InterviewVersion != i.Version {
+			return milestone, ErrInterviewChanged
+		}
+		if strings.TrimSpace(req.Description) == "" {
+			return milestone, errors.New("Clear this answer from its interview")
+		}
+		if len([]rune(strings.TrimSpace(req.Description))) > maxInterviewAnswer {
+			return milestone, errors.New("That answer is too long")
+		}
+		snapshotInterview(tx, &i)
+		i.Version++
+		writeInterview(tx, i)
 		milestone.Description = strings.TrimSpace(req.Description)
 	} else {
 		milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
@@ -744,7 +760,13 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 	}
 
 	resp.Milestone = milestone
-	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+	if milestone.InterviewId > 0 {
+		resp.InterviewVersion = GetInterviewById(ctx.Tx, milestone.InterviewId).Version
+		resp.Milestone = visibleInterviewAnswer(ctx.Tx, user, milestone)
+	}
+	if milestone.InterviewId == 0 {
+		resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
+	}
 	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 	return
 }
@@ -802,6 +824,17 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 	}
 
 	vbeam.UseWriteTx(ctx)
+	existing = GetMilestoneById(ctx.Tx, req.Id)
+	if existing.InterviewId > 0 {
+		i := GetInterviewById(ctx.Tx, existing.InterviewId)
+		if req.InterviewVersion != i.Version {
+			err = ErrInterviewChanged
+			return
+		}
+		snapshotInterview(ctx.Tx, &i)
+		i.Version++
+		writeInterview(ctx.Tx, i)
+	}
 	err = DeleteMilestoneTx(ctx.Tx, req.Id, existing.FamilyId)
 	if err != nil {
 		return
@@ -814,8 +847,9 @@ func DeleteMilestone(ctx *vbeam.Context, req DeleteMilestoneRequest) (resp Delet
 }
 
 type UpdateMilestoneTagsRequest struct {
-	MilestoneId int   `json:"milestoneId"`
-	TagIds      []int `json:"tagIds"`
+	InterviewVersion int   `json:"interviewVersion,omitempty"`
+	MilestoneId      int   `json:"milestoneId"`
+	TagIds           []int `json:"tagIds"`
 }
 
 type UpdateMilestoneTagsResponse struct{}
@@ -839,6 +873,16 @@ func UpdateMilestoneTags(ctx *vbeam.Context, req UpdateMilestoneTagsRequest) (re
 		return
 	}
 
+	if milestone.InterviewId > 0 {
+		i := GetInterviewById(ctx.Tx, milestone.InterviewId)
+		if req.InterviewVersion != i.Version {
+			err = ErrInterviewChanged
+			return
+		}
+		snapshotInterview(ctx.Tx, &i)
+		i.Version++
+		writeInterview(ctx.Tx, i)
+	}
 	if err = setMilestoneTags(ctx.Tx, milestone, req.TagIds); err != nil {
 		return
 	}
@@ -868,15 +912,15 @@ func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp Sea
 		}
 	}
 
-	milestones := SearchVisibleMilestones(ctx.Tx, query, user, limit)
+	milestones := SearchVisibleMilestones(ctx.Tx, query, user, 0)
 	if candidates := visibleMilestones(ctx.Tx, user); len(candidates) > 0 {
 		if scores := semanticMilestoneScores(ctx.Tx, query, candidates); scores != nil {
-			milestones = blendMilestoneResults(milestones, candidates, scores, limit)
+			milestones = blendMilestoneResults(milestones, candidates, scores, len(milestones)+len(candidates))
 		}
 	}
 
-	resp.Milestones = milestones
-	resp.Interviews = interviewsOfAnswers(ctx.Tx, milestones)
+	resp.Milestones = limitMilestoneCards(milestones, limit)
+	resp.Interviews = interviewsOfAnswers(ctx.Tx, resp.Milestones, user)
 	resp.Query = query
 	return
 }
@@ -906,6 +950,28 @@ func blendMilestoneResults(textHits, candidates []Milestone, scores map[int]floa
 	out := make([]Milestone, 0, min(limit, len(all)))
 	for _, r := range all[:min(limit, len(all))] {
 		out = append(out, r.m)
+	}
+	return out
+}
+
+// Count each interview as one result; retain matching answer hits for its preview.
+func limitMilestoneCards(hits []Milestone, limit int) []Milestone {
+	seen := map[int]bool{}
+	count := 0
+	out := []Milestone{}
+	for _, m := range hits {
+		if m.InterviewId > 0 && seen[m.InterviewId] {
+			out = append(out, m)
+			continue
+		}
+		if count >= limit {
+			continue
+		}
+		count++
+		if m.InterviewId > 0 {
+			seen[m.InterviewId] = true
+		}
+		out = append(out, m)
 	}
 	return out
 }

@@ -169,7 +169,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		sort.Slice(row.Milestones, func(i, j int) bool {
 			return row.Milestones[i].MilestoneDate.Before(row.Milestones[j].MilestoneDate)
 		})
-		row.Interviews = interviewsOfAnswers(ctx.Tx, row.Milestones)
+		row.Interviews = interviewsOfAnswers(ctx.Tx, row.Milestones, user)
 
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
 		row.Weight = nearestGrowth(item.GrowthData, Weight, target, growthWindow)

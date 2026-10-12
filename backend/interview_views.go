@@ -118,6 +118,12 @@ func GetPersonInterviews(ctx *vbeam.Context, req GetPersonInterviewsRequest) (re
 		return
 	}
 	resp = personInterviewBundle(ctx.Tx, person)
+	for j := range resp.Interviews {
+		resp.Interviews[j] = visibleInterview(ctx.Tx, user, resp.Interviews[j])
+	}
+	for j := range resp.Answers {
+		resp.Answers[j] = visibleInterviewAnswer(ctx.Tx, user, resp.Answers[j])
+	}
 	return
 }
 
@@ -174,7 +180,10 @@ func GetFamilyInterviews(ctx *vbeam.Context, req GetFamilyInterviewsRequest) (re
 		if person.IsPregnancy || !CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
 			continue
 		}
-		resp.People = append(resp.People, familyInterviewRow(ctx.Tx, person, today))
+		row := familyInterviewRow(ctx.Tx, person, today)
+		row.Last = visibleInterview(ctx.Tx, user, row.Last)
+		row.InProgress = visibleInterview(ctx.Tx, user, row.InProgress)
+		resp.People = append(resp.People, row)
 	}
 	sort.SliceStable(resp.People, func(i, j int) bool {
 		a, b := resp.People[i], resp.People[j]
@@ -267,6 +276,9 @@ func CompareInterviewAnswers(ctx *vbeam.Context, req CompareInterviewAnswersRequ
 	var order []int
 	for _, m := range questionAnswers(ctx.Tx, resp.Question.Id) {
 		person, ok := canSee(m.PersonId)
+		if ageYearsAt(person.Birthday, m.MilestoneDate) < 0 {
+			continue
+		}
 		if !ok || (len(wanted) > 0 && !wanted[person.Id]) {
 			continue
 		}

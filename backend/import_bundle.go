@@ -176,7 +176,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		var interviewIds map[int]int
 		if len(personIdMapping) > 0 {
 			interviews := interviewImport{
-				familyId: familyId, personIdMapping: personIdMapping, tagNameToId: tagNameToId, photoIds: photoIdMapping,
+				familyId: familyId, personIdMapping: personIdMapping, tagNameToId: tagNameToId, photoIds: photoIdMapping, list: importData.InterviewQuestionList,
 			}.run(tx, importData.InterviewQuestions, importData.Interviews, importData.Milestones)
 			interviewIds = interviews.interviewIds
 			resp.ImportedInterviews = interviews.imported

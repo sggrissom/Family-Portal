@@ -151,7 +151,7 @@ func dashboardRecent(ctx *vbeam.Context, today time.Time, items []FamilyTimeline
 		}
 	}
 
-	recent.Interviews = interviewsOfAnswers(ctx.Tx, recent.Milestones)
+	recent.Interviews = interviewsOfAnswers(ctx.Tx, recent.Milestones, dashboardViewer(ctx))
 
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
 		DateFrom: from, DateTo: to, Limit: dashboardRecentPhotos,
@@ -176,7 +176,7 @@ func onThisDay(ctx *vbeam.Context, today time.Time, items []FamilyTimelineItem) 
 			}
 		}
 
-		year.Interviews = interviewsOfAnswers(ctx.Tx, year.Milestones)
+		year.Interviews = interviewsOfAnswers(ctx.Tx, year.Milestones, dashboardViewer(ctx))
 
 		var photos ListFamilyPhotosResponse
 		photos, err = ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
@@ -471,3 +471,5 @@ func dashboardNudges(tx *vbolt.Tx, user User, today time.Time, items []FamilyTim
 	}
 	return result
 }
+
+func dashboardViewer(ctx *vbeam.Context) User { user, _ := GetAuthUser(ctx); return user }

@@ -52,15 +52,15 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
     await page.getByRole("button", { name: /^Start · \d+ questions$/ }).click();
     await expect(page).toHaveURL(/\/interview\/\d+\/ask$/);
     await expect(page.getByRole("heading", { name: "What's your favorite color?" })).toBeVisible();
-    await expect(answer).toBeFocused();
+    await answer.focus();
   });
 
   await test.step("answer two, skip one, and leave a draft", async () => {
     await answer.fill("purple");
-    await answer.press("Enter");
+    await answer.press("Control+Enter");
     await expect(page.getByRole("heading", { name: "What's your favorite food?" })).toBeVisible();
     await answer.fill("spaghetti");
-    await answer.press("Enter");
+    await answer.press("Control+Enter");
     await page.getByRole("button", { name: "Skip", exact: true }).click();
     await expect(progress).toHaveText(/^4 of \d+$/);
     await answer.fill("chocolate cake");
@@ -82,9 +82,29 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
   await test.step("finish from the last question", async () => {
     await page.getByRole("button", { name: "All questions" }).click();
     await page.locator(".iv-jump-item").last().click();
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const sending = new Promise<void>(resolve => {
+      started = resolve;
+    });
+    await page.route("**/rpc/SaveInterviewAnswer", async route => {
+      started();
+      await held;
+      await route.continue();
+    });
+    await answer.fill("a made-up word");
     await page.getByRole("button", { name: "Next", exact: true }).click();
+    await sending;
     await expect(page.getByRole("heading", { name: "That's everything for Ivy" })).toBeVisible();
     await page.getByRole("button", { name: "Finish interview" }).click();
+    // Regression: the old flow completed after five seconds with a write in flight.
+    await page.waitForTimeout(5500);
+    await expect(page).toHaveURL(/\/interview\/\d+\/ask$/);
+    await expect(page.getByRole("button", { name: "Finishing…" })).toBeDisabled();
+    release();
     await expect(page).toHaveURL(/\/interview\/\d+$/);
   });
 

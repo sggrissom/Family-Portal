@@ -20,6 +20,7 @@ import { interviewTitle } from "../../lib/interviews";
 import "./view-milestone-styles";
 
 type ViewMilestoneData = {
+  interviewVersion: number;
   milestone: server.Milestone | null;
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -53,10 +54,30 @@ export async function fetch(
   }
   if (milestone.interviewId) {
     const [interview] = await server.GetInterview({ id: milestone.interviewId });
-    return [{ milestone, person, sameAge, matches: [], interview: interview ?? null }, ""];
+    return [
+      {
+        milestone,
+        person,
+        sameAge,
+        matches: [],
+        interview: interview ?? null,
+        interviewVersion: resp.interviewVersion,
+      },
+      "",
+    ];
   }
   const [matches] = await server.GetMilestoneMatches({ milestoneId: milestone.id });
-  return [{ milestone, person, sameAge, matches: matches?.matches ?? [], interview: null }, ""];
+  return [
+    {
+      milestone,
+      person,
+      sameAge,
+      matches: matches?.matches ?? [],
+      interview: null,
+      interviewVersion: 0,
+    },
+    "",
+  ];
 }
 
 export function view(
@@ -81,6 +102,7 @@ export function view(
       <Header isHome={false} />
       <main id="app" className="view-milestone-container">
         <ViewMilestonePage
+          interviewVersion={data.interviewVersion}
           milestone={data.milestone}
           person={data.person}
           sameAge={data.sameAge}
@@ -100,9 +122,9 @@ function goBack(event: Event) {
   }
 }
 
-async function deleteMilestone(milestone: server.Milestone) {
+async function deleteMilestone(milestone: server.Milestone, interviewVersion: number) {
   if (!confirm(copy.milestoneDetail.confirmDelete(milestone.description))) return;
-  const [resp, err] = await server.DeleteMilestone({ id: milestone.id });
+  const [resp, err] = await server.DeleteMilestone({ id: milestone.id, interviewVersion });
   if (resp?.success) {
     core.setRoute(`/profile/${milestone.personId}`);
   } else {
@@ -111,12 +133,14 @@ async function deleteMilestone(milestone: server.Milestone) {
 }
 
 const ViewMilestonePage = ({
+  interviewVersion,
   milestone,
   person,
   sameAge,
   matches,
   interview,
 }: {
+  interviewVersion: number;
   milestone: server.Milestone;
   person: server.Person | null;
   sameAge: server.GetSameAgeResponse | null;
@@ -170,7 +194,7 @@ const ViewMilestonePage = ({
             <button
               type="button"
               className="btn btn-danger"
-              onClick={() => deleteMilestone(milestone)}
+              onClick={() => deleteMilestone(milestone, interviewVersion)}
             >
               🗑️ {copy.milestoneDetail.delete}
             </button>

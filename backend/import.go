@@ -57,8 +57,9 @@ type ImportDataStructure struct {
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
-	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
-	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+	InterviewQuestionList *InterviewQuestionList    `json:"interviewQuestionList,omitempty"`
+	InterviewQuestions    []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
+	Interviews            []ExportInterview         `json:"interviews,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -192,7 +193,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		resp.SkippedRelations = skippedRelations
 		resp.Errors = append(resp.Errors, relationErrors...)
 
-		if req.ImportMilestones && len(importData.Milestones) > 0 {
+		if req.ImportMilestones {
 			filteredMilestones := filterMilestones(importData.Milestones, personIdMapping)
 			importedMilestones, skippedMilestones, milestoneErrors, ids := importMilestones(ctx.Tx, filteredMilestones, personIdMapping, familyId, tagNameToId)
 			importedMilestoneIds = ids
@@ -202,6 +203,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 
 			interviews := interviewImport{
 				familyId: familyId, personIdMapping: personIdMapping, tagNameToId: tagNameToId,
+				list: importData.InterviewQuestionList,
 			}.run(ctx.Tx, importData.InterviewQuestions, importData.Interviews, importData.Milestones)
 			interviewIds = interviews.interviewIds
 			resp.ImportedInterviews = interviews.imported
@@ -243,6 +245,9 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 }
 
 func validateImportData(data ImportDataStructure) error {
+	if err := validateInterviewBundle(data); err != nil {
+		return err
+	}
 	if len(data.People) == 0 {
 		return errors.New("No people found in import data")
 	}

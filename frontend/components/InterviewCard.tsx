@@ -23,7 +23,7 @@ export const InterviewCard = ({
   const t = copy.interview.card;
   const age = person?.birthday ? ageYearsAt(person.birthday, group.date) : null;
   const name = person && showName ? firstName(person.name) : null;
-  const total = interview?.questionIds?.length ?? 0;
+  const total = interview?.answerCount ?? group.answers.length;
   const count =
     total > group.answers.length
       ? t.someAnswers(group.answers.length, total)
@@ -48,7 +48,7 @@ export const InterviewCard = ({
                 ? t.whose(name)
                 : t.title}
           </strong>
-          {age !== null && ` · ${t.age(age)}`}
+          {age !== null && age >= 0 && ` · ${t.age(age)}`}
           {interview?.status === "in-progress" && ` · ${t.inProgress}`}
         </span>
         <span className="interview-card-lines">

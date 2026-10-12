@@ -69,7 +69,6 @@ var (
 var headerDateLayouts = []string{
 	"2006-01-02", "2006/01/02", "1/2/2006", "01/02/2006", "1/2/06", "1-2-2006",
 	"January 2, 2006", "Jan 2, 2006", "January 2 2006", "Jan 2 2006", "2 January 2006",
-	"January 2006", "Jan 2006", "1/2006",
 }
 
 func parseInterviewHeader(raw string) (InterviewWhen, bool) {
@@ -79,6 +78,12 @@ func parseInterviewHeader(raw string) (InterviewWhen, bool) {
 		return when, false
 	}
 	lower := strings.ToLower(s)
+	for _, layout := range []string{"January 2006", "Jan 2006", "1/2006"} {
+		if d, err := time.Parse(layout, s); err == nil {
+			when.Year = d.Year()
+			return when, true
+		}
+	}
 	if yearOnly.MatchString(lower) {
 		when.Year, _ = strconv.Atoi(lower)
 		return when, true
@@ -327,12 +332,12 @@ func parseLines(lines []string) []ParsedInterview {
 var questionFiller = map[string]bool{
 	"what": true, "whats": true, "what's": true, "who": true, "whos": true, "who's": true, "is": true,
 	"are": true, "your": true, "youre": true, "you": true, "the": true, "a": true, "an": true,
-	"do": true, "does": true, "favorite": true, "favourite": true, "fav": true, "fave": true, "favs": true,
-	"of": true, "my": true, "q": true, "right": true, "now": true, "current": true, "currently": true,
-	"most": true, "s": true, "thing": true, "things": true,
+	"do": true, "does": true,
+	"of": true, "my": true, "q": true,
+	"s": true, "thing": true, "things": true,
 }
 
-var spellings = map[string]string{"colour": "color", "colours": "color", "tv": "show", "movies": "movie"}
+var spellings = map[string]string{"fav": "favorite", "fave": "favorite", "favs": "favorite", "favourite": "favorite", "colour": "color", "colours": "color", "tv": "show", "movies": "movie"}
 
 func questionTokens(text string) []string {
 	text = strings.ToLower(text)
@@ -486,18 +491,10 @@ type PreviewInterviewImportResponse struct {
 	Questions []InterviewQuestion `json:"questions"`
 }
 
-// proposalDate turns what a header says into a day. A year alone is taken to
-// mean that year's birthday, since that's when most families do these.
+// Only a known day is an exact record date. Preserve partial headers in review.
 func proposalDate(when InterviewWhen, birthday time.Time) (string, int) {
-	switch {
-	case !when.Date.IsZero():
+	if !when.Date.IsZero() {
 		return when.Date.Format("2006-01-02"), -1
-	case when.Age >= 0 && !birthday.IsZero():
-		return dayStart(birthday).AddDate(when.Age, 0, 0).Format("2006-01-02"), when.Age
-	case when.Year > 0 && !birthday.IsZero():
-		return time.Date(when.Year, birthday.Month(), birthday.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02"), -1
-	case when.Year > 0:
-		return time.Date(when.Year, 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), -1
 	}
 	return "", when.Age
 }
@@ -558,10 +555,11 @@ func PreviewInterviewImport(ctx *vbeam.Context, req PreviewInterviewImportReques
 // Import
 
 type ImportAnswer struct {
-	Ref     string `json:"ref"`
-	Answer  string `json:"answer"`
-	NewText string `json:"newText"`
-	Keep    bool   `json:"keep"`
+	Ref         string `json:"ref"`
+	Answer      string `json:"answer"`
+	NewText     string `json:"newText"`
+	Keep        bool   `json:"keep"`
+	RawQuestion string `json:"rawQuestion,omitempty"`
 }
 
 type HistoricalInterview struct {
@@ -577,6 +575,7 @@ type HistoricalInterview struct {
 type ImportInterviewsRequest struct {
 	PersonId   int                   `json:"personId"`
 	Interviews []HistoricalInterview `json:"interviews"`
+	RequestId  string                `json:"requestId,omitempty"`
 }
 
 type ImportInterviewsResponse struct {
@@ -586,6 +585,7 @@ type ImportInterviewsResponse struct {
 type SaveHistoricalInterviewRequest struct {
 	PersonId  int                 `json:"personId"`
 	Interview HistoricalInterview `json:"interview"`
+	RequestId string              `json:"requestId,omitempty"`
 }
 
 type questionResolver struct {
@@ -653,7 +653,10 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 	if inputType == "" {
 		inputType = "date"
 	}
-	date, err := resolveEntryDate("Interview", inputType, &in.Date, &in.AgeYears, &in.AgeMonths, person.Birthday)
+	if inputType != "date" {
+		return Interview{}, nil, errors.New("Choose a known interview date; an age alone does not identify an exact day")
+	}
+	date, err := parseInterviewDate(in.Date, person.Birthday)
 	if err != nil {
 		return Interview{}, nil, err
 	}
@@ -666,7 +669,7 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 	interview := Interview{
 		Id: vbolt.NextIntId(tx, InterviewBkt), FamilyId: person.FamilyId, PersonId: person.Id,
 		Date: dayStart(date), Title: title, Notes: notes, Source: InterviewHistorical, Status: InterviewComplete,
-		QuestionIds: []int{}, SkippedIds: []int{}, CreatedAt: time.Now(), CompletedAt: time.Now(), Version: 1,
+		QuestionIds: []int{}, SkippedIds: []int{}, CreatedAt: time.Now(), CompletedAt: time.Now(), Version: 1, Questions: []InterviewQuestionSnapshot{}, OriginKey: newInterviewOrigin(),
 	}
 	var answerIds []int
 	for _, a := range in.Answers {
@@ -687,9 +690,18 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 			}
 		}
 		interview.QuestionIds = append(interview.QuestionIds, q.Id)
+		prompt := renderQuestion(q.Text, person, interview.Date)
+		if a.RawQuestion != "" {
+			var promptErr error
+			prompt, promptErr = cleanQuestionText(a.RawQuestion)
+			if promptErr != nil {
+				return Interview{}, nil, promptErr
+			}
+		}
+		interview.Questions = append(interview.Questions, InterviewQuestionSnapshot{QuestionId: q.Id, Text: prompt, Section: q.Section})
 		m := Milestone{
 			Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: person.Id, FamilyId: person.FamilyId,
-			Description: text, Category: CategoryInterview, Context: renderQuestion(q.Text, person, interview.Date),
+			Description: text, Category: CategoryInterview, Context: prompt,
 			MilestoneDate: interview.Date, CreatedAt: time.Now(), InterviewId: interview.Id, QuestionId: q.Id,
 		}
 		writeMilestone(tx, m)
@@ -742,11 +754,28 @@ func ImportInterviews(ctx *vbeam.Context, req ImportInterviewsRequest) (resp Imp
 		return
 	}
 	vbeam.UseWriteTx(ctx)
+	person := GetPersonById(ctx.Tx, req.PersonId)
+	receipt, replay, receiptErr := interviewReceipt(ctx.Tx, person.FamilyId, "history", req.RequestId, req)
+	if receiptErr != nil {
+		err = receiptErr
+		return
+	}
+	if replay {
+		for _, id := range receipt.Ids {
+			resp.Interviews = append(resp.Interviews, GetInterviewById(ctx.Tx, id))
+		}
+		return
+	}
 	var answerIds []int
 	resp.Interviews, answerIds, err = importInterviewsTx(ctx.Tx, GetPersonById(ctx.Tx, req.PersonId), req.Interviews)
 	if err != nil {
 		return
 	}
+	ids := []int{}
+	for _, i := range resp.Interviews {
+		ids = append(ids, i.Id)
+	}
+	saveInterviewReceipt(ctx.Tx, receipt, ids)
 	vbolt.TxCommit(ctx.Tx)
 	for _, id := range answerIds {
 		QueueMilestoneEmbedding(id)
@@ -755,7 +784,7 @@ func ImportInterviews(ctx *vbeam.Context, req ImportInterviewsRequest) (resp Imp
 }
 
 func SaveHistoricalInterview(ctx *vbeam.Context, req SaveHistoricalInterviewRequest) (resp InterviewResponse, err error) {
-	imported, err := ImportInterviews(ctx, ImportInterviewsRequest{PersonId: req.PersonId, Interviews: []HistoricalInterview{req.Interview}})
+	imported, err := ImportInterviews(ctx, ImportInterviewsRequest{PersonId: req.PersonId, Interviews: []HistoricalInterview{req.Interview}, RequestId: req.RequestId})
 	if err != nil {
 		return
 	}

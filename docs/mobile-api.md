@@ -814,8 +814,9 @@ add sheet offers the first two as Result shortcuts.
 
 ## 13. Retries and idempotency
 
-**There is none.** No endpoint accepts an idempotency key, and no create
-deduplicates.
+**There is no general idempotency protocol.** Interview creates are the explicit
+exception: their JSON `requestId` contract is described in §17. Other creates do
+not deduplicate.
 
 `SendMessage` takes a `clientMessageId`, and the server stores and echoes it —
 but it does **not** check it. A retried send creates a second message. The field
@@ -835,8 +836,8 @@ What follows for the app:
   roster, a rank beyond its field — are ones the device cannot predict, and a
   queued write replayed hours later reports a success that never happened.
 
-If idempotency is ever added it will be an `Idempotency-Key` header honored on
-creates, and it will be additive. Do not anticipate it.
+Do not infer support for an `Idempotency-Key` header or other procedures from
+the interview-specific JSON request receipts.
 
 ---
 
@@ -907,3 +908,53 @@ practice that is:
 
 Never raise `minimumVersion` past a build that exists. The admin page reads the
 live policy back for exactly this reason.
+
+
+---
+
+## 17. Interview write contract
+
+`Interview.version` is the optimistic concurrency token for the whole sitting.
+Read it from `GetInterview` or the latest successful write. Send `version` on
+`SaveInterviewAnswer`, `AddInterviewQuestion`, `UpdateInterview` and
+`DeleteInterview`. Generic answer edits, tag changes and deletion through
+`UpdateMilestone`, `UpdateMilestoneTags` and `DeleteMilestone` send
+`interviewVersion`; `GetMilestone` returns this field. Normal moments do not
+require it. Missing/stale tokens on interview mutations return
+`ErrInterviewChanged` rather than silently overwriting newer data.
+
+All answer/skip/clear, metadata and follow-up writes advance the sitting token.
+Question merges and related record cascades also invalidate stale clients.
+The family question editor still uses its separate `revision`. Serialize writes
+per sitting and use the acknowledged token for the next request. Finish only
+after all answers have been acknowledged. A timeout may have committed: refetch,
+compare the intended answer/skip state and preserve unsaved text. A changed token
+requires reconciliation; do not fetch a new token merely to overwrite blindly.
+
+`StartInterview`, `SaveHistoricalInterview` and `ImportInterviews` accept an
+optional JSON `requestId` (at most 120 characters). Generate a fresh UUID for a
+new submission, retain it with the exact payload across ambiguous retries, and
+retire it after acknowledgement. Receipts are scoped to family and operation,
+checked after contributor authorization and committed with result IDs. Replays
+return the original records in their current state. Reusing an ID with different
+content or replaying a deleted result is an error. Clients omitting the field
+retain legacy create behavior; they have no replay guarantee. This is not an
+offline-write protocol.
+
+Start and historical entry require an explicit date; historical `inputType`
+must be `date`. Year-only, month/year and age-only import headers do not produce
+a made-up day. `ageYears: -1` means unknown; do not display it as a newborn age.
+The web asks for a known date until a full partial-date model is implemented.
+
+`Interview.questions` stores ordered rendered prompt snapshots (`questionId`,
+`text`, `section`). Read these historical prompts rather than reconstructing
+from today's family list. `originKey` identifies an exported sitting across
+restores; same date/person does not identify a duplicate. Reimporting the same
+origin preserves the existing sitting and reports a warning. Photo IDs in
+interview read responses are filtered for the viewer. `answerCount` counts saved
+answers rather than planned questions.
+
+Before deploying to native users, exercise the oldest supported build against
+these changes. Clients that edit interview moments must supply the new token;
+lenient decoding of new response fields is insufficient. Apply the release
+compatibility policy in §16 if any supported build edits without it.

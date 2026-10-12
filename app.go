@@ -165,6 +165,9 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	vbolt.ApplyDBProcess(dbConnection, "2026-1012-interview-snapshots", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) { backend.BackfillInterviewSnapshots(tx); vbolt.TxCommit(tx) })
+	})
 	return dbConnection
 }
 

@@ -1,13 +1,58 @@
 # Annual interview
 
-Status: web implementation merged in PRs #157–#162. Reviewed against commit
-`e0c1907` on 2026-10-11. The original six web phases are implemented; the
-follow-up work below is still proposed, not a claim that those fixes shipped.
-iOS remains a separate workstream; its repository was not reviewed in this pass.
+Status: initial web implementation merged in PRs #157–#162. The review below
+records the baseline at `e0c1907` on 2026-10-11. PR #164 now includes corrective
+implementation as well as this plan. The “Observed” paragraphs describe that
+baseline; the status below distinguishes implemented corrections from remaining
+work. iOS remains a separate workstream; its repository was not reviewed.
 
 This document replaces the original build checklist with an implementation
-reference and a prioritized follow-up plan. It supersedes the short idea in
-[Record ideas](record-ideas.md). This revision changes documentation only.
+reference and prioritized follow-up plan. It supersedes the short idea in
+[Record ideas](record-ideas.md).
+
+## Corrective implementation in PR #164
+
+- **Saves:** sitting-wide version checks cover answers, skip/clear, follow-ups,
+  metadata, deletes and generic moment edits/tags. Question merges and record
+  cascades advance affected versions. Capture serializes writes, debounces typing,
+  waits for acknowledgements before completion, retains scoped drafts and pauses
+  on conflicts. Retry reads saved state before offering replacement. Network
+  failures release busy states. Successful creates clear their client retry ID.
+- **Portability:** start and historical creates accept transactional request
+  receipts. Bundle origin keys distinguish same-day sittings. Repeated origins
+  preserve the existing sitting and report a warning, including any local edits;
+  one-off questions are not recreated on replay. Family-list state, prompt
+  snapshots and answer photo references travel with exports, and malformed
+  interview links are rejected.
+- **History:** each sitting stores rendered question/section snapshots. Startup
+  backfills legacy snapshots from answer context where available and otherwise
+  from current wording. Wording lost before this migration cannot be recovered.
+  Question merges reject overlap even when neither question is answered yet.
+- **Dates and comparisons:** entry requires a known calendar date; partial import
+  headers remain undated for review. Unknown age is `-1`, never age zero. Close
+  matches require an explicit question/New/Ignore selection. Raw imported wording
+  is retained. Web and books use conservative whitespace/case normalization and
+  compare the previous answered sitting for each question.
+- **Presentation:** Enter adds a newline; Ctrl/Cmd+Enter advances. Previous-answer
+  hints start hidden. Cards count actual answers, search budgets grouped cards,
+  grids distinguish skipped/unanswered/unplanned, long print sections can break,
+  and the dashboard caps interview nudges. Interview response photo IDs follow
+  the viewer's photo access.
+
+Remaining work: full partial-date representation (no invented date fallback),
+interactive keep-separate handling for a changed bundle with the same origin,
+phone Questions-view usability review, broader accessibility/print verification,
+and native parity/old-build compatibility checks. Request IDs currently survive
+retries within the active page session; retaining entire unsubmitted historical
+forms across reloads remains future work. These are not claims of completed QA.
+
+Verification: focused backend interview/import/book regressions, all 306
+frontend tests, TypeScript checking and the release build pass. The broader
+backend suite previously encountered Unix-socket restrictions in daemon tests;
+the Playwright browser download failed, so browser tests still need CI or a
+supported local environment. The UI regression now holds a save beyond five
+seconds and asserts that Finish waits. See [Mobile API](../mobile-api.md#17-interview-write-contract)
+for the changed client contract.
 
 ## Product intent
 
@@ -36,7 +81,7 @@ do not replace the shipped model with a parallel answer store.
 | Past entry | `backend/interview_import.go` and `frontend/pages/interviews/{past,import}.tsx`: typed entry, notes/CSV/TSV parsing, preview, question matching and transactional import. The parser already uses `encoding/csv`; text and batch-size limits already exist. |
 | Site integration | `backend/interview_fold.go`, `frontend/lib/interviews.ts` and `InterviewCard.tsx`: grouped cards in existing record surfaces, birthday/continue nudges, question-aware embeddings, person merge/deletion, family teardown, portrait deletion and record-date normalization. |
 | Books and portability | `backend/interview_export.go`, `backend/book*.go` and `frontend/lib/book.ts`: interview export/import, book source references, Q&A rendering and comparison summaries. Sibling comparison is implemented in `CompareInterviewAnswers` and `compare.tsx`. |
-| Coverage | Backend `interview*_test.go`, frontend interview helper tests and `tests/ui/interview.spec.ts` cover the main flows. The scenarios below extend that coverage; this documentation review did not run the application or test suites. |
+| Coverage | Backend `interview*_test.go`, frontend interview helper tests and `tests/ui/interview.spec.ts` cover the main flows. The scenarios below extend that coverage; corrective verification is summarized above; browser QA remains outstanding. |
 
 Preserve the working safeguards rather than reimplementing them: initialized
 empty question lists do not reseed; default selections have `DefaultKeys` before
@@ -73,7 +118,7 @@ to restore older skip state. `finish` waits for up to five seconds, then checks
 failed saves but not whether requests remain in flight. A slow request can
 therefore still be pending when completion proceeds.
 
-Planned changes:
+Correction requirements (implementation status above):
 
 - Keep the existing `Version` name; extend its semantics consistently. Every
   answer, skip/clear, question-list change within a sitting, metadata change
@@ -117,7 +162,7 @@ a bundle into an empty family. Typed/paste historical saves create new sittings
 without a request id, so repeating a submission after a lost response can create
 duplicates. These are different problems and need different solutions.
 
-Planned changes:
+Correction requirements (implementation status above):
 
 - Preserve each source interview as a distinct sitting using source-id mappings
   within a bundle. Date is useful for suggesting a possible duplicate, never
@@ -152,7 +197,7 @@ and sections each time. Unanswered/skipped prompts have no snapshot. Clearing
 and re-answering a question creates a new moment using the current wording.
 Changing sections can also reorganize an old interview.
 
-Planned changes:
+Correction requirements (implementation status above):
 
 - Store ordered question snapshots on the interview: question id, rendered text
   and section. Capture them at setup and when adding a follow-up. Answer context
@@ -181,7 +226,7 @@ is editable, but the stored record does not preserve that the day was inferred.
 `ageYearsAt` returns zero for a missing birthday, which can look like a newborn
 age or render “being 0” in a question.
 
-Planned changes:
+Correction requirements (implementation status above):
 
 - Show the original header/date assertion in review and label inferred dates as
   suggestions. Until partial-date storage exists, require a known date or leave
@@ -210,7 +255,7 @@ merge distinct meanings such as “favorite food” and “food.” Web
 lowercasing, whitespace and limited punctuation trimming. The two surfaces can
 therefore disagree about whether an answer changed.
 
-Planned changes:
+Correction requirements (implementation status above):
 
 - Normalize spelling and introductory phrases conservatively; expand “fav” to
   “favorite” instead of dropping the concept. Preserve negation and qualifiers.

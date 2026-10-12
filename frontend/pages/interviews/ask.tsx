@@ -12,6 +12,7 @@ import {
   firstName,
   interviewTitle,
   loadDrafts,
+  loadDraftStates,
   pendingQuestions,
   previousLine,
   questionStatus,
@@ -21,9 +22,14 @@ import {
 } from "../../lib/interviews";
 
 const t = copy.interview.ask;
-const RETRY_MS = 4000;
+import { callInterview, InterviewSaveQueue } from "../../lib/interviewSave";
 
 type AskState = {
+  queue: InterviewSaveQueue;
+  timers: Map<number, ReturnType<typeof setTimeout>>;
+  paused: boolean;
+  intentions: Map<number, boolean>;
+  storageFailed: boolean;
   source: server.GetInterviewResponse | null;
   interview: server.Interview;
   person: server.Person;
@@ -33,7 +39,6 @@ type AskState = {
   text: Record<number, string>;
   saved: Record<number, string>;
   inflight: Set<number>;
-  again: Map<number, boolean>;
   failed: Set<number>;
   index: number;
   showPrevious: boolean;
@@ -47,6 +52,11 @@ type AskState = {
 
 const useAsk = vlens.declareHook(
   (_id: number): AskState => ({
+    queue: new InterviewSaveQueue(),
+    timers: new Map(),
+    paused: false,
+    intentions: new Map(),
+    storageFailed: false,
     source: null,
     interview: {} as server.Interview,
     person: {} as server.Person,
@@ -56,10 +66,9 @@ const useAsk = vlens.declareHook(
     text: {},
     saved: {},
     inflight: new Set(),
-    again: new Map(),
     failed: new Set(),
     index: 0,
-    showPrevious: true,
+    showPrevious: false,
     expandPrevious: false,
     showJump: false,
     followUp: { open: false, text: "", keep: false, adding: false },
@@ -76,6 +85,8 @@ function init(state: AskState, data: server.GetInterviewResponse) {
   state.questions = [...data.questions];
   state.previous = data.previous ?? {};
   state.answers = answersByQuestion(data.answers ?? []);
+  state.intentions.clear();
+  state.failed.clear();
   state.text = {};
   state.saved = {};
   for (const q of state.questions) {
@@ -91,7 +102,22 @@ function init(state: AskState, data: server.GetInterviewResponse) {
   );
   state.index = firstPending < 0 ? state.questions.length : firstPending;
   state.showPrevious = showPreviousPreference();
+  state.paused = false;
   state.error = "";
+  for (const [id, draft] of loadDraftStates(data.interview.id)) {
+    if (!(id in state.text)) continue;
+    const matches =
+      draft.text.trim() === (state.saved[id] ?? "").trim() &&
+      (data.interview.skippedIds ?? []).includes(id) === draft.skipped;
+    if (!matches) {
+      state.intentions.set(id, draft.skipped);
+      if (draft.version !== data.interview.version) {
+        state.paused = true;
+        state.failed.add(id);
+        state.error = t.savePaused;
+      }
+    }
+  }
 }
 
 export function AskView({ data }: { data: server.GetInterviewResponse }): preact.ComponentChild {
@@ -137,16 +163,31 @@ export function AskView({ data }: { data: server.GetInterviewResponse }): preact
   );
 }
 
-const SaveStatus = ({ state }: { state: AskState }) =>
-  state.failed.size > 0 ? (
-    <p className="iv-save-status" role="status">
-      {t.retrying}
-    </p>
-  ) : state.error ? (
-    <div className="error-message" role="alert">
-      {state.error}
-    </div>
-  ) : null;
+const SaveStatus = ({ state }: { state: AskState }) => (
+  <div className="iv-save-status" role="status">
+    {state.error ? (
+      <p role="alert">{state.error}</p>
+    ) : state.storageFailed ? (
+      <p>{t.deviceSaveFailed}</p>
+    ) : (
+      <p>{state.queue.pending ? t.saving : state.timers.size ? t.deviceSaved : t.saved}</p>
+    )}
+    {state.paused && (
+      <>
+        <a href={`/interview/${state.interview.id}`} target="_blank" rel="noopener">
+          {t.reviewSaved}
+        </a>
+        <button
+          type="button"
+          className="btn btn-secondary btn-small"
+          onClick={() => retrySaves(state)}
+        >
+          {t.retrySaved}
+        </button>
+      </>
+    )}
+  </div>
+);
 
 const QuestionPanel = ({ state, q }: { state: AskState; q: server.InterviewQuestion }) => {
   const prev = state.previous[q.id] ?? [];
@@ -163,15 +204,29 @@ const QuestionPanel = ({ state, q }: { state: AskState; q: server.InterviewQuest
         rows={3}
         placeholder={t.answerPlaceholder}
         value={state.text[q.id] ?? ""}
-        ref={el => {
-          if (el && document.activeElement !== el && !state.followUp.open) el.focus();
-        }}
+        disabled={state.finishing || state.uploading || state.followUp.adding}
         onInput={e => {
           state.text[q.id] = e.currentTarget.value;
-          saveDraft(state.interview.id, q.id, e.currentTarget.value);
+          state.storageFailed = !saveDraft(
+            state.interview.id,
+            q.id,
+            e.currentTarget.value,
+            state.interview.version
+          );
+          state.intentions.set(q.id, false);
+          const timer = state.timers.get(q.id);
+          if (timer) clearTimeout(timer);
+          state.timers.set(
+            q.id,
+            setTimeout(() => {
+              state.timers.delete(q.id);
+              commit(state, q.id);
+            }, 600)
+          );
+          vlens.scheduleRedraw();
         }}
         onKeyDown={e => {
-          if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.isComposing) {
             e.preventDefault();
             go(state, state.index + 1);
           }
@@ -414,7 +469,7 @@ const FinishPanel = ({ state }: { state: AskState }) => {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={state.finishing}
+          disabled={state.finishing || state.uploading || state.followUp.adding}
           onClick={vlens.cachePartial(finish, state)}
         >
           {state.finishing ? t.finishing : t.finish}
@@ -425,6 +480,7 @@ const FinishPanel = ({ state }: { state: AskState }) => {
 };
 
 function go(state: AskState, index: number) {
+  if (state.finishing) return;
   const q = state.questions[state.index];
   if (q) commit(state, q.id);
   state.index = Math.max(0, Math.min(index, state.questions.length));
@@ -434,58 +490,140 @@ function go(state: AskState, index: number) {
 }
 
 function commit(state: AskState, questionId: number) {
+  const timer = state.timers.get(questionId);
+  if (timer) clearTimeout(timer);
+  state.timers.delete(questionId);
+  if (state.paused) return;
   const text = (state.text[questionId] ?? "").trim();
-  if (text === (state.saved[questionId] ?? "").trim()) {
+  const skipped =
+    state.intentions.get(questionId) ?? (state.interview.skippedIds ?? []).includes(questionId);
+  if (
+    !state.inflight.has(questionId) &&
+    text === (state.saved[questionId] ?? "").trim() &&
+    skipped === (state.interview.skippedIds ?? []).includes(questionId)
+  ) {
     clearDraft(state.interview.id, questionId);
     return;
   }
-  void save(state, questionId, false);
+  void save(state, questionId, skipped);
 }
 
 async function save(state: AskState, questionId: number, skipped: boolean) {
-  if (state.inflight.has(questionId)) {
-    state.again.set(questionId, skipped);
-    return;
-  }
-  state.inflight.add(questionId);
   const text = skipped ? "" : (state.text[questionId] ?? "").trim();
-  const [resp, err] = await server.SaveInterviewAnswer({
-    interviewId: state.interview.id,
-    questionId,
-    answer: text,
-    skipped,
+  state.intentions.set(questionId, skipped);
+  state.inflight.add(questionId);
+  await state.queue.run(async () => {
+    if (state.paused) {
+      state.failed.add(questionId);
+      return;
+    }
+    const expectedVersion = state.interview.version;
+    const [resp, err] = await callInterview(
+      server.SaveInterviewAnswer({
+        interviewId: state.interview.id,
+        questionId,
+        answer: text,
+        skipped,
+        version: expectedVersion,
+      })
+    );
+    if (!resp) {
+      // A lost response may follow a committed write. Refetch, never blindly retry.
+      const [latest] = await callInterview(server.GetInterview({ id: state.interview.id }));
+      const answer = latest?.answers?.find(a => a.questionId === questionId);
+      const matches =
+        latest &&
+        (answer?.description ?? "") === text &&
+        (latest.interview.skippedIds ?? []).includes(questionId) === skipped;
+      if (
+        matches &&
+        latest.interview.version === expectedVersion + 1 &&
+        err !== server.ErrInterviewChanged
+      ) {
+        state.interview = latest.interview;
+        state.saved[questionId] = text;
+        if (answer) state.answers.set(questionId, answer);
+        else state.answers.delete(questionId);
+        if (
+          (state.text[questionId] ?? "").trim() === text &&
+          state.intentions.get(questionId) === skipped
+        )
+          clearDraft(state.interview.id, questionId);
+        return;
+      }
+      state.failed.add(questionId);
+      state.paused = true;
+      state.error = err || t.savePaused;
+      return;
+    }
+    state.failed.delete(questionId);
+    state.interview = resp.interview;
+    if (resp.answer.id) state.answers.set(questionId, resp.answer);
+    else state.answers.delete(questionId);
+    state.saved[questionId] = text;
+    if (
+      (state.text[questionId] ?? "").trim() === text &&
+      state.intentions.get(questionId) === skipped
+    )
+      clearDraft(state.interview.id, questionId);
   });
   state.inflight.delete(questionId);
-  if (!resp) {
-    if (err === server.ErrInterviewQuestionNotFound || err?.startsWith("Interview not found")) {
-      state.error = err;
-      state.failed.delete(questionId);
-    } else {
-      state.failed.add(questionId);
-      window.setTimeout(() => save(state, questionId, skipped), RETRY_MS);
-    }
+  vlens.scheduleRedraw();
+}
+
+async function retrySaves(state: AskState) {
+  await state.queue.flush();
+  const [latest, err] = await callInterview(server.GetInterview({ id: state.interview.id }));
+  if (!latest) {
+    state.error = err || t.savePaused;
     vlens.scheduleRedraw();
     return;
   }
-  state.failed.delete(questionId);
-  state.interview = resp.interview;
-  if (resp.answer.id) state.answers.set(questionId, resp.answer);
-  else state.answers.delete(questionId);
-  state.saved[questionId] = text;
-  const next = state.again.get(questionId);
-  state.again.delete(questionId);
-  if (next !== undefined) {
-    void save(state, questionId, next);
-  } else if ((state.text[questionId] ?? "").trim() === text) {
-    clearDraft(state.interview.id, questionId);
+  const remote = answersByQuestion(latest.answers);
+  const dirty = state.questions.filter(
+    q =>
+      (state.text[q.id] ?? "").trim() !== (state.saved[q.id] ?? "").trim() || state.failed.has(q.id)
+  );
+  const conflicts = dirty.filter(
+    q =>
+      state.failed.has(q.id) ||
+      (remote.get(q.id)?.description ?? "") !== (state.saved[q.id] ?? "") ||
+      (latest.interview.skippedIds ?? []).includes(q.id) !==
+        (state.interview.skippedIds ?? []).includes(q.id)
+  );
+  if (
+    conflicts.length &&
+    !confirm(
+      t.confirmReplace(
+        conflicts
+          .map(q => `${q.text}\n${remote.get(q.id)?.description || t.statusSkipped}`)
+          .join("\n\n")
+      )
+    )
+  )
+    return;
+  state.interview = latest.interview;
+  state.questions = latest.questions;
+  state.answers = remote;
+  for (const q of latest.questions) {
+    const saved = remote.get(q.id)?.description ?? "";
+    state.saved[q.id] = saved;
+    if (!dirty.some(d => d.id === q.id)) state.text[q.id] = saved;
   }
+  state.paused = false;
+  state.error = "";
+  state.failed.clear();
+  for (const q of dirty) void save(state, q.id, state.intentions.get(q.id) ?? false);
   vlens.scheduleRedraw();
 }
 
 function skip(state: AskState, q: server.InterviewQuestion) {
+  if (state.finishing || state.paused) return;
+  const timer = state.timers.get(q.id);
+  if (timer) clearTimeout(timer);
+  state.timers.delete(q.id);
   state.text[q.id] = "";
-  clearDraft(state.interview.id, q.id);
-  state.saved[q.id] = "";
+  state.storageFailed = !saveDraft(state.interview.id, q.id, "", state.interview.version, true);
   void save(state, q.id, true);
   state.index = Math.min(state.index + 1, state.questions.length);
   state.expandPrevious = false;
@@ -495,13 +633,22 @@ function skip(state: AskState, q: server.InterviewQuestion) {
 async function addFollowUp(state: AskState, after: server.InterviewQuestion) {
   const text = state.followUp.text.trim();
   if (!text || state.followUp.adding) return;
+  commit(state, after.id);
   state.followUp.adding = true;
   vlens.scheduleRedraw();
-  const [resp, err] = await server.AddInterviewQuestion({
-    interviewId: state.interview.id,
-    text,
-    afterQuestionId: after.id,
-    keep: state.followUp.keep,
+  const [resp, err] = await state.queue.run(async () => {
+    if (state.paused) return [null, t.savePaused] as [null, string];
+    const result = await callInterview(
+      server.AddInterviewQuestion({
+        version: state.interview.version,
+        interviewId: state.interview.id,
+        text,
+        afterQuestionId: after.id,
+        keep: state.followUp.keep,
+      })
+    );
+    if (result[0]) state.interview = result[0].interview;
+    return result;
   });
   state.followUp.adding = false;
   if (!resp) {
@@ -545,33 +692,37 @@ async function updateInterview(
   state: AskState,
   change: Partial<server.UpdateInterviewRequest>
 ): Promise<boolean> {
-  const i = state.interview;
-  const [resp, err] = await server.UpdateInterview({
-    id: i.id,
-    version: i.version,
-    date: i.date.slice(0, 10),
-    title: i.title,
-    notes: i.notes,
-    photoId: i.photoId,
-    status: i.status,
-    ...change,
+  return state.queue.run(async () => {
+    if (state.paused) return false;
+    const i = state.interview;
+    const [resp, err] = await callInterview(
+      server.UpdateInterview({
+        id: i.id,
+        version: i.version,
+        date: i.date.slice(0, 10),
+        title: i.title,
+        notes: i.notes,
+        photoId: i.photoId,
+        status: i.status,
+        ...change,
+      })
+    );
+    if (!resp) {
+      state.paused = true;
+      state.error = err || "The interview could not be saved.";
+      return false;
+    }
+    state.interview = resp.interview;
+    return true;
   });
-  if (!resp) {
-    state.error = err || "The interview could not be saved.";
-    return false;
-  }
-  state.interview = resp.interview;
-  return true;
 }
 
 async function finish(state: AskState) {
   state.finishing = true;
   vlens.scheduleRedraw();
   for (const q of state.questions) commit(state, q.id);
-  for (let tries = 0; state.inflight.size > 0 && tries < 50; tries++) {
-    await new Promise(r => setTimeout(r, 100));
-  }
-  if (state.failed.size > 0) {
+  await state.queue.flush();
+  if (state.failed.size > 0 || state.paused || state.queue.pending > 0) {
     state.finishing = false;
     state.error = t.unsavedOnFinish;
     vlens.scheduleRedraw();

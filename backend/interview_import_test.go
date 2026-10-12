@@ -39,7 +39,7 @@ func TestParseInterviewHeader(t *testing.T) {
 		"2021-05-03":               {Date: time.Date(2021, 5, 3, 0, 0, 0, 0, time.UTC), Age: -1},
 		"5/3/2021":                 {Date: time.Date(2021, 5, 3, 0, 0, 0, 0, time.UTC), Age: -1},
 		"May 3, 2021":              {Date: time.Date(2021, 5, 3, 0, 0, 0, 0, time.UTC), Age: -1},
-		"May 2021":                 {Date: time.Date(2021, 5, 1, 0, 0, 0, 0, time.UTC), Age: -1},
+		"May 2021":                 {Year: 2021, Age: -1},
 		"## 2020 Interview":        {Year: 2020, Age: -1},
 		"Birthday interview 2018:": {Year: 2018, Age: -1},
 		"Clara - age 6 (2022)":     {Year: 2022, Age: 6},
@@ -203,15 +203,15 @@ func TestPreviewAndImportPastInterviews(t *testing.T) {
 	if len(preview.Proposals) != 2 {
 		t.Fatalf("proposals = %+v", preview.Proposals)
 	}
-	if p := preview.Proposals[0]; p.Date != "2019-03-02" || p.Rows[0].Ref != "key:fav-food" || p.Rows[1].Confidence != matchNone {
+	if p := preview.Proposals[0]; p.Date != "" || p.Rows[0].Ref != "key:fav-food" || p.Rows[1].Confidence != matchNone {
 		t.Errorf("first proposal = %+v, want 2019 on the birthday with food matched", p)
 	}
-	if p := preview.Proposals[1]; p.Date != "2021-03-02" || p.AgeYears != 7 {
+	if p := preview.Proposals[1]; p.Date != "" || p.AgeYears != 7 {
 		t.Errorf("second proposal = %+v, want age 7 on the seventh birthday", p)
 	}
 	var interviews []HistoricalInterview
 	for _, p := range preview.Proposals {
-		in := HistoricalInterview{InputType: "date", Date: p.Date}
+		in := HistoricalInterview{InputType: "date", Date: "2020-03-02"}
 		for _, r := range p.Rows {
 			a := ImportAnswer{Ref: r.Ref, Answer: r.Answer}
 			if r.Ref == "" && strings.Contains(r.Raw, "dinosaur") {
@@ -260,7 +260,7 @@ func TestPreviewAndImportPastInterviews(t *testing.T) {
 	}
 
 	byAge, err := callAs(t, fx, SaveHistoricalInterview, SaveHistoricalInterviewRequest{PersonId: fx.bob.Id, Interview: HistoricalInterview{
-		InputType: "age", AgeYears: 4, Notes: "From the baby book",
+		InputType: "date", Date: "2018-03-02", Notes: "From the baby book",
 		Answers: []ImportAnswer{{Ref: "key:fav-color", Answer: "orange"}, {Ref: "key:fav-food", Answer: " "}},
 	}})
 	if err != nil {

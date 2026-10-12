@@ -96,7 +96,17 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
   const names = chipLabels(people);
   const peopleById = new Map(people.map(p => [p.id, p]));
   const dismissed = readDismissed();
-  const nudges = (data.nudges || []).filter(n => !dismissed.includes(n.key)).slice(0, MAX_NUDGES);
+  let interviewShown = false;
+  const nudges = (data.nudges || [])
+    .filter(n => {
+      if (dismissed.includes(n.key)) return false;
+      if (n.kind.startsWith("interview")) {
+        if (interviewShown) return false;
+        interviewShown = true;
+      }
+      return true;
+    })
+    .slice(0, MAX_NUDGES);
   const recent = summarizeDays(
     {
       photos: data.recent.photos || [],
@@ -118,6 +128,9 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
           {nudges.map(nudge => (
             <div key={nudge.key} className="home-nudge">
               <a href={nudgeAction(nudge)}>{nudge.text}</a>
+              {nudge.kind.startsWith("interview") && (
+                <a href="/interviews">{copy.interview.family.title}</a>
+              )}
               <button
                 type="button"
                 className="home-nudge-dismiss"

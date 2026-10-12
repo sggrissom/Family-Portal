@@ -21,7 +21,19 @@ export async function handleDeleteMilestone(id: number, description: string): Pr
 
   if (confirmed) {
     try {
-      let [resp, err] = await server.DeleteMilestone({ id });
+      const [current] = await server.GetMilestone({ id });
+      if (!current) {
+        alert("Reload this page before deleting the moment.");
+        return;
+      }
+      if (current.milestone.interviewId && current.milestone.description !== description) {
+        alert("This answer changed. Reload it before deleting.");
+        return;
+      }
+      let [resp, err] = await server.DeleteMilestone({
+        id,
+        interviewVersion: current.interviewVersion,
+      });
 
       if (resp && resp.success) {
         window.location.reload();

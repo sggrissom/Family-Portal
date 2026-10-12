@@ -483,7 +483,7 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 			resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
 			resp.Milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Milestones[i].Id)
 		}
-		resp.Interviews = interviewsOfAnswers(ctx.Tx, resp.Milestones)
+		resp.Interviews = interviewsOfAnswers(ctx.Tx, resp.Milestones, user)
 	}
 
 	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopePhotos, AccessView) {
@@ -758,7 +758,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 				milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 				timelineItem.Milestones = append(timelineItem.Milestones, milestone)
 			}
-			timelineItem.Interviews = interviewsOfAnswers(ctx.Tx, timelineItem.Milestones)
+			timelineItem.Interviews = interviewsOfAnswers(ctx.Tx, timelineItem.Milestones, user)
 		}
 
 		if !req.SkipPhotos && CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {

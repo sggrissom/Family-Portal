@@ -23,6 +23,7 @@ import {
 } from "./MilestoneFields";
 
 type EditMilestoneForm = {
+  interviewVersion: number;
   description: string;
   category: string;
   context: string;
@@ -41,6 +42,7 @@ type EditMilestoneForm = {
 
 const useEditMilestoneForm = vlens.declareHook(
   (milestone: server.Milestone): EditMilestoneForm => ({
+    interviewVersion: 0,
     description: milestone.description,
     category: milestone.category,
     context: milestone.context ?? "",
@@ -133,6 +135,7 @@ export function view(
   }
 
   const form = useEditMilestoneForm(milestone);
+  if (!form.interviewVersion) form.interviewVersion = data.milestone.interviewVersion ?? 0;
 
   return (
     <div>
@@ -168,6 +171,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
   const when = whenRequest(form.when, new Date());
   const [resp, err] = await server.UpdateMilestone({
     id: milestone.id,
+    interviewVersion: form.interviewVersion,
     description: form.description.trim(),
     category: form.category,
     context: form.context.trim(),

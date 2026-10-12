@@ -195,7 +195,7 @@ function cellClass(cell: GridCell): string {
 const Cell = ({ cell }: { cell: GridCell }) => {
   if (cell.answer) return <a href={`/milestone/${cell.answer.id}`}>{cell.answer.description}</a>;
   if (cell.skipped) return <span aria-label={t.skipped}>–</span>;
-  return null;
+  return <span aria-label={cell.asked ? t.unanswered : t.notPlanned}>—</span>;
 };
 
 const QuestionsView = ({

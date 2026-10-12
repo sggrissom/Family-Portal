@@ -24,8 +24,9 @@ func (fx resultsFixture) startInterview(t *testing.T, person Person, date string
 
 func (fx resultsFixture) answer(t *testing.T, interviewId, questionId int, text string, skipped bool) SaveInterviewAnswerResponse {
 	t.Helper()
+	current, _ := callAs(t, fx, GetInterview, GetInterviewRequest{Id: interviewId})
 	resp, err := callAs(t, fx, SaveInterviewAnswer, SaveInterviewAnswerRequest{
-		InterviewId: interviewId, QuestionId: questionId, Answer: text, Skipped: skipped,
+		Version: current.Interview.Version, InterviewId: interviewId, QuestionId: questionId, Answer: text, Skipped: skipped,
 	})
 	if err != nil {
 		t.Fatalf("SaveInterviewAnswer: %v", err)
@@ -36,7 +37,7 @@ func (fx resultsFixture) answer(t *testing.T, interviewId, questionId int, text 
 func TestAgeYearsAt(t *testing.T) {
 	birthday := time.Date(2018, 5, 10, 0, 0, 0, 0, time.UTC)
 	for date, want := range map[string]int{
-		"2018-05-10": 0, "2019-05-09": 0, "2019-05-10": 1, "2025-04-30": 6, "2025-05-10": 7, "2017-01-01": 0,
+		"2018-05-10": 0, "2019-05-09": 0, "2019-05-10": 1, "2025-04-30": 6, "2025-05-10": 7, "2017-01-01": -1,
 	} {
 		d, _ := time.Parse("2006-01-02", date)
 		if got := ageYearsAt(birthday, d); got != want {
@@ -64,7 +65,7 @@ func TestStartInterviewSeedsTheListAndRendersPlaceholders(t *testing.T) {
 		}
 	})
 
-	if _, err := callAs(t, fx, StartInterview, StartInterviewRequest{PersonId: fx.alice.Id, DefaultKeys: []string{"fav-food"}}); err != ErrInterviewInProgress {
+	if _, err := callAs(t, fx, StartInterview, StartInterviewRequest{PersonId: fx.alice.Id, Date: "2021-03-05", DefaultKeys: []string{"fav-food"}}); err != ErrInterviewInProgress {
 		t.Errorf("second start: err = %v, want ErrInterviewInProgress", err)
 	}
 	setup, _ := callAs(t, fx, GetInterviewSetup, GetInterviewSetupRequest{PersonId: fx.alice.Id})
@@ -76,7 +77,7 @@ func TestStartInterviewSeedsTheListAndRendersPlaceholders(t *testing.T) {
 func TestStartInterviewWithOneOffs(t *testing.T) {
 	fx := setupResultsFixture(t)
 	resp, err := callAs(t, fx, StartInterview, StartInterviewRequest{
-		PersonId: fx.bob.Id, DefaultKeys: []string{"fav-color"}, OneOffQuestions: []string{"Who is your favorite dinosaur?"},
+		PersonId: fx.bob.Id, Date: "2020-01-01", DefaultKeys: []string{"fav-color"}, OneOffQuestions: []string{"Who is your favorite dinosaur?"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,8 +166,9 @@ func TestPreviousAnswersComeFromEarlierInterviewsOfTheSamePerson(t *testing.T) {
 
 func (fx resultsFixture) finish(t *testing.T, interview Interview) Interview {
 	t.Helper()
+	current, _ := callAs(t, fx, GetInterview, GetInterviewRequest{Id: interview.Id})
 	resp, err := callAs(t, fx, UpdateInterview, UpdateInterviewRequest{
-		Id: interview.Id, Version: interview.Version, Date: interview.Date.Format("2006-01-02"), Status: InterviewComplete,
+		Id: interview.Id, Version: current.Interview.Version, Date: interview.Date.Format("2006-01-02"), Status: InterviewComplete,
 	})
 	if err != nil {
 		t.Fatalf("finish: %v", err)
@@ -180,7 +182,7 @@ func TestAddInterviewQuestionKeepsOrOneOff(t *testing.T) {
 	color := got.Questions[0]
 
 	kept, err := callAs(t, fx, AddInterviewQuestion, AddInterviewQuestionRequest{
-		InterviewId: got.Interview.Id, Text: "What's your favorite shape?", AfterQuestionId: color.Id, Keep: true,
+		Version: got.Interview.Version, InterviewId: got.Interview.Id, Text: "What's your favorite shape?", AfterQuestionId: color.Id, Keep: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -188,8 +190,9 @@ func TestAddInterviewQuestionKeepsOrOneOff(t *testing.T) {
 	if kept.Interview.QuestionIds[1] != kept.Question.Id {
 		t.Errorf("question order = %v, want the new one second", kept.Interview.QuestionIds)
 	}
+	got.Interview = kept.Interview
 	once, err := callAs(t, fx, AddInterviewQuestion, AddInterviewQuestionRequest{
-		InterviewId: got.Interview.Id, Text: "Why?", AfterQuestionId: kept.Question.Id,
+		Version: got.Interview.Version, InterviewId: got.Interview.Id, Text: "Why?", AfterQuestionId: kept.Question.Id,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +219,7 @@ func TestUpdateInterviewMovesAnswerDatesAndChecksVersion(t *testing.T) {
 	photo := fx.addPhoto(t, fx.familyId, "portrait.jpg")
 
 	updated, err := callAs(t, fx, UpdateInterview, UpdateInterviewRequest{
-		Id: got.Interview.Id, Version: got.Interview.Version, Date: "2021-03-02",
+		Id: got.Interview.Id, Version: got.Interview.Version + 1, Date: "2021-03-02",
 		Title: "7th birthday", Notes: "Very silly", PhotoId: photo.Id, Status: InterviewComplete,
 	})
 	if err != nil {
@@ -243,7 +246,7 @@ func TestDeleteInterviewRemovesItsAnswers(t *testing.T) {
 	got := fx.startInterview(t, fx.alice, "2021-03-05", "fav-food")
 	answer := fx.answer(t, got.Interview.Id, got.Questions[0].Id, "pizza", false).Answer
 
-	if _, err := callAs(t, fx, DeleteInterview, DeleteInterviewRequest{Id: got.Interview.Id}); err != nil {
+	if _, err := callAs(t, fx, DeleteInterview, DeleteInterviewRequest{Id: got.Interview.Id, Version: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if m, _ := callAs(t, fx, GetMilestone, GetMilestoneRequest{Id: answer.Id}); m.Milestone.Id != 0 {
@@ -265,7 +268,7 @@ func TestInterviewAccessThroughLinksIsReadOnly(t *testing.T) {
 
 	var interview Interview
 	call(fx.userA, func(ctx *vbeam.Context) {
-		resp, err := StartInterview(ctx, StartInterviewRequest{PersonId: fx.alice.Id, DefaultKeys: []string{"fav-food"}})
+		resp, err := StartInterview(ctx, StartInterviewRequest{PersonId: fx.alice.Id, Date: "2021-03-05", DefaultKeys: []string{"fav-food"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -273,7 +276,7 @@ func TestInterviewAccessThroughLinksIsReadOnly(t *testing.T) {
 	})
 	call(fx.userA, func(ctx *vbeam.Context) {
 		if _, err := SaveInterviewAnswer(ctx, SaveInterviewAnswerRequest{
-			InterviewId: interview.Id, QuestionId: interview.QuestionIds[0], Answer: "pizza",
+			Version: interview.Version, InterviewId: interview.Id, QuestionId: interview.QuestionIds[0], Answer: "pizza",
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +296,7 @@ func TestInterviewAccessThroughLinksIsReadOnly(t *testing.T) {
 		}
 	})
 	call(fx.userB, func(ctx *vbeam.Context) {
-		if _, err := StartInterview(ctx, StartInterviewRequest{PersonId: fx.alice.Id, DefaultKeys: []string{"fav-food"}}); err == nil {
+		if _, err := StartInterview(ctx, StartInterviewRequest{PersonId: fx.alice.Id, Date: "2021-03-05", DefaultKeys: []string{"fav-food"}}); err == nil {
 			t.Error("linked grandparent started an interview")
 		}
 	})

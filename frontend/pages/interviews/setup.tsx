@@ -1,3 +1,8 @@
+import {
+  acknowledgeInterviewRequest,
+  callInterview,
+  interviewRequestId,
+} from "../../lib/interviewSave";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -249,18 +254,25 @@ async function start(state: SetupState, data: server.GetInterviewSetupResponse) 
   state.starting = true;
   state.error = "";
   vlens.scheduleRedraw();
-  const [resp, err] = await server.StartInterview({
+  const request = {
     personId: data.person.id,
     date: state.date,
     questionIds: chosen.filter(q => q.id).map(q => q.id),
     defaultKeys: chosen.filter(q => !q.id).map(q => q.defaultKey),
     oneOffQuestions: state.oneOffs,
-  });
+  };
+  const [resp, err] = await callInterview(
+    server.StartInterview({
+      ...request,
+      requestId: interviewRequestId(`start:${data.person.id}`, request),
+    })
+  );
   state.starting = false;
   if (!resp) {
     state.error = err || "The interview could not be started.";
     vlens.scheduleRedraw();
     return;
   }
+  acknowledgeInterviewRequest(`start:${data.person.id}`);
   core.setRoute(`/interview/${resp.interview.id}/ask`);
 }

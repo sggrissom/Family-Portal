@@ -1,10 +1,11 @@
+import { getAuth } from "./authCache";
 import * as server from "../server";
 
 export function ageYearsAt(birthday: string, date: string): number {
-  if (!birthday || !date) return 0;
+  if (!birthday || !date || birthday.startsWith("0001")) return -1;
   const b = new Date(birthday);
   const d = new Date(date);
-  if (d < b) return 0;
+  if (Number.isNaN(b.getTime()) || Number.isNaN(d.getTime()) || d < b) return -1;
   let years = d.getUTCFullYear() - b.getUTCFullYear();
   const beforeBirthday =
     d.getUTCMonth() < b.getUTCMonth() ||
@@ -20,7 +21,9 @@ export function firstName(name: string): string {
 export function interviewTitle(interview: server.Interview, person: server.Person): string {
   if (interview.title) return interview.title;
   const age = ageYearsAt(person.birthday, interview.date);
-  return `${firstName(person.name)}'s interview at ${age}`;
+  return age < 0
+    ? `${firstName(person.name)}'s interview`
+    : `${firstName(person.name)}'s interview at ${age}`;
 }
 
 export type QuestionStatus = "answered" | "skipped" | "pending";
@@ -56,6 +59,10 @@ export function previousLine(previous: server.PreviousAnswer[] | undefined, limi
 
 const DRAFT_PREFIX = "interview-draft:";
 const SHOW_PREVIOUS_KEY = "interview-show-previous";
+function accountScope(): string {
+  const a = getAuth();
+  return `${a?.id ?? 0}:${a?.familyId ?? 0}:`;
+}
 
 function storage(): Storage | null {
   try {
@@ -66,13 +73,24 @@ function storage(): Storage | null {
 }
 
 export function draftKey(interviewId: number, questionId: number): string {
-  return `${DRAFT_PREFIX}${interviewId}:${questionId}`;
+  return `${DRAFT_PREFIX}${accountScope()}${interviewId}:${questionId}`;
 }
 
-export function saveDraft(interviewId: number, questionId: number, text: string) {
+export function saveDraft(
+  interviewId: number,
+  questionId: number,
+  text: string,
+  version = 0,
+  skipped = false
+): boolean {
   try {
-    storage()?.setItem(draftKey(interviewId, questionId), text);
-  } catch {}
+    const store = storage();
+    if (!store) return false;
+    store.setItem(draftKey(interviewId, questionId), JSON.stringify({ text, version, skipped }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearDraft(interviewId: number, questionId: number) {
@@ -85,29 +103,50 @@ export function loadDrafts(interviewId: number): Map<number, string> {
   const drafts = new Map<number, string>();
   const store = storage();
   if (!store) return drafts;
-  const prefix = `${DRAFT_PREFIX}${interviewId}:`;
+  const prefix = `${DRAFT_PREFIX}${accountScope()}${interviewId}:`;
   try {
     for (let i = 0; i < store.length; i++) {
       const key = store.key(i);
       if (key?.startsWith(prefix)) {
-        drafts.set(Number(key.slice(prefix.length)), store.getItem(key) ?? "");
+        drafts.set(Number(key.slice(prefix.length)), readDraft(store.getItem(key)).text);
       }
     }
   } catch {}
   return drafts;
 }
 
+type InterviewDraft = { text: string; version: number; skipped: boolean };
+function readDraft(raw: string | null): InterviewDraft {
+  try {
+    const d = JSON.parse(raw ?? "");
+    if (typeof d.text === "string") return d;
+  } catch {}
+  return { text: raw ?? "", version: 0, skipped: false };
+}
+export function loadDraftStates(interviewId: number): Map<number, InterviewDraft> {
+  const store = storage();
+  const out = new Map<number, InterviewDraft>();
+  if (!store) return out;
+  const prefix = `${DRAFT_PREFIX}${accountScope()}${interviewId}:`;
+  try {
+    for (const key of Object.keys(store))
+      if (key.startsWith(prefix))
+        out.set(Number(key.slice(prefix.length)), readDraft(store.getItem(key)));
+  } catch {}
+  return out;
+}
+
 export function showPreviousPreference(): boolean {
   try {
-    return storage()?.getItem(SHOW_PREVIOUS_KEY) !== "off";
+    return storage()?.getItem(SHOW_PREVIOUS_KEY + accountScope()) === "on";
   } catch {
-    return true;
+    return false;
   }
 }
 
 export function setShowPreviousPreference(on: boolean) {
   try {
-    storage()?.setItem(SHOW_PREVIOUS_KEY, on ? "on" : "off");
+    storage()?.setItem(SHOW_PREVIOUS_KEY + accountScope(), on ? "on" : "off");
   } catch {}
 }
 
@@ -116,12 +155,7 @@ export function questionFitsAge(q: server.InterviewQuestion, age: number): boole
 }
 
 export function normalizeAnswer(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+  return text.toLowerCase().trim().replace(/\s+/gu, " ");
 }
 
 export type AnswerChange = {
@@ -136,21 +170,12 @@ export function changesSincePrevious(
   answers: Map<number, server.Milestone>,
   previous: Record<number, server.PreviousAnswer[]>
 ): AnswerChange[] {
-  let lastDate = "";
-  let lastId = 0;
-  for (const list of Object.values(previous ?? {})) {
-    for (const p of list ?? []) {
-      if (p.date > lastDate) {
-        lastDate = p.date;
-        lastId = p.interviewId;
-      }
-    }
-  }
-  if (!lastId) return [];
   const changes: AnswerChange[] = [];
   for (const q of questions) {
     const now = answers.get(q.id);
-    const before = (previous[q.id] ?? []).find(p => p.interviewId === lastId);
+    const before = [...(previous[q.id] ?? [])].sort(
+      (a, b) => b.date.localeCompare(a.date) || b.interviewId - a.interviewId
+    )[0];
     if (now && before && normalizeAnswer(now.description) !== normalizeAnswer(before.text)) {
       changes.push({ question: q, before: before.text, after: now.description });
     }
@@ -322,12 +347,12 @@ export function importDrafts(
 ): ImportDraft[] {
   return proposals.map(p => ({
     header: p.header,
-    date: p.date || fallbackDate,
+    date: p.date || (p.header ? "" : fallbackDate),
     skip: false,
     rows: (p.rows ?? []).map(r => ({
       raw: r.raw,
       answer: r.answer,
-      choice: r.ref || (r.answer.trim() ? "new" : "ignore"),
+      choice: !r.answer.trim() ? "ignore" : r.ref ? (r.confidence === "exact" ? r.ref : "") : "new",
       confidence: r.confidence,
       keep: true,
     })),
@@ -338,7 +363,8 @@ export function duplicateRefs(draft: ImportDraft): Set<string> {
   const seen = new Set<string>();
   const dups = new Set<string>();
   for (const row of draft.rows) {
-    if (row.choice === "new" || row.choice === "ignore" || !row.answer.trim()) continue;
+    if (!row.choice || row.choice === "new" || row.choice === "ignore" || !row.answer.trim())
+      continue;
     if (seen.has(row.choice)) dups.add(row.choice);
     seen.add(row.choice);
   }
@@ -347,10 +373,12 @@ export function duplicateRefs(draft: ImportDraft): Set<string> {
 
 export function importRequest(
   personId: number,
-  drafts: ImportDraft[]
+  drafts: ImportDraft[],
+  requestId = ""
 ): server.ImportInterviewsRequest {
   return {
     personId,
+    requestId,
     interviews: drafts
       .filter(d => !d.skip)
       .map(d => ({
@@ -364,8 +392,8 @@ export function importRequest(
           .filter(r => r.choice !== "ignore" && r.answer.trim())
           .map(r =>
             r.choice === "new"
-              ? { ref: "", answer: r.answer, newText: r.raw, keep: r.keep }
-              : { ref: r.choice, answer: r.answer, newText: "", keep: false }
+              ? { ref: "", answer: r.answer, newText: r.raw, keep: r.keep, rawQuestion: r.raw }
+              : { ref: r.choice, answer: r.answer, newText: "", keep: false, rawQuestion: r.raw }
           ),
       })),
   };

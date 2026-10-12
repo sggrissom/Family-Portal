@@ -1,3 +1,8 @@
+import {
+  acknowledgeInterviewRequest,
+  callInterview,
+  interviewRequestId,
+} from "../../lib/interviewSave";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -6,7 +11,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { When, whenProblem, whenRequest } from "../../lib/when";
-import { WhenControl } from "../../components/WhenControl";
+import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import { firstName, questionRef } from "../../lib/interviews";
 import "./interview-styles";
@@ -36,7 +41,7 @@ type PastState = {
 const usePast = vlens.declareHook(
   (_personId: number): PastState => ({
     source: null,
-    when: { mode: "age", date: "", ageYears: "", ageMonths: "" },
+    when: { mode: "date", date: "", ageYears: "", ageMonths: "" },
     answers: {},
     extras: [],
     showRetired: false,
@@ -88,7 +93,18 @@ export function view(
 
         <div className="iv-field">
           <span className="entry-label">{t.when}</span>
-          <WhenControl when={state.when} disabled={state.saving} />
+          <input
+            type="date"
+            value={state.when.date}
+            max={localDateString(new Date())}
+            disabled={state.saving}
+            aria-label={t.when}
+            onInput={e => {
+              state.when.date = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+          />
+          <p className="iv-hint">{t.knownDateHint}</p>
         </div>
 
         {sections.map(section => (
@@ -228,19 +244,25 @@ async function save(state: PastState, data: server.GetInterviewSetupResponse) {
     vlens.scheduleRedraw();
     return;
   }
-  const when = whenRequest(state.when, new Date());
+  const when = whenRequest({ ...state.when, mode: "date" }, new Date());
   const answers: server.ImportAnswer[] = Object.entries(state.answers)
     .filter(([, a]) => a.trim())
-    .map(([ref, answer]) => ({ ref, answer, newText: "", keep: false }));
+    .map(([ref, answer]) => ({ ref, answer, newText: "", keep: false, rawQuestion: "" }));
   for (const e of state.extras) {
     if (e.text.trim() && e.answer.trim()) {
-      answers.push({ ref: "", answer: e.answer, newText: e.text, keep: e.keep });
+      answers.push({
+        ref: "",
+        answer: e.answer,
+        newText: e.text,
+        keep: e.keep,
+        rawQuestion: e.text,
+      });
     }
   }
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();
-  const [resp, err] = await server.SaveHistoricalInterview({
+  const request = {
     personId: data.person.id,
     interview: {
       inputType: when.inputType,
@@ -251,13 +273,20 @@ async function save(state: PastState, data: server.GetInterviewSetupResponse) {
       notes: state.notes,
       answers,
     },
-  });
+  };
+  const [resp, err] = await callInterview(
+    server.SaveHistoricalInterview({
+      ...request,
+      requestId: interviewRequestId(`past:${data.person.id}`, request),
+    })
+  );
   state.saving = false;
   if (!resp) {
     state.error = err || t.saveFailed;
     vlens.scheduleRedraw();
     return;
   }
+  acknowledgeInterviewRequest(`past:${data.person.id}`);
   state.source = null;
   core.setRoute(`/interview/${resp.interview.id}`);
 }

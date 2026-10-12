@@ -1246,9 +1246,9 @@ block(`
     color: #000 !important;
     background: none !important;
   }
-  .iv-view-section {
-    break-inside: avoid;
-  }
+  .iv-view-section { break-inside: auto; }
+ .iv-view-section h2 { break-after: avoid; }
+ .iv-qa { break-inside: avoid; }
   .iv-qa {
     padding: 0.2rem 0;
     gap: 0.5rem;

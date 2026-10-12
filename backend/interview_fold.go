@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 
 // interviewsOfAnswers loads the interviews that the given answers belong to,
 // so a client can fold them into one card with the right title and portrait.
-func interviewsOfAnswers(tx *vbolt.Tx, milestones []Milestone) []Interview {
+func interviewsOfAnswers(tx *vbolt.Tx, milestones []Milestone, viewer ...User) []Interview {
 	interviews := []Interview{}
 	seen := map[int]bool{}
 	for _, m := range milestones {
@@ -19,6 +20,9 @@ func interviewsOfAnswers(tx *vbolt.Tx, milestones []Milestone) []Interview {
 		}
 		seen[m.InterviewId] = true
 		if interview := GetInterviewById(tx, m.InterviewId); interview.Id > 0 {
+			if len(viewer) > 0 {
+				interview = visibleInterview(tx, viewer[0], interview)
+			}
 			interviews = append(interviews, interview)
 		}
 	}
@@ -29,6 +33,7 @@ func removePhotoFromInterviews(tx *vbolt.Tx, photo Image) {
 	for _, interview := range familyInterviews(tx, photo.FamilyId) {
 		if interview.PhotoId == photo.Id {
 			interview.PhotoId = 0
+			interview.Version++
 			writeInterview(tx, interview)
 		}
 	}
@@ -37,6 +42,7 @@ func removePhotoFromInterviews(tx *vbolt.Tx, photo Image) {
 func movePersonInterviewsTx(tx *vbolt.Tx, fromPersonId, toPersonId int) {
 	for _, interview := range personInterviews(tx, fromPersonId) {
 		interview.PersonId = toPersonId
+		interview.Version++
 		writeInterview(tx, interview)
 	}
 }
@@ -55,6 +61,7 @@ func deleteFamilyInterviewsTx(tx *vbolt.Tx, familyId int) {
 		deleteInterviewQuestion(tx, q.Id)
 	}
 	vbolt.Delete(tx, InterviewQuestionListBkt, familyId)
+	deleteFamilyInterviewReceipts(tx, familyId)
 }
 
 func interviewNudge(tx *vbolt.Tx, person Person, interviews []Interview, today time.Time) (rankedNudge, bool) {
@@ -107,15 +114,18 @@ type BookInterview struct {
 }
 
 func sameAnswer(a, b string) bool {
-	return strings.Join(strings.Fields(strings.ToLower(strings.Trim(a, ".!?"))), " ") ==
-		strings.Join(strings.Fields(strings.ToLower(strings.Trim(b, ".!?"))), " ")
+	return normalizeInterviewAnswer(a) == normalizeInterviewAnswer(b)
+}
+
+func normalizeInterviewAnswer(text string) string {
+	return strings.Join(strings.Fields(strings.ToLower(text)), " ")
 }
 
 func bookInterviews(tx *vbolt.Tx, person Person, inRange func(time.Time) bool) []BookInterview {
 	interviews := personInterviews(tx, person.Id)
 	sortInterviewsByDate(interviews)
 	var out []BookInterview
-	var previous map[int]string
+	previous := map[int]string{}
 	for _, interview := range interviews {
 		if interview.Status != InterviewComplete || interview.FamilyId != person.FamilyId {
 			continue
@@ -144,7 +154,23 @@ func bookInterviews(tx *vbolt.Tx, person Person, inRange func(time.Time) bool) [
 			}
 			out = append(out, entry)
 		}
-		previous = byQuestion
+		for id, text := range byQuestion {
+			previous[id] = text
+		}
 	}
 	return out
+}
+
+func visibleInterview(tx *vbolt.Tx, user User, i Interview) Interview {
+	if i.PhotoId > 0 && !CanAccessPhoto(tx, user, GetImageById(tx, i.PhotoId), AccessView) {
+		i.PhotoId = 0
+	}
+	i.AnswerCount = len(interviewAnswers(tx, i.Id))
+	return i
+}
+
+func visibleInterviewAnswer(tx *vbolt.Tx, user User, m Milestone) Milestone {
+	m.PhotoIds = GetMilestonePhotoIds(tx, m.Id)
+	m.PhotoIds = slices.DeleteFunc(m.PhotoIds, func(id int) bool { return !CanAccessPhoto(tx, user, GetImageById(tx, id), AccessView) })
+	return m
 }

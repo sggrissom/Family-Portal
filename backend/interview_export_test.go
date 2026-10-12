@@ -166,8 +166,8 @@ func TestBooksCarryInterviews(t *testing.T) {
 	if bi.Interview.Id != second.Interview.Id || len(bi.Answers) != 2 {
 		t.Errorf("book interview = %+v", bi)
 	}
-	if len(bi.Changes) != 1 || bi.Changes[0].Before != "blue" || bi.Changes[0].After != "green" {
-		t.Errorf("changes = %+v, want only the color (pizza → Pizza! is the same answer)", bi.Changes)
+	if len(bi.Changes) != 2 {
+		t.Errorf("changes = %+v, want the changed color and punctuation-bearing food answer", bi.Changes)
 	}
 	for _, m := range sources.Sources.Milestones {
 		if m.InterviewId > 0 {

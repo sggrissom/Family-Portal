@@ -35,7 +35,7 @@ var ErrInterviewInProgress = errors.New("There's already an interview in progres
 
 func ageYearsAt(birthday, date time.Time) int {
 	if birthday.IsZero() || date.Before(birthday) {
-		return 0
+		return -1
 	}
 	years := date.Year() - birthday.Year()
 	if date.Month() < birthday.Month() || (date.Month() == birthday.Month() && date.Day() < birthday.Day()) {
@@ -46,7 +46,11 @@ func ageYearsAt(birthday, date time.Time) int {
 
 func renderQuestion(text string, person Person, date time.Time) string {
 	text = strings.ReplaceAll(text, "{name}", firstName(person.Name))
-	return strings.ReplaceAll(text, "{age}", strconv.Itoa(ageYearsAt(person.Birthday, date)))
+	age := ageYearsAt(person.Birthday, date)
+	if age < 0 {
+		return strings.ReplaceAll(text, "{age}", "this age")
+	}
+	return strings.ReplaceAll(text, "{age}", strconv.Itoa(age))
 }
 
 func interviewFor(tx *vbolt.Tx, user User, id int, need AccessLevel) (Interview, Person, error) {
@@ -82,6 +86,22 @@ func deleteInterviewTx(tx *vbolt.Tx, interview Interview) {
 	vbolt.Delete(tx, InterviewBkt, interview.Id)
 	vbolt.DeleteTargetTerms(tx, InterviewByPersonIndex, interview.Id)
 	vbolt.DeleteTargetTerms(tx, InterviewByFamilyIndex, interview.Id)
+	for _, id := range interview.QuestionIds {
+		q := GetInterviewQuestionById(tx, id)
+		if !q.OneOff {
+			continue
+		}
+		referenced := false
+		for _, other := range familyInterviews(tx, interview.FamilyId) {
+			if slices.Contains(other.QuestionIds, id) {
+				referenced = true
+				break
+			}
+		}
+		if !referenced {
+			deleteInterviewQuestion(tx, id)
+		}
+	}
 }
 
 func setInterviewDate(tx *vbolt.Tx, interview *Interview, date time.Time) {
@@ -96,7 +116,7 @@ func setInterviewDate(tx *vbolt.Tx, interview *Interview, date time.Time) {
 
 func parseInterviewDate(date string, birthday time.Time) (time.Time, error) {
 	if strings.TrimSpace(date) == "" {
-		return dayStart(time.Now().UTC()), nil
+		return time.Time{}, errors.New("Choose the known date of the interview")
 	}
 	day, err := resolveEntryDate("Interview", "date", &date, nil, nil, birthday)
 	if err != nil {
@@ -164,6 +184,7 @@ type StartInterviewRequest struct {
 	QuestionIds     []int    `json:"questionIds"`
 	DefaultKeys     []string `json:"defaultKeys"`
 	OneOffQuestions []string `json:"oneOffQuestions"`
+	RequestId       string   `json:"requestId,omitempty"`
 }
 
 type InterviewResponse struct {
@@ -171,6 +192,13 @@ type InterviewResponse struct {
 }
 
 func startInterviewTx(tx *vbolt.Tx, person Person, req StartInterviewRequest) (Interview, error) {
+	receipt, replay, err := interviewReceipt(tx, person.FamilyId, "start", req.RequestId, req)
+	if err != nil {
+		return Interview{}, err
+	}
+	if replay {
+		return GetInterviewById(tx, receipt.Ids[0]), nil
+	}
 	if inProgressInterview(tx, person.Id).Id > 0 {
 		return Interview{}, ErrInterviewInProgress
 	}
@@ -192,7 +220,7 @@ func startInterviewTx(tx *vbolt.Tx, person Person, req StartInterviewRequest) (I
 	interview := Interview{
 		FamilyId: person.FamilyId, PersonId: person.Id, Date: date,
 		Source: InterviewConducted, Status: InterviewInProgress,
-		QuestionIds: []int{}, SkippedIds: []int{}, CreatedAt: time.Now(), Version: 1,
+		QuestionIds: []int{}, SkippedIds: []int{}, CreatedAt: time.Now(), Version: 1, OriginKey: newInterviewOrigin(),
 	}
 	add := func(id int) {
 		if !slices.Contains(interview.QuestionIds, id) {
@@ -227,7 +255,9 @@ func startInterviewTx(tx *vbolt.Tx, person Person, req StartInterviewRequest) (I
 	}
 
 	interview.Id = vbolt.NextIntId(tx, InterviewBkt)
+	snapshotInterview(tx, &interview)
 	writeInterview(tx, interview)
+	saveInterviewReceipt(tx, receipt, []int{interview.Id})
 	return interview, nil
 }
 
@@ -272,13 +302,11 @@ type GetInterviewResponse struct {
 }
 
 func interviewQuestionsFor(tx *vbolt.Tx, interview Interview, person Person) []InterviewQuestion {
-	questions := make([]InterviewQuestion, 0, len(interview.QuestionIds))
-	for _, id := range interview.QuestionIds {
-		q := GetInterviewQuestionById(tx, id)
-		if q.Id == 0 {
-			continue
-		}
-		q.Text = renderQuestion(q.Text, person, interview.Date)
+	snapshotInterview(tx, &interview)
+	questions := make([]InterviewQuestion, 0, len(interview.Questions))
+	for _, snap := range interview.Questions {
+		q := GetInterviewQuestionById(tx, snap.QuestionId)
+		q.Id, q.Text, q.Section = snap.QuestionId, snap.Text, snap.Section
 		questions = append(questions, q)
 	}
 	return questions
@@ -311,7 +339,7 @@ func GetInterview(ctx *vbeam.Context, req GetInterviewRequest) (resp GetIntervie
 	if err != nil {
 		return
 	}
-	resp.Interview = interview
+	resp.Interview = visibleInterview(ctx.Tx, user, interview)
 	resp.Person = person
 	resp.Questions = interviewQuestionsFor(ctx.Tx, interview, person)
 	resp.Answers = interviewAnswers(ctx.Tx, interview.Id)
@@ -319,7 +347,7 @@ func GetInterview(ctx *vbeam.Context, req GetInterviewRequest) (resp GetIntervie
 		resp.Answers = []Milestone{}
 	}
 	for i := range resp.Answers {
-		resp.Answers[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Answers[i].Id)
+		resp.Answers[i] = visibleInterviewAnswer(ctx.Tx, user, resp.Answers[i])
 		resp.Answers[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Answers[i].Id)
 	}
 	resp.Previous = previousAnswers(ctx.Tx, interview, person)
@@ -333,6 +361,7 @@ type SaveInterviewAnswerRequest struct {
 	QuestionId  int    `json:"questionId"`
 	Answer      string `json:"answer"`
 	Skipped     bool   `json:"skipped"`
+	Version     int    `json:"version"`
 }
 
 type SaveInterviewAnswerResponse struct {
@@ -341,6 +370,10 @@ type SaveInterviewAnswerResponse struct {
 }
 
 func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req SaveInterviewAnswerRequest) (Interview, Milestone, error) {
+	if req.Version != interview.Version {
+		return interview, Milestone{}, ErrInterviewChanged
+	}
+	snapshotInterview(tx, &interview)
 	if !slices.Contains(interview.QuestionIds, req.QuestionId) {
 		return interview, Milestone{}, ErrInterviewQuestionNotFound
 	}
@@ -372,7 +405,7 @@ func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req
 			FamilyId:      interview.FamilyId,
 			Description:   text,
 			Category:      CategoryInterview,
-			Context:       renderQuestion(q.Text, person, interview.Date),
+			Context:       interviewPrompt(tx, interview, req.QuestionId),
 			MilestoneDate: interview.Date,
 			CreatedAt:     time.Now(),
 			InterviewId:   interview.Id,
@@ -380,6 +413,7 @@ func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req
 		}
 		writeMilestone(tx, answer)
 	}
+	interview.Version++
 	writeInterview(tx, interview)
 	return interview, answer, nil
 }
@@ -417,6 +451,7 @@ type AddInterviewQuestionRequest struct {
 	Text            string `json:"text"`
 	AfterQuestionId int    `json:"afterQuestionId"`
 	Keep            bool   `json:"keep"`
+	Version         int    `json:"version"`
 }
 
 type AddInterviewQuestionResponse struct {
@@ -425,6 +460,10 @@ type AddInterviewQuestionResponse struct {
 }
 
 func addInterviewQuestionTx(tx *vbolt.Tx, interview Interview, req AddInterviewQuestionRequest) (Interview, InterviewQuestion, error) {
+	if req.Version != interview.Version {
+		return interview, InterviewQuestion{}, ErrInterviewChanged
+	}
+	snapshotInterview(tx, &interview)
 	if len(interview.QuestionIds) >= maxInterviewQuestions {
 		return interview, InterviewQuestion{}, errors.New("That's too many questions for one interview")
 	}
@@ -482,6 +521,8 @@ func addInterviewQuestionTx(tx *vbolt.Tx, interview Interview, req AddInterviewQ
 		at = len(interview.QuestionIds)
 	}
 	interview.QuestionIds = slices.Insert(interview.QuestionIds, at, q.Id)
+	interview.Questions = slices.Insert(interview.Questions, at, InterviewQuestionSnapshot{QuestionId: q.Id, Text: renderQuestion(q.Text, GetPersonById(tx, interview.PersonId), interview.Date), Section: q.Section})
+	interview.Version++
 	writeInterview(tx, interview)
 	return interview, q, nil
 }
@@ -524,6 +565,7 @@ func updateInterviewTx(tx *vbolt.Tx, interview Interview, person Person, req Upd
 	if req.Version != interview.Version {
 		return interview, ErrInterviewChanged
 	}
+	snapshotInterview(tx, &interview)
 	title := strings.TrimSpace(req.Title)
 	notes := strings.TrimSpace(req.Notes)
 	if len([]rune(title)) > maxInterviewTitle {
@@ -585,7 +627,8 @@ func UpdateInterview(ctx *vbeam.Context, req UpdateInterviewRequest) (resp Inter
 }
 
 type DeleteInterviewRequest struct {
-	Id int `json:"id"`
+	Id      int `json:"id"`
+	Version int `json:"version"`
 }
 
 type DeleteInterviewResponse struct {
@@ -601,6 +644,10 @@ func DeleteInterview(ctx *vbeam.Context, req DeleteInterviewRequest) (resp Delet
 	vbeam.UseWriteTx(ctx)
 	interview, _, err := interviewFor(ctx.Tx, user, req.Id, AccessContribute)
 	if err != nil {
+		return
+	}
+	if req.Version != interview.Version {
+		err = ErrInterviewChanged
 		return
 	}
 	deleteInterviewTx(ctx.Tx, interview)

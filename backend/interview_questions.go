@@ -332,6 +332,12 @@ func saveInterviewQuestionsTx(tx *vbolt.Tx, familyId int, req SaveInterviewQuest
 		return fmt.Errorf("A list can hold at most %d questions", maxFamilyQuestions)
 	}
 
+	for _, i := range familyInterviews(tx, familyId) {
+		if i.Questions == nil {
+			snapshotInterview(tx, &i)
+			writeInterview(tx, i)
+		}
+	}
 	existing := familyQuestions(tx, familyId)
 	byId := map[int]InterviewQuestion{}
 	byKey := map[string]InterviewQuestion{}
@@ -468,6 +474,11 @@ func mergeInterviewQuestionsTx(tx *vbolt.Tx, user User, req MergeInterviewQuesti
 		return 0, ErrInterviewQuestionsChanged
 	}
 
+	for _, i := range familyInterviews(tx, familyId) {
+		if slices.Contains(i.QuestionIds, from.Id) && slices.Contains(i.QuestionIds, into.Id) {
+			return 0, errors.New("Both questions are planned in the same interview, so they can't be merged")
+		}
+	}
 	answers := questionAnswers(tx, from.Id)
 	answeredInto := map[int]bool{}
 	for _, m := range questionAnswers(tx, into.Id) {
@@ -487,6 +498,13 @@ func mergeInterviewQuestionsTx(tx *vbolt.Tx, user User, req MergeInterviewQuesti
 		if !slices.Contains(interview.QuestionIds, from.Id) && !slices.Contains(interview.SkippedIds, from.Id) {
 			continue
 		}
+		snapshotInterview(tx, &interview)
+		for j := range interview.Questions {
+			if interview.Questions[j].QuestionId == from.Id {
+				interview.Questions[j].QuestionId = into.Id
+			}
+		}
+		interview.Version++
 		interview.QuestionIds = replaceId(interview.QuestionIds, from.Id, into.Id)
 		interview.SkippedIds = replaceId(interview.SkippedIds, from.Id, into.Id)
 		if answeredInto[interview.Id] {

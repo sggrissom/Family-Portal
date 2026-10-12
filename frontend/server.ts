@@ -38,21 +38,6 @@ export const BookItemPhoto: BookItemKind = 1;
 export const BookItemInterview: BookItemKind = 2;
 
 // Errors
-export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
-export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -62,13 +47,28 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrInterviewNotFound = "Interview not found or not in your family";
 export const ErrInterviewInProgress = "There's already an interview in progress for this person";
 export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 
 export interface CreateAccountRequest {
     name: string
@@ -482,9 +482,11 @@ export interface GetMilestoneRequest {
 
 export interface GetMilestoneResponse {
     milestone: Milestone
+    interviewVersion: number
 }
 
 export interface UpdateMilestoneRequest {
+    interviewVersion: number
     id: number
     description: string
     category: string
@@ -502,6 +504,7 @@ export interface UpdateMilestoneResponse {
 }
 
 export interface DeleteMilestoneRequest {
+    interviewVersion: number
     id: number
 }
 
@@ -521,6 +524,7 @@ export interface SearchMilestonesResponse {
 }
 
 export interface UpdateMilestoneTagsRequest {
+    interviewVersion: number
     milestoneId: number
     tagIds: number[]
 }
@@ -572,6 +576,7 @@ export interface StartInterviewRequest {
     questionIds: number[]
     defaultKeys: string[]
     oneOffQuestions: string[]
+    requestId: string
 }
 
 export interface InterviewResponse {
@@ -595,6 +600,7 @@ export interface SaveInterviewAnswerRequest {
     questionId: number
     answer: string
     skipped: boolean
+    version: number
 }
 
 export interface SaveInterviewAnswerResponse {
@@ -607,6 +613,7 @@ export interface AddInterviewQuestionRequest {
     text: string
     afterQuestionId: number
     keep: boolean
+    version: number
 }
 
 export interface AddInterviewQuestionResponse {
@@ -626,6 +633,7 @@ export interface UpdateInterviewRequest {
 
 export interface DeleteInterviewRequest {
     id: number
+    version: number
 }
 
 export interface DeleteInterviewResponse {
@@ -676,6 +684,7 @@ export interface PreviewInterviewImportResponse {
 export interface ImportInterviewsRequest {
     personId: number
     interviews: HistoricalInterview[]
+    requestId: string
 }
 
 export interface ImportInterviewsResponse {
@@ -685,6 +694,7 @@ export interface ImportInterviewsResponse {
 export interface SaveHistoricalInterviewRequest {
     personId: number
     interview: HistoricalInterview
+    requestId: string
 }
 
 export interface ListActivitiesRequest {
@@ -1863,6 +1873,7 @@ export interface Image {
 }
 
 export interface Interview {
+    answerCount: number
     id: number
     familyId: number
     personId: number
@@ -1877,6 +1888,8 @@ export interface Interview {
     createdAt: string
     completedAt: string
     version: number
+    questions: InterviewQuestionSnapshot[]
+    originKey: string
 }
 
 export interface Relation {
@@ -2611,6 +2624,12 @@ export interface AdminMobileVersionPlatform {
     warnings: string[]
 }
 
+export interface InterviewQuestionSnapshot {
+    questionId: number
+    text: string
+    section: string
+}
+
 export interface ImportRow {
     raw: string
     answer: string
@@ -2623,6 +2642,7 @@ export interface ImportAnswer {
     answer: string
     newText: string
     keep: boolean
+    rawQuestion: string
 }
 
 export interface Entry {

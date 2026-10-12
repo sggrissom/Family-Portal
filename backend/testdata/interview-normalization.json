@@ -1,0 +1,7 @@
+[
+ {"input":" Pizza \n  AND tacos ","expected":"pizza and tacos"},
+ {"input":"Crème brûlée!!","expected":"crème brûlée!!"},
+ {"input":"C++","expected":"c++"},
+ {"input":"C#","expected":"c#"},
+ {"input":"No, thanks.","expected":"no, thanks."}
+]

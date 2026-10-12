@@ -1,3 +1,4 @@
+import { callInterview } from "../../lib/interviewSave";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -217,7 +218,7 @@ const QA = ({ state, q }: { state: ViewState; q: server.InterviewQuestion }) => 
             id={`answer-${q.id}`}
             type="text"
             value={value}
-            disabled={state.savingAnswer === q.id}
+            disabled={state.busy || state.savingAnswer > 0}
             onInput={e => {
               state.drafts[q.id] = e.currentTarget.value;
             }}
@@ -334,21 +335,24 @@ const DetailsForm = ({ state, person }: { state: ViewState; person: server.Perso
 };
 
 async function saveDetails(state: ViewState, change: Partial<server.UpdateInterviewRequest>) {
+  if (state.busy || state.savingAnswer) return;
   const i = state.interview;
   const d = state.details;
   state.busy = true;
   state.error = "";
   vlens.scheduleRedraw();
-  const [resp, err] = await server.UpdateInterview({
-    id: i.id,
-    version: i.version,
-    date: d.date || i.date.slice(0, 10),
-    title: d.title,
-    notes: d.notes,
-    photoId: i.photoId,
-    status: i.status,
-    ...change,
-  });
+  const [resp, err] = await callInterview(
+    server.UpdateInterview({
+      id: i.id,
+      version: i.version,
+      date: d.date || i.date.slice(0, 10),
+      title: d.title,
+      notes: d.notes,
+      photoId: i.photoId,
+      status: i.status,
+      ...change,
+    })
+  );
   state.busy = false;
   if (!resp) {
     state.error = err || t.saveFailed;
@@ -392,17 +396,21 @@ async function onPortrait(state: ViewState, person: server.Person, e: Event) {
 }
 
 async function saveAnswer(state: ViewState, questionId: number) {
+  if (state.busy || state.savingAnswer) return;
   const draft = state.drafts[questionId];
   const current = state.answers.get(questionId)?.description ?? "";
   if (draft === undefined || draft.trim() === current) return;
   state.savingAnswer = questionId;
   vlens.scheduleRedraw();
-  const [resp, err] = await server.SaveInterviewAnswer({
-    interviewId: state.interview.id,
-    questionId,
-    answer: draft,
-    skipped: false,
-  });
+  const [resp, err] = await callInterview(
+    server.SaveInterviewAnswer({
+      interviewId: state.interview.id,
+      version: state.interview.version,
+      questionId,
+      answer: draft,
+      skipped: false,
+    })
+  );
   state.savingAnswer = 0;
   if (!resp) {
     state.error = err || t.saveFailed;
@@ -416,10 +424,13 @@ async function saveAnswer(state: ViewState, questionId: number) {
 }
 
 async function onDelete(state: ViewState) {
+  if (state.busy || state.savingAnswer) return;
   if (!confirm(t.confirmDelete)) return;
   state.busy = true;
   vlens.scheduleRedraw();
-  const [resp, err] = await server.DeleteInterview({ id: state.interview.id });
+  const [resp, err] = await callInterview(
+    server.DeleteInterview({ id: state.interview.id, version: state.interview.version })
+  );
   state.busy = false;
   if (!resp) {
     state.error = err || t.deleteFailed;
