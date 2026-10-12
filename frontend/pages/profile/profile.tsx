@@ -22,6 +22,7 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { initial } from "../../components/PersonChips";
 import { PersonActivities } from "../activities/person";
 import { InterviewsTab, hasInterviewTab } from "../interviews/person-tab";
+import { interviewsById } from "../../lib/interviews";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
@@ -455,6 +456,7 @@ const StoryTab = ({
     return <p className="profile-empty">{copy.person.nothingYet(person.name.split(" ")[0])}</p>;
   }
 
+  const interviews = interviewsById(data.person.interviews);
   const chapters = isValidBirthday(person.birthday)
     ? storyChapters(days, person.birthday)
     : [{ age: null, days, grew: "" }];
@@ -472,6 +474,7 @@ const StoryTab = ({
             people={[person]}
             today={today}
             subjectId={person.id}
+            interviews={interviews}
           />
           {index === 0 && hasPreview && (
             <>
@@ -486,6 +489,7 @@ const StoryTab = ({
                   people={[person]}
                   today={today}
                   subjectId={person.id}
+                  interviews={interviews}
                 />
               )}
             </>

@@ -370,3 +370,52 @@ export function importRequest(
       })),
   };
 }
+
+export type InterviewGroup = {
+  interviewId: number;
+  personId: number;
+  date: string;
+  answers: server.Milestone[];
+};
+
+// Answers of one interview fold into a single card wherever moments are listed.
+export function groupInterviewAnswers(milestones: server.Milestone[]): {
+  groups: InterviewGroup[];
+  loose: server.Milestone[];
+} {
+  const groups: InterviewGroup[] = [];
+  const byId = new Map<number, InterviewGroup>();
+  const loose: server.Milestone[] = [];
+  for (const m of milestones) {
+    if (!m.interviewId) {
+      loose.push(m);
+      continue;
+    }
+    let group = byId.get(m.interviewId);
+    if (!group) {
+      group = {
+        interviewId: m.interviewId,
+        personId: m.personId,
+        date: m.milestoneDate,
+        answers: [],
+      };
+      byId.set(m.interviewId, group);
+      groups.push(group);
+    }
+    group.answers.push(m);
+  }
+  for (const g of groups) g.answers.sort((a, b) => a.id - b.id);
+  return { groups, loose };
+}
+
+export function shortQuestion(context: string): string {
+  return context
+    .trim()
+    .replace(/^(what's|what is|who's|who is)\s+(your\s+)?/i, "")
+    .replace(/\?$/, "")
+    .trim();
+}
+
+export function interviewsById(interviews: server.Interview[] | null | undefined) {
+  return new Map((interviews ?? []).map(i => [i.id, i]));
+}

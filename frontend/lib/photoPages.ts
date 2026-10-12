@@ -103,6 +103,7 @@ export function mergeTimeline(
         milestones: mergeById(item.milestones, add.milestones),
         growthData: mergeById(item.growthData, add.growthData),
         photos: mergeById(item.photos, add.photos),
+        interviews: mergeById(item.interviews, add.interviews),
       };
     }),
     appearances: [

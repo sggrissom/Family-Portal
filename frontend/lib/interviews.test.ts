@@ -9,6 +9,8 @@ import {
   importRequest,
   columnLabel,
   filterTimelines,
+  groupInterviewAnswers,
+  shortQuestion,
   interviewGrid,
   normalizeAnswer,
   questionTimelines,
@@ -23,6 +25,7 @@ import {
   questionStatus,
   saveDraft,
 } from "./interviews";
+import { summarizeDays } from "./daySummary";
 
 const interview = (extra: Partial<server.Interview> = {}) =>
   ({
@@ -242,5 +245,45 @@ describe("import review", () => {
     const drafts = importDrafts(proposals, "");
     drafts[0].skip = true;
     expect(importRequest(7, drafts).interviews).toEqual([]);
+  });
+});
+
+describe("folding answers into interview cards", () => {
+  const m = (id: number, interviewId: number, extra: Partial<server.Milestone> = {}) =>
+    ({
+      id,
+      interviewId,
+      personId: 1,
+      milestoneDate: "2025-05-10T00:00:00Z",
+      context: "What's your favorite food?",
+      description: `a${id}`,
+      ...extra,
+    }) as server.Milestone;
+
+  it("groups answers by interview and leaves other moments loose", () => {
+    const { groups, loose } = groupInterviewAnswers([m(5, 2), m(1, 0), m(3, 2), m(4, 9), m(2, 0)]);
+    expect(groups.map(g => [g.interviewId, g.answers.map(a => a.id)])).toEqual([
+      [2, [3, 5]],
+      [9, [4]],
+    ]);
+    expect(loose.map(x => x.id)).toEqual([1, 2]);
+  });
+
+  it("shortens questions for a card's preview lines", () => {
+    expect(shortQuestion("What's your favorite food?")).toBe("favorite food");
+    expect(shortQuestion("Who is your best friend?")).toBe("best friend");
+    expect(shortQuestion("What do you want to be when you grow up?")).toBe(
+      "What do you want to be when you grow up"
+    );
+  });
+
+  it("puts one card on the interview's day in a day summary", () => {
+    const days = summarizeDays(
+      { photos: [], growth: [], milestones: [m(1, 2), m(2, 2), m(3, 0)] },
+      []
+    );
+    expect(days).toHaveLength(1);
+    expect(days[0].milestones.map(x => x.id)).toEqual([3]);
+    expect(days[0].interviews.map(g => g.answers.length)).toEqual([2]);
   });
 });

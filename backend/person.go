@@ -99,6 +99,7 @@ type GetPersonResponse struct {
 	GrowthData []GrowthData `json:"growthData"`
 	Milestones []Milestone  `json:"milestones"`
 	Photos     []Image      `json:"photos"`
+	Interviews []Interview  `json:"interviews"`
 }
 
 type GetFamilyTimelineRequest struct {
@@ -120,6 +121,7 @@ type FamilyTimelineItem struct {
 	GrowthData []GrowthData `json:"growthData"`
 	Milestones []Milestone  `json:"milestones"`
 	Photos     []Image      `json:"photos"`
+	Interviews []Interview  `json:"interviews"`
 }
 
 type GetFamilyTimelineResponse struct {
@@ -481,6 +483,7 @@ func GetPerson(ctx *vbeam.Context, req GetPersonRequest) (resp GetPersonResponse
 			resp.Milestones[i].PhotoIds = GetMilestonePhotoIds(ctx.Tx, resp.Milestones[i].Id)
 			resp.Milestones[i].TagIds = GetMilestoneTagIds(ctx.Tx, resp.Milestones[i].Id)
 		}
+		resp.Interviews = interviewsOfAnswers(ctx.Tx, resp.Milestones)
 	}
 
 	if CanAccessPerson(ctx.Tx, user, resp.Person, ScopePhotos, AccessView) {
@@ -622,6 +625,7 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 		milestone.PersonId = req.TargetPersonId
 		writeMilestone(ctx.Tx, milestone)
 	}
+	movePersonInterviewsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	resp.MergedMilestones = len(milestones)
 
 	photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.SourcePersonId)
@@ -754,6 +758,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 				milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
 				timelineItem.Milestones = append(timelineItem.Milestones, milestone)
 			}
+			timelineItem.Interviews = interviewsOfAnswers(ctx.Tx, timelineItem.Milestones)
 		}
 
 		if !req.SkipPhotos && CanAccessPerson(ctx.Tx, user, person, ScopePhotos, AccessView) {

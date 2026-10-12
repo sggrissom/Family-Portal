@@ -58,7 +58,15 @@ func GetMilestoneEmbedding(tx *vbolt.Tx, milestoneId int) (e MilestoneEmbedding,
 
 func milestoneEmbeddingOutdated(m Milestone, e MilestoneEmbedding, found bool) bool {
 	return !found || e.Model != sentenceModelId || e.Version < milestoneEmbedVersion ||
-		e.Text != m.Description || e.PersonId != m.PersonId || len(e.Vector) == 0
+		e.Text != milestoneEmbedText(m) || e.PersonId != m.PersonId || len(e.Vector) == 0
+}
+
+// An interview answer alone ("pizza") says little, so its question goes with it.
+func milestoneEmbedText(m Milestone) string {
+	if m.Category == CategoryInterview && m.Context != "" {
+		return m.Context + ": " + m.Description
+	}
+	return m.Description
 }
 
 func deleteMilestoneEmbeddingTx(tx *vbolt.Tx, milestoneId int) {
@@ -92,7 +100,8 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 	if m.Id == 0 || !milestoneEmbeddingOutdated(m, current, found) {
 		return nil
 	}
-	vectors, err := embedSentences(client, []string{m.Description})
+	text := milestoneEmbedText(m)
+	vectors, err := embedSentences(client, []string{text})
 	if errors.Is(err, errVisionUnavailable) || errors.Is(err, errRetryLater) {
 		return errRetryLater
 	}
@@ -106,7 +115,7 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 		}
 		e := MilestoneEmbedding{
 			MilestoneId: m.Id, PersonId: m.PersonId, FamilyId: m.FamilyId,
-			Model: sentenceModelId, Version: milestoneEmbedVersion, Text: m.Description, Vector: vectors[0],
+			Model: sentenceModelId, Version: milestoneEmbedVersion, Text: text, Vector: vectors[0],
 		}
 		vbolt.Write(tx, MilestoneEmbeddingBkt, m.Id, &e)
 		vbolt.TxCommit(tx)
