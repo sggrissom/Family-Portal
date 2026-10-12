@@ -6,6 +6,7 @@ export type Destination =
   | "books"
   | "sameAge"
   | "activities"
+  | "interviews"
   | "chat";
 
 const DESTINATION_PREFIXES: [string, Destination][] = [
@@ -27,6 +28,9 @@ const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/season", "activities"],
   ["/competition", "activities"],
   ["/routine", "activities"],
+  ["/interviews", "interviews"],
+  ["/interview", "interviews"],
+  ["/interview-questions", "interviews"],
   ["/chat", "chat"],
 ];
 
