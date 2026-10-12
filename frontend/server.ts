@@ -35,30 +35,24 @@ export const RelationPartner: RelationKind = 2;
 export type BookItemKind = number;
 export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
+export const BookItemInterview: BookItemKind = 2;
 
 // Errors
-export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
 export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrFaceNotFound = "Face not found or access denied";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrInterviewNotFound = "Interview not found or not in your family";
-export const ErrInterviewInProgress = "There's already an interview in progress for this person";
-export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
 export const ErrBookNotFound = "Book not found or not in your family";
 export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrFaceNotFound = "Face not found or access denied";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -68,6 +62,13 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
+export const ErrInterviewNotFound = "Interview not found or not in your family";
+export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrPersonNotFound = "Person not found or not in your family";
 
 export interface CreateAccountRequest {
     name: string
@@ -648,6 +649,17 @@ export interface GetFamilyInterviewsRequest {
 
 export interface GetFamilyInterviewsResponse {
     people: FamilyInterviewRow[]
+}
+
+export interface CompareInterviewAnswersRequest {
+    questionId: number
+    personIds: number[]
+}
+
+export interface CompareInterviewAnswersResponse {
+    question: InterviewQuestion
+    questions: InterviewQuestion[]
+    rows: CompareRow[]
 }
 
 export interface PreviewInterviewImportRequest {
@@ -1309,6 +1321,8 @@ export interface ImportDataResponse {
     importedActivities: ActivityImportCounts
     importedBooks: number
     skippedBooks: number
+    importedInterviews: number
+    skippedInterviews: number
     errors: string[]
     warnings: string[]
     personIdMapping: Record<number, number>
@@ -1951,6 +1965,11 @@ export interface FamilyInterviewRow {
     child: boolean
 }
 
+export interface CompareRow {
+    person: Person
+    answers: PreviousAnswer[]
+}
+
 export interface ImportProposal {
     header: string
     date: string
@@ -2224,6 +2243,7 @@ export interface BookSources {
     growthData: GrowthData[]
     photoPeople: Record<number, number[]>
     untagged: number[]
+    interviews: BookInterview[]
 }
 
 export interface Book {
@@ -2671,6 +2691,13 @@ export interface TagSuggestion {
     createdAt: string
 }
 
+export interface BookInterview {
+    interview: Interview
+    questions: InterviewQuestion[]
+    answers: Milestone[]
+    changes: BookInterviewChange[]
+}
+
 export interface BookItem {
     kind: BookItemKind
     sourceId: number
@@ -2756,6 +2783,12 @@ export interface HostRelease {
     sha: string
     deployed_at: string
     current: boolean
+}
+
+export interface BookInterviewChange {
+    questionId: number
+    before: string
+    after: string
 }
 
 export interface EndpointStats {
@@ -2990,6 +3023,10 @@ export async function GetPersonInterviews(data: GetPersonInterviewsRequest): Pro
 
 export async function GetFamilyInterviews(data: GetFamilyInterviewsRequest): Promise<rpc.Response<GetFamilyInterviewsResponse>> {
     return await rpc.call<GetFamilyInterviewsResponse>('GetFamilyInterviews', JSON.stringify(data));
+}
+
+export async function CompareInterviewAnswers(data: CompareInterviewAnswersRequest): Promise<rpc.Response<CompareInterviewAnswersResponse>> {
+    return await rpc.call<CompareInterviewAnswersResponse>('CompareInterviewAnswers', JSON.stringify(data));
 }
 
 export async function PreviewInterviewImport(data: PreviewInterviewImportRequest): Promise<rpc.Response<PreviewInterviewImportResponse>> {

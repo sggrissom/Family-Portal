@@ -26,6 +26,7 @@ type BookItemKind int
 const (
 	BookItemMilestone BookItemKind = iota
 	BookItemPhoto
+	BookItemInterview
 )
 
 const (
@@ -35,7 +36,7 @@ const (
 	BookPresetCustom     = "custom"
 )
 
-var bookCategories = map[string]bool{"milestones": true, "quotes": true, "artwork": true, "photos": true}
+var bookCategories = map[string]bool{"milestones": true, "quotes": true, "artwork": true, "photos": true, "interviews": true}
 
 const (
 	maxBookItems     = 2000
@@ -243,12 +244,13 @@ func readLimit(preset string, end time.Time) time.Time {
 // viewer is allowed to see. PhotoPeople lists which of the book's people each
 // photo is tagged with; Untagged photos have nobody tagged at all.
 type BookSources struct {
-	People      []Person      `json:"people"`
-	Milestones  []Milestone   `json:"milestones"`
-	Photos      []Image       `json:"photos"`
-	GrowthData  []GrowthData  `json:"growthData"`
-	PhotoPeople map[int][]int `json:"photoPeople"`
-	Untagged    []int         `json:"untagged"`
+	People      []Person        `json:"people"`
+	Milestones  []Milestone     `json:"milestones"`
+	Photos      []Image         `json:"photos"`
+	GrowthData  []GrowthData    `json:"growthData"`
+	PhotoPeople map[int][]int   `json:"photoPeople"`
+	Untagged    []int           `json:"untagged"`
+	Interviews  []BookInterview `json:"interviews"`
 }
 
 func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start, limit time.Time, keepPhotoIds map[int]bool) BookSources {
@@ -259,6 +261,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 		GrowthData:  []GrowthData{},
 		PhotoPeople: map[int][]int{},
 		Untagged:    []int{},
+		Interviews:  []BookInterview{},
 	}
 	inRange := func(t time.Time) bool { return !t.Before(start) && t.Before(limit) }
 	selected := map[int]bool{}
@@ -288,7 +291,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 
 	for _, person := range people {
 		for _, milestone := range GetPersonMilestonesTx(tx, person.Id) {
-			if milestone.FamilyId != person.FamilyId || !inRange(milestone.MilestoneDate) {
+			if milestone.FamilyId != person.FamilyId || !inRange(milestone.MilestoneDate) || milestone.InterviewId > 0 {
 				continue
 			}
 			milestone.PhotoIds = GetMilestonePhotoIds(tx, milestone.Id)
@@ -306,6 +309,12 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 		for _, growth := range GetPersonGrowthDataTx(tx, person.Id) {
 			if inRange(growth.MeasurementDate) {
 				sources.GrowthData = append(sources.GrowthData, growth)
+			}
+		}
+		for _, interview := range bookInterviews(tx, person, inRange) {
+			sources.Interviews = append(sources.Interviews, interview)
+			if interview.Interview.PhotoId != 0 {
+				addPhoto(GetImageById(tx, interview.Interview.PhotoId))
 			}
 		}
 	}
@@ -721,7 +730,7 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 	}
 
 	who := peopleNames(people)
-	seen := map[BookItemKind]map[int]bool{BookItemMilestone: {}, BookItemPhoto: {}}
+	seen := map[BookItemKind]map[int]bool{BookItemMilestone: {}, BookItemPhoto: {}, BookItemInterview: {}}
 	book.Items = []BookItem{}
 	usedPhotos := map[int]bool{}
 	for _, item := range content.Items {
@@ -750,6 +759,11 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 				return errors.New("A photo in this book is not of " + who)
 			}
 			usedPhotos[item.SourceId] = true
+		case BookItemInterview:
+			interview := GetInterviewById(tx, item.SourceId)
+			if interview.Id == 0 || !selected[interview.PersonId] || interview.FamilyId != book.FamilyId {
+				return errors.New("An interview in this book does not belong to " + who)
+			}
 		}
 		seen[item.Kind][item.SourceId] = true
 		book.Items = append(book.Items, clean)
@@ -757,7 +771,7 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 
 	book.Excluded = []BookItem{}
 	for _, item := range content.Excluded {
-		if (item.Kind != BookItemMilestone && item.Kind != BookItemPhoto) || seen[item.Kind][item.SourceId] {
+		if seen[item.Kind] == nil || seen[item.Kind][item.SourceId] {
 			continue
 		}
 		seen[item.Kind][item.SourceId] = true

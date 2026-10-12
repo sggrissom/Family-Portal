@@ -38,6 +38,7 @@ type ExportBook struct {
 var bookItemKindNames = map[BookItemKind]string{
 	BookItemMilestone: "milestone",
 	BookItemPhoto:     "photo",
+	BookItemInterview: "interview",
 }
 
 func exportBookItems(items []BookItem) []ExportBookItem {
@@ -109,6 +110,7 @@ type bookImport struct {
 	personIdMapping map[int]int
 	milestoneIds    map[int]int
 	photoIds        map[int]int
+	interviewIds    map[int]int
 }
 
 func (in bookImport) mapItem(item ExportBookItem) (BookItem, bool) {
@@ -124,6 +126,9 @@ func (in bookImport) mapItem(item ExportBookItem) (BookItem, bool) {
 	case "photo":
 		out.Kind = BookItemPhoto
 		out.SourceId, ok = in.photoIds[item.SourceId]
+	case "interview":
+		out.Kind = BookItemInterview
+		out.SourceId, ok = in.interviewIds[item.SourceId]
 	}
 	return out, ok && out.SourceId != 0
 }

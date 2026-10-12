@@ -392,6 +392,8 @@ const Editor = ({ resp }: { resp: server.GetBookResponse }) => {
                   <span className="book-editor-item-thumb">
                     <ThumbnailImage photoId={item.sourceId} alt="" />
                   </span>
+                ) : item.kind === server.BookItemInterview ? (
+                  <span>{interviewLabel(r, item.sourceId)}</span>
                 ) : (
                   <span>{r.milestones.get(item.sourceId)?.description}</span>
                 )}
@@ -537,9 +539,12 @@ const CoverPicker = ({ state, r }: { state: EditorState; r: Resolved }) => {
 function detailOf(r: Resolved, item: server.BookItem): string {
   const day = itemDay(r, item) ?? "";
   const parts = [shortDay(day)];
-  if (item.kind === server.BookItemMilestone) {
-    const m = r.milestones.get(item.sourceId);
-    const person = m ? r.person.get(m.personId) : undefined;
+  if (item.kind === server.BookItemMilestone || item.kind === server.BookItemInterview) {
+    const personId =
+      item.kind === server.BookItemInterview
+        ? r.interviews.get(item.sourceId)?.interview.personId
+        : r.milestones.get(item.sourceId)?.personId;
+    const person = personId ? r.person.get(personId) : undefined;
     if (person && isMulti(r)) parts.push(person.name);
     if (person && dayOf(person.birthday) <= day) {
       parts.push(photoAge(person.birthday, day + "T00:00:00Z"));
@@ -574,21 +579,25 @@ const ItemRow = ({
   const when = detailOf(r, item);
   const milestone = item.kind === server.BookItemMilestone ? r.milestones.get(item.sourceId) : null;
   const photo = item.kind === server.BookItemPhoto ? r.photos.get(item.sourceId) : null;
+  const interview = item.kind === server.BookItemInterview ? r.interviews.get(item.sourceId) : null;
   const attached = (milestone?.photoIds ?? []).filter(id => r.photos.has(id));
   const shownPhoto = photo?.id ?? item.photoId;
 
   return (
     <li className={item.pinned ? "book-editor-item is-pinned" : "book-editor-item"}>
       <div className="book-editor-item-thumb">
-        {shownPhoto ? (
-          <ThumbnailImage photoId={shownPhoto} alt="" />
+        {shownPhoto || interview?.interview.photoId ? (
+          <ThumbnailImage photoId={shownPhoto || interview!.interview.photoId} alt="" />
         ) : (
-          <span aria-hidden="true">{milestone ? getCategoryIcon(milestone.category) : ""}</span>
+          <span aria-hidden="true">
+            {milestone ? getCategoryIcon(milestone.category) : interview ? "🎤" : ""}
+          </span>
         )}
       </div>
       <div className="book-editor-item-body">
         {opening && <span className="book-editor-badge">Opens the chapter</span>}
         {milestone && <p className="book-editor-item-text">{milestone.description}</p>}
+        {interview && <p className="book-editor-item-text">{interviewLabel(r, item.sourceId)}</p>}
         <p className="book-editor-hint">{when}</p>
         {photo && (
           <input
@@ -671,13 +680,20 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
     state.items.filter(i => i.kind === server.BookItemMilestone && i.photoId).map(i => i.photoId)
   );
   usedPhotos.add(state.coverPhotoId);
-  const { milestones, photos } = candidatesIn(r);
-  const months = new Map<string, { milestones: server.Milestone[]; photos: server.Image[] }>();
+  const { milestones, photos, interviews } = candidatesIn(r);
+  const months = new Map<
+    string,
+    { milestones: server.Milestone[]; photos: server.Image[]; interviews: server.BookInterview[] }
+  >();
   const month = (day: string) => {
     const key = day.slice(0, 7);
-    if (!months.has(key)) months.set(key, { milestones: [], photos: [] });
+    if (!months.has(key)) months.set(key, { milestones: [], photos: [], interviews: [] });
     return months.get(key)!;
   };
+  for (const i of interviews) {
+    if (!included.has(`${server.BookItemInterview}:${i.interview.id}`))
+      month(dayOf(i.interview.date)).interviews.push(i);
+  }
   for (const m of milestones) {
     if (!included.has(`${server.BookItemMilestone}:${m.id}`))
       month(dayOf(m.milestoneDate)).milestones.push(m);
@@ -696,6 +712,8 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
       {[...months.entries()].map(([key, group]) => {
         const open = !!state.openMonths[key];
         const parts = [
+          group.interviews.length &&
+            `${group.interviews.length} interview${group.interviews.length === 1 ? "" : "s"}`,
           group.milestones.length &&
             `${group.milestones.length} moment${group.milestones.length === 1 ? "" : "s"}`,
           group.photos.length &&
@@ -717,6 +735,25 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
             </button>
             {open && (
               <div className="book-editor-month-body">
+                {group.interviews.map(i => (
+                  <div key={`i${i.interview.id}`} className="book-editor-leftout">
+                    <span>
+                      🎤 {interviewLabel(r, i.interview.id)}
+                      <span className="book-editor-hint">
+                        {" "}
+                        · {shortDay(dayOf(i.interview.date))}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        addItem(state, r, newItem(server.BookItemInterview, i.interview.id))
+                      }
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))}
                 {group.milestones.map(m => (
                   <div key={m.id} className="book-editor-leftout">
                     <span>
@@ -758,3 +795,10 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
     </section>
   );
 };
+
+function interviewLabel(r: Resolved, interviewId: number): string {
+  const i = r.interviews.get(interviewId);
+  if (!i) return "";
+  const n = (i.answers ?? []).length;
+  return `${i.interview.title || "Annual interview"} · ${n === 1 ? "1 answer" : `${n} answers`}`;
+}

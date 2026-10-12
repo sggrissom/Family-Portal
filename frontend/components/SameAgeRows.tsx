@@ -73,6 +73,14 @@ export const SameAgeRows = ({
               interviews={interviewsById(row.interviews)}
               subjectId={row.person.id}
             />
+            {(row.interviews ?? []).length > 0 && (
+              <a
+                className="same-age-compare"
+                href={`/interview/compare?age=${Math.floor(ageMonths / 12)}`}
+              >
+                {copy.interview.compare.compareAnswers}
+              </a>
+            )}
             {groupInterviewAnswers(row.milestones ?? []).loose.map(m => (
               <a key={m.id} href={`/milestone/${m.id}`} className="same-age-milestone">
                 <span aria-hidden="true">{getCategoryIcon(m.category)}</span>{" "}
