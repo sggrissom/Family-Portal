@@ -103,6 +103,8 @@ type Milestone struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	PhotoIds      []int     `json:"photoIds,omitempty"`
 	TagIds        []int     `json:"tagIds,omitempty"`
+	InterviewId   int       `json:"interviewId,omitempty"`
+	QuestionId    int       `json:"questionId,omitempty"`
 }
 
 type MilestonePhoto struct {
@@ -131,7 +133,7 @@ func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
 }
 
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
-	version := vpack.Version(2, buf)
+	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -141,6 +143,10 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 	if version >= 2 {
 		vpack.String(&self.Context, buf)
+	}
+	if version >= 3 {
+		vpack.Int(&self.InterviewId, buf)
+		vpack.Int(&self.QuestionId, buf)
 	}
 }
 
@@ -160,6 +166,10 @@ var MilestoneTagBkt = vbolt.Bucket(&cfg.Info, "milestone_tags", vpack.FInt, Pack
 var MilestoneByPersonIndex = vbolt.Index(&cfg.Info, "milestones_by_person", vpack.FInt, vpack.FInt)
 
 var MilestoneByFamilyIndex = vbolt.Index(&cfg.Info, "milestones_by_family", vpack.FInt, vpack.FInt)
+
+var MilestoneByInterviewIndex = vbolt.Index(&cfg.Info, "milestones_by_interview", vpack.FInt, vpack.FInt)
+
+var MilestoneByQuestionIndex = vbolt.Index(&cfg.Info, "milestones_by_interview_question", vpack.FInt, vpack.FInt)
 
 var MilestoneSearchIndex = vbolt.IndexExt(&cfg.Info, "milestones_search", vpack.StringZ, vpack.UnixTimeKey, vpack.FInt)
 
@@ -314,7 +324,16 @@ func writeMilestone(tx *vbolt.Tx, milestone Milestone) {
 	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, milestone.PersonId)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
+	vbolt.SetTargetTermsPlain(tx, MilestoneByInterviewIndex, milestone.Id, positiveTerm(milestone.InterviewId))
+	vbolt.SetTargetTermsPlain(tx, MilestoneByQuestionIndex, milestone.Id, positiveTerm(milestone.QuestionId))
 	UpdateMilestoneSearchIndex(tx, milestone)
+}
+
+func positiveTerm(id int) []int {
+	if id > 0 {
+		return []int{id}
+	}
+	return nil
 }
 
 func normalizePhotoIds(photoIds []int) []int {
@@ -497,12 +516,18 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		return milestone, errors.New("Person not found")
 	}
 
-	milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if err != nil {
-		return milestone, err
+	if (milestone.Category == CategoryInterview) != (req.Category == CategoryInterview) {
+		return milestone, ErrInterviewCategory
 	}
-
-	setMilestoneText(&milestone, req.Description, req.Category, req.Context)
+	if milestone.Category == CategoryInterview {
+		milestone.Description = strings.TrimSpace(req.Description)
+	} else {
+		milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+		if err != nil {
+			return milestone, err
+		}
+		setMilestoneText(&milestone, req.Description, req.Category, req.Context)
+	}
 
 	writeMilestone(tx, milestone)
 
@@ -619,6 +644,8 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	deleteMilestoneEmbeddingTx(tx, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByPersonIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByFamilyIndex, milestone.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneByInterviewIndex, milestone.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneByQuestionIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneSearchIndex, milestone.Id)
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
 
@@ -630,7 +657,7 @@ func validateMilestoneFields(description string, category string, inputType stri
 		return errors.New("Description is required")
 	}
 	switch category {
-	case "development", "behavior", "health", "achievement", "first", "quote", "artwork", "other":
+	case "development", "behavior", "health", "achievement", "first", "quote", "artwork", "other", CategoryInterview:
 	default:
 		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, artwork, other")
 	}
@@ -649,6 +676,10 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		return
 	}
 	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
+		return
+	}
+	if req.Category == CategoryInterview {
+		err = ErrInterviewCategory
 		return
 	}
 

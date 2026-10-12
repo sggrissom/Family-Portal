@@ -37,19 +37,21 @@ export const BookItemMilestone: BookItemKind = 0;
 export const BookItemPhoto: BookItemKind = 1;
 
 // Errors
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrMailNotConfigured = "email delivery is not configured";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrLoginFailure = "LoginFailure";
 export const ErrAuthFailure = "AuthFailure";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -59,9 +61,10 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrFaceNotFound = "Face not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -516,6 +519,32 @@ export interface UpdateMilestoneTagsRequest {
 }
 
 export interface UpdateMilestoneTagsResponse {
+}
+
+export interface GetInterviewQuestionsRequest {
+    familyId: number
+}
+
+export interface InterviewQuestionsResponse {
+    familyId: number
+    revision: number
+    questions: InterviewQuestion[]
+    suggested: InterviewQuestion[]
+    defaults: InterviewQuestion[]
+    usage: Record<number, QuestionUsage>
+}
+
+export interface SaveInterviewQuestionsRequest {
+    familyId: number
+    revision: number
+    questions: InterviewQuestionInput[]
+    deleteIds: number[]
+}
+
+export interface MergeInterviewQuestionsRequest {
+    fromId: number
+    intoId: number
+    revision: number
 }
 
 export interface ListActivitiesRequest {
@@ -1666,6 +1695,8 @@ export interface Milestone {
     createdAt: string
     photoIds: number[]
     tagIds: number[]
+    interviewId: number
+    questionId: number
 }
 
 export interface Image {
@@ -1723,6 +1754,35 @@ export interface RelationLabelEntry {
 export interface CheckupValue {
     value: number
     unit: string
+}
+
+export interface InterviewQuestion {
+    id: number
+    familyId: number
+    text: string
+    section: string
+    position: number
+    minAgeYears: number
+    maxAgeYears: number
+    defaultKey: string
+    archived: boolean
+    oneOff: boolean
+    createdAt: string
+}
+
+export interface QuestionUsage {
+    interviews: number
+    answers: number
+}
+
+export interface InterviewQuestionInput {
+    id: number
+    text: string
+    section: string
+    minAgeYears: number
+    maxAgeYears: number
+    defaultKey: string
+    archived: boolean
 }
 
 export interface Activity {
@@ -2681,6 +2741,18 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
+}
+
+export async function GetInterviewQuestions(data: GetInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('GetInterviewQuestions', JSON.stringify(data));
+}
+
+export async function SaveInterviewQuestions(data: SaveInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('SaveInterviewQuestions', JSON.stringify(data));
+}
+
+export async function MergeInterviewQuestions(data: MergeInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
+    return await rpc.call<InterviewQuestionsResponse>('MergeInterviewQuestions', JSON.stringify(data));
 }
 
 export async function ListActivities(data: ListActivitiesRequest): Promise<rpc.Response<ListActivitiesResponse>> {
