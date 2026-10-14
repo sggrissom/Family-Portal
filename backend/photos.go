@@ -1308,20 +1308,25 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		page, similarTo, resp.NextCursor = browsePhotos(listing, start, limit, req.CollapseSimilar)
 	}
 
-	resp.Photos = make([]PhotoWithPeople, 0, len(page))
+	resp.Photos = photosWithPeople(ctx.Tx, page, similarTo)
+	return
+}
+
+func photosWithPeople(tx *vbolt.Tx, page []Image, similarTo map[int][]int) []PhotoWithPeople {
+	out := make([]PhotoWithPeople, 0, len(page))
 	for _, image := range page {
-		people := GetPhotoPeople(ctx.Tx, image.Id)
+		people := GetPhotoPeople(tx, image.Id)
 		for i := range people {
 			people[i].Age = calculateAge(people[i].Birthday)
 		}
-		image.TagIds = GetPhotoTagIds(ctx.Tx, image.Id)
-		resp.Photos = append(resp.Photos, PhotoWithPeople{
+		image.TagIds = GetPhotoTagIds(tx, image.Id)
+		out = append(out, PhotoWithPeople{
 			Image:   image,
 			People:  people,
 			Similar: similarTo[image.Id],
 		})
 	}
-	return
+	return out
 }
 
 const dateOnlyLayout = "2006-01-02"

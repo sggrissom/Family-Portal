@@ -266,6 +266,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterFaceMethods(app)
 	backend.RegisterPlaceMethods(app)
+	backend.RegisterSearchMethods(app)
 	backend.RegisterTagSuggestionMethods(app)
 	backend.RegisterMilestoneAnalysisMethods(app)
 	backend.RegisterPersonPhotoInsightMethods(app)

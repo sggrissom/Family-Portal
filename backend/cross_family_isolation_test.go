@@ -625,6 +625,39 @@ func TestListingProceduresShowNothingFromAnotherFamily(t *testing.T) {
 			}
 		}
 
+		for _, query := range []string{"first", "first word", "their kid", "kid", "holidays", "2024", "theirs", "dance"} {
+			found, err := Search(ctx, SearchRequest{Query: query})
+			if err != nil {
+				t.Fatalf("Search(%q) error = %v", query, err)
+			}
+			for _, person := range found.People {
+				if person.FamilyId != fx.theirFamily {
+					t.Errorf("Search(%q) returned a person from family %d", query, person.FamilyId)
+				}
+			}
+			for _, moment := range found.Moments {
+				if moment.FamilyId != fx.theirFamily {
+					t.Errorf("Search(%q) returned a moment from family %d", query, moment.FamilyId)
+				}
+			}
+			for _, photo := range found.Photos {
+				if photo.Image.FamilyId != fx.theirFamily {
+					t.Errorf("Search(%q) returned a photo from family %d", query, photo.Image.FamilyId)
+				}
+			}
+			for _, tag := range found.Tags {
+				if tag.FamilyId != fx.theirFamily {
+					t.Errorf("Search(%q) returned a tag from family %d", query, tag.FamilyId)
+				}
+			}
+			if len(found.Understood.PersonIds) > 0 || len(found.Understood.TagIds) > 0 {
+				t.Errorf("Search(%q) understood another family's people or tags: %+v", query, found.Understood)
+			}
+			if len(found.Activities) > 0 || len(found.Books) > 0 || len(found.Places) > 0 {
+				t.Errorf("Search(%q) returned another family's activities, books or places", query)
+			}
+		}
+
 		messages, err := GetChatMessages(ctx, GetChatMessagesRequest{})
 		if err != nil {
 			t.Fatalf("GetChatMessages() error = %v", err)
