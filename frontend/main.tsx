@@ -92,6 +92,7 @@ async function main() {
     guarded("/interview/", () => import("@app/pages/interviews/interview")),
     guarded("/milestone/", () => import("@app/pages/milestones/view-milestone")),
     guarded("/history", () => import("@app/pages/history/history")),
+    guarded("/search", () => import("@app/pages/search/search")),
     guarded("/chat", () => import("@app/pages/chat/chat")),
     guarded("/settings", () => import("@app/pages/settings/settings")),
     guarded("/add-person", () => import("@app/pages/people/add-person")),

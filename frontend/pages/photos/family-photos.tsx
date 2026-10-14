@@ -208,7 +208,8 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
           </span>
           {pages.searchMode === "text" && (
             <span className="photo-search-note">
-              Image search is unavailable right now, so only titles and descriptions were searched.
+              Image search is unavailable right now, so only words in titles, descriptions, tags and
+              places were searched.
             </span>
           )}
           <button className="photo-search-clear" onClick={() => photoFilter.setQuery("")}>

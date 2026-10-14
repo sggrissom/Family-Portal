@@ -9,6 +9,7 @@ import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/when";
 import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
+import { isTypingTarget } from "../lib/search";
 import {
   ModalDialogState,
   attrsModalDialog,
@@ -69,6 +70,7 @@ const useNav = vlens.declareHook((): NavState => {
 export const TopNav = ({ user }: { user: auth.AuthCache }) => {
   const state = useNav();
   const active = activeDestination(window.location.pathname);
+  installSearchShortcut();
 
   return (
     <>
@@ -87,7 +89,7 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
         <li>
           <button
             type="button"
-            className={active && !TOP_BAR.includes(active) ? "active" : ""}
+            className={active && MORE.includes(active) && !TOP_BAR.includes(active) ? "active" : ""}
             aria-haspopup="dialog"
             onClick={vlens.cachePartial(openMore, state)}
           >
@@ -99,6 +101,21 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
         </li>
       </ul>
       <div className="app-topbar-actions">
+        <a
+          href="/search"
+          className={active === "search" ? "app-search-button active" : "app-search-button"}
+          aria-label={copy.search.label}
+          aria-current={active === "search" ? "page" : undefined}
+          title={copy.search.shortcutHint}
+        >
+          <span className="app-search-icon" aria-hidden="true">
+            🔍
+          </span>
+          <span className="app-search-label">{copy.nav.search}</span>
+          <kbd className="app-search-key" aria-hidden="true">
+            /
+          </kbd>
+        </a>
         {auth.canContributeAnywhere() && (
           <button
             type="button"
@@ -447,6 +464,23 @@ function choosePerson(state: NavState, personId: number) {
   state.selectedPersonId = state.selectedPersonId === personId ? null : personId;
   writeLastPerson(state.selectedPersonId);
   vlens.scheduleRedraw();
+}
+
+let searchShortcutInstalled = false;
+
+function installSearchShortcut() {
+  if (searchShortcutInstalled) return;
+  searchShortcutInstalled = true;
+  document.addEventListener("keydown", event => {
+    const slash = event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey;
+    const commandK = event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey);
+    if ((!slash && !commandK) || isTypingTarget(event.target)) return;
+    if (!auth.getAuth()) return;
+    event.preventDefault();
+    const input = document.getElementById("searchInput");
+    if (input) input.focus();
+    else core.setRoute("/search");
+  });
 }
 
 let detachAccountDismissal: (() => void) | null = null;
