@@ -103,7 +103,7 @@ export function saveRecent(recent: string[]) {
   } catch {}
 }
 
-export type ChipKind = "person" | "age" | "date" | "category" | "tag";
+export type ChipKind = "person" | "age" | "date" | "category";
 
 export type Chip = { kind: ChipKind; label: string };
 
@@ -141,12 +141,11 @@ function categoryLabel(category: string): string {
   );
 }
 
-// One chip per kind the server understood, since removing a chip ignores
-// that whole kind.
+// One chip per filter the server understood, since removing a chip ignores
+// that whole kind. Tags are not filters, so they get no chip.
 export function understoodChips(
   understood: server.SearchUnderstood,
-  people: server.Person[],
-  tags: server.Tag[]
+  people: server.Person[]
 ): Chip[] {
   const chips: Chip[] = [];
   const names = (understood.personIds ?? [])
@@ -158,10 +157,6 @@ export function understoodChips(
   if (date) chips.push({ kind: "date", label: date });
   if (understood.category)
     chips.push({ kind: "category", label: categoryLabel(understood.category) });
-  const tagNames = (understood.tagIds ?? [])
-    .map(id => tags.find(t => t.id === id)?.name)
-    .filter((n): n is string => !!n);
-  if (tagNames.length > 0) chips.push({ kind: "tag", label: tagNames.join(" or ") });
   return chips;
 }
 
@@ -198,13 +193,11 @@ function pad(n: number): string {
 }
 
 // The Photos page showing what a search's photo group would, as far as its
-// filters reach: people, tags, a year or a month of a year, and the text.
+// filters reach: people, a year or a month of a year, and the text.
 export function photosHref(understood: server.SearchUnderstood): string {
   const params = new URLSearchParams();
   const people = understood.personIds ?? [];
-  const tags = understood.tagIds ?? [];
   if (people.length > 0) params.set("people", people.join(","));
-  if (tags.length > 0) params.set("tags", tags.join(","));
   if (understood.year > 0) {
     const month = understood.month;
     const lastDay = month > 0 ? new Date(Date.UTC(understood.year, month, 0)).getUTCDate() : 31;

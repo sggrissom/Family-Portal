@@ -238,7 +238,7 @@ const SearchPage = ({ data }: { data: SearchData }) => {
 
   const query = state.query.trim();
   const result = query ? state.result : null;
-  const chips = result ? understoodChips(result.understood, result.people, result.tags) : [];
+  const chips = result ? understoodChips(result.understood, result.people) : [];
   const terms = result ? searchTerms(result.understood.text) : [];
 
   return (

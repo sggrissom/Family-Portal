@@ -86,9 +86,7 @@ describe("understoodChips", () => {
     { id: 1, name: "Ada Grissom" },
     { id: 3, name: "Ada Smith" },
   ] as server.Person[];
-  const tags = [{ id: 7, name: "Beach" }] as server.Tag[];
-
-  it("labels one chip per kind", () => {
+  it("labels one chip per filter, leaving tags out", () => {
     const chips = understoodChips(
       understood({
         personIds: [1, 3],
@@ -98,20 +96,18 @@ describe("understoodChips", () => {
         category: "quote",
         tagIds: [7],
       }),
-      people,
-      tags
+      people
     );
     expect(chips).toEqual([
       { kind: "person", label: "Ada or Ada" },
       { kind: "age", label: "age 2" },
       { kind: "date", label: "June 2024" },
       { kind: "category", label: "Quotes" },
-      { kind: "tag", label: "Beach" },
     ]);
   });
 
   it("is empty when nothing was understood", () => {
-    expect(understoodChips(understood({ text: "walk" }), people, tags)).toEqual([]);
+    expect(understoodChips(understood({ text: "walk" }), people)).toEqual([]);
   });
 });
 
@@ -136,8 +132,8 @@ describe("routes", () => {
       "/photos?people=1,3&q=beach"
     );
     expect(photosHref(understood({ year: 2024 }))).toBe("/photos?from=2024-01-01&to=2024-12-31");
-    expect(photosHref(understood({ year: 2024, month: 2, tagIds: [7] }))).toBe(
-      "/photos?tags=7&from=2024-02-01&to=2024-02-29"
+    expect(photosHref(understood({ year: 2024, month: 2, tagIds: [7], text: "beach" }))).toBe(
+      "/photos?from=2024-02-01&to=2024-02-29&q=beach"
     );
   });
 
