@@ -140,7 +140,7 @@ func peopleInQuery(people []Person, query string) (personIds []int, rest string)
 var searchFillerWords = map[string]bool{
 	"a": true, "an": true, "the": true, "and": true, "at": true, "in": true, "on": true,
 	"of": true, "with": true, "to": true, "for": true, "photo": true, "photos": true,
-	"picture": true, "pictures": true,
+	"picture": true, "pictures": true, "when": true, "was": true, "old": true,
 }
 
 func textMatches(image Image, words []string) bool {
