@@ -83,7 +83,7 @@ func TestParseSearchQuery(t *testing.T) {
 		{query: "ben 25 pumpkins", want: want{people: []int{2}, groups: [][]int{{2}}, text: "25 pumpkins"}},
 		{query: "ben 2 3", want: want{people: []int{2}, groups: [][]int{{2}}, age: []int{24, 36}, ageLabel: "age 2", text: "3"}},
 
-		{query: "beach 2024", want: want{tags: []int{10}, year: 2024}},
+		{query: "beach 2024", want: want{tags: []int{10}, year: 2024, text: "beach"}},
 		{query: "1899", want: want{text: "1899"}},
 		{query: "ben 2024", want: want{people: []int{2}, groups: [][]int{{2}}, year: 2024}},
 		{query: "june", want: want{month: 6}},
@@ -98,15 +98,15 @@ func TestParseSearchQuery(t *testing.T) {
 		{query: "drawing of a dog", want: want{category: "artwork", text: "dog"}},
 		{query: "interview answers", want: want{category: "interview", text: "answers"}},
 
-		{query: "first day of school", want: want{tags: []int{11}}},
-		{query: "disney world 2023", want: want{tags: []int{12}, year: 2023}},
+		{query: "first day of school", want: want{tags: []int{11}, text: "first day school"}},
+		{query: "disney world 2023", want: want{tags: []int{12}, year: 2023, text: "disney world"}},
 		{query: "disney", want: want{text: "disney"}},
-		{query: "photos of the beach", want: want{tags: []int{10}}},
+		{query: "photos of the beach", want: want{tags: []int{10}, text: "beach"}},
 
 		{query: "ben at 2", ignore: []string{"age"}, want: want{people: []int{2}, groups: [][]int{{2}}, text: "2"}},
-		{query: "ben at 2", ignore: []string{"person"}, want: want{tags: []int{13}, text: "2"}},
+		{query: "ben at 2", ignore: []string{"person"}, want: want{tags: []int{13}, text: "ben 2"}},
 		{query: "ben at 2", ignore: []string{"person", "tag"}, want: want{text: "ben 2"}},
-		{query: "beach 2024", ignore: []string{"date"}, want: want{tags: []int{10}, text: "2024"}},
+		{query: "beach 2024", ignore: []string{"date"}, want: want{tags: []int{10}, text: "beach 2024"}},
 		{query: "beach 2024", ignore: []string{"tag"}, want: want{year: 2024, text: "beach"}},
 		{query: "quotes", ignore: []string{"category"}, want: want{text: "quotes"}},
 	}

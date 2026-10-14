@@ -64,8 +64,11 @@ Recognised pieces:
   matches it in any year.
 - **Categories.** Category words (`quote`, `quotes`, `artwork`, `drawing`, and
   any other category values) → category filter for moments.
-- **Tags.** An exact tag name (multi-word tags matched greedily) → tag filter,
-  *and* the tag shows in the Tags group.
+- **Tags.** An exact tag name (multi-word tags matched greedily) is recognised
+  and its tag leads the Tags group, but its words stay in the free text rather
+  than becoming a filter. Text matching already covers tag names, so this reads
+  as "tagged, or mentions it", and a moment about the beach that nobody tagged
+  Beach still turns up.
 - **Filler.** `the`, `a`, `of`, `photo(s)`, `picture(s)`, `when`, `was`, `old`
   are dropped from the text (`searchFillerWords`, extended).
 
@@ -89,7 +92,7 @@ Within a group:
 2. Semantic hits (MiniLM for moments, CLIP for photos) are blended exactly as
    today (`blendMilestoneResults`, `rankPhotos`), reusing their calibrated
    thresholds.
-3. Structured filters (person, age, date, category, tag) are hard filters. With
+3. Structured filters (person, age, date, category) are hard filters. With
    no free text left (`ada at 2`), the group lists everything matching the
    filters, newest first.
 

@@ -257,9 +257,11 @@ func searchYear(token string) int {
 	return 0
 }
 
-// parseSearchQuery pulls people, an age, a date, a category and tags out of
-// a search, leaving the rest as free text. Kinds named in ignore are left
-// in the text instead.
+// parseSearchQuery pulls people, an age, a date and a category out of a
+// search, leaving the rest as free text. Tag names are recognised but stay in
+// the text, since text matching already covers tag names and a moment about
+// the beach may not carry the Beach tag. Kinds named in ignore are left in
+// the text instead.
 func parseSearchQuery(query string, people []Person, tags []Tag, now time.Time, ignore []string) parsedSearch {
 	ignored := map[string]bool{}
 	for _, kind := range ignore {
@@ -271,6 +273,7 @@ func parseSearchQuery(query string, people []Person, tags []Tag, now time.Time, 
 		tokens[i] = searchToken(word)
 	}
 	used := make([]bool, len(tokens))
+	keep := make([]bool, len(tokens))
 	out := parsedSearch{SearchUnderstood: SearchUnderstood{PersonIds: []int{}, TagIds: []int{}}}
 
 	phrases := searchPhrases(people, tags)
@@ -284,6 +287,7 @@ func parseSearchQuery(query string, people []Person, tags []Tag, now time.Time, 
 		}
 		for j := range p.words {
 			used[i+j] = true
+			keep[i+j] = p.tag
 		}
 		if p.tag {
 			for _, id := range p.ids {
@@ -361,7 +365,7 @@ func parseSearchQuery(query string, people []Person, tags []Tag, now time.Time, 
 
 	var text []string
 	for i, word := range raw {
-		if !used[i] && tokens[i] != "" && !searchFillerWords[tokens[i]] {
+		if (!used[i] || keep[i]) && tokens[i] != "" && !searchFillerWords[tokens[i]] {
 			text = append(text, word)
 		}
 	}
