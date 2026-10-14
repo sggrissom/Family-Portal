@@ -399,7 +399,8 @@ user believes they entered. With `"auto"`, send the device's local day as
   by date, and `cursor`/`nextCursor` become offsets (`s60`, …), still opaque.
   First names of visible people in the query narrow to photos with all of them;
   they come back in `matchedPersonIds`. `searchMode` is `semantic`, or `text`
-  when image search is down and only titles and descriptions were matched.
+  when image search is down and only words were matched: each word of the
+  query must start a word of the title, description, a tag or the place name.
   `collapseSimilar` is ignored while searching.
 
 `GetPhoto` also returns `place` (null unless the caller belongs to the photo's
@@ -809,6 +810,62 @@ add sheet offers the first two as Result shortcuts.
 - Photos and milestones count within half an age step either side of the day
   the person reached the age; height and weight are the nearest within a
   whole step. The step is a month under two, three months to six, six after.
+
+### `Search`
+
+One search across the family, for the search screen. It is safe to call on
+every keystroke: an empty query returns empty groups, not an error.
+
+```json
+{"query": "ada at 2 park", "ignore": ["tag"], "limit": 20}
+```
+
+```json
+{
+  "query": "ada at 2 park",
+  "understood": {"personIds": [3], "ageFromMonth": 24, "ageToMonth": 36, "ageLabel": "age 2", "year": 0, "month": 0, "category": "", "tagIds": [], "text": "park"},
+  "people": [Person], "moments": [Milestone], "momentCount": 41, "interviews": [Interview],
+  "photos": [PhotoWithPeople], "morePhotos": true,
+  "tags": [Tag], "places": [PhotoPlace],
+  "activities": [{"kind": "event", "id": 9, "name": "Nuvo Nashville", "detail": "Music City Center", "date": "2026-02-07T00:00:00Z"}],
+  "books": [BookSummary],
+  "searchMode": "semantic"
+}
+```
+
+- `understood` is what the server read out of the query: people (first or full
+  name, possessive, or a relationship label such as "grandma" that fits one
+  person), an age (`at 2`, `2yo`, `18 months`, `newborn`, `baby`), a year or
+  month, a moment category (`quotes`, `artwork`), and exact tag names. A bare
+  number is an age only when a person is named and it is under 25. What is
+  left over is `text`. Show each piece as a removable chip. Removing one sends
+  the same query again with its kind in `ignore` (`person`, `age`, `date`,
+  `category`, `tag`), and the words go back into `text`.
+- The understood pieces are hard filters on moments and photos. A moment
+  matches a named person if it belongs to any of them. A photo must show
+  someone from each name mentioned (a first name two people share counts as
+  either). An age is measured from the moment's person, or for a photo from a
+  named person in it (anyone tagged when no one is named).
+- Text matches word prefixes, every word required, ignoring case and accents
+  (`walk` finds "Walked", `cafe` finds "café"). Moments also match by meaning,
+  and photos by content, when the analysis daemon is up. `searchMode` is
+  `text` when it was down and only words were matched.
+- Moments: word matches in the description first, then other word matches
+  (context, category, tags), each newest first, then moments close in meaning.
+  With no text left, every moment passing the filters, newest first.
+  `momentCount` is the total; `limit` (default 20, at most 100) pages only
+  this group. `interviews` carries the interviews of any answers, for folding.
+- Photos: at most 12, `morePhotos` when there are more. "See all" is
+  `ListFamilyPhotos` with the same query.
+- People (at most 8) are the understood people first, then anyone whose name
+  or relationship label starts with the text. Tags, places, activities and
+  books (at most 6 each) match `text` by name only. Places include the
+  family's named places and the cities its photos were taken in, for members
+  of the owning family only. `activities` mixes `kind` `activity`, `season`
+  and `event`: activities by name, then seasons and events newest first.
+- Groups are always present; empty ones are `[]`. Clients render them in a
+  fixed order (People, Moments, Photos, Tags, Places, Activities, Books) and
+  hide empty ones.
 
 ---
 
