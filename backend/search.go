@@ -170,6 +170,19 @@ func Search(ctx *vbeam.Context, req SearchRequest) (resp SearchResponse, err err
 	return
 }
 
+// SearchVisibleMilestones is global search's Moments group on its own, for
+// History's search box.
+func SearchVisibleMilestones(tx *vbolt.Tx, query string, user User, limit int) []Milestone {
+	s := newSearcher(tx, user)
+	parsed := parseSearchQuery(query, s.people, s.tags, time.Now(), nil)
+	terms := searchTerms(parsed.Text)
+	if len(terms) == 0 && !parsed.hasFilters() {
+		return []Milestone{}
+	}
+	moments, _, _ := s.matchMoments(parsed, terms, limit)
+	return moments
+}
+
 type searcher struct {
 	tx       *vbolt.Tx
 	user     User
