@@ -4,6 +4,7 @@ import (
 	"errors"
 	"family/vision"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -153,38 +154,13 @@ func matchesATerm(terms []string, name string) bool {
 	return false
 }
 
-// photoPlacesMatchingATerm resolves where each located photo of the user's
-// own families was taken, keeping those whose place name matches some term.
-func photoPlacesMatchingATerm(tx *vbolt.Tx, user User, terms []string) map[int]PhotoPlace {
-	out := map[int]PhotoPlace{}
-	matches := map[string]bool{}
-	for _, familyId := range familiesVisibleTo(tx, user) {
-		places := GetFamilyPlaces(tx, familyId)
-		for _, features := range familyFeatures(tx, familyId) {
-			place, ok := resolvePlace(places, features)
-			if !ok {
-				continue
-			}
-			match, seen := matches[place.Name]
-			if !seen {
-				match = matchesATerm(terms, place.Name)
-				matches[place.Name] = match
-			}
-			if match {
-				out[features.PhotoId] = place
-			}
-		}
-	}
-	return out
-}
-
 // photoTextMatcher reports whether a photo's title, description, tags or
 // place name contain every search term as a word prefix. Only tags and
 // places whose names match some term can make a difference, so those are
 // gathered once up front.
-func photoTextMatcher(l photoListing, terms []string, places map[int]PhotoPlace) func(Image) bool {
+func photoTextMatcher(l photoListing, terms []string, places map[int]PhotoPlace, words photoWords) func(*Image) bool {
 	if len(terms) == 0 {
-		return func(Image) bool { return false }
+		return func(*Image) bool { return false }
 	}
 	extra := map[int][]string{}
 	for _, tag := range getVisibleTags(l.tx, l.user) {
@@ -197,13 +173,20 @@ func photoTextMatcher(l photoListing, terms []string, places map[int]PhotoPlace)
 	for photoId, place := range places {
 		extra[photoId] = append(extra[photoId], place.Name)
 	}
-	return func(image Image) bool {
-		return termsMatch(terms, searchFieldWords(append([]string{image.Title, image.Description}, extra[image.Id]...)...))
+	return func(image *Image) bool {
+		own, ok := words[image.FamilyId][image.Id]
+		if !ok {
+			own = searchFieldWords(image.Title, image.Description)
+		}
+		if more, found := extra[image.Id]; found {
+			own = append(append([]string{}, own...), searchFieldWords(more...)...)
+		}
+		return termsMatch(terms, own)
 	}
 }
 
 type scoredPhoto struct {
-	image Image
+	index int
 	score float64
 }
 
@@ -211,11 +194,12 @@ type scoredPhoto struct {
 // within searchWindow of the best match and above searchMinScore, plus any
 // text matches. Without a query vector (no daemon), only the text matches
 // remain.
-func rankPhotos(tx *vbolt.Tx, candidates []Image, queryVector []float32, textMatches func(Image) bool) []Image {
-	var scored []scoredPhoto
-	textHits := map[int]bool{}
+func rankPhotos(tx *vbolt.Tx, candidates []Image, queryVector []float32, textMatches func(*Image) bool) []Image {
+	scored := make([]scoredPhoto, 0, len(candidates))
+	textHit := make([]bool, len(candidates))
 	best := 0.0
-	for _, image := range candidates {
+	for i := range candidates {
+		image := &candidates[i]
 		score := 0.0
 		if queryVector != nil {
 			if v, ok := vectorsForFamily(tx, image.FamilyId)[image.Id]; ok {
@@ -224,23 +208,22 @@ func rankPhotos(tx *vbolt.Tx, candidates []Image, queryVector []float32, textMat
 		}
 		best = max(best, score)
 		if textMatches(image) {
-			textHits[image.Id] = true
+			textHit[i] = true
 			score += searchTextBonus
 		}
-		scored = append(scored, scoredPhoto{image, score})
+		scored = append(scored, scoredPhoto{i, score})
 	}
 	cutoff := max(searchMinScore, best-searchWindow)
 	kept := scored[:0]
 	for _, s := range scored {
-		if textHits[s.image.Id] || (queryVector != nil && s.score >= cutoff) {
+		if textHit[s.index] || (queryVector != nil && s.score >= cutoff) {
 			kept = append(kept, s)
 		}
 	}
-	scored = kept
-	sort.SliceStable(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
-	out := make([]Image, len(scored))
-	for i, s := range scored {
-		out[i] = s.image
+	sort.SliceStable(kept, func(i, j int) bool { return kept[i].score > kept[j].score })
+	out := make([]Image, len(kept))
+	for i, s := range kept {
+		out[i] = candidates[s.index]
 	}
 	return out
 }
@@ -256,16 +239,9 @@ func parseSearchCursor(cursor string) (int, error) {
 	return offset, nil
 }
 
-func photoHasEveryone(tx *vbolt.Tx, photoId int, personIds []int) bool {
-	if len(personIds) == 0 {
-		return true
-	}
-	present := map[int]bool{}
-	for _, pp := range GetPhotoPersonsByPhoto(tx, photoId) {
-		present[pp.PersonId] = true
-	}
+func hasEveryone(present []int, personIds []int) bool {
 	for _, id := range personIds {
-		if !present[id] {
+		if !slices.Contains(present, id) {
 			return false
 		}
 	}
@@ -280,16 +256,12 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 		l.personIds = matched[:1]
 	}
 
-	var candidates []Image
-	l.read(l.newest, func(image Image) bool {
-		if l.passes(image) && photoHasEveryone(l.tx, image.Id, matched) {
-			candidates = append(candidates, image)
-		}
-		return true
+	candidates, words := l.searchCandidates(func(image Image) bool {
+		return l.passes(image) && (len(matched) == 0 || hasEveryone(l.photoPeople(image), matched))
 	})
 	if query != "" {
 		terms := searchTerms(query)
-		candidates, mode = rankPhotoQuery(l, candidates, query, photoTextMatcher(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)))
+		candidates, mode = rankPhotoQuery(l, candidates, query, photoTextMatcher(l, terms, l.cachedPlaces(terms), words))
 	} else {
 		mode = "semantic"
 	}
@@ -300,12 +272,12 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 		nextCursor = fmt.Sprintf("s%d", end)
 	}
 	if offset < end {
-		page = candidates[offset:end]
+		page = reloadImages(l.tx, candidates[offset:end])
 	}
 	return
 }
 
-func rankPhotoQuery(l photoListing, candidates []Image, query string, textMatches func(Image) bool) ([]Image, string) {
+func rankPhotoQuery(l photoListing, candidates []Image, query string, textMatches func(*Image) bool) ([]Image, string) {
 	mode := "semantic"
 	vector, err := embedQuery(query)
 	if err != nil {

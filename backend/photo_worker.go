@@ -367,6 +367,7 @@ func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {
 
 		image.Status = status
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		notePhotoWrite(tx)
 
 		if updateError == nil {
 			vbolt.TxCommit(tx)
@@ -405,6 +406,7 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 		}
 
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		notePhotoWrite(tx)
 
 		if updateError == nil {
 			vbolt.TxCommit(tx)

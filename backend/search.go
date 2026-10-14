@@ -151,11 +151,12 @@ func Search(ctx *vbeam.Context, req SearchRequest) (resp SearchResponse, err err
 	var momentsSemantic, photosSemantic bool
 	resp.Moments, resp.MomentCount, momentsSemantic = s.matchMoments(parsed, terms, limit)
 	resp.Interviews = interviewsOfAnswers(ctx.Tx, resp.Moments)
+	listing := s.photoListing(parsed)
 	var photoPlaces map[int]PhotoPlace
 	if len(terms) > 0 {
-		photoPlaces = photoPlacesMatchingATerm(ctx.Tx, user, terms)
+		photoPlaces = listing.cachedPlaces(terms)
 	}
-	resp.Photos, resp.MorePhotos, photosSemantic = s.matchPhotos(parsed, terms, photoPlaces)
+	resp.Photos, resp.MorePhotos, photosSemantic = s.matchPhotos(listing, parsed, terms, photoPlaces)
 	if len(terms) > 0 {
 		resp.Tags = s.matchTags(parsed, terms)
 		resp.Places = s.matchPlaces(terms, photoPlaces)
@@ -408,8 +409,7 @@ func (s *searcher) photoAgeMatches(parsed parsedSearch, image Image, present []i
 	return false
 }
 
-func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[int]PhotoPlace) (out []PhotoWithPeople, more bool, semantic bool) {
-	l := s.photoListing(parsed)
+func (s *searcher) matchPhotos(l photoListing, parsed parsedSearch, terms []string, places map[int]PhotoPlace) (out []PhotoWithPeople, more bool, semantic bool) {
 	keep := func(image Image) bool {
 		if !l.passes(image) || !dateMatches(parsed, image.PhotoDate) {
 			return false
@@ -417,10 +417,7 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 		if len(parsed.personGroups) == 0 && parsed.AgeFromMonth == nil {
 			return true
 		}
-		var present []int
-		for _, pp := range GetPhotoPersonsByPhoto(s.tx, image.Id) {
-			present = append(present, pp.PersonId)
-		}
+		present := l.photoPeople(image)
 		if !hasOneOfEach(present, parsed.personGroups) {
 			return false
 		}
@@ -437,19 +434,15 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 		})
 		semantic = true
 	} else {
-		l.read(l.newest, func(image Image) bool {
-			if keep(image) {
-				candidates = append(candidates, image)
-			}
-			return true
-		})
+		var words photoWords
+		candidates, words = l.searchCandidates(keep)
 		var mode string
-		candidates, mode = rankPhotoQuery(l, candidates, parsed.Text, photoTextMatcher(l, terms, places))
+		candidates, mode = rankPhotoQuery(l, candidates, parsed.Text, photoTextMatcher(l, terms, places, words))
 		semantic = mode == "semantic"
 	}
 
 	more = len(candidates) > searchPhotoLimit
-	return photosWithPeople(s.tx, candidates[:min(len(candidates), searchPhotoLimit)], nil), more, semantic
+	return photosWithPeople(s.tx, reloadImages(s.tx, candidates[:min(len(candidates), searchPhotoLimit)]), nil), more, semantic
 }
 
 func (s *searcher) understoodTags(parsed parsedSearch) []Tag {

@@ -28,6 +28,7 @@ func packDateKey(seconds *int64, buf *vpack.Buffer) {
 // ReindexPhotoDates brings both date indexes in line with the stored photo and
 // its people. Call it after any write to the photo, its date, or who is in it.
 func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
+	notePhotoWrite(tx)
 	image := GetImageById(tx, photoId)
 	if image.Id == 0 {
 		vbolt.DeleteTargetTerms(tx, ImageByFamilyDateIndex, photoId)
@@ -176,6 +177,9 @@ type photoListing struct {
 	places    *placeResolver
 	newest    photoKey
 	oldest    int64
+	own       map[int]bool
+	ownList   []int
+	texts     map[int]familyPhotoText
 }
 
 func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, placeKey string, dateFrom string, dateTo string) photoListing {
@@ -187,6 +191,12 @@ func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, pla
 		places:    newPlaceResolver(tx),
 		newest:    photoKey{seconds: math.MaxInt64, id: math.MaxInt},
 		oldest:    math.MinInt64,
+		own:       map[int]bool{},
+		ownList:   familiesVisibleTo(tx, user),
+		texts:     map[int]familyPhotoText{},
+	}
+	for _, familyId := range l.ownList {
+		l.own[familyId] = true
 	}
 	if dateTo != "" {
 		end, _ := time.Parse(dateOnlyLayout, dateTo)
@@ -236,7 +246,7 @@ func (l photoListing) passes(image Image) bool {
 	if image.Status == 2 || (l.withTag != nil && !l.withTag[image.Id]) {
 		return false
 	}
-	if len(l.personIds) > 0 && !CanAccessPhoto(l.tx, l.user, image, AccessView) {
+	if len(l.personIds) > 0 && !l.own[image.FamilyId] && !CanAccessPhoto(l.tx, l.user, image, AccessView) {
 		return false
 	}
 	if l.placeKey != "" {
