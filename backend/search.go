@@ -220,7 +220,7 @@ func (s *searcher) ageMatches(parsed parsedSearch, personId int, at time.Time) b
 }
 
 func (p parsedSearch) hasFilters() bool {
-	return len(p.PersonIds) > 0 || len(p.TagIds) > 0 || p.AgeFromMonth != nil || p.Year != 0 || p.Month != 0 || p.Category != ""
+	return len(p.PersonIds) > 0 || p.AgeFromMonth != nil || p.Year != 0 || p.Month != 0 || p.Category != ""
 }
 
 func dateMatches(parsed parsedSearch, at time.Time) bool {
@@ -301,9 +301,6 @@ func (s *searcher) matchMoments(parsed parsedSearch, terms []string, limit int) 
 		if !dateMatches(parsed, m.MilestoneDate) || (parsed.Category != "" && m.Category != parsed.Category) {
 			continue
 		}
-		if len(parsed.tagGroups) > 0 && !hasOneOfEach(tagsOf(m), parsed.tagGroups) {
-			continue
-		}
 		candidates = append(candidates, m)
 	}
 	newestFirst := func(ms []Milestone) {
@@ -380,7 +377,7 @@ func (s *searcher) photoListing(parsed parsedSearch) photoListing {
 		}
 		dateFrom, dateTo = from.Format(dateOnlyLayout), to.Format(dateOnlyLayout)
 	}
-	return newPhotoListing(s.tx, s.user, personIds, parsed.TagIds, "", dateFrom, dateTo)
+	return newPhotoListing(s.tx, s.user, personIds, nil, "", dateFrom, dateTo)
 }
 
 // photoAgeMatches checks the age against the named people in the photo, or
@@ -402,9 +399,6 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 	l := s.photoListing(parsed)
 	keep := func(image Image) bool {
 		if !l.passes(image) || !dateMatches(parsed, image.PhotoDate) {
-			return false
-		}
-		if len(parsed.tagGroups) > 1 && !hasOneOfEach(GetPhotoTagIds(s.tx, image.Id), parsed.tagGroups) {
 			return false
 		}
 		if len(parsed.personGroups) == 0 && parsed.AgeFromMonth == nil {

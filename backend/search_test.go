@@ -304,3 +304,29 @@ func TestSearchLeavesOutPhotosOfAPersonSharedWithoutThem(t *testing.T) {
 		t.Errorf("other groups leaked: %+v", resp)
 	}
 }
+
+func TestSearchTreatsATagNameAsText(t *testing.T) {
+	fx := setupResultsFixture(t)
+	noVision(t)
+	school := fx.addTag(t, fx.familyId, "School")
+	mentions := fx.addMilestoneOn(t, fx.alice, "First day of school", "first", day("2020-09-01"))
+	tagged := fx.addMilestoneOn(t, fx.alice, "Met her teacher", "first", day("2020-08-20"))
+	fx.addMilestoneOn(t, fx.alice, "Lost a tooth", "health", day("2020-10-01"))
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		if err := setMilestoneTags(tx, tagged, []int{school.Id}); err != nil {
+			t.Fatal(err)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	resp := search(t, fx, SearchRequest{Query: "school"})
+	if !slices.Equal(resp.Understood.TagIds, []int{school.Id}) || resp.Understood.Text != "school" {
+		t.Errorf("understood = %+v", resp.Understood)
+	}
+	if got := momentIds(resp.Moments); !slices.Equal(got, []int{mentions.Id, tagged.Id}) {
+		t.Errorf("school = %v, want the moment that says it, then the tagged one", got)
+	}
+	if len(resp.Tags) != 1 || resp.Tags[0].Id != school.Id {
+		t.Errorf("tags = %+v", resp.Tags)
+	}
+}

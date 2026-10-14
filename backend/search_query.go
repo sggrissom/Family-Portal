@@ -32,12 +32,11 @@ const (
 	SearchIgnoreTag      = "tag"
 )
 
-// parsedSearch is the understood query plus one group of ids per person or
-// tag mentioned: a match needs something from every group.
+// parsedSearch is the understood query plus the people named in it, one
+// group per mention: a photo must show someone from every group.
 type parsedSearch struct {
 	SearchUnderstood
 	personGroups [][]int
-	tagGroups    [][]int
 }
 
 func foldText(s string) string {
@@ -291,7 +290,6 @@ func parseSearchQuery(query string, people []Person, tags []Tag, now time.Time, 
 			keep[i+j] = p.tag
 		}
 		if p.tag {
-			out.tagGroups = append(out.tagGroups, p.ids)
 			for _, id := range p.ids {
 				if !slices.Contains(out.TagIds, id) {
 					out.TagIds = append(out.TagIds, id)

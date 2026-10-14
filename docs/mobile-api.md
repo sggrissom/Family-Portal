@@ -841,7 +841,9 @@ every keystroke: an empty query returns empty groups, not an error.
   left over is `text`. Show each piece as a removable chip. Removing one sends
   the same query again with its kind in `ignore` (`person`, `age`, `date`,
   `category`, `tag`), and the words go back into `text`.
-- The understood pieces are hard filters on moments and photos. A moment
+- A tag name is recognised (its tag leads `tags`) but its words stay in
+  `text`, so it matches things tagged with it or mentioning it. The other
+  understood pieces are hard filters on moments and photos. A moment
   matches a named person if it belongs to any of them. A photo must show
   someone from each name mentioned (a first name two people share counts as
   either). An age is measured from the moment's person, or for a photo from a
