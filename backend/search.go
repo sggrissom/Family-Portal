@@ -437,14 +437,8 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 		})
 		semantic = true
 	} else {
-		l.read(l.newest, func(image Image) bool {
-			if keep(image) {
-				candidates = append(candidates, image)
-			}
-			return true
-		})
 		var mode string
-		candidates, mode = rankPhotoQuery(l, candidates, parsed.Text, photoTextMatcher(l, terms, places))
+		candidates, mode = rankPhotoQuery(l, parsed.Text, photoTextHits(l, terms, places), keep)
 		semantic = mode == "semantic"
 	}
 

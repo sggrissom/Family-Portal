@@ -65,6 +65,7 @@ func TestSearchMatchesWordPrefixesAcrossGroups(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		photo.Title = "Walkabout"
 		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
+		ReindexPhotoDates(tx, photo.Id)
 		place := FamilyPlace{Id: vbolt.NextIntId(tx, FamilyPlaceBkt), FamilyId: fx.familyId, Name: "Walker Park", RadiusMeters: 100}
 		vbolt.Write(tx, FamilyPlaceBkt, place.Id, &place)
 		vbolt.SetTargetSingleTerm(tx, FamilyPlaceByFamilyIndex, place.Id, fx.familyId)
