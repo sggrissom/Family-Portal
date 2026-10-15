@@ -815,7 +815,6 @@ func markPhotoFailed(imageId int) {
 		}
 		image.Status = 2
 		vbolt.Write(tx, ImagesBkt, image.Id, &image)
-		notePhotoWrite(tx)
 		vbolt.TxCommit(tx)
 	})
 }

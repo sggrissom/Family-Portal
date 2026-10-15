@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"bytes"
 	"family/cfg"
 	"math"
 	"slices"
+	"sort"
 	"time"
 
 	"go.hasen.dev/vbolt"
@@ -16,6 +18,35 @@ import (
 var ImageByFamilyDateIndex = vbolt.IndexExt(&cfg.Info, "image_by_family_date", vpack.FInt, packDateKey, vpack.FInt)
 var ImageByPersonDateIndex = vbolt.IndexExt(&cfg.Info, "image_by_person_date", vpack.FInt, packDateKey, vpack.FInt)
 
+// PhotoWordIndex maps each word of a photo's title and description to the
+// photo. Words are packed without a length prefix, so a cursor can seek to
+// every word that starts with a search term.
+var PhotoWordIndex = vbolt.Index(&cfg.Info, "photo_word", packIndexWord, vpack.FInt)
+
+func packIndexWord(word *string, buf *vpack.Buffer) {
+	if buf.Writing {
+		buf.WriteBytes(append([]byte(*word), 0)...)
+		return
+	}
+	end := bytes.IndexByte(buf.Data[buf.Pos:], 0)
+	if end < 0 {
+		buf.Error = true
+		return
+	}
+	*word = string(buf.Data[buf.Pos : buf.Pos+end])
+	buf.Pos += end + 1
+}
+
+func photosWithWordPrefix(tx *vbolt.Tx, prefix string, out map[int]bool) {
+	seek := append([]byte{vbolt.IndexTermPrefix}, prefix...)
+	cursor := vbolt.TxRawBucket(tx, PhotoWordIndex.Name).Cursor()
+	for key, _ := cursor.Seek(seek); bytes.HasPrefix(key, seek); key, _ = cursor.Next() {
+		var id int
+		vpack.FromBytesInto(key[len(key)-8:], &id, vpack.FInt)
+		out[id] = true
+	}
+}
+
 // vpack.UnixTimeKey writes the seconds as an unsigned int, which puts every
 // pre-1970 photo after the modern ones. Flipping the sign bit keeps the bytes
 // in time order.
@@ -25,16 +56,18 @@ func packDateKey(seconds *int64, buf *vpack.Buffer) {
 	*seconds = int64(u ^ (1 << 63))
 }
 
-// ReindexPhotoDates brings both date indexes in line with the stored photo and
-// its people. Call it after any write to the photo, its date, or who is in it.
+// ReindexPhotoDates brings the date and word indexes in line with the stored
+// photo and its people. Call it after any write to the photo, its date, or who
+// is in it.
 func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
-	notePhotoWrite(tx)
 	image := GetImageById(tx, photoId)
 	if image.Id == 0 {
 		vbolt.DeleteTargetTerms(tx, ImageByFamilyDateIndex, photoId)
 		vbolt.DeleteTargetTerms(tx, ImageByPersonDateIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, PhotoWordIndex, photoId)
 		return
 	}
+	vbolt.SetTargetTermsPlain(tx, PhotoWordIndex, image.Id, searchFieldWords(image.Title, image.Description))
 
 	seconds := image.PhotoDate.Unix()
 	vbolt.SetTargetSingleTermExt(tx, ImageByFamilyDateIndex, image.Id, seconds, image.FamilyId)
@@ -177,9 +210,6 @@ type photoListing struct {
 	places    *placeResolver
 	newest    photoKey
 	oldest    int64
-	own       map[int]bool
-	ownList   []int
-	texts     map[int]familyPhotoText
 }
 
 func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, placeKey string, dateFrom string, dateTo string) photoListing {
@@ -191,12 +221,6 @@ func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, pla
 		places:    newPlaceResolver(tx),
 		newest:    photoKey{seconds: math.MaxInt64, id: math.MaxInt},
 		oldest:    math.MinInt64,
-		own:       map[int]bool{},
-		ownList:   familiesVisibleTo(tx, user),
-		texts:     map[int]familyPhotoText{},
-	}
-	for _, familyId := range l.ownList {
-		l.own[familyId] = true
 	}
 	if dateTo != "" {
 		end, _ := time.Parse(dateOnlyLayout, dateTo)
@@ -217,6 +241,28 @@ func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, pla
 	return l
 }
 
+// listingTerm is one index term the listing reads photos from.
+type listingTerm struct {
+	index *vbolt.IndexInfo[int, int, int64]
+	term  int
+}
+
+func (l photoListing) terms() (terms []listingTerm) {
+	if len(l.personIds) > 0 {
+		for _, personId := range l.personIds {
+			terms = append(terms, listingTerm{ImageByPersonDateIndex, personId})
+		}
+		return
+	}
+	for _, familyId := range familiesVisibleTo(l.tx, l.user) {
+		terms = append(terms, listingTerm{ImageByFamilyDateIndex, familyId})
+	}
+	for _, person := range linkedPeopleVisibleTo(l.tx, l.user, ScopePhotos) {
+		terms = append(terms, listingTerm{ImageByPersonDateIndex, person.Id})
+	}
+	return
+}
+
 // read visits the listing's photos newest first from start, which is clamped
 // to the date window, until visit returns false.
 func (l photoListing) read(start photoKey, visit func(Image) bool) {
@@ -224,19 +270,28 @@ func (l photoListing) read(start photoKey, visit func(Image) bool) {
 		start = l.newest
 	}
 	var streams []*photoStream
-	if len(l.personIds) > 0 {
-		for _, personId := range l.personIds {
-			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, personId, start))
-		}
-	} else {
-		for _, familyId := range familiesVisibleTo(l.tx, l.user) {
-			streams = append(streams, newPhotoStream(ImageByFamilyDateIndex, familyId, start))
-		}
-		for _, person := range linkedPeopleVisibleTo(l.tx, l.user, ScopePhotos) {
-			streams = append(streams, newPhotoStream(ImageByPersonDateIndex, person.Id, start))
-		}
+	for _, t := range l.terms() {
+		streams = append(streams, newPhotoStream(t.index, t.term, start))
 	}
 	mergePhotoStreams(l.tx, streams, start, l.oldest, visit)
+}
+
+// keys lists the photos read would visit, newest first, without loading them.
+func (l photoListing) keys() []photoKey {
+	seen := map[int]bool{}
+	var keys []photoKey
+	for _, t := range l.terms() {
+		vbolt.IterateTerm(l.tx, t.index, t.term, func(id int, seconds int64) bool {
+			key := photoKey{seconds: seconds, id: id}
+			if !seen[id] && seconds >= l.oldest && l.newest.newerThan(key) {
+				seen[id] = true
+				keys = append(keys, key)
+			}
+			return true
+		})
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].newerThan(keys[j]) })
+	return keys
 }
 
 // passes is the filter for a photo already read from the listing's streams.
@@ -246,7 +301,7 @@ func (l photoListing) passes(image Image) bool {
 	if image.Status == 2 || (l.withTag != nil && !l.withTag[image.Id]) {
 		return false
 	}
-	if len(l.personIds) > 0 && !l.own[image.FamilyId] && !CanAccessPhoto(l.tx, l.user, image, AccessView) {
+	if len(l.personIds) > 0 && !CanAccessPhoto(l.tx, l.user, image, AccessView) {
 		return false
 	}
 	if l.placeKey != "" {

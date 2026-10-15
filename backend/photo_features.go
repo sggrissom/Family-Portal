@@ -104,7 +104,6 @@ func hashChunkTerms(hash uint64) []int {
 }
 
 func writeFeaturesTx(tx *vbolt.Tx, f *PhotoFeatures) {
-	notePhotoWrite(tx)
 	vbolt.Write(tx, PhotoFeaturesBkt, f.PhotoId, f)
 	vbolt.SetTargetSingleTerm(tx, FeaturesByFamilyIndex, f.PhotoId, f.FamilyId)
 	if f.HashVersion > 0 {
@@ -120,7 +119,6 @@ func writeFeaturesTx(tx *vbolt.Tx, f *PhotoFeatures) {
 }
 
 func deletePhotoFeaturesTx(tx *vbolt.Tx, photoId int) {
-	notePhotoWrite(tx)
 	vbolt.Delete(tx, PhotoFeaturesBkt, photoId)
 	vbolt.DeleteTargetTerms(tx, FeaturesByFamilyIndex, photoId)
 	vbolt.DeleteTargetTerms(tx, FeaturesByGroupIndex, photoId)

@@ -147,6 +147,14 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: photo text search finds its matches in the photo word index.
+	vbolt.ApplyDBProcess(dbConnection, "2026-1015-index-photo-words", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillPhotoDateIndexes(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	// Migration: membership rows are the only authority, so every user needs a
 	// row for their primary family before the User.FamilyId fallback is gone.
 	vbolt.ApplyDBProcess(dbConnection, "2026-0930-ensure-primary-memberships", func() {

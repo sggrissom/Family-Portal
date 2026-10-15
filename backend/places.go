@@ -349,7 +349,6 @@ func SaveFamilyPlace(ctx *vbeam.Context, req SaveFamilyPlaceRequest) (resp SaveF
 	place.Name = name
 	place.RadiusMeters = radius
 	vbolt.Write(ctx.Tx, FamilyPlaceBkt, place.Id, &place)
-	notePhotoWrite(ctx.Tx)
 	vbolt.SetTargetSingleTerm(ctx.Tx, FamilyPlaceByFamilyIndex, place.Id, place.FamilyId)
 	resp.Place = place
 	vbolt.TxCommit(ctx.Tx)
@@ -374,7 +373,6 @@ func DeleteFamilyPlace(ctx *vbeam.Context, req DeleteFamilyPlaceRequest) (resp E
 		return
 	}
 	vbolt.Delete(ctx.Tx, FamilyPlaceBkt, place.Id)
-	notePhotoWrite(ctx.Tx)
 	vbolt.DeleteTargetTerms(ctx.Tx, FamilyPlaceByFamilyIndex, place.Id)
 	vbolt.TxCommit(ctx.Tx)
 	return

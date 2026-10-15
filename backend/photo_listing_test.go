@@ -62,6 +62,7 @@ func TestSearchPagesThroughItsRankingWithFilters(t *testing.T) {
 		for _, image := range fx.photos {
 			image.Title = "Beach day"
 			vbolt.Write(tx, ImagesBkt, image.Id, &image)
+			ReindexPhotoDates(tx, image.Id)
 		}
 		vbolt.TxCommit(tx)
 	})
