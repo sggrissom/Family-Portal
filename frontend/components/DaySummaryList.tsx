@@ -1,3 +1,5 @@
+import { Cake, Ruler, Trophy } from "lucide-preact";
+import { Icon } from "./Icon";
 import * as preact from "preact";
 import * as server from "../server";
 import { Checkup, DayEvent, DaySummary, PhotoGroup, dayLabel } from "../lib/daySummary";
@@ -37,7 +39,7 @@ export const DaySummaryList = ({
           <h3 className="day-summary-label">{dayLabel(day.day, today)}</h3>
           {day.birthdays.map(b => (
             <div key={`b${b.personId}`} className="day-birthday">
-              🎂 {copy.home.turned(name(b.personId), b.age)}
+              <Icon symbol={Cake} /> {copy.home.turned(name(b.personId), b.age)}
             </div>
           ))}
           {day.milestones.map(m => (
@@ -108,7 +110,7 @@ const EventCard = ({
     <a href={`/competition/${dayEvent.event.id}`} className="day-event">
       <span className="day-event-head">
         <span className="day-milestone-icon" aria-hidden="true">
-          🏆
+          <Icon symbol={Trophy} />
         </span>
         <strong>{dayEvent.event.name}</strong>
       </span>
@@ -158,7 +160,7 @@ const CheckupRow = ({
   return (
     <a href={`/view-growth/${ids.join(",")}`} className="day-checkup">
       <span className="day-milestone-icon" aria-hidden="true">
-        📏
+        <Icon symbol={Ruler} />
       </span>
       <span>
         {name ? (

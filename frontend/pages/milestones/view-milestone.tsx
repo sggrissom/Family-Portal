@@ -1,3 +1,5 @@
+import { Pencil, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
@@ -165,14 +167,14 @@ const ViewMilestonePage = ({
         {canContribute(milestone.familyId) && (
           <div className="milestone-detail-actions">
             <a href={`/edit-milestone/${milestone.id}`} className="btn btn-secondary">
-              ✏️ {copy.milestoneDetail.edit}
+              <Icon symbol={Pencil} /> {copy.milestoneDetail.edit}
             </a>
             <button
               type="button"
               className="btn btn-danger"
               onClick={() => deleteMilestone(milestone)}
             >
-              🗑️ {copy.milestoneDetail.delete}
+              <Icon symbol={Trash2} /> {copy.milestoneDetail.delete}
             </button>
           </div>
         )}

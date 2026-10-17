@@ -1,3 +1,5 @@
+import { Camera, Pencil, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -392,7 +394,7 @@ const AppearanceRow = ({
             onClick={vlens.cachePartial(onStartAppearancePhotos, state, detail)}
             disabled={state.saving}
           >
-            📸
+            <Icon symbol={Camera} />
           </button>
           <button
             className="icon-btn"
@@ -401,7 +403,7 @@ const AppearanceRow = ({
             onClick={vlens.cachePartial(onStartEdit, state, detail)}
             disabled={state.saving}
           >
-            ✏️
+            <Icon symbol={Pencil} />
           </button>
           <button
             className="icon-btn"
@@ -410,7 +412,7 @@ const AppearanceRow = ({
             onClick={vlens.cachePartial(onDeleteAppearance, state, detail, labels)}
             disabled={state.saving}
           >
-            🗑️
+            <Icon symbol={Trash2} />
           </button>
         </span>
       )}

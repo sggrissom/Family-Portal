@@ -1,3 +1,5 @@
+import { Smartphone } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -37,7 +39,9 @@ export function view(
 
             <div className="admin-header">
               <div className="admin-badge">
-                <span className="admin-icon">📱</span>
+                <span className="admin-icon">
+                  <Icon symbol={Smartphone} />
+                </span>
                 <span>App Versions</span>
               </div>
               <h1>App Versions</h1>
@@ -162,7 +166,9 @@ const PlatformForm = ({ platform }: { platform: server.AdminMobileVersionPlatfor
   return (
     <div className="admin-card">
       <div className="card-header">
-        <div className="admin-card-icon">{platform.platform === "ios" ? "🍎" : "🤖"}</div>
+        <div className="admin-card-icon">
+          <Icon symbol={Smartphone} />
+        </div>
         <h3>{label}</h3>
         <span className={configured ? "version-state-set" : "version-state-unset"}>
           {configured ? "Policy set" : "No policy — every build accepted"}

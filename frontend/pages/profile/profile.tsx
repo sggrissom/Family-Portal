@@ -1,3 +1,5 @@
+import { Baby, BookOpen, Palette, Pencil, Trophy } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -271,7 +273,7 @@ const ProfileHeader = ({
           />
         ) : (
           <span className="profile-initial">
-            {person.isPregnancy ? "🤰" : initial(person.name)}
+            {person.isPregnancy ? <Icon symbol={Baby} /> : initial(person.name)}
           </span>
         )}
       </span>
@@ -287,11 +289,11 @@ const ProfileHeader = ({
       <div className="profile-actions">
         {canContribute(person.familyId) && (
           <a href={`/edit-person/${person.id}`} className="btn btn-secondary">
-            ✏️ Edit
+            <Icon symbol={Pencil} /> Edit
           </a>
         )}
         <a href="/books" className="btn btn-secondary">
-          📖 Books
+          <Icon symbol={BookOpen} /> Books
         </a>
         {canContribute(person.familyId) && (
           <button
@@ -416,7 +418,7 @@ const Snapshot = ({
             className="snapshot-season"
             onClick={onShowActivities}
           >
-            🏆 {season.name} · {copy.person.entries(entries.length)}
+            <Icon symbol={Trophy} /> {season.name} · {copy.person.entries(entries.length)}
             {next && ` · ${copy.person.next(next.event.name)}`}
           </button>
         );
@@ -553,7 +555,9 @@ const ArtworkTab = ({
               {cover ? (
                 <ThumbnailImage photoId={cover} alt={piece.description} />
               ) : (
-                <span aria-hidden="true">🎨</span>
+                <span aria-hidden="true">
+                  <Icon symbol={Palette} />
+                </span>
               )}
               {more > 0 && <span className="profile-artwork-more">+{more}</span>}
             </div>

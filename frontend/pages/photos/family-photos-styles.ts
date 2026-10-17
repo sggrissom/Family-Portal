@@ -396,7 +396,7 @@ block(`
 
 block(`
 .empty-icon {
-  font-size: 4rem;
+  line-height: 1;
   margin-bottom: 1rem;
   opacity: 0.6;
 }

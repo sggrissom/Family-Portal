@@ -1,3 +1,5 @@
+import { ChartColumn } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
@@ -112,7 +114,9 @@ const AnalyticsPage = ({ overviewData }: AnalyticsPageProps) => {
     <div className="admin-page">
       <div className="admin-header analytics-header">
         <div className="admin-badge">
-          <span className="admin-icon">📊</span>
+          <span className="admin-icon">
+            <Icon symbol={ChartColumn} />
+          </span>
           <span>Analytics Dashboard</span>
         </div>
         <h1>Site Analytics</h1>

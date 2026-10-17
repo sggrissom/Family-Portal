@@ -1,3 +1,4 @@
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
@@ -194,7 +195,9 @@ export const CategoryChips = ({ value, suggested, onChange, disabled }: Category
           disabled={disabled}
           onClick={vlens.cachePartial(onChange, category.value)}
         >
-          <span aria-hidden="true">{category.icon}</span>
+          <span aria-hidden="true">
+            <Icon symbol={category.icon} />
+          </span>
           {category.label}
         </button>
       ))}

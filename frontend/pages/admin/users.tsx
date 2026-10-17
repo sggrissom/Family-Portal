@@ -1,3 +1,5 @@
+import { CircleCheck, CircleX, Clock, ScrollText, Upload, UsersRound, Zap } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
@@ -135,7 +137,9 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
 
       <div className="admin-header">
         <div className="admin-badge">
-          <span className="admin-icon">👥</span>
+          <span className="admin-icon">
+            <Icon symbol={UsersRound} />
+          </span>
           <span>User Management</span>
         </div>
         <h1>Registered Users</h1>
@@ -181,7 +185,9 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                     </td>
                     <td className="user-role">
                       {u.isAdmin ? (
-                        <span className="admin-badge-small">⚡ Admin</span>
+                        <span className="admin-badge-small">
+                          <Icon symbol={Zap} /> Admin
+                        </span>
                       ) : (
                         <span className="user-badge">User</span>
                       )}
@@ -255,7 +261,9 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
       {stats && (
         <div className="photo-stats-grid">
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">📤</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Upload} />
+            </div>
             <div className="stat-content">
               <h3>Sent</h3>
               <div className="admin-stat-value">{stats.sent.toLocaleString()}</div>
@@ -264,7 +272,9 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">{stats.failed > 0 ? "❌" : "✅"}</div>
+            <div className="admin-stat-icon">
+              {stats.failed > 0 ? <Icon symbol={CircleX} /> : <Icon symbol={CircleCheck} />}
+            </div>
             <div className="stat-content">
               <h3>Failed</h3>
               <div className="admin-stat-value">{stats.failed.toLocaleString()}</div>
@@ -273,7 +283,9 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">🕒</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Clock} />
+            </div>
             <div className="stat-content">
               <h3>Last Sent</h3>
               <div className="admin-stat-value">
@@ -288,15 +300,21 @@ const MailPanel = ({ state }: { state: UsersPageState }) => {
       {stats && stats.recentAttempts.length > 0 && (
         <div className="admin-card">
           <div className="card-header">
-            <div className="admin-card-icon">📜</div>
+            <div className="admin-card-icon">
+              <Icon symbol={ScrollText} />
+            </div>
             <h3>Recent Attempts</h3>
           </div>
           <div className="card-content">
             <ul className="error-list">
               {stats.recentAttempts.map(attempt => (
                 <li key={`${attempt.to}-${attempt.time}`}>
-                  {attempt.success ? "✅" : "❌"} {attempt.kind} → {attempt.to} ·{" "}
-                  {formatRelativeTime(attempt.time, "never")}
+                  {attempt.success ? (
+                    <Icon symbol={CircleCheck} label="Succeeded" />
+                  ) : (
+                    <Icon symbol={CircleX} label="Failed" />
+                  )}{" "}
+                  {attempt.kind} → {attempt.to} · {formatRelativeTime(attempt.time, "never")}
                   {attempt.attempts > 1 && ` · ${attempt.attempts} tries`}
                   {attempt.error &&
                     ` · ${attempt.permanent ? "permanent" : "gave up"}: ${attempt.error}`}

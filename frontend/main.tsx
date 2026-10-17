@@ -11,6 +11,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installGlobalErrorHandlers } from "./lib/clientErrors";
 import { LEGACY_PREFIXES, legacyRedirect } from "./lib/appNav";
 import "./styles/global";
+import "./components/icon-styles";
 
 function customErrorView(route: string, prefix: string, error: string): preact.ComponentChild {
   if (error === server.ErrAuthFailure) {

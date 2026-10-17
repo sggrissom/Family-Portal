@@ -1,3 +1,5 @@
+import { Pencil, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -193,7 +195,7 @@ export function view(
                           onClick={vlens.cachePartial(onStartEdit, state, tag)}
                           disabled={state.saving}
                         >
-                          ✏️
+                          <Icon symbol={Pencil} />
                         </button>
                       )}
                       {auth.canAdmin(tag.familyId) && (
@@ -204,7 +206,7 @@ export function view(
                           onClick={vlens.cachePartial(onDeleteTag, state, tag.id)}
                           disabled={state.saving}
                         >
-                          🗑️
+                          <Icon symbol={Trash2} />
                         </button>
                       )}
                     </>

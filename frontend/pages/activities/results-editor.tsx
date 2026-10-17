@@ -1,3 +1,5 @@
+import { Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
@@ -306,7 +308,7 @@ const ResultRowFields = ({
           onClick={vlens.cachePartial(onRemoveResultRow, host, index)}
           disabled={host.saving}
         >
-          🗑️
+          <Icon symbol={Trash2} />
         </button>
       </div>
 
