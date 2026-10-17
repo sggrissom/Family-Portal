@@ -1,3 +1,5 @@
+import { Camera, MapPin, Search, UserRound } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -302,7 +304,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                       onChange={() => photoFilter.setPlace(place.key)}
                     />
                     <span>
-                      {place.key.startsWith("f") ? "📍 " : ""}
+                      {place.key.startsWith("f") && <Icon symbol={MapPin} />}
                       {place.name} <span className="place-count">({place.count})</span>
                     </span>
                   </label>
@@ -375,7 +377,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                         />
                         {photoWithPeople.people.some(
                           person => person.profilePhotoId === photoWithPeople.image.id
-                        ) && <div className="profile-photo-badge">👤 Profile</div>}
+                        ) && (
+                          <div className="profile-photo-badge">
+                            <Icon symbol={UserRound} /> Profile
+                          </div>
+                        )}
                         {photoWithPeople.people.length > 0 ? (
                           <div className="people-badges">
                             {photoWithPeople.people.map(person => (
@@ -441,7 +447,9 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
           ) : (
             <div className="photos-gallery">
               <div className="empty-state">
-                <div className="empty-icon">🔍</div>
+                <div className="empty-icon">
+                  <Icon symbol={Search} />
+                </div>
                 <h2>
                   {searching ? "Nothing Matched That Search" : "No Photos Match Your Filters"}
                 </h2>
@@ -464,7 +472,9 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
         ) : (
           <div className="photos-gallery">
             <div className="empty-state">
-              <div className="empty-icon">📸</div>
+              <div className="empty-icon">
+                <Icon symbol={Camera} />
+              </div>
               <h2>No Family Photos Yet</h2>
               {auth.canContributeAnywhere() && (
                 <>

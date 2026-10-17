@@ -1,3 +1,5 @@
+import { Menu, X } from "lucide-preact";
+import { Icon } from "./components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
@@ -91,7 +93,7 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
         >
           <span>Menu</span>
           <span className="nav-toggle-icon" aria-hidden="true">
-            {vlens.refGet(menuRef) ? "×" : "☰"}
+            {vlens.refGet(menuRef) ? <Icon symbol={X} /> : <Icon symbol={Menu} />}
           </span>
         </button>
         <ul className={navLinksClass} id="navLinks">

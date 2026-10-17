@@ -1,3 +1,5 @@
+import { BookOpen, MapPin, Search, Trophy } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -246,7 +248,7 @@ const SearchPage = ({ data }: { data: SearchData }) => {
       <h1 className="search-title">{copy.search.title}</h1>
       <form className="search-field" role="search" onSubmit={e => e.preventDefault()}>
         <span className="search-field-icon" aria-hidden="true">
-          🔍
+          <Icon symbol={Search} />
         </span>
         <input
           id="searchInput"
@@ -516,7 +518,7 @@ const Groups = ({
                   data-result
                 >
                   <span className="search-row-icon" aria-hidden="true">
-                    📍
+                    <Icon symbol={MapPin} />
                   </span>
                   <span className="search-row-main">
                     <Marked text={place.name} terms={terms} />
@@ -535,7 +537,7 @@ const Groups = ({
               <li key={`${hit.kind}${hit.id}`}>
                 <a className="search-row" href={activityHref(hit)} data-result>
                   <span className="search-row-icon" aria-hidden="true">
-                    🏆
+                    <Icon symbol={Trophy} />
                   </span>
                   <span className="search-row-main">
                     <Marked text={hit.name} terms={terms} />
@@ -559,7 +561,7 @@ const Groups = ({
               <li key={book.id}>
                 <a className="search-row" href={`/book/${book.id}`} data-result>
                   <span className="search-row-icon" aria-hidden="true">
-                    📖
+                    <Icon symbol={BookOpen} />
                   </span>
                   <span className="search-row-main">
                     <Marked text={book.title} terms={terms} />

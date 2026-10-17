@@ -4,6 +4,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "lucide-preact": "^1.58.0",
     "preact": "^10.26.9",
     "vlens": "^0.1.6"
   },

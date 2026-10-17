@@ -1,3 +1,5 @@
+import { ClipboardList, KeyRound, Sprout } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
@@ -194,7 +196,9 @@ const SeedPage = ({ data }: SeedPageProps) => {
 
       <div className="admin-header">
         <div className="admin-badge">
-          <span className="admin-icon">🌱</span>
+          <span className="admin-icon">
+            <Icon symbol={Sprout} />
+          </span>
           <span>Test Accounts</span>
         </div>
         <h1>Seeded Test Accounts</h1>
@@ -203,7 +207,9 @@ const SeedPage = ({ data }: SeedPageProps) => {
 
       <div className="admin-card">
         <div className="card-header">
-          <div className="admin-card-icon">📋</div>
+          <div className="admin-card-icon">
+            <Icon symbol={ClipboardList} />
+          </div>
           <h3>What this writes</h3>
         </div>
         <div className="card-content">
@@ -223,7 +229,9 @@ const SeedPage = ({ data }: SeedPageProps) => {
 
       <div className="admin-card">
         <div className="card-header">
-          <div className="admin-card-icon">🌱</div>
+          <div className="admin-card-icon">
+            <Icon symbol={Sprout} />
+          </div>
           <h3>Create a Set</h3>
         </div>
         <div className="card-content">
@@ -299,7 +307,9 @@ const SeedPage = ({ data }: SeedPageProps) => {
       {state.created && (
         <div className="admin-card">
           <div className="card-header">
-            <div className="admin-card-icon">🔑</div>
+            <div className="admin-card-icon">
+              <Icon symbol={KeyRound} />
+            </div>
             <h3>Credentials</h3>
           </div>
           <div className="card-content">

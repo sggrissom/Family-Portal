@@ -1,3 +1,5 @@
+import { Pencil, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -216,7 +218,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                           onClick={vlens.cachePartial(onStartEditActivity, state, a)}
                           disabled={state.saving}
                         >
-                          ✏️
+                          <Icon symbol={Pencil} />
                         </button>
                         <button
                           className="icon-btn"
@@ -225,7 +227,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                           onClick={vlens.cachePartial(onDeleteActivity, state, a)}
                           disabled={state.saving}
                         >
-                          🗑️
+                          <Icon symbol={Trash2} />
                         </button>
                       </span>
                     )}
@@ -290,7 +292,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                             onClick={vlens.cachePartial(onStartEditSeason, state, season)}
                             disabled={state.saving}
                           >
-                            ✏️
+                            <Icon symbol={Pencil} />
                           </button>
                           <button
                             className="icon-btn"
@@ -299,7 +301,7 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
                             onClick={vlens.cachePartial(onDeleteSeason, state, season)}
                             disabled={state.saving}
                           >
-                            🗑️
+                            <Icon symbol={Trash2} />
                           </button>
                         </span>
                       )}

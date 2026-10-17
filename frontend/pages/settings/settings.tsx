@@ -1,3 +1,5 @@
+import { Download, TriangleAlert, Upload } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -894,7 +896,13 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     onClick={vlens.cachePartial(onExportDataClicked, exportForm)}
                     disabled={exportForm.loading}
                   >
-                    {exportForm.loading ? "Exporting..." : "📥 Export Data"}
+                    {exportForm.loading ? (
+                      "Exporting..."
+                    ) : (
+                      <>
+                        <Icon symbol={Download} /> Export Data
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -903,7 +911,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   <p>Upload data from a previous export or another family portal.</p>
 
                   <a href="/import" className="btn btn-secondary">
-                    📤 Import Data
+                    <Icon symbol={Upload} /> Import Data
                   </a>
                 </div>
               </div>
@@ -916,7 +924,10 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
             <h2>Advanced Data Management</h2>
             <div className="settings-card merge-card">
               <div className="warning-banner">
-                <strong>⚠️ Warning:</strong> This is a destructive operation that cannot be undone.
+                <strong>
+                  <Icon symbol={TriangleAlert} /> Warning:
+                </strong>{" "}
+                This is a destructive operation that cannot be undone.
               </div>
 
               <h4>Merge People</h4>
@@ -1135,7 +1146,10 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
           <h2>Delete Account</h2>
           <div className="settings-card">
             <div className="warning-banner">
-              <strong>⚠️ Warning:</strong> This cannot be undone.
+              <strong>
+                <Icon symbol={TriangleAlert} /> Warning:
+              </strong>{" "}
+              This cannot be undone.
             </div>
 
             <p className="section-description">

@@ -1,3 +1,5 @@
+import { Pencil, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -372,7 +374,7 @@ const EventRow = ({
             onClick={vlens.cachePartial(onStartEditEvent, state, event)}
             disabled={state.saving}
           >
-            ✏️
+            <Icon symbol={Pencil} />
           </button>
           <button
             className="icon-btn"
@@ -381,7 +383,7 @@ const EventRow = ({
             onClick={vlens.cachePartial(onDeleteEvent, state, event, labels)}
             disabled={state.saving}
           >
-            🗑️
+            <Icon symbol={Trash2} />
           </button>
         </span>
       )}
@@ -552,7 +554,7 @@ const EntryRow = ({
             onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
             disabled={state.saving}
           >
-            ✏️
+            <Icon symbol={Pencil} />
           </button>
           <button
             className="icon-btn"
@@ -561,7 +563,7 @@ const EntryRow = ({
             onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
             disabled={state.saving}
           >
-            🗑️
+            <Icon symbol={Trash2} />
           </button>
         </span>
       )}

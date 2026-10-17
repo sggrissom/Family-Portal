@@ -1,3 +1,5 @@
+import { Mic } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -590,7 +592,13 @@ const ItemRow = ({
           <ThumbnailImage photoId={shownPhoto || interview!.interview.photoId} alt="" />
         ) : (
           <span aria-hidden="true">
-            {milestone ? getCategoryIcon(milestone.category) : interview ? "🎤" : ""}
+            {milestone ? (
+              getCategoryIcon(milestone.category)
+            ) : interview ? (
+              <Icon symbol={Mic} />
+            ) : (
+              ""
+            )}
           </span>
         )}
       </div>
@@ -738,7 +746,7 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                 {group.interviews.map(i => (
                   <div key={`i${i.interview.id}`} className="book-editor-leftout">
                     <span>
-                      🎤 {interviewLabel(r, i.interview.id)}
+                      <Icon symbol={Mic} /> {interviewLabel(r, i.interview.id)}
                       <span className="book-editor-hint">
                         {" "}
                         · {shortDay(dayOf(i.interview.date))}

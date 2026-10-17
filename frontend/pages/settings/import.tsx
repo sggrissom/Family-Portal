@@ -1,3 +1,5 @@
+import { CircleCheck, CircleX, ClipboardList, Target, TriangleAlert } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -293,7 +295,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
       {form.success && form.result ? (
         <div className="import-success">
-          <h2>✅ Import Successful!</h2>
+          <h2>
+            <Icon symbol={CircleCheck} /> Import Successful!
+          </h2>
           <div className="import-stats">
             <div className="stat">
               <span className="stat-number">{form.result.importedPeople}</span>
@@ -373,7 +377,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
           {form.result.warnings && form.result.warnings.length > 0 && (
             <div className="import-warnings">
-              <h3>⚠️ Warnings:</h3>
+              <h3>
+                <Icon symbol={TriangleAlert} /> Warnings:
+              </h3>
               <ul>
                 {form.result.warnings.map((warning, index) => (
                   <li key={index}>{warning}</li>
@@ -384,7 +390,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
           {form.result.errors && form.result.errors.length > 0 && (
             <div className="import-errors">
-              <h3>❌ Errors:</h3>
+              <h3>
+                <Icon symbol={CircleX} /> Errors:
+              </h3>
               <ul>
                 {form.result.errors.map((error, index) => (
                   <li key={index}>{error}</li>
@@ -618,7 +626,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
           {form.showFilters && form.previewData && <FilteringInterface form={form} />}
 
           <div className="import-help">
-            <h3>📋 Import Instructions</h3>
+            <h3>
+              <Icon symbol={ClipboardList} /> Import Instructions
+            </h3>
             <ul>
               <li>Upload a JSON file exported from a previous version</li>
               <li>Or paste the JSON data directly into the text area</li>
@@ -685,7 +695,9 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
 
   return (
     <div className="filtering-interface">
-      <h3>🎯 Select Data to Import</h3>
+      <h3>
+        <Icon symbol={Target} /> Select Data to Import
+      </h3>
       <p>Choose which families and people you want to import:</p>
 
       {form.previewData?.availableFamilyIds?.map(familyId => {
@@ -757,7 +769,8 @@ const FilteringInterface = ({ form }: FilteringInterfaceProps) => {
         </p>
         {form.selectedPersonIds.length === 0 && (
           <p className="warning">
-            ⚠️ No people selected. Please select at least one person to import.
+            <Icon symbol={TriangleAlert} /> No people selected. Please select at least one person to
+            import.
           </p>
         )}
       </div>
