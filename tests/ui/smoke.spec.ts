@@ -242,10 +242,7 @@ test("a person is deleted from their edit page after seeing what goes with them"
   await page.getByRole("link", { name: `Back to ${mistake.name}'s Profile` }).click();
   await expect(page).toHaveURL(/\/profile\/\d+$/);
 
-  await page
-    .locator(".profile-actions")
-    .getByRole("link", { name: "✏️ Edit", exact: true })
-    .click();
+  await page.locator(".profile-actions").getByRole("link", { name: "Edit", exact: true }).click();
   await expect(page).toHaveURL(/\/edit-person\/\d+$/);
 
   await page.getByRole("button", { name: `Delete ${mistake.name}…` }).click();
