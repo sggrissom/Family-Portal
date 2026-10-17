@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"go.hasen.dev/vbolt"
@@ -103,10 +102,9 @@ func TestMilestoneImportsQueueCommittedRecords(t *testing.T) {
 
 func assertMilestoneSearchable(t *testing.T, fx resultsFixture, id int, query string) {
 	t.Helper()
-	var outsiderFamilyId int
+	var outsider User
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		outsider := AddUserTx(tx, CreateAccountRequest{Name: "Outsider", Email: fmt.Sprintf("outsider-%d@example.com", id)}, nil)
-		outsiderFamilyId = outsider.FamilyId
+		outsider = AddUserTx(tx, CreateAccountRequest{Name: "Outsider", Email: fmt.Sprintf("outsider-%d@example.com", id)}, nil)
 		vbolt.TxCommit(tx)
 	})
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
@@ -117,13 +115,13 @@ func assertMilestoneSearchable(t *testing.T, fx resultsFixture, id int, query st
 		if !found {
 			t.Fatalf("milestone %d not found by %q", id, query)
 		}
-		if leaked := SearchMilestonesTx(tx, query, outsiderFamilyId, 10); len(leaked) != 0 {
+		if leaked := SearchVisibleMilestones(tx, query, outsider, 10); len(leaked) != 0 {
 			t.Fatalf("unrelated family found %+v", leaked)
 		}
 	})
 }
 
-func TestRebuildMilestoneSearchIndexRepairsUnindexedRecords(t *testing.T) {
+func TestMilestonesWrittenOutsideTheSavePathAreSearchable(t *testing.T) {
 	fx := setupResultsFixture(t)
 	legacy := Milestone{PersonId: fx.alice.Id, FamilyId: fx.familyId, Description: "Rode a bicycle", Category: "achievement", MilestoneDate: featuresEpoch, CreatedAt: featuresEpoch}
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
@@ -133,23 +131,7 @@ func TestRebuildMilestoneSearchIndexRepairsUnindexedRecords(t *testing.T) {
 		vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, legacy.Id, legacy.FamilyId)
 		vbolt.TxCommit(tx)
 	})
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		if got := SearchMilestonesTx(tx, "bicycle", fx.familyId, 10); len(got) != 0 {
-			t.Fatalf("precondition: legacy record already searchable: %+v", got)
-		}
-	})
-	for range 2 {
-		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-			RebuildMilestoneSearchIndex(tx)
-			vbolt.TxCommit(tx)
-		})
-	}
 	assertMilestoneSearchable(t, fx, legacy.Id, "bicycle")
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		if got := GetMilestoneById(tx, legacy.Id); !reflect.DeepEqual(got, legacy) {
-			t.Fatalf("rebuild altered the record: %+v != %+v", got, legacy)
-		}
-	})
 }
 
 func TestPersonMergeQueuesMilestonesForTheirNewOwner(t *testing.T) {
@@ -169,8 +151,31 @@ func TestPersonMergeQueuesMilestonesForTheirNewOwner(t *testing.T) {
 		if got := GetMilestoneById(tx, id); got.PersonId != fx.bob.Id {
 			t.Fatalf("queued milestone has stale owner: %+v", got)
 		}
-		if got := SearchMilestonesTx(tx, fmt.Sprintf("p:%d", fx.bob.Id), fx.familyId, 10); len(got) != 1 || got[0].Id != id {
-			t.Fatalf("merged milestone not indexed under its new owner: %+v", got)
+		if got := SearchVisibleMilestones(tx, "bob first steps", fx.owner, 10); len(got) != 1 || got[0].Id != id {
+			t.Fatalf("merged milestone not found under its new owner: %+v", got)
+		}
+	})
+}
+
+func TestDropMilestoneSearchIndexRemovesTheOldBucket(t *testing.T) {
+	fx := setupResultsFixture(t)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(legacyMilestoneSearchBucket))
+		if err != nil {
+			t.Fatal(err)
+		}
+		bucket.Put([]byte("walk"), []byte{1})
+		vbolt.TxCommit(tx)
+	})
+	for range 2 {
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			DropMilestoneSearchIndex(tx)
+			vbolt.TxCommit(tx)
+		})
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if tx.Bucket([]byte(legacyMilestoneSearchBucket)) != nil {
+			t.Error("the old search index is still there")
 		}
 	})
 }

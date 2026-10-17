@@ -491,34 +491,40 @@ func ListBooks(ctx *vbeam.Context, req ListBooksRequest) (resp ListBooksResponse
 	resp.CanEdit = CanAccessFamily(ctx.Tx, user, familyId, AccessContribute)
 	resp.Books = []BookSummary{}
 	for _, book := range GetFamilyBooks(ctx.Tx, familyId) {
-		summary := BookSummary{
-			Id:          book.Id,
-			PersonIds:   []int{},
-			PersonNames: []string{},
-			Preset:      book.Preset,
-			Title:       book.Title,
-			StartDate:   book.StartDate,
-			EndDate:     book.EndDate,
-			UpdatedAt:   book.UpdatedAt,
+		if summary, ok := bookSummaryFor(ctx.Tx, user, book); ok {
+			resp.Books = append(resp.Books, summary)
 		}
-		for _, id := range book.PersonIds {
-			if person := GetPersonById(ctx.Tx, id); person.Id != 0 {
-				summary.PersonIds = append(summary.PersonIds, id)
-				summary.PersonNames = append(summary.PersonNames, person.Name)
-			}
-		}
-		if len(summary.PersonIds) == 0 {
-			continue
-		}
-		if book.CoverPhotoId != 0 && CanAccessPhoto(ctx.Tx, user, GetImageById(ctx.Tx, book.CoverPhotoId), AccessView) {
-			summary.CoverPhotoId = book.CoverPhotoId
-		}
-		resp.Books = append(resp.Books, summary)
 	}
 	sort.Slice(resp.Books, func(i, j int) bool {
 		return resp.Books[i].UpdatedAt.After(resp.Books[j].UpdatedAt)
 	})
 	return
+}
+
+func bookSummaryFor(tx *vbolt.Tx, user User, book Book) (BookSummary, bool) {
+	summary := BookSummary{
+		Id:          book.Id,
+		PersonIds:   []int{},
+		PersonNames: []string{},
+		Preset:      book.Preset,
+		Title:       book.Title,
+		StartDate:   book.StartDate,
+		EndDate:     book.EndDate,
+		UpdatedAt:   book.UpdatedAt,
+	}
+	for _, id := range book.PersonIds {
+		if person := GetPersonById(tx, id); person.Id != 0 {
+			summary.PersonIds = append(summary.PersonIds, id)
+			summary.PersonNames = append(summary.PersonNames, person.Name)
+		}
+	}
+	if len(summary.PersonIds) == 0 {
+		return summary, false
+	}
+	if book.CoverPhotoId != 0 && CanAccessPhoto(tx, user, GetImageById(tx, book.CoverPhotoId), AccessView) {
+		summary.CoverPhotoId = book.CoverPhotoId
+	}
+	return summary, true
 }
 
 type GetBookSourcesRequest struct {

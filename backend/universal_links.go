@@ -30,11 +30,21 @@ var universalLinkPaths = []string{
 	// A record's own page; the iOS widgets open these, and a push can too.
 	"/view-photo/*",
 	"/milestone/*",
+	// The annual interview: an interview's page and conduct screen, setup,
+	// typing in a past one and comparing (all under /interview/), the
+	// family's Interviews page and the question list.
+	"/interview/*",
+	"/interviews",
+	"/interview-questions",
 }
 
 var universalLinkExcludedPaths = []string{
 	"/reset-password",
 	"/api/*",
+	// Pasting in past interviews stays on the web. "*" spans slashes, so
+	// without this "/interview/*" would claim it too and open the app on a
+	// page it does not have.
+	"/interview/import",
 }
 
 const AppSiteAssociationPath = "/.well-known/apple-app-site-association"

@@ -1,3 +1,5 @@
+import { CalendarDays, Download, MapPin, Pencil, Trash2, UserRound } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -420,7 +422,7 @@ const PhotoPlaceLine = ({ photo, place }: { photo: server.Image; place: server.P
   return (
     <div className="view-photo-place">
       <a href={`/photos?place=${place.key}`} className="view-photo-place-link">
-        📍 {place.name}
+        <Icon symbol={MapPin} /> {place.name}
       </a>
       {place.familyPlaceId === 0 && !form.open && auth.canContribute(photo.familyId) && (
         <button
@@ -600,7 +602,9 @@ const ViewPhotoPage = ({
       <div className="photo-info-panel">
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
-          <div className="view-photo-date">📅 {formatPhotoDate(photo.photoDate)}</div>
+          <div className="view-photo-date">
+            <Icon symbol={CalendarDays} /> {formatPhotoDate(photo.photoDate)}
+          </div>
           {compareHref && (
             <a href={compareHref} className="view-photo-compare">
               {copy.sameAge.compareAtThisAge} →
@@ -712,11 +716,11 @@ const ViewPhotoPage = ({
         <div className="photo-actions">
           {auth.canContribute(photo.familyId) && (
             <a href={`/edit-photo/${photo.id}`} className="btn btn-secondary">
-              ✏️ Edit
+              <Icon symbol={Pencil} /> Edit
             </a>
           )}
           <a href={`/api/photo/${photo.id}/original?download=1`} className="btn btn-secondary">
-            ⬇️ Download original
+            <Icon symbol={Download} /> Download original
           </a>
 
           {profileCandidates.length > 0 && (
@@ -736,7 +740,7 @@ const ViewPhotoPage = ({
                       className="btn btn-outline btn-sm"
                       onClick={() => openCropModal(cropModalState, person)}
                     >
-                      👤 {person.name}
+                      <Icon symbol={UserRound} /> {person.name}
                     </button>
                   )}
                 </div>
@@ -746,7 +750,7 @@ const ViewPhotoPage = ({
 
           {auth.canAdmin(photo.familyId) && (
             <button className="btn btn-danger" onClick={() => handleDeletePhoto(photo, backRoute)}>
-              🗑️ Delete
+              <Icon symbol={Trash2} /> Delete
             </button>
           )}
         </div>

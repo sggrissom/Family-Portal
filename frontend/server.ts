@@ -1137,6 +1137,28 @@ export interface ListPhotoPlacesResponse {
     places: PlaceCount[]
 }
 
+export interface SearchRequest {
+    query: string
+    ignore: string[]
+    limit: number
+}
+
+export interface SearchResponse {
+    query: string
+    understood: SearchUnderstood
+    people: Person[]
+    moments: Milestone[]
+    momentCount: number
+    interviews: Interview[]
+    photos: PhotoWithPeople[]
+    morePhotos: boolean
+    tags: Tag[]
+    places: PhotoPlace[]
+    activities: ActivityHit[]
+    books: BookSummary[]
+    searchMode: string
+}
+
 export interface GetTagSuggestionsResponse {
     enabled: boolean
     groups: SuggestionGroup[]
@@ -2141,6 +2163,38 @@ export interface PlaceCount {
     count: number
 }
 
+export interface SearchUnderstood {
+    personIds: number[]
+    ageFromMonth: number | null
+    ageToMonth: number | null
+    ageLabel: string
+    year: number
+    month: number
+    category: string
+    tagIds: number[]
+    text: string
+}
+
+export interface ActivityHit {
+    kind: string
+    id: number
+    name: string
+    detail: string
+    date: string
+}
+
+export interface BookSummary {
+    id: number
+    personIds: number[]
+    personNames: string[]
+    preset: string
+    title: string
+    startDate: string
+    endDate: string
+    coverPhotoId: number
+    updatedAt: string
+}
+
 export interface SuggestionGroup {
     key: string
     label: string
@@ -2222,18 +2276,6 @@ export interface SameAgeRow {
     interviews: Interview[]
     photoIds: number[]
     portraits: PortraitPhoto[]
-}
-
-export interface BookSummary {
-    id: number
-    personIds: number[]
-    personNames: string[]
-    preset: string
-    title: string
-    startDate: string
-    endDate: string
-    coverPhotoId: number
-    updatedAt: string
 }
 
 export interface BookSources {
@@ -3239,6 +3281,10 @@ export async function DeleteFamilyPlace(data: DeleteFamilyPlaceRequest): Promise
 
 export async function ListPhotoPlaces(data: Empty): Promise<rpc.Response<ListPhotoPlacesResponse>> {
     return await rpc.call<ListPhotoPlacesResponse>('ListPhotoPlaces', JSON.stringify(data));
+}
+
+export async function Search(data: SearchRequest): Promise<rpc.Response<SearchResponse>> {
+    return await rpc.call<SearchResponse>('Search', JSON.stringify(data));
 }
 
 export async function GetTagSuggestions(data: Empty): Promise<rpc.Response<GetTagSuggestionsResponse>> {

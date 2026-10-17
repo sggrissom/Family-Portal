@@ -7,7 +7,8 @@ export type Destination =
   | "sameAge"
   | "activities"
   | "interviews"
-  | "chat";
+  | "chat"
+  | "search";
 
 const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/dashboard", "home"],
@@ -32,6 +33,7 @@ const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/interview", "interviews"],
   ["/interview-questions", "interviews"],
   ["/chat", "chat"],
+  ["/search", "search"],
 ];
 
 function underPrefix(route: string, prefix: string): boolean {

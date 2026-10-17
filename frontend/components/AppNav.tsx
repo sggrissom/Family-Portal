@@ -1,3 +1,24 @@
+import {
+  Baby,
+  BookOpen,
+  CalendarDays,
+  Camera,
+  ChartNoAxesCombined,
+  ChevronDown,
+  House,
+  Images,
+  Menu,
+  MessageCircle,
+  Mic,
+  Plus,
+  Ruler,
+  Search,
+  Star,
+  Trophy,
+  X,
+} from "lucide-preact";
+import type { LucideIcon } from "lucide-preact";
+import { Icon } from "./Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -9,6 +30,7 @@ import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/when";
 import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
+import { isTypingTarget } from "../lib/search";
 import {
   ModalDialogState,
   attrsModalDialog,
@@ -18,16 +40,16 @@ import {
 import { PersonChips, initial, scrollSelectedChipIntoView } from "./PersonChips";
 import "./app-nav-styles";
 
-const DESTINATIONS: { key: Destination; href: string; icon: string }[] = [
-  { key: "home", href: "/dashboard", icon: "🏠" },
-  { key: "photos", href: "/photos", icon: "🖼️" },
-  { key: "growth", href: "/growth", icon: "📈" },
-  { key: "history", href: "/history", icon: "📅" },
-  { key: "books", href: "/books", icon: "📖" },
-  { key: "sameAge", href: "/same-age", icon: "👶" },
-  { key: "activities", href: "/activities", icon: "🏆" },
-  { key: "interviews", href: "/interviews", icon: "🎤" },
-  { key: "chat", href: "/chat", icon: "💬" },
+const DESTINATIONS: { key: Destination; href: string; icon: LucideIcon }[] = [
+  { key: "home", href: "/dashboard", icon: House },
+  { key: "photos", href: "/photos", icon: Images },
+  { key: "growth", href: "/growth", icon: ChartNoAxesCombined },
+  { key: "history", href: "/history", icon: CalendarDays },
+  { key: "books", href: "/books", icon: BookOpen },
+  { key: "sameAge", href: "/same-age", icon: Baby },
+  { key: "activities", href: "/activities", icon: Trophy },
+  { key: "interviews", href: "/interviews", icon: Mic },
+  { key: "chat", href: "/chat", icon: MessageCircle },
 ];
 
 const TOP_BAR: Destination[] = ["home", "photos", "growth", "history", "books"];
@@ -69,6 +91,7 @@ const useNav = vlens.declareHook((): NavState => {
 export const TopNav = ({ user }: { user: auth.AuthCache }) => {
   const state = useNav();
   const active = activeDestination(window.location.pathname);
+  installSearchShortcut();
 
   return (
     <>
@@ -87,25 +110,40 @@ export const TopNav = ({ user }: { user: auth.AuthCache }) => {
         <li>
           <button
             type="button"
-            className={active && !TOP_BAR.includes(active) ? "active" : ""}
+            className={active && MORE.includes(active) && !TOP_BAR.includes(active) ? "active" : ""}
             aria-haspopup="dialog"
             onClick={vlens.cachePartial(openMore, state)}
           >
             {copy.nav.more}{" "}
             <span className="app-topbar-caret" aria-hidden="true">
-              ▾
+              <Icon symbol={ChevronDown} size={16} />
             </span>
           </button>
         </li>
       </ul>
       <div className="app-topbar-actions">
+        <a
+          href="/search"
+          className={active === "search" ? "app-search-button active" : "app-search-button"}
+          aria-label={copy.search.label}
+          aria-current={active === "search" ? "page" : undefined}
+          title={copy.search.shortcutHint}
+        >
+          <span className="app-search-icon" aria-hidden="true">
+            <Icon symbol={Search} />
+          </span>
+          <span className="app-search-label">{copy.nav.search}</span>
+          <kbd className="app-search-key" aria-hidden="true">
+            /
+          </kbd>
+        </a>
         {auth.canContributeAnywhere() && (
           <button
             type="button"
             className="app-add-button"
             onClick={vlens.cachePartial(openSheet, state)}
           >
-            <span aria-hidden="true">+</span> {copy.nav.add}
+            <Icon symbol={Plus} /> {copy.nav.add}
           </button>
         )}
         <div className="account">
@@ -141,7 +179,7 @@ export const BottomNav = () => {
       aria-current={d.key === active ? "page" : undefined}
     >
       <span className="app-bottombar-icon" aria-hidden="true">
-        {d.icon}
+        <Icon symbol={d.icon} />
       </span>
       <span>{copy.nav[d.key]}</span>
     </a>
@@ -157,7 +195,7 @@ export const BottomNav = () => {
           aria-label={copy.nav.add}
           onClick={vlens.cachePartial(openSheet, state)}
         >
-          <span aria-hidden="true">+</span>
+          <Icon symbol={Plus} />
         </button>
       )}
       {items.slice(2).map(link)}
@@ -168,7 +206,7 @@ export const BottomNav = () => {
         onClick={vlens.cachePartial(openMore, state)}
       >
         <span className="app-bottombar-icon" aria-hidden="true">
-          ☰
+          <Icon symbol={Menu} />
         </span>
         <span>{copy.nav.more}</span>
       </button>
@@ -198,7 +236,7 @@ export const MoreSheet = () => {
             aria-label={copy.addSheet.close}
             onClick={vlens.cachePartial(closeMore, state)}
           >
-            ×
+            <Icon symbol={X} />
           </button>
         </div>
         <nav className="add-sheet-options" aria-label={copy.moreSheet.title}>
@@ -211,7 +249,7 @@ export const MoreSheet = () => {
               onClick={vlens.cachePartial(closeMore, state)}
             >
               <span className="add-sheet-icon" aria-hidden="true">
-                {d.icon}
+                <Icon symbol={d.icon} />
               </span>
               <span className="more-sheet-label">
                 {copy.nav[d.key]}
@@ -249,7 +287,7 @@ export const AddSheet = () => {
             aria-label={copy.addSheet.close}
             onClick={vlens.cachePartial(closeSheet, state)}
           >
-            ×
+            <Icon symbol={X} />
           </button>
         </div>
 
@@ -265,7 +303,7 @@ export const AddSheet = () => {
         <div className="add-sheet-options">
           <button type="button" onClick={pickPhotos}>
             <span className="add-sheet-icon" aria-hidden="true">
-              📷
+              <Icon symbol={Camera} />
             </span>
             {copy.addSheet.photos}
           </button>
@@ -282,7 +320,7 @@ export const AddSheet = () => {
             onClick={vlens.cachePartial(formChosen, state)}
           >
             <span className="add-sheet-icon" aria-hidden="true">
-              📏
+              <Icon symbol={Ruler} />
             </span>
             {copy.addSheet.measurement}
           </a>
@@ -291,7 +329,7 @@ export const AddSheet = () => {
             onClick={vlens.cachePartial(formChosen, state)}
           >
             <span className="add-sheet-icon" aria-hidden="true">
-              ⭐
+              <Icon symbol={Star} />
             </span>
             {copy.addSheet.milestone}
           </a>
@@ -302,7 +340,7 @@ export const AddSheet = () => {
               onClick={vlens.cachePartial(formChosen, state)}
             >
               <span className="add-sheet-icon" aria-hidden="true">
-                🏆
+                <Icon symbol={Trophy} />
               </span>
               {copy.result} — {open.event.name}
               <span className="add-sheet-when">
@@ -447,6 +485,23 @@ function choosePerson(state: NavState, personId: number) {
   state.selectedPersonId = state.selectedPersonId === personId ? null : personId;
   writeLastPerson(state.selectedPersonId);
   vlens.scheduleRedraw();
+}
+
+let searchShortcutInstalled = false;
+
+function installSearchShortcut() {
+  if (searchShortcutInstalled) return;
+  searchShortcutInstalled = true;
+  document.addEventListener("keydown", event => {
+    const slash = event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey;
+    const commandK = event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey);
+    if ((!slash && !commandK) || isTypingTarget(event.target)) return;
+    if (!auth.getAuth()) return;
+    event.preventDefault();
+    const input = document.getElementById("searchInput");
+    if (input) input.focus();
+    else core.setRoute("/search");
+  });
 }
 
 let detachAccountDismissal: (() => void) | null = null;

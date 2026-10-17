@@ -3,9 +3,7 @@ package backend
 import (
 	"errors"
 	"family/cfg"
-	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -172,8 +170,6 @@ var MilestoneByInterviewIndex = vbolt.Index(&cfg.Info, "milestones_by_interview"
 
 var MilestoneByQuestionIndex = vbolt.Index(&cfg.Info, "milestones_by_interview_question", vpack.FInt, vpack.FInt)
 
-var MilestoneSearchIndex = vbolt.IndexExt(&cfg.Info, "milestones_search", vpack.StringZ, vpack.UnixTimeKey, vpack.FInt)
-
 var MilestonePhotoByMilestoneIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_milestone", vpack.FInt, vpack.FInt)
 
 var MilestonePhotoByPhotoIndex = vbolt.Index(&cfg.Info, "milestone_photo_by_photo", vpack.FInt, vpack.FInt)
@@ -241,84 +237,14 @@ func GetMilestoneForUser(tx *vbolt.Tx, milestoneId int, user User, need AccessLe
 	return milestone, nil
 }
 
-func SearchMilestonesTx(tx *vbolt.Tx, query string, familyId int, limit int) []Milestone {
-	return searchMilestonesTx(tx, query, limit, func(milestone Milestone) bool {
-		return CanFamilyAccess(tx, familyId, milestone.FamilyId, AccessView)
-	})
-}
+const legacyMilestoneSearchBucket = "milestones_search"
 
-func SearchVisibleMilestones(tx *vbolt.Tx, query string, user User, limit int) []Milestone {
-	return searchMilestonesTx(tx, query, limit, func(milestone Milestone) bool {
-		return CanAccessRecordOfPerson(tx, user, milestone.FamilyId, milestone.PersonId, ScopeMilestones, AccessView)
-	})
-}
-
-func milestoneSearchWords(text string) []string {
-	words := strings.Fields(strings.ToLower(text))
-	terms := make([]string, 0, len(words))
-	for _, word := range words {
-		word = strings.Trim(word, ".,!?;:()[]{}\"'")
-		if len(word) >= 3 {
-			terms = append(terms, word)
+func DropMilestoneSearchIndex(tx *vbolt.Tx) {
+	if tx.Bucket([]byte(legacyMilestoneSearchBucket)) != nil {
+		if err := tx.DeleteBucket([]byte(legacyMilestoneSearchBucket)); err != nil {
+			panic(err)
 		}
 	}
-	return terms
-}
-
-func searchMilestonesTx(tx *vbolt.Tx, query string, limit int, canSee func(Milestone) bool) (milestones []Milestone) {
-	terms := milestoneSearchWords(query)
-	if len(terms) == 0 {
-		return []Milestone{}
-	}
-
-	milestoneIdMap := make(map[int]bool)
-	for _, term := range terms {
-		var ids []int
-		vbolt.ReadTermTargets(tx, MilestoneSearchIndex, term, &ids, vbolt.Window{Limit: limit * 2})
-		for _, id := range ids {
-			milestoneIdMap[id] = true
-		}
-	}
-
-	var milestoneIds []int
-	for id := range milestoneIdMap {
-		milestoneIds = append(milestoneIds, id)
-	}
-
-	var allMilestones []Milestone
-	if len(milestoneIds) > 0 {
-		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &allMilestones)
-	}
-
-	milestones = make([]Milestone, 0, limit)
-	for _, milestone := range allMilestones {
-		if canSee(milestone) {
-			milestones = append(milestones, milestone)
-			if len(milestones) >= limit {
-				break
-			}
-		}
-	}
-
-	return
-}
-
-func UpdateMilestoneSearchIndex(tx *vbolt.Tx, milestone Milestone) {
-	terms := milestoneSearchWords(milestone.Description + " " + milestone.Context)
-	terms = append(terms,
-		fmt.Sprintf("cat:%s", milestone.Category),
-		fmt.Sprintf("y:%d", milestone.MilestoneDate.Year()),
-		fmt.Sprintf("m:%s", milestone.MilestoneDate.Format("2006.01")),
-		fmt.Sprintf("p:%d", milestone.PersonId),
-	)
-	vbolt.SetTargetTermsUniform(tx, MilestoneSearchIndex, milestone.Id, terms, milestone.MilestoneDate)
-}
-
-func RebuildMilestoneSearchIndex(tx *vbolt.Tx) {
-	vbolt.IterateAll(tx, MilestoneBkt, func(_ int, milestone Milestone) bool {
-		UpdateMilestoneSearchIndex(tx, milestone)
-		return true
-	})
 }
 
 func writeMilestone(tx *vbolt.Tx, milestone Milestone) {
@@ -327,7 +253,6 @@ func writeMilestone(tx *vbolt.Tx, milestone Milestone) {
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
 	vbolt.SetTargetTermsPlain(tx, MilestoneByInterviewIndex, milestone.Id, positiveTerm(milestone.InterviewId))
 	vbolt.SetTargetTermsPlain(tx, MilestoneByQuestionIndex, milestone.Id, positiveTerm(milestone.QuestionId))
-	UpdateMilestoneSearchIndex(tx, milestone)
 }
 
 func positiveTerm(id int) []int {
@@ -647,7 +572,6 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	vbolt.DeleteTargetTerms(tx, MilestoneByFamilyIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByInterviewIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByQuestionIndex, milestone.Id)
-	vbolt.DeleteTargetTerms(tx, MilestoneSearchIndex, milestone.Id)
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
 
 	return nil
@@ -869,43 +793,8 @@ func SearchMilestones(ctx *vbeam.Context, req SearchMilestonesRequest) (resp Sea
 	}
 
 	milestones := SearchVisibleMilestones(ctx.Tx, query, user, limit)
-	if candidates := visibleMilestones(ctx.Tx, user); len(candidates) > 0 {
-		if scores := semanticMilestoneScores(ctx.Tx, query, candidates); scores != nil {
-			milestones = blendMilestoneResults(milestones, candidates, scores, limit)
-		}
-	}
-
 	resp.Milestones = milestones
 	resp.Interviews = interviewsOfAnswers(ctx.Tx, milestones)
 	resp.Query = query
 	return
-}
-
-// blendMilestoneResults puts word matches and close-in-meaning milestones in
-// one list, ordered by meaning, with word matches given a head start.
-func blendMilestoneResults(textHits, candidates []Milestone, scores map[int]float64, limit int) []Milestone {
-	const textBonus = 0.3
-	hit := map[int]bool{}
-	for _, m := range textHits {
-		hit[m.Id] = true
-	}
-	type ranked struct {
-		m     Milestone
-		score float64
-	}
-	var all []ranked
-	for _, m := range textHits {
-		all = append(all, ranked{m, scores[m.Id] + textBonus})
-	}
-	for _, m := range candidates {
-		if !hit[m.Id] && scores[m.Id] >= milestoneSearchMinScore {
-			all = append(all, ranked{m, scores[m.Id]})
-		}
-	}
-	sort.SliceStable(all, func(i, j int) bool { return all[i].score > all[j].score })
-	out := make([]Milestone, 0, min(limit, len(all)))
-	for _, r := range all[:min(limit, len(all))] {
-		out = append(out, r.m)
-	}
-	return out
 }

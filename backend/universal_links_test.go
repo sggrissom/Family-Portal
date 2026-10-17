@@ -226,3 +226,27 @@ func TestAppSiteAssociationIsReachableThroughTheApplication(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
 }
+
+func TestAppSiteAssociationClaimsInterviewPages(t *testing.T) {
+	t.Setenv("IOS_APP_ID", testIOSAppID)
+	_, doc := fetchAssociation(t)
+
+	allowed := map[string]bool{}
+	excluded := map[string]bool{}
+	for _, c := range associationComponents(t, doc) {
+		path, _ := c["/"].(string)
+		if ex, _ := c["exclude"].(bool); ex {
+			excluded[path] = true
+		} else {
+			allowed[path] = true
+		}
+	}
+	for _, path := range []string{"/interview/*", "/interviews", "/interview-questions"} {
+		if !allowed[path] {
+			t.Errorf("%s is not claimed; the link would open the browser instead of the app", path)
+		}
+	}
+	if !excluded["/interview/import"] {
+		t.Error("/interview/import is not excluded; the app has no paste importer")
+	}
+}
