@@ -127,6 +127,8 @@ func TestSearchFallsBackToTextWithoutTheDaemon(t *testing.T) {
 		vbolt.Write(tx, ImagesBkt, beach.Id, &beach)
 		other.Title = "Snow day"
 		vbolt.Write(tx, ImagesBkt, other.Id, &other)
+		ReindexPhotoDates(tx, beach.Id)
+		ReindexPhotoDates(tx, other.Id)
 		vbolt.TxCommit(tx)
 	})
 
@@ -137,6 +139,50 @@ func TestSearchFallsBackToTextWithoutTheDaemon(t *testing.T) {
 	if got := photoIds(resp.Photos); !slices.Equal(got, []int{beach.Id}) || resp.SearchMode != "text" {
 		t.Errorf("text search = %v (%s), want [%d]", got, resp.SearchMode, beach.Id)
 	}
+}
+
+func TestSearchFollowsPhotoEdits(t *testing.T) {
+	fx := setupResultsFixture(t)
+	noVision(t)
+	photo := fx.addPhotoAt(t, "p.jpg", featuresEpoch)
+	edit := func(title, description string) {
+		t.Helper()
+		if _, err := callAs(t, fx, UpdatePhoto, UpdatePhotoRequest{Id: photo.Id, Title: title, Description: description, InputType: "keep"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	found := func(query string) bool {
+		t.Helper()
+		resp, err := callAs(t, fx, ListFamilyPhotos, ListFamilyPhotosRequest{Query: query, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Equal(photoIds(resp.Photos), []int{photo.Id})
+	}
+
+	edit("Pumpkin patch", "")
+	if !found("pump") || found("pumpkins") || found("patches") {
+		t.Errorf("a term should match the start of a word, and no more")
+	}
+	edit("Apple orchard", "Pumpkin pie after")
+	if !found("orchard pumpkin") {
+		t.Errorf("title and description words should match together")
+	}
+	edit("Apple orchard", "")
+	if found("pumpkin") {
+		t.Errorf("a removed word still matched")
+	}
+
+	if _, err := callAs(t, fx, DeletePhoto, DeletePhotoRequest{Id: photo.Id}); err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		left := map[int]bool{}
+		photosWithWordPrefix(tx, "", left)
+		if left[photo.Id] {
+			t.Errorf("a deleted photo kept its words")
+		}
+	})
 }
 
 func TestPeopleInQuery(t *testing.T) {

@@ -1,3 +1,5 @@
+import { TriangleAlert, Hourglass } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
@@ -503,7 +505,7 @@ function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
 
     state.referenceError
       ? preact.h("div", { className: "logs-error-message" }, [
-          preact.h("span", { className: "error-icon" }, "⚠️"),
+          preact.h("span", { className: "error-icon" }, preact.h(Icon, { symbol: TriangleAlert })),
           preact.h("span", {}, state.referenceError),
         ])
       : null,
@@ -565,7 +567,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             key: file.name,
             value: file.name,
           },
-          `${file.name} (${file.sizeString}) ${file.isToday ? "📍" : ""}`
+          `${file.name} (${file.sizeString}) ${file.isToday ? "(today)" : ""}`
         )
       ),
     ];
@@ -587,7 +589,11 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
 
           state.error || data.error
             ? preact.h("div", { className: "logs-error-message" }, [
-                preact.h("span", { className: "error-icon" }, "⚠️"),
+                preact.h(
+                  "span",
+                  { className: "error-icon" },
+                  preact.h(Icon, { symbol: TriangleAlert })
+                ),
                 preact.h("span", {}, state.error || data.error),
               ])
             : null,
@@ -841,7 +847,11 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
 
           state.loading
             ? preact.h("div", { className: "loading-message" }, [
-                preact.h("span", { className: "loading-spinner" }, "⏳"),
+                preact.h(
+                  "span",
+                  { className: "loading-spinner" },
+                  preact.h(Icon, { symbol: Hourglass })
+                ),
                 preact.h("span", {}, "Loading logs..."),
               ])
             : null,

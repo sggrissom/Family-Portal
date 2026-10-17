@@ -40,10 +40,9 @@ func NormalizeStoredRecordDates(tx *vbolt.Tx) (changed int) {
 	changed += normalizeBucket(tx, GrowthDataBkt, func(g *GrowthData) bool {
 		return normalizedDay(&g.MeasurementDate)
 	})
-	milestones := normalizeBucket(tx, MilestoneBkt, func(m *Milestone) bool {
+	changed += normalizeBucket(tx, MilestoneBkt, func(m *Milestone) bool {
 		return normalizedDay(&m.MilestoneDate)
 	})
-	changed += milestones
 	changed += normalizeBucket(tx, SeasonBkt, func(s *Season) bool {
 		start := normalizedDay(&s.StartDate)
 		end := normalizedDay(&s.EndDate)
@@ -65,9 +64,6 @@ func NormalizeStoredRecordDates(tx *vbolt.Tx) (changed int) {
 	})
 	changed += photos
 
-	if milestones > 0 {
-		RebuildMilestoneSearchIndex(tx)
-	}
 	if photos > 0 {
 		BackfillPhotoDateIndexes(tx)
 	}

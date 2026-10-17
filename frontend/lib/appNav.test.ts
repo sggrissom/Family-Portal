@@ -18,6 +18,7 @@ describe("activeDestination", () => {
     expect(activeDestination("/interviews")).toBe("interviews");
     expect(activeDestination("/interview/5/ask")).toBe("interviews");
     expect(activeDestination("/interview-questions")).toBe("interviews");
+    expect(activeDestination("/search?q=walk")).toBe("search");
   });
 
   it("does not match a longer word that shares a prefix", () => {

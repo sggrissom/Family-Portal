@@ -1,3 +1,15 @@
+import {
+  Ban,
+  Bell,
+  BellOff,
+  CircleCheck,
+  CircleX,
+  FlaskConical,
+  Send,
+  Smartphone,
+  TriangleAlert,
+} from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -183,7 +195,9 @@ const PushPage = ({ data }: PushPageProps) => {
 
       <div className="admin-header">
         <div className="admin-badge">
-          <span className="admin-icon">🔔</span>
+          <span className="admin-icon">
+            <Icon symbol={Bell} />
+          </span>
           <span>Push Notifications</span>
         </div>
         <h1>Push Notifications</h1>
@@ -193,7 +207,9 @@ const PushPage = ({ data }: PushPageProps) => {
       {status.issues.length > 0 && (
         <div className="admin-card error-card">
           <div className="card-header">
-            <div className="admin-card-icon">⚠️</div>
+            <div className="admin-card-icon">
+              <Icon symbol={TriangleAlert} />
+            </div>
             <h3>Configuration Problems</h3>
           </div>
           <div className="card-content">
@@ -210,7 +226,9 @@ const PushPage = ({ data }: PushPageProps) => {
 
       <div className="photo-stats-grid">
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">{stats.enabled ? "🟢" : "🔴"}</div>
+          <div className="admin-stat-icon">
+            {stats.enabled ? <Icon symbol={CircleCheck} /> : <Icon symbol={CircleX} />}
+          </div>
           <div className="stat-content">
             <h3>Worker</h3>
             <div className="admin-stat-value">{stats.enabled ? "Running" : "Off"}</div>
@@ -221,7 +239,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">📮</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Send} />
+          </div>
           <div className="stat-content">
             <h3>Queue</h3>
             <div className="admin-stat-value">{stats.queueLength}</div>
@@ -230,7 +250,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">✅</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={CircleCheck} />
+          </div>
           <div className="stat-content">
             <h3>Delivered</h3>
             <div className="admin-stat-value">{stats.sent.toLocaleString()}</div>
@@ -239,7 +261,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">❌</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={CircleX} />
+          </div>
           <div className="stat-content">
             <h3>Failed</h3>
             <div className="admin-stat-value">{stats.failed.toLocaleString()}</div>
@@ -248,7 +272,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">📱</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Smartphone} />
+          </div>
           <div className="stat-content">
             <h3>Active Devices</h3>
             <div className="admin-stat-value">{status.activeDevices.toLocaleString()}</div>
@@ -257,7 +283,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">🚫</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Ban} />
+          </div>
           <div className="stat-content">
             <h3>Auto-Deactivated</h3>
             <div className="admin-stat-value">{stats.deactivated.toLocaleString()}</div>
@@ -266,7 +294,9 @@ const PushPage = ({ data }: PushPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">🔕</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={BellOff} />
+          </div>
           <div className="stat-content">
             <h3>Suppressed</h3>
             <div className="admin-stat-value">{stats.suppressed.toLocaleString()}</div>
@@ -341,7 +371,9 @@ const PushPage = ({ data }: PushPageProps) => {
 
       <div className="admin-card">
         <div className="card-header">
-          <div className="admin-card-icon">🧪</div>
+          <div className="admin-card-icon">
+            <Icon symbol={FlaskConical} />
+          </div>
           <h3>Send Test Notification</h3>
         </div>
         <div className="card-content">
@@ -425,7 +457,7 @@ const PushPage = ({ data }: PushPageProps) => {
                             className="push-mismatch"
                             title="This device registered against a different APNs environment than the server is configured for. Notifications to it will be rejected."
                           >
-                            ⚠ mismatch
+                            <Icon symbol={TriangleAlert} /> mismatch
                           </span>
                         )}
                       </td>

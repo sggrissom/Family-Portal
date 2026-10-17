@@ -140,66 +140,147 @@ func peopleInQuery(people []Person, query string) (personIds []int, rest string)
 var searchFillerWords = map[string]bool{
 	"a": true, "an": true, "the": true, "and": true, "at": true, "in": true, "on": true,
 	"of": true, "with": true, "to": true, "for": true, "photo": true, "photos": true,
-	"picture": true, "pictures": true,
+	"picture": true, "pictures": true, "when": true, "was": true, "old": true,
 }
 
-func textMatches(image Image, words []string) bool {
-	haystack := strings.ToLower(image.Title + " " + image.Description)
-	matched := false
-	for _, w := range words {
-		if searchFillerWords[w] || len(w) < 3 {
-			continue
+func matchesATerm(terms []string, name string) bool {
+	words := searchFieldWords(name)
+	for _, term := range terms {
+		if termsMatch([]string{term}, words) {
+			return true
 		}
-		if !strings.Contains(haystack, w) {
-			return false
-		}
-		matched = true
 	}
-	return matched
+	return false
+}
+
+// photoPlacesMatchingATerm resolves where each located photo of the user's
+// own families was taken, keeping those whose place name matches some term.
+func photoPlacesMatchingATerm(tx *vbolt.Tx, user User, terms []string) map[int]PhotoPlace {
+	out := map[int]PhotoPlace{}
+	matches := map[string]bool{}
+	for _, familyId := range familiesVisibleTo(tx, user) {
+		places := GetFamilyPlaces(tx, familyId)
+		for _, features := range familyFeatures(tx, familyId) {
+			place, ok := resolvePlace(places, features)
+			if !ok {
+				continue
+			}
+			match, seen := matches[place.Name]
+			if !seen {
+				match = matchesATerm(terms, place.Name)
+				matches[place.Name] = match
+			}
+			if match {
+				out[features.PhotoId] = place
+			}
+		}
+	}
+	return out
+}
+
+// photoTextHits is the set of photos whose title, description, tags or place
+// name contain every term as a word prefix.
+func photoTextHits(l photoListing, terms []string, places map[int]PhotoPlace) map[int]bool {
+	var hits map[int]bool
+	tags := getVisibleTags(l.tx, l.user)
+	for _, term := range terms {
+		found := map[int]bool{}
+		photosWithWordPrefix(l.tx, term, found)
+		for _, tag := range tags {
+			if matchesATerm([]string{term}, tag.Name) {
+				for _, id := range GetTagPhotoIds(l.tx, tag.Id) {
+					found[id] = true
+				}
+			}
+		}
+		named := map[string]bool{}
+		for id, place := range places {
+			match, seen := named[place.Name]
+			if !seen {
+				match = matchesATerm([]string{term}, place.Name)
+				named[place.Name] = match
+			}
+			if match {
+				found[id] = true
+			}
+		}
+		if hits == nil {
+			hits = found
+		}
+		for id := range hits {
+			if !found[id] {
+				delete(hits, id)
+			}
+		}
+	}
+	return hits
 }
 
 type scoredPhoto struct {
 	image Image
 	score float64
+	text  bool
 }
 
-// rankPhotos orders candidates by similarity to the query, keeping those
-// within searchWindow of the best match and above searchMinScore, plus any
-// whose title or description contains its words. Without a query vector (no
-// daemon), only the text matches remain.
-func rankPhotos(tx *vbolt.Tx, candidates []Image, query string, queryVector []float32) []Image {
-	words := searchWords(query)
+// rankPhotoQuery orders the listing's photos that keep accepts by similarity
+// to the query, keeping those within searchWindow of the best match and above
+// searchMinScore, plus the text hits. Without the daemon, only the text hits
+// remain. Only photos that can make the cut are loaded.
+func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(Image) bool) ([]Image, string) {
+	mode := "semantic"
+	vector, err := embedQuery(query)
+	if err != nil {
+		mode = "text"
+	}
+	similarity := func(familyId int, photoId int) (float64, bool) {
+		v, ok := vectorsForFamily(l.tx, familyId)[photoId]
+		if !ok {
+			return 0, false
+		}
+		return float64(vision.Dot(vector, v)), true
+	}
+	own := familiesVisibleTo(l.tx, l.user)
+
 	var scored []scoredPhoto
-	textHits := map[int]bool{}
 	best := 0.0
-	for _, image := range candidates {
-		score := 0.0
-		if queryVector != nil {
-			if v, ok := vectorsForFamily(tx, image.FamilyId)[image.Id]; ok {
-				score = float64(vision.Dot(queryVector, v))
+	for _, key := range l.keys() {
+		text := hits[key.id]
+		score, known := 0.0, false
+		if vector != nil {
+			for _, familyId := range own {
+				if score, known = similarity(familyId, key.id); known {
+					break
+				}
 			}
 		}
+		if !text && (vector == nil || known && score < searchMinScore) {
+			continue
+		}
+		image := GetImageById(l.tx, key.id)
+		if !keep(image) {
+			continue
+		}
+		if vector != nil && !known {
+			score, _ = similarity(image.FamilyId, image.Id)
+		}
 		best = max(best, score)
-		if textMatches(image, words) {
-			textHits[image.Id] = true
+		if text {
 			score += searchTextBonus
+		} else if score < searchMinScore {
+			continue
 		}
-		scored = append(scored, scoredPhoto{image, score})
+		scored = append(scored, scoredPhoto{image, score, text})
 	}
+
 	cutoff := max(searchMinScore, best-searchWindow)
-	kept := scored[:0]
+	var out []Image
+	sort.SliceStable(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
 	for _, s := range scored {
-		if textHits[s.image.Id] || (queryVector != nil && s.score >= cutoff) {
-			kept = append(kept, s)
+		if s.text || s.score >= cutoff {
+			out = append(out, s.image)
 		}
 	}
-	scored = kept
-	sort.SliceStable(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
-	out := make([]Image, len(scored))
-	for i, s := range scored {
-		out[i] = s.image
-	}
-	return out
+	return out, mode
 }
 
 func parseSearchCursor(cursor string) (int, error) {
@@ -237,21 +318,21 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 		l.personIds = matched[:1]
 	}
 
+	keep := func(image Image) bool {
+		return l.passes(image) && photoHasEveryone(l.tx, image.Id, matched)
+	}
 	var candidates []Image
-	l.read(l.newest, func(image Image) bool {
-		if l.passes(image) && photoHasEveryone(l.tx, image.Id, matched) {
-			candidates = append(candidates, image)
-		}
-		return true
-	})
-
-	mode = "semantic"
 	if query != "" {
-		vector, err := embedQuery(query)
-		if err != nil {
-			mode = "text"
-		}
-		candidates = rankPhotos(l.tx, candidates, query, vector)
+		terms := searchTerms(query)
+		candidates, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
+	} else {
+		l.read(l.newest, func(image Image) bool {
+			if keep(image) {
+				candidates = append(candidates, image)
+			}
+			return true
+		})
+		mode = "semantic"
 	}
 
 	end := len(candidates)

@@ -116,7 +116,7 @@ func TestMilestoneSavesTagsInTheSameTransaction(t *testing.T) {
 		t.Fatal("add accepted another family's tag")
 	}
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		if found := SearchMilestonesTx(tx, "leaked", fx.familyId, 10); len(found) != 0 {
+		if found := SearchVisibleMilestones(tx, "leaked", fx.owner, 10); len(found) != 0 {
 			t.Fatalf("rejected add left a milestone: %+v", found)
 		}
 	})

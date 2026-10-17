@@ -1,3 +1,15 @@
+import {
+  Bell,
+  ChartColumn,
+  CircleCheck,
+  ClipboardList,
+  Images,
+  Smartphone,
+  Sprout,
+  UsersRound,
+  Zap,
+} from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -70,7 +82,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
     <div className="admin-page">
       <div className="admin-header">
         <div className="admin-badge">
-          <span className="admin-icon">⚡</span>
+          <span className="admin-icon">
+            <Icon symbol={Zap} />
+          </span>
           <span>Admin Panel</span>
         </div>
         <h1>System Administration</h1>
@@ -86,7 +100,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
       <div className="admin-grid">
         <a href="/admin/analytics" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">📊</div>
+            <div className="admin-card-icon">
+              <Icon symbol={ChartColumn} />
+            </div>
             <h3>Site Analytics</h3>
           </div>
           <div className="card-content">
@@ -97,7 +113,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/users" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">👥</div>
+            <div className="admin-card-icon">
+              <Icon symbol={UsersRound} />
+            </div>
             <h3>User Management</h3>
           </div>
           <div className="card-content">
@@ -108,7 +126,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/photos" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">🖼️</div>
+            <div className="admin-card-icon">
+              <Icon symbol={Images} />
+            </div>
             <h3>Photo Management</h3>
           </div>
           <div className="card-content">
@@ -119,7 +139,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/push" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">🔔</div>
+            <div className="admin-card-icon">
+              <Icon symbol={Bell} />
+            </div>
             <h3>Push Notifications</h3>
           </div>
           <div className="card-content">
@@ -130,7 +152,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/app-versions" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">📱</div>
+            <div className="admin-card-icon">
+              <Icon symbol={Smartphone} />
+            </div>
             <h3>App Versions</h3>
           </div>
           <div className="card-content">
@@ -143,7 +167,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/seed" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">🌱</div>
+            <div className="admin-card-icon">
+              <Icon symbol={Sprout} />
+            </div>
             <h3>Test Accounts</h3>
           </div>
           <div className="card-content">
@@ -157,7 +183,9 @@ const AdminPage = ({ user, diagnostics, health, host, digest }: AdminPageProps) 
 
         <a href="/admin/logs" className="admin-card admin-card-link">
           <div className="card-header">
-            <div className="admin-card-icon">📋</div>
+            <div className="admin-card-icon">
+              <Icon symbol={ClipboardList} />
+            </div>
             <h3>System Logs</h3>
           </div>
           <div className="card-content">
@@ -297,7 +325,9 @@ const Problems = ({ health: initialHealth }: { health: server.SystemHealthRespon
   if (health.healthy) {
     return (
       <div className="problems problems-clear">
-        <span className="problems-icon">✅</span>
+        <span className="problems-icon">
+          <Icon symbol={CircleCheck} />
+        </span>
         <span>
           Nothing to report. No unreviewed errors in the last {health.logs.windowHours}h, no failed
           photos, no configuration problems.

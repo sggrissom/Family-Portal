@@ -1,3 +1,24 @@
+import {
+  Calculator,
+  ChartColumn,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  Clock,
+  Hourglass,
+  Images,
+  Package,
+  Pause,
+  RefreshCw,
+  ScrollText,
+  Search,
+  Smile,
+  Tag,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+} from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -124,7 +145,9 @@ const WorkerPanel = ({
 
       <div className="photo-stats-grid">
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">✅</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={CircleCheck} />
+          </div>
           <div className="stat-content">
             <h3>Processed</h3>
             <div className="admin-stat-value">{stats.processed.toLocaleString()}</div>
@@ -133,7 +156,9 @@ const WorkerPanel = ({
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">❌</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={CircleX} />
+          </div>
           <div className="stat-content">
             <h3>Failed</h3>
             <div className="admin-stat-value">{stats.failed.toLocaleString()}</div>
@@ -142,7 +167,9 @@ const WorkerPanel = ({
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">🕒</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Clock} />
+          </div>
           <div className="stat-content">
             <h3>Last Processed</h3>
             <div className="admin-stat-value">
@@ -163,14 +190,21 @@ const WorkerPanel = ({
       {stats.recentAttempts.length > 0 && (
         <div className="admin-card">
           <div className="card-header">
-            <div className="admin-card-icon">📜</div>
+            <div className="admin-card-icon">
+              <Icon symbol={ScrollText} />
+            </div>
             <h3>Recent Attempts</h3>
           </div>
           <div className="card-content">
             <ul className="error-list">
               {stats.recentAttempts.map(attempt => (
                 <li key={`${attempt.imageId}-${attempt.time}`}>
-                  {attempt.success ? "✅" : "❌"} Photo #{attempt.imageId}
+                  {attempt.success ? (
+                    <Icon symbol={CircleCheck} label="Succeeded" />
+                  ) : (
+                    <Icon symbol={CircleX} label="Failed" />
+                  )}{" "}
+                  Photo #{attempt.imageId}
                   {attempt.reprocess ? " (reprocess)" : ""} · {attempt.durationMs}ms ·{" "}
                   {formatRelativeTime(attempt.time, "never")}
                   {attempt.reason && ` · ${attempt.reason}`}
@@ -261,7 +295,9 @@ const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }
 
     <div className="photo-stats-grid">
       <div className="admin-stat-card">
-        <div className="admin-stat-icon">✅</div>
+        <div className="admin-stat-icon">
+          <Icon symbol={CircleCheck} />
+        </div>
         <div className="stat-content">
           <h3>Originals Present</h3>
           <div className="admin-stat-value">{report.presentCount.toLocaleString()}</div>
@@ -272,7 +308,9 @@ const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }
       </div>
 
       <div className="admin-stat-card">
-        <div className="admin-stat-icon">{report.missingCount > 0 ? "❌" : "✅"}</div>
+        <div className="admin-stat-icon">
+          {report.missingCount > 0 ? <Icon symbol={CircleX} /> : <Icon symbol={CircleCheck} />}
+        </div>
         <div className="stat-content">
           <h3>Missing Originals</h3>
           <div className="admin-stat-value">{report.missingCount.toLocaleString()}</div>
@@ -281,7 +319,9 @@ const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }
       </div>
 
       <div className="admin-stat-card">
-        <div className="admin-stat-icon">🗑️</div>
+        <div className="admin-stat-icon">
+          <Icon symbol={Trash2} />
+        </div>
         <div className="stat-content">
           <h3>Orphaned Files</h3>
           <div className="admin-stat-value">{report.orphanCount.toLocaleString()}</div>
@@ -293,7 +333,9 @@ const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }
     {report.missing.length > 0 && (
       <div className="admin-card error-card">
         <div className="card-header">
-          <div className="admin-card-icon">⚠️</div>
+          <div className="admin-card-icon">
+            <Icon symbol={TriangleAlert} />
+          </div>
           <h3>Photo Rows With No Original</h3>
         </div>
         <div className="card-content">
@@ -317,7 +359,9 @@ const ConsistencyResult = ({ report }: { report: server.PhotoConsistencyReport }
     {report.orphans.length > 0 && (
       <div className="admin-card">
         <div className="card-header">
-          <div className="admin-card-icon">📦</div>
+          <div className="admin-card-icon">
+            <Icon symbol={Package} />
+          </div>
           <h3>Originals With No Photo Row</h3>
         </div>
         <div className="card-content">
@@ -506,7 +550,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
       <div className="photo-stats-grid">
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">🖼️</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Images} />
+          </div>
           <div className="stat-content">
             <h3>Total Photos</h3>
             <div className="admin-stat-value">{data.totalPhotos.toLocaleString()}</div>
@@ -515,7 +561,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">✅</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={CircleCheck} />
+          </div>
           <div className="stat-content">
             <h3>Processed</h3>
             <div className="admin-stat-value">{data.processedPhotos.toLocaleString()}</div>
@@ -524,7 +572,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">⏳</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={Hourglass} />
+          </div>
           <div className="stat-content">
             <h3>Needs Processing</h3>
             <div className="admin-stat-value">{data.pendingPhotos.toLocaleString()}</div>
@@ -533,7 +583,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         </div>
 
         <div className="admin-stat-card">
-          <div className="admin-stat-icon">📊</div>
+          <div className="admin-stat-icon">
+            <Icon symbol={ChartColumn} />
+          </div>
           <div className="stat-content">
             <h3>Progress</h3>
             <div className="admin-stat-value">
@@ -548,7 +600,13 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
         {state.processingStats && (
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">{state.processingStats.isRunning ? "🔄" : "⏸️"}</div>
+            <div className="admin-stat-icon">
+              {state.processingStats.isRunning ? (
+                <Icon symbol={RefreshCw} />
+              ) : (
+                <Icon symbol={Pause} />
+              )}
+            </div>
             <div className="stat-content">
               <h3>Processing Queue</h3>
               <div className="admin-stat-value">{state.processingStats.queueLength}</div>
@@ -572,7 +630,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
         {state.reanalysisError && <div className="admin-notice">{state.reanalysisError}</div>}
         <div className="photo-stats-grid">
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">⏳</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Hourglass} />
+            </div>
             <div className="stat-content">
               <h3>Pending</h3>
               <div className="admin-stat-value">{data.analysisPending.toLocaleString()}</div>
@@ -581,7 +641,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">🔍</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Search} />
+            </div>
             <div className="stat-content">
               <h3>Analyzing</h3>
               <div className="admin-stat-value">{data.analysisAnalyzing.toLocaleString()}</div>
@@ -590,7 +652,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">✅</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={CircleCheck} />
+            </div>
             <div className="stat-content">
               <h3>Done</h3>
               <div className="admin-stat-value">{data.analysisDone.toLocaleString()}</div>
@@ -603,7 +667,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">❌</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={CircleX} />
+            </div>
             <div className="stat-content">
               <h3>Failed</h3>
               <div className="admin-stat-value">{data.analysisFailed.toLocaleString()}</div>
@@ -612,7 +678,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">🏷️</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Tag} />
+            </div>
             <div className="stat-content">
               <h3>Auto-tags</h3>
               <div className="admin-stat-value">{data.autoTaggedCount.toLocaleString()}</div>
@@ -621,7 +689,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">👤</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={UserRound} />
+            </div>
             <div className="stat-content">
               <h3>Face Models</h3>
               <div className="admin-stat-value">{data.personsWithFace.toLocaleString()}</div>
@@ -630,7 +700,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">🙂</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Smile} />
+            </div>
             <div className="stat-content">
               <h3>Faces</h3>
               <div className="admin-stat-value">{data.facesDetected.toLocaleString()}</div>
@@ -642,7 +714,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
           </div>
 
           <div className="admin-stat-card">
-            <div className="admin-stat-icon">🧮</div>
+            <div className="admin-stat-icon">
+              <Icon symbol={Calculator} />
+            </div>
             <div className="stat-content">
               <h3>Photo Features</h3>
               <div className="admin-stat-value">{data.featuresCurrent.toLocaleString()}</div>
@@ -656,7 +730,13 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
           <div className="admin-stat-card">
             <div className="admin-stat-icon">
-              {data.visionStatus === "up" ? "🟢" : data.visionStatus === "down" ? "🔴" : "⚪"}
+              {data.visionStatus === "up" ? (
+                <Icon symbol={CircleCheck} />
+              ) : data.visionStatus === "down" ? (
+                <Icon symbol={CircleX} />
+              ) : (
+                <Icon symbol={CircleHelp} />
+              )}
             </div>
             <div className="stat-content">
               <h3>Image Embeddings</h3>
@@ -671,7 +751,13 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
 
           {state.analysisStats && (
             <div className="admin-stat-card">
-              <div className="admin-stat-icon">{state.analysisStats.isRunning ? "🟢" : "🔴"}</div>
+              <div className="admin-stat-icon">
+                {state.analysisStats.isRunning ? (
+                  <Icon symbol={CircleCheck} />
+                ) : (
+                  <Icon symbol={CircleX} />
+                )}
+              </div>
               <div className="stat-content">
                 <h3>Analysis Queue</h3>
                 <div className="admin-stat-value">{state.analysisStats.queueLength}</div>
@@ -687,7 +773,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
       {data.analysisPending + data.analysisFailed + data.analysisOutdated > 0 && (
         <div className="admin-card reprocess-card">
           <div className="card-header">
-            <div className="admin-card-icon">🔍</div>
+            <div className="admin-card-icon">
+              <Icon symbol={Search} />
+            </div>
             <h3>Face Reanalysis</h3>
           </div>
           <div className="card-content">
@@ -727,7 +815,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
       {needsReprocessing && (
         <div className="admin-card reprocess-card">
           <div className="card-header">
-            <div className="admin-card-icon">🔄</div>
+            <div className="admin-card-icon">
+              <Icon symbol={RefreshCw} />
+            </div>
             <h3>Photo Reprocessing</h3>
           </div>
           <div className="card-content">
@@ -765,7 +855,9 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
       {state.reprocessError && (
         <div className="admin-card error-card">
           <div className="card-header">
-            <div className="admin-card-icon">⚠️</div>
+            <div className="admin-card-icon">
+              <Icon symbol={TriangleAlert} />
+            </div>
             <h3>Reprocessing Error</h3>
           </div>
           <div className="card-content">{state.reprocessError}</div>

@@ -1,3 +1,6 @@
+import { Baby, Cake, Medal, Mic, Music2, Trophy } from "lucide-preact";
+import type { LucideIcon } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
@@ -84,7 +87,7 @@ function nudgeAction(nudge: server.DashboardNudge): string {
   }
 }
 
-const KIND_ICONS: Record<string, string> = { dance: "🩰", sport: "🏅" };
+const KIND_ICONS: Record<string, LucideIcon> = { dance: Music2, sport: Medal };
 
 const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashboardResponse }) => {
   const people = data.people || [];
@@ -117,7 +120,19 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
         <div className="home-nudges">
           {nudges.map(nudge => (
             <div key={nudge.key} className="home-nudge">
-              <a href={nudgeAction(nudge)}>{nudge.text}</a>
+              <a href={nudgeAction(nudge)}>
+                {nudge.kind === "birthday" ? (
+                  <>
+                    <Icon symbol={Cake} /> {nudge.text.replace(/^🎂\s*/, "")}
+                  </>
+                ) : nudge.kind === "interview" ? (
+                  <>
+                    <Icon symbol={Mic} /> {nudge.text.replace(/^🎤\s*/, "")}
+                  </>
+                ) : (
+                  nudge.text
+                )}
+              </a>
               <button
                 type="button"
                 className="home-nudge-dismiss"
@@ -138,7 +153,9 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
             {data.seasons.map(s => (
               <div key={s.season.id} className="home-season">
                 <a href={`/season/${s.season.id}`} className="home-season-name">
-                  <span aria-hidden="true">{KIND_ICONS[s.season.kind] ?? "🏆"}</span>{" "}
+                  <span aria-hidden="true">
+                    <Icon symbol={KIND_ICONS[s.season.kind] ?? Trophy} />
+                  </span>{" "}
                   {s.activityName} · {s.season.name}
                 </a>
                 {s.event && (
@@ -263,7 +280,7 @@ const FamilyStrip = ({
                   cropScale={person.profileCropScale}
                 />
               ) : person.isPregnancy ? (
-                "🤰"
+                <Icon symbol={Baby} />
               ) : (
                 initial(person.name)
               )}

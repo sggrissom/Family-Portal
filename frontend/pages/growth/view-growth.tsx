@@ -1,3 +1,5 @@
+import { CalendarDays, Pencil, Ruler, Scale, Target, Trash2 } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
@@ -158,7 +160,11 @@ const ViewGrowthPage = ({
     <section className="view-growth-measurement">
       <div className="growth-detail-card">
         <div className="growth-detail-icon">
-          {growthData.measurementType === server.Height ? "📏" : "⚖️"}
+          {growthData.measurementType === server.Height ? (
+            <Icon symbol={Ruler} />
+          ) : (
+            <Icon symbol={Scale} />
+          )}
         </div>
         <div className="growth-detail-main">
           <div className="growth-detail-type">
@@ -177,7 +183,7 @@ const ViewGrowthPage = ({
         {canContribute(growthData.familyId) && (
           <div className="growth-detail-actions">
             <a href={`/edit-growth/${growthData.id}`} className="btn btn-secondary">
-              ✏️ Edit
+              <Icon symbol={Pencil} /> Edit
             </a>
             <button
               className="btn btn-danger"
@@ -190,7 +196,7 @@ const ViewGrowthPage = ({
                 )
               }
             >
-              🗑️ Delete
+              <Icon symbol={Trash2} /> Delete
             </button>
           </div>
         )}
@@ -278,7 +284,7 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
             ) : (
               <div className="comparison-rows">
                 <ComparisonRow
-                  icon="📅"
+                  icon={<Icon symbol={CalendarDays} />}
                   label="At the same age"
                   point={entry.atSameAge}
                   renderText={p => (
@@ -290,7 +296,7 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
                   )}
                 />
                 <ComparisonRow
-                  icon="🎯"
+                  icon={<Icon symbol={Target} />}
                   label="Reached this measurement"
                   point={entry.atSameValue}
                   renderText={p => (
@@ -312,7 +318,7 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
 };
 
 interface ComparisonRowProps {
-  icon: string;
+  icon: preact.ComponentChild;
   label: string;
   point: ComparisonPoint | null;
   renderText: (point: ComparisonPoint) => preact.ComponentChild;

@@ -138,11 +138,19 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
-	// Migration: milestone search terms, which imports and person merges once
-	// skipped or left stale. Supersedes 2025-1004-populate-milestone-search.
-	vbolt.ApplyDBProcess(dbConnection, "2026-0930-rebuild-milestone-search", func() {
+	// Migration: moments are searched by scanning them, so the old word index
+	// is dead weight.
+	vbolt.ApplyDBProcess(dbConnection, "2026-1014-drop-milestone-search-index", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
-			backend.RebuildMilestoneSearchIndex(tx)
+			backend.DropMilestoneSearchIndex(tx)
+			vbolt.TxCommit(tx)
+		})
+	})
+
+	// Migration: photo text search finds its matches in the photo word index.
+	vbolt.ApplyDBProcess(dbConnection, "2026-1015-index-photo-words", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			backend.BackfillPhotoDateIndexes(tx)
 			vbolt.TxCommit(tx)
 		})
 	})
@@ -266,6 +274,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterFaceMethods(app)
 	backend.RegisterPlaceMethods(app)
+	backend.RegisterSearchMethods(app)
 	backend.RegisterTagSuggestionMethods(app)
 	backend.RegisterMilestoneAnalysisMethods(app)
 	backend.RegisterPersonPhotoInsightMethods(app)

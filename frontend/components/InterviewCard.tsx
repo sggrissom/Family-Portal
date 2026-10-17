@@ -1,3 +1,5 @@
+import { Mic } from "lucide-preact";
+import { Icon } from "./Icon";
 import * as preact from "preact";
 import * as server from "../server";
 import { copy } from "../lib/copy";
@@ -34,7 +36,7 @@ export const InterviewCard = ({
         <ThumbnailImage photoId={interview.photoId} alt="" className="interview-card-photo" />
       ) : (
         <span className="interview-card-icon" aria-hidden="true">
-          🎤
+          <Icon symbol={Mic} />
         </span>
       )}
       <span className="interview-card-body">
