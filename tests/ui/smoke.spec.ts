@@ -49,7 +49,8 @@ test.afterEach(() => {
 });
 
 test("the landing page renders for a signed-out visitor", async ({ page }) => {
-  // A visitor with no session has nothing to refresh, and asking answers 401.
+  // HttpOnly cookies cannot be inspected by the app. An anonymous access check
+  // must try refresh before deciding this visitor has no session.
   const refreshCalls: string[] = [];
   page.on("request", request => {
     if (request.url().includes("/api/refresh")) {
@@ -67,9 +68,7 @@ test("the landing page renders for a signed-out visitor", async ({ page }) => {
   await expect(page).toHaveURL(/\/create-account$/);
   await expect(page.getByRole("heading", { name: "Create Account" })).toBeVisible();
 
-  expect(refreshCalls, "a signed-out visitor asked to refresh a session they do not have").toEqual(
-    []
-  );
+  expect(refreshCalls, "the landing page checks once for a refresh-only session").toHaveLength(1);
 });
 
 test("a new family signs up, adds a person, and records a measurement", async ({ page }) => {
@@ -106,6 +105,34 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(
       page.getByRole("heading", { name: `Welcome back, ${account.name}!` })
     ).toBeVisible();
+  });
+
+  await test.step("refresh-only sessions survive on protected and public routes", async () => {
+    for (const route of ["/dashboard", "/", "/login"]) {
+      const before = (await page.context().cookies()).find(
+        cookie => cookie.name === "refreshToken"
+      );
+      expect(before, "signup or the previous refresh left a refresh cookie").toBeDefined();
+      await page.context().clearCookies({ name: "authToken" });
+      if (route !== "/dashboard") {
+        // Public entry points must also recover without a cached profile.
+        await page.evaluate(() => localStorage.removeItem("auth-cache"));
+      }
+      const refreshed = page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname === "/api/refresh" &&
+          response.request().method() === "POST"
+      );
+      await page.goto(route);
+      expect((await refreshed).status()).toBe(200);
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect(
+        page.getByRole("heading", { name: `Welcome back, ${account.name}!` })
+      ).toBeVisible();
+      const cookies = await page.context().cookies();
+      expect(cookies.find(cookie => cookie.name === "authToken")).toBeDefined();
+      expect(cookies.find(cookie => cookie.name === "refreshToken")?.value).not.toBe(before!.value);
+    }
   });
 
   await test.step("add a family member", async () => {
