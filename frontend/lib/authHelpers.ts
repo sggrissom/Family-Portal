@@ -1,4 +1,3 @@
-import * as rpc from "vlens/rpc";
 import * as core from "vlens/core";
 import * as auth from "./authCache";
 import * as server from "../server";
@@ -22,68 +21,46 @@ async function tryRefreshAuth(): Promise<auth.AuthCache | null> {
   }
 }
 
-export async function ensureAuthInFetch(): Promise<boolean> {
-  const currentAuth = auth.getAuth();
-  if (currentAuth && currentAuth.id > 0) {
+// Cached profile data does not prove the HttpOnly access cookie is still valid.
+// Share concurrent checks so token rotation happens once within this tab.
+let pendingAuth: Promise<auth.AuthCache | null> | null = null;
+
+async function loadSession(): Promise<auth.AuthCache | null> {
+  try {
+    const [current] = await server.GetAuthContext({});
+    if (current && current.id > 0) return current;
+  } catch {
+    // An expired access token can still have a valid refresh cookie.
+  }
+  return tryRefreshAuth();
+}
+
+async function restoreSession(): Promise<boolean> {
+  if (!pendingAuth) {
+    pendingAuth = loadSession().finally(() => {
+      pendingAuth = null;
+    });
+  }
+  const current = await pendingAuth;
+  if (current) {
+    auth.setAuth(current);
     return true;
   }
+  auth.clearAuth();
+  return false;
+}
 
-  try {
-    let [authResponse, err] = await server.GetAuthContext({});
-    if (authResponse && authResponse.id > 0) {
-      auth.setAuth(authResponse);
-      return true;
-    }
-
-    const refreshedAuth = await tryRefreshAuth();
-    if (refreshedAuth) {
-      auth.setAuth(refreshedAuth);
-      return true;
-    }
-
-    auth.clearAuth();
-    core.setRoute("/login");
-    return false;
-  } catch (error) {
-    const refreshedAuth = await tryRefreshAuth();
-    if (refreshedAuth) {
-      auth.setAuth(refreshedAuth);
-      return true;
-    }
-
-    auth.clearAuth();
-    core.setRoute("/login");
-    return false;
-  }
+export async function ensureAuthInFetch(): Promise<boolean> {
+  if (await restoreSession()) return true;
+  core.setRoute("/login");
+  return false;
 }
 
 export async function ensureNoAuthInFetch(): Promise<boolean> {
-  const currentAuth = auth.getAuth();
-  if (currentAuth && currentAuth.id > 0) {
+  if (await restoreSession()) {
     core.setRoute("/dashboard");
     return false;
   }
-
-  try {
-    let [authResponse, err] = await server.GetAuthContext({});
-    if (authResponse && authResponse.id > 0) {
-      auth.setAuth(authResponse);
-      core.setRoute("/dashboard");
-      return false;
-    }
-
-    // Nothing to refresh: the server has just said there is no session. Asking
-    // anyway answers 401 on every anonymous page view.
-    return true;
-  } catch (error) {
-    const refreshedAuth = await tryRefreshAuth();
-    if (refreshedAuth) {
-      auth.setAuth(refreshedAuth);
-      core.setRoute("/dashboard");
-      return false;
-    }
-  }
-
   return true;
 }
 
