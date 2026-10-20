@@ -25,6 +25,7 @@ type GetPhotoStatsRequest struct{}
 
 type GetPhotoStatsResponse struct {
 	TotalPhotos       int    `json:"totalPhotos"`
+	TotalVideos       int    `json:"totalVideos"`
 	ProcessedPhotos   int    `json:"processedPhotos"`
 	PendingPhotos     int    `json:"pendingPhotos"`
 	AnalysisPending   int    `json:"analysisPending"`
@@ -61,6 +62,10 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 
 	var allPhotos []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
+		if image.IsVideo() {
+			resp.TotalVideos++
+			return true
+		}
 		allPhotos = append(allPhotos, image)
 		return true
 	})
@@ -163,7 +168,7 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 
 	var toQueue []PhotoProcessingJob
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if !isPhotoProcessed(image) {
+		if !image.IsVideo() && !isPhotoProcessed(image) {
 			toQueue = append(toQueue, PhotoProcessingJob{
 				ImageId:   image.Id,
 				FamilyId:  image.FamilyId,
@@ -263,7 +268,7 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if image.AnalysisStatus == 3 || imageNeedsAnalysis(image) {
+		if !image.IsVideo() && (image.AnalysisStatus == 3 || imageNeedsAnalysis(image)) {
 			toQueue = append(toQueue, image)
 		} else {
 			resp.Skipped++

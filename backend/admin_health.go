@@ -305,6 +305,9 @@ func collectPhotoProblems(tx *vbolt.Tx) PhotoProblems {
 
 	stuckBefore := time.Now().Add(-stuckPhotoAge)
 	vbolt.IterateAll(tx, ImagesBkt, func(key int, image Image) bool {
+		if image.IsVideo() {
+			return true
+		}
 		switch {
 		case image.Status == 2:
 			problems.Failed++

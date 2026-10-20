@@ -273,7 +273,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 
 	photoIds := map[int]bool{}
 	addPhoto := func(image Image) {
-		if image.Id == 0 || photoIds[image.Id] || !CanAccessPhoto(tx, user, image, AccessView) {
+		if image.Id == 0 || image.IsVideo() || photoIds[image.Id] || !CanAccessPhoto(tx, user, image, AccessView) {
 			return
 		}
 		photoIds[image.Id] = true
@@ -714,7 +714,7 @@ func applyBookContent(tx *vbolt.Tx, user User, book *Book, people []Person, cont
 		for _, row := range rows {
 			ok = ok || selected[row.PersonId]
 		}
-		ok = ok && CanAccessPhoto(tx, user, image, AccessView)
+		ok = ok && !image.IsVideo() && CanAccessPhoto(tx, user, image, AccessView)
 		photoOk[photoId] = ok
 		return ok
 	}

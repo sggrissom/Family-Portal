@@ -282,7 +282,7 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 			targets = suggestionTargets(tx, img.FamilyId)
 		}
 	})
-	if img.Id == 0 || img.Status != 0 || !found || embeddingOutdated(embedding, true) || !outdated {
+	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !found || embeddingOutdated(embedding, true) || !outdated {
 		return nil
 	}
 
