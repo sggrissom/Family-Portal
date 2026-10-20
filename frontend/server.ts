@@ -79,6 +79,7 @@ export const ErrVideoUploadNotFound = "That upload could not be found.";
 export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrMediaNotFound = "media object not found";
+export const ErrVideoNotFound = "Video not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -1125,6 +1126,37 @@ export interface SetFamilyVideoEnabledRequest {
     enabled: boolean
 }
 
+export interface GetVideoPlaybackRequest {
+    id: number
+}
+
+export interface GetVideoPlaybackResponse {
+    status: number
+    playbackUrl: string
+    mimeType: string
+    downloadUrl: string
+    originalFilename: string
+    expiresAt: string
+    processingError: string
+}
+
+export interface VideoProcessingStats {
+    available: boolean
+    reason: string
+    isRunning: boolean
+    queueLength: number
+    processed: number
+    rejected: number
+    failed: number
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: VideoAttempt[]
+}
+
+export interface RetryFailedVideosResponse {
+    queued: number
+}
+
 export interface GetFaceReviewRequest {
 }
 
@@ -1639,6 +1671,7 @@ export interface SystemHealthResponse {
     configIssues: ConfigProblem[]
     logs: LogProblems
     photos: PhotoProblems
+    videos: VideoProblems
     push: PushProblems
     mail: MailProblems
     host: HostProblems
@@ -2186,6 +2219,14 @@ export interface UploadInstructions {
     expiresAt: string
 }
 
+export interface VideoAttempt {
+    time: string
+    imageId: number
+    outcome: string
+    durationMs: number
+    reason: string
+}
+
 export interface FaceGroup {
     familyId: number
     faces: PhotoFace[]
@@ -2643,6 +2684,17 @@ export interface PhotoProblems {
     analysisFailed: number
     workerStopped: boolean
     queueLength: number
+}
+
+export interface VideoProblems {
+    enabled: boolean
+    available: boolean
+    reason: string
+    queueLength: number
+    failed: number
+    rejected: number
+    stuck: number
+    failedDeletes: number
 }
 
 export interface PushProblems {
@@ -3333,6 +3385,18 @@ export async function CancelVideoUpload(data: CancelVideoUploadRequest): Promise
 
 export async function SetFamilyVideoEnabled(data: SetFamilyVideoEnabledRequest): Promise<rpc.Response<Empty>> {
     return await rpc.call<Empty>('SetFamilyVideoEnabled', JSON.stringify(data));
+}
+
+export async function GetVideoPlayback(data: GetVideoPlaybackRequest): Promise<rpc.Response<GetVideoPlaybackResponse>> {
+    return await rpc.call<GetVideoPlaybackResponse>('GetVideoPlayback', JSON.stringify(data));
+}
+
+export async function GetVideoProcessingStats(data: Empty): Promise<rpc.Response<VideoProcessingStats>> {
+    return await rpc.call<VideoProcessingStats>('GetVideoProcessingStats', JSON.stringify(data));
+}
+
+export async function RetryFailedVideos(data: Empty): Promise<rpc.Response<RetryFailedVideosResponse>> {
+    return await rpc.call<RetryFailedVideosResponse>('RetryFailedVideos', JSON.stringify(data));
 }
 
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {

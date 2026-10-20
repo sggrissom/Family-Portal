@@ -519,6 +519,7 @@ func RegisterVideoUploadMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, CompleteVideoUpload)
 	vbeam.RegisterProc(app, CancelVideoUpload)
 	vbeam.RegisterProc(app, SetFamilyVideoEnabled)
+	vbeam.RegisterProc(app, GetVideoPlayback)
+	vbeam.RegisterProc(app, GetVideoProcessingStats)
+	vbeam.RegisterProc(app, RetryFailedVideos)
 }
-
-func QueueVideoProcessing(imageId int) {}

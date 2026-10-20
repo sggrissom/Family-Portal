@@ -66,6 +66,11 @@ jobs:
       - name: TypeScript check
         run: make typecheck
 
+      # The video worker tests run real ffmpeg and skip without it.
+      - name: Install ffmpeg
+        if: env.FULL_CI == 'true'
+        run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+
       - name: Unit tests
         if: env.FULL_CI == 'true'
         run: make test
