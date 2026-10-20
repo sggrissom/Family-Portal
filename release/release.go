@@ -22,6 +22,13 @@ import (
 var embedded embed.FS
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "migrate-media" {
+		if err := family.MigrateMedia(os.Args[2:]); err != nil {
+			log.Printf("migrate-media: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 	// run returns rather than calling log.Fatal so that the deferred shutdown
 	// in RunHTTPServer actually runs; the exit status is set here instead.
 	if err := run(); err != nil {

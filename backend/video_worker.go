@@ -62,6 +62,9 @@ func InitializeVideoWorker(db *vbolt.DB) {
 	}
 	if activeMediaStore() == nil {
 		videoUnavailableReason = "Media storage is not available."
+		if mediaStoreProblem != "" {
+			videoUnavailableReason += " " + mediaStoreProblem
+		}
 		videoProcessingAvailable = func() bool { return false }
 		return
 	}

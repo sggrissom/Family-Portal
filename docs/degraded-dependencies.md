@@ -58,6 +58,8 @@ accepted original, and nothing may be accepted that cannot be kept.
 | --- | --- |
 | ffmpeg or ffprobe missing at startup | `InitializeVideoWorker` logs and returns. `GetVideoSupport` reports video unavailable and `BeginVideoUpload` refuses with a clear message, so no new upload is accepted that could not be processed. Existing videos keep playing. |
 | `cfg.EnableVideo` off, or media storage unavailable | The same refusal. Existing video rows render as their poster or a placeholder. |
+| `MEDIA_S3_*` incomplete | Media storage is unavailable (never a silent fallback to local disk), with the missing settings in admin health. |
+| bucket unreachable | Startup logs it and carries on. Uploads, playback links and worker jobs fail or retry as for any storage error; nothing already stored is lost, and the janitor keeps retrying deletes. |
 | family not enabled | `BeginVideoUpload` refuses with `ErrVideoDisabled`. Video is opt-in per family. |
 | disk short of the reservation a job needs | The job goes back on the front of the backlog and the worker pauses, 5 seconds doubling to 5 minutes. Nothing is marked failed and `MinFreeDiskBytes` is never crossed. |
 | storage read or write fails mid-job | Same retry. The row stays processing. |
