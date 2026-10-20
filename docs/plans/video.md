@@ -35,9 +35,10 @@ different endpoint covers either, so the choice stays a config value rather than
 a rewrite.
 
 Choosing between the two:
-- R2 has zero egress. Storage runs a little more per GB, playback and the
-  worker's own reads cost nothing, and a custom domain plus a Worker in front is
-  the cleanest path to authenticated playback.
+- R2 has zero egress. Storage runs a little more per GB. Start with private
+  bucket access through presigned URLs on the S3 API endpoint; those URLs do
+  not work on custom domains. A custom domain plus a Worker using an R2 binding
+  and validating signed cookies is a separate, optional playback design.
 - B2 is about half R2's price per GB stored, and egress is free up to three
   times the average stored volume, which a family archive watched by a handful
   of relatives never approaches. So it doesn't need Cloudflare in front either.
@@ -47,19 +48,24 @@ won't. Confirm current pricing before committing; both are cheap enough that
 predictability matters more than the rate.
 
 Sequencing:
-- The backend hands out URLs, never bytes. A `MediaStore` interface with
-  `UploadURL`, `PlaybackURL`, `Open`, and `Delete`; clients ask for a URL and
-  PUT to it or play from it, and never know which backend answered.
+- Clients use the same upload and playback contract for either backend. A
+  `MediaStore` interface supplies `UploadURL`, `PlaybackURL`, `Open`, `Put`,
+  `Stat`, and `Delete`: clients transfer through URLs, while the worker opens
+  originals, writes remuxes/posters, and checks object size through the store.
+  Upload instructions include the URL, HTTP method, required headers, and
+  expiry; clients must use those instructions rather than assume same-origin
+  authentication or attach the app's bearer token to a bucket request.
 - Phase 1 is a local-disk backend. `UploadURL` and `PlaybackURL` return
-  short-lived signed URLs on the app itself, and playback goes through
+  signed URLs on the app itself, with separate upload and viewing-session
+  expiries (see Technical notes), and playback goes through
   `http.ServeContent`, which already handles range requests. The whole
   feature — model, worker, timeline, tagging, deletes — lands and settles on
   the one machine already understood, with no new vendor to debug at the same
   time.
 - Phase 1 is for this family, not for opening video up. A small VPS disk holds
   one family's clips, not fifty, so video stays off per family until phase 2,
-  and the existing quota and `CheckDiskHeadroom` checks hold the line
-  meanwhile.
+  with quota reservations and disk budgeting extending the existing quota
+  and `CheckDiskHeadroom` checks as described below.
 - Phase 2 adds the S3-compatible backend and a one-time copy of existing
   files into the bucket. Because clients only ever see URLs, it's a config
   change and a migration, not a client release — which matters most for iOS,
@@ -79,16 +85,58 @@ Scope:
   than a parallel `Video` bucket. A separate bucket is cleaner in isolation and
   worse everywhere else: photo people, tags, timeline, activity attachment, and
   export would each grow a second code path for no gain.
-- New fields for the object key, duration, and the poster frame.
+- New fields for original and playback object keys, duration, codec metadata,
+  and the poster frame. Keep original and remux distinct so archive/export
+  retains the exact uploaded file. Old `Image` records default to photo when
+  decoded; preserve their existing paths and status meanings.
 - Status states the UI can show honestly: uploading, processing, ready, failed.
   Processing takes real time, so "still processing" is a screen, not an edge
   case.
 - Creation date pulled from QuickTime metadata the way `PhotoDate` comes from
   EXIF today, so clips land on the timeline where they belong.
-- Videos skip face analysis — set `AnalysisStatus` to done at ingest so the
-  analysis worker never picks them up.
-- A size and duration cap enforced client-side before upload, and the mobile
-  upload path in `docs/mobile-api.md` extended to match.
+- Videos skip face analysis through an explicit `MediaKind` guard in
+  `imageNeedsAnalysis`, worker entry points, and admin/maintenance requeue
+  paths. Setting `AnalysisStatus` to done is not sufficient: completed images
+  are requeued when `AnalysisVersion` becomes outdated.
+- Audit every consumer of `Image`. Videos participate in the library,
+  timeline, people tagging, and activity attachments. Keep them out of portrait
+  ranking, Growing Up, profile-photo selection, photo-only analysis/search,
+  and book photo layouts unless a surface explicitly supports a poster and a
+  route to playback. Reuse poster resizing without treating the video original
+  as an image; photo processing and consistency scans must branch by kind.
+- Choose explicit v1 size and duration caps before implementation. Check them
+  client-side for immediate feedback and enforce them server-side during
+  transfer and verification. Extend `docs/mobile-api.md` with the same upload
+  lifecycle and instructions used by the web client.
+
+Upload lifecycle (the same for local disk and object storage):
+- Begin an authenticated upload after checking family membership, upload
+  permission, and video enablement. In a write transaction, create an upload
+  session with an expiry and a server-generated temporary key, and reserve the
+  declared bytes against the family quota. Outstanding reservations count
+  toward quota so concurrent uploads cannot each claim the same free space.
+- Stream to the temporary key. The local handler validates the signed upload
+  scope, enforces the reserved byte limit while reading (including unknown-length bodies),
+  and removes partial files on failure. For the bucket backend, constrain the
+  signed request's size where supported; never trust declared size or MIME
+  type as verification. Pending objects remain private and unplayable.
+- The client calls an authenticated completion endpoint with the upload session
+  ID. The server verifies ownership and upload state, uses `Stat` to check
+  actual size, and records durable pending work. Probe the uploaded file with
+  bounded ffprobe execution to validate duration, container, and codecs before
+  accepting it for remuxing. Reject over-limit or unsupported files, delete
+  them, and release their reservations. Show a clear reason in the UI.
+- Completion is idempotent: retrying returns the existing media ID/status
+  rather than creating another row or another logical job. Recover pending
+  work after restart; do not rely only on an in-memory queue. Process into
+  separate final keys so a reusable upload URL cannot overwrite accepted
+  content. Only publish playback once the required outputs are complete.
+- On success, replace the reservation with recorded original and derivative
+  usage atomically. Expired sessions and abandoned or rejected uploads are
+  swept after their upload URLs expire, with retries for failed deletes.
+  Reconcile late uploads too: an expired session must never become a playable
+  row or leave an object stored forever. Deleting media during processing must
+  prevent the worker from publishing it and clean up any outputs it created.
 
 Processing, which is the part worth getting right:
 - No transcoding ladder. Phones already record H.264 or HEVC in MP4, and a
@@ -99,19 +147,26 @@ Processing, which is the part worth getting right:
   moves the moov atom to the front so playback starts before the file is
   downloaded. It costs seconds and no quality, and it is the whole fix for
   "the video won't start until it's loaded".
-- No re-encoding, including HEVC. iPhones record HEVC by default, so a
-  re-encode path for it would be the common path, and on a one-vCPU box it
-  runs well under real time. Safari, iOS, and Android play HEVC natively, and
-  Chrome and Edge do wherever there's a hardware decoder, which is nearly every
-  device from the last several years. Remux with `-tag:v hvc1`, since Safari
-  refuses HEVC tagged `hev1`.
-- The player checks `canPlayType` first, and where it fails — old hardware,
-  some Firefox setups — shows the poster with a download link instead of a
-  broken player. HDR clips from recent iPhones can look slightly flat off
-  Apple devices; that's cosmetic and not a reason to re-encode. A re-encode
-  path comes back only if unplayable clips turn out to be a real complaint, and
-  then as a niced, one-at-a-time job, or as an H.264 export on the phone
-  before upload.
+- No automatic re-encoding in v1, including HEVC. iPhone HEVC uploads can
+  make transcoding the common path, which is too expensive to assume on the
+  small VPS. Remux HEVC with `-tag:v hvc1` for Apple playback compatibility;
+  use it only for HEVC streams. Browser playback still depends on the OS,
+  decoder, codec profile, and clip, so download-only access is an explicit
+  accepted v1 fallback rather than a promise of universal playback.
+- Probe and retain video/audio codec information. The player checks
+  `canPlayType` with a codec-specific MIME string, not just `video/mp4`;
+  its answer is a hint, not proof that the actual clip will play. Handle
+  runtime playback errors as well, showing the poster and an original-download
+  link with a useful explanation. Distinguish expired URLs/network failures
+  from unsupported media; renew an expired URL through authenticated API access
+  and preserve playback position when retrying.
+- Validate actual iPhone H.264, HEVC, HDR, and portrait-orientation clips on
+  iOS/Safari and the family's Linux/Chrome setup before settling this policy.
+  Check audio, rotation, seeking, and poster orientation/colour as well as
+  whether playback starts. HDR appearance needs inspection, not an assumption
+  that differences are always minor. Add a low-priority, one-at-a-time H.264
+  conversion path or offer a phone-side H.264 export only if those results or
+  family feedback justify it.
 - Optionally one 720p rendition for 4K originals, decided after seeing whether
   originals are actually painful to stream. Skip it until then.
 - Poster frame extracted as a single still and pushed through the existing photo
@@ -126,17 +181,28 @@ Processing, which is the part worth getting right:
 Technical notes:
 - With the bucket backend, upload goes direct from the client to the bucket
   against a presigned PUT the backend mints, so nothing large transits the
-  VPS: no request timeout changes, no multipart buffering, no disk pressure.
+  VPS during the transfer. Configure bucket CORS for the web client's origins,
+  methods, and required headers. Processing still needs local scratch space.
   S3 multipart above ~100 MB, so a phone on a flaky connection can resume
   instead of restarting, is a later addition; a single PUT covers 5 GB, and
   the v1 size cap sits well under that.
 - The worker then pulls the object back down to process it. That reads oddly
   but it's right: the download happens on the worker's schedule rather than
-  inside a request, and on R2 it's free. Delete the temp file in a defer, and
-  cap total worker scratch space against `MinFreeDiskBytes`.
+  inside a request. Bound ffmpeg/ffprobe execution and clean temporary files on
+  success, failure, cancellation, and restart. One worker limits processing
+  concurrency; it does not limit concurrent uploads.
+- Extend `CheckDiskHeadroom` with coordinated reservations for local uploads
+  and worker scratch allocations, shared by all writers using that disk
+  budget. A free-space snapshot alone cannot prevent concurrent uploads from
+  consuming the same headroom. Budget for the retained original, separate
+  remux, poster variants, and any downloaded scratch copy; check again before
+  allocation and processing. Wait for capacity rather than starting a job that
+  would cross `MinFreeDiskBytes`. Keep the same floor protecting photo writes
+  and the database.
 - The bucket is private, with no public access and no bucket-level anonymous
   read, ever. Playback is a presigned GET minted per request behind the same
-  family membership check `servePhotoHandler` already makes. Never store a
+  media access checks `servePhotoHandler` already makes, including family
+  membership and scoped permissions. Never store a
   playable URL in the database; store the key and sign on demand.
 - Presigned expiry has a real trap: a range-request playback session outlives a
   short-lived URL, and the player fails mid-scrub when it tries to seek. Expiry
@@ -144,10 +210,12 @@ Technical notes:
   too loose, the alternative is a Worker in front of R2 validating a signed
   cookie — more moving parts, and only worth it if hours-long links actually
   bother you.
-- Quota goes back to counting bytes, which `FamilyStorageUsage` already does.
-  Count remote bytes separately from local ones so the disk floor and the family
-  quota stay distinct numbers; a family filling a bucket must not read as a full
-  disk, and vice versa.
+- `FamilyStorageUsage` currently counts original bytes only. Extend video
+  accounting to retained originals, remuxes, poster variants, and outstanding
+  upload/output reservations; reserve bounded processing output space before
+  starting work. Keep logical family usage, actual local bytes, remote bytes,
+  and temporary disk reservations distinct. A family filling a bucket must not
+  read as a full disk, and a bucket upload must not evade its family quota.
 - Deletion has to reach the bucket. Photo deletes today only touch local disk,
   so orphaned objects accruing forever is the obvious failure — reconcile in
   `photo_maintenance.go` alongside the existing sweeps.
@@ -156,10 +224,14 @@ Technical notes:
   the local backend standing in during development, and an entry in
   `docs/degraded-dependencies.md`. With it off,
   uploads refuse with a clear message and existing rows render as placeholders.
-- Export has to include video or the data isn't the family's. A multi-gigabyte
-  ZIP is not a download, so the manifest carries presigned per-video links and
-  the data-only export keeps listing them as metadata. Originals stay in the
-  bucket unmodified, so "give me my files" is a bulk copy, not a conversion.
+- Export has to include video or the data isn't the family's. The data-only
+  export lists stable media IDs and original-file metadata. A downloadable
+  manifest may include presigned links for immediate use, but expiring links
+  alone are not a durable backup. Provide an authenticated bulk-originals
+  download workflow that can request fresh links and retry individual files,
+  so a family can save all its actual files without finishing one enormous ZIP
+  request before it times out. It must work with local storage as well as the
+  bucket. Originals remain unmodified; remuxing is a playback derivative.
 
 This is still the first feature that puts family content on a machine the family
 doesn't own, and the plan shouldn't skip past it — but the trade is a much
@@ -174,3 +246,23 @@ Open question: whether photos eventually follow video into the bucket. Once the
 storage client, the presigned URL path, and the deletion reconciliation all
 exist, the argument for keeping photos on local disk is mostly that they already
 work — which is a real argument, and the reason not to do both at once.
+
+Implementation acceptance checks:
+- Old photo rows and photo uploads still work; video rows never enter photo
+  analysis or portrait selection, including after an analysis version bump,
+  admin requeue, or restart.
+- Exercise concurrent uploads near quota and disk limits, interrupted transfers,
+  invalid/over-limit files, repeated completion, restart during processing, and
+  deletion during processing. No duplicate media, leaked reservations, playable
+  partial files, or unbounded orphan storage.
+- Verify authorized and unauthorized upload/completion/playback access, byte
+  range seeking, expired playback URL renewal, and the same client contract
+  against both storage backends when the bucket backend lands.
+- Run the real-device clip checks above and download exported originals after
+  the initial manifest links have expired.
+
+References for implementation:
+- [HTML media capability checks](https://html.spec.whatwg.org/multipage/media.html#dom-navigator-canplaytype-dev):
+  `canPlayType` returns confidence, not a playback guarantee.
+- [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/):
+  required headers, CORS, URL reuse, and the S3-endpoint/custom-domain distinction.
