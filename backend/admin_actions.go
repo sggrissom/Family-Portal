@@ -39,7 +39,7 @@ func RequeueStuckPhotos(ctx *vbeam.Context, req RequeueStuckPhotosRequest) (resp
 	stuckBefore := time.Now().Add(-stuckPhotoAge)
 	var toQueue []PhotoProcessingJob
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if image.Status == 1 && image.CreatedAt.Before(stuckBefore) {
+		if !image.IsVideo() && image.Status == 1 && image.CreatedAt.Before(stuckBefore) {
 			toQueue = append(toQueue, PhotoProcessingJob{
 				ImageId:   image.Id,
 				FamilyId:  image.FamilyId,
