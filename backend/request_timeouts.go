@@ -37,7 +37,7 @@ func requestDeadlines(r *http.Request) (read, write time.Duration) {
 	}
 
 	if strings.HasPrefix(r.URL.Path, localMediaUploadPrefix) {
-		return mediaUploadReadTimeout, mediaUploadReadTimeout+defaultWriteTimeout
+		return mediaUploadReadTimeout, mediaUploadReadTimeout + defaultWriteTimeout
 	}
 	if strings.HasPrefix(r.URL.Path, localMediaObjectPrefix) {
 		return defaultReadTimeout, mediaPlaybackWriteTimeout
