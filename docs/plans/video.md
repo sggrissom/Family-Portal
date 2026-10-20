@@ -14,9 +14,12 @@ clip is one to two orders of magnitude larger than a photo. The 10 GB
 floor is one careless upload away, and `servePhotoHandler` streaming a long clip
 to a phone on cellular ties up a connection for the length of the video.
 
-So the bytes move to object storage — Backblaze B2 or Cloudflare R2 — served
-from the edge, while the app keeps everything it already does well: metadata,
-permissions, family scoping, and the processing itself.
+So the bytes eventually move to object storage — Backblaze B2 or Cloudflare
+R2 — while the app keeps everything it already does well: metadata,
+permissions, family scoping, and the processing itself. Eventually, because the
+feature ships first on local disk behind a storage interface, and the bucket is
+a second backend for that interface rather than the starting point (see
+Sequencing).
 
 Not a video platform. Mux, Cloudflare Stream, and the like solve a problem this
 app doesn't have. They price per stored minute and per delivered minute, they
@@ -35,13 +38,38 @@ Choosing between the two:
 - R2 has zero egress. Storage runs a little more per GB, playback and the
   worker's own reads cost nothing, and a custom domain plus a Worker in front is
   the cleanest path to authenticated playback.
-- B2 is cheaper per GB stored, with egress free through Cloudflare and metered
-  otherwise — so in practice it also wants Cloudflare in front, at which point
-  it's R2's setup with an extra vendor.
+- B2 is about half R2's price per GB stored, and egress is free up to three
+  times the average stored volume, which a family archive watched by a handful
+  of relatives never approaches. So it doesn't need Cloudflare in front either.
 
 R2 unless the storage bill actually starts to matter, which for one family it
 won't. Confirm current pricing before committing; both are cheap enough that
 predictability matters more than the rate.
+
+Sequencing:
+- The backend hands out URLs, never bytes. A `MediaStore` interface with
+  `UploadURL`, `PlaybackURL`, `Open`, and `Delete`; clients ask for a URL and
+  PUT to it or play from it, and never know which backend answered.
+- Phase 1 is a local-disk backend. `UploadURL` and `PlaybackURL` return
+  short-lived signed URLs on the app itself, and playback goes through
+  `http.ServeContent`, which already handles range requests. The whole
+  feature — model, worker, timeline, tagging, deletes — lands and settles on
+  the one machine already understood, with no new vendor to debug at the same
+  time.
+- Phase 1 is for this family, not for opening video up. A small VPS disk holds
+  one family's clips, not fifty, so video stays off per family until phase 2,
+  and the existing quota and `CheckDiskHeadroom` checks hold the line
+  meanwhile.
+- Phase 2 adds the S3-compatible backend and a one-time copy of existing
+  files into the bucket. Because clients only ever see URLs, it's a config
+  change and a migration, not a client release — which matters most for iOS,
+  where releases are the slow part.
+- The local backend outlives phase 1 as the dev stub, so little of it is
+  throwaway. What is throwaway is the handler that takes the upload through
+  the VPS: it must stream to disk rather than buffer, and the reverse proxy's
+  body size and timeout limits need raising for it.
+- Real sizes and playback behaviour from phase 1 decide the open choices in
+  phase 2: which provider, and whether a 720p rendition is needed at all.
 
 Scope:
 - Videos alongside photos in the library, on the family timeline, on a person's
@@ -71,25 +99,37 @@ Processing, which is the part worth getting right:
   moves the moov atom to the front so playback starts before the file is
   downloaded. It costs seconds and no quality, and it is the whole fix for
   "the video won't start until it's loaded".
-- Re-encode only when the codec won't play broadly — HEVC from an iPhone is the
-  main case — and only then. That's the expensive path, so it should be the
-  uncommon one.
+- No re-encoding, including HEVC. iPhones record HEVC by default, so a
+  re-encode path for it would be the common path, and on a one-vCPU box it
+  runs well under real time. Safari, iOS, and Android play HEVC natively, and
+  Chrome and Edge do wherever there's a hardware decoder, which is nearly every
+  device from the last several years. Remux with `-tag:v hvc1`, since Safari
+  refuses HEVC tagged `hev1`.
+- The player checks `canPlayType` first, and where it fails — old hardware,
+  some Firefox setups — shows the poster with a download link instead of a
+  broken player. HDR clips from recent iPhones can look slightly flat off
+  Apple devices; that's cosmetic and not a reason to re-encode. A re-encode
+  path comes back only if unplayable clips turn out to be a real complaint, and
+  then as a niced, one-at-a-time job, or as an H.264 export on the phone
+  before upload.
 - Optionally one 720p rendition for 4K originals, decided after seeing whether
   originals are actually painful to stream. Skip it until then.
 - Poster frame extracted as a single still and pushed through the existing photo
   pipeline, so grids, timelines, and link previews are ordinary images.
 - A video worker mirroring `InitializePhotoWorker`, but concurrency 1 and
-  niced. Photo resizes are cheap and parallel; an ffmpeg re-encode will eat the
-  box if you let several run. Queue depth and failures belong in the existing
-  admin health view.
+  niced. A remux is cheap on CPU but reads and writes the whole file, so
+  several at once compete for disk with everything else the box does. Queue
+  depth and failures belong in the existing admin health view.
 - ffmpeg is exec'd, not linked, so a missing binary disables video and the app
   still starts — the same bargain face tagging already makes with dlib.
 
 Technical notes:
-- Upload goes direct from the client to the bucket against a presigned PUT the
-  backend mints, so nothing large transits the VPS: no request timeout changes,
-  no multipart buffering, no disk pressure. Use S3 multipart above ~100 MB so a
-  phone on a flaky connection can resume instead of restarting.
+- With the bucket backend, upload goes direct from the client to the bucket
+  against a presigned PUT the backend mints, so nothing large transits the
+  VPS: no request timeout changes, no multipart buffering, no disk pressure.
+  S3 multipart above ~100 MB, so a phone on a flaky connection can resume
+  instead of restarting, is a later addition; a single PUT covers 5 GB, and
+  the v1 size cap sits well under that.
 - The worker then pulls the object back down to process it. That reads oddly
   but it's right: the download happens on the worker's schedule rather than
   inside a request, and on R2 it's free. Delete the temp file in a defer, and
@@ -113,7 +153,8 @@ Technical notes:
   `photo_maintenance.go` alongside the existing sweeps.
 - The app must start and run with the bucket unconfigured or unreachable, like
   face tagging does: a `cfg.EnableVideo` flag, credentials from the environment,
-  a local stub, and an entry in `docs/degraded-dependencies.md`. With it off,
+  the local backend standing in during development, and an entry in
+  `docs/degraded-dependencies.md`. With it off,
   uploads refuse with a clear message and existing rows render as placeholders.
 - Export has to include video or the data isn't the family's. A multi-gigabyte
   ZIP is not a download, so the manifest carries presigned per-video links and
