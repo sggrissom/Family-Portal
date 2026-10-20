@@ -3,6 +3,7 @@ import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
+import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -119,6 +120,27 @@ async function revokeSessions(state: UsersPageState, u: server.AdminUserInfo) {
   vlens.scheduleRedraw();
 }
 
+async function toggleFamilyVideo(state: UsersPageState, u: server.AdminUserInfo) {
+  const enable = !u.familyVideoEnabled;
+  const confirmed = confirm(
+    enable
+      ? `Turn on video for ${u.familyName}?\n\nIts members will be able to upload videos, which count against the family's storage.`
+      : `Turn off video uploads for ${u.familyName}?\n\nVideos already uploaded stay and keep playing.`
+  );
+  if (!confirmed) return;
+
+  state.busy[u.id] = "video";
+  vlens.scheduleRedraw();
+  const [, error] = await server.SetFamilyVideoEnabled({ familyId: u.familyId, enabled: enable });
+  state.busy[u.id] = "";
+  if (error) {
+    state.results[u.id] = error;
+    vlens.scheduleRedraw();
+    return;
+  }
+  core.replaceRoute(core.getRoute());
+}
+
 const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
   const users = data.users || [];
   const state = useUsersPageState();
@@ -208,6 +230,17 @@ const UserManagementPage = ({ user, data }: UserManagementPageProps) => {
                         >
                           {state.busy[u.id] === "resend" ? "Sending…" : "Send reset link"}
                         </button>
+                        {u.familyId > 0 && (
+                          <button
+                            className="admin-btn admin-btn-secondary admin-btn-small"
+                            onClick={() => toggleFamilyVideo(state, u)}
+                            disabled={!!state.busy[u.id]}
+                          >
+                            {u.familyVideoEnabled
+                              ? "Turn off family video"
+                              : "Turn on family video"}
+                          </button>
+                        )}
                       </div>
                       {state.results[u.id] && (
                         <div className="session-result">{state.results[u.id]}</div>

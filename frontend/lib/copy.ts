@@ -363,6 +363,8 @@ export const copy = {
   photos: {
     title: "Photos",
     choose: "Choose photos",
+    chooseWithVideo: "Choose photos or videos",
+    videoProcessing: "Uploaded · processing",
     addMore: "Add more",
     whoIsIn: "Who's in these?",
     caption: "Caption",

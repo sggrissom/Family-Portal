@@ -50,7 +50,8 @@ block(`
 `);
 
 block(`
-.upload-tile img {
+.upload-tile img,
+.upload-tile video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -59,7 +60,9 @@ block(`
 
 block(`
 .upload-tile.upload-queued img,
-.upload-tile.upload-uploading img {
+.upload-tile.upload-uploading img,
+.upload-tile.upload-queued video,
+.upload-tile.upload-uploading video {
   opacity: 0.55;
 }
 `);
