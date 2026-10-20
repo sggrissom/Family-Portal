@@ -556,6 +556,48 @@ that ETag. Five
 minutes of free reuse, then revalidate. Nothing else authenticated is cacheable:
 `/api`, `/rpc` and `/internal` default to `no-store`.
 
+### Video upload
+
+A video is an `Image` with `mediaKind: 1` (`MediaVideo`). It is not sent to
+`/api/upload-photo`; the bytes go to a URL the server hands out, which today is
+on the app and later will be a storage bucket. The client contract is the same
+for both, so follow it literally:
+
+1. **`GetVideoSupport`** `{familyId?}` → `{enabled, reason, maxBytes,
+   maxDurationSeconds, contentTypes}`. Video is off per family until an admin
+   turns it on. When `enabled` is false, show `reason` and don't offer video.
+   Check `maxBytes` before starting; `maxDurationSeconds` can only be checked on
+   the device or by the server after upload.
+2. **`BeginVideoUpload`** `{familyId?, personIds, filename, contentType, size,
+   title, description, fallbackDate}` → `{uploadId, upload}`. `size` is the exact
+   byte count you will send. `contentType` is `video/mp4`, `video/quicktime`, or
+   `video/x-m4v`. `fallbackDate` is the local day (`YYYY-MM-DD`) used when the
+   file carries no creation date. The server reserves the bytes against the
+   family's quota here, so a full family is refused before anything is sent.
+3. **Send the file** using `upload` exactly:
+   `{url, method, headers, expiresAt}`. Use that method, set every header in
+   `headers` and no others, and send exactly `size` bytes as the raw body (not
+   multipart). **Do not attach the bearer token or cookies** — the URL carries
+   its own authorization, and a bucket will reject unexpected credentials. A
+   `url` that starts with `/` is relative to the API origin; anything else is
+   absolute. Any 2xx means the bytes arrived. The URL works until `expiresAt`
+   (two hours) and may be retried from the start until then.
+4. **`CompleteVideoUpload`** `{uploadId}` → `{image}`. Returns the new row with
+   `status: 1` (processing). Completion is idempotent: calling it again returns
+   the same image rather than another row, so retry it freely after a timeout.
+   `ErrVideoUploadMissing` means the bytes have not arrived — finish or retry
+   step 3. `ErrVideoUploadExpired` means start again from step 2.
+5. Optionally **`CancelVideoUpload`** `{uploadId}` when the user abandons it, which
+   releases the reservation at once instead of when the session expires.
+
+Unfinished sessions expire two hours after `BeginVideoUpload` (plus a short
+grace for completion) and their bytes are deleted.
+
+After completion the server checks the file (duration, container, codecs) and
+prepares it for playback. Poll `GetPhotoStatus` as for photos. A video that is
+rejected moves to `status: 2` with `processingError` set to a sentence that
+can be shown as is.
+
 ---
 
 ## 9. Chat and the WebSocket
@@ -873,8 +915,9 @@ every keystroke: an empty query returns empty groups, not an error.
 
 ## 13. Retries and idempotency
 
-**There is none.** No endpoint accepts an idempotency key, and no create
-deduplicates.
+**There is almost none.** No endpoint accepts an idempotency key, and no create
+deduplicates. The exception is `CompleteVideoUpload`, which is keyed by its
+upload session and returns the same image however often it is called.
 
 `SendMessage` takes a `clientMessageId`, and the server stores and echoes it —
 but it does **not** check it. A retried send creates a second message. The field
@@ -912,16 +955,18 @@ header; there is no faster path.
 | invite-code | 10 | 15 min | `JoinFamily`, `AcceptFamilyLink` |
 | refresh | 30 | 5 min | `/api/refresh` |
 | import | 5 | 1 hour | `ImportData`, `/api/import-bundle` |
-| upload | 120 | 10 min | `/api/upload-photo` |
+| upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
-| photo-read | 600 | 5 min | `/api/photo/*` |
+| photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |
 | **default** | **300** | **1 min** | everything else under `/api/` and `/rpc/` |
 
 Buckets are per client and in-process; a restart resets them.
 
-Body sizes: 1 MiB for any JSON request, 52 MiB for a photo upload, 512 MiB for
-an import bundle. Deadlines: 30s read for an ordinary request, 10 min for an
-upload, 30 min for an import, 2 min write for a response, 30 min for a download.
+Body sizes: 1 MiB for any JSON request, 52 MiB for a photo upload, 1 GiB for a
+video, 512 MiB for an import bundle. Deadlines: 30s read for an ordinary
+request, 10 min for a photo upload, 2 hours for a video upload, 30 min for an
+import, 2 min write for a response, 30 min for a download, 2 hours for video
+playback.
 
 A photo grid firing 600 requests in five minutes is not a hypothetical — it is
 one reason the app needs an image cache rather than a fresh request per

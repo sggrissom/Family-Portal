@@ -73,6 +73,12 @@ export const ErrFamilyAccessDenied = "Access denied: record belongs to another f
 export const ErrNoFamily = "User is not part of a family";
 export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
+export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
+export const ErrVideoUploadNotFound = "That upload could not be found.";
+export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
+export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
+export const ErrMediaNotFound = "media object not found";
 
 export interface CreateAccountRequest {
     name: string
@@ -1072,6 +1078,51 @@ export interface UpdatePhotoTagsRequest {
 }
 
 export interface UpdatePhotoTagsResponse {
+}
+
+export interface GetVideoSupportRequest {
+    familyId: number
+}
+
+export interface GetVideoSupportResponse {
+    enabled: boolean
+    reason: string
+    maxBytes: number
+    maxDurationSeconds: number
+    contentTypes: string[]
+}
+
+export interface BeginVideoUploadRequest {
+    familyId: number
+    personIds: number[]
+    filename: string
+    contentType: string
+    size: number
+    title: string
+    description: string
+    fallbackDate: string
+}
+
+export interface BeginVideoUploadResponse {
+    uploadId: number
+    upload: UploadInstructions
+}
+
+export interface CompleteVideoUploadRequest {
+    uploadId: number
+}
+
+export interface CompleteVideoUploadResponse {
+    image: Image
+}
+
+export interface CancelVideoUploadRequest {
+    uploadId: number
+}
+
+export interface SetFamilyVideoEnabledRequest {
+    familyId: number
+    enabled: boolean
 }
 
 export interface GetFaceReviewRequest {
@@ -2126,6 +2177,13 @@ export interface PhotoWithPeople {
     image: Image
     people: Person[]
     similar: number[]
+}
+
+export interface UploadInstructions {
+    url: string
+    method: string
+    headers: Record<string, string>
+    expiresAt: string
 }
 
 export interface FaceGroup {
@@ -3255,6 +3313,26 @@ export async function RemovePersonFromPhotoProc(data: RemovePersonFromPhotoReque
 
 export async function UpdatePhotoTags(data: UpdatePhotoTagsRequest): Promise<rpc.Response<UpdatePhotoTagsResponse>> {
     return await rpc.call<UpdatePhotoTagsResponse>('UpdatePhotoTags', JSON.stringify(data));
+}
+
+export async function GetVideoSupport(data: GetVideoSupportRequest): Promise<rpc.Response<GetVideoSupportResponse>> {
+    return await rpc.call<GetVideoSupportResponse>('GetVideoSupport', JSON.stringify(data));
+}
+
+export async function BeginVideoUpload(data: BeginVideoUploadRequest): Promise<rpc.Response<BeginVideoUploadResponse>> {
+    return await rpc.call<BeginVideoUploadResponse>('BeginVideoUpload', JSON.stringify(data));
+}
+
+export async function CompleteVideoUpload(data: CompleteVideoUploadRequest): Promise<rpc.Response<CompleteVideoUploadResponse>> {
+    return await rpc.call<CompleteVideoUploadResponse>('CompleteVideoUpload', JSON.stringify(data));
+}
+
+export async function CancelVideoUpload(data: CancelVideoUploadRequest): Promise<rpc.Response<Empty>> {
+    return await rpc.call<Empty>('CancelVideoUpload', JSON.stringify(data));
+}
+
+export async function SetFamilyVideoEnabled(data: SetFamilyVideoEnabledRequest): Promise<rpc.Response<Empty>> {
+    return await rpc.call<Empty>('SetFamilyVideoEnabled', JSON.stringify(data));
 }
 
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {

@@ -1159,6 +1159,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 	deletePhotoRecordTx(ctx.Tx, photo)
 
 	vbolt.TxCommit(ctx.Tx)
+	kickMediaJanitor()
 
 	resp.Success = true
 	return
@@ -1180,6 +1181,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	removePhotoFromActivities(tx, photo.Id)
 	removePhotoFromInterviews(tx, photo)
 	removeAllPhotoTags(tx, photo.Id)
+	queueVideoObjectDeletionsTx(tx, photo)
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
