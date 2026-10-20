@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"family/cfg"
 	"os"
 	"path/filepath"
@@ -325,6 +326,9 @@ type PhotoConsistencyReport struct {
 	Orphans       []OrphanOriginal  `json:"orphans"`
 	ListLimit     int               `json:"listLimit"`
 	OrphanScanErr string            `json:"orphanScanErr"`
+
+	VideosChecked int               `json:"videosChecked"`
+	VideosMissing []MissingOriginal `json:"videosMissing"`
 }
 
 func originalPathIn(staticDir, filePath string) string {
@@ -340,6 +344,8 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 		Missing:   []MissingOriginal{},
 		Orphans:   []OrphanOriginal{},
 		ListLimit: listLimit,
+
+		VideosMissing: []MissingOriginal{},
 	}
 
 	referenced := make(map[string]bool)
@@ -350,6 +356,9 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 		}
 		path := originalPathIn(staticDir, image.FilePath)
 		referenced[filepath.Base(path)] = true
+		if image.IsVideo() && image.Status != 0 {
+			return true
+		}
 		if _, err := os.Stat(path); err != nil {
 			report.MissingCount++
 			if listLimit <= 0 || len(report.Missing) < listLimit {
@@ -404,6 +413,35 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 	return report
 }
 
+// scanVideoObjects reports videos whose stored original or playback file is
+// gone.
+func scanVideoObjects(tx *vbolt.Tx, store MediaStore) (checked int, missing []MissingOriginal) {
+	missing = []MissingOriginal{}
+	if store == nil {
+		return
+	}
+	vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
+		if !image.IsVideo() {
+			return true
+		}
+		checked++
+		for _, key := range []string{image.OriginalKey, image.PlaybackKey} {
+			if key == "" {
+				continue
+			}
+			if _, err := store.Stat(context.Background(), key); err != nil {
+				missing = append(missing, MissingOriginal{
+					ImageId: image.Id, FamilyId: image.FamilyId, Status: image.Status,
+					FilePath: key, CreatedAt: image.CreatedAt,
+				})
+				break
+			}
+		}
+		return len(missing) < photoConsistencyListLimit
+	})
+	return
+}
+
 type CheckPhotoConsistencyRequest struct{}
 
 func CheckPhotoConsistency(ctx *vbeam.Context, req CheckPhotoConsistencyRequest) (resp PhotoConsistencyReport, err error) {
@@ -412,6 +450,12 @@ func CheckPhotoConsistency(ctx *vbeam.Context, req CheckPhotoConsistencyRequest)
 	}
 
 	resp = ScanPhotoConsistency(ctx.Tx, cfg.StaticDir, photoConsistencyListLimit)
+	resp.VideosChecked, resp.VideosMissing = scanVideoObjects(ctx.Tx, activeMediaStore())
+	if len(resp.VideosMissing) > 0 {
+		LogWarn(LogCategoryAdmin, "Photo consistency check found videos with missing stored files", map[string]interface{}{
+			"missing": len(resp.VideosMissing),
+		})
+	}
 
 	if resp.MissingCount > 0 {
 		LogWarn(LogCategoryAdmin, "Photo consistency check found image rows with no original on disk", map[string]interface{}{
