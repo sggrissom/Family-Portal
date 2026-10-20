@@ -114,6 +114,7 @@ func addSecurityHeaders(w http.ResponseWriter) {
 		"script-src 'self' 'unsafe-inline'; " +
 		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob:; " +
+		"media-src 'self' blob:; " +
 		"font-src 'self'; " +
 		"connect-src 'self' ws: wss:; " +
 		"frame-ancestors 'none';"

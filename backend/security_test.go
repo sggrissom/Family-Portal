@@ -168,6 +168,7 @@ func TestAddSecurityHeaders(t *testing.T) {
 			"script-src 'self' 'unsafe-inline'",
 			"style-src 'self' 'unsafe-inline'",
 			"img-src 'self' data: blob:",
+			"media-src 'self' blob:",
 			"font-src 'self'",
 			"connect-src 'self'",
 			"frame-ancestors 'none'",
