@@ -21,6 +21,7 @@ func TestRequestSizeLimitWrapper(t *testing.T) {
 		{name: "JSON RPC", path: "/rpc/example", contentType: "application/json; charset=utf-8", limit: maxJSONRequestBytes},
 		{name: "photo upload", path: "/api/upload-photo", contentType: "multipart/form-data; boundary=test", limit: maxPhotoRequestBytes},
 		{name: "family import", path: "/api/import-bundle", contentType: "multipart/form-data; boundary=test", limit: maxImportRequestBytes},
+		{name: "video upload", path: localMediaUploadPrefix + "videos/abc/original.mov", contentType: "video/quicktime", limit: maxVideoBytes},
 	}
 
 	for _, tt := range tests {

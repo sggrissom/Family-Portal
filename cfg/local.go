@@ -14,3 +14,6 @@ const VisionAnalysisSocket = ""
 
 const FamilyStorageQuotaBytes = 10 << 30
 const MinFreeDiskBytes = 1 << 30
+
+const EnableVideo = true
+const MediaDir = ".serve/media/"

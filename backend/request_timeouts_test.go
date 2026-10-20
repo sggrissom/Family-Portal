@@ -21,6 +21,8 @@ func TestRequestDeadlinesByRoute(t *testing.T) {
 		{"family export", "/api/export-bundle", defaultReadTimeout, downloadWriteTimeout},
 		{"database snapshot", SnapshotPath, defaultReadTimeout, downloadWriteTimeout},
 		{"photo download", "/api/photo/1234/medium", defaultReadTimeout, downloadWriteTimeout},
+		{"video upload", localMediaUploadPrefix + "videos/abc/original.mov", mediaUploadReadTimeout, mediaUploadReadTimeout + defaultWriteTimeout},
+		{"video playback", localMediaObjectPrefix + "videos/abc/playback.mp4", defaultReadTimeout, mediaPlaybackWriteTimeout},
 	}
 
 	for _, tt := range tests {
@@ -61,6 +63,7 @@ func TestUploadBudgetsCoverTheirSizeLimits(t *testing.T) {
 	}{
 		{"photo upload", maxPhotoRequestBytes, uploadReadTimeout, mobileUplinkBytesPerSecond},
 		{"family import", maxImportRequestBytes, importReadTimeout, broadbandUplinkBytesPerSecond},
+		{"video upload", maxVideoBytes, mediaUploadReadTimeout, mobileUplinkBytesPerSecond},
 	}
 
 	for _, tc := range cases {

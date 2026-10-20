@@ -16,6 +16,10 @@ const (
 	importReadTimeout = 30 * time.Minute
 
 	downloadWriteTimeout = 30 * time.Minute
+
+	mediaUploadReadTimeout = mediaUploadTTL
+
+	mediaPlaybackWriteTimeout = 2 * time.Hour
 )
 
 func requestDeadlines(r *http.Request) (read, write time.Duration) {
@@ -30,6 +34,13 @@ func requestDeadlines(r *http.Request) (read, write time.Duration) {
 		return importReadTimeout, defaultWriteTimeout
 	case "/api/export-bundle", SnapshotPath:
 		return defaultReadTimeout, downloadWriteTimeout
+	}
+
+	if strings.HasPrefix(r.URL.Path, localMediaUploadPrefix) {
+		return mediaUploadReadTimeout, mediaUploadReadTimeout+defaultWriteTimeout
+	}
+	if strings.HasPrefix(r.URL.Path, localMediaObjectPrefix) {
+		return defaultReadTimeout, mediaPlaybackWriteTimeout
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/api/photo/") {
