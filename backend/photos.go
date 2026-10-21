@@ -174,6 +174,14 @@ type Image struct {
 	AnalysisStatus   int       `json:"analysisStatus"`
 	AnalysisVersion  int       `json:"-"`
 	TagIds           []int     `json:"tagIds,omitempty"`
+	MediaKind        MediaKind `json:"mediaKind"`
+	DurationMs       int       `json:"durationMs,omitempty"`
+	VideoCodec       string    `json:"videoCodec,omitempty"`
+	AudioCodec       string    `json:"audioCodec,omitempty"`
+	ProcessingError  string    `json:"processingError,omitempty"`
+	OriginalKey      string    `json:"-"`
+	PlaybackKey      string    `json:"-"`
+	DerivedBytes     int       `json:"-"`
 }
 
 type PhotoPerson struct {
@@ -186,7 +194,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(4, buf)
+	version := vpack.Version(5, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -206,6 +214,16 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	}
 	if version >= 4 {
 		vpack.Int(&self.AnalysisVersion, buf)
+	}
+	if version >= 5 {
+		vpack.IntEnum(&self.MediaKind, buf)
+		vpack.Int(&self.DurationMs, buf)
+		vpack.String(&self.VideoCodec, buf)
+		vpack.String(&self.AudioCodec, buf)
+		vpack.String(&self.ProcessingError, buf)
+		vpack.String(&self.OriginalKey, buf)
+		vpack.String(&self.PlaybackKey, buf)
+		vpack.Int(&self.DerivedBytes, buf)
 	}
 }
 

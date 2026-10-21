@@ -141,7 +141,7 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	images := GetFamilyImages(tx, familyId)
 	result := make([]ExportPhoto, 0, len(images))
 	for _, img := range images {
-		if img.Status != 0 {
+		if img.Status != 0 || img.IsVideo() {
 			continue
 		}
 		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))

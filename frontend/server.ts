@@ -27,6 +27,10 @@ export type MeasurementType = number;
 export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
 
+export type MediaKind = number;
+export const MediaPhoto: MediaKind = 0;
+export const MediaVideo: MediaKind = 1;
+
 export type RelationKind = number;
 export const RelationParent: RelationKind = 0;
 export const RelationSibling: RelationKind = 1;
@@ -1370,6 +1374,7 @@ export interface GetPhotoStatsRequest {
 
 export interface GetPhotoStatsResponse {
     totalPhotos: number
+    totalVideos: number
     processedPhotos: number
     pendingPhotos: number
     analysisPending: number
@@ -1882,6 +1887,11 @@ export interface Image {
     status: number
     analysisStatus: number
     tagIds: number[]
+    mediaKind: MediaKind
+    durationMs: number
+    videoCodec: string
+    audioCodec: string
+    processingError: string
 }
 
 export interface Interview {

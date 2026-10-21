@@ -74,6 +74,7 @@ export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.GetPhotoStatsResponse>({
       totalPhotos: 0,
+      totalVideos: 0,
       processedPhotos: 0,
       pendingPhotos: 0,
       analysisPending: 0,

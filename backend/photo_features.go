@@ -277,7 +277,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 		img = GetImageById(tx, photoId)
 		current, found = GetPhotoFeatures(tx, photoId)
 	})
-	if img.Id == 0 || img.Status != 0 || !featuresOutdated(current, found) {
+	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !featuresOutdated(current, found) {
 		return
 	}
 
@@ -331,7 +331,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 func photosNeedingFeatures(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, img Image) bool {
-			if img.Status == 0 {
+			if img.Status == 0 && !img.IsVideo() {
 				f, found := GetPhotoFeatures(tx, img.Id)
 				if featuresOutdated(f, found) {
 					ids = append(ids, img.Id)

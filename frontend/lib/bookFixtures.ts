@@ -101,6 +101,11 @@ function photos(list: P[]): server.Image[] {
     status: 0,
     analysisStatus: 0,
     tagIds: [],
+    mediaKind: server.MediaPhoto,
+    durationMs: 0,
+    videoCodec: "",
+    audioCodec: "",
+    processingError: "",
   }));
 }
 
