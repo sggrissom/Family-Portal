@@ -477,7 +477,7 @@ const Groups = ({
                 href={viewPhotoRoute(p.image.id, true, matchStartMs(p))}
                 className="search-photo has-video-badge"
                 data-result
-                title={p.image.title || undefined}
+                title={p.match?.snippet || p.image.title || undefined}
                 onClick={e => {
                   e.preventDefault();
                   openPhoto(state, photos, p);
@@ -489,6 +489,9 @@ const Groups = ({
                   frameMs={matchStartMs(p)}
                 />
                 <VideoBadge image={p.image} />
+                {p.match?.snippet && (
+                  <span className="search-photo-snippet">“{p.match.snippet}”</span>
+                )}
               </a>
             ))}
           </div>

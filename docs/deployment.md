@@ -337,6 +337,28 @@ up, down, or not configured under
 version; a new model or a bump of `embeddingVersion` re-embeds the library in
 the background.
 
+## Video transcripts
+
+Transcripts come from whisper.cpp, run by the app as a command (like ffmpeg),
+not a daemon. It has to be built on a box, because a build from a newer
+distro needs a newer glibc than the servers have (staging is Ubuntu 24.04,
+glibc 2.39; it already has git, cmake and g++):
+
+```bash
+make speech-models DEPLOY_HOST=vps   # build + ~490 MB into /srv/apps/family/shared/models/whisper
+```
+
+`scripts/install-speech.sh` pins the whisper.cpp release and the model
+checksums, builds every x86 CPU variant (ggml picks one at run time), and
+finishes by transcribing a sample, so a broken build fails there rather than
+in the app. Re-running keeps a working build. Restart the app afterwards; it
+looks for `bin/whisper-cli` and `ggml-small.en.bin` in `cfg.SpeechModelsDir`
+at startup and logs why when transcription is off.
+
+A transcription uses two threads and up to about 750 MB while it runs, one
+video at a time. On the laptop `small.en` takes about 0.6× the clip's length;
+expect slower on staging's older CPU.
+
 ## Host metrics
 
 `/admin` shows a Host card and folds disk pressure and proxy-measured 5xx into

@@ -43,6 +43,7 @@ type ViewPhotoData = {
   childId: number;
   compareHref: string;
   playback: server.GetVideoPlaybackResponse | null;
+  transcript: server.GetVideoTranscriptResponse | null;
 };
 
 const CHILD_MAX_MONTHS = 18 * 12;
@@ -72,7 +73,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     ? firstChildIn(photoResp.people ?? [], photoResp.image.photoDate)
     : [0, 0];
   const isVideo = photoResp?.image.mediaKind === server.MediaVideo;
-  const [[tagsResp], [facesResp], [sameAge], [playback]] = await Promise.all([
+  const [[tagsResp], [facesResp], [sameAge], [playback], [transcript]] = await Promise.all([
     server.ListTags({}),
     server.GetPhotoFaces({ photoId }),
     childId
@@ -87,6 +88,9 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     isVideo
       ? server.GetVideoPlayback({ id: photoId })
       : Promise.resolve([null, ""] as rpc.Response<server.GetVideoPlaybackResponse>),
+    isVideo
+      ? server.GetVideoTranscript({ id: photoId })
+      : Promise.resolve([null, ""] as rpc.Response<server.GetVideoTranscriptResponse>),
   ]);
   return [
     {
@@ -102,6 +106,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
         ? compareHref(route, photoResp.people ?? [], photoResp.image.photoDate)
         : "",
       playback: playback ?? null,
+      transcript: transcript ?? null,
     },
     "",
   ];
@@ -151,6 +156,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           childId={data.childId}
           compareHref={data.compareHref}
           playback={data.playback}
+          transcript={data.transcript}
           startAt={routeStartSeconds(route)}
           position={position}
           backRoute={sequence?.backRoute || "/photos"}
@@ -172,6 +178,7 @@ interface ViewPhotoPageProps {
   childId: number;
   compareHref: string;
   playback: server.GetVideoPlaybackResponse | null;
+  transcript: server.GetVideoTranscriptResponse | null;
   startAt: number;
   position: SequencePosition | null;
   backRoute: string;
@@ -540,6 +547,7 @@ const ViewPhotoPage = ({
   childId,
   compareHref,
   playback,
+  transcript,
   startAt,
   position,
   backRoute,
@@ -586,7 +594,12 @@ const ViewPhotoPage = ({
         onTouchEnd={position ? e => handleTouchEnd(position, e) : undefined}
       >
         {isVideo ? (
-          <VideoPlayer photo={photo} playback={playback} startAt={startAt} />
+          <VideoPlayer
+            photo={photo}
+            playback={playback}
+            startAt={startAt}
+            transcript={transcript}
+          />
         ) : (
           <FullImage
             photoId={photo.id}

@@ -8,6 +8,7 @@ import { FullImage } from "./ResponsiveImage";
 import { usePhotoStatus, Status } from "../hooks/usePhotoStatus";
 import { canProbablyPlay, classifyPlaybackError, type PlaybackProblem } from "../lib/videoPlayback";
 import { uploadUrl } from "../lib/videoUpload";
+import { VideoTranscript } from "./VideoTranscript";
 import "./video-styles";
 
 type PlayerState = {
@@ -21,6 +22,7 @@ type PlayerState = {
   playing: boolean;
   renewals: number;
   watching: boolean;
+  element: HTMLVideoElement | null;
 };
 
 const usePlayerState = vlens.declareHook(
@@ -35,6 +37,7 @@ const usePlayerState = vlens.declareHook(
     playing: false,
     renewals: 0,
     watching: false,
+    element: null,
   })
 );
 
@@ -136,14 +139,23 @@ const DownloadLink = ({ playback }: { playback: server.GetVideoPlaybackResponse 
     </a>
   ) : null;
 
+function seek(state: PlayerState, seconds: number) {
+  const video = state.element;
+  if (!video) return;
+  video.currentTime = seconds;
+  video.play().catch(() => {});
+}
+
 export const VideoPlayer = ({
   photo,
   playback,
   startAt = 0,
+  transcript = null,
 }: {
   photo: server.Image;
   playback: server.GetVideoPlaybackResponse | null;
   startAt?: number;
+  transcript?: server.GetVideoTranscriptResponse | null;
 }) => {
   const state = usePlayerState();
   if (state.photoId !== photo.id) {
@@ -158,8 +170,17 @@ export const VideoPlayer = ({
       playing: false,
       renewals: 0,
       watching: false,
+      element: null,
     });
   }
+  const transcriptPanel = (
+    <VideoTranscript
+      photoId={photo.id}
+      transcript={transcript}
+      position={state.position}
+      onSeek={seconds => seek(state, seconds)}
+    />
+  );
 
   const photoStatus = usePhotoStatus();
   const status = photoStatus.getStatus(photo.id);
@@ -227,6 +248,7 @@ export const VideoPlayer = ({
             </button>
           )}
         </div>
+        {transcriptPanel}
       </div>
     );
   }
@@ -235,6 +257,9 @@ export const VideoPlayer = ({
     <div className="video-player">
       <video
         key={p.playbackUrl}
+        ref={el => {
+          state.element = el;
+        }}
         src={uploadUrl(p.playbackUrl)}
         poster={photo.filePath ? `/api/photo/${photo.id}/xlarge` : undefined}
         controls
@@ -247,7 +272,16 @@ export const VideoPlayer = ({
         onTimeUpdate={e => onProgress(state, e)}
         onPlay={e => onProgress(state, e)}
         onPause={e => onProgress(state, e)}
-      />
+      >
+        {transcript?.captionUrl && (
+          <track
+            kind="captions"
+            src={transcript.captionUrl}
+            srcLang={transcript.language || "en"}
+            label={transcript.automatic ? "English (automatic)" : "English"}
+          />
+        )}
+      </video>
       {state.problem === "network" && (
         <p className="video-player-note" role="alert">
           <strong>Playback stopped</strong>
@@ -257,6 +291,7 @@ export const VideoPlayer = ({
           </button>
         </p>
       )}
+      {transcriptPanel}
     </div>
   );
 };

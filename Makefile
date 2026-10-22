@@ -1,6 +1,6 @@
 -include .env.mk
 
-.PHONY: all build build-vision deploy-vision vision-models deploy smoke e2e test test-frontend test-ui test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
+.PHONY: all build build-vision deploy-vision vision-models speech-models deploy smoke e2e test test-frontend test-ui test-race test-coverage local seed seed-fresh typecheck lint format check check-css check-clean
 all: local
 
 # ── deployment settings ────────────────────────────────────────────────────────
@@ -92,6 +92,14 @@ vision-models:
 	scp scripts/fetch-vision-models.sh $(DEPLOY_HOST):/tmp/fetch-vision-models.sh
 	ssh $(DEPLOY_HOST) "sudo mkdir -p $(VISION_MODELS_DIR) && sudo chown apps:apps $(VISION_MODELS_DIR) && \
 	  sudo -u apps bash /tmp/fetch-vision-models.sh $(VISION_MODELS_DIR) && rm /tmp/fetch-vision-models.sh"
+
+# Build whisper.cpp and fetch its models on the server, into cfg.SpeechModelsDir.
+# The app picks transcription up on its next start.
+SPEECH_MODELS_DIR ?= /srv/apps/family/shared/models/whisper
+speech-models:
+	scp scripts/install-speech.sh $(DEPLOY_HOST):/tmp/install-speech.sh
+	ssh $(DEPLOY_HOST) "sudo mkdir -p $(SPEECH_MODELS_DIR) && sudo chown apps:apps $(SPEECH_MODELS_DIR) && \
+	  sudo -u apps bash /tmp/install-speech.sh $(SPEECH_MODELS_DIR) && rm /tmp/install-speech.sh"
 
 test:
 	go test ./backend/ ./vision/ -v

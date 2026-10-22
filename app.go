@@ -277,6 +277,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterMediaHandlers(app)
 	backend.RegisterVideoUploadMethods(app)
+	backend.RegisterVideoTranscriptMethods(app)
 	backend.RegisterFaceMethods(app)
 	backend.RegisterPlaceMethods(app)
 	backend.RegisterSearchMethods(app)

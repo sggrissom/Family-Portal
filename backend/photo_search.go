@@ -284,11 +284,30 @@ func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(I
 	return out, frameAt, mode
 }
 
-func attachFrameMatches(photos []PhotoWithPeople, frameAt map[int]int) {
-	for i := range photos {
-		if at, ok := frameAt[photos[i].Image.Id]; ok {
-			photos[i].Match = &MediaMatch{Source: MatchFrame, OffsetMs: at}
+// mediaMatches says where in each video of page the query matched: a line of
+// its transcript holding the words, or else its best frame.
+func mediaMatches(tx *vbolt.Tx, page []Image, frameAt map[int]int, terms []string) map[int]*MediaMatch {
+	matches := map[int]*MediaMatch{}
+	for _, image := range page {
+		if !image.IsVideo() {
+			continue
 		}
+		if t, ok := GetVideoTranscriptRecord(tx, image.Id); ok {
+			if s, ok := transcriptMatch(t, terms); ok {
+				matches[image.Id] = &MediaMatch{Source: MatchTranscript, OffsetMs: s.StartMs, Snippet: s.Text}
+				continue
+			}
+		}
+		if at, ok := frameAt[image.Id]; ok {
+			matches[image.Id] = &MediaMatch{Source: MatchFrame, OffsetMs: at}
+		}
+	}
+	return matches
+}
+
+func attachMatches(photos []PhotoWithPeople, matches map[int]*MediaMatch) {
+	for i := range photos {
+		photos[i].Match = matches[photos[i].Image.Id]
 	}
 }
 
@@ -321,7 +340,7 @@ func photoHasEveryone(tx *vbolt.Tx, photoId int, personIds []int) bool {
 
 // searchPhotos ranks every photo in the listing that shows all the people
 // named in the query, and pages through the ranking by offset.
-func searchPhotos(l photoListing, query string, offset int, limit int) (page []Image, nextCursor string, matched []int, mode string, frameAt map[int]int) {
+func searchPhotos(l photoListing, query string, offset int, limit int) (page []Image, nextCursor string, matched []int, mode string, matches map[int]*MediaMatch) {
 	matched, query = peopleInQuery(GetVisiblePeople(l.tx, l.user), query)
 	if len(l.personIds) == 0 && len(matched) > 0 {
 		l.personIds = matched[:1]
@@ -331,8 +350,10 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 		return l.passes(image) && photoHasEveryone(l.tx, image.Id, matched)
 	}
 	var candidates []Image
+	var frameAt map[int]int
+	var terms []string
 	if query != "" {
-		terms := searchTerms(query)
+		terms = searchTerms(query)
 		candidates, frameAt, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
 	} else {
 		l.read(l.newest, func(image Image) bool {
@@ -352,5 +373,6 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 	if offset < end {
 		page = candidates[offset:end]
 	}
+	matches = mediaMatches(l.tx, page, frameAt, terms)
 	return
 }

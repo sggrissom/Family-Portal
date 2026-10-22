@@ -7,6 +7,12 @@ export const StatedParent: StatedRelation = 2;
 export const StatedSibling: StatedRelation = 3;
 export const StatedPartner: StatedRelation = 4;
 
+export type TranscriptStatus = number;
+export const TranscriptDone: TranscriptStatus = 0;
+export const TranscriptNoSpeech: TranscriptStatus = 1;
+export const TranscriptFailed: TranscriptStatus = 2;
+export const TranscriptRemoved: TranscriptStatus = 3;
+
 export type AccessLevel = number;
 export const AccessNone: AccessLevel = 0;
 export const AccessView: AccessLevel = 1;
@@ -80,6 +86,7 @@ export const ErrVideoUploadExpired = "This upload expired before it finished. Pl
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrMediaNotFound = "media object not found";
 export const ErrVideoNotFound = "Video not found or access denied";
+export const ErrTranscriptNotFound = "Transcript not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -1155,6 +1162,26 @@ export interface VideoProcessingStats {
 
 export interface RetryFailedVideosResponse {
     queued: number
+}
+
+export interface GetVideoTranscriptRequest {
+    id: number
+}
+
+export interface GetVideoTranscriptResponse {
+    available: boolean
+    status: TranscriptStatus
+    pending: boolean
+    automatic: boolean
+    language: string
+    segments: TranscriptSegment[]
+    canEdit: boolean
+    captionUrl: string
+}
+
+export interface UpdateVideoTranscriptRequest {
+    id: number
+    texts: string[]
 }
 
 export interface GetFaceReviewRequest {
@@ -2253,6 +2280,13 @@ export interface VideoAttempt {
     reason: string
 }
 
+export interface TranscriptSegment {
+    startMs: number
+    endMs: number
+    text: string
+    confidence: number
+}
+
 export interface FaceGroup {
     familyId: number
     faces: PhotoFace[]
@@ -2870,6 +2904,7 @@ export interface EventSummary {
 export interface MediaMatch {
     source: string
     offsetMs: number
+    snippet: string
 }
 
 export interface FaceBox {
@@ -2918,6 +2953,7 @@ export interface ExportVideo {
     person_ids: number[]
     tag_ids: number[]
     available: boolean
+    transcript: ExportTranscript | null
 }
 
 export interface PerformanceStats {
@@ -3003,6 +3039,12 @@ export interface BookInterviewChange {
     questionId: number
     before: string
     after: string
+}
+
+export interface ExportTranscript {
+    automatic: boolean
+    language: string
+    segments: TranscriptSegment[]
 }
 
 export interface EndpointStats {
@@ -3449,6 +3491,18 @@ export async function GetVideoProcessingStats(data: Empty): Promise<rpc.Response
 
 export async function RetryFailedVideos(data: Empty): Promise<rpc.Response<RetryFailedVideosResponse>> {
     return await rpc.call<RetryFailedVideosResponse>('RetryFailedVideos', JSON.stringify(data));
+}
+
+export async function GetVideoTranscript(data: GetVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('GetVideoTranscript', JSON.stringify(data));
+}
+
+export async function UpdateVideoTranscript(data: UpdateVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('UpdateVideoTranscript', JSON.stringify(data));
+}
+
+export async function RemoveVideoTranscript(data: GetVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('RemoveVideoTranscript', JSON.stringify(data));
 }
 
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {

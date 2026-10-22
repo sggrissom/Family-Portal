@@ -41,6 +41,13 @@ func TestExportListsVideoOriginals(t *testing.T) {
 	failedKept := fx.storedVideo(t, "IMG_0002.MOV", 2)
 	processing := fx.storedVideo(t, "IMG_0003.MOV", 1)
 	fx.addPhotoAt(t, "still.jpg", featuresEpoch)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		writeVideoTranscriptTx(tx, &VideoTranscript{
+			ImageId: ready.Id, FamilyId: ready.FamilyId, Status: TranscriptDone, EditedBy: fx.owner.Id,
+			Segments: []TranscriptSegment{{StartMs: 1000, EndMs: 2000, Text: "Look at me!"}},
+		})
+		vbolt.TxCommit(tx)
+	})
 
 	resp, err := callAs(t, fx.resultsFixture, ExportData, ExportDataRequest{})
 	if err != nil {
@@ -66,6 +73,12 @@ func TestExportListsVideoOriginals(t *testing.T) {
 	}
 	if byId[failedKept.Id].Available {
 		t.Fatal("a failed video is marked available")
+	}
+	if tr := got.Transcript; tr == nil || tr.Automatic || len(tr.Segments) != 1 || tr.Segments[0].Text != "Look at me!" {
+		t.Fatalf("exported transcript %+v", tr)
+	}
+	if byId[failedKept.Id].Transcript != nil {
+		t.Fatal("a video without a transcript exported one")
 	}
 }
 
