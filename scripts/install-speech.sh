@@ -20,6 +20,7 @@ verified() {
 }
 
 mkdir -p "$dest"
+cd "$dest"
 for entry in "${files[@]}"; do
   read -r name url sha <<<"$entry"
   target="$dest/$name"
