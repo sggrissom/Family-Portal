@@ -70,12 +70,38 @@ func activeMediaStore() MediaStore {
 	return mediaStore
 }
 
+var mediaStoreProblem string
+
+// InitializeMediaStore picks the bucket when MEDIA_S3_* is set and local disk
+// otherwise. Incomplete bucket settings leave video unavailable rather than
+// quietly filling the local disk.
 func InitializeMediaStore() {
 	if mediaStore != nil {
 		return
 	}
-	store, err := newLocalMediaStore(localMediaRoot(), mediaSigningKey())
+	var store MediaStore
+	var err error
+	if c, configured := s3ConfigFromEnv(); configured {
+		var s3 *s3MediaStore
+		s3, err = newS3MediaStore(c)
+		if err == nil {
+			store = s3
+			mediaOrigin = c.origin()
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := s3.checkReachable(ctx); err != nil {
+					LogErrorSimple(LogCategorySystem, "Media bucket is not reachable", map[string]interface{}{
+						"bucket": c.Bucket, "error": err.Error(),
+					})
+				}
+			}()
+		}
+	} else {
+		store, err = newLocalMediaStore(localMediaRoot(), mediaSigningKey())
+	}
 	if err != nil {
+		mediaStoreProblem = err.Error()
 		LogErrorSimple(LogCategorySystem, "Media storage is unavailable; video is disabled", map[string]interface{}{
 			"error": err.Error(),
 		})
