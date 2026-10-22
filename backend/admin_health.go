@@ -39,6 +39,17 @@ type PhotoProblems struct {
 	QueueLength    int  `json:"queueLength"`
 }
 
+type VideoProblems struct {
+	Enabled       bool   `json:"enabled"`
+	Available     bool   `json:"available"`
+	Reason        string `json:"reason"`
+	QueueLength   int    `json:"queueLength"`
+	Failed        int    `json:"failed"`
+	Rejected      int    `json:"rejected"`
+	Stuck         int    `json:"stuck"`
+	FailedDeletes int    `json:"failedDeletes"`
+}
+
 type PushProblems struct {
 	Failed      int       `json:"failed"`
 	LastError   string    `json:"lastError"`
@@ -76,6 +87,7 @@ type SystemHealthResponse struct {
 	ConfigIssues []ConfigProblem `json:"configIssues"`
 	Logs         LogProblems     `json:"logs"`
 	Photos       PhotoProblems   `json:"photos"`
+	Videos       VideoProblems   `json:"videos"`
 	Push         PushProblems    `json:"push"`
 	Mail         MailProblems    `json:"mail"`
 	Host         HostProblems    `json:"host"`
@@ -154,6 +166,7 @@ func collectSystemHealth(tx *vbolt.Tx) (resp SystemHealthResponse) {
 
 	resp.Logs = collectLogProblems(reviewedLogsThrough(tx))
 	resp.Photos = collectPhotoProblems(tx)
+	resp.Videos = collectVideoProblems(tx)
 
 	host := fetchHostMetrics()
 	if host.Available {
@@ -193,6 +206,10 @@ func collectSystemHealth(tx *vbolt.Tx) (resp SystemHealthResponse) {
 		resp.Photos.Stuck == 0 &&
 		resp.Photos.AnalysisFailed == 0 &&
 		!resp.Photos.WorkerStopped &&
+		resp.Videos.Failed == 0 &&
+		resp.Videos.Stuck == 0 &&
+		resp.Videos.FailedDeletes == 0 &&
+		(!resp.Videos.Enabled || resp.Videos.Available) &&
 		resp.Push.LastError == "" &&
 		resp.Mail.LastError == "" &&
 		!resp.Host.DiskLow &&
@@ -293,6 +310,47 @@ func collectLogProblems(reviewedThrough time.Time) LogProblems {
 	for _, entry := range recent.newestFirst() {
 		problems.RecentErrors = append(problems.RecentErrors, convertToPublicLogEntry(entry))
 	}
+	return problems
+}
+
+const stuckVideoAge = 6 * time.Hour
+
+const failingDeleteAttempts = 3
+
+// A rejected video is the uploader's file, not a fault in the system, so it is
+// counted but does not make the system unhealthy.
+func collectVideoProblems(tx *vbolt.Tx) VideoProblems {
+	stats := GetVideoWorkerStats()
+	problems := VideoProblems{
+		Available:   stats.Available,
+		Reason:      stats.Reason,
+		QueueLength: stats.QueueLength,
+	}
+	vbolt.IterateAll(tx, FamiliesBkt, func(_ int, family Family) bool {
+		problems.Enabled = problems.Enabled || family.VideoEnabled
+		return !problems.Enabled
+	})
+	stuckBefore := time.Now().Add(-stuckVideoAge)
+	vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
+		if !image.IsVideo() {
+			return true
+		}
+		switch {
+		case image.Status == 2 && image.OriginalKey != "":
+			problems.Failed++
+		case image.Status == 2:
+			problems.Rejected++
+		case image.Status == 1 && image.CreatedAt.Before(stuckBefore):
+			problems.Stuck++
+		}
+		return true
+	})
+	vbolt.IterateAll(tx, MediaDeletionBkt, func(_ int, d MediaDeletion) bool {
+		if d.Attempts >= failingDeleteAttempts {
+			problems.FailedDeletes++
+		}
+		return true
+	})
 	return problems
 }
 

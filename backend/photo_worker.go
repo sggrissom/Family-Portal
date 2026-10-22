@@ -293,14 +293,35 @@ func (pw *PhotoWorker) discardJobFiles(job PhotoProcessingJob) {
 }
 
 func (pw *PhotoWorker) saveImageVariants(job PhotoProcessingJob, processedImages map[string][]byte) error {
+	if _, err := writeImageVariants(job.FilePath, processedImages); err != nil {
+		return err
+	}
+
+	if len(job.FileData) > 0 {
+		photosDir := filepath.Join(cfg.StaticDir, "photos")
+		baseFilename := strings.TrimSuffix(filepath.Base(job.FilePath), filepath.Ext(job.FilePath))
+		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(job.FilePath))
+		if origFile, err := os.Create(originalPath); err == nil {
+			origFile.Write(job.FileData)
+			origFile.Close()
+		}
+	}
+
+	return nil
+}
+
+// writeImageVariants writes resized variants beside filePath (relative to
+// StaticDir) and returns the bytes written.
+func writeImageVariants(filePath string, processedImages map[string][]byte) (int64, error) {
 	photosDir := filepath.Join(cfg.StaticDir, "photos")
 
 	err := os.MkdirAll(photosDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create photos directory: %w", err)
+		return 0, fmt.Errorf("failed to create photos directory: %w", err)
 	}
 
-	baseFilename := strings.TrimSuffix(filepath.Base(job.FilePath), filepath.Ext(job.FilePath))
+	baseFilename := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+	var written int64
 
 	for key, data := range processedImages {
 		parts := strings.Split(key, "_")
@@ -328,27 +349,20 @@ func (pw *PhotoWorker) saveImageVariants(job PhotoProcessingJob, processedImages
 			fileName = baseFilename + "_" + sizeName + ext
 		}
 
-		filePath := filepath.Join(photosDir, fileName)
-		if file, err := os.Create(filePath); err == nil {
+		variantPath := filepath.Join(photosDir, fileName)
+		if file, err := os.Create(variantPath); err == nil {
 			_, writeErr := file.Write(data)
 			file.Close()
 			if writeErr != nil {
-				return fmt.Errorf("failed to write file %s: %w", filePath, writeErr)
+				return written, fmt.Errorf("failed to write file %s: %w", variantPath, writeErr)
 			}
+			written += int64(len(data))
 		} else {
-			return fmt.Errorf("failed to create file %s: %w", filePath, err)
+			return written, fmt.Errorf("failed to create file %s: %w", variantPath, err)
 		}
 	}
 
-	if len(job.FileData) > 0 {
-		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(job.FilePath))
-		if origFile, err := os.Create(originalPath); err == nil {
-			origFile.Write(job.FileData)
-			origFile.Close()
-		}
-	}
-
-	return nil
+	return written, nil
 }
 
 func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {

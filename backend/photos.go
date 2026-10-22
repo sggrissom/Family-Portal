@@ -881,7 +881,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if image.Status == 1 {
-		serveProcessingPlaceholder(w, r)
+		serveProcessingPlaceholder(w, r, image.IsVideo())
 		return
 	}
 
@@ -898,7 +898,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		"large": true, "xlarge": true, "xxlarge": true, "original": true,
 	}
 
-	if sizeVariant != "" && !validSizes[sizeVariant] {
+	if (sizeVariant != "" && !validSizes[sizeVariant]) || (image.IsVideo() && sizeVariant == "original") {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -1253,7 +1253,11 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	return nil
 }
 
-func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
+func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request, video bool) {
+	label := "Processing image..."
+	if video {
+		label = "Processing video..."
+	}
 	svgContent := `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
 		<rect width="100%" height="100%" fill="#f0f0f0"/>
 		<circle cx="200" cy="120" r="30" fill="#d0d0d0">
@@ -1261,7 +1265,7 @@ func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
 				from="0 200 120" to="360 200 120" dur="1s" repeatCount="indefinite"/>
 		</circle>
 		<text x="200" y="180" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#666">
-			Processing image...
+			` + label + `
 		</text>
 	</svg>`
 

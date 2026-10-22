@@ -183,6 +183,40 @@ var errMediaTooLarge = errors.New("media body exceeds its declared size")
 
 var errMediaIncomplete = errors.New("media body is shorter than its declared size")
 
+func (s *localMediaStore) localPath(key string) (string, error) {
+	return s.path(key)
+}
+
+func (s *localMediaStore) Move(ctx context.Context, src, dst string) error {
+	from, err := s.path(src)
+	if err != nil {
+		return err
+	}
+	to, err := s.path(dst)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0750); err != nil {
+		return err
+	}
+	if err := os.Rename(from, to); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrMediaNotFound
+		}
+		return err
+	}
+	s.pruneEmptyDirs(filepath.Dir(from))
+	return nil
+}
+
+func (s *localMediaStore) pruneEmptyDirs(dir string) {
+	for ; dir != s.root && strings.HasPrefix(dir, s.root); dir = filepath.Dir(dir) {
+		if os.Remove(dir) != nil {
+			break
+		}
+	}
+}
+
 func (s *localMediaStore) Stat(ctx context.Context, key string) (MediaObject, error) {
 	p, err := s.path(key)
 	if err != nil {
@@ -206,11 +240,7 @@ func (s *localMediaStore) Delete(ctx context.Context, key string) error {
 	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	for dir := filepath.Dir(p); dir != s.root && strings.HasPrefix(dir, s.root); dir = filepath.Dir(dir) {
-		if os.Remove(dir) != nil {
-			break
-		}
-	}
+	s.pruneEmptyDirs(filepath.Dir(p))
 	return nil
 }
 
