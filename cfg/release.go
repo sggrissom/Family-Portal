@@ -15,3 +15,6 @@ const VisionAnalysisSocket = "/run/family-vision/vision.sock"
 
 const FamilyStorageQuotaBytes = 10 << 30
 const MinFreeDiskBytes = 1 << 30
+
+const EnableVideo = true
+const MediaDir = "/srv/apps/family/shared/media/"

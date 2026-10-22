@@ -252,6 +252,9 @@ func MakeApplication() *vbeam.Application {
 	var app = vbeam.NewApplication("Family Record", db)
 
 	backend.SetupAuth(app)
+	if cfg.EnableVideo {
+		backend.InitializeMediaStore()
+	}
 	backend.RegisterUserMethods(app)
 	backend.RegisterAccountHandlers(app)
 	backend.RegisterMembershipMethods(app)
@@ -272,6 +275,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterTagMethods(app)
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)
+	backend.RegisterMediaHandlers(app)
 	backend.RegisterFaceMethods(app)
 	backend.RegisterPlaceMethods(app)
 	backend.RegisterSearchMethods(app)

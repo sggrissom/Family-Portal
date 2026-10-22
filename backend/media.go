@@ -1,5 +1,12 @@
 package backend
 
+import "time"
+
+const (
+	maxVideoBytes    = 1 << 30
+	maxVideoDuration = 10 * time.Minute
+)
+
 type MediaKind int
 
 const (

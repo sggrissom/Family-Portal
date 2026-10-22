@@ -29,6 +29,9 @@ func requestBodyLimit(r *http.Request) int64 {
 	case "/api/import-bundle":
 		return maxImportRequestBytes
 	}
+	if strings.HasPrefix(r.URL.Path, localMediaUploadPrefix) {
+		return maxVideoBytes
+	}
 
 	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
 		return maxJSONRequestBytes

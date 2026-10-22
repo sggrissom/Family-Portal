@@ -75,6 +75,8 @@ var prefixPathRules = []struct {
 	rule   RateLimitRule
 }{
 	{prefix: "/api/photo/", rule: rateRulePhotoRead},
+	{prefix: localMediaObjectPrefix, rule: rateRulePhotoRead},
+	{prefix: localMediaUploadPrefix, rule: rateRuleUpload},
 }
 
 func ruleForPath(path string) (RateLimitRule, bool) {
