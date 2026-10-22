@@ -885,7 +885,8 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                       <div className="export-mode-label">
                         <span>With photos</span>
                         <span className="export-mode-desc">
-                          ZIP — all data + original photo files
+                          ZIP — all data + original photo files. Videos are too large for the ZIP;{" "}
+                          <a href="/save-videos">save them separately</a>.
                         </span>
                       </div>
                     </label>

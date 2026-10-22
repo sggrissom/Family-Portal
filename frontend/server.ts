@@ -1448,6 +1448,26 @@ export interface ExportDataResponse {
     jsonData: string
 }
 
+export interface ListVideoOriginalsRequest {
+    familyId: number
+}
+
+export interface ListVideoOriginalsResponse {
+    videos: VideoOriginal[]
+    totalBytes: number
+    expiresAt: string
+}
+
+export interface GetVideoOriginalLinkRequest {
+    id: number
+}
+
+export interface GetVideoOriginalLinkResponse {
+    downloadUrl: string
+    fileName: string
+    expiresAt: string
+}
+
 export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
@@ -1527,6 +1547,8 @@ export interface PhotoConsistencyReport {
     orphans: OrphanOriginal[]
     listLimit: number
     orphanScanErr: string
+    videosChecked: number
+    videosMissing: MissingOriginal[]
 }
 
 export interface GetLogFilesResponse {
@@ -2466,6 +2488,11 @@ export interface PersonMatch {
     confidence: number
 }
 
+export interface VideoOriginal {
+    video: ExportVideo
+    downloadUrl: string
+}
+
 export interface AdminUserInfo {
     id: number
     name: string
@@ -2867,6 +2894,21 @@ export interface BookItem {
     photoId: number
     caption: string
     pinned: boolean
+}
+
+export interface ExportVideo {
+    id: number
+    title: string
+    description: string
+    photo_date: string
+    original_filename: string
+    file_name: string
+    mime_type: string
+    file_size: number
+    duration_ms: number
+    person_ids: number[]
+    tag_ids: number[]
+    available: boolean
 }
 
 export interface PerformanceStats {
@@ -3510,6 +3552,14 @@ export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<
 
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
+}
+
+export async function ListVideoOriginals(data: ListVideoOriginalsRequest): Promise<rpc.Response<ListVideoOriginalsResponse>> {
+    return await rpc.call<ListVideoOriginalsResponse>('ListVideoOriginals', JSON.stringify(data));
+}
+
+export async function GetVideoOriginalLink(data: GetVideoOriginalLinkRequest): Promise<rpc.Response<GetVideoOriginalLinkResponse>> {
+    return await rpc.call<GetVideoOriginalLinkResponse>('GetVideoOriginalLink', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

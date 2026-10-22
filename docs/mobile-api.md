@@ -598,6 +598,38 @@ prepares it for playback. Poll `GetPhotoStatus` as for photos. A video that is
 rejected moves to `status: 2` with `processingError` set to a sentence that
 can be shown as is.
 
+### Video playback
+
+Everywhere a photo appears, a video appears as its **poster**: `/api/photo/<id>/<variant>`
+returns a still frame like any photo (`original` is 404 for a video). Show a
+play badge from `mediaKind` and `durationMs`.
+
+To play, call **`GetVideoPlayback`** `{id}` →
+`{status, playbackUrl, mimeType, downloadUrl, originalFilename, expiresAt, processingError}`.
+
+- `playbackUrl` is set only when `status` is 0. It is a progressive MP4 with
+  its index at the front, so it streams and seeks with range requests. Hand it
+  to the player as is, **without** the bearer token or cookies; a relative URL
+  is relative to the API origin.
+- `mimeType` carries the codecs (`video/mp4; codecs="hvc1.1.6.L93.B0, mp4a.40.2"`).
+  iOS plays H.264 and HEVC; on other platforms treat a negative capability
+  answer as "offer the download", not as an error.
+- Links last six hours, long enough for a viewing session. When playback fails
+  with a 403 (or after `expiresAt`), call `GetVideoPlayback` again and resume
+  at the same position. Never store a link.
+- `downloadUrl` is the untouched original, as uploaded. It is present when the
+  original is still kept — including for a video whose processing failed —
+  and absent for one that was rejected.
+
+### Saving every original
+
+The family export's `data.json` lists videos under `videos`, with stable ids,
+metadata, and a `file_name` unique within the family. The files are not in the
+ZIP. **`ListVideoOriginals`** `{familyId?}` returns every original with a
+download link that expires; **`GetVideoOriginalLink`** `{id}` returns a fresh
+link for one file, named `file_name`. A client saving many files should ask
+for a fresh link whenever one has lapsed rather than restarting the whole set.
+
 ---
 
 ## 9. Chat and the WebSocket
