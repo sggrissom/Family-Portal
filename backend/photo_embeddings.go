@@ -204,7 +204,7 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 		img = GetImageById(tx, photoId)
 		current, found = GetPhotoEmbedding(tx, photoId)
 	})
-	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !embeddingOutdated(current, found) {
+	if img.Id == 0 || img.Status != 0 || !embeddingOutdated(current, found) {
 		return nil
 	}
 
@@ -249,7 +249,7 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 func photosNeedingEmbedding(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, img Image) bool {
-			if img.Status == 0 && !img.IsVideo() {
+			if img.Status == 0 {
 				e, found := GetPhotoEmbedding(tx, img.Id)
 				if embeddingOutdated(e, found) {
 					ids = append(ids, img.Id)

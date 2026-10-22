@@ -282,7 +282,7 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 			targets = suggestionTargets(tx, img.FamilyId)
 		}
 	})
-	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !found || embeddingOutdated(embedding, true) || !outdated {
+	if img.Id == 0 || img.Status != 0 || !found || embeddingOutdated(embedding, true) || !outdated {
 		return nil
 	}
 
@@ -395,6 +395,7 @@ type GetTagSuggestionsResponse struct {
 	Enabled bool              `json:"enabled"`
 	Groups  []SuggestionGroup `json:"groups"`
 	Total   int               `json:"total"`
+	Videos  []Image           `json:"videos"`
 }
 
 func isCatalogLabel(name string) bool {
@@ -423,6 +424,8 @@ func GetTagSuggestions(ctx *vbeam.Context, req Empty) (resp GetTagSuggestionsRes
 	}
 	resp.Enabled = globalVisionClient != nil
 	resp.Groups = []SuggestionGroup{}
+	resp.Videos = []Image{}
+	videos := map[int]bool{}
 	for _, familyId := range familiesVisibleTo(ctx.Tx, user) {
 		if !CanAccessFamily(ctx.Tx, user, familyId, AccessContribute) {
 			continue
@@ -430,8 +433,13 @@ func GetTagSuggestions(ctx *vbeam.Context, req Empty) (resp GetTagSuggestionsRes
 		byKey := map[string]*SuggestionGroup{}
 		var order []string
 		for _, s := range pendingFamilySuggestions(ctx.Tx, familyId) {
-			if img := GetImageById(ctx.Tx, s.PhotoId); img.Id == 0 || img.Status != 0 {
+			img := GetImageById(ctx.Tx, s.PhotoId)
+			if img.Id == 0 || img.Status != 0 {
 				continue
+			}
+			if img.IsVideo() && !videos[img.Id] {
+				videos[img.Id] = true
+				resp.Videos = append(resp.Videos, img)
 			}
 			key := fmt.Sprintf("%d/%s", familyId, suggestionKeyOf(s))
 			g := byKey[key]

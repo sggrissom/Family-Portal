@@ -340,6 +340,7 @@ func (w *videoWorker) process(imageId int) error {
 		return nil
 	}
 
+	QueuePhotoEmbedding(imageId)
 	w.record(imageId, start, "ready", "")
 	log.Printf("[VIDEO] Video %d ready in %v (%s, %s)", imageId, time.Since(start), probe.VideoMime, probe.Duration)
 	return nil
