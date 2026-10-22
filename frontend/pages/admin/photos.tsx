@@ -97,6 +97,8 @@ export async function fetch(route: string, prefix: string) {
       embeddingsPending: 0,
       visionQueue: 0,
       visionStatus: "off",
+      videoFramesDone: 0,
+      videoFramesQueue: 0,
     });
   }
 
@@ -748,6 +750,12 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                   ? "Vision daemon not configured"
                   : `${data.embeddingsPending.toLocaleString()} pending (${data.visionQueue} queued), daemon ${data.visionStatus}`}
               </div>
+              {data.totalVideos > 0 && data.visionStatus !== "off" && (
+                <div className="admin-stat-label">
+                  Video frames: {data.videoFramesDone.toLocaleString()} of{" "}
+                  {data.totalVideos.toLocaleString()} videos ({data.videoFramesQueue} queued)
+                </div>
+              )}
             </div>
           </div>
 

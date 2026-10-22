@@ -25,6 +25,7 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import {
   loadSequence,
   routeHasSequence,
+  routeStartSeconds,
   sequencePosition,
   swipeDirection,
   viewPhotoRoute,
@@ -150,6 +151,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           childId={data.childId}
           compareHref={data.compareHref}
           playback={data.playback}
+          startAt={routeStartSeconds(route)}
           position={position}
           backRoute={sequence?.backRoute || "/photos"}
         />
@@ -170,6 +172,7 @@ interface ViewPhotoPageProps {
   childId: number;
   compareHref: string;
   playback: server.GetVideoPlaybackResponse | null;
+  startAt: number;
   position: SequencePosition | null;
   backRoute: string;
 }
@@ -537,6 +540,7 @@ const ViewPhotoPage = ({
   childId,
   compareHref,
   playback,
+  startAt,
   position,
   backRoute,
 }: ViewPhotoPageProps) => {
@@ -582,7 +586,7 @@ const ViewPhotoPage = ({
         onTouchEnd={position ? e => handleTouchEnd(position, e) : undefined}
       >
         {isVideo ? (
-          <VideoPlayer photo={photo} playback={playback} />
+          <VideoPlayer photo={photo} playback={playback} startAt={startAt} />
         ) : (
           <FullImage
             photoId={photo.id}

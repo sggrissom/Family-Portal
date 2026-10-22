@@ -65,7 +65,7 @@ export function historyView(
     if (wantType("photos")) {
       for (const image of item.photos ?? []) {
         if (!shown(image.photoDate) || !tagged(image.tagIds)) continue;
-        const entry = photos.get(image.id) ?? { image, people: [], similar: [] };
+        const entry = photos.get(image.id) ?? { image, people: [], similar: [], match: null };
         entry.people.push(person);
         photos.set(image.id, entry);
       }
@@ -75,7 +75,7 @@ export function historyView(
   if (wantType("photos") && filters.personIds.length === 0) {
     for (const image of timeline.untaggedPhotos ?? []) {
       if (shown(image.photoDate) && tagged(image.tagIds)) {
-        records.photos.push({ image, people: [], similar: [] });
+        records.photos.push({ image, people: [], similar: [], match: null });
       }
     }
   }

@@ -441,7 +441,12 @@ const StoryTab = ({
   const hasPreview = data.insights.growingUp.length > 1;
   const days = summarizeDays(
     {
-      photos: (data.person.photos ?? []).map(image => ({ image, people: [], similar: [] })),
+      photos: (data.person.photos ?? []).map(image => ({
+        image,
+        people: [],
+        similar: [],
+        match: null,
+      })),
       growth: data.person.growthData ?? [],
       milestones: data.person.milestones ?? [],
       appearances: (data.activities.appearances ?? []).map(detail => ({

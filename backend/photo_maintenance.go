@@ -48,6 +48,8 @@ type GetPhotoStatsResponse struct {
 	EmbeddingsPending int    `json:"embeddingsPending"`
 	VisionQueue       int    `json:"visionQueue"`
 	VisionStatus      string `json:"visionStatus"`
+	VideoFramesDone   int    `json:"videoFramesDone"`
+	VideoFramesQueue  int    `json:"videoFramesQueue"`
 }
 
 type ReprocessAllPhotosRequest struct{}
@@ -65,6 +67,9 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
 		if image.IsVideo() {
 			resp.TotalVideos++
+			if _, found := GetVideoFrames(ctx.Tx, image.Id); found {
+				resp.VideoFramesDone++
+			}
 			return true
 		}
 		allPhotos = append(allPhotos, image)
@@ -111,6 +116,7 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 
 	resp.FeaturesQueue = FeaturesQueueLength()
 	resp.VisionQueue = VisionQueueLength()
+	resp.VideoFramesQueue = VideoAnalysisQueueLength()
 	resp.VisionStatus = VisionStatus()
 	groupSizes := map[int]int{}
 	vbolt.IterateAll(ctx.Tx, PhotoFeaturesBkt, func(_ int, f PhotoFeatures) bool {

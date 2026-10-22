@@ -2,7 +2,6 @@ package backend
 
 import (
 	"errors"
-	"family/vision"
 	"fmt"
 	"sort"
 	"strconv"
@@ -225,19 +224,21 @@ type scoredPhoto struct {
 // rankPhotoQuery orders the listing's photos that keep accepts by similarity
 // to the query, keeping those within searchWindow of the best match and above
 // searchMinScore, plus the text hits. Without the daemon, only the text hits
-// remain. Only photos that can make the cut are loaded.
-func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(Image) bool) ([]Image, string) {
+// remain. Only photos that can make the cut are loaded. A video scores as its
+// poster or its best frame, and frameAt holds that frame's offset.
+func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(Image) bool) ([]Image, map[int]int, string) {
 	mode := "semantic"
 	vector, err := embedQuery(query)
 	if err != nil {
 		mode = "text"
 	}
+	frameAt := map[int]int{}
 	similarity := func(familyId int, photoId int) (float64, bool) {
-		v, ok := vectorsForFamily(l.tx, familyId)[photoId]
-		if !ok {
-			return 0, false
+		score, at, fromFrame, known := mediaSimilarity(l.tx, familyId, photoId, vector)
+		if fromFrame {
+			frameAt[photoId] = at
 		}
-		return float64(vision.Dot(vector, v)), true
+		return score, known
 	}
 	own := familiesVisibleTo(l.tx, l.user)
 
@@ -280,7 +281,15 @@ func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(I
 			out = append(out, s.image)
 		}
 	}
-	return out, mode
+	return out, frameAt, mode
+}
+
+func attachFrameMatches(photos []PhotoWithPeople, frameAt map[int]int) {
+	for i := range photos {
+		if at, ok := frameAt[photos[i].Image.Id]; ok {
+			photos[i].Match = &MediaMatch{Source: MatchFrame, OffsetMs: at}
+		}
+	}
 }
 
 func parseSearchCursor(cursor string) (int, error) {
@@ -312,7 +321,7 @@ func photoHasEveryone(tx *vbolt.Tx, photoId int, personIds []int) bool {
 
 // searchPhotos ranks every photo in the listing that shows all the people
 // named in the query, and pages through the ranking by offset.
-func searchPhotos(l photoListing, query string, offset int, limit int) (page []Image, nextCursor string, matched []int, mode string) {
+func searchPhotos(l photoListing, query string, offset int, limit int) (page []Image, nextCursor string, matched []int, mode string, frameAt map[int]int) {
 	matched, query = peopleInQuery(GetVisiblePeople(l.tx, l.user), query)
 	if len(l.personIds) == 0 && len(matched) > 0 {
 		l.personIds = matched[:1]
@@ -324,7 +333,7 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 	var candidates []Image
 	if query != "" {
 		terms := searchTerms(query)
-		candidates, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
+		candidates, frameAt, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
 	} else {
 		l.read(l.newest, func(image Image) bool {
 			if keep(image) {
