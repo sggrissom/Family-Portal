@@ -21,10 +21,14 @@ func FrameInterval(duration time.Duration) time.Duration {
 
 // FrameSelectFilter keeps the first frame, a frame every FrameInterval, and
 // every scene cut. showinfo logs each kept frame's time to stderr, in the
-// order ffmpeg writes them.
-func FrameSelectFilter(duration time.Duration) string {
-	return fmt.Sprintf("select='isnan(prev_selected_t)+gte(t-prev_selected_t,%.3f)+gt(scene,%.2f)',showinfo,scale=%d:-2",
-		FrameInterval(duration).Seconds(), sceneThreshold, FrameWidth)
+// order ffmpeg writes them. convert, if any, runs on the kept frames only.
+func FrameSelectFilter(duration time.Duration, convert string) string {
+	filter := fmt.Sprintf("select='isnan(prev_selected_t)+gte(t-prev_selected_t,%.3f)+gt(scene,%.2f)',showinfo,",
+		FrameInterval(duration).Seconds(), sceneThreshold)
+	if convert != "" {
+		filter += convert + ","
+	}
+	return filter + fmt.Sprintf("scale=%d:-2", FrameWidth)
 }
 
 var showinfoFrame = regexp.MustCompile(`\bn:\s*\d+\s+pts:\s*-?\d+\s+pts_time:(-?[0-9.]+)`)

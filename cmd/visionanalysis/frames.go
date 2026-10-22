@@ -31,7 +31,7 @@ func probeDuration(path string) (time.Duration, error) {
 
 func sampleFrames(path, dir string, duration time.Duration) ([]string, []time.Duration, error) {
 	cmd := exec.Command("ffmpeg", "-nostdin", "-hide_banner", "-v", "info", "-i", path, "-an",
-		"-vf", vision.FrameSelectFilter(duration), "-fps_mode", "vfr", "-q:v", "4",
+		"-vf", vision.FrameSelectFilter(duration, ""), "-fps_mode", "vfr", "-q:v", "4",
 		filepath.Join(dir, "frame-%03d.jpg"))
 	stderr, err := cmd.CombinedOutput()
 	if err != nil {

@@ -48,6 +48,17 @@ daemon, and a photo upload still has to finish.
 A photo without an embedding is simply absent from features that rank by
 embedding. Uploads and every other page are unaffected.
 
+Ready videos are embedded by their poster like photos. Their sampled frames
+come from a separate video analysis worker, which needs both the vision
+daemon and the video worker (ffmpeg and media storage):
+
+| condition | behavior |
+| --- | --- |
+| no vision daemon, or video processing unavailable | `InitializeVideoAnalysisWorker` returns without a worker and `QueueVideoAnalysis` is a no-op. Videos are found by their poster only. |
+| daemon down, storage missing, or not enough disk | The job is retried with the same backoff. Nothing is marked failed. |
+| ffmpeg cannot read the video | Logged, and the video is recorded with no frames so it isn't retried every startup. |
+| shutdown | Stopped without draining; the startup sweep requeues ready videos with missing or outdated frames. |
+
 ## Video
 
 Video differs from the others in one way: a video's file *is* primary user

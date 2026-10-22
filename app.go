@@ -325,6 +325,7 @@ func MakeApplication() *vbeam.Application {
 	// Upload sessions, expiry sweeps, and retried deletes for stored video
 	backend.InitializeVideoUploads(app.DB)
 	backend.InitializeVideoWorker(app.DB)
+	backend.InitializeVideoAnalysisWorker(app.DB)
 
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs

@@ -139,9 +139,11 @@ const DownloadLink = ({ playback }: { playback: server.GetVideoPlaybackResponse 
 export const VideoPlayer = ({
   photo,
   playback,
+  startAt = 0,
 }: {
   photo: server.Image;
   playback: server.GetVideoPlaybackResponse | null;
+  startAt?: number;
 }) => {
   const state = usePlayerState();
   if (state.photoId !== photo.id) {
@@ -150,7 +152,7 @@ export const VideoPlayer = ({
       playback,
       problem: "",
       forcePlay: false,
-      resumeAt: 0,
+      resumeAt: startAt,
       resumePlaying: false,
       position: 0,
       playing: false,

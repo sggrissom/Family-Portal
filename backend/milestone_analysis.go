@@ -343,8 +343,8 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		if query, embedErr := embedQuery(text); embedErr == nil {
 			scores := map[int]float32{}
 			for _, img := range candidates {
-				if v, ok := vectorsForFamily(ctx.Tx, img.FamilyId)[img.Id]; ok {
-					scores[img.Id] = vision.Dot(query, v)
+				if score, _, _, ok := mediaSimilarity(ctx.Tx, img.FamilyId, img.Id, query); ok {
+					scores[img.Id] = float32(score)
 				}
 			}
 			sort.SliceStable(candidates, func(i, j int) bool { return scores[candidates[i].Id] > scores[candidates[j].Id] })

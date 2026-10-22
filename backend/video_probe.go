@@ -226,6 +226,11 @@ const maxToolStderr = 2000
 
 // run executes a tool at low priority, bounded by timeout and by ctx.
 func (t mediaTools) run(ctx context.Context, timeout time.Duration, tool string, args ...string) ([]byte, error) {
+	out, _, err := t.runLogged(ctx, timeout, tool, args...)
+	return out, err
+}
+
+func (t mediaTools) runLogged(ctx context.Context, timeout time.Duration, tool string, args ...string) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	name := tool
@@ -238,16 +243,16 @@ func (t mediaTools) run(ctx context.Context, timeout time.Duration, tool string,
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, "", ctx.Err()
 	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if len(msg) > maxToolStderr {
 			msg = msg[len(msg)-maxToolStderr:]
 		}
-		return nil, fmt.Errorf("%s: %w: %s", tool, err, msg)
+		return nil, "", fmt.Errorf("%s: %w: %s", tool, err, msg)
 	}
-	return stdout.Bytes(), nil
+	return stdout.Bytes(), stderr.String(), nil
 }
 
 const (

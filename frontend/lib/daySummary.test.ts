@@ -43,6 +43,7 @@ const photo = (id: number, date: string, people: server.Person[]): server.PhotoW
   image: { id, photoDate: date } as server.Image,
   people,
   similar: [],
+  match: null,
 });
 
 const milestone = (id: number, personId: number, date: string): server.Milestone =>

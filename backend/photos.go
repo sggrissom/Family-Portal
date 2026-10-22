@@ -122,9 +122,18 @@ type ListFamilyPhotosRequest struct {
 }
 
 type PhotoWithPeople struct {
-	Image   Image    `json:"image"`
-	People  []Person `json:"people"`
-	Similar []int    `json:"similar,omitempty"`
+	Image   Image       `json:"image"`
+	People  []Person    `json:"people"`
+	Similar []int       `json:"similar,omitempty"`
+	Match   *MediaMatch `json:"match,omitempty"`
+}
+
+const MatchFrame = "frame"
+
+// MediaMatch is where in a video a search found what it was looking for.
+type MediaMatch struct {
+	Source   string `json:"source"`
+	OffsetMs int    `json:"offsetMs"`
 }
 
 type ListFamilyPhotosResponse struct {
@@ -890,6 +899,11 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sizeVariant == "frame" && len(pathParts) == 3 {
+		serveVideoFrame(w, r, image, pathParts[2])
+		return
+	}
+
 	acceptHeader := r.Header.Get("Accept")
 	optimalFormat := GetOptimalImageFormat(acceptHeader)
 
@@ -1169,6 +1183,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFacesTx(tx, photo.Id)
 	deletePhotoFeaturesTx(tx, photo.Id)
 	deletePhotoEmbeddingTx(tx, photo.Id)
+	deleteVideoFramesTx(tx, photo.Id)
 	deletePhotoSuggestionsTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -1189,6 +1204,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 }
 
 func deletePhotoFiles(photo Image) error {
+	deleteVideoFrameFiles(photo)
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
 	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
@@ -1316,12 +1332,13 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 
 	var page []Image
 	var similarTo map[int][]int
+	var frameAt map[int]int
 	if query := strings.TrimSpace(req.Query); query != "" {
 		var offset int
 		if offset, err = parseSearchCursor(req.Cursor); err != nil {
 			return
 		}
-		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode = searchPhotos(listing, query, offset, limit)
+		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode, frameAt = searchPhotos(listing, query, offset, limit)
 	} else {
 		start := listing.newest
 		if req.Cursor != "" {
@@ -1333,6 +1350,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	}
 
 	resp.Photos = photosWithPeople(ctx.Tx, page, similarTo)
+	attachFrameMatches(resp.Photos, frameAt)
 	return
 }
 

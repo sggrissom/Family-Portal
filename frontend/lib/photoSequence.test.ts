@@ -6,6 +6,7 @@ import {
   sequencePosition,
   swipeDirection,
   viewPhotoRoute,
+  routeStartSeconds,
 } from "./photoSequence";
 
 describe("sequencePosition", () => {
@@ -42,6 +43,14 @@ describe("viewer route", () => {
     expect(viewPhotoRoute(7, true)).toBe("/view-photo/7?seq=1");
     expect(routeHasSequence("/view-photo/7?seq=1")).toBe(true);
     expect(routeHasSequence(viewPhotoRoute(7, false))).toBe(false);
+  });
+
+  it("opens a video at a matched moment", () => {
+    expect(viewPhotoRoute(7, true, 42500)).toBe("/view-photo/7?seq=1&t=42");
+    expect(viewPhotoRoute(7, false, 0)).toBe("/view-photo/7");
+    expect(routeStartSeconds("/view-photo/7?seq=1&t=42")).toBe(42);
+    expect(routeStartSeconds("/view-photo/7?t=-3")).toBe(0);
+    expect(routeStartSeconds("/view-photo/7?t=abc")).toBe(0);
   });
 });
 

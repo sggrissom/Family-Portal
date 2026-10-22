@@ -1500,6 +1500,8 @@ export interface GetPhotoStatsResponse {
     embeddingsPending: number
     visionQueue: number
     visionStatus: string
+    videoFramesDone: number
+    videoFramesQueue: number
 }
 
 export interface ReprocessAllPhotosRequest {
@@ -2233,6 +2235,7 @@ export interface PhotoWithPeople {
     image: Image
     people: Person[]
     similar: number[]
+    match: MediaMatch | null
 }
 
 export interface UploadInstructions {
@@ -2862,6 +2865,11 @@ export interface EventSummary {
     location: string
     startDate: string
     endDate: string
+}
+
+export interface MediaMatch {
+    source: string
+    offsetMs: number
 }
 
 export interface FaceBox {
