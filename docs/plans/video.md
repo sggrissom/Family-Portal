@@ -242,6 +242,10 @@ README promises no third-party service the app depends on, and once video
 ships that becomes: self-hosted app, one binary, one database file, with bulk
 video storage the single named exception.
 
+Analysis is not part of this plan: videos skip every analyzer here. Bringing
+them into search, tag and people suggestions, and adding transcripts is
+[Video analysis](video-analysis.md).
+
 Open question: whether photos eventually follow video into the bucket. Once the
 storage client, the presigned URL path, and the deletion reconciliation all
 exist, the argument for keeping photos on local disk is mostly that they already
