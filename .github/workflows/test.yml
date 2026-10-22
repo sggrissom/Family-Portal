@@ -22,9 +22,9 @@ permissions:
 
 # Pin an exact patched toolchain so validation, security scans, and deployment
 # all use the same standard library instead of the runner's cached minor release.
-# Go 1.26.9 fixes the stdlib advisories reported against Go 1.25.14.
+# Go 1.26.10 fixes GO-2026-6809 in crypto/x509, reported against Go 1.26.9.
 env:
-  GO_VERSION: '1.26.9'
+  GO_VERSION: '1.26.10'
   NODE_VERSION: '20'
 
 jobs:
