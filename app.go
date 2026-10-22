@@ -276,6 +276,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)
 	backend.RegisterMediaHandlers(app)
+	backend.RegisterVideoUploadMethods(app)
 	backend.RegisterFaceMethods(app)
 	backend.RegisterPlaceMethods(app)
 	backend.RegisterSearchMethods(app)
@@ -320,6 +321,9 @@ func MakeApplication() *vbeam.Application {
 
 	// Image embeddings from the vision daemon, when one is configured
 	backend.InitializeVisionWorker(app.DB)
+
+	// Upload sessions, expiry sweeps, and retried deletes for stored video
+	backend.InitializeVideoUploads(app.DB)
 
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs
