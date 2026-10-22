@@ -310,6 +310,7 @@ func (w *videoAnalysisWorker) process(imageId int) error {
 		deleteVideoFrameFiles(image)
 		return nil
 	}
+	QueuePhotoEmbedding(imageId)
 	log.Printf("[VIDEO_ANALYSIS] Video %d: %d frames", imageId, len(frames))
 	return nil
 }
