@@ -128,3 +128,39 @@ func TestEmbedPhotoSkipsRejectedAndMismatchedResults(t *testing.T) {
 		t.Errorf("pending = %v, want the photo still pending", ids)
 	}
 }
+
+func TestEmbedPhotoUsesAReadyVideosPoster(t *testing.T) {
+	fx := setupResultsFixture(t)
+	fv := &fakeVision{model: clipModelId}
+	client := newVisionClient(startFakeVision(t, fv))
+	video := fx.photoWithMedium(t, "embed-video")
+	setVideoStatus := func(status int) {
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			video.MediaKind = MediaVideo
+			video.Status = status
+			vbolt.Write(tx, ImagesBkt, video.Id, &video)
+			vbolt.TxCommit(tx)
+		})
+	}
+
+	setVideoStatus(1)
+	if ids := photosNeedingEmbedding(fx.db); len(ids) != 0 {
+		t.Errorf("a processing video was queued: %v", ids)
+	}
+	if err := embedPhoto(fx.db, client, video.Id); err != nil || fv.calls != 0 {
+		t.Errorf("a processing video was embedded (calls = %d, err = %v)", fv.calls, err)
+	}
+
+	setVideoStatus(0)
+	if ids := photosNeedingEmbedding(fx.db); len(ids) != 1 || ids[0] != video.Id {
+		t.Errorf("pending = %v, want the ready video", ids)
+	}
+	if err := embedPhoto(fx.db, client, video.Id); err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if _, found := GetPhotoEmbedding(tx, video.Id); !found {
+			t.Error("the ready video has no embedding")
+		}
+	})
+}

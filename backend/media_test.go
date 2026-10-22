@@ -120,9 +120,6 @@ func TestVideosStayOutOfPhotoDerivedWork(t *testing.T) {
 	if ids := photosNeedingFeatures(fx.db); !slices.Contains(ids, photo.Id) || slices.Contains(ids, video.Id) {
 		t.Errorf("features sweep = %v", ids)
 	}
-	if ids := photosNeedingEmbedding(fx.db); !slices.Contains(ids, photo.Id) || slices.Contains(ids, video.Id) {
-		t.Errorf("embedding sweep = %v", ids)
-	}
 	analyzePhotoFeatures(fx.db, video.Id)
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if _, found := GetPhotoFeatures(tx, video.Id); found {

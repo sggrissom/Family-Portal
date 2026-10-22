@@ -1250,6 +1250,7 @@ export interface GetTagSuggestionsResponse {
     enabled: boolean
     groups: SuggestionGroup[]
     total: number
+    videos: Image[]
 }
 
 export interface SuggestionIdsRequest {

@@ -5,8 +5,8 @@ import { Icon } from "./Icon";
 import { formatDuration } from "../lib/videoFiles";
 import "./video-styles";
 
-export const VideoBadge = ({ image }: { image: server.Image }) => {
-  if (image.mediaKind !== server.MediaVideo) return null;
+export const VideoBadge = ({ image }: { image: server.Image | undefined }) => {
+  if (image?.mediaKind !== server.MediaVideo) return null;
   return (
     <span className="video-badge">
       <Icon symbol={Play} size={12} label="Video" />
