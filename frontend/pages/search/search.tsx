@@ -10,6 +10,7 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { PersonChips, initial } from "../../components/PersonChips";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import { InterviewCard } from "../../components/InterviewCard";
 import { isQuote } from "../../components/MilestoneText";
 import { chipOrder } from "../../lib/familyGroups";
@@ -470,7 +471,7 @@ const Groups = ({
               <a
                 key={p.image.id}
                 href={viewPhotoRoute(p.image.id, true)}
-                className="search-photo"
+                className="search-photo has-video-badge"
                 data-result
                 title={p.image.title || undefined}
                 onClick={e => {
@@ -479,6 +480,7 @@ const Groups = ({
                 }}
               >
                 <ThumbnailImage photoId={p.image.id} alt={p.image.title || ""} />
+                <VideoBadge image={p.image} />
               </a>
             ))}
           </div>

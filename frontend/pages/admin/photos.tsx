@@ -30,6 +30,7 @@ import { adminView } from "../../components/AdminGuard";
 import { formatDateTime, formatRelativeTime } from "../../lib/dateUtils";
 import { formatBytes } from "../../lib/formatBytes";
 import { logWarn } from "../../lib/logger";
+import { VideoPanel } from "./video-panel";
 import "./admin-styles";
 
 type PhotoManagementState = {
@@ -812,6 +813,8 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
       {state.processingStats && (
         <WorkerPanel stats={state.processingStats} onRequeue={requeueStuck} state={state} />
       )}
+
+      <VideoPanel />
 
       {needsReprocessing && (
         <div className="admin-card reprocess-card">

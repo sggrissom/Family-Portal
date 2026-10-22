@@ -2475,6 +2475,7 @@ export interface AdminUserInfo {
     familyId: number
     familyName: string
     isAdmin: boolean
+    familyVideoEnabled: boolean
 }
 
 export interface PhotoAttempt {

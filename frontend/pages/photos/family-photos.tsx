@@ -10,6 +10,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import { usePhotoFilter } from "../../hooks/usePhotoFilter";
 import {
@@ -375,6 +376,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                           fetchpriority={index < 3 ? "high" : "auto"}
                           status={photoStatus.getStatus(photoWithPeople.image.id)}
                         />
+                        <VideoBadge image={photoWithPeople.image} />
                         {photoWithPeople.people.some(
                           person => person.profilePhotoId === photoWithPeople.image.id
                         ) && (

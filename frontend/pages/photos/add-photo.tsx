@@ -7,6 +7,14 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { uploadPhoto } from "../../lib/photoUpload";
+import {
+  durationProblem,
+  isVideoFile,
+  readVideoDuration,
+  uploadVideo,
+  videoFileProblem,
+} from "../../lib/videoUpload";
+import { videoTypes } from "../../lib/videoFiles";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
@@ -26,6 +34,8 @@ import "../../components/entry-form-styles";
 type UploadItem = QueuedPhoto & {
   image: server.Image | null;
   taggedAtUpload: number[];
+  isVideo: boolean;
+  progress: number;
 };
 
 type AddPhotoForm = {
@@ -62,6 +72,15 @@ const useAddPhotoForm = vlens.declareHook((personId: number | null): AddPhotoFor
 type AddPhotoData = {
   people: server.Person[];
   tags: server.Tag[];
+  video: server.GetVideoSupportResponse;
+};
+
+const noVideo: server.GetVideoSupportResponse = {
+  enabled: false,
+  reason: "",
+  maxBytes: 0,
+  maxDurationSeconds: 0,
+  contentTypes: [],
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddPhotoData>> {
@@ -69,12 +88,20 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   if (!people) return [null, peopleErr];
   const [tags, tagsErr] = await server.ListTags({});
   if (!tags) return [null, tagsErr];
+  const [video] = await server.GetVideoSupport({ familyId: 0 });
   const ordered = chipOrder(
     (people.people || []).filter(person => auth.canContribute(person.familyId)),
     people.relations || [],
     auth.getAuth()?.familyId ?? 0
   );
-  return [{ people: ordered, tags: tags.tags.filter(tag => auth.canContribute(tag.familyId)) }, ""];
+  return [
+    {
+      people: ordered,
+      tags: tags.tags.filter(tag => auth.canContribute(tag.familyId)),
+      video: video ?? noVideo,
+    },
+    "",
+  ];
 }
 
 export function view(route: string, prefix: string, data: AddPhotoData): preact.ComponentChild {
@@ -101,24 +128,33 @@ export function view(route: string, prefix: string, data: AddPhotoData): preact.
   if (!form.handedOff) {
     form.handedOff = true;
     const files = takeHandedOffPhotos();
-    if (files.length > 0) addFiles(form, data.people, files);
+    if (files.length > 0) addFiles(form, data.people, data.video, files);
   }
 
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="entry-container">
-        <AddPhotoPage form={form} people={data.people} tags={data.tags} />
+        <AddPhotoPage form={form} people={data.people} tags={data.tags} video={data.video} />
       </main>
       <Footer />
     </div>
   );
 }
 
-function addFiles(form: AddPhotoForm, people: server.Person[], files: File[]) {
+async function addFiles(
+  form: AddPhotoForm,
+  people: server.Person[],
+  video: server.GetVideoSupportResponse,
+  files: File[]
+) {
   const problems: string[] = [];
   for (const file of files) {
-    const problem = photoFileProblem(file);
+    const isVideo = isVideoFile(file);
+    let problem = isVideo ? videoFileProblem(file, video) : photoFileProblem(file);
+    if (!problem && isVideo) {
+      problem = durationProblem(file.name, await readVideoDuration(file), video.maxDurationSeconds);
+    }
     if (problem) {
       problems.push(problem);
       continue;
@@ -130,6 +166,8 @@ function addFiles(form: AddPhotoForm, people: server.Person[], files: File[]) {
       error: "",
       image: null,
       taggedAtUpload: [],
+      isVideo,
+      progress: 0,
     });
   }
   form.error = problems.length > 0 ? `Skipped: ${problems.join("; ")}` : "";
@@ -150,7 +188,12 @@ async function pump(form: AddPhotoForm, people: server.Person[]) {
 
     const familyId = people.find(p => item.taggedAtUpload.includes(p.id))?.familyId;
     try {
-      item.image = await uploadPhoto(item.file, item.taggedAtUpload, familyId);
+      item.image = item.isVideo
+        ? await uploadVideo(item.file, item.taggedAtUpload, familyId, fraction => {
+            item.progress = fraction;
+            vlens.scheduleRedraw();
+          })
+        : await uploadPhoto(item.file, item.taggedAtUpload, familyId);
       item.state = "done";
     } catch (error) {
       item.state = "failed";
@@ -165,11 +208,16 @@ async function pump(form: AddPhotoForm, people: server.Person[]) {
   }
 }
 
-function onFileSelect(form: AddPhotoForm, people: server.Person[], event: Event) {
+function onFileSelect(
+  form: AddPhotoForm,
+  people: server.Person[],
+  video: server.GetVideoSupportResponse,
+  event: Event
+) {
   const target = event.target as HTMLInputElement;
   const files = Array.from(target.files ?? []);
   target.value = "";
-  if (files.length > 0) addFiles(form, people, files);
+  if (files.length > 0) addFiles(form, people, video, files);
 }
 
 function onDragOver(form: AddPhotoForm, event: DragEvent) {
@@ -184,17 +232,23 @@ function onDragLeave(form: AddPhotoForm, event: DragEvent) {
   vlens.scheduleRedraw();
 }
 
-function onDrop(form: AddPhotoForm, people: server.Person[], event: DragEvent) {
+function onDrop(
+  form: AddPhotoForm,
+  people: server.Person[],
+  video: server.GetVideoSupportResponse,
+  event: DragEvent
+) {
   event.preventDefault();
   form.dragActive = false;
   const files = Array.from(event.dataTransfer?.files ?? []);
-  if (files.length > 0) addFiles(form, people, files);
+  if (files.length > 0) addFiles(form, people, video, files);
   vlens.scheduleRedraw();
 }
 
 function retry(form: AddPhotoForm, people: server.Person[], item: UploadItem) {
   item.state = "queued";
   item.error = "";
+  item.progress = 0;
   form.error = "";
   pump(form, people);
 }
@@ -305,10 +359,13 @@ function cancel(event: Event) {
 function statusLabel(item: UploadItem): string {
   switch (item.state) {
     case "uploading":
+      return item.isVideo && item.progress > 0
+        ? `${copy.photos.uploading} ${Math.floor(item.progress * 100)}%`
+        : copy.photos.uploading;
     case "queued":
       return copy.photos.uploading;
     case "done":
-      return copy.photos.uploaded;
+      return item.isVideo ? copy.photos.videoProcessing : copy.photos.uploaded;
     case "failed":
       return item.error || copy.photos.failed;
   }
@@ -318,9 +375,10 @@ interface AddPhotoPageProps {
   form: AddPhotoForm;
   people: server.Person[];
   tags: server.Tag[];
+  video: server.GetVideoSupportResponse;
 }
 
-const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
+const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
   const hasItems = form.items.length > 0;
   const uploaded = form.items.filter(item => item.image).map(item => item.image!.photoDate);
   const taken = takenLabel(uploaded);
@@ -333,22 +391,24 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
       <input
         id="photo-input"
         type="file"
-        accept="image/*"
+        accept={
+          video.enabled ? ["image/*", ...videoTypes, ".mov", ".mp4", ".m4v"].join(",") : "image/*"
+        }
         multiple
         hidden
-        onChange={vlens.cachePartial(onFileSelect, form, people)}
+        onChange={vlens.cachePartial(onFileSelect, form, people, video)}
       />
 
       <div
         className={`photo-drop${form.dragActive ? " drag-active" : ""}${hasItems ? " has-items" : ""}`}
         onDragOver={vlens.cachePartial(onDragOver, form)}
         onDragLeave={vlens.cachePartial(onDragLeave, form)}
-        onDrop={vlens.cachePartial(onDrop, form, people)}
+        onDrop={vlens.cachePartial(onDrop, form, people, video)}
       >
         {!hasItems ? (
           <div className="photo-drop-empty">
             <label htmlFor="photo-input" className="btn btn-primary">
-              {copy.photos.choose}
+              {video.enabled ? copy.photos.chooseWithVideo : copy.photos.choose}
             </label>
             <small>{copy.photos.dropHint}</small>
           </div>
@@ -356,7 +416,11 @@ const AddPhotoPage = ({ form, people, tags }: AddPhotoPageProps) => {
           <div className="upload-grid">
             {form.items.map(item => (
               <div key={item.previewUrl} className={`upload-tile upload-${item.state}`}>
-                <img src={item.previewUrl} alt="" />
+                {item.isVideo ? (
+                  <video src={item.previewUrl} muted playsInline preload="metadata" />
+                ) : (
+                  <img src={item.previewUrl} alt="" />
+                )}
                 <span className="upload-tile-status">{statusLabel(item)}</span>
                 {item.state === "failed" && (
                   <span className="upload-tile-actions">
