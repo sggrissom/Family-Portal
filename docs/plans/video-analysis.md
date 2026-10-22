@@ -279,11 +279,11 @@ transcribed again.
 
 ## Export, deletion, and access
 
-- **Export.** Frames, frame vectors, and automatic transcripts are derived
-  data and regenerate after import, the way embeddings do: import queues
-  imported videos for analysis. Edited transcripts are family-authored, so they
-  are exported and imported with the video. Removed-transcript markers are
-  exported too, so an import doesn't bring back a transcript someone deleted.
+- **Export.** Each exported video carries its transcript, automatic or
+  edited, flagged as which. It's text the family may want even without the
+  app. Frames and frame vectors are derived and are not exported. Import does
+  not restore videos yet; when it does, it should restore edited transcripts
+  and queue the rest for analysis.
 - **Deletion.** Deleting a video removes its frames record, frame files,
   transcript, `PhotoFace`s, and suggestions. Deleting during analysis must not
   leave any of them behind; check before the final write, as the processing
@@ -307,29 +307,49 @@ transcribed again.
   checksum-pinned by a script like `scripts/fetch-vision-models.sh`, plus a
   `make` target and a section in `docs/deployment.md`.
 
-## Prototype first
+## Prototype results
 
-As with the vision daemon, measure before building the worker. A bench command
-(no app changes) runs over a handful of real family clips: a child talking, a
-birthday with singing, a recital with only music, an outdoor clip with wind,
-and a portrait-orientation HDR iPhone clip. Record:
+Measured 2026-10-22 on the laptop (i5-8350U, AVX2) with whisper.cpp v1.9.5,
+two threads, on public speech samples (a 127-second radio address, a
+30-second fast-talking ad) plus a minute of silence and a minute of synthetic
+tones. Real family clips were not available, so quality on children's speech,
+real music and wind is still to check.
 
-| | laptop | staging (AVX only) |
-| --- | --- | --- |
-| whisper real-time factor per model | | |
-| peak RSS per model | | |
-| transcript quality, by eye, per clip | | |
-| does the music-only clip produce nothing? | | |
-| frames kept per clip after dedupe | | |
-| frame search vs poster search on 10 queries | | |
+| model | decoding | time / clip length | peak memory |
+| --- | --- | --- | --- |
+| base.en | greedy | 0.18 | 340 MB |
+| base.en | beam 5 | 0.27 | 380 MB |
+| small.en | greedy | 0.58 (0.51 with VAD) | 735 MB |
+| small.en | beam 5 | 0.82 | 850 MB |
+| small | greedy | 0.61 | 735 MB |
+| large-v3-turbo q5_0 | greedy | 2.75 | 830 MB |
+| large-v3-turbo q5_0 | beam 5 | 3.00 | 900 MB |
 
-That table chooses the model, the build approach, the timeout multiplier, and
-the two-frame tag rule.
+- **Model: `small.en`, greedy, with Silero VAD.** Turbo would take about 27
+  minutes for a 10-minute clip on the laptop, and staging is slower. Beam
+  search cost 40% more time for this use. `base.en` is three times faster, so
+  it stays the fallback if staging turns out too slow.
+- **Silence and music.** Without VAD both models emitted only annotations
+  (`[BLANK_AUDIO]`, `(soft music)`, `(wind blowing)`), which the transcript
+  cleaner drops. With VAD they emitted nothing and finished in under a second.
+- **Build.** A portable build (`GGML_CPU_ALL_VARIANTS`, picked at run time)
+  includes Ivy Bridge (staging) and Cascade Lake (production) variants and was
+  about 10% slower than a native build. It has to be built on a server: the
+  laptop's glibc is newer than the boxes'. `scripts/install-speech.sh` does
+  this.
+- **Frames.** `family-vision -frames DIR -prompts FILE` reports kept frames
+  and poster against best-frame scores per prompt. It has not been run on real
+  clips yet. The two-frame tag rule and the 0.95 dedupe threshold are
+  uncalibrated.
+
+Still to measure: real-time factor on staging, and transcript and frame
+quality on real family clips.
 
 ## Order of work
 
 0. **Poster through the existing analyzers.** One small PR.
-1. **Prototype bench.** Fill in the table above.
+1. **Prototype bench.** Done for speed and silence; real-clip quality is still
+   open (see Prototype results).
 2. **Video analysis worker and frames.** Frame search with `match`, `?t=` deep
    links, frame tag suggestions, moment suggestions by frame.
 3. **Faces from frames.**

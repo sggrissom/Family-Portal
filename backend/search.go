@@ -444,8 +444,9 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 	}
 
 	more = len(candidates) > searchPhotoLimit
-	out = photosWithPeople(s.tx, candidates[:min(len(candidates), searchPhotoLimit)], nil)
-	attachFrameMatches(out, frameAt)
+	page := candidates[:min(len(candidates), searchPhotoLimit)]
+	out = photosWithPeople(s.tx, page, nil)
+	attachMatches(out, mediaMatches(s.tx, page, frameAt, terms))
 	return out, more, semantic
 }
 

@@ -104,3 +104,104 @@ block(`
   }
 }
 `);
+
+block(`
+.video-transcript {
+  width: 100%;
+  max-width: 44rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+}
+`);
+
+block(`
+.video-transcript summary {
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+`);
+
+block(`
+.video-transcript-hint,
+.video-transcript-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: normal;
+}
+`);
+
+block(`
+.video-transcript-lines {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+`);
+
+block(`
+.video-transcript-lines li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.25rem 0.25rem;
+  border-radius: 6px;
+}
+`);
+
+block(`
+.video-transcript-lines li.active {
+  background: var(--accent-soft);
+}
+`);
+
+block(`
+.video-transcript-lines li.unsure span {
+  color: var(--muted);
+}
+`);
+
+block(`
+.video-transcript-lines textarea {
+  flex: 1;
+  font: inherit;
+  resize: vertical;
+}
+`);
+
+block(`
+.video-transcript-time {
+  flex-shrink: 0;
+  min-width: 3.5rem;
+  padding: 0.1rem 0.4rem;
+  border: none;
+  border-radius: 4px;
+  background: var(--hover-bg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+`);
+
+block(`
+.video-transcript-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+`);
+
+block(`
+.video-transcript-error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+`);

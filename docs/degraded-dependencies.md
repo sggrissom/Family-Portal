@@ -59,6 +59,17 @@ daemon and the video worker (ffmpeg and media storage):
 | ffmpeg cannot read the video | Logged, and the video is recorded with no frames so it isn't retried every startup. |
 | shutdown | Stopped without draining; the startup sweep requeues ready videos with missing or outdated frames. |
 
+The same worker transcribes videos when `cfg.SpeechModelsDir` holds
+`whisper-cli` and its model (`make speech-models`):
+
+| condition | behavior |
+| --- | --- |
+| no binary or model | `InitializeSpeech` logs why and transcription is off. Video pages show no transcript and search uses titles, descriptions and frames. |
+| video has no audio | Recorded as no speech; nothing runs. |
+| whisper-cli or ffmpeg fails | Logged and recorded as failed, so it isn't retried every startup. |
+| only music or silence | Voice detection and the transcript cleaner leave nothing, recorded as no speech. |
+| edited or removed transcript | Never rerun, even when the model or version changes. |
+
 ## Video
 
 Video differs from the others in one way: a video's file *is* primary user

@@ -11,6 +11,7 @@ const EnableFaceTagging = false
 const FaceModelsDir = ""
 const FaceAnalysisSocket = ""
 const VisionAnalysisSocket = ""
+const SpeechModelsDir = ""
 
 const FamilyStorageQuotaBytes = 10 << 30
 const MinFreeDiskBytes = 1 << 30

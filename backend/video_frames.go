@@ -2,7 +2,6 @@ package backend
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"family/cfg"
 	"family/vision"
@@ -26,7 +25,6 @@ const (
 	videoFramesVersion = 1
 	frameThumbWidth    = 320
 	framesTimeout      = 10 * time.Minute
-	framesScratchBytes = 64 << 20
 )
 
 type VideoFrame struct {
@@ -174,145 +172,6 @@ func bestFrame(frames []VideoFrame, query []float32) (score float64, offsetMs in
 		}
 	}
 	return
-}
-
-type videoAnalysisWorker struct {
-	*backlogWorker[int]
-	db      *vbolt.DB
-	tools   mediaTools
-	client  *visionClient
-	scratch string
-	ctx     context.Context
-	cancel  context.CancelFunc
-}
-
-var globalVideoAnalysisWorker *videoAnalysisWorker
-
-func InitializeVideoAnalysisWorker(db *vbolt.DB) {
-	if globalVideoAnalysisWorker != nil || globalVideoWorker == nil || globalVisionClient == nil {
-		return
-	}
-	scratch := filepath.Join(globalVideoWorker.scratch, "analysis")
-	if err := os.MkdirAll(scratch, 0750); err != nil {
-		LogErrorSimple(LogCategoryWorker, "Video analysis disabled: no scratch directory", map[string]interface{}{"error": err.Error()})
-		return
-	}
-	w := newVideoAnalysisWorker(db, globalVideoWorker.tools, globalVisionClient, scratch)
-	globalVideoAnalysisWorker = w
-	w.run(func() []int { return videosNeedingAnalysis(db) })
-	LogInfo(LogCategoryWorker, "Video analysis worker started", nil)
-}
-
-func newVideoAnalysisWorker(db *vbolt.DB, tools mediaTools, client *visionClient, scratch string) *videoAnalysisWorker {
-	ctx, cancel := context.WithCancel(context.Background())
-	w := &videoAnalysisWorker{db: db, tools: tools, client: client, scratch: scratch, ctx: ctx, cancel: cancel}
-	w.backlogWorker = newBacklogWorker("Video analysis worker", w.process)
-	return w
-}
-
-func QueueVideoAnalysis(imageId int) {
-	if globalVideoAnalysisWorker != nil {
-		globalVideoAnalysisWorker.add(imageId)
-	}
-}
-
-func StopVideoAnalysisWorker(ctx context.Context) bool {
-	if globalVideoAnalysisWorker == nil {
-		return true
-	}
-	globalVideoAnalysisWorker.cancel()
-	return globalVideoAnalysisWorker.stopWait(ctx)
-}
-
-func VideoAnalysisQueueLength() int {
-	if globalVideoAnalysisWorker == nil {
-		return 0
-	}
-	return globalVideoAnalysisWorker.length()
-}
-
-func videosNeedingAnalysis(db *vbolt.DB) (ids []int) {
-	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if videoNeedsFrames(tx, image) {
-				ids = append(ids, image.Id)
-			}
-			return true
-		})
-	})
-	if len(ids) > 0 {
-		LogInfo(LogCategoryWorker, "Queued videos for analysis", map[string]interface{}{"count": len(ids)})
-	}
-	return
-}
-
-func (w *videoAnalysisWorker) process(imageId int) error {
-	var image Image
-	var needed bool
-	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) {
-		image = GetImageById(tx, imageId)
-		needed = videoNeedsFrames(tx, image)
-	})
-	if !needed || videoFramesDir(image) == "" {
-		return nil
-	}
-	store := activeMediaStore()
-	if store == nil {
-		return errRetryLater
-	}
-	release, diskErr := diskBudget.reserve(cfg.MediaDir, int64(image.FileSize)+framesScratchBytes, cfg.MinFreeDiskBytes)
-	if diskErr != nil {
-		return errRetryLater
-	}
-	defer release()
-
-	workDir, err := os.MkdirTemp(w.scratch, strconv.Itoa(imageId)+"-")
-	if err != nil {
-		return errRetryLater
-	}
-	defer os.RemoveAll(workDir)
-
-	source, err := localCopyOf(w.ctx, store, image.PlaybackKey, workDir)
-	if errors.Is(err, ErrMediaNotFound) {
-		log.Printf("[VIDEO_ANALYSIS] Video %d has no playback file", imageId)
-		return nil
-	}
-	if err != nil {
-		return errRetryLater
-	}
-
-	frames, thumbs, err := w.sampleFrames(image, source, workDir)
-	if w.ctx.Err() != nil {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	stored := false
-	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
-		current := GetImageById(tx, imageId)
-		if current.Id == 0 || current.Status != 0 || current.PlaybackKey != image.PlaybackKey {
-			return
-		}
-		previous, _ := GetVideoFrames(tx, imageId)
-		current.DerivedBytes += thumbs - previous.ThumbBytes
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
-		writeVideoFramesTx(tx, &VideoFrames{
-			ImageId: current.Id, FamilyId: current.FamilyId,
-			Model: clipModelId, Version: videoFramesVersion,
-			Frames: frames, ThumbBytes: thumbs,
-		})
-		vbolt.TxCommit(tx)
-		stored = true
-	})
-	if !stored {
-		deleteVideoFrameFiles(image)
-		return nil
-	}
-	QueuePhotoEmbedding(imageId)
-	log.Printf("[VIDEO_ANALYSIS] Video %d: %d frames", imageId, len(frames))
-	return nil
 }
 
 // sampleFrames embeds the video's chosen frames and leaves a thumbnail of

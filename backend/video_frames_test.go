@@ -69,9 +69,9 @@ func TestVideoAnalysisKeepsOneFramePerScene(t *testing.T) {
 	}
 	before := imageForTest(t, fx.db, video.Id)
 
-	aw := newVideoAnalysisWorker(fx.db, fx.worker.tools, startColorVision(t), t.TempDir())
+	aw := newVideoAnalysisWorker(fx.db, fx.worker.tools, startColorVision(t), nil, t.TempDir())
 	t.Cleanup(aw.cancel)
-	if ids := videosNeedingAnalysis(fx.db); len(ids) != 1 || ids[0] != video.Id {
+	if ids := videosNeedingAnalysis(fx.db, true, false); len(ids) != 1 || ids[0] != video.Id {
 		t.Fatalf("sweep = %v, want the published video", ids)
 	}
 	if err := aw.process(video.Id); err != nil {
@@ -91,7 +91,7 @@ func TestVideoAnalysisKeepsOneFramePerScene(t *testing.T) {
 	if frames.ThumbBytes <= 0 || after.DerivedBytes != before.DerivedBytes+frames.ThumbBytes {
 		t.Fatalf("derived %d -> %d with %d thumb bytes", before.DerivedBytes, after.DerivedBytes, frames.ThumbBytes)
 	}
-	if ids := videosNeedingAnalysis(fx.db); len(ids) != 0 {
+	if ids := videosNeedingAnalysis(fx.db, true, false); len(ids) != 0 {
 		t.Errorf("still pending after analysis: %v", ids)
 	}
 

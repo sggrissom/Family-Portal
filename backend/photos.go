@@ -128,12 +128,16 @@ type PhotoWithPeople struct {
 	Match   *MediaMatch `json:"match,omitempty"`
 }
 
-const MatchFrame = "frame"
+const (
+	MatchFrame      = "frame"
+	MatchTranscript = "transcript"
+)
 
 // MediaMatch is where in a video a search found what it was looking for.
 type MediaMatch struct {
 	Source   string `json:"source"`
 	OffsetMs int    `json:"offsetMs"`
+	Snippet  string `json:"snippet,omitempty"`
 }
 
 type ListFamilyPhotosResponse struct {
@@ -903,6 +907,10 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		serveVideoFrame(w, r, image, pathParts[2])
 		return
 	}
+	if sizeVariant == "captions" {
+		serveVideoCaptions(w, image)
+		return
+	}
 
 	acceptHeader := r.Header.Get("Accept")
 	optimalFormat := GetOptimalImageFormat(acceptHeader)
@@ -1184,6 +1192,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFeaturesTx(tx, photo.Id)
 	deletePhotoEmbeddingTx(tx, photo.Id)
 	deleteVideoFramesTx(tx, photo.Id)
+	deleteVideoTranscriptTx(tx, photo.Id)
 	deletePhotoSuggestionsTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -1332,13 +1341,13 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 
 	var page []Image
 	var similarTo map[int][]int
-	var frameAt map[int]int
+	var matches map[int]*MediaMatch
 	if query := strings.TrimSpace(req.Query); query != "" {
 		var offset int
 		if offset, err = parseSearchCursor(req.Cursor); err != nil {
 			return
 		}
-		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode, frameAt = searchPhotos(listing, query, offset, limit)
+		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode, matches = searchPhotos(listing, query, offset, limit)
 	} else {
 		start := listing.newest
 		if req.Cursor != "" {
@@ -1350,7 +1359,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	}
 
 	resp.Photos = photosWithPeople(ctx.Tx, page, similarTo)
-	attachFrameMatches(resp.Photos, frameAt)
+	attachMatches(resp.Photos, matches)
 	return
 }
 

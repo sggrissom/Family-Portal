@@ -11,18 +11,33 @@ import (
 )
 
 type ExportVideo struct {
-	Id               int       `json:"id"`
-	Title            string    `json:"title"`
-	Description      string    `json:"description"`
-	PhotoDate        time.Time `json:"photo_date"`
-	OriginalFilename string    `json:"original_filename"`
-	FileName         string    `json:"file_name"`
-	MimeType         string    `json:"mime_type"`
-	FileSize         int       `json:"file_size"`
-	DurationMs       int       `json:"duration_ms"`
-	PersonIds        []int     `json:"person_ids"`
-	TagIds           []int     `json:"tag_ids"`
-	Available        bool      `json:"available"`
+	Id               int               `json:"id"`
+	Title            string            `json:"title"`
+	Description      string            `json:"description"`
+	PhotoDate        time.Time         `json:"photo_date"`
+	OriginalFilename string            `json:"original_filename"`
+	FileName         string            `json:"file_name"`
+	MimeType         string            `json:"mime_type"`
+	FileSize         int               `json:"file_size"`
+	DurationMs       int               `json:"duration_ms"`
+	PersonIds        []int             `json:"person_ids"`
+	TagIds           []int             `json:"tag_ids"`
+	Available        bool              `json:"available"`
+	Transcript       *ExportTranscript `json:"transcript,omitempty"`
+}
+
+type ExportTranscript struct {
+	Automatic bool                `json:"automatic"`
+	Language  string              `json:"language"`
+	Segments  []TranscriptSegment `json:"segments"`
+}
+
+func exportTranscript(tx *vbolt.Tx, imageId int) *ExportTranscript {
+	t, ok := GetVideoTranscriptRecord(tx, imageId)
+	if !ok || t.Status != TranscriptDone {
+		return nil
+	}
+	return &ExportTranscript{Automatic: t.EditedBy == 0, Language: t.Language, Segments: t.Segments}
 }
 
 // videoExportFileName is unique within a family, sorts by date, and keeps the
@@ -63,6 +78,7 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 			PersonIds:        personIds,
 			TagIds:           GetPhotoTagIds(tx, image.Id),
 			Available:        image.Status == 0,
+			Transcript:       exportTranscript(tx, image.Id),
 		})
 	}
 	return result

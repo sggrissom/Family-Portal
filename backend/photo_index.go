@@ -67,7 +67,11 @@ func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
 		vbolt.DeleteTargetTerms(tx, PhotoWordIndex, photoId)
 		return
 	}
-	vbolt.SetTargetTermsPlain(tx, PhotoWordIndex, image.Id, searchFieldWords(image.Title, image.Description))
+	words := searchFieldWords(image.Title, image.Description)
+	if image.IsVideo() {
+		words = append(words, transcriptWords(tx, image.Id)...)
+	}
+	vbolt.SetTargetTermsPlain(tx, PhotoWordIndex, image.Id, words)
 
 	seconds := image.PhotoDate.Unix()
 	vbolt.SetTargetSingleTermExt(tx, ImageByFamilyDateIndex, image.Id, seconds, image.FamilyId)
