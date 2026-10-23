@@ -9,6 +9,7 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { canContribute } from "../../lib/authCache";
 import { openAddSheet } from "../../components/AppNav";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import { FaceCrop } from "../../components/FaceCrop";
 import { DaySummaryList } from "../../components/DaySummaryList";
 import { MilestoneText, isQuote } from "../../components/MilestoneText";
@@ -440,7 +441,12 @@ const StoryTab = ({
   const hasPreview = data.insights.growingUp.length > 1;
   const days = summarizeDays(
     {
-      photos: (data.person.photos ?? []).map(image => ({ image, people: [], similar: [] })),
+      photos: (data.person.photos ?? []).map(image => ({
+        image,
+        people: [],
+        similar: [],
+        match: null,
+      })),
       growth: data.person.growthData ?? [],
       milestones: data.person.milestones ?? [],
       appearances: (data.activities.appearances ?? []).map(detail => ({
@@ -679,8 +685,14 @@ const PhotosTab = ({
       </a>
       <div className="profile-photo-grid">
         {sorted.map(photo => (
-          <a key={photo.id} href={`/view-photo/${photo.id}`} aria-label={photo.title}>
+          <a
+            key={photo.id}
+            href={`/view-photo/${photo.id}`}
+            aria-label={photo.title}
+            className="has-video-badge"
+          >
             <ThumbnailImage photoId={photo.id} alt={photo.title} />
+            <VideoBadge image={photo} />
           </a>
         ))}
       </div>

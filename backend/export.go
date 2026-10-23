@@ -22,6 +22,8 @@ import (
 
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
+	vbeam.RegisterProc(app, ListVideoOriginals)
+	vbeam.RegisterProc(app, GetVideoOriginalLink)
 	app.HandleFunc("GET /api/export-bundle", AuthMiddleware(exportBundleHandler))
 }
 
@@ -141,7 +143,7 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	images := GetFamilyImages(tx, familyId)
 	result := make([]ExportPhoto, 0, len(images))
 	for _, img := range images {
-		if img.Status != 0 {
+		if img.Status != 0 || img.IsVideo() {
 			continue
 		}
 		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))
@@ -204,6 +206,7 @@ type ExportDataStructure struct {
 	Milestones []ExportMilestone `json:"milestones"`
 	Tags       []ExportTag       `json:"tags"`
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Videos     []ExportVideo     `json:"videos,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
@@ -218,6 +221,7 @@ type ExportDataStructure struct {
 	TotalMilestones int       `json:"total_milestones"`
 	TotalTags       int       `json:"total_tags"`
 	TotalPhotos     int       `json:"total_photos,omitempty"`
+	TotalVideos     int       `json:"total_videos,omitempty"`
 
 	TotalActivities  int `json:"total_activities,omitempty"`
 	TotalSeasons     int `json:"total_seasons,omitempty"`
@@ -416,6 +420,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	}
 
 	exportData.Relations = buildRelationExport(tx, people, personNames)
+
+	exportData.Videos = buildVideoExport(tx, familyId)
+	exportData.TotalVideos = len(exportData.Videos)
 
 	exportData.Activities = buildActivityExport(tx, familyId, personNames)
 	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=

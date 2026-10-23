@@ -148,6 +148,9 @@ func GetPersonPhotoInsights(ctx *vbeam.Context, req GetPersonPhotoInsightsReques
 			}
 		}
 
+		if img.IsVideo() {
+			continue
+		}
 		c := scorePortrait(ctx.Tx, img, person, len(inPhoto))
 
 		key := c.AgeMonths

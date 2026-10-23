@@ -7,6 +7,12 @@ export const StatedParent: StatedRelation = 2;
 export const StatedSibling: StatedRelation = 3;
 export const StatedPartner: StatedRelation = 4;
 
+export type TranscriptStatus = number;
+export const TranscriptDone: TranscriptStatus = 0;
+export const TranscriptNoSpeech: TranscriptStatus = 1;
+export const TranscriptFailed: TranscriptStatus = 2;
+export const TranscriptRemoved: TranscriptStatus = 3;
+
 export type AccessLevel = number;
 export const AccessNone: AccessLevel = 0;
 export const AccessView: AccessLevel = 1;
@@ -26,6 +32,10 @@ export const Unknown: GenderType = 2;
 export type MeasurementType = number;
 export const Height: MeasurementType = 0;
 export const Weight: MeasurementType = 1;
+
+export type MediaKind = number;
+export const MediaPhoto: MediaKind = 0;
+export const MediaVideo: MediaKind = 1;
 
 export type RelationKind = number;
 export const RelationParent: RelationKind = 0;
@@ -69,6 +79,14 @@ export const ErrFamilyAccessDenied = "Access denied: record belongs to another f
 export const ErrNoFamily = "User is not part of a family";
 export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
+export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
+export const ErrVideoUploadNotFound = "That upload could not be found.";
+export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
+export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
+export const ErrMediaNotFound = "media object not found";
+export const ErrVideoNotFound = "Video not found or access denied";
+export const ErrTranscriptNotFound = "Transcript not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -1070,6 +1088,102 @@ export interface UpdatePhotoTagsRequest {
 export interface UpdatePhotoTagsResponse {
 }
 
+export interface GetVideoSupportRequest {
+    familyId: number
+}
+
+export interface GetVideoSupportResponse {
+    enabled: boolean
+    reason: string
+    maxBytes: number
+    maxDurationSeconds: number
+    contentTypes: string[]
+}
+
+export interface BeginVideoUploadRequest {
+    familyId: number
+    personIds: number[]
+    filename: string
+    contentType: string
+    size: number
+    title: string
+    description: string
+    fallbackDate: string
+}
+
+export interface BeginVideoUploadResponse {
+    uploadId: number
+    upload: UploadInstructions
+}
+
+export interface CompleteVideoUploadRequest {
+    uploadId: number
+}
+
+export interface CompleteVideoUploadResponse {
+    image: Image
+}
+
+export interface CancelVideoUploadRequest {
+    uploadId: number
+}
+
+export interface SetFamilyVideoEnabledRequest {
+    familyId: number
+    enabled: boolean
+}
+
+export interface GetVideoPlaybackRequest {
+    id: number
+}
+
+export interface GetVideoPlaybackResponse {
+    status: number
+    playbackUrl: string
+    mimeType: string
+    downloadUrl: string
+    originalFilename: string
+    expiresAt: string
+    processingError: string
+}
+
+export interface VideoProcessingStats {
+    available: boolean
+    reason: string
+    isRunning: boolean
+    queueLength: number
+    processed: number
+    rejected: number
+    failed: number
+    lastError: string
+    lastErrorAt: string
+    recentAttempts: VideoAttempt[]
+}
+
+export interface RetryFailedVideosResponse {
+    queued: number
+}
+
+export interface GetVideoTranscriptRequest {
+    id: number
+}
+
+export interface GetVideoTranscriptResponse {
+    available: boolean
+    status: TranscriptStatus
+    pending: boolean
+    automatic: boolean
+    language: string
+    segments: TranscriptSegment[]
+    canEdit: boolean
+    captionUrl: string
+}
+
+export interface UpdateVideoTranscriptRequest {
+    id: number
+    texts: string[]
+}
+
 export interface GetFaceReviewRequest {
 }
 
@@ -1163,6 +1277,7 @@ export interface GetTagSuggestionsResponse {
     enabled: boolean
     groups: SuggestionGroup[]
     total: number
+    videos: Image[]
 }
 
 export interface SuggestionIdsRequest {
@@ -1361,6 +1476,26 @@ export interface ExportDataResponse {
     jsonData: string
 }
 
+export interface ListVideoOriginalsRequest {
+    familyId: number
+}
+
+export interface ListVideoOriginalsResponse {
+    videos: VideoOriginal[]
+    totalBytes: number
+    expiresAt: string
+}
+
+export interface GetVideoOriginalLinkRequest {
+    id: number
+}
+
+export interface GetVideoOriginalLinkResponse {
+    downloadUrl: string
+    fileName: string
+    expiresAt: string
+}
+
 export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
@@ -1370,6 +1505,7 @@ export interface GetPhotoStatsRequest {
 
 export interface GetPhotoStatsResponse {
     totalPhotos: number
+    totalVideos: number
     processedPhotos: number
     pendingPhotos: number
     analysisPending: number
@@ -1391,6 +1527,8 @@ export interface GetPhotoStatsResponse {
     embeddingsPending: number
     visionQueue: number
     visionStatus: string
+    videoFramesDone: number
+    videoFramesQueue: number
 }
 
 export interface ReprocessAllPhotosRequest {
@@ -1439,6 +1577,8 @@ export interface PhotoConsistencyReport {
     orphans: OrphanOriginal[]
     listLimit: number
     orphanScanErr: string
+    videosChecked: number
+    videosMissing: MissingOriginal[]
 }
 
 export interface GetLogFilesResponse {
@@ -1583,6 +1723,7 @@ export interface SystemHealthResponse {
     configIssues: ConfigProblem[]
     logs: LogProblems
     photos: PhotoProblems
+    videos: VideoProblems
     push: PushProblems
     mail: MailProblems
     host: HostProblems
@@ -1882,6 +2023,11 @@ export interface Image {
     status: number
     analysisStatus: number
     tagIds: number[]
+    mediaKind: MediaKind
+    durationMs: number
+    videoCodec: string
+    audioCodec: string
+    processingError: string
 }
 
 export interface Interview {
@@ -2116,6 +2262,29 @@ export interface PhotoWithPeople {
     image: Image
     people: Person[]
     similar: number[]
+    match: MediaMatch | null
+}
+
+export interface UploadInstructions {
+    url: string
+    method: string
+    headers: Record<string, string>
+    expiresAt: string
+}
+
+export interface VideoAttempt {
+    time: string
+    imageId: number
+    outcome: string
+    durationMs: number
+    reason: string
+}
+
+export interface TranscriptSegment {
+    startMs: number
+    endMs: number
+    text: string
+    confidence: number
 }
 
 export interface FaceGroup {
@@ -2357,6 +2526,11 @@ export interface PersonMatch {
     confidence: number
 }
 
+export interface VideoOriginal {
+    video: ExportVideo
+    downloadUrl: string
+}
+
 export interface AdminUserInfo {
     id: number
     name: string
@@ -2366,6 +2540,7 @@ export interface AdminUserInfo {
     familyId: number
     familyName: string
     isAdmin: boolean
+    familyVideoEnabled: boolean
 }
 
 export interface PhotoAttempt {
@@ -2577,6 +2752,17 @@ export interface PhotoProblems {
     queueLength: number
 }
 
+export interface VideoProblems {
+    enabled: boolean
+    available: boolean
+    reason: string
+    queueLength: number
+    failed: number
+    rejected: number
+    stuck: number
+    failedDeletes: number
+}
+
 export interface PushProblems {
     failed: number
     lastError: string
@@ -2715,6 +2901,12 @@ export interface EventSummary {
     endDate: string
 }
 
+export interface MediaMatch {
+    source: string
+    offsetMs: number
+    snippet: string
+}
+
 export interface FaceBox {
     left: number
     top: number
@@ -2746,6 +2938,22 @@ export interface BookItem {
     photoId: number
     caption: string
     pinned: boolean
+}
+
+export interface ExportVideo {
+    id: number
+    title: string
+    description: string
+    photo_date: string
+    original_filename: string
+    file_name: string
+    mime_type: string
+    file_size: number
+    duration_ms: number
+    person_ids: number[]
+    tag_ids: number[]
+    available: boolean
+    transcript: ExportTranscript | null
 }
 
 export interface PerformanceStats {
@@ -2831,6 +3039,12 @@ export interface BookInterviewChange {
     questionId: number
     before: string
     after: string
+}
+
+export interface ExportTranscript {
+    automatic: boolean
+    language: string
+    segments: TranscriptSegment[]
 }
 
 export interface EndpointStats {
@@ -3247,6 +3461,50 @@ export async function UpdatePhotoTags(data: UpdatePhotoTagsRequest): Promise<rpc
     return await rpc.call<UpdatePhotoTagsResponse>('UpdatePhotoTags', JSON.stringify(data));
 }
 
+export async function GetVideoSupport(data: GetVideoSupportRequest): Promise<rpc.Response<GetVideoSupportResponse>> {
+    return await rpc.call<GetVideoSupportResponse>('GetVideoSupport', JSON.stringify(data));
+}
+
+export async function BeginVideoUpload(data: BeginVideoUploadRequest): Promise<rpc.Response<BeginVideoUploadResponse>> {
+    return await rpc.call<BeginVideoUploadResponse>('BeginVideoUpload', JSON.stringify(data));
+}
+
+export async function CompleteVideoUpload(data: CompleteVideoUploadRequest): Promise<rpc.Response<CompleteVideoUploadResponse>> {
+    return await rpc.call<CompleteVideoUploadResponse>('CompleteVideoUpload', JSON.stringify(data));
+}
+
+export async function CancelVideoUpload(data: CancelVideoUploadRequest): Promise<rpc.Response<Empty>> {
+    return await rpc.call<Empty>('CancelVideoUpload', JSON.stringify(data));
+}
+
+export async function SetFamilyVideoEnabled(data: SetFamilyVideoEnabledRequest): Promise<rpc.Response<Empty>> {
+    return await rpc.call<Empty>('SetFamilyVideoEnabled', JSON.stringify(data));
+}
+
+export async function GetVideoPlayback(data: GetVideoPlaybackRequest): Promise<rpc.Response<GetVideoPlaybackResponse>> {
+    return await rpc.call<GetVideoPlaybackResponse>('GetVideoPlayback', JSON.stringify(data));
+}
+
+export async function GetVideoProcessingStats(data: Empty): Promise<rpc.Response<VideoProcessingStats>> {
+    return await rpc.call<VideoProcessingStats>('GetVideoProcessingStats', JSON.stringify(data));
+}
+
+export async function RetryFailedVideos(data: Empty): Promise<rpc.Response<RetryFailedVideosResponse>> {
+    return await rpc.call<RetryFailedVideosResponse>('RetryFailedVideos', JSON.stringify(data));
+}
+
+export async function GetVideoTranscript(data: GetVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('GetVideoTranscript', JSON.stringify(data));
+}
+
+export async function UpdateVideoTranscript(data: UpdateVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('UpdateVideoTranscript', JSON.stringify(data));
+}
+
+export async function RemoveVideoTranscript(data: GetVideoTranscriptRequest): Promise<rpc.Response<GetVideoTranscriptResponse>> {
+    return await rpc.call<GetVideoTranscriptResponse>('RemoveVideoTranscript', JSON.stringify(data));
+}
+
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {
     return await rpc.call<GetFaceReviewResponse>('GetFaceReview', JSON.stringify(data));
 }
@@ -3357,6 +3615,14 @@ export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<
 
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
+}
+
+export async function ListVideoOriginals(data: ListVideoOriginalsRequest): Promise<rpc.Response<ListVideoOriginalsResponse>> {
+    return await rpc.call<ListVideoOriginalsResponse>('ListVideoOriginals', JSON.stringify(data));
+}
+
+export async function GetVideoOriginalLink(data: GetVideoOriginalLinkRequest): Promise<rpc.Response<GetVideoOriginalLinkResponse>> {
+    return await rpc.call<GetVideoOriginalLinkResponse>('GetVideoOriginalLink', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

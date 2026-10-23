@@ -104,6 +104,7 @@ cannot write.
 | `/srv/apps/family/shared/.env` | secrets, mode 600, **not backed up** |
 | `/srv/apps/family/shared/data/db.bolt` | the database (`cfg.DBPath`) |
 | `/srv/apps/family/shared/static/` | uploads and derived variants (`cfg.StaticDir`) |
+| `/srv/apps/family/shared/media/` | video originals and playback files on local storage (`cfg.MediaDir`), created at startup; `.scratch/` inside it is the video worker's and is wiped on start |
 | `/srv/apps/family/shared/logs/` | the rotating application log (`cfg.LogDir`) |
 | `/srv/apps/family-face/shared/` | the face daemon's own env and models |
 | `/run/family-face/face.sock` | app → daemon socket (`cfg.FaceAnalysisSocket`) |
@@ -336,6 +337,28 @@ up, down, or not configured under
 version; a new model or a bump of `embeddingVersion` re-embeds the library in
 the background.
 
+## Video transcripts
+
+Transcripts come from whisper.cpp, run by the app as a command (like ffmpeg),
+not a daemon. It has to be built on a box, because a build from a newer
+distro needs a newer glibc than the servers have (staging is Ubuntu 24.04,
+glibc 2.39; it already has git, cmake and g++):
+
+```bash
+make speech-models DEPLOY_HOST=vps   # build + ~490 MB into /srv/apps/family/shared/models/whisper
+```
+
+`scripts/install-speech.sh` pins the whisper.cpp release and the model
+checksums, builds every x86 CPU variant (ggml picks one at run time), and
+finishes by transcribing a sample, so a broken build fails there rather than
+in the app. Re-running keeps a working build. Restart the app afterwards; it
+looks for `bin/whisper-cli` and `ggml-small.en.bin` in `cfg.SpeechModelsDir`
+at startup and logs why when transcription is off.
+
+A transcription uses two threads and up to about 750 MB while it runs, one
+video at a time. On the laptop `small.en` takes about 0.6× the clip's length;
+expect slower on staging's older CPU.
+
 ## Host metrics
 
 `/admin` shows a Host card and folds disk pressure and proxy-measured 5xx into
@@ -406,6 +429,11 @@ enforced in `backend/storage_quota.go`.
 | `FamilyStorageQuotaBytes` | 10 GiB | one account costing an unbounded amount. Signup is open and accounts are free, so without it the only limit is the upload rate rule. |
 | `MinFreeDiskBytes` | 1 GiB | the machine running out. Per-family quotas multiply by the number of families, so they cannot promise this on their own. |
 
+Video counts more than its original: an upload reserves twice its size plus a
+poster allowance until the worker records the real remux and poster sizes, and
+outstanding reservations count against the quota and the disk floor, so
+concurrent uploads cannot claim the same space.
+
 The quota counts photo **originals**, which is what the `Image` row records.
 Derived variants roughly triple what actually lands on disk, so the quota is
 deliberately set well under the disk rather than close to it — raising it means
@@ -421,6 +449,72 @@ and it is logged at error level so it reaches the health check below.
 
 If `Statfs` fails, the write is allowed. Refusing every upload because the
 filesystem could not be measured trades a rare problem for a total one.
+
+## Video
+
+The design is `docs/plans/video.md`; what degrades how is in
+`docs/degraded-dependencies.md`. Video is opt-in per family: an admin turns it
+on from **Admin → Users** ("Turn on family video").
+
+### Phase 1: local disk
+
+Needs `ffmpeg` and `ffprobe` on the box (`sudo apt install ffmpeg`). Without
+them the app starts, logs `Video processing disabled: ffmpeg not found`, and
+refuses video uploads with a clear message; admin health reports it if a family
+has video turned on. Uploads stream to `shared/media/` through the app; Caddy
+imposes no body size or timeout limit (see above), and the app allows a 1 GiB
+body with a two-hour read deadline on `/api/media/upload/*`.
+
+Backups do **not** include `shared/media/` until `backup.conf` says so. Add
+`include = /srv/apps/family/shared/media/videos/*/original.*` **after the first
+video has finished processing**: `backupctl` treats a glob that matches nothing
+as a failed backup. The playback files and posters are derived and need not be
+backed up; posters regenerate on reprocessing.
+
+### Phase 2: a bucket
+
+Setting all five variables below in `shared/.env` switches storage to the
+bucket at the next start. Partial settings leave video unavailable rather than
+falling back to local disk.
+
+| variable | R2 | B2 |
+| --- | --- | --- |
+| `MEDIA_S3_ENDPOINT` | `<account id>.r2.cloudflarestorage.com` | `s3.<region>.backblazeb2.com` |
+| `MEDIA_S3_REGION` | `auto` | the bucket's region, e.g. `us-west-004` |
+| `MEDIA_S3_BUCKET` | bucket name | bucket name |
+| `MEDIA_S3_ACCESS_KEY_ID` | R2 API token's access key, Object Read & Write on that bucket only | application key ID scoped to the bucket |
+| `MEDIA_S3_SECRET_ACCESS_KEY` | its secret | the application key |
+
+The bucket stays private: no public access, no custom domain. Browsers reach it
+only through presigned URLs, so it needs a CORS rule for the site's origins:
+
+```json
+[{
+  "AllowedOrigins": ["https://familyrecord.app", "https://staging.familyrecord.app"],
+  "AllowedMethods": ["GET", "PUT", "HEAD"],
+  "AllowedHeaders": ["Content-Type", "Range"],
+  "ExposeHeaders": ["Content-Length", "Content-Range", "ETag"],
+  "MaxAgeSeconds": 3600
+}]
+```
+
+The content security policy adds the endpoint to `media-src` and `connect-src`
+automatically. Moving existing files:
+
+```bash
+sudo systemctl stop app@family
+# add the MEDIA_S3_* variables to shared/.env
+sudo -u apps /srv/apps/family/current/family migrate-media
+sudo systemctl start app@family
+# once playback is checked:
+sudo -u apps /srv/apps/family/current/family migrate-media -delete-local
+```
+
+`migrate-media` keeps every key, skips objects already in the bucket at the
+same size, verifies each copy, and can be run again until it reports no
+failures. After the move, remove the media include from `backup.conf`: bucket
+objects are outside restic, so plan their protection separately (R2 has no
+versioning; B2 keeps prior versions by default).
 
 ## Health alerting
 

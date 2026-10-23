@@ -9,6 +9,8 @@ import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { FullImage } from "../../components/ResponsiveImage";
+import { VideoPlayer } from "../../components/VideoPlayer";
+import { uploadUrl } from "../../lib/videoUpload";
 import { CropSelector } from "../../components/CropSelector";
 import { FaceCrop } from "../../components/FaceCrop";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
@@ -23,6 +25,7 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import {
   loadSequence,
   routeHasSequence,
+  routeStartSeconds,
   sequencePosition,
   swipeDirection,
   viewPhotoRoute,
@@ -39,6 +42,8 @@ type ViewPhotoData = {
   sameAge: server.GetSameAgeResponse | null;
   childId: number;
   compareHref: string;
+  playback: server.GetVideoPlaybackResponse | null;
+  transcript: server.GetVideoTranscriptResponse | null;
 };
 
 const CHILD_MAX_MONTHS = 18 * 12;
@@ -67,7 +72,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const [childId, childAge] = photoResp
     ? firstChildIn(photoResp.people ?? [], photoResp.image.photoDate)
     : [0, 0];
-  const [[tagsResp], [facesResp], [sameAge]] = await Promise.all([
+  const isVideo = photoResp?.image.mediaKind === server.MediaVideo;
+  const [[tagsResp], [facesResp], [sameAge], [playback], [transcript]] = await Promise.all([
     server.ListTags({}),
     server.GetPhotoFaces({ photoId }),
     childId
@@ -79,6 +85,12 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
           today: localDateString(new Date()),
         })
       : Promise.resolve([null, ""] as rpc.Response<server.GetSameAgeResponse>),
+    isVideo
+      ? server.GetVideoPlayback({ id: photoId })
+      : Promise.resolve([null, ""] as rpc.Response<server.GetVideoPlaybackResponse>),
+    isVideo
+      ? server.GetVideoTranscript({ id: photoId })
+      : Promise.resolve([null, ""] as rpc.Response<server.GetVideoTranscriptResponse>),
   ]);
   return [
     {
@@ -93,6 +105,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       compareHref: photoResp
         ? compareHref(route, photoResp.people ?? [], photoResp.image.photoDate)
         : "",
+      playback: playback ?? null,
+      transcript: transcript ?? null,
     },
     "",
   ];
@@ -141,6 +155,9 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
           sameAge={data.sameAge}
           childId={data.childId}
           compareHref={data.compareHref}
+          playback={data.playback}
+          transcript={data.transcript}
+          startAt={routeStartSeconds(route)}
           position={position}
           backRoute={sequence?.backRoute || "/photos"}
         />
@@ -160,6 +177,9 @@ interface ViewPhotoPageProps {
   sameAge: server.GetSameAgeResponse | null;
   childId: number;
   compareHref: string;
+  playback: server.GetVideoPlaybackResponse | null;
+  transcript: server.GetVideoTranscriptResponse | null;
+  startAt: number;
   position: SequencePosition | null;
   backRoute: string;
 }
@@ -526,13 +546,17 @@ const ViewPhotoPage = ({
   sameAge,
   childId,
   compareHref,
+  playback,
+  transcript,
+  startAt,
   position,
   backRoute,
 }: ViewPhotoPageProps) => {
   const photoStatus = usePhotoStatus();
   const cropModalState = useCropModalState();
+  const isVideo = photo.mediaKind === server.MediaVideo;
   const profileCandidates =
-    auth.roleIn(photo.familyId) >= auth.ROLE_VIEW
+    !isVideo && auth.roleIn(photo.familyId) >= auth.ROLE_VIEW
       ? people.filter(person => auth.canContribute(person.familyId))
       : [];
 
@@ -569,12 +593,21 @@ const ViewPhotoPage = ({
         onTouchStart={position ? handleTouchStart : undefined}
         onTouchEnd={position ? e => handleTouchEnd(position, e) : undefined}
       >
-        <FullImage
-          photoId={photo.id}
-          alt={photo.title}
-          className="photo-main-image"
-          status={photoStatus.getStatus(photo.id)}
-        />
+        {isVideo ? (
+          <VideoPlayer
+            photo={photo}
+            playback={playback}
+            startAt={startAt}
+            transcript={transcript}
+          />
+        ) : (
+          <FullImage
+            photoId={photo.id}
+            alt={photo.title}
+            className="photo-main-image"
+            status={photoStatus.getStatus(photo.id)}
+          />
+        )}
         {position && (
           <>
             <button
@@ -719,9 +752,20 @@ const ViewPhotoPage = ({
               <Icon symbol={Pencil} /> Edit
             </a>
           )}
-          <a href={`/api/photo/${photo.id}/original?download=1`} className="btn btn-secondary">
-            <Icon symbol={Download} /> Download original
-          </a>
+          {!isVideo && (
+            <a href={`/api/photo/${photo.id}/original?download=1`} className="btn btn-secondary">
+              <Icon symbol={Download} /> Download original
+            </a>
+          )}
+          {isVideo && playback?.downloadUrl && (
+            <a
+              href={uploadUrl(playback.downloadUrl)}
+              download={playback.originalFilename}
+              className="btn btn-secondary"
+            >
+              <Icon symbol={Download} /> Download original
+            </a>
+          )}
 
           {profileCandidates.length > 0 && (
             <div className="profile-photo-actions">

@@ -538,6 +538,10 @@ func SetProfilePhoto(ctx *vbeam.Context, req SetProfilePhotoRequest) (resp SetPr
 		err = errors.New("Photo not found or access denied")
 		return
 	}
+	if photo.IsVideo() {
+		err = errors.New("A video cannot be a profile photo")
+		return
+	}
 
 	photoPeople := GetPhotoPeople(ctx.Tx, req.PhotoId)
 	personInPhoto := false

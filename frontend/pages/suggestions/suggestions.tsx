@@ -5,9 +5,15 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import "./suggestions-styles";
 
-const emptyReview: server.GetTagSuggestionsResponse = { enabled: false, groups: [], total: 0 };
+const emptyReview: server.GetTagSuggestionsResponse = {
+  enabled: false,
+  groups: [],
+  total: 0,
+  videos: [],
+};
 
 export async function fetch(
   route: string,
@@ -94,7 +100,7 @@ export function view(
         )}
 
         {review.groups.map(group => (
-          <SuggestionGroupCard key={group.key} state={state} group={group} />
+          <SuggestionGroupCard key={group.key} state={state} group={group} videos={review.videos} />
         ))}
       </main>
       <Footer />
@@ -105,9 +111,11 @@ export function view(
 const SuggestionGroupCard = ({
   state,
   group,
+  videos,
 }: {
   state: SuggestionsState;
   group: server.SuggestionGroup;
+  videos: server.Image[];
 }) => {
   const ids = includedIds(state, group);
   const shown = shownIn(group);
@@ -143,12 +151,13 @@ const SuggestionGroupCard = ({
           <button
             key={s.id}
             type="button"
-            className={`suggestion-photo ${state.excluded[s.id] ? "excluded" : ""}`}
+            className={`suggestion-photo has-video-badge ${state.excluded[s.id] ? "excluded" : ""}`}
             aria-pressed={!state.excluded[s.id]}
             title={state.excluded[s.id] ? "Include this photo" : "Leave this photo out"}
             onClick={vlens.cachePartial(onToggle, state, s.id)}
           >
             <ThumbnailImage photoId={s.photoId} alt={group.label} className="suggestion-thumb" />
+            <VideoBadge image={videos.find(v => v.id === s.photoId)} />
           </button>
         ))}
       </div>

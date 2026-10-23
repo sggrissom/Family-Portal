@@ -109,10 +109,20 @@ func suggestKey(tx *vbolt.Tx, familyId int) string {
 	return fmt.Sprintf("%d:%d", autoTagVersion, gen)
 }
 
+// photoSuggestKey adds a video's frames to the family key, so new frames
+// rescore it.
+func photoSuggestKey(tx *vbolt.Tx, photoId, familyId int) string {
+	key := suggestKey(tx, familyId)
+	if f, ok := GetVideoFrames(tx, photoId); ok {
+		key += fmt.Sprintf(":f%d", f.Version)
+	}
+	return key
+}
+
 func suggestionsOutdated(tx *vbolt.Tx, photoId, familyId int) bool {
 	var key string
 	vbolt.Read(tx, SuggestStateBkt, photoId, &key)
-	return key != suggestKey(tx, familyId)
+	return key != photoSuggestKey(tx, photoId, familyId)
 }
 
 func writeSuggestionTx(tx *vbolt.Tx, s *TagSuggestion) {
@@ -267,18 +277,49 @@ func scoreLabels(image []float32, targets, background [][]float32) []labelScore 
 	return scores
 }
 
+const shortClipMs = 15000
+
+// scoreVideoLabels keeps a label that passes on enough of the video's frames,
+// two unless the clip is short, at its best frame's probability.
+func scoreVideoLabels(frames []VideoFrame, durationMs int, targets, background [][]float32) []labelScore {
+	minFrames := 2
+	if durationMs < shortClipMs || len(frames) < 2 {
+		minFrames = 1
+	}
+	best := make([]labelScore, len(targets))
+	passed := make([]int, len(targets))
+	for _, f := range frames {
+		for i, s := range scoreLabels(f.Vector, targets, background) {
+			if s.prob > suggestMinProb && s.cosine >= suggestMinCosine {
+				passed[i]++
+				if s.prob > best[i].prob {
+					best[i] = s
+				}
+			}
+		}
+	}
+	for i := range best {
+		if passed[i] < minFrames {
+			best[i] = labelScore{}
+		}
+	}
+	return best
+}
+
 func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 	var img Image
 	var embedding PhotoEmbedding
 	var found, outdated bool
 	var targets []suggestionTarget
 	var generation string
+	var frames VideoFrames
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		img = GetImageById(tx, photoId)
 		embedding, found = GetPhotoEmbedding(tx, photoId)
+		frames, _ = GetVideoFrames(tx, photoId)
 		if img.Id != 0 {
 			outdated = suggestionsOutdated(tx, img.Id, img.FamilyId)
-			generation = suggestKey(tx, img.FamilyId)
+			generation = photoSuggestKey(tx, img.Id, img.FamilyId)
 			targets = suggestionTargets(tx, img.FamilyId)
 		}
 	})
@@ -302,7 +343,12 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 		log.Printf("[VISION] Could not embed tag phrases: %v", err)
 		return nil
 	}
-	scores := scoreLabels(embedding.Vector, vectors[:len(targets)], vectors[len(targets):])
+	var scores []labelScore
+	if len(frames.Frames) > 0 {
+		scores = scoreVideoLabels(frames.Frames, img.DurationMs, vectors[:len(targets)], vectors[len(targets):])
+	} else {
+		scores = scoreLabels(embedding.Vector, vectors[:len(targets)], vectors[len(targets):])
+	}
 	stale := false
 
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -310,7 +356,7 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 		if img.Id == 0 || img.Status != 0 {
 			return
 		}
-		if suggestKey(tx, img.FamilyId) != generation {
+		if photoSuggestKey(tx, img.Id, img.FamilyId) != generation {
 			stale = true
 			return
 		}
@@ -395,6 +441,7 @@ type GetTagSuggestionsResponse struct {
 	Enabled bool              `json:"enabled"`
 	Groups  []SuggestionGroup `json:"groups"`
 	Total   int               `json:"total"`
+	Videos  []Image           `json:"videos"`
 }
 
 func isCatalogLabel(name string) bool {
@@ -423,6 +470,8 @@ func GetTagSuggestions(ctx *vbeam.Context, req Empty) (resp GetTagSuggestionsRes
 	}
 	resp.Enabled = globalVisionClient != nil
 	resp.Groups = []SuggestionGroup{}
+	resp.Videos = []Image{}
+	videos := map[int]bool{}
 	for _, familyId := range familiesVisibleTo(ctx.Tx, user) {
 		if !CanAccessFamily(ctx.Tx, user, familyId, AccessContribute) {
 			continue
@@ -430,8 +479,13 @@ func GetTagSuggestions(ctx *vbeam.Context, req Empty) (resp GetTagSuggestionsRes
 		byKey := map[string]*SuggestionGroup{}
 		var order []string
 		for _, s := range pendingFamilySuggestions(ctx.Tx, familyId) {
-			if img := GetImageById(ctx.Tx, s.PhotoId); img.Id == 0 || img.Status != 0 {
+			img := GetImageById(ctx.Tx, s.PhotoId)
+			if img.Id == 0 || img.Status != 0 {
 				continue
+			}
+			if img.IsVideo() && !videos[img.Id] {
+				videos[img.Id] = true
+				resp.Videos = append(resp.Videos, img)
 			}
 			key := fmt.Sprintf("%d/%s", familyId, suggestionKeyOf(s))
 			g := byKey[key]

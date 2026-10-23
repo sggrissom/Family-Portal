@@ -30,6 +30,7 @@ import { adminView } from "../../components/AdminGuard";
 import { formatDateTime, formatRelativeTime } from "../../lib/dateUtils";
 import { formatBytes } from "../../lib/formatBytes";
 import { logWarn } from "../../lib/logger";
+import { VideoPanel } from "./video-panel";
 import "./admin-styles";
 
 type PhotoManagementState = {
@@ -74,6 +75,7 @@ export async function fetch(route: string, prefix: string) {
   if (!(await ensureAuthInFetch())) {
     return rpc.ok<server.GetPhotoStatsResponse>({
       totalPhotos: 0,
+      totalVideos: 0,
       processedPhotos: 0,
       pendingPhotos: 0,
       analysisPending: 0,
@@ -95,6 +97,8 @@ export async function fetch(route: string, prefix: string) {
       embeddingsPending: 0,
       visionQueue: 0,
       visionStatus: "off",
+      videoFramesDone: 0,
+      videoFramesQueue: 0,
     });
   }
 
@@ -746,6 +750,12 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
                   ? "Vision daemon not configured"
                   : `${data.embeddingsPending.toLocaleString()} pending (${data.visionQueue} queued), daemon ${data.visionStatus}`}
               </div>
+              {data.totalVideos > 0 && data.visionStatus !== "off" && (
+                <div className="admin-stat-label">
+                  Video frames: {data.videoFramesDone.toLocaleString()} of{" "}
+                  {data.totalVideos.toLocaleString()} videos ({data.videoFramesQueue} queued)
+                </div>
+              )}
             </div>
           </div>
 
@@ -811,6 +821,8 @@ const PhotoManagementPage = ({ data }: PhotoManagementPageProps) => {
       {state.processingStats && (
         <WorkerPanel stats={state.processingStats} onRequeue={requeueStuck} state={state} />
       )}
+
+      <VideoPanel />
 
       {needsReprocessing && (
         <div className="admin-card reprocess-card">

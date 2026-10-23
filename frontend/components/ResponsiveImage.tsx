@@ -85,6 +85,7 @@ interface ThumbnailImageProps {
   fetchpriority?: "high" | "low" | "auto";
   onClick?: () => void;
   status?: number;
+  frameMs?: number;
 }
 
 export const ThumbnailImage = ({
@@ -95,7 +96,21 @@ export const ThumbnailImage = ({
   fetchpriority = "auto",
   onClick,
   status,
+  frameMs = 0,
 }: ThumbnailImageProps) => {
+  if (frameMs > 0) {
+    return (
+      <img
+        src={`/api/photo/${photoId}/frame/${frameMs}`}
+        alt={alt}
+        className={className}
+        loading={loading}
+        onClick={onClick}
+        width={300}
+        height={300}
+      />
+    );
+  }
   return (
     <ResponsiveImage
       photoId={photoId}

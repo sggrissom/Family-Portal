@@ -47,6 +47,8 @@ type AdminUserInfo struct {
 	FamilyId   int       `json:"familyId"`
 	FamilyName string    `json:"familyName"`
 	IsAdmin    bool      `json:"isAdmin"`
+
+	FamilyVideoEnabled bool `json:"familyVideoEnabled"`
 }
 
 type ListAllUsersResponse struct {
@@ -71,9 +73,11 @@ func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err
 	resp.Users = make([]AdminUserInfo, 0, len(users))
 	for _, u := range users {
 		familyName := ""
+		videoEnabled := false
 		if u.FamilyId != 0 {
 			family := GetFamily(ctx.Tx, u.FamilyId)
 			familyName = family.Name
+			videoEnabled = family.VideoEnabled
 		}
 
 		adminUser := AdminUserInfo{
@@ -85,6 +89,8 @@ func ListAllUsers(ctx *vbeam.Context, req Empty) (resp ListAllUsersResponse, err
 			FamilyId:   u.FamilyId,
 			FamilyName: familyName,
 			IsAdmin:    u.Id == 1,
+
+			FamilyVideoEnabled: videoEnabled,
 		}
 		resp.Users = append(resp.Users, adminUser)
 	}

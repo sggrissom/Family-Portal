@@ -10,6 +10,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import { usePhotoStatus, Status } from "../../hooks/usePhotoStatus";
 import { usePhotoFilter } from "../../hooks/usePhotoFilter";
 import {
@@ -22,7 +23,7 @@ import {
 import { LoadMore } from "../../components/LoadMore";
 import { parseFilterQuery, serverFilters } from "../../lib/photoFilterQuery";
 import { PHOTO_PAGE_SIZE, photosRequest } from "../../lib/photoPages";
-import { saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
+import { matchStartMs, saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import "./family-photos-styles";
 
 type FamilyPhotosData = {
@@ -71,9 +72,9 @@ interface FamilyPhotosPageProps {
   data: FamilyPhotosData;
 }
 
-function openPhoto(photoId: number, photos: server.PhotoWithPeople[]) {
+function openPhoto(photoId: number, photos: server.PhotoWithPeople[], startMs = 0) {
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(photoId, true));
+  core.setRoute(viewPhotoRoute(photoId, true, startMs));
 }
 
 const useSearchDraft = vlens.declareHook(() => ({ text: "", syncedTo: "" }));
@@ -359,11 +360,19 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                   <div key={photoWithPeople.image.id} className="photo-card">
                     <a
                       className="photo-open"
-                      href={viewPhotoRoute(photoWithPeople.image.id, true)}
+                      href={viewPhotoRoute(
+                        photoWithPeople.image.id,
+                        true,
+                        matchStartMs(photoWithPeople)
+                      )}
                       aria-label={`View ${photoWithPeople.image.title}`}
                       onClick={e => {
                         e.preventDefault();
-                        openPhoto(photoWithPeople.image.id, filteredPhotos);
+                        openPhoto(
+                          photoWithPeople.image.id,
+                          filteredPhotos,
+                          matchStartMs(photoWithPeople)
+                        );
                       }}
                     >
                       <div className="photo-image-container">
@@ -374,7 +383,9 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                           loading={index < 6 ? "eager" : "lazy"}
                           fetchpriority={index < 3 ? "high" : "auto"}
                           status={photoStatus.getStatus(photoWithPeople.image.id)}
+                          frameMs={matchStartMs(photoWithPeople)}
                         />
+                        <VideoBadge image={photoWithPeople.image} />
                         {photoWithPeople.people.some(
                           person => person.profilePhotoId === photoWithPeople.image.id
                         ) && (

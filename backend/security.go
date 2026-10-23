@@ -29,6 +29,9 @@ func requestBodyLimit(r *http.Request) int64 {
 	case "/api/import-bundle":
 		return maxImportRequestBytes
 	}
+	if strings.HasPrefix(r.URL.Path, localMediaUploadPrefix) {
+		return maxVideoBytes
+	}
 
 	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
 		return maxJSONRequestBytes
@@ -107,12 +110,17 @@ func addSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
+	media := ""
+	if mediaOrigin != "" {
+		media = " " + mediaOrigin
+	}
 	csp := "default-src 'self'; " +
 		"script-src 'self' 'unsafe-inline'; " +
 		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob:; " +
+		"media-src 'self' blob:" + media + "; " +
 		"font-src 'self'; " +
-		"connect-src 'self' ws: wss:; " +
+		"connect-src 'self' ws: wss:" + media + "; " +
 		"frame-ancestors 'none';"
 	w.Header().Set("Content-Security-Policy", csp)
 }

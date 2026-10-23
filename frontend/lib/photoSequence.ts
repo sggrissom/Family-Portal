@@ -1,3 +1,5 @@
+import * as server from "../server";
+
 // The viewer only trusts the saved list when its route carries SEQUENCE_PARAM,
 // so a photo opened from somewhere other than the grid can't pick up a stale one.
 
@@ -52,8 +54,23 @@ export function sequencePosition(ids: number[], photoId: number): SequencePositi
   };
 }
 
-export function viewPhotoRoute(photoId: number, inSequence: boolean): string {
-  return inSequence ? `/view-photo/${photoId}?${SEQUENCE_PARAM}=1` : `/view-photo/${photoId}`;
+export const START_PARAM = "t";
+
+export function viewPhotoRoute(photoId: number, inSequence: boolean, startMs = 0): string {
+  const params = new URLSearchParams();
+  if (inSequence) params.set(SEQUENCE_PARAM, "1");
+  if (startMs > 0) params.set(START_PARAM, String(Math.floor(startMs / 1000)));
+  const query = params.toString();
+  return query ? `/view-photo/${photoId}?${query}` : `/view-photo/${photoId}`;
+}
+
+export function routeStartSeconds(route: string): number {
+  const seconds = Number(new URLSearchParams(route.split("?")[1] ?? "").get(START_PARAM));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+}
+
+export function matchStartMs(photo: server.PhotoWithPeople): number {
+  return photo.match?.offsetMs ?? 0;
 }
 
 export function routeHasSequence(route: string): boolean {

@@ -256,7 +256,9 @@ func sameAgePhotosFor(ctx *vbeam.Context, person Person, ageMonths int) (ids []i
 	}
 	images := make([]Image, 0, len(photos.Photos))
 	for _, photo := range photos.Photos {
-		images = append(images, photo.Image)
+		if !photo.Image.IsVideo() {
+			images = append(images, photo.Image)
+		}
 	}
 	sort.SliceStable(images, func(i, j int) bool {
 		return absDuration(images[i].PhotoDate.Sub(target)) < absDuration(images[j].PhotoDate.Sub(target))
@@ -357,7 +359,7 @@ func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, 
 		// Apply the listing's visibility/deleted-photo filter before counting.
 		listing := newPhotoListing(ctx.Tx, user, []int{item.Person.Id}, nil, "", "", "")
 		vbolt.IterateTerm(ctx.Tx, ImageByPersonDateIndex, item.Person.Id, func(id int, seconds int64) bool {
-			if listing.passes(GetImageById(ctx.Tx, id)) {
+			if image := GetImageById(ctx.Tx, id); !image.IsVideo() && listing.passes(image) {
 				add(time.Unix(seconds, 0), false, true)
 			}
 			return true

@@ -21,6 +21,7 @@ func TestRequestSizeLimitWrapper(t *testing.T) {
 		{name: "JSON RPC", path: "/rpc/example", contentType: "application/json; charset=utf-8", limit: maxJSONRequestBytes},
 		{name: "photo upload", path: "/api/upload-photo", contentType: "multipart/form-data; boundary=test", limit: maxPhotoRequestBytes},
 		{name: "family import", path: "/api/import-bundle", contentType: "multipart/form-data; boundary=test", limit: maxImportRequestBytes},
+		{name: "video upload", path: localMediaUploadPrefix + "videos/abc/original.mov", contentType: "video/quicktime", limit: maxVideoBytes},
 	}
 
 	for _, tt := range tests {
@@ -167,6 +168,7 @@ func TestAddSecurityHeaders(t *testing.T) {
 			"script-src 'self' 'unsafe-inline'",
 			"style-src 'self' 'unsafe-inline'",
 			"img-src 'self' data: blob:",
+			"media-src 'self' blob:",
 			"font-src 'self'",
 			"connect-src 'self'",
 			"frame-ancestors 'none'",

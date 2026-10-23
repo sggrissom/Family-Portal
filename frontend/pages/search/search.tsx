@@ -10,13 +10,14 @@ import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { PersonChips, initial } from "../../components/PersonChips";
 import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
+import { VideoBadge } from "../../components/VideoBadge";
 import { InterviewCard } from "../../components/InterviewCard";
 import { isQuote } from "../../components/MilestoneText";
 import { chipOrder } from "../../lib/familyGroups";
 import { groupInterviewAnswers, interviewsById, InterviewGroup } from "../../lib/interviews";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { formatDate } from "../../lib/dateUtils";
-import { saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
+import { matchStartMs, saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import { copy } from "../../lib/copy";
 import {
   Chip,
@@ -211,10 +212,14 @@ function onResultsClick(state: SearchState, event: MouseEvent) {
   if ((event.target as HTMLElement).closest("a")) remember(state);
 }
 
-function openPhoto(state: SearchState, photos: server.PhotoWithPeople[], photoId: number) {
+function openPhoto(
+  state: SearchState,
+  photos: server.PhotoWithPeople[],
+  photo: server.PhotoWithPeople
+) {
   remember(state);
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(photoId, true));
+  core.setRoute(viewPhotoRoute(photo.image.id, true, matchStartMs(photo)));
 }
 
 function focusOnMount(state: SearchState, el: HTMLInputElement | null) {
@@ -469,16 +474,24 @@ const Groups = ({
             {photos.map(p => (
               <a
                 key={p.image.id}
-                href={viewPhotoRoute(p.image.id, true)}
-                className="search-photo"
+                href={viewPhotoRoute(p.image.id, true, matchStartMs(p))}
+                className="search-photo has-video-badge"
                 data-result
-                title={p.image.title || undefined}
+                title={p.match?.snippet || p.image.title || undefined}
                 onClick={e => {
                   e.preventDefault();
-                  openPhoto(state, photos, p.image.id);
+                  openPhoto(state, photos, p);
                 }}
               >
-                <ThumbnailImage photoId={p.image.id} alt={p.image.title || ""} />
+                <ThumbnailImage
+                  photoId={p.image.id}
+                  alt={p.image.title || ""}
+                  frameMs={matchStartMs(p)}
+                />
+                <VideoBadge image={p.image} />
+                {p.match?.snippet && (
+                  <span className="search-photo-snippet">“{p.match.snippet}”</span>
+                )}
               </a>
             ))}
           </div>

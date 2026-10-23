@@ -103,11 +103,12 @@ type User struct {
 }
 
 type Family struct {
-	Id         int       `json:"id"`
-	Name       string    `json:"name"`
-	InviteCode string    `json:"inviteCode"`
-	Creation   time.Time `json:"creation"`
-	CreatedBy  int       `json:"createdBy"`
+	Id           int       `json:"id"`
+	Name         string    `json:"name"`
+	InviteCode   string    `json:"inviteCode"`
+	Creation     time.Time `json:"creation"`
+	CreatedBy    int       `json:"createdBy"`
+	VideoEnabled bool      `json:"videoEnabled"`
 }
 
 func PackUser(self *User, buf *vpack.Buffer) {
@@ -127,12 +128,15 @@ func PackUser(self *User, buf *vpack.Buffer) {
 }
 
 func PackFamily(self *Family, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.String(&self.Name, buf)
 	vpack.String(&self.InviteCode, buf)
 	vpack.Time(&self.Creation, buf)
 	vpack.Int(&self.CreatedBy, buf)
+	if version >= 2 {
+		vpack.Bool(&self.VideoEnabled, buf)
+	}
 }
 
 var UsersBkt = vbolt.Bucket(&cfg.Info, "users", vpack.FInt, PackUser)

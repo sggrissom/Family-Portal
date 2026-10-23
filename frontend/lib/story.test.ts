@@ -30,6 +30,7 @@ describe("storyChapters", () => {
           image: { id: 1, photoDate: "2023-04-20T00:00:00Z" } as server.Image,
           people: [],
           similar: [],
+          match: null,
         },
       ],
       milestones: [],

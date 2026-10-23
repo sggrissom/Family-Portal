@@ -113,7 +113,8 @@ func main() {
 	port := flag.String("port", envOr("PORT", ""), "TCP port for healthz (optional)")
 	threads := flag.Int("threads", 0, "Intra-op threads (default VISION_THREADS or 2)")
 	benchDir := flag.String("bench", "", "Embed every image in this directory, report timings, and exit")
-	prompts := flag.String("prompts", "", "With -bench: file of `label: phrase` lines to score each image against")
+	framesDir := flag.String("frames", "", "Sample and embed frames from every video in this directory, report, and exit")
+	prompts := flag.String("prompts", "", "With -bench or -frames: file of `label: phrase` lines to score each image against")
 	visualFile := flag.String("visual", envOr("VISION_VISUAL", ""), "CLIP visual model file under clip/")
 	textFile := flag.String("textual", envOr("VISION_TEXTUAL", ""), "CLIP text model file under clip/")
 	minilmFile := flag.String("minilm", envOr("VISION_MINILM", ""), "Sentence model file under minilm/")
@@ -142,6 +143,12 @@ func main() {
 
 	if *benchDir != "" {
 		if err := runBench(*benchDir, *prompts); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *framesDir != "" {
+		if err := runFrameBench(*framesDir, *prompts); err != nil {
 			log.Fatal(err)
 		}
 		return

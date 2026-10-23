@@ -626,3 +626,81 @@ block(`
   line-height: 1.5;
 }
 `);
+
+block(`
+.save-videos-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+}
+`);
+
+block(`
+.save-videos-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.save-videos-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+`);
+
+block(`
+.save-video {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+`);
+
+block(`
+.save-video-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+`);
+
+block(`
+.save-video-name small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.save-video-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+`);
+
+block(`
+.save-video-failed .save-video-status {
+  color: var(--danger);
+}
+`);
+
+block(`
+.save-video-name a,
+.section-description a {
+  color: var(--accent);
+}
+`);

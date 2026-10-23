@@ -122,9 +122,22 @@ type ListFamilyPhotosRequest struct {
 }
 
 type PhotoWithPeople struct {
-	Image   Image    `json:"image"`
-	People  []Person `json:"people"`
-	Similar []int    `json:"similar,omitempty"`
+	Image   Image       `json:"image"`
+	People  []Person    `json:"people"`
+	Similar []int       `json:"similar,omitempty"`
+	Match   *MediaMatch `json:"match,omitempty"`
+}
+
+const (
+	MatchFrame      = "frame"
+	MatchTranscript = "transcript"
+)
+
+// MediaMatch is where in a video a search found what it was looking for.
+type MediaMatch struct {
+	Source   string `json:"source"`
+	OffsetMs int    `json:"offsetMs"`
+	Snippet  string `json:"snippet,omitempty"`
 }
 
 type ListFamilyPhotosResponse struct {
@@ -174,6 +187,14 @@ type Image struct {
 	AnalysisStatus   int       `json:"analysisStatus"`
 	AnalysisVersion  int       `json:"-"`
 	TagIds           []int     `json:"tagIds,omitempty"`
+	MediaKind        MediaKind `json:"mediaKind"`
+	DurationMs       int       `json:"durationMs,omitempty"`
+	VideoCodec       string    `json:"videoCodec,omitempty"`
+	AudioCodec       string    `json:"audioCodec,omitempty"`
+	ProcessingError  string    `json:"processingError,omitempty"`
+	OriginalKey      string    `json:"-"`
+	PlaybackKey      string    `json:"-"`
+	DerivedBytes     int       `json:"-"`
 }
 
 type PhotoPerson struct {
@@ -186,7 +207,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(4, buf)
+	version := vpack.Version(5, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -206,6 +227,16 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	}
 	if version >= 4 {
 		vpack.Int(&self.AnalysisVersion, buf)
+	}
+	if version >= 5 {
+		vpack.IntEnum(&self.MediaKind, buf)
+		vpack.Int(&self.DurationMs, buf)
+		vpack.String(&self.VideoCodec, buf)
+		vpack.String(&self.AudioCodec, buf)
+		vpack.String(&self.ProcessingError, buf)
+		vpack.String(&self.OriginalKey, buf)
+		vpack.String(&self.PlaybackKey, buf)
+		vpack.Int(&self.DerivedBytes, buf)
 	}
 }
 
@@ -863,12 +894,21 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if image.Status == 1 {
-		serveProcessingPlaceholder(w, r)
+		serveProcessingPlaceholder(w, r, image.IsVideo())
 		return
 	}
 
 	if image.Status == 2 {
 		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	if sizeVariant == "frame" && len(pathParts) == 3 {
+		serveVideoFrame(w, r, image, pathParts[2])
+		return
+	}
+	if sizeVariant == "captions" {
+		serveVideoCaptions(w, image)
 		return
 	}
 
@@ -880,7 +920,7 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		"large": true, "xlarge": true, "xxlarge": true, "original": true,
 	}
 
-	if sizeVariant != "" && !validSizes[sizeVariant] {
+	if (sizeVariant != "" && !validSizes[sizeVariant]) || (image.IsVideo() && sizeVariant == "original") {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -1141,6 +1181,7 @@ func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoRe
 	deletePhotoRecordTx(ctx.Tx, photo)
 
 	vbolt.TxCommit(ctx.Tx)
+	kickMediaJanitor()
 
 	resp.Success = true
 	return
@@ -1150,6 +1191,8 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFacesTx(tx, photo.Id)
 	deletePhotoFeaturesTx(tx, photo.Id)
 	deletePhotoEmbeddingTx(tx, photo.Id)
+	deleteVideoFramesTx(tx, photo.Id)
+	deleteVideoTranscriptTx(tx, photo.Id)
 	deletePhotoSuggestionsTx(tx, photo.Id)
 	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
@@ -1162,6 +1205,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	removePhotoFromActivities(tx, photo.Id)
 	removePhotoFromInterviews(tx, photo)
 	removeAllPhotoTags(tx, photo.Id)
+	queueVideoObjectDeletionsTx(tx, photo)
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
@@ -1169,6 +1213,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 }
 
 func deletePhotoFiles(photo Image) error {
+	deleteVideoFrameFiles(photo)
 	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
 	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
 
@@ -1233,7 +1278,11 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	return nil
 }
 
-func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
+func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request, video bool) {
+	label := "Processing image..."
+	if video {
+		label = "Processing video..."
+	}
 	svgContent := `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
 		<rect width="100%" height="100%" fill="#f0f0f0"/>
 		<circle cx="200" cy="120" r="30" fill="#d0d0d0">
@@ -1241,7 +1290,7 @@ func serveProcessingPlaceholder(w http.ResponseWriter, r *http.Request) {
 				from="0 200 120" to="360 200 120" dur="1s" repeatCount="indefinite"/>
 		</circle>
 		<text x="200" y="180" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#666">
-			Processing image...
+			` + label + `
 		</text>
 	</svg>`
 
@@ -1292,12 +1341,13 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 
 	var page []Image
 	var similarTo map[int][]int
+	var matches map[int]*MediaMatch
 	if query := strings.TrimSpace(req.Query); query != "" {
 		var offset int
 		if offset, err = parseSearchCursor(req.Cursor); err != nil {
 			return
 		}
-		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode = searchPhotos(listing, query, offset, limit)
+		page, resp.NextCursor, resp.MatchedPersonIds, resp.SearchMode, matches = searchPhotos(listing, query, offset, limit)
 	} else {
 		start := listing.newest
 		if req.Cursor != "" {
@@ -1309,6 +1359,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	}
 
 	resp.Photos = photosWithPeople(ctx.Tx, page, similarTo)
+	attachMatches(resp.Photos, matches)
 	return
 }
 

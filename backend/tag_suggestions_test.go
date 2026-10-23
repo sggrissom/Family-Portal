@@ -200,3 +200,85 @@ func TestUpdateTagWithoutPhraseKeepsIt(t *testing.T) {
 		t.Errorf("phrase = %q, want it kept", updated.Tag.AutoPhrase)
 	}
 }
+
+func TestTagSuggestionsCoverVideosByTheirPoster(t *testing.T) {
+	fx := setupResultsFixture(t)
+	client := startFakePhraseVision(t, map[string]int{"a photo at the beach with sand and ocean": 0})
+	previous := globalVisionClient
+	globalVisionClient = client
+	t.Cleanup(func() { globalVisionClient = previous })
+
+	photo := fx.addPhotoAt(t, "beach.jpg", featuresEpoch)
+	video := fx.addVideoAt(t, "beach.mov", featuresEpoch.Add(1))
+	for _, m := range []Image{photo, video} {
+		fx.setEmbedding(t, m, axis(0))
+		if err := suggestTagsForPhoto(fx.db, client, m.Id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := fx.suggestionsFor(t, video); len(got) != 1 || got[0].Label != "Beach" {
+		t.Fatalf("video suggestions = %+v", got)
+	}
+
+	review, err := callAs(t, fx, GetTagSuggestions, Empty{})
+	if err != nil || review.Total != 2 {
+		t.Fatalf("review = %+v, %v", review, err)
+	}
+	if len(review.Videos) != 1 || review.Videos[0].Id != video.Id {
+		t.Errorf("review videos = %+v, want only the video", review.Videos)
+	}
+}
+
+func TestVideoTagSuggestionsNeedTwoFramesUnlessShort(t *testing.T) {
+	fx := setupResultsFixture(t)
+	client := startFakePhraseVision(t, map[string]int{"a photo at the beach with sand and ocean": 0})
+	previous := globalVisionClient
+	globalVisionClient = client
+	t.Cleanup(func() { globalVisionClient = previous })
+
+	beachFrame := func(ms int) VideoFrame { return VideoFrame{OffsetMs: ms, Vector: axis(0)} }
+	plainFrame := func(ms int) VideoFrame { return VideoFrame{OffsetMs: ms, Vector: axis(3)} }
+	video := func(name string, durationMs int, frames ...VideoFrame) Image {
+		v := fx.addVideoAt(t, name, featuresEpoch)
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			v.DurationMs = durationMs
+			vbolt.Write(tx, ImagesBkt, v.Id, &v)
+			vbolt.TxCommit(tx)
+		})
+		fx.setEmbedding(t, v, axis(3))
+		fx.setFrames(t, v, frames...)
+		if err := suggestTagsForPhoto(fx.db, client, v.Id); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+
+	twice := video("twice.mov", 60000, plainFrame(0), beachFrame(20000), plainFrame(30000), beachFrame(40000))
+	once := video("once.mov", 60000, plainFrame(0), beachFrame(20000), plainFrame(40000))
+	short := video("short.mov", 8000, plainFrame(0), beachFrame(5000))
+
+	if got := fx.suggestionsFor(t, twice); len(got) != 1 || got[0].Label != "Beach" {
+		t.Errorf("beach in two frames: %+v", got)
+	}
+	if got := fx.suggestionsFor(t, once); len(got) != 0 {
+		t.Errorf("beach in one frame of a long clip: %+v", got)
+	}
+	if got := fx.suggestionsFor(t, short); len(got) != 1 {
+		t.Errorf("beach in one frame of a short clip: %+v", got)
+	}
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if suggestionsOutdated(tx, once.Id, once.FamilyId) {
+			t.Error("a scored video is still outdated")
+		}
+	})
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		deleteVideoFramesTx(tx, once.Id)
+		vbolt.TxCommit(tx)
+	})
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if !suggestionsOutdated(tx, once.Id, once.FamilyId) {
+			t.Error("changing a video's frames did not mark it for rescoring")
+		}
+	})
+}

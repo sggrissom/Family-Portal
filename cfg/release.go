@@ -12,6 +12,10 @@ const EnableFaceTagging = true
 const FaceModelsDir = "/srv/apps/family/shared/models"
 const FaceAnalysisSocket = "/run/family-face/face.sock"
 const VisionAnalysisSocket = "/run/family-vision/vision.sock"
+const SpeechModelsDir = "/srv/apps/family/shared/models/whisper"
 
 const FamilyStorageQuotaBytes = 10 << 30
 const MinFreeDiskBytes = 1 << 30
+
+const EnableVideo = true
+const MediaDir = "/srv/apps/family/shared/media/"

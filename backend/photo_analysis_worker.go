@@ -113,6 +113,9 @@ func TriggerPersonFaceUpdate(personId int) {
 }
 
 func imageNeedsAnalysis(image Image) bool {
+	if image.IsVideo() {
+		return false
+	}
 	switch image.AnalysisStatus {
 	// Retry old failures once on startup as well; older workers recorded
 	// daemon outages as permanent failures.
@@ -171,18 +174,18 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		}
 		return nil
 	}
-	log.Printf("[FACE_ANALYSIS] Starting analysis of photo %d", job.ImageId)
-
-	if err := aw.setAnalysisStatus(job.ImageId, 1); err != nil {
-		log.Printf("[FACE_ANALYSIS] Failed to set analyzing status for photo %d: %v", job.ImageId, err)
-		return nil
-	}
-
 	var img Image
 	vbolt.WithReadTx(aw.db, func(tx *vbolt.Tx) {
 		img = GetImageById(tx, job.ImageId)
 	})
-	if img.Id == 0 {
+	if img.Id == 0 || img.IsVideo() {
+		return nil
+	}
+
+	log.Printf("[FACE_ANALYSIS] Starting analysis of photo %d", job.ImageId)
+
+	if err := aw.setAnalysisStatus(job.ImageId, 1); err != nil {
+		log.Printf("[FACE_ANALYSIS] Failed to set analyzing status for photo %d: %v", job.ImageId, err)
 		return nil
 	}
 
@@ -383,6 +386,9 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 			return
 		}
 		img = GetImageById(tx, person.ProfilePhotoId)
+		if img.IsVideo() {
+			img = Image{}
+		}
 		if img.Id != 0 {
 			known = GetPhotoFacesTx(tx, img.Id)
 		}

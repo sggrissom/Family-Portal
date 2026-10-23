@@ -49,6 +49,18 @@ func ShutdownWorkers(ctx context.Context) bool {
 		LogWarn(LogCategoryWorker, "Vision worker did not stop before the deadline", nil)
 		clean = false
 	}
+	if !StopVideoAnalysisWorker(ctx) {
+		LogWarn(LogCategoryWorker, "Video analysis worker did not stop before the deadline", nil)
+		clean = false
+	}
+	if !StopVideoWorker(ctx) {
+		LogWarn(LogCategoryWorker, "Video worker did not stop before the deadline", nil)
+		clean = false
+	}
+	if !StopMediaJanitor(ctx) {
+		LogWarn(LogCategoryWorker, "Media janitor did not stop before the deadline", nil)
+		clean = false
+	}
 	if !StopFeaturesWorker(ctx) {
 		LogWarn(LogCategoryWorker, "Photo features worker did not stop before the deadline", nil)
 		clean = false
