@@ -342,10 +342,12 @@ the background.
 Transcripts come from whisper.cpp, run by the app as a command (like ffmpeg),
 not a daemon. It has to be built on a box, because a build from a newer
 distro needs a newer glibc than the servers have (staging is Ubuntu 24.04,
-glibc 2.39; it already has git, cmake and g++):
+glibc 2.39; production is Debian 13, glibc 2.41). It needs git, cmake and g++;
+production had no cmake (`sudo apt install cmake`). Both boxes are installed.
 
 ```bash
 make speech-models DEPLOY_HOST=vps   # build + ~490 MB into /srv/apps/family/shared/models/whisper
+make speech-models DEPLOY_HOST=prod
 ```
 
 `scripts/install-speech.sh` pins the whisper.cpp release and the model
@@ -357,7 +359,8 @@ at startup and logs why when transcription is off.
 
 A transcription uses two threads and up to about 750 MB while it runs, one
 video at a time. On the laptop `small.en` takes about 0.6× the clip's length;
-expect slower on staging's older CPU.
+staging takes about 18s for the 11s sample (model load included) and
+production about 8s.
 
 ## Host metrics
 
@@ -466,9 +469,10 @@ imposes no body size or timeout limit (see above), and the app allows a 1 GiB
 body with a two-hour read deadline on `/api/media/upload/*`.
 
 Backups do **not** include `shared/media/` until `backup.conf` says so. Add
-`include = /srv/apps/family/shared/media/videos/*/original.*` **after the first
-video has finished processing**: `backupctl` treats a glob that matches nothing
-as a failed backup. The playback files and posters are derived and need not be
+`include=media/videos/*/original.*` **after the first video has finished
+processing**: `backupctl` treats a glob that matches nothing as a failed backup,
+and rejects include paths that aren't relative to `shared/`. Production has it
+(since 2026-10-23); run `sudo backupctl doctor` after editing. The playback files and posters are derived and need not be
 backed up; posters regenerate on reprocessing.
 
 ### Phase 2: a bucket
