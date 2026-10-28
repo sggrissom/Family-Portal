@@ -56,14 +56,16 @@ test("a battle bracket records each round and sums up the run", async ({ page })
     { round: "Round 1", opponent: "Crew X", outcome: "Won" },
     { round: "Final", opponent: "Crew Z", outcome: "Lost" },
   ];
-  for (const { round, opponent, outcome } of rounds) {
+  for (const [i, { round, opponent, outcome }] of rounds.entries()) {
     await test.step(`add the ${round} against ${opponent}`, async () => {
-      await page.getByRole("button", { name: "Add performance" }).click();
-      await page.getByRole("button", { name: "Add head-to-head" }).click();
+      await page
+        .getByRole("button", { name: i === 0 ? "Record results" : "+ Another performance" })
+        .click();
+      await page.getByRole("button", { name: "+ Head-to-head" }).click();
       await page.getByLabel("Round").fill(round);
       await page.getByLabel("Against").fill(opponent);
       await page.getByLabel("Outcome").selectOption({ label: outcome });
-      await page.getByRole("button", { name: "Add performance" }).click();
+      await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect(
         page.locator(".matchup-line", { hasText: `${round} · vs ${opponent} · ${outcome}` })
       ).toBeVisible();
@@ -71,14 +73,12 @@ test("a battle bracket records each round and sums up the run", async ({ page })
   }
 
   await test.step("the run is summed up above its rounds", async () => {
-    await expect(page.locator(".matchup-summary")).toHaveText(
-      "Crew Battle — Went 1–1, lost in the Final"
-    );
+    await expect(page.locator(".perf-run-summary")).toHaveText("Went 1–1, lost in the Final");
   });
 
   await test.step("a score fills in the outcome it implies", async () => {
-    const final = page.locator(".appearance-item", { hasText: "vs Crew Z" });
-    await final.getByRole("button", { name: "Edit performance" }).click();
+    const final = page.locator(".perf", { hasText: "vs Crew Z" });
+    await final.getByRole("button", { name: "Edit", exact: true }).click();
     await expect(page.getByLabel("Outcome")).toHaveValue("loss");
     await page.getByLabel("Outcome").selectOption("");
     await page.getByLabel("Our score").fill("3");
@@ -88,9 +88,7 @@ test("a battle bracket records each round and sums up the run", async ({ page })
     await expect(
       page.locator(".matchup-line", { hasText: "Final · vs Crew Z · Won 3–2" })
     ).toBeVisible();
-    await expect(page.locator(".matchup-summary")).toHaveText(
-      "Crew Battle — Went 2–0, won the Final"
-    );
+    await expect(page.locator(".perf-run-summary")).toHaveText("Went 2–0, won the Final");
   });
 
   await test.step("the routine page counts the competition once and shows the record", async () => {
