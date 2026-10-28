@@ -16,7 +16,21 @@ import {
   MediaUploadState,
   newMediaUpload,
 } from "../../components/MediaUpload";
-import { ActivityLabels, labelsFor } from "./labels";
+import {
+  MatchupDraft,
+  commonRounds,
+  draftError,
+  draftToMatchup,
+  emptyMatchupDraft,
+  groupByEntry,
+  hasMatchup,
+  matchupParts,
+  matchupToDraft,
+  outcomeFromScore,
+  outcomeOptions,
+  runSummary,
+} from "../../lib/matchups";
+import { ActivityKindSport, ActivityLabels, labelsFor } from "./labels";
 import { ResultList } from "./results";
 import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
 import "./activities-styles";
@@ -112,10 +126,14 @@ type CompetitionState = {
   newEntryId: number;
   newOccurredAt: string;
   newNotes: string;
+  newMatchup: MatchupDraft;
 
   editingId: number;
   editOccurredAt: string;
   editNotes: string;
+  editMatchup: MatchupDraft;
+
+  showMatchup: boolean;
 
   editingResultsFor: number;
   resultRows: ResultRow[];
@@ -139,9 +157,12 @@ const useCompetitionState = vlens.declareHook(
     newEntryId: 0,
     newOccurredAt: "",
     newNotes: "",
+    newMatchup: emptyMatchupDraft(),
     editingId: 0,
     editOccurredAt: "",
     editNotes: "",
+    editMatchup: emptyMatchupDraft(),
+    showMatchup: false,
     editingResultsFor: 0,
     resultRows: [],
     eventPhotoIds: [],
@@ -272,46 +293,49 @@ export function view(
             </div>
           ) : (
             <ul className="event-list">
-              {state.appearances.map(detail => (
-                <li key={detail.appearance.id} className="event-item appearance-item">
-                  {state.editingId === detail.appearance.id ? (
-                    <EditAppearanceForm state={state} detail={detail} labels={labels} />
-                  ) : state.editingResultsFor === detail.appearance.id ? (
-                    <div className="appearance-editing">
-                      <strong className="event-name">{detail.entry.name}</strong>
-                      <ResultsEditor
-                        host={state}
-                        vocabulary={data.vocabulary}
-                        roster={rosterOf(data, detail.entry.id)}
-                        onSave={vlens.cachePartial(onSaveResults, state, detail.appearance.id)}
-                        onCancel={vlens.cachePartial(onCancelResults, state)}
-                      />
-                    </div>
-                  ) : state.editingPhotosFor === detail.appearance.id ? (
-                    <div className="appearance-editing">
-                      <strong className="event-name">{detail.entry.name}</strong>
-                      <PhotoDraftEditor
+              {groupByEntry(state.appearances).flatMap(group => [
+                <EntryRunSummary key={`run-${group[0].entry.id}`} group={group} />,
+                ...group.map(detail => (
+                  <li key={detail.appearance.id} className="event-item appearance-item">
+                    {state.editingId === detail.appearance.id ? (
+                      <EditAppearanceForm state={state} detail={detail} labels={labels} />
+                    ) : state.editingResultsFor === detail.appearance.id ? (
+                      <div className="appearance-editing">
+                        <strong className="event-name">{detail.entry.name}</strong>
+                        <ResultsEditor
+                          host={state}
+                          vocabulary={data.vocabulary}
+                          roster={rosterOf(data, detail.entry.id)}
+                          onSave={vlens.cachePartial(onSaveResults, state, detail.appearance.id)}
+                          onCancel={vlens.cachePartial(onCancelResults, state)}
+                        />
+                      </div>
+                    ) : state.editingPhotosFor === detail.appearance.id ? (
+                      <div className="appearance-editing">
+                        <strong className="event-name">{detail.entry.name}</strong>
+                        <PhotoDraftEditor
+                          state={state}
+                          personIds={rosterOf(data, detail.entry.id).map(person => person.id)}
+                          familyId={event.familyId}
+                          onSave={vlens.cachePartial(
+                            onSaveAppearancePhotos,
+                            state,
+                            detail.appearance.id
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <AppearanceRow
                         state={state}
-                        personIds={rosterOf(data, detail.entry.id).map(person => person.id)}
-                        familyId={event.familyId}
-                        onSave={vlens.cachePartial(
-                          onSaveAppearancePhotos,
-                          state,
-                          detail.appearance.id
-                        )}
+                        data={data}
+                        detail={detail}
+                        labels={labels}
+                        editable={editable}
                       />
-                    </div>
-                  ) : (
-                    <AppearanceRow
-                      state={state}
-                      data={data}
-                      detail={detail}
-                      labels={labels}
-                      editable={editable}
-                    />
-                  )}
-                </li>
-              ))}
+                    )}
+                  </li>
+                )),
+              ])}
             </ul>
           )}
         </section>
@@ -320,6 +344,176 @@ export function view(
     </div>
   );
 }
+
+const EntryRunSummary = ({ group }: { group: server.AppearanceDetail[] }) => {
+  if (group.length < 2) return null;
+  const summary = runSummary(group.map(detail => detail.appearance));
+  if (!summary) return null;
+  return (
+    <li className="matchup-summary">
+      <strong>{group[0].entry.name}</strong> — {summary}
+    </li>
+  );
+};
+
+const MatchupLine = ({ appearance }: { appearance: server.Appearance }) => {
+  const parts = matchupParts(appearance);
+  if (parts.length === 0) return null;
+  return (
+    <span className={`matchup-line${appearance.outcome ? ` matchup-${appearance.outcome}` : ""}`}>
+      {parts.join(" · ")}
+    </span>
+  );
+};
+
+function usedValues(state: CompetitionState, pick: (a: server.Appearance) => string): string[] {
+  const seen = new Set<string>();
+  for (const detail of state.appearances) {
+    const value = pick(detail.appearance);
+    if (value) seen.add(value);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+function onScoreInput(draft: MatchupDraft, field: "scoreFor" | "scoreAgainst", value: string) {
+  const derivedBefore = outcomeFromScore(draft);
+  draft[field] = value;
+  if (draft.outcome === "" || draft.outcome === derivedBefore) {
+    draft.outcome = outcomeFromScore(draft);
+  }
+  vlens.scheduleRedraw();
+}
+
+const MatchupFields = ({
+  state,
+  draft,
+  idPrefix,
+  labels,
+}: {
+  state: CompetitionState;
+  draft: MatchupDraft;
+  idPrefix: string;
+  labels: ActivityLabels;
+}) => {
+  if (!state.showMatchup) {
+    return (
+      <div className="form-group">
+        <button
+          type="button"
+          className="btn btn-secondary btn-small"
+          onClick={() => {
+            state.showMatchup = true;
+            vlens.scheduleRedraw();
+          }}
+          disabled={state.saving}
+        >
+          Add head-to-head
+        </button>
+        <p className="form-hint">
+          For a bracket or a game: the round, who it was against, and whether{" "}
+          {labels.entry.toLowerCase()} won.
+        </p>
+      </div>
+    );
+  }
+
+  const rounds = [...new Set([...commonRounds, ...usedValues(state, a => a.round)])];
+  const opponents = usedValues(state, a => a.opponent);
+  return (
+    <fieldset className="matchup-fields">
+      <legend>Head-to-head</legend>
+      <div className="form-row">
+        <div className="form-group">
+          <label htmlFor={`${idPrefix}Round`}>Round</label>
+          <input
+            id={`${idPrefix}Round`}
+            type="text"
+            list={`${idPrefix}Rounds`}
+            maxLength={100}
+            value={draft.round}
+            onInput={e => {
+              draft.round = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+          <datalist id={`${idPrefix}Rounds`}>
+            {rounds.map(round => (
+              <option key={round} value={round} />
+            ))}
+          </datalist>
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${idPrefix}Opponent`}>Against</label>
+          <input
+            id={`${idPrefix}Opponent`}
+            type="text"
+            list={`${idPrefix}Opponents`}
+            maxLength={100}
+            value={draft.opponent}
+            onInput={e => {
+              draft.opponent = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+          <datalist id={`${idPrefix}Opponents`}>
+            {opponents.map(opponent => (
+              <option key={opponent} value={opponent} />
+            ))}
+          </datalist>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label htmlFor={`${idPrefix}Outcome`}>Outcome</label>
+          <select
+            id={`${idPrefix}Outcome`}
+            value={draft.outcome}
+            onInput={e => {
+              draft.outcome = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          >
+            {outcomeOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${idPrefix}ScoreFor`}>Score</label>
+          <div className="matchup-score">
+            <input
+              id={`${idPrefix}ScoreFor`}
+              type="text"
+              inputMode="numeric"
+              aria-label="Our score"
+              placeholder="Us"
+              value={draft.scoreFor}
+              onInput={e => onScoreInput(draft, "scoreFor", e.currentTarget.value)}
+              disabled={state.saving}
+            />
+            <span aria-hidden="true">–</span>
+            <input
+              id={`${idPrefix}ScoreAgainst`}
+              type="text"
+              inputMode="numeric"
+              aria-label="Their score"
+              placeholder="Them"
+              value={draft.scoreAgainst}
+              onInput={e => onScoreInput(draft, "scoreAgainst", e.currentTarget.value)}
+              disabled={state.saving}
+            />
+          </div>
+          <p className="form-hint">Optional — leave empty when there is only a winner.</p>
+        </div>
+      </div>
+    </fieldset>
+  );
+};
 
 const AppearanceRow = ({
   state,
@@ -344,6 +538,7 @@ const AppearanceRow = ({
       <div className="event-item-main">
         <strong className="event-name">{entry.name}</strong>
         {traits && <span className="event-meta">{traits}</span>}
+        <MatchupLine appearance={detail.appearance} />
         {isRealDate(detail.appearance.occurredAt) && (
           <span className="event-count">{formatDate(detail.appearance.occurredAt)}</span>
         )}
@@ -373,7 +568,7 @@ const AppearanceRow = ({
             className="icon-btn"
             title={`Edit ${labels.appearance.toLowerCase()}`}
             aria-label={`Edit ${labels.appearance.toLowerCase()}`}
-            onClick={vlens.cachePartial(onStartEdit, state, detail)}
+            onClick={vlens.cachePartial(onStartEdit, state, data, detail)}
             disabled={state.saving}
           >
             <Icon symbol={Pencil} />
@@ -437,6 +632,7 @@ const AddAppearanceForm = ({
         Leave empty for "sometime that {labels.event === "Competition" ? "weekend" : "day"}".
       </p>
     </div>
+    <MatchupFields state={state} draft={state.newMatchup} idPrefix="new" labels={labels} />
     <div className="form-group">
       <label htmlFor="appearanceNotes">Notes</label>
       <textarea
@@ -496,6 +692,7 @@ const EditAppearanceForm = ({
         disabled={state.saving}
       />
     </div>
+    <MatchupFields state={state} draft={state.editMatchup} idPrefix="edit" labels={labels} />
     <div className="form-group">
       <label htmlFor="editAppearanceNotes">Notes</label>
       <textarea
@@ -540,16 +737,24 @@ function onShowAddForm(state: CompetitionState, data: CompetitionPageData) {
   state.newEntryId = data.entries.length > 0 ? data.entries[0].entry.id : 0;
   state.newOccurredAt = toDateInputValue(data.detail.event.startDate);
   state.newNotes = "";
+  state.newMatchup = emptyMatchupDraft();
+  state.showMatchup = data.activity.kind === ActivityKindSport;
   vlens.scheduleRedraw();
 }
 
-function onStartEdit(state: CompetitionState, detail: server.AppearanceDetail) {
+function onStartEdit(
+  state: CompetitionState,
+  data: CompetitionPageData,
+  detail: server.AppearanceDetail
+) {
   state.adding = false;
   state.editingResultsFor = 0;
   closePhotoEditors(state);
   state.editingId = detail.appearance.id;
   state.editOccurredAt = toDateInputValue(detail.appearance.occurredAt);
   state.editNotes = detail.appearance.notes;
+  state.editMatchup = matchupToDraft(detail.appearance);
+  state.showMatchup = data.activity.kind === ActivityKindSport || hasMatchup(detail.appearance);
   vlens.scheduleRedraw();
 }
 
@@ -756,6 +961,11 @@ function sortAppearances(appearances: server.AppearanceDetail[]) {
 
 async function onCreateAppearance(state: CompetitionState) {
   if (state.newEntryId === 0) return;
+  state.error = draftError(state.newMatchup);
+  if (state.error) {
+    vlens.scheduleRedraw();
+    return;
+  }
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();
@@ -765,7 +975,7 @@ async function onCreateAppearance(state: CompetitionState) {
     entryId: state.newEntryId,
     occurredAt: dateOrNull(state.newOccurredAt),
     notes: state.newNotes.trim(),
-    matchup: null,
+    matchup: draftToMatchup(state.newMatchup),
   });
   if (err || !resp) {
     state.error = err || "Failed to add";
@@ -781,6 +991,11 @@ async function onCreateAppearance(state: CompetitionState) {
 }
 
 async function onSaveAppearance(state: CompetitionState, appearanceId: number) {
+  state.error = draftError(state.editMatchup);
+  if (state.error) {
+    vlens.scheduleRedraw();
+    return;
+  }
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();
@@ -789,7 +1004,7 @@ async function onSaveAppearance(state: CompetitionState, appearanceId: number) {
     id: appearanceId,
     occurredAt: dateOrNull(state.editOccurredAt),
     notes: state.editNotes.trim(),
-    matchup: null,
+    matchup: draftToMatchup(state.editMatchup),
   });
   if (err || !resp) {
     state.error = err || "Failed to save";
