@@ -838,6 +838,7 @@ export interface CreateAppearanceRequest {
     entryId: number
     occurredAt: string | null
     notes: string
+    matchup: MatchupInput | null
 }
 
 export interface AppearanceResponse {
@@ -848,6 +849,7 @@ export interface UpdateAppearanceRequest {
     id: number
     occurredAt: string | null
     notes: string
+    matchup: MatchupInput | null
 }
 
 export interface AppearanceIdRequest {
@@ -857,6 +859,17 @@ export interface AppearanceIdRequest {
 export interface SetAppearanceResultsRequest {
     appearanceId: number
     results: ResultInput[]
+}
+
+export interface SaveAppearanceRequest {
+    id: number
+    eventId: number
+    entryId: number
+    occurredAt: string | null
+    notes: string
+    matchup: MatchupInput | null
+    results: ResultInput[]
+    photoIds: number[]
 }
 
 export interface GetSeasonOverviewRequest {
@@ -919,6 +932,16 @@ export interface ListActivityVocabularyResponse {
     levels: string[]
     formats: string[]
     hosts: string[]
+}
+
+export interface GetActivitiesHomeRequest {
+    familyId: number
+}
+
+export interface GetActivitiesHomeResponse {
+    familyId: number
+    activities: Activity[]
+    seasons: HomeSeason[]
 }
 
 export interface SetAppearancePhotosRequest {
@@ -2192,6 +2215,14 @@ export interface EntryView {
     personIds: number[]
 }
 
+export interface MatchupInput {
+    round: string
+    opponent: string
+    outcome: string
+    scoreFor: number | null
+    scoreAgainst: number | null
+}
+
 export interface AppearanceView {
     appearance: Appearance
     results: Result[]
@@ -2223,6 +2254,12 @@ export interface AppearanceDetail {
     photoIds: number[]
     entry: Entry
     event: EventSummary
+}
+
+export interface HomeSeason {
+    season: Season
+    events: HomeEvent[]
+    entries: EntryView[]
 }
 
 export interface Tag {
@@ -2874,6 +2911,11 @@ export interface Appearance {
     occurredAt: string
     notes: string
     createdAt: string
+    round: string
+    opponent: string
+    outcome: string
+    scoreFor: number | null
+    scoreAgainst: number | null
 }
 
 export interface Result {
@@ -2899,6 +2941,11 @@ export interface EventSummary {
     location: string
     startDate: string
     endDate: string
+}
+
+export interface HomeEvent {
+    event: Event
+    appearances: number
 }
 
 export interface MediaMatch {
@@ -3373,6 +3420,10 @@ export async function SetAppearanceResults(data: SetAppearanceResultsRequest): P
     return await rpc.call<AppearanceResponse>('SetAppearanceResults', JSON.stringify(data));
 }
 
+export async function SaveAppearance(data: SaveAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SaveAppearance', JSON.stringify(data));
+}
+
 export async function GetSeasonOverview(data: GetSeasonOverviewRequest): Promise<rpc.Response<GetSeasonOverviewResponse>> {
     return await rpc.call<GetSeasonOverviewResponse>('GetSeasonOverview', JSON.stringify(data));
 }
@@ -3391,6 +3442,10 @@ export async function GetPersonSeason(data: GetPersonSeasonRequest): Promise<rpc
 
 export async function ListActivityVocabulary(data: ListActivityVocabularyRequest): Promise<rpc.Response<ListActivityVocabularyResponse>> {
     return await rpc.call<ListActivityVocabularyResponse>('ListActivityVocabulary', JSON.stringify(data));
+}
+
+export async function GetActivitiesHome(data: GetActivitiesHomeRequest): Promise<rpc.Response<GetActivitiesHomeResponse>> {
+    return await rpc.call<GetActivitiesHomeResponse>('GetActivitiesHome', JSON.stringify(data));
 }
 
 export async function SetAppearancePhotos(data: SetAppearancePhotosRequest): Promise<rpc.Response<AppearanceResponse>> {

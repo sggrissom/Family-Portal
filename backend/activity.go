@@ -75,7 +75,19 @@ type Appearance struct {
 	OccurredAt time.Time `json:"occurredAt"`
 	Notes      string    `json:"notes"`
 	CreatedAt  time.Time `json:"createdAt"`
+
+	Round        string `json:"round"`
+	Opponent     string `json:"opponent"`
+	Outcome      string `json:"outcome"`
+	ScoreFor     *int   `json:"scoreFor,omitempty"`
+	ScoreAgainst *int   `json:"scoreAgainst,omitempty"`
 }
+
+const (
+	OutcomeWin  = "win"
+	OutcomeLoss = "loss"
+	OutcomeDraw = "draw"
+)
 
 type Result struct {
 	Id           int       `json:"id"`
@@ -217,7 +229,7 @@ func PackEntryMember(self *EntryMember, buf *vpack.Buffer) {
 }
 
 func PackAppearance(self *Appearance, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.EventId, buf)
 	vpack.Int(&self.EntryId, buf)
@@ -225,6 +237,13 @@ func PackAppearance(self *Appearance, buf *vpack.Buffer) {
 	vpack.Time(&self.OccurredAt, buf)
 	vpack.String(&self.Notes, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.String(&self.Round, buf)
+		vpack.String(&self.Opponent, buf)
+		vpack.String(&self.Outcome, buf)
+		packOptionalInt(&self.ScoreFor, buf)
+		packOptionalInt(&self.ScoreAgainst, buf)
+	}
 }
 
 func PackResult(self *Result, buf *vpack.Buffer) {

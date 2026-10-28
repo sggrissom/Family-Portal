@@ -1,17 +1,14 @@
 import * as preact from "preact";
-import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
+import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
-import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
 import { labelsForKind } from "./labels";
-import { PhotoStrip } from "../../components/PhotoPicker";
-import { ResultKindAdjudication, ResultList } from "./results";
+import { PerformanceCard, SeasonStats, groupByEvent } from "./performance-card";
 import "./activities-styles";
 import "./season-styles";
-import "./routine-styles";
 
 export type RoutinePageData = {
   history: server.GetEntryHistoryResponse;
@@ -54,21 +51,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   return rpc.ok<RoutinePageData>({ history, people: people?.people ?? [] });
 }
 
-function countLabels(appearances: server.AppearanceDetail[]): { label: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const detail of appearances) {
-    for (const result of detail.results ?? []) {
-      if (result.kind !== ResultKindAdjudication) continue;
-      const label = result.label.trim();
-      if (!label) continue;
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
-  }
-  return [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => (a.count !== b.count ? b.count - a.count : a.label < b.label ? -1 : 1));
-}
-
 export function view(route: string, prefix: string, data: RoutinePageData): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) return;
@@ -80,9 +62,10 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
     .filter(part => part)
     .join(" · ");
   const roster = (data.history.entry.personIds ?? [])
-    .map(id => data.people.find(person => person.id === id)?.name)
-    .filter((name): name is string => !!name);
-  const adjudications = countLabels(appearances);
+    .map(id => data.people.find(person => person.id === id))
+    .filter((person): person is server.Person => !!person);
+  const editable = auth.canContribute(entry.familyId);
+  const groups = groupByEvent(appearances);
 
   return (
     <div>
@@ -95,32 +78,23 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
         <div className="season-header">
           <span className="season-eyebrow">{traits || labels.entry}</span>
           <h1>{entry.name}</h1>
-          {roster.length > 0 && <p className="season-dates">{roster.join(", ")}</p>}
+          {roster.length > 0 && (
+            <p className="routine-roster">
+              {roster.map(person => (
+                <a key={person.id} href={`/profile/${person.id}`}>
+                  {person.name}
+                </a>
+              ))}
+            </p>
+          )}
           {entry.notes && <p className="season-notes">{entry.notes}</p>}
         </div>
 
-        {adjudications.length > 0 && (
-          <div className="routine-tally">
-            {adjudications.map(row => (
-              <span key={row.label} className="routine-tally-item">
-                <strong>{row.count}×</strong> {row.label}
-              </span>
-            ))}
-          </div>
-        )}
+        <SeasonStats appearances={appearances} labels={labels} />
 
         <section className="activities-section">
-          <h2>
-            {appearances.length === 0
-              ? "This season"
-              : `${appearances.length} ${
-                  appearances.length === 1
-                    ? labels.event.toLowerCase()
-                    : labels.eventPlural.toLowerCase()
-                }`}
-          </h2>
-
-          {appearances.length === 0 ? (
+          <h2 className="activities-heading">The season so far</h2>
+          {groups.length === 0 ? (
             <div className="empty-state">
               <p>
                 This {labels.entry.toLowerCase()} has not been to a {labels.event.toLowerCase()}{" "}
@@ -128,40 +102,22 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
               </p>
             </div>
           ) : (
-            <ul className="event-list">
-              {appearances.map(detail => (
-                <li key={detail.appearance.id} className="event-item">
-                  <div className="event-item-main">
-                    <a className="event-name" href={`/competition/${detail.event.id}`}>
-                      {detail.event.name}
-                    </a>
-                    <span className="event-meta">{appearanceWhen(detail)}</span>
-                    {(detail.results ?? []).length === 0 ? (
-                      <span className="event-count">No results recorded</span>
-                    ) : (
-                      <ResultList results={detail.results} people={data.people} />
-                    )}
-                    {detail.appearance.notes && (
-                      <p className="event-notes">{detail.appearance.notes}</p>
-                    )}
-                    <PhotoStrip photoIds={detail.photoIds} />
-                  </div>
-                </li>
+            <div className="story-cards">
+              {groups.map(group => (
+                <PerformanceCard
+                  key={group[0].appearance.id}
+                  group={group}
+                  people={data.people}
+                  showEntry={false}
+                  linkEvent={true}
+                  editable={editable}
+                />
               ))}
-            </ul>
+            </div>
           )}
         </section>
       </main>
       <Footer />
     </div>
   );
-}
-
-function appearanceWhen(detail: server.AppearanceDetail): string {
-  if (isRealDate(detail.appearance.occurredAt)) {
-    return formatDate(detail.appearance.occurredAt);
-  }
-  const range = formatDateRange(detail.event.startDate, detail.event.endDate);
-  const where = [detail.event.host, detail.event.location].filter(part => part).join(" · ");
-  return [range, where].filter(part => part).join(" — ");
 }

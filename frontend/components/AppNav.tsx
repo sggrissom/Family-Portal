@@ -29,6 +29,7 @@ import { Destination, activeDestination, addPath, contextPersonId } from "../lib
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/when";
+import { mediaAccept } from "../lib/mediaUpload";
 import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import { isTypingTarget } from "../lib/search";
 import {
@@ -72,6 +73,7 @@ interface NavState {
 
 let familyPeople: server.Person[] | null = null;
 let openEvents: server.OpenEvent[] = [];
+let takesVideo = false;
 
 const useNav = vlens.declareHook((): NavState => {
   const state: NavState = {
@@ -305,12 +307,12 @@ export const AddSheet = () => {
             <span className="add-sheet-icon" aria-hidden="true">
               <Icon symbol={Camera} />
             </span>
-            {copy.addSheet.photos}
+            {takesVideo ? copy.addSheet.photosAndVideos : copy.addSheet.photos}
           </button>
           <input
             id="addSheetPhotoInput"
             type="file"
-            accept="image/*"
+            accept={mediaAccept({ enabled: takesVideo })}
             multiple
             hidden
             onChange={vlens.cachePartial(photosPicked, state)}
@@ -405,11 +407,13 @@ async function openSheet(state: NavState) {
   vlens.scheduleRedraw();
 
   const today = localDateString(new Date());
-  const [[resp], [events]] = await Promise.all([
+  const [[resp], [events], [video]] = await Promise.all([
     server.ListPeople({}),
     server.ListOpenEvents({ today }),
+    server.GetVideoSupport({ familyId: 0 }),
   ]);
   openEvents = events?.events ?? [];
+  takesVideo = video?.enabled ?? false;
   if (!resp) return;
   familyPeople = chipOrder(
     (resp.people || []).filter(person => auth.canContribute(person.familyId)),

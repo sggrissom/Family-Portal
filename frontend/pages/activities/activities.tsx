@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from "lucide-preact";
+import { ChevronRight, Pencil, Trash2 } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -9,57 +9,51 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
 import { formatDateRange, toDateInputValue } from "../../lib/dateUtils";
-import { ActivityKindDance, activityKindName, activityKindOptions, labelsForKind } from "./labels";
+import { localDateString } from "../../lib/when";
+import { dayKey, dayLabel } from "../../lib/daySummary";
+import { EventFocus, seasonPhase, seasonProgress } from "../../lib/activityHome";
+import {
+  ActivityKindDance,
+  ActivityLabels,
+  activityKindIcon,
+  activityKindName,
+  activityKindOptions,
+  labelsForKind,
+} from "./labels";
 import "./activities-styles";
 
-type ActivitiesData = {
-  familyId: number;
-  activities: server.Activity[];
-  selectedActivityId: number;
-  seasons: server.Season[];
-};
-
-const emptyData: ActivitiesData = {
+const emptyHome: server.GetActivitiesHomeResponse = {
   familyId: 0,
   activities: [],
-  selectedActivityId: 0,
   seasons: [],
 };
 
-export async function fetch(route: string, prefix: string): Promise<rpc.Response<ActivitiesData>> {
+export async function fetch(
+  route: string,
+  prefix: string
+): Promise<rpc.Response<server.GetActivitiesHomeResponse>> {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<ActivitiesData>(emptyData);
+    return rpc.ok<server.GetActivitiesHomeResponse>(emptyHome);
   }
-
-  const [listed, listErr] = await server.ListActivities({ familyId: 0 });
-  if (listErr || !listed) {
-    return [null, listErr || "Failed to load activities"];
-  }
-
-  const activities = listed.activities ?? [];
-  if (activities.length === 0) {
-    return rpc.ok<ActivitiesData>({ ...emptyData, familyId: listed.familyId });
-  }
-
-  const [seasons, seasonsErr] = await server.ListSeasons({ activityId: activities[0].id });
-  if (seasonsErr) {
-    return [null, seasonsErr];
-  }
-  return rpc.ok<ActivitiesData>({
-    familyId: listed.familyId,
-    activities,
-    selectedActivityId: activities[0].id,
-    seasons: seasons?.seasons ?? [],
-  });
+  return server.GetActivitiesHome({ familyId: 0 });
 }
+
+type SeasonForm = {
+  name: string;
+  start: string;
+  end: string;
+  notes: string;
+};
+
+const blankSeasonForm = (): SeasonForm => ({ name: "", start: "", end: "", notes: "" });
 
 type ActivitiesState = {
   initialized: boolean;
   familyId: number;
   activities: server.Activity[];
-  selectedActivityId: number;
-  seasons: server.Season[];
-  loadingSeasons: boolean;
+  seasons: server.HomeSeason[];
+  loading: boolean;
+  managing: boolean;
 
   addingActivity: boolean;
   newActivityName: string;
@@ -69,17 +63,9 @@ type ActivitiesState = {
   editActivityName: string;
   editActivityKind: string;
 
-  addingSeason: boolean;
-  newSeasonName: string;
-  newSeasonStart: string;
-  newSeasonEnd: string;
-  newSeasonNotes: string;
-
+  addingSeasonFor: number;
   editingSeasonId: number;
-  editSeasonName: string;
-  editSeasonStart: string;
-  editSeasonEnd: string;
-  editSeasonNotes: string;
+  seasonForm: SeasonForm;
 
   error: string;
   saving: boolean;
@@ -90,9 +76,9 @@ const useActivitiesState = vlens.declareHook(
     initialized: false,
     familyId: 0,
     activities: [],
-    selectedActivityId: 0,
     seasons: [],
-    loadingSeasons: false,
+    loading: false,
+    managing: false,
 
     addingActivity: false,
     newActivityName: "",
@@ -102,53 +88,61 @@ const useActivitiesState = vlens.declareHook(
     editActivityName: "",
     editActivityKind: ActivityKindDance,
 
-    addingSeason: false,
-    newSeasonName: "",
-    newSeasonStart: "",
-    newSeasonEnd: "",
-    newSeasonNotes: "",
-
+    addingSeasonFor: 0,
     editingSeasonId: 0,
-    editSeasonName: "",
-    editSeasonStart: "",
-    editSeasonEnd: "",
-    editSeasonNotes: "",
+    seasonForm: blankSeasonForm(),
 
     error: "",
     saving: false,
   })
 );
 
-function selectedActivity(state: ActivitiesState): server.Activity | null {
-  return state.activities.find(a => a.id === state.selectedActivityId) ?? null;
+function phaseOf(season: server.Season, today: string) {
+  return seasonPhase(toDateInputValue(season.startDate), toDateInputValue(season.endDate), today);
 }
 
-export function view(route: string, prefix: string, data: ActivitiesData): preact.ComponentChild {
+export function view(
+  route: string,
+  prefix: string,
+  data: server.GetActivitiesHomeResponse
+): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth) return;
 
   const state = useActivitiesState();
   if (!state.initialized) {
     state.initialized = true;
-    state.familyId = data.familyId;
-    state.activities = [...data.activities];
-    state.selectedActivityId = data.selectedActivityId;
-    state.seasons = [...data.seasons];
+    applyHome(state, data);
   }
 
-  const activity = selectedActivity(state);
-  const labels = labelsForKind(activity?.kind ?? "");
   const editable = auth.canContribute(state.familyId);
+  const today = localDateString(new Date());
+  const activityOf = (season: server.Season) =>
+    state.activities.find(a => a.id === season.activityId);
+  const inSeason = state.seasons
+    .filter(home => phaseOf(home.season, today) !== "past")
+    .sort((a, b) => a.season.startDate.localeCompare(b.season.startDate));
+  const past = state.seasons.filter(home => phaseOf(home.season, today) === "past");
+  const idle = state.activities.filter(
+    activity => !inSeason.some(home => home.season.activityId === activity.id)
+  );
 
   return (
     <div>
       <Header isHome={false} />
       <main id="app" className="activities-container">
-        <h1>Activities</h1>
-        <p className="activities-intro">
-          Track a competitive season — {labels.eventPlural.toLowerCase()},{" "}
-          {labels.entryPlural.toLowerCase()}, and how each one placed.
-        </p>
+        <div className="activities-title">
+          <h1>Activities</h1>
+          {editable && !state.addingActivity && (
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={vlens.cachePartial(onShowActivityForm, state)}
+              disabled={state.saving}
+            >
+              New program
+            </button>
+          )}
+        </div>
 
         <FamilySelect
           id="activitiesFamilyId"
@@ -166,157 +160,368 @@ export function view(route: string, prefix: string, data: ActivitiesData): preac
           </div>
         )}
 
-        <section className="activities-section">
-          <div className="activities-section-head">
-            <h2>Programs</h2>
+        {state.addingActivity && <ActivityForm state={state} />}
+
+        {state.loading ? (
+          <div className="muted">Loading…</div>
+        ) : state.activities.length === 0 ? (
+          <div className="empty-state">
+            <p>
+              Track a competitive season — the competitions or games, the routines or teams, and how
+              each one did.
+            </p>
             {editable && !state.addingActivity && (
               <button
-                className="btn btn-secondary"
+                className="btn btn-primary"
                 onClick={vlens.cachePartial(onShowActivityForm, state)}
-                disabled={state.saving}
               >
-                New program
+                Add a program
               </button>
             )}
           </div>
-
-          {state.addingActivity && <ActivityForm state={state} />}
-
-          {state.activities.length === 0 ? (
-            <div className="empty-state">
-              <p>
-                No programs yet.
-                {editable && ' Add one — "Dance", "Soccer" — to start a season.'}
-              </p>
-            </div>
-          ) : (
-            <div className="activity-chips">
-              {state.activities.map(a =>
-                state.editingActivityId === a.id ? (
-                  <ActivityEditForm key={a.id} state={state} activity={a} />
-                ) : (
-                  <div
-                    key={a.id}
-                    className={
-                      a.id === state.selectedActivityId ? "activity-chip selected" : "activity-chip"
-                    }
-                  >
-                    <button
-                      className="activity-chip-name"
-                      onClick={vlens.cachePartial(onSelectActivity, state, a.id)}
-                      disabled={state.saving}
-                    >
-                      <strong>{a.name}</strong>
-                      <small>{activityKindName(a.kind)}</small>
-                    </button>
-                    {editable && (
-                      <span className="activity-chip-actions">
-                        <button
-                          className="icon-btn"
-                          title="Rename program"
-                          aria-label="Rename program"
-                          onClick={vlens.cachePartial(onStartEditActivity, state, a)}
-                          disabled={state.saving}
-                        >
-                          <Icon symbol={Pencil} />
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Delete program"
-                          aria-label="Delete program"
-                          onClick={vlens.cachePartial(onDeleteActivity, state, a)}
-                          disabled={state.saving}
-                        >
-                          <Icon symbol={Trash2} />
-                        </button>
-                      </span>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </section>
-
-        {activity && (
-          <section className="activities-section">
-            <div className="activities-section-head">
-              <h2>{activity.name} seasons</h2>
-              {editable && !state.addingSeason && (
-                <button
-                  className="btn btn-primary"
-                  onClick={vlens.cachePartial(onShowSeasonForm, state)}
-                  disabled={state.saving}
-                >
-                  New season
-                </button>
-              )}
-            </div>
-
-            {state.addingSeason && <SeasonForm state={state} />}
-
-            {state.loadingSeasons ? (
-              <div className="muted">Loading seasons…</div>
-            ) : state.seasons.length === 0 ? (
-              <div className="empty-state">
-                <p>
-                  No seasons yet. A season holds the {labels.eventPlural.toLowerCase()} and{" "}
-                  {labels.entryPlural.toLowerCase()} for one year.
-                </p>
-              </div>
-            ) : (
-              <ul className="season-list">
-                {state.seasons.map(season =>
-                  state.editingSeasonId === season.id ? (
-                    <li key={season.id} className="season-item">
-                      <SeasonEditForm state={state} season={season} />
-                    </li>
-                  ) : (
-                    <li key={season.id} className="season-item">
-                      <a className="season-item-main season-link" href={`/season/${season.id}`}>
-                        <strong className="season-name">{season.name}</strong>
-                        {formatDateRange(season.startDate, season.endDate) && (
-                          <span className="season-dates">
-                            {formatDateRange(season.startDate, season.endDate)}
-                          </span>
-                        )}
-                        {season.notes && <p className="season-notes">{season.notes}</p>}
-                        <span className="season-open">Open season →</span>
-                      </a>
-                      {editable && (
-                        <span className="season-item-actions">
-                          <button
-                            className="icon-btn"
-                            title="Edit season"
-                            aria-label="Edit season"
-                            onClick={vlens.cachePartial(onStartEditSeason, state, season)}
-                            disabled={state.saving}
-                          >
-                            <Icon symbol={Pencil} />
-                          </button>
-                          <button
-                            className="icon-btn"
-                            title="Delete season"
-                            aria-label="Delete season"
-                            onClick={vlens.cachePartial(onDeleteSeason, state, season)}
-                            disabled={state.saving}
-                          >
-                            <Icon symbol={Trash2} />
-                          </button>
-                        </span>
-                      )}
-                    </li>
-                  )
-                )}
-              </ul>
+        ) : (
+          <>
+            {inSeason.length > 0 && (
+              <section className="activities-section">
+                <h2 className="activities-heading">In season</h2>
+                <div className="home-season-cards">
+                  {inSeason.map(home => (
+                    <SeasonCard
+                      key={home.season.id}
+                      home={home}
+                      activity={activityOf(home.season)}
+                      today={today}
+                      editable={editable}
+                    />
+                  ))}
+                </div>
+              </section>
             )}
-          </section>
+
+            {idle.length > 0 && (
+              <section className="activities-section">
+                <h2 className="activities-heading">
+                  {inSeason.length > 0 ? "Between seasons" : "Programs"}
+                </h2>
+                <ul className="idle-programs">
+                  {idle.map(activity => (
+                    <IdleProgram
+                      key={activity.id}
+                      state={state}
+                      activity={activity}
+                      editable={editable}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {past.length > 0 && (
+              <section className="activities-section">
+                <h2 className="activities-heading">Past seasons</h2>
+                <ul className="past-seasons">
+                  {past.map(home => (
+                    <PastSeason
+                      key={home.season.id}
+                      home={home}
+                      activity={activityOf(home.season)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {editable && (
+              <section className="activities-section">
+                <button
+                  className="manage-toggle"
+                  onClick={vlens.cachePartial(onToggleManaging, state)}
+                  aria-expanded={state.managing}
+                >
+                  <Icon symbol={ChevronRight} /> Manage programs and seasons
+                </button>
+                {state.managing && <ManagePrograms state={state} />}
+              </section>
+            )}
+          </>
         )}
       </main>
       <Footer />
     </div>
   );
 }
+
+function focusLabel(focus: EventFocus): string {
+  switch (focus) {
+    case "latest":
+      return "Latest";
+    case "needs-results":
+      return "No results yet";
+    case "now":
+      return "Happening now";
+    case "next":
+      return "Next";
+  }
+}
+
+function countText(n: number, labels: ActivityLabels): string {
+  return `${n} ${(n === 1 ? labels.appearance : labels.appearancePlural).toLowerCase()}`;
+}
+
+const SeasonCard = ({
+  home,
+  activity,
+  today,
+  editable,
+}: {
+  home: server.HomeSeason;
+  activity: server.Activity | undefined;
+  today: string;
+  editable: boolean;
+}) => {
+  const season = home.season;
+  const kind = activity?.kind ?? "";
+  const labels = labelsForKind(kind);
+  const entries = home.entries ?? [];
+  const events = home.events ?? [];
+  const progress = seasonProgress(events, entries.length > 0, today);
+  const dates = formatDateRange(season.startDate, season.endDate);
+  const starts = phaseOf(season, today) === "upcoming";
+
+  return (
+    <article className="home-season-card">
+      <a className="home-season-card-head" href={`/season/${season.id}`}>
+        <span className="home-season-program">
+          <Icon symbol={activityKindIcon(kind)} /> {activity?.name ?? ""}
+        </span>
+        <span className="home-season-title">
+          <strong>{season.name}</strong>
+          <Icon symbol={ChevronRight} />
+        </span>
+        {dates && (
+          <span className="home-season-dates">
+            {starts ? "Starts " : ""}
+            {dates}
+          </span>
+        )}
+      </a>
+
+      {entries.length > 0 && (
+        <p className="home-season-entries">
+          {entries.map(view => (
+            <a key={view.entry.id} href={`/routine/${view.entry.id}`}>
+              {view.entry.name}
+            </a>
+          ))}
+        </p>
+      )}
+
+      {progress.focus.length > 0 && (
+        <ul className="home-season-events">
+          {progress.focus.map(({ item, focus }) => (
+            <li key={item.event.id} className={`home-event home-event-${focus}`}>
+              <a className="home-event-main" href={`/competition/${item.event.id}`}>
+                <span className="home-event-focus">{focusLabel(focus)}</span>
+                <strong>{item.event.name}</strong>
+                <span className="home-event-when">
+                  {dayLabel(dayKey(item.event.startDate), today)}
+                </span>
+              </a>
+              {editable && (focus === "needs-results" || focus === "now") ? (
+                <a className="btn btn-primary btn-small" href={`/competition/${item.event.id}`}>
+                  Add results
+                </a>
+              ) : (
+                focus === "latest" && (
+                  <span className="home-event-count">{countText(item.appearances, labels)}</span>
+                )
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="home-season-foot">
+        {events.length === 0
+          ? `No ${labels.eventPlural.toLowerCase()} yet`
+          : `${progress.recorded} of ${progress.held} ${labels.eventPlural.toLowerCase()} recorded · ${events.length} this season`}
+      </p>
+    </article>
+  );
+};
+
+const IdleProgram = ({
+  state,
+  activity,
+  editable,
+}: {
+  state: ActivitiesState;
+  activity: server.Activity;
+  editable: boolean;
+}) => {
+  const last = state.seasons.find(home => home.season.activityId === activity.id);
+  return (
+    <li className="idle-program">
+      <div className="idle-program-main">
+        <span className="home-season-program">
+          <Icon symbol={activityKindIcon(activity.kind)} /> {activity.name}
+        </span>
+        <span className="home-season-dates">
+          {last ? `Last season: ${last.season.name}` : "No seasons yet"}
+        </span>
+      </div>
+      {editable && (state.addingSeasonFor !== activity.id || state.managing) && (
+        <button
+          className="btn btn-secondary btn-small"
+          onClick={vlens.cachePartial(onShowSeasonForm, state, activity.id)}
+          disabled={state.saving}
+        >
+          Start a season
+        </button>
+      )}
+      {state.addingSeasonFor === activity.id && !state.managing && (
+        <SeasonFormFields
+          state={state}
+          idPrefix={`newSeason${activity.id}`}
+          submitLabel="Add season"
+          onSubmit={vlens.cachePartial(onCreateSeason, state)}
+        />
+      )}
+    </li>
+  );
+};
+
+const PastSeason = ({
+  home,
+  activity,
+}: {
+  home: server.HomeSeason;
+  activity: server.Activity | undefined;
+}) => {
+  const labels = labelsForKind(activity?.kind ?? "");
+  const events = (home.events ?? []).length;
+  const entries = (home.entries ?? []).length;
+  const dates = formatDateRange(home.season.startDate, home.season.endDate);
+  const counts = [
+    `${events} ${(events === 1 ? labels.event : labels.eventPlural).toLowerCase()}`,
+    `${entries} ${(entries === 1 ? labels.entry : labels.entryPlural).toLowerCase()}`,
+  ].join(" · ");
+
+  return (
+    <li>
+      <a className="past-season" href={`/season/${home.season.id}`}>
+        <span className="past-season-main">
+          <strong>{home.season.name}</strong>
+          <span className="home-season-dates">
+            {[activity?.name, dates].filter(part => part).join(" · ")}
+          </span>
+        </span>
+        <span className="past-season-counts">{counts}</span>
+        <Icon symbol={ChevronRight} />
+      </a>
+    </li>
+  );
+};
+
+const ManagePrograms = ({ state }: { state: ActivitiesState }) => (
+  <div className="manage-programs">
+    {state.activities.map(activity => (
+      <div key={activity.id} className="manage-program">
+        {state.editingActivityId === activity.id ? (
+          <ActivityEditForm state={state} activity={activity} />
+        ) : (
+          <div className="manage-row">
+            <span className="manage-row-main">
+              <strong>{activity.name}</strong>
+              <small>{activityKindName(activity.kind)}</small>
+            </span>
+            <span className="season-item-actions">
+              <button
+                className="icon-btn"
+                title="Rename program"
+                aria-label={`Rename ${activity.name}`}
+                onClick={vlens.cachePartial(onStartEditActivity, state, activity)}
+                disabled={state.saving}
+              >
+                <Icon symbol={Pencil} />
+              </button>
+              <button
+                className="icon-btn"
+                title="Delete program"
+                aria-label={`Delete ${activity.name}`}
+                onClick={vlens.cachePartial(onDeleteActivity, state, activity)}
+                disabled={state.saving}
+              >
+                <Icon symbol={Trash2} />
+              </button>
+            </span>
+          </div>
+        )}
+
+        <ul className="manage-seasons">
+          {state.seasons
+            .filter(home => home.season.activityId === activity.id)
+            .map(home =>
+              state.editingSeasonId === home.season.id ? (
+                <li key={home.season.id}>
+                  <SeasonFormFields
+                    state={state}
+                    idPrefix={`editSeason${home.season.id}`}
+                    submitLabel="Save"
+                    onSubmit={vlens.cachePartial(onSaveSeason, state, home.season.id)}
+                  />
+                </li>
+              ) : (
+                <li key={home.season.id} className="manage-row">
+                  <span className="manage-row-main">
+                    <span>{home.season.name}</span>
+                    <small>{formatDateRange(home.season.startDate, home.season.endDate)}</small>
+                  </span>
+                  <span className="season-item-actions">
+                    <button
+                      className="icon-btn"
+                      title="Edit season"
+                      aria-label={`Edit ${home.season.name}`}
+                      onClick={vlens.cachePartial(onStartEditSeason, state, home.season)}
+                      disabled={state.saving}
+                    >
+                      <Icon symbol={Pencil} />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      title="Delete season"
+                      aria-label={`Delete ${home.season.name}`}
+                      onClick={vlens.cachePartial(onDeleteSeason, state, home.season)}
+                      disabled={state.saving}
+                    >
+                      <Icon symbol={Trash2} />
+                    </button>
+                  </span>
+                </li>
+              )
+            )}
+        </ul>
+
+        {state.addingSeasonFor === activity.id ? (
+          <SeasonFormFields
+            state={state}
+            idPrefix={`manageSeason${activity.id}`}
+            submitLabel="Add season"
+            onSubmit={vlens.cachePartial(onCreateSeason, state)}
+          />
+        ) : (
+          <button
+            className="link-action"
+            onClick={vlens.cachePartial(onShowSeasonForm, state, activity.id)}
+            disabled={state.saving}
+          >
+            + New season
+          </button>
+        )}
+      </div>
+    ))}
+  </div>
+);
 
 const ActivityForm = ({ state }: { state: ActivitiesState }) => (
   <div className="activities-form">
@@ -383,7 +588,7 @@ const ActivityEditForm = ({
   state: ActivitiesState;
   activity: server.Activity;
 }) => (
-  <div className="activities-form activity-chip-edit">
+  <div className="activities-form">
     <div className="form-row">
       <div className="form-group flex-2">
         <label htmlFor={`editActivityName${activity.id}`}>Name</label>
@@ -436,183 +641,136 @@ const ActivityEditForm = ({
   </div>
 );
 
-const SeasonForm = ({ state }: { state: ActivitiesState }) => (
-  <div className="activities-form">
-    <div className="form-group">
-      <label htmlFor="newSeasonName">Name</label>
-      <input
-        id="newSeasonName"
-        type="text"
-        placeholder="2025–26 Competition Season"
-        value={state.newSeasonName}
-        onInput={e => {
-          state.newSeasonName = e.currentTarget.value;
-          vlens.scheduleRedraw();
-        }}
-        disabled={state.saving}
-      />
-    </div>
-    <div className="form-row">
-      <div className="form-group flex-1">
-        <label htmlFor="newSeasonStart">Starts</label>
+const SeasonFormFields = ({
+  state,
+  idPrefix,
+  submitLabel,
+  onSubmit,
+}: {
+  state: ActivitiesState;
+  idPrefix: string;
+  submitLabel: string;
+  onSubmit: () => void;
+}) => {
+  const form = state.seasonForm;
+  return (
+    <div className="activities-form season-form">
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}Name`}>Season name</label>
         <input
-          id="newSeasonStart"
-          type="date"
-          value={state.newSeasonStart}
+          id={`${idPrefix}Name`}
+          type="text"
+          placeholder="2025–26 Competition Season"
+          value={form.name}
           onInput={e => {
-            state.newSeasonStart = e.currentTarget.value;
+            form.name = e.currentTarget.value;
             vlens.scheduleRedraw();
           }}
           disabled={state.saving}
         />
       </div>
-      <div className="form-group flex-1">
-        <label htmlFor="newSeasonEnd">Ends</label>
-        <input
-          id="newSeasonEnd"
-          type="date"
-          value={state.newSeasonEnd}
+      <div className="form-row">
+        <div className="form-group flex-1">
+          <label htmlFor={`${idPrefix}Start`}>Starts</label>
+          <input
+            id={`${idPrefix}Start`}
+            type="date"
+            value={form.start}
+            onInput={e => {
+              form.start = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+        </div>
+        <div className="form-group flex-1">
+          <label htmlFor={`${idPrefix}End`}>Ends</label>
+          <input
+            id={`${idPrefix}End`}
+            type="date"
+            value={form.end}
+            onInput={e => {
+              form.end = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+        </div>
+      </div>
+      <p className="form-hint">
+        The dates decide whether the season shows as in season or past. Leave the end empty until
+        it's over.
+      </p>
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}Notes`}>Notes</label>
+        <textarea
+          id={`${idPrefix}Notes`}
+          rows={2}
+          value={form.notes}
           onInput={e => {
-            state.newSeasonEnd = e.currentTarget.value;
+            form.notes = e.currentTarget.value;
             vlens.scheduleRedraw();
           }}
           disabled={state.saving}
         />
       </div>
+      <div className="form-actions">
+        <button
+          className="btn btn-primary"
+          onClick={onSubmit}
+          disabled={state.saving || !form.name.trim()}
+        >
+          {submitLabel}
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={vlens.cachePartial(onCancelSeasonForm, state)}
+          disabled={state.saving}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
-    <div className="form-group">
-      <label htmlFor="newSeasonNotes">Notes</label>
-      <textarea
-        id="newSeasonNotes"
-        rows={2}
-        value={state.newSeasonNotes}
-        onInput={e => {
-          state.newSeasonNotes = e.currentTarget.value;
-          vlens.scheduleRedraw();
-        }}
-        disabled={state.saving}
-      />
-    </div>
-    <div className="form-actions">
-      <button
-        className="btn btn-primary"
-        onClick={vlens.cachePartial(onCreateSeason, state)}
-        disabled={state.saving || !state.newSeasonName.trim()}
-      >
-        Add season
-      </button>
-      <button
-        className="btn btn-secondary"
-        onClick={vlens.cachePartial(onCancelSeasonForm, state)}
-        disabled={state.saving}
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
-const SeasonEditForm = ({ state, season }: { state: ActivitiesState; season: server.Season }) => (
-  <div className="activities-form">
-    <div className="form-group">
-      <label htmlFor={`editSeasonName${season.id}`}>Name</label>
-      <input
-        id={`editSeasonName${season.id}`}
-        type="text"
-        value={state.editSeasonName}
-        onInput={e => {
-          state.editSeasonName = e.currentTarget.value;
-          vlens.scheduleRedraw();
-        }}
-        disabled={state.saving}
-      />
-    </div>
-    <div className="form-row">
-      <div className="form-group flex-1">
-        <label htmlFor={`editSeasonStart${season.id}`}>Starts</label>
-        <input
-          id={`editSeasonStart${season.id}`}
-          type="date"
-          value={state.editSeasonStart}
-          onInput={e => {
-            state.editSeasonStart = e.currentTarget.value;
-            vlens.scheduleRedraw();
-          }}
-          disabled={state.saving}
-        />
-      </div>
-      <div className="form-group flex-1">
-        <label htmlFor={`editSeasonEnd${season.id}`}>Ends</label>
-        <input
-          id={`editSeasonEnd${season.id}`}
-          type="date"
-          value={state.editSeasonEnd}
-          onInput={e => {
-            state.editSeasonEnd = e.currentTarget.value;
-            vlens.scheduleRedraw();
-          }}
-          disabled={state.saving}
-        />
-      </div>
-    </div>
-    <div className="form-group">
-      <label htmlFor={`editSeasonNotes${season.id}`}>Notes</label>
-      <textarea
-        id={`editSeasonNotes${season.id}`}
-        rows={2}
-        value={state.editSeasonNotes}
-        onInput={e => {
-          state.editSeasonNotes = e.currentTarget.value;
-          vlens.scheduleRedraw();
-        }}
-        disabled={state.saving}
-      />
-    </div>
-    <div className="form-actions">
-      <button
-        className="btn btn-primary"
-        onClick={vlens.cachePartial(onSaveSeason, state, season.id)}
-        disabled={state.saving || !state.editSeasonName.trim()}
-      >
-        Save
-      </button>
-      <button
-        className="btn btn-secondary"
-        onClick={vlens.cachePartial(onCancelEditSeason, state)}
-        disabled={state.saving}
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-);
+function applyHome(state: ActivitiesState, home: server.GetActivitiesHomeResponse) {
+  state.familyId = home.familyId;
+  state.activities = [...(home.activities ?? [])];
+  state.seasons = [...(home.seasons ?? [])];
+}
+
+async function reload(state: ActivitiesState) {
+  const familyId = state.familyId;
+  const [resp, err] = await server.GetActivitiesHome({ familyId });
+  if (state.familyId !== familyId) return;
+  if (err || !resp) {
+    state.error = err || "Failed to load activities";
+  } else {
+    applyHome(state, resp);
+  }
+  state.loading = false;
+  vlens.scheduleRedraw();
+}
 
 async function selectFamily(state: ActivitiesState, familyId: number) {
   if (state.familyId === familyId) return;
   state.familyId = familyId;
   state.activities = [];
   state.seasons = [];
-  state.selectedActivityId = 0;
   state.addingActivity = false;
   state.editingActivityId = 0;
-  state.addingSeason = false;
+  state.addingSeasonFor = 0;
   state.editingSeasonId = 0;
   state.error = "";
-  state.loadingSeasons = true;
+  state.loading = true;
   vlens.scheduleRedraw();
+  await reload(state);
+}
 
-  const [resp, err] = await server.ListActivities({ familyId });
-  if (state.familyId !== familyId) return;
-  if (err || !resp) {
-    state.error = err || "Failed to load activities";
-    state.loadingSeasons = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  state.activities = resp.activities ?? [];
-  state.loadingSeasons = false;
-  await selectActivity(state, state.activities.length > 0 ? state.activities[0].id : 0);
+function onToggleManaging(state: ActivitiesState) {
+  state.managing = !state.managing;
+  vlens.scheduleRedraw();
 }
 
 function onShowActivityForm(state: ActivitiesState) {
@@ -641,9 +799,9 @@ async function onCreateActivity(state: ActivitiesState) {
     name,
     kind: state.newActivityKind,
   });
+  state.saving = false;
   if (err || !resp) {
     state.error = err || "Failed to create program";
-    state.saving = false;
     vlens.scheduleRedraw();
     return;
   }
@@ -651,8 +809,7 @@ async function onCreateActivity(state: ActivitiesState) {
   state.activities.push(resp.activity);
   state.addingActivity = false;
   state.newActivityName = "";
-  state.saving = false;
-  await selectActivity(state, resp.activity.id);
+  onShowSeasonForm(state, resp.activity.id);
 }
 
 function onStartEditActivity(state: ActivitiesState, activity: server.Activity) {
@@ -704,65 +861,25 @@ async function onDeleteActivity(state: ActivitiesState, activity: server.Activit
   vlens.scheduleRedraw();
 
   const [, err] = await server.DeleteActivity({ id: activity.id });
+  state.saving = false;
   if (err) {
     state.error = err || "Failed to delete program";
-    state.saving = false;
     vlens.scheduleRedraw();
     return;
   }
-
-  const idx = state.activities.findIndex(a => a.id === activity.id);
-  if (idx >= 0) state.activities.splice(idx, 1);
-  state.saving = false;
-  if (state.selectedActivityId === activity.id) {
-    await selectActivity(state, state.activities.length > 0 ? state.activities[0].id : 0);
-    return;
-  }
-  vlens.scheduleRedraw();
+  await reload(state);
 }
 
-function onSelectActivity(state: ActivitiesState, activityId: number) {
-  if (state.selectedActivityId === activityId) return;
-  void selectActivity(state, activityId);
-}
-
-async function selectActivity(state: ActivitiesState, activityId: number) {
-  state.selectedActivityId = activityId;
-  state.seasons = [];
-  state.addingSeason = false;
+function onShowSeasonForm(state: ActivitiesState, activityId: number) {
+  state.addingSeasonFor = activityId;
   state.editingSeasonId = 0;
-  if (activityId === 0) {
-    state.loadingSeasons = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  state.loadingSeasons = true;
-  vlens.scheduleRedraw();
-
-  const [resp, err] = await server.ListSeasons({ activityId });
-  if (state.selectedActivityId !== activityId) return;
-  if (err || !resp) {
-    state.error = err || "Failed to load seasons";
-  } else {
-    state.seasons = resp.seasons ?? [];
-  }
-  state.loadingSeasons = false;
-  vlens.scheduleRedraw();
-}
-
-function onShowSeasonForm(state: ActivitiesState) {
-  state.addingSeason = true;
-  state.editingSeasonId = 0;
-  state.newSeasonName = "";
-  state.newSeasonStart = "";
-  state.newSeasonEnd = "";
-  state.newSeasonNotes = "";
+  state.seasonForm = blankSeasonForm();
   vlens.scheduleRedraw();
 }
 
 function onCancelSeasonForm(state: ActivitiesState) {
-  state.addingSeason = false;
+  state.addingSeasonFor = 0;
+  state.editingSeasonId = 0;
   vlens.scheduleRedraw();
 }
 
@@ -772,46 +889,45 @@ function dateOrNull(value: string): string | null {
 }
 
 async function onCreateSeason(state: ActivitiesState) {
-  const name = state.newSeasonName.trim();
-  if (!name || state.selectedActivityId === 0) return;
+  const form = state.seasonForm;
+  const name = form.name.trim();
+  if (!name || state.addingSeasonFor === 0) return;
   state.saving = true;
   state.error = "";
   vlens.scheduleRedraw();
 
   const [resp, err] = await server.CreateSeason({
-    activityId: state.selectedActivityId,
+    activityId: state.addingSeasonFor,
     name,
-    startDate: dateOrNull(state.newSeasonStart),
-    endDate: dateOrNull(state.newSeasonEnd),
-    notes: state.newSeasonNotes.trim(),
+    startDate: dateOrNull(form.start),
+    endDate: dateOrNull(form.end),
+    notes: form.notes.trim(),
   });
+  state.saving = false;
   if (err || !resp) {
     state.error = err || "Failed to create season";
-  } else {
-    state.seasons.push(resp.season);
-    state.addingSeason = false;
+    vlens.scheduleRedraw();
+    return;
   }
-  state.saving = false;
-  vlens.scheduleRedraw();
+  state.addingSeasonFor = 0;
+  await reload(state);
 }
 
 function onStartEditSeason(state: ActivitiesState, season: server.Season) {
   state.editingSeasonId = season.id;
-  state.editSeasonName = season.name;
-  state.editSeasonStart = toDateInputValue(season.startDate);
-  state.editSeasonEnd = toDateInputValue(season.endDate);
-  state.editSeasonNotes = season.notes;
-  state.addingSeason = false;
-  vlens.scheduleRedraw();
-}
-
-function onCancelEditSeason(state: ActivitiesState) {
-  state.editingSeasonId = 0;
+  state.addingSeasonFor = 0;
+  state.seasonForm = {
+    name: season.name,
+    start: toDateInputValue(season.startDate),
+    end: toDateInputValue(season.endDate),
+    notes: season.notes,
+  };
   vlens.scheduleRedraw();
 }
 
 async function onSaveSeason(state: ActivitiesState, seasonId: number) {
-  const name = state.editSeasonName.trim();
+  const form = state.seasonForm;
+  const name = form.name.trim();
   if (!name) return;
   state.saving = true;
   state.error = "";
@@ -820,15 +936,15 @@ async function onSaveSeason(state: ActivitiesState, seasonId: number) {
   const [resp, err] = await server.UpdateSeason({
     id: seasonId,
     name,
-    startDate: dateOrNull(state.editSeasonStart),
-    endDate: dateOrNull(state.editSeasonEnd),
-    notes: state.editSeasonNotes.trim(),
+    startDate: dateOrNull(form.start),
+    endDate: dateOrNull(form.end),
+    notes: form.notes.trim(),
   });
   if (err || !resp) {
     state.error = err || "Failed to update season";
   } else {
-    const idx = state.seasons.findIndex(s => s.id === seasonId);
-    if (idx >= 0) state.seasons[idx] = resp.season;
+    const home = state.seasons.find(row => row.season.id === seasonId);
+    if (home) home.season = resp.season;
     state.editingSeasonId = 0;
   }
   state.saving = false;
@@ -851,8 +967,7 @@ async function onDeleteSeason(state: ActivitiesState, season: server.Season) {
   if (err) {
     state.error = err || "Failed to delete season";
   } else {
-    const idx = state.seasons.findIndex(s => s.id === season.id);
-    if (idx >= 0) state.seasons.splice(idx, 1);
+    state.seasons = state.seasons.filter(home => home.season.id !== season.id);
     if (state.editingSeasonId === season.id) state.editingSeasonId = 0;
   }
   state.saving = false;

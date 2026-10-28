@@ -4,8 +4,11 @@ import * as vlens from "vlens";
 import * as server from "../../server";
 import { copy } from "../../lib/copy";
 import { WhenRequest } from "../../lib/when";
-import { photoFileProblem } from "../../lib/photoUploadQueue";
-import { uploadPhoto } from "../../lib/photoUpload";
+import {
+  MediaUploadButton,
+  MediaUploadError,
+  MediaUploadState,
+} from "../../components/MediaUpload";
 import { MILESTONE_CATEGORIES } from "../../lib/milestoneHelpers";
 import "./add-milestone-styles";
 import "../../components/entry-form-styles";
@@ -73,42 +76,14 @@ export const MilestoneTextFields = ({ form, disabled, textareaRef }: MilestoneTe
   );
 };
 
-export type MilestonePhotoUpload = {
+export type MilestonePhotoUpload = MediaUploadState & {
   photoIds: number[];
-  uploading: boolean;
-  uploadError: string;
   previews: Record<number, string>;
 };
 
-async function uploadMilestonePhotos(
-  form: MilestonePhotoUpload,
-  personId: number,
-  familyId: number,
-  event: Event
-) {
-  const input = event.currentTarget as HTMLInputElement;
-  const files = Array.from(input.files ?? []);
-  input.value = "";
-  if (form.uploading || files.length === 0) return;
-  form.uploadError = files.map(photoFileProblem).find(Boolean) ?? "";
-  if (form.uploadError) {
-    vlens.scheduleRedraw();
-    return;
-  }
-  form.uploading = true;
-  vlens.scheduleRedraw();
-  try {
-    for (const file of files) {
-      const image = await uploadPhoto(file, [personId], familyId);
-      form.previews[image.id] = URL.createObjectURL(file);
-      if (!form.photoIds.includes(image.id)) form.photoIds.push(image.id);
-      vlens.scheduleRedraw();
-    }
-  } catch (err) {
-    form.uploadError = err instanceof Error ? err.message : String(err);
-  }
-  form.uploading = false;
-  vlens.scheduleRedraw();
+function attachUpload(form: MilestonePhotoUpload, image: server.Image, file: File) {
+  if (image.mediaKind !== server.MediaVideo) form.previews[image.id] = URL.createObjectURL(file);
+  if (!form.photoIds.includes(image.id)) form.photoIds.push(image.id);
 }
 
 interface MilestonePhotoUploadsProps {
@@ -119,7 +94,7 @@ interface MilestonePhotoUploadsProps {
   isArtwork?: boolean;
 }
 
-// Upload and attach photos without leaving the milestone, tagged to its person.
+// Upload and attach photos or videos without leaving the milestone, tagged to its person.
 export const MilestonePhotoUploads = ({
   form,
   personId,
@@ -145,30 +120,17 @@ export const MilestonePhotoUploads = ({
           <img src={form.previews[id] ?? `/api/photo/${id}/thumb`} alt="" loading="lazy" />
         </button>
       ))}
-      <label className={`artwork-upload${disabled || personId === null ? " disabled" : ""}`}>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          disabled={disabled || form.uploading || personId === null}
-          onChange={
-            personId === null
-              ? undefined
-              : vlens.cachePartial(uploadMilestonePhotos, form, personId, familyId)
-          }
-        />
-        {form.uploading
-          ? "Uploading photos…"
-          : isArtwork
-            ? copy.milestone.addArtworkPhoto
-            : "Add new photos"}
-      </label>
+      <MediaUploadButton
+        state={form}
+        className="media-upload-tile"
+        personIds={personId === null ? [] : [personId]}
+        familyId={familyId}
+        disabled={disabled || personId === null}
+        label={isArtwork ? copy.milestone.addArtworkPhoto : undefined}
+        onUploaded={(image, file) => attachUpload(form, image, file)}
+      />
     </div>
-    {form.uploadError && (
-      <div className="error-message" role="alert">
-        {form.uploadError}
-      </div>
-    )}
+    <MediaUploadError state={form} />
   </div>
 );
 

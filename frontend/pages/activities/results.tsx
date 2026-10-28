@@ -1,11 +1,22 @@
 import * as preact from "preact";
 import * as server from "../../server";
+import { matchupParts } from "../../lib/matchups";
+import {
+  ResultKindAdjudication,
+  ResultKindAward,
+  ResultKindPlacement,
+  ResultKindScore,
+  resultText,
+} from "../../lib/activityResults";
 import "./results-styles";
 
-export const ResultKindAdjudication = "adjudication";
-export const ResultKindPlacement = "placement";
-export const ResultKindAward = "award";
-export const ResultKindScore = "score";
+export {
+  ResultKindAdjudication,
+  ResultKindAward,
+  ResultKindPlacement,
+  ResultKindScore,
+  resultText,
+};
 
 export const resultKindOptions: { value: string; label: string }[] = [
   { value: ResultKindAdjudication, label: "Adjudication" },
@@ -14,67 +25,80 @@ export const resultKindOptions: { value: string; label: string }[] = [
   { value: ResultKindScore, label: "Score" },
 ];
 
-function ordinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
+function personName(people: server.Person[], personId: number | null): string {
+  if (personId == null) return "";
+  return people.find(person => person.id === personId)?.name ?? "";
 }
 
-export function resultText(result: server.Result): string {
-  switch (result.kind) {
-    case ResultKindPlacement: {
-      const place = result.rank == null ? result.label : ordinal(result.rank);
-      const field = result.outOf == null ? "" : ` of ${result.outOf}`;
-      return `${place}${field}`;
-    }
-    case ResultKindScore: {
-      const score = result.score == null ? result.label : String(result.score);
-      return result.label && result.score != null ? `${score} ${result.label}` : score;
-    }
-    default:
-      return result.label;
-  }
+function resultDetail(result: server.Result, name: string): string {
+  return [result.category, name].filter(part => part).join(" · ");
 }
 
-function resultDetail(result: server.Result, personName: string): string {
-  return [result.category, personName].filter(part => part).join(" · ");
+export const MatchupLine = ({ appearance }: { appearance: server.Appearance }) => {
+  const parts = matchupParts(appearance);
+  if (parts.length === 0) return null;
+  return (
+    <span className={`matchup-line${appearance.outcome ? ` matchup-${appearance.outcome}` : ""}`}>
+      {parts.join(" · ")}
+    </span>
+  );
+};
+
+function podiumClass(result: server.Result): string {
+  if (result.kind !== ResultKindPlacement || result.rank == null || result.rank > 3) return "";
+  return ` result-badge-podium result-badge-p${result.rank}`;
 }
 
-export const ResultList = ({
+const badgeOrder = [ResultKindPlacement, ResultKindAdjudication, ResultKindAward, ResultKindScore];
+
+export const ResultBadges = ({
   results,
   people,
 }: {
   results: server.Result[] | null;
   people: server.Person[];
 }): preact.ComponentChild => {
-  const rows = results ?? [];
+  const rows = [...(results ?? [])].sort(
+    (a, b) => badgeOrder.indexOf(a.kind) - badgeOrder.indexOf(b.kind)
+  );
   if (rows.length === 0) return null;
 
   return (
-    <ul className="result-list">
+    <ul className="result-badges">
       {rows.map(result => {
-        const personName =
-          result.personId == null
-            ? ""
-            : (people.find(person => person.id === result.personId)?.name ?? "");
-        const detail = resultDetail(result, personName);
+        const detail = resultDetail(result, personName(people, result.personId));
         return (
-          <li key={result.id} className={`result-row result-${result.kind}`}>
-            <span className="result-text">{resultText(result)}</span>
-            {detail && <span className="result-detail">{detail}</span>}
-            {result.notes && <span className="result-detail">{result.notes}</span>}
+          <li
+            key={result.id}
+            className={`result-badge result-badge-${result.kind}${podiumClass(result)}`}
+            title={result.notes || undefined}
+          >
+            <strong>{resultText(result)}</strong>
+            {detail && <small>{detail}</small>}
           </li>
         );
       })}
     </ul>
+  );
+};
+
+export const MediaGrid = ({
+  photoIds,
+  size = "large",
+}: {
+  photoIds: number[] | null;
+  size?: "large" | "small";
+}): preact.ComponentChild => {
+  const ids = photoIds ?? [];
+  if (ids.length === 0) return null;
+
+  return (
+    <div className={`media-grid media-grid-${size}`}>
+      {ids.map(id => (
+        <a key={id} className="media-grid-item" href={`/view-photo/${id}`} aria-label="View photo">
+          <img src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />
+        </a>
+      ))}
+    </div>
   );
 };

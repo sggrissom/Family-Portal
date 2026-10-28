@@ -542,3 +542,219 @@ func TestDeleteEntryReachesResultsThroughAppearances(t *testing.T) {
 		}
 	})
 }
+
+func TestAppearanceMatchupRoundTrips(t *testing.T) {
+	fx := setupResultsFixture(t)
+
+	var created Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := CreateAppearance(ctx, CreateAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.entry.Id,
+			Matchup: &MatchupInput{
+				Round: " Semifinal ", Opponent: "Crew Z", Outcome: "WIN",
+				ScoreFor: intPtr(3), ScoreAgainst: intPtr(0),
+			},
+		})
+		if err != nil {
+			t.Fatalf("CreateAppearance() error = %v", err)
+		}
+		created = resp.Appearance.Appearance
+	})
+
+	var stored Appearance
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		stored = GetAppearanceById(tx, created.Id)
+	})
+	if stored.Round != "Semifinal" || stored.Opponent != "Crew Z" || stored.Outcome != OutcomeWin {
+		t.Errorf("stored matchup = %q / %q / %q", stored.Round, stored.Opponent, stored.Outcome)
+	}
+	if stored.ScoreFor == nil || *stored.ScoreFor != 3 || stored.ScoreAgainst == nil || *stored.ScoreAgainst != 0 {
+		t.Errorf("stored score = %v-%v, want 3-0", stored.ScoreFor, stored.ScoreAgainst)
+	}
+}
+
+func TestUpdateAppearanceWithoutAMatchupKeepsIt(t *testing.T) {
+	fx := setupResultsFixture(t)
+	appearance := fx.newAppearance(t)
+
+	fx.as(t, func(ctx *vbeam.Context) {
+		if _, err := UpdateAppearance(ctx, UpdateAppearanceRequest{
+			Id: appearance.Id, Matchup: &MatchupInput{Round: "Final", Outcome: OutcomeLoss},
+		}); err != nil {
+			t.Fatalf("UpdateAppearance(matchup) error = %v", err)
+		}
+	})
+	var kept Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Notes: "close one"})
+		if err != nil {
+			t.Fatalf("UpdateAppearance(notes) error = %v", err)
+		}
+		kept = resp.Appearance.Appearance
+	})
+	if kept.Round != "Final" || kept.Outcome != OutcomeLoss || kept.Notes != "close one" {
+		t.Errorf("an update without a matchup changed it: %+v", kept)
+	}
+
+	var cleared Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Matchup: &MatchupInput{}})
+		if err != nil {
+			t.Fatalf("UpdateAppearance(empty matchup) error = %v", err)
+		}
+		cleared = resp.Appearance.Appearance
+	})
+	if cleared.Round != "" || cleared.Outcome != "" {
+		t.Errorf("an empty matchup did not clear it: %+v", cleared)
+	}
+}
+
+func TestAppearanceMatchupValidation(t *testing.T) {
+	fx := setupResultsFixture(t)
+	appearance := fx.newAppearance(t)
+
+	for _, tc := range []struct {
+		name    string
+		matchup MatchupInput
+		want    error
+	}{
+		{"unknown outcome", MatchupInput{Outcome: "forfeit"}, ErrInvalidOutcome},
+		{"negative score", MatchupInput{ScoreFor: intPtr(-1)}, ErrMatchupScoreOutOfRange},
+		{"huge score", MatchupInput{ScoreAgainst: intPtr(maxMatchupScore + 1)}, ErrMatchupScoreOutOfRange},
+	} {
+		matchup := tc.matchup
+		fx.as(t, func(ctx *vbeam.Context) {
+			_, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Matchup: &matchup})
+			if err != tc.want {
+				t.Errorf("%s: error = %v, want %v", tc.name, err, tc.want)
+			}
+		})
+		fx.as(t, func(ctx *vbeam.Context) {
+			_, err := CreateAppearance(ctx, CreateAppearanceRequest{
+				EventId: fx.event.Id, EntryId: fx.entry.Id, Matchup: &matchup,
+			})
+			if err != tc.want {
+				t.Errorf("%s on create: error = %v, want %v", tc.name, err, tc.want)
+			}
+		})
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetEventAppearances(tx, fx.event.Id)); got != 1 {
+			t.Errorf("rejected creates left %d appearances, want 1", got)
+		}
+	})
+}
+
+func TestSaveAppearanceCreatesTheWholePerformanceAtOnce(t *testing.T) {
+	fx := setupResultsFixture(t)
+	photo := fx.addPhoto(t, fx.familyId, "stage.jpg")
+	occurredAt := "2026-02-08"
+
+	resp, err := callAs(t, fx, SaveAppearance, SaveAppearanceRequest{
+		EventId: fx.event.Id, EntryId: fx.entry.Id, OccurredAt: &occurredAt, Notes: "  clean run  ",
+		Results: []ResultInput{
+			{Kind: ResultKindPlacement, Rank: intPtr(1), OutOf: intPtr(9), Category: "Teen Group Jazz"},
+			{Kind: ResultKindAdjudication, Label: "Platinum"},
+		},
+		PhotoIds: []int{photo.Id},
+	})
+	if err != nil {
+		t.Fatalf("SaveAppearance(new) error = %v", err)
+	}
+
+	saved := resp.Appearance
+	if saved.Appearance.Id == 0 || saved.Appearance.EventId != fx.event.Id || saved.Appearance.EntryId != fx.entry.Id {
+		t.Fatalf("SaveAppearance(new) = %+v, want it hung off the event and the entry", saved.Appearance)
+	}
+	if saved.Appearance.Notes != "clean run" {
+		t.Errorf("notes = %q, want trimmed", saved.Appearance.Notes)
+	}
+	if len(saved.Results) != 2 || saved.Results[0].Kind != ResultKindPlacement || saved.Results[1].Label != "Platinum" {
+		t.Errorf("results = %+v, want the placement then the adjudication", saved.Results)
+	}
+	if saved.Results[0].AppearanceId != saved.Appearance.Id {
+		t.Errorf("result appearance = %d, want %d", saved.Results[0].AppearanceId, saved.Appearance.Id)
+	}
+	if len(saved.PhotoIds) != 1 || saved.PhotoIds[0] != photo.Id {
+		t.Errorf("photoIds = %v, want the stage photo", saved.PhotoIds)
+	}
+}
+
+func TestSaveAppearanceReplacesResultsAndPhotosOnUpdate(t *testing.T) {
+	fx := setupResultsFixture(t)
+	appearance := fx.newAppearance(t)
+	fx.setResults(t, appearance.Id, []ResultInput{{Kind: ResultKindAdjudication, Label: "High Gold"}})
+	first := fx.addPhoto(t, fx.familyId, "one.jpg")
+	second := fx.addPhoto(t, fx.familyId, "two.jpg")
+	if _, err := callAs(t, fx, SetAppearancePhotos, SetAppearancePhotosRequest{
+		AppearanceId: appearance.Id, PhotoIds: []int{first.Id},
+	}); err != nil {
+		t.Fatalf("SetAppearancePhotos() error = %v", err)
+	}
+
+	resp, err := callAs(t, fx, SaveAppearance, SaveAppearanceRequest{
+		Id: appearance.Id, EventId: 0, EntryId: fx.otherEntry.Id,
+		Results:  []ResultInput{{Kind: ResultKindAward, Label: "Judges' Choice"}},
+		PhotoIds: []int{second.Id},
+	})
+	if err != nil {
+		t.Fatalf("SaveAppearance(update) error = %v", err)
+	}
+
+	saved := resp.Appearance
+	if saved.Appearance.Id != appearance.Id || saved.Appearance.EntryId != fx.entry.Id {
+		t.Errorf("update moved or re-created the appearance: %+v", saved.Appearance)
+	}
+	results := fx.resultsOf(t, appearance.Id)
+	if len(results) != 1 || results[0].Label != "Judges' Choice" {
+		t.Errorf("results = %+v, want only the award", results)
+	}
+	if len(saved.PhotoIds) != 1 || saved.PhotoIds[0] != second.Id {
+		t.Errorf("photoIds = %v, want only the second photo", saved.PhotoIds)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetEventAppearances(tx, fx.event.Id)); got != 1 {
+			t.Errorf("GetEventAppearances = %d, want the one appearance", got)
+		}
+	})
+}
+
+func TestSaveAppearanceWritesNothingWhenAnyPartIsRejected(t *testing.T) {
+	fx := setupResultsFixture(t)
+	ours := fx.addPhoto(t, fx.familyId, "ours.jpg")
+	theirs := fx.addPhoto(t, fx.familyId+999, "theirs.jpg")
+
+	cases := []struct {
+		name string
+		req  SaveAppearanceRequest
+	}{
+		{"bad result", SaveAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.entry.Id,
+			Results: []ResultInput{{Kind: ResultKindAdjudication, Label: "Gold"}, {Kind: ResultKindPlacement}},
+		}},
+		{"another family's photo", SaveAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.entry.Id, PhotoIds: []int{ours.Id, theirs.Id},
+		}},
+		{"entry from another season", SaveAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.otherEntry.Id,
+		}},
+		{"result for someone off the roster", SaveAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.entry.Id,
+			Results: []ResultInput{{Kind: ResultKindAward, Label: "Solo", PersonId: intPtr(fx.carol.Id)}},
+		}},
+	}
+	for _, tc := range cases {
+		if _, err := callAs(t, fx, SaveAppearance, tc.req); err == nil {
+			t.Errorf("SaveAppearance(%s) succeeded", tc.name)
+		}
+	}
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetEventAppearances(tx, fx.event.Id)); got != 0 {
+			t.Errorf("rejected saves left %d appearances behind", got)
+		}
+		if got := len(GetFamilyAppearancePhotos(tx, fx.familyId)); got != 0 {
+			t.Errorf("rejected saves left %d photo joins behind", got)
+		}
+	})
+}

@@ -42,6 +42,7 @@ type AddMilestoneForm = {
   lookupKey: string;
   lookupTimer: number;
   uploading: boolean;
+  uploadProgress: number;
   uploadError: string;
   previews: Record<number, string>;
 };
@@ -64,6 +65,7 @@ const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMile
     lookupKey: "",
     lookupTimer: 0,
     uploading: false,
+    uploadProgress: 0,
     uploadError: "",
     previews: {},
   };

@@ -8,8 +8,12 @@ import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
-import { formatDateRange, toDateInputValue } from "../../lib/dateUtils";
-import { ActivityLabels, labelsFor } from "./labels";
+import { formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
+import { localDateString } from "../../lib/when";
+import { dayKey, dayLabel } from "../../lib/daySummary";
+import { cellHeadline, eventStatus } from "../../lib/activityResults";
+import { ActivityLabels, activityKindIcon, labelsFor } from "./labels";
+import { DateBlock } from "./performance-card";
 import "./activities-styles";
 import "./season-styles";
 
@@ -79,6 +83,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 type SeasonState = {
   initialized: boolean;
   seasonId: number;
+  appearances: server.AppearanceView[];
   events: server.Event[];
   appearanceCounts: Record<number, number>;
 
@@ -138,6 +143,7 @@ const useSeasonState = vlens.declareHook(
   (): SeasonState => ({
     initialized: false,
     seasonId: 0,
+    appearances: [],
     events: [],
     appearanceCounts: {},
     addingEvent: false,
@@ -175,6 +181,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
     const appearances = overview.appearances ?? [];
     state.initialized = true;
     state.seasonId = overview.season.id;
+    state.appearances = appearances;
     state.events = [...(overview.events ?? [])];
     state.appearanceCounts = countBy(appearances, a => a.appearance.eventId);
     state.entries = [...(overview.entries ?? [])];
@@ -189,6 +196,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
   const labels = labelsFor(overview.activity);
   const dates = formatDateRange(overview.season.startDate, overview.season.endDate);
   const editable = auth.canContribute(overview.season.familyId);
+  const today = localDateString(new Date());
 
   return (
     <div>
@@ -199,7 +207,9 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
         </a>
 
         <div className="season-header">
-          <span className="season-eyebrow">{overview.activity.name}</span>
+          <span className="home-season-program">
+            <Icon symbol={activityKindIcon(overview.activity.kind)} /> {overview.activity.name}
+          </span>
           <h1>{overview.season.name}</h1>
           {dates && <p className="season-dates">{dates}</p>}
           {overview.season.notes && <p className="season-notes">{overview.season.notes}</p>}
@@ -211,12 +221,19 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
           </div>
         )}
 
+        {state.events.length > 0 && state.entries.length > 0 && (
+          <section className="activities-section">
+            <h2 className="activities-heading">Results</h2>
+            <ResultsGrid state={state} labels={labels} today={today} />
+          </section>
+        )}
+
         <section className="activities-section">
           <div className="activities-section-head">
             <h2>{labels.eventPlural}</h2>
             {editable && !state.addingEvent && (
               <button
-                className="btn btn-primary"
+                className="btn btn-secondary btn-small"
                 onClick={vlens.cachePartial(onShowEventForm, state)}
                 disabled={state.saving}
               >
@@ -243,10 +260,10 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
               </p>
             </div>
           ) : (
-            <ul className="event-list">
+            <ul className="schedule">
               {state.events.map(event =>
                 state.editingEventId === event.id ? (
-                  <li key={event.id} className="event-item">
+                  <li key={event.id}>
                     <EventFormFields
                       state={state}
                       labels={labels}
@@ -256,9 +273,14 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
                     />
                   </li>
                 ) : (
-                  <li key={event.id} className="event-item">
-                    <EventRow state={state} event={event} labels={labels} editable={editable} />
-                  </li>
+                  <EventRow
+                    key={event.id}
+                    state={state}
+                    event={event}
+                    labels={labels}
+                    editable={editable}
+                    today={today}
+                  />
                 )
               )}
             </ul>
@@ -270,7 +292,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
             <h2>{labels.entryPlural}</h2>
             {editable && !state.addingEntry && (
               <button
-                className="btn btn-primary"
+                className="btn btn-secondary btn-small"
                 onClick={vlens.cachePartial(onShowEntryForm, state)}
                 disabled={state.saving}
               >
@@ -298,32 +320,30 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
               </p>
             </div>
           ) : (
-            <ul className="event-list">
+            <div className="entry-cards">
               {state.entries.map(entryView =>
                 state.editingEntryId === entryView.entry.id ? (
-                  <li key={entryView.entry.id} className="event-item">
-                    <EntryFormFields
-                      state={state}
-                      data={data}
-                      labels={labels}
-                      submitLabel="Save"
-                      onSubmit={vlens.cachePartial(onSaveEntry, state, entryView)}
-                      onCancel={vlens.cachePartial(onCancelEntryForm, state)}
-                    />
-                  </li>
+                  <EntryFormFields
+                    key={entryView.entry.id}
+                    state={state}
+                    data={data}
+                    labels={labels}
+                    submitLabel="Save"
+                    onSubmit={vlens.cachePartial(onSaveEntry, state, entryView)}
+                    onCancel={vlens.cachePartial(onCancelEntryForm, state)}
+                  />
                 ) : (
-                  <li key={entryView.entry.id} className="event-item">
-                    <EntryRow
-                      state={state}
-                      data={data}
-                      entryView={entryView}
-                      labels={labels}
-                      editable={editable}
-                    />
-                  </li>
+                  <EntryRow
+                    key={entryView.entry.id}
+                    state={state}
+                    data={data}
+                    entryView={entryView}
+                    labels={labels}
+                    editable={editable}
+                  />
                 )
               )}
-            </ul>
+            </div>
           )}
         </section>
       </main>
@@ -332,45 +352,120 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
   );
 }
 
+function statusOf(event: server.Event, today: string) {
+  return eventStatus(toDateInputValue(event.startDate), toDateInputValue(event.endDate), today);
+}
+
+const ResultsGrid = ({
+  state,
+  labels,
+  today,
+}: {
+  state: SeasonState;
+  labels: ActivityLabels;
+  today: string;
+}) => (
+  <div className="results-grid-scroll">
+    <table className="results-grid">
+      <thead>
+        <tr>
+          <th scope="col" className="results-grid-corner">
+            {labels.entry}
+          </th>
+          {state.events.map(event => (
+            <th
+              key={event.id}
+              scope="col"
+              className={statusOf(event, today) === "upcoming" ? "results-grid-upcoming" : ""}
+            >
+              <a href={`/competition/${event.id}`}>{event.name}</a>
+              {isRealDate(event.startDate) && (
+                <small>{dayLabel(dayKey(event.startDate), today).replace(/^\w+, /, "")}</small>
+              )}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {state.entries.map(entryView => (
+          <tr key={entryView.entry.id}>
+            <th scope="row">
+              <a href={`/routine/${entryView.entry.id}`}>{entryView.entry.name}</a>
+            </th>
+            {state.events.map(event => {
+              const views = state.appearances.filter(
+                view =>
+                  view.appearance.eventId === event.id &&
+                  view.appearance.entryId === entryView.entry.id
+              );
+              const text = cellHeadline(views);
+              return (
+                <td key={event.id} className={text ? "results-grid-hit" : ""}>
+                  {text ? (
+                    <a href={`/competition/${event.id}`}>{text}</a>
+                  ) : (
+                    <span aria-label="Not recorded">·</span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 const EventRow = ({
   state,
   event,
   labels,
   editable,
+  today,
 }: {
   state: SeasonState;
   event: server.Event;
   labels: ActivityLabels;
   editable: boolean;
+  today: string;
 }) => {
-  const dates = formatDateRange(event.startDate, event.endDate);
-  const where = [event.host, event.location].filter(part => part).join(" · ");
+  const where = [event.location, event.host].filter(part => part).join(" · ");
   const count = state.appearanceCounts[event.id] ?? 0;
+  const status = statusOf(event, today);
+  const needsResults = status !== "upcoming" && count === 0 && state.entries.length > 0;
 
   return (
-    <>
-      <div className="event-item-main">
-        <a className="event-name" href={`/competition/${event.id}`}>
-          {event.name}
-        </a>
-        {(dates || where) && (
-          <span className="event-meta">{[dates, where].filter(part => part).join(" — ")}</span>
-        )}
-        <span className="event-count">
-          {count === 0
-            ? `No ${labels.appearancePlural.toLowerCase()} recorded`
-            : count === 1
+    <li className={`schedule-row schedule-${status}`}>
+      <DateBlock date={event.startDate} />
+      <a className="schedule-main" href={`/competition/${event.id}`}>
+        <strong>{event.name}</strong>
+        {where && <span className="event-meta">{where}</span>}
+      </a>
+      <span className="schedule-status">
+        {status === "upcoming" ? (
+          <span className="schedule-tag">Upcoming</span>
+        ) : needsResults ? (
+          editable ? (
+            <a className="btn btn-primary btn-small" href={`/competition/${event.id}`}>
+              Add results
+            </a>
+          ) : (
+            <span className="schedule-tag schedule-tag-missing">No results yet</span>
+          )
+        ) : (
+          <span className="event-count">
+            {count === 1
               ? `1 ${labels.appearance.toLowerCase()}`
               : `${count} ${labels.appearancePlural.toLowerCase()}`}
-        </span>
-        {event.notes && <p className="event-notes">{event.notes}</p>}
-      </div>
+          </span>
+        )}
+      </span>
       {editable && (
         <span className="event-item-actions">
           <button
             className="icon-btn"
             title={`Edit ${labels.event.toLowerCase()}`}
-            aria-label={`Edit ${labels.event.toLowerCase()}`}
+            aria-label={`Edit ${event.name}`}
             onClick={vlens.cachePartial(onStartEditEvent, state, event)}
             disabled={state.saving}
           >
@@ -379,7 +474,7 @@ const EventRow = ({
           <button
             className="icon-btn"
             title={`Delete ${labels.event.toLowerCase()}`}
-            aria-label={`Delete ${labels.event.toLowerCase()}`}
+            aria-label={`Delete ${event.name}`}
             onClick={vlens.cachePartial(onDeleteEvent, state, event, labels)}
             disabled={state.saving}
           >
@@ -387,7 +482,7 @@ const EventRow = ({
           </button>
         </span>
       )}
-    </>
+    </li>
   );
 };
 
@@ -527,13 +622,13 @@ const EntryRow = ({
   const count = state.entryAppearanceCounts[entry.id] ?? 0;
 
   return (
-    <>
-      <div className="event-item-main">
-        <a className="event-name" href={`/routine/${entry.id}`}>
+    <article className="entry-card">
+      <div className="entry-card-main">
+        <a className="entry-card-name" href={`/routine/${entry.id}`}>
           {entry.name}
         </a>
         {traits && <span className="event-meta">{traits}</span>}
-        <span className="event-meta">
+        <span className="entry-card-roster">
           {roster.length > 0 ? roster.join(", ") : `No ${labels.roster.toLowerCase()} yet`}
         </span>
         <span className="event-count">
@@ -550,7 +645,7 @@ const EntryRow = ({
           <button
             className="icon-btn"
             title={`Edit ${labels.entry.toLowerCase()}`}
-            aria-label={`Edit ${labels.entry.toLowerCase()}`}
+            aria-label={`Edit ${entry.name}`}
             onClick={vlens.cachePartial(onStartEditEntry, state, entryView)}
             disabled={state.saving}
           >
@@ -559,7 +654,7 @@ const EntryRow = ({
           <button
             className="icon-btn"
             title={`Delete ${labels.entry.toLowerCase()}`}
-            aria-label={`Delete ${labels.entry.toLowerCase()}`}
+            aria-label={`Delete ${entry.name}`}
             onClick={vlens.cachePartial(onDeleteEntry, state, entryView, labels)}
             disabled={state.saving}
           >
@@ -567,7 +662,7 @@ const EntryRow = ({
           </button>
         </span>
       )}
-    </>
+    </article>
   );
 };
 
@@ -838,6 +933,7 @@ async function onDeleteEvent(state: SeasonState, event: server.Event, labels: Ac
     const idx = state.events.findIndex(e => e.id === event.id);
     if (idx >= 0) state.events.splice(idx, 1);
     delete state.appearanceCounts[event.id];
+    state.appearances = state.appearances.filter(view => view.appearance.eventId !== event.id);
     if (state.editingEventId === event.id) state.editingEventId = 0;
   }
   state.saving = false;
@@ -988,6 +1084,9 @@ async function onDeleteEntry(
     const idx = state.entries.findIndex(row => row.entry.id === entryView.entry.id);
     if (idx >= 0) state.entries.splice(idx, 1);
     delete state.entryAppearanceCounts[entryView.entry.id];
+    state.appearances = state.appearances.filter(
+      view => view.appearance.entryId !== entryView.entry.id
+    );
     if (state.editingEntryId === entryView.entry.id) state.editingEntryId = 0;
   }
   state.saving = false;

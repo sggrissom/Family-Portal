@@ -414,7 +414,7 @@ test("artwork is photographed from the moment form and hangs on its own tab", as
   await expect(page.locator("label[for=description]")).toHaveText("What did they make?");
   await page.locator("#description").fill("Drew the whole family as dinosaurs");
 
-  await page.locator(".artwork-upload input").setInputFiles("backend/seedphotos/bubbles-park.jpg");
+  await page.locator(".media-upload input").setInputFiles("backend/seedphotos/bubbles-park.jpg");
   await expect(page.getByRole("button", { name: "Don't attach this photo" })).toHaveCount(1);
   await page.getByRole("button", { name: "Save", exact: true }).click();
 

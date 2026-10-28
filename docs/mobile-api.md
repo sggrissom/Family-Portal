@@ -717,6 +717,23 @@ partial list is a deletion. `AddMilestone` and `UpdateMilestone` take the same
 whole-set `tagIds` in the same transaction as the milestone; on update an absent
 `tagIds` leaves the tags alone and `[]` clears them.
 
+`CreateAppearance` and `UpdateAppearance` take an optional `matchup`
+(`{round, opponent, outcome, scoreFor, scoreAgainst}`) for a head-to-head
+round: a battle bracket or a tournament game. It is all-or-nothing like a
+whole-set write. On update an absent `matchup` leaves the stored one alone,
+and `{}` clears it, so a build that predates it never wipes one. `outcome` is
+`""`, `"win"`, `"loss"` or `"draw"`; anything else fails. A score is 0–9999,
+and `null` means no score was kept — a dance battle has an outcome and no
+score. The fields come back flat on `Appearance`, `scoreFor` and
+`scoreAgainst` omitted when absent.
+
+`SaveAppearance` writes a whole performance in one transaction: the appearance
+(created when `id` is 0, from `eventId` and `entryId`), its whole-set `results`
+and its whole-set `photoIds`. On update `eventId` and `entryId` are ignored. If
+any part is rejected nothing is written, so a results screen can save with one
+call instead of chaining `CreateAppearance`, `SetAppearanceResults` and
+`SetAppearancePhotos`.
+
 `AddCheckup` saves an optional `height` and `weight` (`{value, unit}`) against one
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.

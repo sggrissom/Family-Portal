@@ -368,6 +368,11 @@ func TestLinkedHouseholdReachesOnlyTheRosterScopedViews(t *testing.T) {
 			t.Error("the vocabulary was readable through a link")
 		}
 	})
+	asUserB(func(ctx *vbeam.Context) {
+		if _, err := GetActivitiesHome(ctx, GetActivitiesHomeRequest{FamilyId: fx.season.FamilyId}); err == nil {
+			t.Error("the activities home was readable through a link")
+		}
+	})
 
 	asUserB(func(ctx *vbeam.Context) {
 		if _, err := GetPersonSeason(ctx, GetPersonSeasonRequest{PersonId: fx.bob.Id}); err == nil {
@@ -418,5 +423,39 @@ func TestSeasonSummaryCarriesActivityKind(t *testing.T) {
 		if season.Kind != ActivityKindDance {
 			t.Errorf("season %q kind = %q, want %q", season.Name, season.Kind, ActivityKindDance)
 		}
+	}
+}
+
+func TestGetActivitiesHomeListsEverySeasonWithItsEventsAndEntries(t *testing.T) {
+	fx := seedSeason(t)
+
+	resp, err := callAs(t, fx.resultsFixture, GetActivitiesHome, GetActivitiesHomeRequest{})
+	if err != nil {
+		t.Fatalf("GetActivitiesHome() error = %v", err)
+	}
+	if resp.FamilyId != fx.familyId {
+		t.Errorf("familyId = %d, want the caller's family %d", resp.FamilyId, fx.familyId)
+	}
+	if len(resp.Activities) != 1 || resp.Activities[0].Id != fx.activity.Id {
+		t.Errorf("activities = %+v, want the one program", resp.Activities)
+	}
+	if len(resp.Seasons) != 2 || resp.Seasons[0].Season.Id != fx.season.Id || resp.Seasons[1].Season.Id != fx.otherSeason.Id {
+		t.Fatalf("seasons = %+v, want this season then last season", resp.Seasons)
+	}
+
+	current := resp.Seasons[0]
+	if len(current.Events) != 2 || current.Events[0].Event.Id != fx.nuvo.Id || current.Events[1].Event.Id != fx.showstopper.Id {
+		t.Fatalf("events = %+v, want Nuvo then Showstopper", current.Events)
+	}
+	if current.Events[0].Appearances != 2 || current.Events[1].Appearances != 1 {
+		t.Errorf("appearance counts = %d, %d, want 2, 1", current.Events[0].Appearances, current.Events[1].Appearances)
+	}
+	if len(current.Entries) != 2 || current.Entries[0].Entry.Name != "On My Own" || len(current.Entries[1].PersonIds) != 2 {
+		t.Errorf("entries = %+v, want both routines by name with their rosters", current.Entries)
+	}
+
+	last := resp.Seasons[1]
+	if len(last.Events) != 0 || len(last.Entries) != 1 {
+		t.Errorf("last season = %+v, want its one routine and no events", last)
 	}
 }

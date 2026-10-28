@@ -6,15 +6,8 @@ import * as core from "vlens/core";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
-import { uploadPhoto } from "../../lib/photoUpload";
-import {
-  durationProblem,
-  isVideoFile,
-  readVideoDuration,
-  uploadVideo,
-  videoFileProblem,
-} from "../../lib/videoUpload";
-import { videoTypes } from "../../lib/videoFiles";
+import { isVideoFile } from "../../lib/videoFiles";
+import { mediaAccept, mediaFileProblem, noVideo, uploadMedia } from "../../lib/mediaUpload";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
@@ -22,12 +15,7 @@ import { localDateString } from "../../lib/when";
 import { readLastPerson, returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
-import {
-  peopleChanges,
-  photoFileProblem,
-  takenLabel,
-  type QueuedPhoto,
-} from "../../lib/photoUploadQueue";
+import { peopleChanges, takenLabel, type QueuedPhoto } from "../../lib/photoUploadQueue";
 import "./add-photo-styles";
 import "../../components/entry-form-styles";
 
@@ -73,14 +61,6 @@ type AddPhotoData = {
   people: server.Person[];
   tags: server.Tag[];
   video: server.GetVideoSupportResponse;
-};
-
-const noVideo: server.GetVideoSupportResponse = {
-  enabled: false,
-  reason: "",
-  maxBytes: 0,
-  maxDurationSeconds: 0,
-  contentTypes: [],
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<AddPhotoData>> {
@@ -150,11 +130,7 @@ async function addFiles(
 ) {
   const problems: string[] = [];
   for (const file of files) {
-    const isVideo = isVideoFile(file);
-    let problem = isVideo ? videoFileProblem(file, video) : photoFileProblem(file);
-    if (!problem && isVideo) {
-      problem = durationProblem(file.name, await readVideoDuration(file), video.maxDurationSeconds);
-    }
+    const problem = await mediaFileProblem(file, video);
     if (problem) {
       problems.push(problem);
       continue;
@@ -166,7 +142,7 @@ async function addFiles(
       error: "",
       image: null,
       taggedAtUpload: [],
-      isVideo,
+      isVideo: isVideoFile(file),
       progress: 0,
     });
   }
@@ -188,12 +164,10 @@ async function pump(form: AddPhotoForm, people: server.Person[]) {
 
     const familyId = people.find(p => item.taggedAtUpload.includes(p.id))?.familyId;
     try {
-      item.image = item.isVideo
-        ? await uploadVideo(item.file, item.taggedAtUpload, familyId, fraction => {
-            item.progress = fraction;
-            vlens.scheduleRedraw();
-          })
-        : await uploadPhoto(item.file, item.taggedAtUpload, familyId);
+      item.image = await uploadMedia(item.file, item.taggedAtUpload, familyId, fraction => {
+        item.progress = fraction;
+        vlens.scheduleRedraw();
+      });
       item.state = "done";
     } catch (error) {
       item.state = "failed";
@@ -391,9 +365,7 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
       <input
         id="photo-input"
         type="file"
-        accept={
-          video.enabled ? ["image/*", ...videoTypes, ".mov", ".mp4", ".m4v"].join(",") : "image/*"
-        }
+        accept={mediaAccept(video)}
         multiple
         hidden
         onChange={vlens.cachePartial(onFileSelect, form, people, video)}
