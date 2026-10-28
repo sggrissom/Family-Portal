@@ -765,6 +765,7 @@ async function onCreateAppearance(state: CompetitionState) {
     entryId: state.newEntryId,
     occurredAt: dateOrNull(state.newOccurredAt),
     notes: state.newNotes.trim(),
+    matchup: null,
   });
   if (err || !resp) {
     state.error = err || "Failed to add";
@@ -788,6 +789,7 @@ async function onSaveAppearance(state: CompetitionState, appearanceId: number) {
     id: appearanceId,
     occurredAt: dateOrNull(state.editOccurredAt),
     notes: state.editNotes.trim(),
+    matchup: null,
   });
   if (err || !resp) {
     state.error = err || "Failed to save";

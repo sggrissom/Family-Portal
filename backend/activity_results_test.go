@@ -542,3 +542,105 @@ func TestDeleteEntryReachesResultsThroughAppearances(t *testing.T) {
 		}
 	})
 }
+
+func TestAppearanceMatchupRoundTrips(t *testing.T) {
+	fx := setupResultsFixture(t)
+
+	var created Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := CreateAppearance(ctx, CreateAppearanceRequest{
+			EventId: fx.event.Id, EntryId: fx.entry.Id,
+			Matchup: &MatchupInput{
+				Round: " Semifinal ", Opponent: "Crew Z", Outcome: "WIN",
+				ScoreFor: intPtr(3), ScoreAgainst: intPtr(0),
+			},
+		})
+		if err != nil {
+			t.Fatalf("CreateAppearance() error = %v", err)
+		}
+		created = resp.Appearance.Appearance
+	})
+
+	var stored Appearance
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		stored = GetAppearanceById(tx, created.Id)
+	})
+	if stored.Round != "Semifinal" || stored.Opponent != "Crew Z" || stored.Outcome != OutcomeWin {
+		t.Errorf("stored matchup = %q / %q / %q", stored.Round, stored.Opponent, stored.Outcome)
+	}
+	if stored.ScoreFor == nil || *stored.ScoreFor != 3 || stored.ScoreAgainst == nil || *stored.ScoreAgainst != 0 {
+		t.Errorf("stored score = %v-%v, want 3-0", stored.ScoreFor, stored.ScoreAgainst)
+	}
+}
+
+func TestUpdateAppearanceWithoutAMatchupKeepsIt(t *testing.T) {
+	fx := setupResultsFixture(t)
+	appearance := fx.newAppearance(t)
+
+	fx.as(t, func(ctx *vbeam.Context) {
+		if _, err := UpdateAppearance(ctx, UpdateAppearanceRequest{
+			Id: appearance.Id, Matchup: &MatchupInput{Round: "Final", Outcome: OutcomeLoss},
+		}); err != nil {
+			t.Fatalf("UpdateAppearance(matchup) error = %v", err)
+		}
+	})
+	var kept Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Notes: "close one"})
+		if err != nil {
+			t.Fatalf("UpdateAppearance(notes) error = %v", err)
+		}
+		kept = resp.Appearance.Appearance
+	})
+	if kept.Round != "Final" || kept.Outcome != OutcomeLoss || kept.Notes != "close one" {
+		t.Errorf("an update without a matchup changed it: %+v", kept)
+	}
+
+	var cleared Appearance
+	fx.as(t, func(ctx *vbeam.Context) {
+		resp, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Matchup: &MatchupInput{}})
+		if err != nil {
+			t.Fatalf("UpdateAppearance(empty matchup) error = %v", err)
+		}
+		cleared = resp.Appearance.Appearance
+	})
+	if cleared.Round != "" || cleared.Outcome != "" {
+		t.Errorf("an empty matchup did not clear it: %+v", cleared)
+	}
+}
+
+func TestAppearanceMatchupValidation(t *testing.T) {
+	fx := setupResultsFixture(t)
+	appearance := fx.newAppearance(t)
+
+	for _, tc := range []struct {
+		name    string
+		matchup MatchupInput
+		want    error
+	}{
+		{"unknown outcome", MatchupInput{Outcome: "forfeit"}, ErrInvalidOutcome},
+		{"negative score", MatchupInput{ScoreFor: intPtr(-1)}, ErrMatchupScoreOutOfRange},
+		{"huge score", MatchupInput{ScoreAgainst: intPtr(maxMatchupScore + 1)}, ErrMatchupScoreOutOfRange},
+	} {
+		matchup := tc.matchup
+		fx.as(t, func(ctx *vbeam.Context) {
+			_, err := UpdateAppearance(ctx, UpdateAppearanceRequest{Id: appearance.Id, Matchup: &matchup})
+			if err != tc.want {
+				t.Errorf("%s: error = %v, want %v", tc.name, err, tc.want)
+			}
+		})
+		fx.as(t, func(ctx *vbeam.Context) {
+			_, err := CreateAppearance(ctx, CreateAppearanceRequest{
+				EventId: fx.event.Id, EntryId: fx.entry.Id, Matchup: &matchup,
+			})
+			if err != tc.want {
+				t.Errorf("%s on create: error = %v, want %v", tc.name, err, tc.want)
+			}
+		})
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := len(GetEventAppearances(tx, fx.event.Id)); got != 1 {
+			t.Errorf("rejected creates left %d appearances, want 1", got)
+		}
+	})
+}

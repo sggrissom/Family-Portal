@@ -27,21 +27,36 @@ var (
 	ErrResultRankOutOfRange   = errors.New("A rank must be 1 or greater, and no greater than the field size")
 	ErrResultPersonNotOnEntry = errors.New("A result can only name someone on this entry's roster")
 	ErrTooManyResults         = errors.New("That is more results than one performance can hold")
+	ErrInvalidOutcome         = errors.New("An outcome must be a win, a loss, or a draw")
+	ErrMatchupScoreOutOfRange = errors.New("A score must be between 0 and 9999")
 )
 
-const maxResultsPerAppearance = 50
+const (
+	maxResultsPerAppearance = 50
+	maxMatchupScore         = 9999
+)
 
 type CreateAppearanceRequest struct {
-	EventId    int     `json:"eventId"`
-	EntryId    int     `json:"entryId"`
-	OccurredAt *string `json:"occurredAt,omitempty"`
-	Notes      string  `json:"notes"`
+	EventId    int           `json:"eventId"`
+	EntryId    int           `json:"entryId"`
+	OccurredAt *string       `json:"occurredAt,omitempty"`
+	Notes      string        `json:"notes"`
+	Matchup    *MatchupInput `json:"matchup,omitempty"`
 }
 
 type UpdateAppearanceRequest struct {
-	Id         int     `json:"id"`
-	OccurredAt *string `json:"occurredAt,omitempty"`
-	Notes      string  `json:"notes"`
+	Id         int           `json:"id"`
+	OccurredAt *string       `json:"occurredAt,omitempty"`
+	Notes      string        `json:"notes"`
+	Matchup    *MatchupInput `json:"matchup,omitempty"`
+}
+
+type MatchupInput struct {
+	Round        string `json:"round"`
+	Opponent     string `json:"opponent"`
+	Outcome      string `json:"outcome"`
+	ScoreFor     *int   `json:"scoreFor,omitempty"`
+	ScoreAgainst *int   `json:"scoreAgainst,omitempty"`
 }
 
 type AppearanceIdRequest struct {
@@ -103,6 +118,44 @@ func appearanceView(tx *vbolt.Tx, user User, appearance Appearance) AppearanceVi
 	}
 }
 
+func normalizeOutcome(outcome string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(outcome)) {
+	case "":
+		return "", true
+	case OutcomeWin:
+		return OutcomeWin, true
+	case OutcomeLoss:
+		return OutcomeLoss, true
+	case OutcomeDraw:
+		return OutcomeDraw, true
+	default:
+		return "", false
+	}
+}
+
+func validMatchupScore(score *int) bool {
+	return score == nil || (*score >= 0 && *score <= maxMatchupScore)
+}
+
+func applyMatchup(appearance *Appearance, in *MatchupInput) error {
+	if in == nil {
+		return nil
+	}
+	outcome, ok := normalizeOutcome(in.Outcome)
+	if !ok {
+		return ErrInvalidOutcome
+	}
+	if !validMatchupScore(in.ScoreFor) || !validMatchupScore(in.ScoreAgainst) {
+		return ErrMatchupScoreOutOfRange
+	}
+	appearance.Round = trimField(in.Round, maxLabelLength)
+	appearance.Opponent = trimField(in.Opponent, maxLabelLength)
+	appearance.Outcome = outcome
+	appearance.ScoreFor = in.ScoreFor
+	appearance.ScoreAgainst = in.ScoreAgainst
+	return nil
+}
+
 func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp AppearanceResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -128,9 +181,7 @@ func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp App
 		return
 	}
 
-	vbeam.UseWriteTx(ctx)
 	appearance := Appearance{
-		Id:         vbolt.NextIntId(ctx.Tx, AppearanceBkt),
 		EventId:    event.Id,
 		EntryId:    entry.Id,
 		FamilyId:   event.FamilyId,
@@ -138,6 +189,12 @@ func CreateAppearance(ctx *vbeam.Context, req CreateAppearanceRequest) (resp App
 		Notes:      trimField(req.Notes, maxNotesLength),
 		CreatedAt:  time.Now(),
 	}
+	if err = applyMatchup(&appearance, req.Matchup); err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+	appearance.Id = vbolt.NextIntId(ctx.Tx, AppearanceBkt)
 	writeAppearanceTx(ctx.Tx, &appearance)
 	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	// Build the response before committing: TxCommit closes the tx, and reading a
@@ -160,6 +217,10 @@ func UpdateAppearance(ctx *vbeam.Context, req UpdateAppearanceRequest) (resp App
 
 	appearance, err := getAppearanceForUser(ctx.Tx, req.Id, user, AccessContribute)
 	if err != nil {
+		return
+	}
+
+	if err = applyMatchup(&appearance, req.Matchup); err != nil {
 		return
 	}
 
