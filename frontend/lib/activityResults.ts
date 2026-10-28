@@ -54,14 +54,6 @@ export function eventStatus(startDay: string, endDay: string, today: string): Ev
   return "done";
 }
 
-export type SeasonPhase = "upcoming" | "current" | "past";
-
-export function seasonPhase(startDay: string, endDay: string, today: string): SeasonPhase {
-  if (startDay && today < startDay) return "upcoming";
-  if (endDay && today > endDay) return "past";
-  return "current";
-}
-
 const danceAdjudications = ["Platinum", "High Gold", "Gold"];
 
 export function quickLabels(kind: string, used: string[] | null): string[] {

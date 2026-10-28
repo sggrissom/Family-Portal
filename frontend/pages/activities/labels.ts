@@ -1,3 +1,5 @@
+import { Medal, Music2, Trophy } from "lucide-preact";
+import type { LucideIcon } from "lucide-preact";
 import * as server from "../../server";
 
 export interface ActivityLabels {
@@ -68,4 +70,15 @@ export function labelsFor(activity: server.Activity | null | undefined): Activit
 export function activityKindName(kind: string): string {
   const option = activityKindOptions.find(o => o.value === kind);
   return option ? option.label : "Other";
+}
+
+export function activityKindIcon(kind: string): LucideIcon {
+  switch (kind) {
+    case ActivityKindDance:
+      return Music2;
+    case ActivityKindSport:
+      return Medal;
+    default:
+      return Trophy;
+  }
 }

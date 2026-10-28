@@ -731,6 +731,10 @@ func (s *seeder) danceSeason(familyId int, dancer Person) Appearance {
 		"Meridian Studio B", s.now.AddDate(0, -6, 0), s.now.AddDate(0, -6, 0))
 	spring := s.event(season, "Spring Regionals", "Regional Dance Alliance",
 		"Civic Auditorium, Fairview", s.now.AddDate(0, -2, 0), s.now.AddDate(0, -2, 2))
+	s.event(season, "Summer Invitational", "Starbound Talent",
+		"Lakeview Convention Center", s.now.AddDate(0, 0, -6), s.now.AddDate(0, 0, -5))
+	s.event(season, "Nationals", "Regional Dance Alliance",
+		"Grand Hyatt Ballroom, Capital City", s.now.AddDate(0, 0, 24), s.now.AddDate(0, 0, 27))
 
 	first := s.appearance(autumn, solo, autumn.StartDate, "Nerves in the first sixteen counts, clean after that.")
 	s.result(first, Result{Kind: ResultKindPlacement, Label: "3rd", Rank: seedInt(3), OutOf: seedInt(18), Category: "Junior Solo Ballet", SortOrder: 0})

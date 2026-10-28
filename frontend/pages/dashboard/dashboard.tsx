@@ -1,5 +1,4 @@
-import { Baby, Cake, Medal, Mic, Music2, Trophy } from "lucide-preact";
-import type { LucideIcon } from "lucide-preact";
+import { Baby, Cake, Mic } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -18,6 +17,7 @@ import { dayKey, dayLabel, summarizeDays } from "../../lib/daySummary";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { MilestoneText } from "../../components/MilestoneText";
 import { InterviewCards } from "../../components/InterviewCard";
+import { activityKindIcon } from "../activities/labels";
 import { groupInterviewAnswers, interviewsById } from "../../lib/interviews";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
@@ -87,8 +87,6 @@ function nudgeAction(nudge: server.DashboardNudge): string {
   }
 }
 
-const KIND_ICONS: Record<string, LucideIcon> = { dance: Music2, sport: Medal };
-
 const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashboardResponse }) => {
   const people = data.people || [];
   const familyId = user.familyId;
@@ -154,7 +152,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
               <div key={s.season.id} className="home-season">
                 <a href={`/season/${s.season.id}`} className="home-season-name">
                   <span aria-hidden="true">
-                    <Icon symbol={KIND_ICONS[s.season.kind] ?? Trophy} />
+                    <Icon symbol={activityKindIcon(s.season.kind)} />
                   </span>{" "}
                   {s.activityName} · {s.season.name}
                 </a>

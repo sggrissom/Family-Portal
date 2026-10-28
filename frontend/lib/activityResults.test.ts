@@ -10,7 +10,6 @@ import {
   ordinal,
   quickLabels,
   resultText,
-  seasonPhase,
 } from "./activityResults";
 
 function result(kind: string, fields: Partial<ResultLike> = {}): ResultLike {
@@ -54,15 +53,6 @@ describe("eventStatus", () => {
     expect(eventStatus("2026-08-28", "", "2026-08-28")).toBe("now");
     expect(eventStatus("2026-08-28", "", "2026-08-29")).toBe("done");
     expect(eventStatus("2026-08-28", "2026-08-01", "2026-08-29")).toBe("done");
-  });
-});
-
-describe("seasonPhase", () => {
-  it("treats an open-ended season as current once it starts", () => {
-    expect(seasonPhase("2026-01-01", "", "2026-10-01")).toBe("current");
-    expect(seasonPhase("2026-01-01", "2026-06-01", "2026-10-01")).toBe("past");
-    expect(seasonPhase("2026-11-01", "", "2026-10-01")).toBe("upcoming");
-    expect(seasonPhase("", "", "2026-10-01")).toBe("current");
   });
 });
 

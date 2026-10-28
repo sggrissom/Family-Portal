@@ -187,20 +187,6 @@ block(`
 `);
 
 block(`
-.perf-another {
-  justify-self: start;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-`);
-
-block(`
 .perf-editor {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;

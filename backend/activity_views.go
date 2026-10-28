@@ -16,6 +16,7 @@ func RegisterActivityViewMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetEntryHistory)
 	vbeam.RegisterProc(app, GetPersonSeason)
 	vbeam.RegisterProc(app, ListActivityVocabulary)
+	vbeam.RegisterProc(app, GetActivitiesHome)
 }
 
 var ErrPersonNotFound = errors.New("Person not found or not in your family")
@@ -497,4 +498,79 @@ func timelineAppearances(tx *vbolt.Tx, user User, people []Person, inWindow func
 		return appearanceOrder(result[i].Detail, result[j].Detail)
 	})
 	return result
+}
+
+type GetActivitiesHomeRequest struct {
+	FamilyId int `json:"familyId"`
+}
+
+type HomeEvent struct {
+	Event       Event `json:"event"`
+	Appearances int   `json:"appearances"`
+}
+
+type HomeSeason struct {
+	Season  Season      `json:"season"`
+	Events  []HomeEvent `json:"events"`
+	Entries []EntryView `json:"entries"`
+}
+
+type GetActivitiesHomeResponse struct {
+	FamilyId   int          `json:"familyId"`
+	Activities []Activity   `json:"activities"`
+	Seasons    []HomeSeason `json:"seasons"`
+}
+
+// GetActivitiesHome is everything the activities landing page shows for one
+// family: its programs, and every season with its events and entries.
+func GetActivitiesHome(ctx *vbeam.Context, req GetActivitiesHomeRequest) (resp GetActivitiesHomeResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
+	if err != nil {
+		return
+	}
+
+	resp.FamilyId = familyId
+	resp.Activities = GetFamilyActivities(ctx.Tx, familyId)
+	sort.Slice(resp.Activities, func(i, j int) bool { return resp.Activities[i].Name < resp.Activities[j].Name })
+
+	seasons := GetFamilySeasons(ctx.Tx, familyId)
+	sort.Slice(seasons, func(i, j int) bool {
+		if !seasons[i].StartDate.Equal(seasons[j].StartDate) {
+			return seasons[i].StartDate.After(seasons[j].StartDate)
+		}
+		return seasons[i].Id > seasons[j].Id
+	})
+
+	resp.Seasons = make([]HomeSeason, 0, len(seasons))
+	for _, season := range seasons {
+		events := GetSeasonEvents(ctx.Tx, season.Id)
+		sort.Slice(events, func(i, j int) bool {
+			if !events[i].StartDate.Equal(events[j].StartDate) {
+				return events[i].StartDate.Before(events[j].StartDate)
+			}
+			return events[i].Id < events[j].Id
+		})
+		home := HomeSeason{Season: season, Events: make([]HomeEvent, 0, len(events))}
+		for _, event := range events {
+			home.Events = append(home.Events, HomeEvent{
+				Event:       event,
+				Appearances: len(GetEventAppearances(ctx.Tx, event.Id)),
+			})
+		}
+
+		entries := GetSeasonEntries(ctx.Tx, season.Id)
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+		home.Entries = make([]EntryView, 0, len(entries))
+		for _, entry := range entries {
+			home.Entries = append(home.Entries, entryView(ctx.Tx, entry))
+		}
+		resp.Seasons = append(resp.Seasons, home)
+	}
+	return
 }
