@@ -18,3 +18,9 @@ block(`
   min-width: 0;
 }
 `);
+
+block(`
+.photo-draft-upload {
+  margin-bottom: 0.75rem;
+}
+`);

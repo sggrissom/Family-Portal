@@ -10,6 +10,12 @@ import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
 import { PagedPhotoPicker, PhotoStrip } from "../../components/PhotoPicker";
+import {
+  MediaUploadButton,
+  MediaUploadError,
+  MediaUploadState,
+  newMediaUpload,
+} from "../../components/MediaUpload";
 import { ActivityLabels, labelsFor } from "./labels";
 import { ResultList } from "./results";
 import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
@@ -118,6 +124,7 @@ type CompetitionState = {
   editingEventPhotos: boolean;
   editingPhotosFor: number;
   photoDraft: number[];
+  upload: MediaUploadState;
 
   error: string;
   saving: boolean;
@@ -141,6 +148,7 @@ const useCompetitionState = vlens.declareHook(
     editingEventPhotos: false,
     editingPhotosFor: 0,
     photoDraft: [],
+    upload: newMediaUpload(),
     error: "",
     saving: false,
   })
@@ -168,6 +176,7 @@ export function view(
     state.editingEventPhotos = false;
     state.editingPhotosFor = 0;
     state.photoDraft = [];
+    state.upload = newMediaUpload();
     state.error = "";
   }
 
@@ -220,30 +229,12 @@ export function view(
                 of any one {labels.entry.toLowerCase()}. A {labels.entry.toLowerCase()}'s own photos
                 hang off its {labels.appearance.toLowerCase()} below.
               </p>
-              <PagedPhotoPicker
-                pageKey="competition-photos"
-                filters={{}}
-                selectedIds={state.photoDraft}
-                onToggle={photoId => onTogglePhotoDraft(state, photoId)}
-                disabled={state.saving}
-                emptyText="No photos yet — upload some first."
+              <PhotoDraftEditor
+                state={state}
+                personIds={[]}
+                familyId={event.familyId}
+                onSave={vlens.cachePartial(onSaveEventPhotos, state)}
               />
-              <div className="form-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={vlens.cachePartial(onSaveEventPhotos, state)}
-                  disabled={state.saving}
-                >
-                  Save
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={vlens.cachePartial(onCancelPhotos, state)}
-                  disabled={state.saving}
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           ) : state.eventPhotoIds.length === 0 ? (
             <p className="form-hint">No photos of this {labels.event.toLowerCase()} yet.</p>
@@ -299,34 +290,16 @@ export function view(
                   ) : state.editingPhotosFor === detail.appearance.id ? (
                     <div className="appearance-editing">
                       <strong className="event-name">{detail.entry.name}</strong>
-                      <PagedPhotoPicker
-                        pageKey="competition-photos"
-                        filters={{}}
-                        selectedIds={state.photoDraft}
-                        onToggle={photoId => onTogglePhotoDraft(state, photoId)}
-                        disabled={state.saving}
-                        emptyText="No photos yet — upload some first."
+                      <PhotoDraftEditor
+                        state={state}
+                        personIds={rosterOf(data, detail.entry.id).map(person => person.id)}
+                        familyId={event.familyId}
+                        onSave={vlens.cachePartial(
+                          onSaveAppearancePhotos,
+                          state,
+                          detail.appearance.id
+                        )}
                       />
-                      <div className="form-actions">
-                        <button
-                          className="btn btn-primary"
-                          onClick={vlens.cachePartial(
-                            onSaveAppearancePhotos,
-                            state,
-                            detail.appearance.id
-                          )}
-                          disabled={state.saving}
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={vlens.cachePartial(onCancelPhotos, state)}
-                          disabled={state.saving}
-                        >
-                          Cancel
-                        </button>
-                      </div>
                     </div>
                   ) : (
                     <AppearanceRow
@@ -590,7 +563,59 @@ function closePhotoEditors(state: CompetitionState) {
   state.editingEventPhotos = false;
   state.editingPhotosFor = 0;
   state.photoDraft = [];
+  state.upload.uploadError = "";
 }
+
+const PhotoDraftEditor = ({
+  state,
+  personIds,
+  familyId,
+  onSave,
+}: {
+  state: CompetitionState;
+  personIds: number[];
+  familyId: number;
+  onSave: () => void;
+}) => {
+  const busy = state.saving || state.upload.uploading;
+  const draft = state.photoDraft;
+  return (
+    <>
+      <div className="photo-draft-upload">
+        <MediaUploadButton
+          state={state.upload}
+          personIds={personIds}
+          familyId={familyId}
+          disabled={state.saving}
+          onUploaded={image => {
+            if (state.photoDraft === draft && !draft.includes(image.id)) draft.push(image.id);
+          }}
+        />
+        <MediaUploadError state={state.upload} />
+      </div>
+      <PagedPhotoPicker
+        pageKey="competition-photos"
+        filters={{}}
+        selectedIds={state.photoDraft}
+        onToggle={photoId => onTogglePhotoDraft(state, photoId)}
+        disabled={state.saving}
+        emptyText="Nothing uploaded yet — add some above."
+      />
+      <div className="form-actions">
+        <button className="btn btn-primary" onClick={onSave} disabled={busy}>
+          Save
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={vlens.cachePartial(onCancelPhotos, state)}
+          disabled={busy}
+        >
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+};
 
 function onStartEventPhotos(state: CompetitionState) {
   state.adding = false;
