@@ -84,3 +84,35 @@ export function headlineText(results: ResultLike[]): string {
   const first = results[0];
   return first ? resultText(first) : "";
 }
+
+export interface AppearanceResultsLike {
+  appearance: {
+    outcome: string;
+    round: string;
+    opponent: string;
+    scoreFor: number | null;
+    scoreAgainst: number | null;
+  };
+  results: ResultLike[] | null;
+}
+
+export function cellHeadline(views: AppearanceResultsLike[]): string {
+  if (views.length === 0) return "";
+  const decided = views.filter(view => view.appearance.outcome !== "");
+  if (decided.length > 0) {
+    const tally = { win: 0, loss: 0, draw: 0 } as Record<string, number>;
+    for (const view of decided) tally[view.appearance.outcome]++;
+    if (decided.length === 1) {
+      const m = decided[0].appearance;
+      const letter = m.outcome === "win" ? "W" : m.outcome === "loss" ? "L" : "D";
+      const score =
+        m.scoreFor != null && m.scoreAgainst != null ? ` ${m.scoreFor}–${m.scoreAgainst}` : "";
+      return `${letter}${score}`;
+    }
+    const record = [tally.win, tally.loss];
+    if (tally.draw > 0) record.push(tally.draw);
+    return record.join("–");
+  }
+  const headline = headlineText(views.flatMap(view => view.results ?? []));
+  return headline || "Recorded";
+}

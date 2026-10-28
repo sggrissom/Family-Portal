@@ -45,9 +45,11 @@ test("a battle bracket records each round and sums up the run", async ({ page })
     await page.getByRole("button", { name: "Add routine" }).click();
     await page.locator("#entryName").fill("Crew Battle");
     await page.getByRole("button", { name: "Add routine" }).click();
-    await expect(page.getByRole("link", { name: "Crew Battle" })).toBeVisible();
+    await expect(
+      page.locator(".entry-cards").getByRole("link", { name: "Crew Battle" })
+    ).toBeVisible();
 
-    await page.getByRole("link", { name: "Battle Fest" }).click();
+    await page.locator(".schedule").getByRole("link", { name: "Battle Fest" }).click();
     await expect(page.getByRole("heading", { name: "Battle Fest", level: 1 })).toBeVisible();
   });
 
@@ -92,7 +94,8 @@ test("a battle bracket records each round and sums up the run", async ({ page })
 
   await test.step("the routine page counts the competition once and shows the record", async () => {
     await page.getByRole("link", { name: "2026" }).click();
-    await page.getByRole("link", { name: "Crew Battle" }).click();
+    await expect(page.locator(".results-grid-hit")).toHaveText("2–0");
+    await page.locator(".entry-cards").getByRole("link", { name: "Crew Battle" }).click();
     await expect(page.getByRole("heading", { name: "Crew Battle", level: 1 })).toBeVisible();
     await expect(page.locator(".routine-tally")).toContainText("2–0 W–L");
     await expect(page.getByRole("heading", { name: "1 competition", level: 2 })).toBeVisible();
