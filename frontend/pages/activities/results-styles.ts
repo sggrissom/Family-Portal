@@ -54,3 +54,10 @@ block(`
   font-size: 0.85rem;
 }
 `);
+
+block(`
+.matchup-line {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+`);

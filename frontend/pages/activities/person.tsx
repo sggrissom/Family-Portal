@@ -3,8 +3,9 @@ import * as server from "../../server";
 import * as auth from "../../lib/authCache";
 import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
 import { labelsForKind } from "./labels";
+import { hasMatchup, recordLabel, recordText, tallyOutcomes } from "../../lib/matchups";
 import { PhotoStrip } from "../../components/PhotoPicker";
-import { ResultKindAdjudication, ResultList } from "./results";
+import { MatchupLine, ResultKindAdjudication, ResultList } from "./results";
 import "./activities-styles";
 import "./season-styles";
 import "./routine-styles";
@@ -95,6 +96,8 @@ const SeasonGroup = ({
   const labels = labelsForKind(season.kind);
   const dates = formatDateRange(season.startDate, season.endDate);
   const adjudications = countLabels(appearances);
+  const tally = tallyOutcomes(appearances.map(detail => detail.appearance));
+  const record = recordText(tally);
 
   return (
     <section className="person-season-group">
@@ -130,8 +133,13 @@ const SeasonGroup = ({
         })}
       </div>
 
-      {adjudications.length > 0 && (
+      {(adjudications.length > 0 || record) && (
         <div className="routine-tally">
+          {record && (
+            <span className="routine-tally-item">
+              <strong>{record}</strong> {recordLabel(tally)}
+            </span>
+          )}
           {adjudications.map(row => (
             <span key={row.label} className="routine-tally-item">
               <strong>{row.count}×</strong> {row.label}
@@ -167,8 +175,11 @@ const SeasonGroup = ({
                 <span className="person-appearance-entry">
                   <a href={`/routine/${detail.entry.id}`}>{detail.entry.name}</a>
                 </span>
+                <MatchupLine appearance={detail.appearance} />
                 {(detail.results ?? []).length === 0 ? (
-                  <span className="event-count">No results recorded</span>
+                  !hasMatchup(detail.appearance) && (
+                    <span className="event-count">No results recorded</span>
+                  )
                 ) : (
                   <ResultList results={detail.results} people={people} />
                 )}

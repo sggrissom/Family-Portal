@@ -21,8 +21,8 @@ const dance: ActivityLabels = {
 };
 
 const sport: ActivityLabels = {
-  event: "Game",
-  eventPlural: "Games",
+  event: "Event",
+  eventPlural: "Events",
   entry: "Team",
   entryPlural: "Teams",
   appearance: "Game",

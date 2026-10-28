@@ -7,8 +7,9 @@ import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
 import { labelsForKind } from "./labels";
+import { hasMatchup, recordLabel, recordText, tallyOutcomes } from "../../lib/matchups";
 import { PhotoStrip } from "../../components/PhotoPicker";
-import { ResultKindAdjudication, ResultList } from "./results";
+import { MatchupLine, ResultKindAdjudication, ResultList } from "./results";
 import "./activities-styles";
 import "./season-styles";
 import "./routine-styles";
@@ -83,6 +84,9 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
     .map(id => data.people.find(person => person.id === id)?.name)
     .filter((name): name is string => !!name);
   const adjudications = countLabels(appearances);
+  const tally = tallyOutcomes(appearances.map(detail => detail.appearance));
+  const record = recordText(tally);
+  const eventCount = new Set(appearances.map(detail => detail.event.id)).size;
 
   return (
     <div>
@@ -99,8 +103,13 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
           {entry.notes && <p className="season-notes">{entry.notes}</p>}
         </div>
 
-        {adjudications.length > 0 && (
+        {(adjudications.length > 0 || record) && (
           <div className="routine-tally">
+            {record && (
+              <span className="routine-tally-item">
+                <strong>{record}</strong> {recordLabel(tally)}
+              </span>
+            )}
             {adjudications.map(row => (
               <span key={row.label} className="routine-tally-item">
                 <strong>{row.count}×</strong> {row.label}
@@ -111,12 +120,10 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
 
         <section className="activities-section">
           <h2>
-            {appearances.length === 0
+            {eventCount === 0
               ? "This season"
-              : `${appearances.length} ${
-                  appearances.length === 1
-                    ? labels.event.toLowerCase()
-                    : labels.eventPlural.toLowerCase()
+              : `${eventCount} ${
+                  eventCount === 1 ? labels.event.toLowerCase() : labels.eventPlural.toLowerCase()
                 }`}
           </h2>
 
@@ -136,8 +143,11 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
                       {detail.event.name}
                     </a>
                     <span className="event-meta">{appearanceWhen(detail)}</span>
+                    <MatchupLine appearance={detail.appearance} />
                     {(detail.results ?? []).length === 0 ? (
-                      <span className="event-count">No results recorded</span>
+                      !hasMatchup(detail.appearance) && (
+                        <span className="event-count">No results recorded</span>
+                      )
                     ) : (
                       <ResultList results={detail.results} people={data.people} />
                     )}
