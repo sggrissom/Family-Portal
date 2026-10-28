@@ -5,6 +5,8 @@ import {
   ResultKindPlacement,
   ResultKindScore,
   ResultLike,
+  adjudicationCounts,
+  bestFinish,
   cellHeadline,
   eventStatus,
   headlineText,
@@ -43,6 +45,7 @@ describe("resultText", () => {
   it("does not repeat a score whose label is the score", () => {
     expect(resultText(result(ResultKindScore, { score: 285.4, label: "285.4" }))).toBe("285.4");
     expect(resultText(result(ResultKindScore, { score: 2, label: "goals" }))).toBe("2 goals");
+    expect(resultText(result(ResultKindScore, { score: 1, label: "1 goal(s)" }))).toBe("1 goal(s)");
     expect(resultText(result(ResultKindScore, { label: "3–1 W" }))).toBe("3–1 W");
   });
 });
@@ -127,5 +130,36 @@ describe("cellHeadline", () => {
         { appearance: appearance("loss"), results: [] },
       ])
     ).toBe("2–1");
+  });
+});
+
+describe("adjudicationCounts", () => {
+  it("counts each adjudication, most first", () => {
+    expect(
+      adjudicationCounts([
+        result(ResultKindAdjudication, { label: "High Gold" }),
+        result(ResultKindAdjudication, { label: "Platinum" }),
+        result(ResultKindAdjudication, { label: " Platinum " }),
+        result(ResultKindAward, { label: "Platinum" }),
+        result(ResultKindAdjudication, { label: "" }),
+      ])
+    ).toEqual([
+      { label: "Platinum", count: 2 },
+      { label: "High Gold", count: 1 },
+    ]);
+  });
+});
+
+describe("bestFinish", () => {
+  it("finds the best placement across performances", () => {
+    const views = [
+      { name: "autumn", results: [result(ResultKindPlacement, { rank: 3, outOf: 18 })] },
+      { name: "winter", results: [result(ResultKindAward, { label: "Studio Choice" })] },
+      { name: "spring", results: [result(ResultKindPlacement, { rank: 1, outOf: 24 })] },
+    ];
+    const best = bestFinish(views);
+    expect(best?.view.name).toBe("spring");
+    expect(best?.result.rank).toBe(1);
+    expect(bestFinish([views[1]])).toBeNull();
   });
 });

@@ -19,13 +19,6 @@ block(`
 `);
 
 block(`
-.person-season-head h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-`);
-
-block(`
 .person-season-when {
   font-size: 0.9rem;
   color: var(--muted);
@@ -70,25 +63,66 @@ block(`
 `);
 
 block(`
-.person-appearance-entry {
-  font-size: 0.85rem;
-  color: var(--muted);
+.person-season-title {
+  display: grid;
+  gap: 0.1rem;
 }
 `);
 
 block(`
-.person-appearance-entry a {
-  color: inherit;
+.person-season-title strong {
+  font-size: 1.2rem;
 }
 `);
 
 block(`
-.person-season-subhead {
-  margin: 1.5rem 0 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+.person-past-heading {
+  margin-top: 1rem;
+}
+`);
+
+block(`
+.person-season-past {
+  margin-bottom: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+`);
+
+block(`
+.person-season-past summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+`);
+
+block(`
+.person-season-past summary::-webkit-details-marker {
+  display: none;
+}
+`);
+
+block(`
+.person-season-past[open] summary {
+  margin-bottom: 1rem;
+}
+`);
+
+block(`
+.person-season-past[open] summary svg {
+  transform: rotate(90deg);
+}
+`);
+
+block(`
+.person-season-past > .link-action {
+  display: inline-block;
+  margin-bottom: 0.75rem;
 }
 `);

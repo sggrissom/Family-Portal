@@ -130,13 +130,6 @@ block(`
 `);
 
 block(`
-.perf-run-summary {
-  margin: 0;
-  font-weight: 600;
-}
-`);
-
-block(`
 .perf {
   display: grid;
   gap: 0.6rem;
@@ -167,22 +160,6 @@ block(`
   display: grid;
   gap: 0.4rem;
   min-width: 0;
-}
-`);
-
-block(`
-.perf-date {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-`);
-
-block(`
-.perf-notes {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-  white-space: pre-wrap;
 }
 `);
 

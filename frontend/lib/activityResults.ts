@@ -37,7 +37,8 @@ export function resultText(result: ResultLike): string {
       if (result.score == null) return result.label;
       const score = String(result.score);
       const label = result.label.trim();
-      return label && label !== score ? `${score} ${label}` : score;
+      if (!label || label === score) return score;
+      return label.startsWith(`${score} `) ? label : `${score} ${label}`;
     }
     default:
       return result.label;
@@ -115,4 +116,30 @@ export function cellHeadline(views: AppearanceResultsLike[]): string {
   }
   const headline = headlineText(views.flatMap(view => view.results ?? []));
   return headline || "Recorded";
+}
+
+export function adjudicationCounts(results: ResultLike[]): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const result of results) {
+    if (result.kind !== ResultKindAdjudication) continue;
+    const label = result.label.trim();
+    if (!label) continue;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => (a.count !== b.count ? b.count - a.count : a.label < b.label ? -1 : 1));
+}
+
+export function bestFinish<T extends { results: ResultLike[] | null }>(
+  views: T[]
+): { view: T; result: ResultLike } | null {
+  let best: { view: T; result: ResultLike } | null = null;
+  for (const view of views) {
+    const placement = bestPlacement(view.results ?? []);
+    if (placement && (best === null || placement.rank! < best.result.rank!)) {
+      best = { view, result: placement };
+    }
+  }
+  return best;
 }

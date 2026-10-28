@@ -44,32 +44,6 @@ export const MatchupLine = ({ appearance }: { appearance: server.Appearance }) =
   );
 };
 
-export const ResultList = ({
-  results,
-  people,
-}: {
-  results: server.Result[] | null;
-  people: server.Person[];
-}): preact.ComponentChild => {
-  const rows = results ?? [];
-  if (rows.length === 0) return null;
-
-  return (
-    <ul className="result-list">
-      {rows.map(result => {
-        const detail = resultDetail(result, personName(people, result.personId));
-        return (
-          <li key={result.id} className={`result-row result-${result.kind}`}>
-            <span className="result-text">{resultText(result)}</span>
-            {detail && <span className="result-detail">{detail}</span>}
-            {result.notes && <span className="result-detail">{result.notes}</span>}
-          </li>
-        );
-      })}
-    </ul>
-  );
-};
-
 function podiumClass(result: server.Result): string {
   if (result.kind !== ResultKindPlacement || result.rank == null || result.rank > 3) return "";
   return ` result-badge-podium result-badge-p${result.rank}`;
