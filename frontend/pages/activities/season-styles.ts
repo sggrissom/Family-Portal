@@ -291,31 +291,6 @@ block(`
 `);
 
 block(`
-.date-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 2.75rem;
-  line-height: 1.1;
-}
-`);
-
-block(`
-.date-block small {
-  color: var(--muted);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-`);
-
-block(`
-.date-block strong {
-  font-size: 1.2rem;
-}
-`);
-
-block(`
 .schedule-main {
   display: grid;
   gap: 0.1rem;
@@ -435,5 +410,31 @@ block(`
   .schedule-row .event-item-actions {
     margin-left: auto;
   }
+}
+`);
+
+block(`
+.routine-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0;
+}
+`);
+
+block(`
+.routine-roster a {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+`);
+
+block(`
+.routine-roster a:hover {
+  border-color: var(--accent);
 }
 `);

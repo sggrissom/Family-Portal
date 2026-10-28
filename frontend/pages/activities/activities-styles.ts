@@ -476,6 +476,7 @@ block(`
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
 }
 `);

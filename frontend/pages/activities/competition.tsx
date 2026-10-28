@@ -42,6 +42,7 @@ import {
 import "./activities-styles";
 import "./season-styles";
 import "./competition-styles";
+import "./performance-card-styles";
 
 export type CompetitionPageData = {
   detail: server.GetEventDetailResponse;

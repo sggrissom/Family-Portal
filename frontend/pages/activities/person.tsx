@@ -1,14 +1,15 @@
+import { ChevronRight } from "lucide-preact";
+import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as server from "../../server";
 import * as auth from "../../lib/authCache";
-import { formatDate, formatDateRange, isRealDate } from "../../lib/dateUtils";
-import { labelsForKind } from "./labels";
-import { hasMatchup, recordLabel, recordText, tallyOutcomes } from "../../lib/matchups";
-import { PhotoStrip } from "../../components/PhotoPicker";
-import { MatchupLine, ResultKindAdjudication, ResultList } from "./results";
+import { formatDateRange, toDateInputValue } from "../../lib/dateUtils";
+import { localDateString } from "../../lib/when";
+import { seasonPhase } from "../../lib/activityHome";
+import { activityKindIcon, activityKindName, labelsForKind } from "./labels";
+import { PerformanceCard, SeasonStats, groupByEvent } from "./performance-card";
 import "./activities-styles";
 import "./season-styles";
-import "./routine-styles";
 import "./person-styles";
 
 export type PersonActivitiesData = {
@@ -16,32 +17,8 @@ export type PersonActivitiesData = {
   people: server.Person[];
 };
 
-function countLabels(appearances: server.AppearanceDetail[]): { label: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const detail of appearances) {
-    for (const result of detail.results ?? []) {
-      if (result.kind !== ResultKindAdjudication) continue;
-      const label = result.label.trim();
-      if (!label) continue;
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
-  }
-  return [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => (a.count !== b.count ? b.count - a.count : a.label < b.label ? -1 : 1));
-}
-
 function entryTraits(entry: server.Entry): string {
   return [entry.format, entry.style, entry.division, entry.level].filter(part => part).join(" · ");
-}
-
-function appearanceWhen(detail: server.AppearanceDetail): string {
-  if (isRealDate(detail.appearance.occurredAt)) {
-    return formatDate(detail.appearance.occurredAt);
-  }
-  const range = formatDateRange(detail.event.startDate, detail.event.endDate);
-  const where = [detail.event.host, detail.event.location].filter(part => part).join(" · ");
-  return [range, where].filter(part => part).join(" — ");
 }
 
 export const PersonActivities = ({ data }: { data: PersonActivitiesData }) => {
@@ -54,6 +31,24 @@ export const PersonActivities = ({ data }: { data: PersonActivitiesData }) => {
   const seasons = data.season.seasons ?? [];
   const entries = data.season.entries ?? [];
   const appearances = data.season.appearances ?? [];
+  const today = localDateString(new Date());
+  const isPast = (season: server.SeasonSummary) =>
+    seasonPhase(toDateInputValue(season.startDate), toDateInputValue(season.endDate), today) ===
+    "past";
+  const current = seasons.filter(season => !isPast(season));
+  const past = seasons.filter(isPast);
+
+  const group = (season: server.SeasonSummary, open: boolean) => (
+    <SeasonGroup
+      key={season.id}
+      season={season}
+      entries={entries.filter(entry => entry.entry.seasonId === season.id)}
+      appearances={appearances.filter(detail => detail.entry.seasonId === season.id)}
+      people={data.people}
+      ownsPerson={ownsPerson}
+      open={open}
+    />
+  );
 
   return seasons.length === 0 ? (
     <div className="empty-state">
@@ -66,16 +61,13 @@ export const PersonActivities = ({ data }: { data: PersonActivitiesData }) => {
     </div>
   ) : (
     <>
-      {seasons.map(season => (
-        <SeasonGroup
-          key={season.id}
-          season={season}
-          entries={entries.filter(entry => entry.entry.seasonId === season.id)}
-          appearances={appearances.filter(detail => detail.entry.seasonId === season.id)}
-          people={data.people}
-          ownsPerson={ownsPerson}
-        />
-      ))}
+      {current.map(season => group(season, true))}
+      {past.length > 0 && (
+        <>
+          <h2 className="activities-heading person-past-heading">Past seasons</h2>
+          {past.map(season => group(season, false))}
+        </>
+      )}
     </>
   );
 };
@@ -86,37 +78,21 @@ const SeasonGroup = ({
   appearances,
   people,
   ownsPerson,
+  open,
 }: {
   season: server.SeasonSummary;
   entries: server.EntryView[];
   appearances: server.AppearanceDetail[];
   people: server.Person[];
   ownsPerson: boolean;
+  open: boolean;
 }): preact.ComponentChild => {
   const labels = labelsForKind(season.kind);
   const dates = formatDateRange(season.startDate, season.endDate);
-  const adjudications = countLabels(appearances);
-  const tally = tallyOutcomes(appearances.map(detail => detail.appearance));
-  const record = recordText(tally);
+  const groups = groupByEvent(appearances);
 
-  return (
-    <section className="person-season-group">
-      <div className="person-season-head">
-        <h2>
-          {ownsPerson ? (
-            <a className="season-link" href={`/season/${season.id}`}>
-              {season.name}
-            </a>
-          ) : (
-            season.name
-          )}
-        </h2>
-        {dates && <span className="person-season-when">{dates}</span>}
-      </div>
-
-      <h3 className="person-season-subhead">
-        {entries.length === 1 ? labels.entry : labels.entryPlural}
-      </h3>
+  const body = (
+    <>
       <div className="person-entry-chips">
         {entries.map(entryView => {
           const traits = entryTraits(entryView.entry);
@@ -133,65 +109,68 @@ const SeasonGroup = ({
         })}
       </div>
 
-      {(adjudications.length > 0 || record) && (
-        <div className="routine-tally">
-          {record && (
-            <span className="routine-tally-item">
-              <strong>{record}</strong> {recordLabel(tally)}
-            </span>
-          )}
-          {adjudications.map(row => (
-            <span key={row.label} className="routine-tally-item">
-              <strong>{row.count}×</strong> {row.label}
-            </span>
-          ))}
-        </div>
-      )}
+      <SeasonStats appearances={appearances} labels={labels} />
 
-      <h3 className="person-season-subhead">
-        {appearances.length === 1 ? labels.appearance : labels.appearancePlural}
-      </h3>
-      {appearances.length === 0 ? (
-        <div className="empty-state">
-          <p>
-            No {labels.appearancePlural.toLowerCase()} recorded this season — the{" "}
-            {labels.entryPlural.toLowerCase()} above have not been to a {labels.event.toLowerCase()}{" "}
-            yet.
-          </p>
-        </div>
+      {groups.length === 0 ? (
+        <p className="form-hint">
+          No {labels.appearancePlural.toLowerCase()} recorded this season yet.
+        </p>
       ) : (
-        <ul className="event-list">
-          {appearances.map(detail => (
-            <li key={detail.appearance.id} className="event-item">
-              <div className="event-item-main">
-                {ownsPerson ? (
-                  <a className="event-name" href={`/competition/${detail.event.id}`}>
-                    {detail.event.name}
-                  </a>
-                ) : (
-                  <span className="event-name">{detail.event.name}</span>
-                )}
-                <span className="event-meta">{appearanceWhen(detail)}</span>
-                <span className="person-appearance-entry">
-                  <a href={`/routine/${detail.entry.id}`}>{detail.entry.name}</a>
-                </span>
-                <MatchupLine appearance={detail.appearance} />
-                {(detail.results ?? []).length === 0 ? (
-                  !hasMatchup(detail.appearance) && (
-                    <span className="event-count">No results recorded</span>
-                  )
-                ) : (
-                  <ResultList results={detail.results} people={people} />
-                )}
-                {detail.appearance.notes && (
-                  <p className="event-notes">{detail.appearance.notes}</p>
-                )}
-                <PhotoStrip photoIds={detail.photoIds} />
-              </div>
-            </li>
+        <div className="story-cards">
+          {groups.map(rows => (
+            <PerformanceCard
+              key={rows[0].appearance.id}
+              group={rows}
+              people={people}
+              showEntry={entries.length > 1}
+              linkEvent={ownsPerson}
+              editable={ownsPerson}
+            />
           ))}
-        </ul>
+        </div>
       )}
+    </>
+  );
+
+  const title = (
+    <span className="person-season-title">
+      <span className="home-season-program">
+        <Icon symbol={activityKindIcon(season.kind)} /> {activityKindName(season.kind)}
+      </span>
+      <strong>{season.name}</strong>
+      {dates && <span className="person-season-when">{dates}</span>}
+    </span>
+  );
+
+  if (!open) {
+    return (
+      <details className="person-season-group person-season-past">
+        <summary>
+          {title}
+          <Icon symbol={ChevronRight} />
+        </summary>
+        {ownsPerson && (
+          <a className="link-action" href={`/season/${season.id}`}>
+            Open the season
+          </a>
+        )}
+        {body}
+      </details>
+    );
+  }
+
+  return (
+    <section className="person-season-group">
+      <div className="person-season-head">
+        {ownsPerson ? (
+          <a className="season-link" href={`/season/${season.id}`}>
+            {title}
+          </a>
+        ) : (
+          title
+        )}
+      </div>
+      {body}
     </section>
   );
 };

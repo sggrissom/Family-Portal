@@ -13,6 +13,7 @@ import { localDateString } from "../../lib/when";
 import { dayKey, dayLabel } from "../../lib/daySummary";
 import { cellHeadline, eventStatus } from "../../lib/activityResults";
 import { ActivityLabels, activityKindIcon, labelsFor } from "./labels";
+import { DateBlock } from "./performance-card";
 import "./activities-styles";
 import "./season-styles";
 
@@ -354,19 +355,6 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
 function statusOf(event: server.Event, today: string) {
   return eventStatus(toDateInputValue(event.startDate), toDateInputValue(event.endDate), today);
 }
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const DateBlock = ({ date }: { date: string }) => {
-  if (!isRealDate(date)) return <span className="date-block date-block-empty">—</span>;
-  const d = new Date(date);
-  return (
-    <span className="date-block">
-      <small>{MONTHS[d.getUTCMonth()]}</small>
-      <strong>{d.getUTCDate()}</strong>
-    </span>
-  );
-};
 
 const ResultsGrid = ({
   state,
