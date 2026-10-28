@@ -727,6 +727,13 @@ and `null` means no score was kept — a dance battle has an outcome and no
 score. The fields come back flat on `Appearance`, `scoreFor` and
 `scoreAgainst` omitted when absent.
 
+`SaveAppearance` writes a whole performance in one transaction: the appearance
+(created when `id` is 0, from `eventId` and `entryId`), its whole-set `results`
+and its whole-set `photoIds`. On update `eventId` and `entryId` are ignored. If
+any part is rejected nothing is written, so a results screen can save with one
+call instead of chaining `CreateAppearance`, `SetAppearanceResults` and
+`SetAppearancePhotos`.
+
 `AddCheckup` saves an optional `height` and `weight` (`{value, unit}`) against one
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.
