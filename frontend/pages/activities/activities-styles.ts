@@ -25,7 +25,8 @@ block(`
 `);
 
 block(`
-.activities-title > .btn {
+.activities-title > .btn,
+.activities-section-head > .btn {
   flex: 0 0 auto;
   width: auto;
 }

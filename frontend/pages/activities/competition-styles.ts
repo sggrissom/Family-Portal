@@ -367,8 +367,7 @@ block(`
 
 block(`
 .perf-card-head > .btn,
-.perf-top > .btn,
-.activities-section-head > .btn {
+.perf-top > .btn {
   flex: 0 0 auto;
   width: auto;
 }

@@ -5,6 +5,7 @@ import {
   ResultKindPlacement,
   ResultKindScore,
   ResultLike,
+  cellHeadline,
   eventStatus,
   headlineText,
   ordinal,
@@ -81,5 +82,50 @@ describe("headlineText", () => {
     );
     expect(headlineText([result(ResultKindScore, { label: "3–1 W" })])).toBe("3–1 W");
     expect(headlineText([])).toBe("");
+  });
+});
+
+describe("cellHeadline", () => {
+  const appearance = (
+    outcome = "",
+    scoreFor: number | null = null,
+    scoreAgainst: number | null = null
+  ) => ({
+    outcome,
+    round: "",
+    opponent: "",
+    scoreFor,
+    scoreAgainst,
+  });
+
+  it("is empty when nothing was performed", () => {
+    expect(cellHeadline([])).toBe("");
+  });
+
+  it("sums a performance's results", () => {
+    expect(
+      cellHeadline([
+        {
+          appearance: appearance(),
+          results: [
+            result(ResultKindAdjudication, { label: "High Gold" }),
+            result(ResultKindPlacement, { rank: 3, outOf: 18 }),
+          ],
+        },
+      ])
+    ).toBe("3rd · High Gold");
+    expect(cellHeadline([{ appearance: appearance(), results: [] }])).toBe("Recorded");
+  });
+
+  it("reads a game as its outcome and a bracket as its record", () => {
+    expect(cellHeadline([{ appearance: appearance("win", 3, 1), results: [] }])).toBe("W 3–1");
+    expect(cellHeadline([{ appearance: appearance("loss"), results: [] }])).toBe("L");
+    expect(
+      cellHeadline([
+        { appearance: appearance("win"), results: [] },
+        { appearance: appearance("win"), results: [] },
+        { appearance: appearance("loss"), results: [] },
+      ])
+    ).toBe("2–1");
   });
 });
