@@ -31,8 +31,7 @@ test("a battle bracket records each round and sums up the run", async ({ page })
     await page.getByRole("button", { name: "New program" }).click();
     await page.locator("#newActivityName").fill("Dance");
     await page.getByRole("button", { name: "Add program" }).click();
-    await page.getByRole("button", { name: "New season" }).click();
-    await page.locator("#newSeasonName").fill("2026");
+    await page.getByLabel("Season name").fill("2026");
     await page.getByRole("button", { name: "Add season" }).click();
     await page.getByRole("link", { name: "2026" }).click();
     await expect(page).toHaveURL(/\/season\/\d+$/);

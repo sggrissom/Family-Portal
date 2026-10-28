@@ -934,6 +934,16 @@ export interface ListActivityVocabularyResponse {
     hosts: string[]
 }
 
+export interface GetActivitiesHomeRequest {
+    familyId: number
+}
+
+export interface GetActivitiesHomeResponse {
+    familyId: number
+    activities: Activity[]
+    seasons: HomeSeason[]
+}
+
 export interface SetAppearancePhotosRequest {
     appearanceId: number
     photoIds: number[]
@@ -2246,6 +2256,12 @@ export interface AppearanceDetail {
     event: EventSummary
 }
 
+export interface HomeSeason {
+    season: Season
+    events: HomeEvent[]
+    entries: EntryView[]
+}
+
 export interface Tag {
     id: number
     familyId: number
@@ -2927,6 +2943,11 @@ export interface EventSummary {
     endDate: string
 }
 
+export interface HomeEvent {
+    event: Event
+    appearances: number
+}
+
 export interface MediaMatch {
     source: string
     offsetMs: number
@@ -3421,6 +3442,10 @@ export async function GetPersonSeason(data: GetPersonSeasonRequest): Promise<rpc
 
 export async function ListActivityVocabulary(data: ListActivityVocabularyRequest): Promise<rpc.Response<ListActivityVocabularyResponse>> {
     return await rpc.call<ListActivityVocabularyResponse>('ListActivityVocabulary', JSON.stringify(data));
+}
+
+export async function GetActivitiesHome(data: GetActivitiesHomeRequest): Promise<rpc.Response<GetActivitiesHomeResponse>> {
+    return await rpc.call<GetActivitiesHomeResponse>('GetActivitiesHome', JSON.stringify(data));
 }
 
 export async function SetAppearancePhotos(data: SetAppearancePhotosRequest): Promise<rpc.Response<AppearanceResponse>> {

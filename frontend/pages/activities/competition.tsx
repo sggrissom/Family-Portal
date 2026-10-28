@@ -404,7 +404,7 @@ const EntryCardView = ({
 
       {editable && !empty && !editingHere && (
         <button
-          className="perf-another"
+          className="link-action"
           onClick={vlens.cachePartial(onStartNew, state, data, entry.id)}
           disabled={state.saving}
         >
