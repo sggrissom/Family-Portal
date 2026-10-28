@@ -243,25 +243,42 @@ func TestVideoWorkerRemuxesAndPublishes(t *testing.T) {
 	}
 }
 
-func TestVideoWorkerTagsHEVCForApple(t *testing.T) {
+func TestVideoWorkerConvertsHEVCForBrowsers(t *testing.T) {
 	fx := setupVideoWorker(t)
 	clip := makeClip(t, fx.worker.tools, "hevc.mp4",
 		"-f", "lavfi", "-i", "testsrc=size=320x240:rate=30", "-t", "1",
-		"-c:v", "libx265", "-pix_fmt", "yuv420p", "-tag:v", "hev1", "-x265-params", "log-level=error")
+		"-c:v", "libx265", "-pix_fmt", "yuv420p", "-tag:v", "hev1", "-x265-params", "log-level=error:pools=1")
 	video := fx.upload(t, "hevc.mp4", "video/mp4", clip)
 	if err := fx.worker.process(video.Id); err != nil {
 		t.Fatal(err)
 	}
 	got := imageForTest(t, fx.db, video.Id)
-	if got.Status != 0 || !strings.HasPrefix(got.VideoCodec, "hvc1.") || got.AudioCodec != "" {
+	if got.Status != 0 || !strings.HasPrefix(got.VideoCodec, "avc1.") || got.AudioCodec != "" {
 		t.Fatalf("status %d codecs %q %q (%s)", got.Status, got.VideoCodec, got.AudioCodec, got.ProcessingError)
 	}
 	r, _ := fx.store.Open(context.Background(), got.PlaybackKey)
 	var remux bytes.Buffer
 	remux.ReadFrom(r)
 	r.Close()
-	if !bytes.Contains(remux.Bytes(), []byte("hvc1")) || bytes.Contains(remux.Bytes(), []byte("hev1")) {
-		t.Fatal("HEVC playback file is not tagged hvc1")
+	original, err := fx.store.Open(context.Background(), got.OriginalKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var originalBytes bytes.Buffer
+	originalBytes.ReadFrom(original)
+	original.Close()
+	if !bytes.Equal(originalBytes.Bytes(), clip) {
+		t.Fatal("original was changed")
+	}
+	if videoNeedsRetry(got) {
+		t.Fatal("converted video should not be queued again")
+	}
+	got.VideoCodec = "hvc1.1.6.L90.B0"
+	if !videoNeedsRetry(got) {
+		t.Fatal("legacy HEVC video should be eligible for reprocessing")
+	}
+	if !bytes.Contains(remux.Bytes(), []byte("avc1")) || bytes.Contains(remux.Bytes(), []byte("hev1")) {
+		t.Fatal("HEVC playback file was not converted to H.264")
 	}
 }
 
@@ -419,5 +436,49 @@ func TestVideoPlaybackAccess(t *testing.T) {
 	resp, err := callAs(t, fx.resultsFixture, GetVideoPlayback, GetVideoPlaybackRequest{Id: video.Id})
 	if err != nil || resp.PlaybackUrl != "" || resp.DownloadUrl != "" {
 		t.Fatalf("processing video handed out URLs: %+v %v", resp, err)
+	}
+}
+
+func TestHEVCPlaybackHDRAndRotation(t *testing.T) {
+	tools := requireFFmpeg(t)
+	for _, hdr := range []bool{false, true} {
+		name := "SDR"
+		if hdr {
+			name = "HDR"
+		}
+		t.Run(name, func(t *testing.T) {
+			args := []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10",
+				"-f", "lavfi", "-i", "sine=frequency=440", "-t", "0.5",
+				"-c:v", "libx265", "-x265-params", "pools=1:log-level=error",
+				"-pix_fmt", "yuv420p10le", "-c:a", "aac"}
+			if hdr {
+				args = append(args, "-color_primaries", "bt2020", "-color_trc", "arib-std-b67", "-colorspace", "bt2020nc")
+			}
+			data := makeClip(t, tools, "source.mp4", args...)
+			src := filepath.Join(t.TempDir(), "source.mp4")
+			if err := os.WriteFile(src, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			// Set a portrait display matrix using stream copy.
+			rotated := makeClip(t, tools, "portrait.mp4", "-display_rotation", "90", "-i", src, "-c", "copy")
+			if err := os.WriteFile(src, rotated, 0600); err != nil {
+				t.Fatal(err)
+			}
+			p, err := tools.probe(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst := filepath.Join(t.TempDir(), "playback.mp4")
+			if err := tools.preparePlayback(context.Background(), src, dst, p); err != nil {
+				t.Fatal(err)
+			}
+			got, err := tools.probe(context.Background(), dst)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.VideoCodec != "h264" || got.AudioCodec != "aac" || got.HDR || got.Width != 240 || got.Height != 320 || got.Rotation != 0 {
+				t.Fatalf("incompatible playback: %+v (source %+v)", got, p)
+			}
+		})
 	}
 }
