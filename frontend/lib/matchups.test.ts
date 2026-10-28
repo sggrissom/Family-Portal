@@ -8,6 +8,7 @@ import {
   matchupParts,
   matchupToDraft,
   outcomeFromScore,
+  recordLabel,
   recordText,
   runSummary,
   tallyOutcomes,
@@ -47,6 +48,13 @@ describe("recordText", () => {
       "1–0–1"
     );
     expect(recordText(tallyOutcomes([m({ round: "Final" })]))).toBe("");
+  });
+});
+
+describe("recordLabel", () => {
+  it("names the draw column only when it is shown", () => {
+    expect(recordLabel({ wins: 2, losses: 1, draws: 0 })).toBe("W–L");
+    expect(recordLabel({ wins: 2, losses: 1, draws: 1 })).toBe("W–L–D");
   });
 });
 

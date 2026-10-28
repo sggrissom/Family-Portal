@@ -26,13 +26,6 @@ block(`
 `);
 
 block(`
-.matchup-line {
-  color: var(--text);
-  font-size: 0.9rem;
-}
-`);
-
-block(`
 .matchup-summary {
   list-style: none;
   padding: 0.5rem 0 0.25rem;

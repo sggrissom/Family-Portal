@@ -74,6 +74,10 @@ export function recordText(tally: OutcomeTally): string {
   return parts.join("–");
 }
 
+export function recordLabel(tally: OutcomeTally): string {
+  return tally.draws > 0 ? "W–L–D" : "W–L";
+}
+
 export function runSummary(matchups: Matchup[]): string {
   const decided = matchups.filter(m => m.outcome !== "");
   if (decided.length === 0) return "";

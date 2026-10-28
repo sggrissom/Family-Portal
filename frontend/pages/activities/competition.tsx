@@ -24,14 +24,13 @@ import {
   emptyMatchupDraft,
   groupByEntry,
   hasMatchup,
-  matchupParts,
   matchupToDraft,
   outcomeFromScore,
   outcomeOptions,
   runSummary,
 } from "../../lib/matchups";
 import { ActivityKindSport, ActivityLabels, labelsFor } from "./labels";
-import { ResultList } from "./results";
+import { MatchupLine, ResultList } from "./results";
 import { ResultRow, ResultsEditor, resultToRow, rowError, rowToInput } from "./results-editor";
 import "./activities-styles";
 import "./season-styles";
@@ -353,16 +352,6 @@ const EntryRunSummary = ({ group }: { group: server.AppearanceDetail[] }) => {
     <li className="matchup-summary">
       <strong>{group[0].entry.name}</strong> — {summary}
     </li>
-  );
-};
-
-const MatchupLine = ({ appearance }: { appearance: server.Appearance }) => {
-  const parts = matchupParts(appearance);
-  if (parts.length === 0) return null;
-  return (
-    <span className={`matchup-line${appearance.outcome ? ` matchup-${appearance.outcome}` : ""}`}>
-      {parts.join(" · ")}
-    </span>
   );
 };
 

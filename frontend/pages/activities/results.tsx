@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import * as server from "../../server";
+import { matchupParts } from "../../lib/matchups";
 import "./results-styles";
 
 export const ResultKindAdjudication = "adjudication";
@@ -48,6 +49,16 @@ export function resultText(result: server.Result): string {
 function resultDetail(result: server.Result, personName: string): string {
   return [result.category, personName].filter(part => part).join(" · ");
 }
+
+export const MatchupLine = ({ appearance }: { appearance: server.Appearance }) => {
+  const parts = matchupParts(appearance);
+  if (parts.length === 0) return null;
+  return (
+    <span className={`matchup-line${appearance.outcome ? ` matchup-${appearance.outcome}` : ""}`}>
+      {parts.join(" · ")}
+    </span>
+  );
+};
 
 export const ResultList = ({
   results,
