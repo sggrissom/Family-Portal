@@ -35,6 +35,7 @@ type EditMilestoneForm = {
   lookupKey: string;
   lookupTimer: number;
   uploading: boolean;
+  uploadProgress: number;
   uploadError: string;
   previews: Record<number, string>;
 };
@@ -58,6 +59,7 @@ const useEditMilestoneForm = vlens.declareHook(
     lookupKey: "",
     lookupTimer: 0,
     uploading: false,
+    uploadProgress: 0,
     uploadError: "",
     previews: {},
   })
