@@ -861,6 +861,17 @@ export interface SetAppearanceResultsRequest {
     results: ResultInput[]
 }
 
+export interface SaveAppearanceRequest {
+    id: number
+    eventId: number
+    entryId: number
+    occurredAt: string | null
+    notes: string
+    matchup: MatchupInput | null
+    results: ResultInput[]
+    photoIds: number[]
+}
+
 export interface GetSeasonOverviewRequest {
     seasonId: number
 }
@@ -3386,6 +3397,10 @@ export async function DeleteAppearance(data: AppearanceIdRequest): Promise<rpc.R
 
 export async function SetAppearanceResults(data: SetAppearanceResultsRequest): Promise<rpc.Response<AppearanceResponse>> {
     return await rpc.call<AppearanceResponse>('SetAppearanceResults', JSON.stringify(data));
+}
+
+export async function SaveAppearance(data: SaveAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
+    return await rpc.call<AppearanceResponse>('SaveAppearance', JSON.stringify(data));
 }
 
 export async function GetSeasonOverview(data: GetSeasonOverviewRequest): Promise<rpc.Response<GetSeasonOverviewResponse>> {
