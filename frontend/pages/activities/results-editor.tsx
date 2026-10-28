@@ -105,8 +105,8 @@ export interface ResultsEditorHost {
   saving: boolean;
 }
 
-export function onAddResultRow(host: ResultsEditorHost) {
-  host.resultRows.push(blankResultRow());
+export function onAddResultRow(host: ResultsEditorHost, kind: string, label: string) {
+  host.resultRows.push({ ...blankResultRow(), kind, label });
   vlens.scheduleRedraw();
 }
 
@@ -115,56 +115,62 @@ export function onRemoveResultRow(host: ResultsEditorHost, index: number) {
   vlens.scheduleRedraw();
 }
 
+export function resultRowsBlocked(host: ResultsEditorHost): boolean {
+  return host.resultRows.some(row => rowError(row) !== "");
+}
+
 export const ResultsEditor = ({
   host,
   vocabulary,
   roster,
-  onSave,
-  onCancel,
+  quick,
 }: {
   host: ResultsEditorHost;
   vocabulary: server.ListActivityVocabularyResponse;
   roster: server.Person[];
-  onSave: () => void;
-  onCancel: () => void;
-}): preact.ComponentChild => {
-  const blocked = host.resultRows.some(row => rowError(row) !== "");
+  quick: string[];
+}): preact.ComponentChild => (
+  <div className="results-editor">
+    {host.resultRows.map((row, index) => (
+      <ResultRowFields
+        key={index}
+        host={host}
+        row={row}
+        index={index}
+        vocabulary={vocabulary}
+        roster={roster}
+      />
+    ))}
 
-  return (
-    <div className="activities-form results-editor">
-      {host.resultRows.length === 0 && (
-        <p className="form-hint">No results yet. Add a row for each line on the results sheet.</p>
-      )}
-
-      {host.resultRows.map((row, index) => (
-        <ResultRowFields
-          key={index}
-          host={host}
-          row={row}
-          index={index}
-          vocabulary={vocabulary}
-          roster={roster}
-        />
-      ))}
-
-      <div className="form-actions">
+    <div className="result-quick-add">
+      <span className="result-quick-label">
+        {host.resultRows.length === 0 ? "Add a result" : "Add another"}
+      </span>
+      {quick.map(label => (
         <button
-          className="btn btn-secondary"
-          onClick={vlens.cachePartial(onAddResultRow, host)}
+          key={`adj-${label}`}
+          type="button"
+          className="result-chip result-chip-adjudication"
+          onClick={vlens.cachePartial(onAddResultRow, host, ResultKindAdjudication, label)}
           disabled={host.saving}
         >
-          Add result
+          {label}
         </button>
-        <button className="btn btn-primary" onClick={onSave} disabled={host.saving || blocked}>
-          Save results
+      ))}
+      {resultKindOptions.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          className="result-chip"
+          onClick={vlens.cachePartial(onAddResultRow, host, option.value, "")}
+          disabled={host.saving}
+        >
+          + {option.label}
         </button>
-        <button className="btn btn-secondary" onClick={onCancel} disabled={host.saving}>
-          Cancel
-        </button>
-      </div>
+      ))}
     </div>
-  );
-};
+  </div>
+);
 
 const Suggestions = ({ id, values }: { id: string; values: string[] | null }) => (
   <datalist id={id}>
@@ -173,6 +179,26 @@ const Suggestions = ({ id, values }: { id: string; values: string[] | null }) =>
     ))}
   </datalist>
 );
+
+function textField(
+  host: ResultsEditorHost,
+  row: ResultRow,
+  field: "label" | "rank" | "outOf" | "category" | "score" | "notes",
+  props: preact.JSX.InputHTMLAttributes<HTMLInputElement>
+) {
+  return (
+    <input
+      type="text"
+      {...props}
+      value={row[field]}
+      onInput={e => {
+        row[field] = e.currentTarget.value;
+        vlens.scheduleRedraw();
+      }}
+      disabled={host.saving}
+    />
+  );
+}
 
 const ResultRowFields = ({
   host,
@@ -190,118 +216,105 @@ const ResultRowFields = ({
   const error = rowError(row);
 
   return (
-    <div className="result-edit-row">
-      <div className="form-row">
-        <div className="form-group flex-1">
-          <label htmlFor={`resultKind${index}`}>Kind</label>
-          <select
-            id={`resultKind${index}`}
-            value={row.kind}
-            onInput={e => {
-              row.kind = e.currentTarget.value;
-              vlens.scheduleRedraw();
-            }}
-            disabled={host.saving}
-          >
-            {resultKindOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className={`result-edit-row result-edit-${row.kind}`}>
+      <div className="result-edit-fields">
+        <select
+          className="result-edit-kind"
+          aria-label="Kind of result"
+          value={row.kind}
+          onInput={e => {
+            row.kind = e.currentTarget.value;
+            vlens.scheduleRedraw();
+          }}
+          disabled={host.saving}
+        >
+          {resultKindOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
         {(row.kind === ResultKindAdjudication || row.kind === ResultKindAward) && (
-          <div className="form-group flex-2">
-            <label htmlFor={`resultLabel${index}`}>Label</label>
-            <input
-              id={`resultLabel${index}`}
-              type="text"
-              list={`resultLabelOptions${index}`}
-              placeholder={row.kind === ResultKindAdjudication ? "High Gold" : "Judges' Choice"}
-              value={row.label}
-              onInput={e => {
-                row.label = e.currentTarget.value;
-                vlens.scheduleRedraw();
-              }}
-              disabled={host.saving}
-            />
+          <>
+            {textField(host, row, "label", {
+              className: "result-edit-wide",
+              "aria-label": row.kind === ResultKindAdjudication ? "Adjudication" : "Award",
+              list: `resultLabelOptions${index}`,
+              placeholder: row.kind === ResultKindAdjudication ? "High Gold" : "Judges' Choice",
+            })}
             <Suggestions
               id={`resultLabelOptions${index}`}
               values={
                 row.kind === ResultKindAdjudication ? vocabulary.adjudications : vocabulary.awards
               }
             />
-          </div>
+          </>
         )}
 
         {row.kind === ResultKindPlacement && (
           <>
-            <div className="form-group flex-1">
-              <label htmlFor={`resultRank${index}`}>Place</label>
-              <input
-                id={`resultRank${index}`}
-                type="number"
-                min="1"
-                value={row.rank}
-                onInput={e => {
-                  row.rank = e.currentTarget.value;
-                  vlens.scheduleRedraw();
-                }}
-                disabled={host.saving}
-              />
-            </div>
-            <div className="form-group flex-1">
-              <label htmlFor={`resultOutOf${index}`}>Out of</label>
-              <input
-                id={`resultOutOf${index}`}
-                type="number"
-                min="1"
-                value={row.outOf}
-                onInput={e => {
-                  row.outOf = e.currentTarget.value;
-                  vlens.scheduleRedraw();
-                }}
-                disabled={host.saving}
-              />
-            </div>
+            {textField(host, row, "rank", {
+              className: "result-edit-num",
+              inputMode: "numeric",
+              "aria-label": "Place",
+              placeholder: "Place",
+            })}
+            <span className="result-edit-of">of</span>
+            {textField(host, row, "outOf", {
+              className: "result-edit-num",
+              inputMode: "numeric",
+              "aria-label": "Out of",
+              placeholder: "—",
+            })}
+            {textField(host, row, "category", {
+              className: "result-edit-wide",
+              "aria-label": "Category",
+              list: `resultCategoryOptions${index}`,
+              placeholder: "Category, e.g. Teen Small Group Jazz",
+            })}
+            <Suggestions id={`resultCategoryOptions${index}`} values={vocabulary.categories} />
           </>
         )}
 
         {row.kind === ResultKindScore && (
           <>
-            <div className="form-group flex-1">
-              <label htmlFor={`resultScore${index}`}>Score</label>
-              <input
-                id={`resultScore${index}`}
-                type="number"
-                step="any"
-                value={row.score}
-                onInput={e => {
-                  row.score = e.currentTarget.value;
-                  vlens.scheduleRedraw();
-                }}
-                disabled={host.saving}
-              />
-            </div>
-            <div className="form-group flex-1">
-              <label htmlFor={`resultScoreLabel${index}`}>Label</label>
-              <input
-                id={`resultScoreLabel${index}`}
-                type="text"
-                placeholder="optional"
-                value={row.label}
-                onInput={e => {
-                  row.label = e.currentTarget.value;
-                  vlens.scheduleRedraw();
-                }}
-                disabled={host.saving}
-              />
-            </div>
+            {textField(host, row, "score", {
+              className: "result-edit-num",
+              inputMode: "decimal",
+              "aria-label": "Score",
+              placeholder: "Score",
+            })}
+            {textField(host, row, "label", {
+              className: "result-edit-wide",
+              "aria-label": "What the score is for",
+              placeholder: "What for, e.g. Technique",
+            })}
           </>
         )}
 
+        {roster.length > 1 && (
+          <select
+            className="result-edit-person"
+            aria-label="Who this result is for"
+            value={String(row.personId)}
+            onInput={e => {
+              row.personId = Number(e.currentTarget.value);
+              vlens.scheduleRedraw();
+            }}
+            disabled={host.saving}
+          >
+            <option value="0">Everyone</option>
+            {roster.map(person => (
+              <option key={person.id} value={String(person.id)}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         <button
+          type="button"
           className="icon-btn result-remove"
           title="Remove this result"
           aria-label="Remove this result"
@@ -312,62 +325,12 @@ const ResultRowFields = ({
         </button>
       </div>
 
-      <div className="form-row">
-        {row.kind === ResultKindPlacement && (
-          <div className="form-group flex-2">
-            <label htmlFor={`resultCategory${index}`}>Category</label>
-            <input
-              id={`resultCategory${index}`}
-              type="text"
-              list={`resultCategoryOptions${index}`}
-              placeholder="Teen Small Group Jazz"
-              value={row.category}
-              onInput={e => {
-                row.category = e.currentTarget.value;
-                vlens.scheduleRedraw();
-              }}
-              disabled={host.saving}
-            />
-            <Suggestions id={`resultCategoryOptions${index}`} values={vocabulary.categories} />
-          </div>
-        )}
-
-        {roster.length > 0 && (
-          <div className="form-group flex-1">
-            <label htmlFor={`resultPerson${index}`}>For</label>
-            <select
-              id={`resultPerson${index}`}
-              value={String(row.personId)}
-              onInput={e => {
-                row.personId = Number(e.currentTarget.value);
-                vlens.scheduleRedraw();
-              }}
-              disabled={host.saving}
-            >
-              <option value="0">Everyone</option>
-              {roster.map(person => (
-                <option key={person.id} value={String(person.id)}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div className="form-group flex-2">
-          <label htmlFor={`resultNotes${index}`}>Notes</label>
-          <input
-            id={`resultNotes${index}`}
-            type="text"
-            value={row.notes}
-            onInput={e => {
-              row.notes = e.currentTarget.value;
-              vlens.scheduleRedraw();
-            }}
-            disabled={host.saving}
-          />
-        </div>
-      </div>
+      {row.notes !== "" &&
+        textField(host, row, "notes", {
+          className: "result-edit-notes",
+          "aria-label": "Notes on this result",
+          placeholder: "Notes",
+        })}
 
       {error && <p className="result-row-error">{error}</p>}
     </div>
