@@ -52,14 +52,19 @@ type ExportEvent struct {
 }
 
 type ExportAppearance struct {
-	Id         int            `json:"id"`
-	EntryId    int            `json:"entryId"`
-	EntryName  string         `json:"entryName,omitempty"`
-	OccurredAt time.Time      `json:"occurredAt"`
-	Notes      string         `json:"notes,omitempty"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	PhotoIds   []int          `json:"photoIds,omitempty"`
-	Results    []ExportResult `json:"results,omitempty"`
+	Id           int            `json:"id"`
+	EntryId      int            `json:"entryId"`
+	EntryName    string         `json:"entryName,omitempty"`
+	OccurredAt   time.Time      `json:"occurredAt"`
+	Notes        string         `json:"notes,omitempty"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	Round        string         `json:"round,omitempty"`
+	Opponent     string         `json:"opponent,omitempty"`
+	Outcome      string         `json:"outcome,omitempty"`
+	ScoreFor     *int           `json:"scoreFor,omitempty"`
+	ScoreAgainst *int           `json:"scoreAgainst,omitempty"`
+	PhotoIds     []int          `json:"photoIds,omitempty"`
+	Results      []ExportResult `json:"results,omitempty"`
 }
 
 type ExportResult struct {
@@ -165,14 +170,19 @@ func exportAppearances(
 	exported := make([]ExportAppearance, 0, len(appearances))
 	for _, appearance := range appearances {
 		exported = append(exported, ExportAppearance{
-			Id:         appearance.Id,
-			EntryId:    appearance.EntryId,
-			EntryName:  entryNames[appearance.EntryId],
-			OccurredAt: appearance.OccurredAt,
-			Notes:      appearance.Notes,
-			CreatedAt:  appearance.CreatedAt,
-			PhotoIds:   GetAppearancePhotoIds(tx, appearance.Id),
-			Results:    exportResults(tx, appearance.Id, personNames),
+			Id:           appearance.Id,
+			EntryId:      appearance.EntryId,
+			EntryName:    entryNames[appearance.EntryId],
+			OccurredAt:   appearance.OccurredAt,
+			Notes:        appearance.Notes,
+			CreatedAt:    appearance.CreatedAt,
+			Round:        appearance.Round,
+			Opponent:     appearance.Opponent,
+			Outcome:      appearance.Outcome,
+			ScoreFor:     appearance.ScoreFor,
+			ScoreAgainst: appearance.ScoreAgainst,
+			PhotoIds:     GetAppearancePhotoIds(tx, appearance.Id),
+			Results:      exportResults(tx, appearance.Id, personNames),
 		})
 	}
 	return exported

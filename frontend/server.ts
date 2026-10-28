@@ -838,6 +838,7 @@ export interface CreateAppearanceRequest {
     entryId: number
     occurredAt: string | null
     notes: string
+    matchup: MatchupInput | null
 }
 
 export interface AppearanceResponse {
@@ -848,6 +849,7 @@ export interface UpdateAppearanceRequest {
     id: number
     occurredAt: string | null
     notes: string
+    matchup: MatchupInput | null
 }
 
 export interface AppearanceIdRequest {
@@ -2192,6 +2194,14 @@ export interface EntryView {
     personIds: number[]
 }
 
+export interface MatchupInput {
+    round: string
+    opponent: string
+    outcome: string
+    scoreFor: number | null
+    scoreAgainst: number | null
+}
+
 export interface AppearanceView {
     appearance: Appearance
     results: Result[]
@@ -2874,6 +2884,11 @@ export interface Appearance {
     occurredAt: string
     notes: string
     createdAt: string
+    round: string
+    opponent: string
+    outcome: string
+    scoreFor: number | null
+    scoreAgainst: number | null
 }
 
 export interface Result {

@@ -328,3 +328,83 @@ func TestActivityImportAttachesPhotosOnlyWithAMapping(t *testing.T) {
 		}
 	})
 }
+
+func TestActivityImportKeepsEveryRoundOfABracket(t *testing.T) {
+	fx, cleanup := setupActivityFixture(t)
+	defer cleanup()
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		for _, round := range []struct {
+			name, opponent, outcome string
+		}{{"Semifinal", "Crew Y", OutcomeWin}, {"Final", "Crew Z", OutcomeLoss}} {
+			appearance := Appearance{
+				Id: vbolt.NextIntId(tx, AppearanceBkt), EventId: fx.event.Id,
+				EntryId: fx.groupEntry.Id, FamilyId: fx.famA,
+				OccurredAt: fx.groupAppr.OccurredAt, CreatedAt: fx.groupAppr.CreatedAt,
+				Round: round.name, Opponent: round.opponent, Outcome: round.outcome,
+				ScoreFor: intPtr(2), ScoreAgainst: intPtr(1),
+			}
+			writeAppearanceTx(tx, &appearance)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	activities, personIdMapping := exportFamilyA(t, fx)
+	for range 2 {
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			importActivities(tx, activities, fx.famB, personIdMapping, nil)
+			vbolt.TxCommit(tx)
+		})
+	}
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		appearances := GetFamilyAppearances(tx, fx.famB)
+		if len(appearances) != 4 {
+			t.Fatalf("family B has %d appearances, want all 4 rounds once", len(appearances))
+		}
+		var final *Appearance
+		for i := range appearances {
+			if appearances[i].Round == "Final" {
+				final = &appearances[i]
+			}
+		}
+		if final == nil {
+			t.Fatal("the final did not survive the import")
+		}
+		if final.Opponent != "Crew Z" || final.Outcome != OutcomeLoss ||
+			final.ScoreFor == nil || *final.ScoreFor != 2 || final.ScoreAgainst == nil || *final.ScoreAgainst != 1 {
+			t.Errorf("imported final = %+v", *final)
+		}
+	})
+}
+
+func TestActivityImportDropsAnUnknownOutcome(t *testing.T) {
+	fx, cleanup := setupActivityFixture(t)
+	defer cleanup()
+
+	activities, personIdMapping := exportFamilyA(t, fx)
+	source := &activities[0].Seasons[0].Events[0].Appearances[0]
+	source.Round, source.Opponent, source.Outcome = "Final", "Crew Z", "forfeit"
+	source.ScoreFor = intPtr(1)
+
+	var warnings []string
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		_, warnings = importActivities(tx, activities, fx.famB, personIdMapping, nil)
+		vbolt.TxCommit(tx)
+	})
+	if len(warnings) == 0 {
+		t.Error("dropping an outcome went unreported")
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, appearance := range GetFamilyAppearances(tx, fx.famB) {
+			if appearance.Round != "Final" {
+				continue
+			}
+			if appearance.Opponent != "Crew Z" || appearance.Outcome != "" || appearance.ScoreFor != nil {
+				t.Errorf("imported appearance = %+v, want round and opponent only", appearance)
+			}
+			return
+		}
+		t.Error("the appearance with a bad outcome was not imported")
+	})
+}

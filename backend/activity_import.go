@@ -282,13 +282,7 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 			continue
 		}
 
-		if appearanceExists(tx, event.Id, entryId) {
-			counts.Reused++
-			continue
-		}
-
 		appearance := Appearance{
-			Id:         vbolt.NextIntId(tx, AppearanceBkt),
 			EventId:    event.Id,
 			EntryId:    entryId,
 			FamilyId:   args.familyId,
@@ -296,6 +290,26 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 			Notes:      trimField(sourceAppearance.Notes, maxNotesLength),
 			CreatedAt:  args.now,
 		}
+		matchup := MatchupInput{
+			Round:        sourceAppearance.Round,
+			Opponent:     sourceAppearance.Opponent,
+			Outcome:      sourceAppearance.Outcome,
+			ScoreFor:     sourceAppearance.ScoreFor,
+			ScoreAgainst: sourceAppearance.ScoreAgainst,
+		}
+		if err := applyMatchup(&appearance, &matchup); err != nil {
+			matchup.Outcome, matchup.ScoreFor, matchup.ScoreAgainst = "", nil, nil
+			_ = applyMatchup(&appearance, &matchup)
+			*warnings = append(*warnings, fmt.Sprintf(
+				"%q: dropped a performance's outcome or score: %v", name, err))
+		}
+
+		if appearanceExists(tx, appearance) {
+			counts.Reused++
+			continue
+		}
+
+		appearance.Id = vbolt.NextIntId(tx, AppearanceBkt)
 		writeAppearanceTx(tx, &appearance)
 		counts.Appearances++
 
@@ -337,9 +351,12 @@ func findOrCreateEvent(tx *vbolt.Tx, args importEventArgs, name string) (Event, 
 	return event, false
 }
 
-func appearanceExists(tx *vbolt.Tx, eventId, entryId int) bool {
-	for _, existing := range GetEventAppearances(tx, eventId) {
-		if existing.EntryId == entryId {
+func appearanceExists(tx *vbolt.Tx, candidate Appearance) bool {
+	for _, existing := range GetEventAppearances(tx, candidate.EventId) {
+		if existing.EntryId == candidate.EntryId &&
+			existing.OccurredAt.Equal(candidate.OccurredAt) &&
+			strings.EqualFold(existing.Round, candidate.Round) &&
+			strings.EqualFold(existing.Opponent, candidate.Opponent) {
 			return true
 		}
 	}
