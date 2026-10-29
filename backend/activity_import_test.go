@@ -336,13 +336,14 @@ func TestActivityImportKeepsEveryRoundOfABracket(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		for _, round := range []struct {
 			name, opponent, outcome string
-		}{{"Semifinal", "Crew Y", OutcomeWin}, {"Final", "Crew Z", OutcomeLoss}} {
+			ours, theirs            int
+		}{{"Semifinal", "Crew Y", OutcomeWin, 2, 1}, {"Final", "Crew Z", OutcomeLoss, 1, 2}} {
 			appearance := Appearance{
 				Id: vbolt.NextIntId(tx, AppearanceBkt), EventId: fx.event.Id,
 				EntryId: fx.groupEntry.Id, FamilyId: fx.famA,
 				OccurredAt: fx.groupAppr.OccurredAt, CreatedAt: fx.groupAppr.CreatedAt,
 				Round: round.name, Opponent: round.opponent, Outcome: round.outcome,
-				ScoreFor: intPtr(2), ScoreAgainst: intPtr(1),
+				ScoreFor: intPtr(round.ours), ScoreAgainst: intPtr(round.theirs),
 			}
 			writeAppearanceTx(tx, &appearance)
 		}
@@ -372,7 +373,7 @@ func TestActivityImportKeepsEveryRoundOfABracket(t *testing.T) {
 			t.Fatal("the final did not survive the import")
 		}
 		if final.Opponent != "Crew Z" || final.Outcome != OutcomeLoss ||
-			final.ScoreFor == nil || *final.ScoreFor != 2 || final.ScoreAgainst == nil || *final.ScoreAgainst != 1 {
+			final.ScoreFor == nil || *final.ScoreFor != 1 || final.ScoreAgainst == nil || *final.ScoreAgainst != 2 {
 			t.Errorf("imported final = %+v", *final)
 		}
 	})

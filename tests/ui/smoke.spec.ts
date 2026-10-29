@@ -87,9 +87,7 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await page.getByRole("button", { name: "Create Account" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(
-      page.getByRole("heading", { name: `Welcome back, ${account.name}!` })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome, ${account.name}!` })).toBeVisible();
 
     // Signup creates the account holder as the family's first person, using
     // the account name when no profile name is given.
@@ -348,7 +346,7 @@ test("a measurement and a moment are edited without losing their units", async (
 
     await page.locator("#height").fill("99abc");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("above zero");
+    await expect(page.getByRole("alert")).toContainText("should be a number");
     await expect(page.locator("#height")).toHaveValue("99abc");
 
     await page.locator("#height").fill("99.5");
@@ -368,8 +366,12 @@ test("a measurement and a moment are edited without losing their units", async (
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("dialog").getByRole("link", { name: "Moment" }).click();
     await expect(page).toHaveURL(/\/add-milestone/);
-    const chip = page.getByRole("button", { name: kid.name });
-    if ((await chip.getAttribute("aria-pressed")) !== "true") await chip.click();
+    // As above, wait for the form so the closing sheet's chip isn't matched.
+    await expect(page.getByRole("heading", { name: "Moment", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: kid.name })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     await page.locator("#description").fill("Rode a bike");
     await page.getByLabel("When").selectOption("date");
     await page.getByLabel("Date", { exact: true }).fill("2024-05-04");

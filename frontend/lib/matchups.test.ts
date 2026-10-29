@@ -7,6 +7,8 @@ import {
   hasMatchup,
   matchupParts,
   matchupToDraft,
+  opponentFromEventName,
+  outcomeContradictsScore,
   outcomeFromScore,
   recordLabel,
   recordText,
@@ -107,5 +109,29 @@ describe("drafts", () => {
     expect(outcomeFromScore({ ...draft, scoreFor: "0", scoreAgainst: "1" })).toBe("loss");
     expect(outcomeFromScore({ ...draft, scoreFor: "2", scoreAgainst: "2" })).toBe("draw");
     expect(outcomeFromScore({ ...draft, scoreFor: "2" })).toBe("");
+  });
+
+  it("flags an outcome the score contradicts, but lets a tie go either way", () => {
+    const draft = matchupToDraft(m({}));
+    const won = { ...draft, outcome: "win" };
+    expect(outcomeContradictsScore({ ...won, scoreFor: "1", scoreAgainst: "3" })).toBe(true);
+    expect(draftError({ ...won, scoreFor: "1", scoreAgainst: "3" })).not.toBe("");
+    expect(outcomeContradictsScore({ ...won, scoreFor: "2", scoreAgainst: "2" })).toBe(false);
+    expect(outcomeContradictsScore({ ...won, scoreFor: "3", scoreAgainst: "1" })).toBe(false);
+    expect(
+      outcomeContradictsScore({ ...draft, outcome: "draw", scoreFor: "3", scoreAgainst: "1" })
+    ).toBe(true);
+    expect(outcomeContradictsScore({ ...won, scoreFor: "1" })).toBe(false);
+  });
+});
+
+describe("opponentFromEventName", () => {
+  it("reads the opponent out of a game's name", () => {
+    expect(opponentFromEventName("vs Red Foxes")).toBe("Red Foxes");
+    expect(opponentFromEventName("VS. Red Foxes ")).toBe("Red Foxes");
+    expect(opponentFromEventName("at Northgate FC")).toBe("Northgate FC");
+    expect(opponentFromEventName("@ Northgate")).toBe("Northgate");
+    expect(opponentFromEventName("Spring Regionals")).toBe("");
+    expect(opponentFromEventName("Avs Classic")).toBe("");
   });
 });

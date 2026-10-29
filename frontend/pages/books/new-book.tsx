@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -206,7 +206,7 @@ async function create(
     form.error = createErr || "Could not create the book";
     return;
   }
-  core.setRoute(`/book/${created.book.id}`);
+  navigate(`/book/${created.book.id}`);
 }
 
 export function view(route: string, prefix: string, data: NewBookData): preact.ComponentChild {
@@ -240,7 +240,7 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
       : defaultTitle(preset, chosen, period, form.yearKind, form.age);
   const choice = PRESET_CHOICES.find(p => p.value === preset)!;
   const firstYear = new Date(
-    Math.min(...people.map(p => Date.parse(p.birthday)), Date.now())
+    Math.min(...(chosen.length ? chosen : people).map(p => Date.parse(p.birthday)), Date.now())
   ).getUTCFullYear();
   const years = Array.from(
     { length: parseInt(today.slice(0, 4)) - firstYear + 1 },

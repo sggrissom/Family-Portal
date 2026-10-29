@@ -4,6 +4,7 @@ import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
@@ -116,7 +117,7 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute("/login");
+    navigate("/login");
     return;
   }
 
@@ -351,7 +352,7 @@ async function handleDeletePhoto(photo: server.Image, backRoute: string) {
 
     if (resp && resp.success) {
       alert("Photo deleted successfully");
-      core.setRoute(backRoute);
+      navigate(backRoute);
     } else {
       alert("Failed to delete photo");
     }

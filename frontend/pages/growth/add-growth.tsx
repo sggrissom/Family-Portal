@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
@@ -14,7 +14,7 @@ import { WhenControl } from "../../components/WhenControl";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
-import { When, newWhen, whenProblem, whenRequest } from "../../lib/when";
+import { When, WhenRequest, newWhen, whenProblem, whenRequest } from "../../lib/when";
 import {
   CheckupEntry,
   checkupValues,
@@ -23,6 +23,7 @@ import {
   defaultWeightUnit,
   describeLast,
   latestOf,
+  plausibilityWarning,
   rememberUnits,
 } from "../../lib/checkup";
 import { ageInMonths, formatAgeAtMeasurement, isValidBirthday } from "../../lib/growthPercentiles";
@@ -62,6 +63,7 @@ type CheckupForm = {
   when: When;
   defaultsApplied: boolean;
   error: string;
+  acceptedWarning: string;
   saving: boolean;
 };
 
@@ -72,6 +74,7 @@ const useCheckupForm = vlens.declareHook(
     when: newWhen(),
     defaultsApplied: false,
     error: "",
+    acceptedWarning: "",
     saving: false,
   })
 );
@@ -141,7 +144,12 @@ function choosePerson(form: CheckupForm, data: AddGrowthData, personId: number) 
   vlens.scheduleRedraw();
 }
 
-async function saveCheckup(form: CheckupForm, event: Event) {
+function ageAtEntry(person: server.Person | undefined, when: WhenRequest): number | null {
+  if (when.inputType === "age") return (when.ageYears ?? 0) * 12 + (when.ageMonths ?? 0);
+  return when.date ? personAgeMonths(person, when.date) : null;
+}
+
+async function saveCheckup(form: CheckupForm, data: AddGrowthData, event: Event) {
   event.preventDefault();
   if (form.saving) return;
 
@@ -151,9 +159,28 @@ async function saveCheckup(form: CheckupForm, event: Event) {
     return;
   }
   const values = checkupValues(form.entry);
-  const problem = values.error || whenProblem(form.when);
+  const problem =
+    values.error || whenProblem(form.when, data.people.find(p => p.id === form.personId)?.birthday);
   if (problem) {
     form.error = problem;
+    vlens.scheduleRedraw();
+    return;
+  }
+
+  const personId = form.personId;
+  const now = new Date();
+  const when = whenRequest(form.when, now);
+  const person = data.people.find(p => p.id === personId);
+  const warning = plausibilityWarning(
+    values,
+    ageAtEntry(person, when),
+    person?.gender ?? server.Unknown,
+    data.growth.get(personId) ?? [],
+    now
+  );
+  if (warning && warning !== form.acceptedWarning) {
+    form.error = warning;
+    form.acceptedWarning = warning;
     vlens.scheduleRedraw();
     return;
   }
@@ -162,8 +189,6 @@ async function saveCheckup(form: CheckupForm, event: Event) {
   form.error = "";
   vlens.scheduleRedraw();
 
-  const personId = form.personId;
-  const when = whenRequest(form.when, new Date());
   const [resp, err] = await server.AddCheckup({
     personId,
     inputType: when.inputType,
@@ -183,12 +208,12 @@ async function saveCheckup(form: CheckupForm, event: Event) {
   saveUnitPrefs(rememberUnits(loadUnitPrefs(), personId, values, form.entry));
   writeLastPerson(personId);
   takeReturnPath("");
-  core.setRoute(`/view-growth/${resp.growthData.map(g => g.id).join(",")}`);
+  navigate(`/view-growth/${resp.growthData.map(g => g.id).join(",")}`);
 }
 
 function cancel(event: Event) {
   event.preventDefault();
-  core.setRoute(takeReturnPath("/dashboard"));
+  navigate(takeReturnPath("/dashboard"));
 }
 
 const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData }) => {
@@ -212,7 +237,11 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
         disabled={disabled}
       />
 
-      <form className="entry-form" onSubmit={vlens.cachePartial(saveCheckup, form)} noValidate>
+      <form
+        className="entry-form"
+        onSubmit={vlens.cachePartial(saveCheckup, form, data)}
+        noValidate
+      >
         <div className="entry-subject">
           <span className="entry-subject-name">
             {person ? (
@@ -226,7 +255,7 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
               <span className="entry-subject-missing">{copy.measurement.pickPerson}</span>
             )}
           </span>
-          <WhenControl when={form.when} disabled={disabled} />
+          <WhenControl when={form.when} disabled={disabled} birthday={person?.birthday} />
         </div>
 
         {form.error && (

@@ -7,6 +7,7 @@ import {
   getPercentileRow,
   interpolatePercentiles,
   isValidBirthday,
+  ordinalSuffix,
   whoHeightBoys,
   type PercentileRow,
 } from "@app/lib/growthPercentiles";
@@ -154,5 +155,24 @@ describe("formatAgeAtMeasurement", () => {
 
   it("shows a dash for a measurement dated before the birthday", () => {
     expect(formatAgeAtMeasurement(-1)).toBe("—");
+  });
+});
+
+describe("ordinalSuffix", () => {
+  it("handles the teens and the twenties up", () => {
+    const cases: [number, string][] = [
+      [1, "st"],
+      [2, "nd"],
+      [3, "rd"],
+      [4, "th"],
+      [11, "th"],
+      [12, "th"],
+      [13, "th"],
+      [21, "st"],
+      [32, "nd"],
+      [93, "rd"],
+      [111, "th"],
+    ];
+    for (const [n, suffix] of cases) expect(ordinalSuffix(n)).toBe(suffix);
   });
 });

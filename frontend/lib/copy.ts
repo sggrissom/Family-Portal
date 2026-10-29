@@ -73,7 +73,7 @@ export const copy = {
     title: "Moment",
     who: "Who is this about?",
     whatHappened: "What happened?",
-    placeholder: "Wrote her name for the first time",
+    placeholder: "Rode a bike without training wheels",
     whatTheySaid: "What did they say?",
     quotePlaceholder: "The moon is following our car!",
     context: "Context (optional)",
@@ -271,6 +271,7 @@ export const copy = {
       due: "Due soon",
       view: "See answers",
       never: "No interviews yet",
+      firstUnderWay: "First interview under way",
       last: (age: number, date: string, n: number) =>
         `Last at ${age}, ${date}${n > 1 ? ` · ${n} interviews` : ""}`,
       others: "Everyone else",
@@ -344,6 +345,7 @@ export const copy = {
       inProgress: "in progress",
       answers: (n: number) => (n === 1 ? "1 answer" : `${n} answers`),
       someAnswers: (n: number, total: number) => `${n} of ${total} answers`,
+      matches: (n: number) => (n === 1 ? "1 matching answer" : `${n} matching answers`),
     },
     compare: {
       title: "Compare at the same age",
@@ -514,6 +516,8 @@ export const copy = {
     groups: {
       people: "People",
       moments: "Moments",
+      interviews: "Interviews",
+      momentsAndInterviews: "Moments and interviews",
       photos: "Photos",
       tags: "Tags",
       places: "Places",

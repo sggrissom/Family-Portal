@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -48,7 +48,7 @@ export async function fetch(route: string, prefix: string) {
 export function view(route: string, prefix: string, data: Data): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (currentAuth && currentAuth.id > 0) {
-    core.setRoute("/dashboard");
+    navigate("/dashboard");
   }
 
   const form = useLoginForm();
@@ -88,7 +88,7 @@ async function onLoginClicked(form: LoginForm, event: Event) {
     if (result.success) {
       rpc.setAuthHeaders({ "x-auth-token": result.token });
       auth.setAuth(result.auth);
-      core.setRoute("/dashboard");
+      navigate("/dashboard");
     } else {
       form.error = result.error || "Login failed";
     }

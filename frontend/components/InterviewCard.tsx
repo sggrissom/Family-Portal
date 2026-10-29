@@ -13,6 +13,7 @@ interface InterviewCardProps {
   interview?: server.Interview;
   showName?: boolean;
   highlights?: number;
+  matchesOnly?: boolean;
 }
 
 export const InterviewCard = ({
@@ -21,13 +22,15 @@ export const InterviewCard = ({
   interview,
   showName = true,
   highlights = 3,
+  matchesOnly = false,
 }: InterviewCardProps) => {
   const t = copy.interview.card;
   const age = person?.birthday ? ageYearsAt(person.birthday, group.date) : null;
   const name = person && showName ? firstName(person.name) : null;
   const total = interview?.questionIds?.length ?? 0;
-  const count =
-    total > group.answers.length
+  const count = matchesOnly
+    ? t.matches(group.answers.length)
+    : total > group.answers.length
       ? t.someAnswers(group.answers.length, total)
       : t.answers(group.answers.length);
   return (

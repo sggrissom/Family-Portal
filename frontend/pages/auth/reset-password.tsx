@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
@@ -111,10 +111,7 @@ const PasswordChanged = () => (
       <p>You've been signed out on your other devices</p>
     </div>
     <div className="success-message">Your new password is ready to use.</div>
-    <button
-      className="btn btn-primary btn-large auth-submit"
-      onClick={() => core.setRoute("/login")}
-    >
+    <button className="btn btn-primary btn-large auth-submit" onClick={() => navigate("/login")}>
       Sign In
     </button>
   </div>

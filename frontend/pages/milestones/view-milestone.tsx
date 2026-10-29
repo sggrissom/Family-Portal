@@ -2,7 +2,7 @@ import { Pencil, Trash2 } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -106,7 +106,7 @@ async function deleteMilestone(milestone: server.Milestone) {
   if (!confirm(copy.milestoneDetail.confirmDelete(milestone.description))) return;
   const [resp, err] = await server.DeleteMilestone({ id: milestone.id });
   if (resp?.success) {
-    core.setRoute(`/profile/${milestone.personId}`);
+    navigate(`/profile/${milestone.personId}`);
   } else {
     alert(err || "That moment could not be deleted.");
   }

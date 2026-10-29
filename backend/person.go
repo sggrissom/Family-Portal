@@ -46,6 +46,9 @@ type AddPersonRequest struct {
 	// AdditionalAnchorIds states the same relation against more people, so a
 	// child can be linked to both parents as they are added.
 	AdditionalAnchorIds []int `json:"additionalAnchorIds,omitempty"`
+	// ChildIds makes the new person a parent of these people too, so a
+	// partner added after the children isn't left a step-parent.
+	ChildIds []int `json:"childIds,omitempty"`
 }
 
 type UpdatePersonRequest struct {
@@ -91,7 +94,26 @@ type ListPeopleResponse struct {
 	People []Person `json:"people"`
 	// Relations are the stored edges among People, so a client can offer
 	// relationship shortcuts without a round trip per person.
-	Relations []Relation `json:"relations"`
+	Relations []Relation    `json:"relations"`
+	Families  []FamilyLabel `json:"families"`
+}
+
+type FamilyLabel struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func familyLabelsOf(tx *vbolt.Tx, people []Person) []FamilyLabel {
+	labels := []FamilyLabel{}
+	seen := map[int]bool{}
+	for _, person := range people {
+		if seen[person.FamilyId] {
+			continue
+		}
+		seen[person.FamilyId] = true
+		labels = append(labels, FamilyLabel{Id: person.FamilyId, Name: GetFamily(tx, person.FamilyId).Name})
+	}
+	return labels
 }
 
 type GetPersonResponse struct {
@@ -380,6 +402,12 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 			return
 		}
 	}
+	if len(req.ChildIds) > 0 {
+		if relErr := applyStatedRelationTx(ctx.Tx, user, person.Id, StatedParent, req.ChildIds); relErr != nil {
+			err = relErr
+			return
+		}
+	}
 	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
 
 	vbolt.TxCommit(ctx.Tx)
@@ -452,6 +480,7 @@ func ListPeople(ctx *vbeam.Context, req Empty) (resp ListPeopleResponse, err err
 	resp.People = GetVisiblePeople(ctx.Tx, user)
 	labelPeopleFor(ctx.Tx, user, resp.People)
 	resp.Relations = relationsAmong(ctx.Tx, resp.People)
+	resp.Families = familyLabelsOf(ctx.Tx, resp.People)
 	return
 }
 
@@ -505,6 +534,13 @@ func validateAddPersonRequest(req AddPersonRequest) error {
 	}
 	if req.Birthdate == "" {
 		return errors.New("Birthdate is required")
+	}
+	birthday, err := time.Parse("2006-01-02", req.Birthdate)
+	if err != nil {
+		return errors.New("Invalid birthdate format. Use YYYY-MM-DD")
+	}
+	if !req.IsPregnancy && birthday.After(time.Now().UTC().AddDate(0, 0, 1)) {
+		return errors.New("That birthday is in the future. For an expected baby, tick \"Baby isn't born yet\".")
 	}
 	return nil
 }

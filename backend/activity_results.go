@@ -19,17 +19,18 @@ func RegisterActivityResultMethods(app *vbeam.Application) {
 }
 
 var (
-	ErrAppearanceNotFound     = errors.New("Performance not found")
-	ErrEntryNotInSeason       = errors.New("That entry is not in the same season as this competition")
-	ErrInvalidResultKind      = errors.New("A result must be an adjudication, placement, award, or score")
-	ErrResultLabelRequired    = errors.New("An adjudication or award needs a label")
-	ErrResultRankRequired     = errors.New("A placement needs a rank")
-	ErrResultScoreRequired    = errors.New("A score result needs a score")
-	ErrResultRankOutOfRange   = errors.New("A rank must be 1 or greater, and no greater than the field size")
-	ErrResultPersonNotOnEntry = errors.New("A result can only name someone on this entry's roster")
-	ErrTooManyResults         = errors.New("That is more results than one performance can hold")
-	ErrInvalidOutcome         = errors.New("An outcome must be a win, a loss, or a draw")
-	ErrMatchupScoreOutOfRange = errors.New("A score must be between 0 and 9999")
+	ErrAppearanceNotFound      = errors.New("Performance not found")
+	ErrEntryNotInSeason        = errors.New("That entry is not in the same season as this competition")
+	ErrInvalidResultKind       = errors.New("A result must be an adjudication, placement, award, or score")
+	ErrResultLabelRequired     = errors.New("An adjudication or award needs a label")
+	ErrResultRankRequired      = errors.New("A placement needs a rank")
+	ErrResultScoreRequired     = errors.New("A score result needs a score")
+	ErrResultRankOutOfRange    = errors.New("A rank must be 1 or greater, and no greater than the field size")
+	ErrResultPersonNotOnEntry  = errors.New("A result can only name someone on this entry's roster")
+	ErrTooManyResults          = errors.New("That is more results than one performance can hold")
+	ErrInvalidOutcome          = errors.New("An outcome must be a win, a loss, or a draw")
+	ErrMatchupScoreOutOfRange  = errors.New("A score must be between 0 and 9999")
+	ErrOutcomeContradictsScore = errors.New("The outcome doesn't match the score")
 )
 
 const (
@@ -138,6 +139,20 @@ func validMatchupScore(score *int) bool {
 	return score == nil || (*score >= 0 && *score <= maxMatchupScore)
 }
 
+func outcomeContradictsScore(outcome string, scoreFor, scoreAgainst *int) bool {
+	if outcome == "" || scoreFor == nil || scoreAgainst == nil {
+		return false
+	}
+	switch {
+	case *scoreFor > *scoreAgainst:
+		return outcome != OutcomeWin
+	case *scoreFor < *scoreAgainst:
+		return outcome != OutcomeLoss
+	default:
+		return false
+	}
+}
+
 func applyMatchup(appearance *Appearance, in *MatchupInput) error {
 	if in == nil {
 		return nil
@@ -148,6 +163,9 @@ func applyMatchup(appearance *Appearance, in *MatchupInput) error {
 	}
 	if !validMatchupScore(in.ScoreFor) || !validMatchupScore(in.ScoreAgainst) {
 		return ErrMatchupScoreOutOfRange
+	}
+	if outcomeContradictsScore(outcome, in.ScoreFor, in.ScoreAgainst) {
+		return ErrOutcomeContradictsScore
 	}
 	appearance.Round = trimField(in.Round, maxLabelLength)
 	appearance.Opponent = trimField(in.Opponent, maxLabelLength)

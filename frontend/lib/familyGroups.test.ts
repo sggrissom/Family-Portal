@@ -131,6 +131,11 @@ describe("chipOrder", () => {
     );
     expect(order.map(p => p.name)).toEqual(["Ann", "Ben", "Dad", "Mom", "Gran", "Loner", "Cousin"]);
   });
+
+  it("puts an expected baby first when asked to", () => {
+    const order = chipOrder([dad, ann, due], [parent(1, 3)], 1, { includeUnborn: true });
+    expect(order.map(p => p.name)).toEqual(["Due", "Ann", "Dad"]);
+  });
 });
 
 describe("chipLabels", () => {

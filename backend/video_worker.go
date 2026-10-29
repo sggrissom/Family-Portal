@@ -254,11 +254,19 @@ func (w *videoWorker) process(imageId int) error {
 	}
 
 	remuxPath := filepath.Join(workDir, "playback.mp4")
-	if err := w.tools.remux(w.ctx, source, remuxPath, probe); err != nil {
+	if err := w.tools.preparePlayback(w.ctx, source, remuxPath, probe); err != nil {
 		if w.ctx.Err() != nil {
 			return nil
 		}
 		w.fail(image, start, "This video couldn't be prepared for playback.", true, err)
+		return nil
+	}
+	// The playback MIME must describe the output, not the HEVC original.
+	playbackProbe, err := w.tools.probe(w.ctx, remuxPath)
+	if err != nil {
+		if w.ctx.Err() == nil {
+			w.fail(image, start, "The playback video couldn't be verified.", true, err)
+		}
 		return nil
 	}
 	posterFile := filepath.Join(workDir, "poster.jpg")
@@ -326,8 +334,8 @@ func (w *videoWorker) process(imageId int) error {
 		current.PlaybackKey = outputs.playbackKey
 		current.Width, current.Height = probe.Width, probe.Height
 		current.DurationMs = int(probe.Duration / time.Millisecond)
-		current.VideoCodec = probe.VideoMime
-		current.AudioCodec = probe.AudioMime
+		current.VideoCodec = playbackProbe.VideoMime
+		current.AudioCodec = playbackProbe.AudioMime
 		current.DerivedBytes = int(remuxInfo.Size() + posterBytes)
 		vbolt.Write(tx, ImagesBkt, current.Id, &current)
 		ReindexPhotoDates(tx, current.Id)
@@ -529,7 +537,7 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 	vbeam.UseWriteTx(ctx)
 	var ids []int
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(_ int, image Image) bool {
-		if image.IsVideo() && image.Status == 2 && image.OriginalKey != "" {
+		if videoNeedsRetry(image) {
 			ids = append(ids, image.Id)
 		}
 		return true
@@ -545,4 +553,12 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 	globalVideoWorker.add(ids...)
 	resp.Queued = len(ids)
 	return
+}
+
+// Include previously published HEVC derivatives so an admin can upgrade them
+// using the retained original, without requiring another upload.
+func videoNeedsRetry(image Image) bool {
+	return image.IsVideo() && image.OriginalKey != "" &&
+		(image.Status == 2 || (image.Status == 0 &&
+			(strings.HasPrefix(image.VideoCodec, "hvc1") || strings.HasPrefix(image.VideoCodec, "hev1"))))
 }

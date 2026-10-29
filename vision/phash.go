@@ -25,6 +25,13 @@ func DHash(img image.Image) uint64 {
 	return hash
 }
 
+// Informative reports whether a hash has enough edges to tell images apart.
+// Flat or smoothly shaded images hash to nearly all zeros or all ones.
+func Informative(hash uint64) bool {
+	n := bits.OnesCount64(hash)
+	return n >= 6 && n <= 58
+}
+
 func HammingDistance(a, b uint64) int {
 	return bits.OnesCount64(a ^ b)
 }

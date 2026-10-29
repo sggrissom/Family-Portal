@@ -14,12 +14,14 @@ import { dayKey, dayLabel } from "../../lib/daySummary";
 import { cellHeadline, eventStatus } from "../../lib/activityResults";
 import { ActivityLabels, activityKindIcon, labelsFor } from "./labels";
 import { DateBlock } from "./performance-card";
+import { chipOrder } from "../../lib/familyGroups";
 import "./activities-styles";
 import "./season-styles";
 
 export type SeasonPageData = {
   overview: server.GetSeasonOverviewResponse;
   people: server.Person[];
+  rosterChoices: server.Person[];
   vocabulary: server.ListActivityVocabularyResponse;
 };
 
@@ -57,6 +59,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     return rpc.ok<SeasonPageData>({
       overview: emptyOverview,
       people: [],
+      rosterChoices: [],
       vocabulary: emptyVocabulary,
     });
   }
@@ -73,9 +76,15 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     activityId: overview.activity.id,
   });
 
+  const familyId = overview.activity.familyId;
   return rpc.ok<SeasonPageData>({
     overview,
     people: people?.people ?? [],
+    rosterChoices: chipOrder(
+      (people?.people ?? []).filter(p => p.familyId === familyId),
+      people?.relations ?? [],
+      familyId
+    ),
     vocabulary: vocabulary ?? emptyVocabulary,
   });
 }
@@ -633,7 +642,7 @@ const EntryRow = ({
         </span>
         <span className="event-count">
           {count === 0
-            ? `Not yet at a ${labels.event.toLowerCase()}`
+            ? `Not at any ${labels.event.toLowerCase()} yet`
             : count === 1
               ? `1 ${labels.appearance.toLowerCase()}`
               : `${count} ${labels.appearancePlural.toLowerCase()}`}
@@ -704,40 +713,42 @@ const EntryFormFields = ({
         disabled={state.saving}
       />
     </div>
-    <div className="form-row">
-      <div className="form-group flex-1">
-        <label htmlFor="entryFormat">Format</label>
-        <input
-          id="entryFormat"
-          type="text"
-          list="entryFormatOptions"
-          placeholder={labels.entry === "Routine" ? "solo, duet, group" : ""}
-          value={state.entryForm.format}
-          onInput={e => {
-            state.entryForm.format = e.currentTarget.value;
-            vlens.scheduleRedraw();
-          }}
-          disabled={state.saving}
-        />
-        <Suggestions id="entryFormatOptions" values={data.vocabulary.formats ?? []} />
+    {(labels.entryTraits || state.entryForm.format || state.entryForm.style) && (
+      <div className="form-row">
+        <div className="form-group flex-1">
+          <label htmlFor="entryFormat">Format</label>
+          <input
+            id="entryFormat"
+            type="text"
+            list="entryFormatOptions"
+            placeholder={labels.entry === "Routine" ? "solo, duet, group" : ""}
+            value={state.entryForm.format}
+            onInput={e => {
+              state.entryForm.format = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+          <Suggestions id="entryFormatOptions" values={data.vocabulary.formats ?? []} />
+        </div>
+        <div className="form-group flex-1">
+          <label htmlFor="entryStyle">Style</label>
+          <input
+            id="entryStyle"
+            type="text"
+            list="entryStyleOptions"
+            placeholder={labels.entry === "Routine" ? "Jazz, Lyrical" : ""}
+            value={state.entryForm.style}
+            onInput={e => {
+              state.entryForm.style = e.currentTarget.value;
+              vlens.scheduleRedraw();
+            }}
+            disabled={state.saving}
+          />
+          <Suggestions id="entryStyleOptions" values={data.vocabulary.styles ?? []} />
+        </div>
       </div>
-      <div className="form-group flex-1">
-        <label htmlFor="entryStyle">Style</label>
-        <input
-          id="entryStyle"
-          type="text"
-          list="entryStyleOptions"
-          placeholder={labels.entry === "Routine" ? "Jazz, Lyrical" : ""}
-          value={state.entryForm.style}
-          onInput={e => {
-            state.entryForm.style = e.currentTarget.value;
-            vlens.scheduleRedraw();
-          }}
-          disabled={state.saving}
-        />
-        <Suggestions id="entryStyleOptions" values={data.vocabulary.styles ?? []} />
-      </div>
-    </div>
+    )}
     <div className="form-row">
       <div className="form-group flex-1">
         <label htmlFor="entryDivision">Division</label>
@@ -773,11 +784,11 @@ const EntryFormFields = ({
 
     <div className="form-group">
       <label>{labels.roster}</label>
-      {data.people.length === 0 ? (
+      {rosterChoices(data, state.entryForm.personIds).length === 0 ? (
         <p className="form-hint">No people to add yet.</p>
       ) : (
         <div className="roster-picker">
-          {data.people.map(person => (
+          {rosterChoices(data, state.entryForm.personIds).map(person => (
             <label key={person.id} className="roster-option">
               <input
                 type="checkbox"
@@ -938,6 +949,12 @@ async function onDeleteEvent(state: SeasonState, event: server.Event, labels: Ac
   }
   state.saving = false;
   vlens.scheduleRedraw();
+}
+
+function rosterChoices(data: SeasonPageData, personIds: number[]): server.Person[] {
+  const listed = new Set(data.rosterChoices.map(p => p.id));
+  const extra = data.people.filter(p => personIds.includes(p.id) && !listed.has(p.id));
+  return [...data.rosterChoices, ...extra];
 }
 
 function rosterNames(people: server.Person[], personIds: number[] | null): string[] {

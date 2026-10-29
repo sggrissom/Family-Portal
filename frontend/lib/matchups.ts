@@ -52,9 +52,12 @@ export function scoreText(m: Matchup): string {
   return `${m.scoreFor ?? "?"}–${m.scoreAgainst ?? "?"}`;
 }
 
+function resultText(m: Matchup): string {
+  return [outcomeLabel(m.outcome), scoreText(m)].filter(part => part).join(" ");
+}
+
 export function matchupParts(m: Matchup): string[] {
-  const result = [outcomeLabel(m.outcome), scoreText(m)].filter(part => part).join(" ");
-  return [m.round, m.opponent ? `vs ${m.opponent}` : "", result].filter(part => part);
+  return [m.round, m.opponent ? `vs ${m.opponent}` : "", resultText(m)].filter(part => part);
 }
 
 export function tallyOutcomes(matchups: Matchup[]): OutcomeTally {
@@ -130,6 +133,7 @@ export function draftError(draft: MatchupDraft): string {
   if (parseScore(draft.scoreFor) === undefined || parseScore(draft.scoreAgainst) === undefined) {
     return "A score must be a whole number.";
   }
+  if (outcomeContradictsScore(draft)) return "The outcome doesn't match the score.";
   return "";
 }
 
@@ -150,4 +154,15 @@ export function outcomeFromScore(draft: MatchupDraft): string {
   if (ours > theirs) return OutcomeWin;
   if (ours < theirs) return OutcomeLoss;
   return OutcomeDraw;
+}
+
+export function outcomeContradictsScore(draft: MatchupDraft): boolean {
+  const derived = outcomeFromScore(draft);
+  if (derived === "" || draft.outcome === "" || draft.outcome === derived) return false;
+  return derived !== OutcomeDraw;
+}
+
+export function opponentFromEventName(name: string): string {
+  const match = /^\s*(?:vs\.?|v\.?|versus|at|@)\s+(.+?)\s*$/i.exec(name);
+  return match ? match[1] : "";
 }

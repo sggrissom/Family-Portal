@@ -509,3 +509,19 @@ func TestEntryWithEmptyRosterStaysPrivate(t *testing.T) {
 		}
 	})
 }
+
+func TestParseActivityDateRangeRejectsAnEndBeforeTheStart(t *testing.T) {
+	start, end, early := "2026-09-01", "2026-12-01", "2026-06-01"
+	if _, _, err := parseActivityDateRange(&start, &end); err != nil {
+		t.Fatalf("ordered range: %v", err)
+	}
+	if _, _, err := parseActivityDateRange(&start, &start); err != nil {
+		t.Fatalf("single day: %v", err)
+	}
+	if _, _, err := parseActivityDateRange(&start, nil); err != nil {
+		t.Fatalf("open end: %v", err)
+	}
+	if _, _, err := parseActivityDateRange(&start, &early); err == nil {
+		t.Fatal("expected an end before the start to be rejected")
+	}
+}

@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -65,7 +65,7 @@ export function view(
                 onChange={e => {
                   const next = new URLSearchParams(route.split("?")[1] ?? "");
                   next.set("question", e.currentTarget.value);
-                  core.setRoute(`/interview/compare?${next.toString()}`);
+                  navigate(`/interview/compare?${next.toString()}`);
                 }}
               >
                 {sections.map(section => (

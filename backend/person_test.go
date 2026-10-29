@@ -564,3 +564,17 @@ func TestMergePeopleValidation(t *testing.T) {
 		})
 	})
 }
+
+func TestValidateAddPersonRequestFutureBirthday(t *testing.T) {
+	future := time.Now().UTC().AddDate(0, 3, 0).Format("2006-01-02")
+	if err := validateAddPersonRequest(AddPersonRequest{Name: "Ada", Birthdate: future}); err == nil {
+		t.Fatal("expected a future birthday to be rejected")
+	}
+	if err := validateAddPersonRequest(AddPersonRequest{Name: "Ada", Birthdate: future, IsPregnancy: true}); err != nil {
+		t.Fatalf("expected a future due date to be accepted, got %v", err)
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if err := validateAddPersonRequest(AddPersonRequest{Name: "Ada", Birthdate: today}); err != nil {
+		t.Fatalf("expected today to be accepted, got %v", err)
+	}
+}

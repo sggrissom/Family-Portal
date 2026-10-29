@@ -78,6 +78,7 @@ type GetDashboardResponse struct {
 	Today     string            `json:"today"`
 	People    []Person          `json:"people"`
 	Relations []Relation        `json:"relations"`
+	Families  []FamilyLabel     `json:"families"`
 	Nudges    []DashboardNudge  `json:"nudges"`
 	Seasons   []DashboardSeason `json:"seasons"`
 	OnThisDay []DashboardYear   `json:"onThisDay"`
@@ -112,6 +113,7 @@ func GetDashboard(ctx *vbeam.Context, req GetDashboardRequest) (resp GetDashboar
 	}
 	resp.People = people.People
 	resp.Relations = people.Relations
+	resp.Families = people.Families
 
 	timeline, err := GetFamilyTimeline(ctx, GetFamilyTimelineRequest{SkipPhotos: true})
 	if err != nil {

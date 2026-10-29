@@ -946,3 +946,15 @@ block(`
   }
 }
 `);
+
+block(`
+.book-empty {
+  margin: 0 auto 32px;
+  padding: 28px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+`);

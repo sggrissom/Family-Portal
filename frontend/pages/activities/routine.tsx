@@ -97,7 +97,7 @@ export function view(route: string, prefix: string, data: RoutinePageData): prea
           {groups.length === 0 ? (
             <div className="empty-state">
               <p>
-                This {labels.entry.toLowerCase()} has not been to a {labels.event.toLowerCase()}{" "}
+                This {labels.entry.toLowerCase()} has not been to any {labels.event.toLowerCase()}{" "}
                 yet.
               </p>
             </div>

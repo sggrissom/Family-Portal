@@ -2,7 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -124,7 +124,8 @@ export async function fetch(
   const ordered = chipOrder(
     (people.people || []).filter(person => auth.canContribute(person.familyId)),
     people.relations || [],
-    auth.getAuth()?.familyId ?? 0
+    auth.getAuth()?.familyId ?? 0,
+    { includeUnborn: true }
   );
   return [{ people: ordered, tags: tags.tags.filter(tag => auth.canContribute(tag.familyId)) }, ""];
 }
@@ -161,7 +162,7 @@ export function view(route: string, prefix: string, data: AddMilestoneData): pre
   );
 }
 
-async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
+async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[], event: Event) {
   event.preventDefault();
   if (form.saving || form.uploading) return;
 
@@ -171,7 +172,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
       ? copy.milestone.pickPerson
       : !form.description.trim()
         ? copy.milestone.needsText
-        : whenProblem(form.when);
+        : whenProblem(form.when, people.find(p => p.id === personId)?.birthday);
   if (problem || personId === null) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -205,7 +206,7 @@ async function onSubmitMilestone(form: AddMilestoneForm, event: Event) {
 
   writeLastPerson(personId);
   takeReturnPath("");
-  core.setRoute(`/profile/${personId}`);
+  navigate(`/profile/${personId}`);
 }
 
 function choosePerson(form: AddMilestoneForm, personId: number) {
@@ -224,7 +225,7 @@ function chooseCategory(form: AddMilestoneForm, category: string) {
 
 function cancel(event: Event) {
   event.preventDefault();
-  core.setRoute(takeReturnPath("/dashboard"));
+  navigate(takeReturnPath("/dashboard"));
 }
 
 const focused = new WeakSet<HTMLElement>();
@@ -265,7 +266,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
 
       <form
         className="entry-form"
-        onSubmit={vlens.cachePartial(onSubmitMilestone, form)}
+        onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}
         noValidate
       >
         {form.error && (
@@ -285,7 +286,11 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
 
         <div className="entry-subject">
           <span className="entry-label">{copy.when.label}</span>
-          <WhenControl when={form.when} disabled={disabled} />
+          <WhenControl
+            when={form.when}
+            disabled={disabled}
+            birthday={people.find(p => p.id === form.personId)?.birthday}
+          />
           {statedAge && !ageAlreadyUsed && (
             <button
               type="button"

@@ -3,9 +3,11 @@ package backend
 import (
 	"family/cfg"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -352,6 +354,47 @@ func TestMembershipRoleCapsAccess(t *testing.T) {
 		}
 		if _, err := ResolveActingFamily(tx, viewer, fx.famB, AccessContribute); err == nil {
 			t.Error("an AccessView member should not be able to name family B for a write")
+		}
+	})
+}
+
+func TestChatFamilyFollowsTheRequestedMembership(t *testing.T) {
+	fx, cleanup := setupMultiFamilyFixture(t)
+	defer cleanup()
+
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, tc := range []struct {
+			requested string
+			want      int
+		}{{"", fx.famA}, {"0", fx.famA}, {"junk", fx.famA}, {strconv.Itoa(fx.famB), fx.famB}} {
+			if got, err := chatFamilyFor(tx, fx.both, tc.requested); err != nil || got != tc.want {
+				t.Errorf("chatFamilyFor(%q) = %d, %v; want %d", tc.requested, got, err, tc.want)
+			}
+		}
+		if _, err := chatFamilyFor(tx, fx.both, strconv.Itoa(fx.famC)); err == nil {
+			t.Error("a family the user doesn't belong to should be refused")
+		}
+	})
+}
+
+func TestSameAgeDefaultsToAChildEvenFromAViewOnlyFamily(t *testing.T) {
+	fx, cleanup := setupMultiFamilyFixture(t)
+	defer cleanup()
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		EnsureMembershipTx(tx, fx.outsider.Id, fx.famA, AccessView)
+		adult, err := AddPersonTx(tx, AddPersonRequest{Name: "Sitter", Birthdate: "1988-01-01"}, fx.famC)
+		if err != nil {
+			t.Fatal(err)
+		}
+		today := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+		candidates := []FamilyTimelineItem{{Person: adult}, {Person: fx.personA}}
+		from, age := sameAgeDefaults(&vbeam.Context{Tx: tx}, fx.outsider, candidates, GetSameAgeRequest{}, today)
+		if from != fx.personA.Id {
+			t.Errorf("from = %d, want the child %d", from, fx.personA.Id)
+		}
+		if age != monthsBetween(fx.personA.Birthday, today) {
+			t.Errorf("age = %d months, want the child's age", age)
 		}
 	})
 }

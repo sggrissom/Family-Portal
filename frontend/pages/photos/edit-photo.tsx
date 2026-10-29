@@ -2,7 +2,7 @@ import { localDateString } from "../../lib/when";
 import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
@@ -85,7 +85,7 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute("/login");
+    navigate("/login");
     return;
   }
 
@@ -165,7 +165,7 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
 
     if (resp && resp.image) {
       await server.UpdatePhotoTags({ photoId: photo.id, tagIds: form.tagIds });
-      core.setRoute(`/view-photo/${photo.id}`);
+      navigate(`/view-photo/${photo.id}`);
     } else {
       form.error = "Failed to update photo";
       form.loading = false;

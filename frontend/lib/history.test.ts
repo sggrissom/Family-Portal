@@ -62,7 +62,7 @@ describe("historyView", () => {
   it("shows only the loaded years", () => {
     const view = historyView(timeline, all, 2024, "2026-09-27");
     expect(view.records.milestones.map(m => m.id)).toEqual([1]);
-    expect(view.range).toEqual({ from: "2026-01-01", to: "2026-09-27" });
+    expect(view.range).toEqual({ from: "2026-01-01", to: "2026-09-27", maxAge: 18 });
   });
 
   it("lists a photo once with everyone in it", () => {

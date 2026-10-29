@@ -1,6 +1,7 @@
 import { localDateString } from "./when";
 import * as server from "../server";
 import { lbOzToLbs, OZ_PER_LB, formatMeasurement, prefersLbOz, splitLbOz } from "./weightFormat";
+import { formatAgeAtMeasurement, getPercentileRow } from "./growthPercentiles";
 
 export type HeightUnit = "in" | "ft-in" | "cm";
 export type WeightUnit = "lb" | "lb-oz" | "kg";
@@ -14,10 +15,6 @@ export const HEIGHT_UNITS: { value: HeightUnit; label: string }[] = [
 export const WEIGHT_UNITS: { value: WeightUnit; label: string }[] = [
   { value: "lb", label: "lb" },
   { value: "lb-oz", label: "lb/oz" },
-];
-
-export const EDIT_WEIGHT_UNITS: { value: WeightUnit; label: string }[] = [
-  ...WEIGHT_UNITS,
   { value: "kg", label: "kg" },
 ];
 
@@ -161,6 +158,9 @@ export function heightValue(entry: CheckupEntry): Parsed {
   }
   if (blank(entry.height)) return { value: null, error: "" };
   const value = parseAmount(entry.height);
+  if (isNaN(Number(entry.height))) {
+    return { value: null, error: "Height should be a number, like 42.5" };
+  }
   if (!(value > 0)) return { value: null, error: "Enter a height above zero" };
   return { value: { value, unit: entry.heightUnit }, error: "" };
 }
@@ -177,6 +177,9 @@ export function weightValue(entry: CheckupEntry): Parsed {
   }
   if (blank(entry.weight)) return { value: null, error: "" };
   const value = parseAmount(entry.weight);
+  if (isNaN(Number(entry.weight))) {
+    return { value: null, error: "Weight should be a number, like 38.2" };
+  }
   if (!(value > 0)) return { value: null, error: "Enter a weight above zero" };
   return { value: { value, unit: entry.weightUnit === "kg" ? "kg" : "lbs" }, error: "" };
 }
@@ -184,9 +187,9 @@ export function weightValue(entry: CheckupEntry): Parsed {
 export function checkupValues(entry: CheckupEntry): CheckupValues & { error: string } {
   const height = heightValue(entry);
   const weight = weightValue(entry);
+  const fieldErrors = [height.error, weight.error].filter(Boolean);
   const error =
-    height.error ||
-    weight.error ||
+    fieldErrors.join(". ") ||
     (!height.value && !weight.value ? "Enter a height, a weight, or both" : "");
   if (error) return { height: null, weight: null, error };
   return { height: height.value, weight: weight.value, error: "" };
@@ -214,4 +217,76 @@ export function describeLast(
 ): string {
   if (!last) return "";
   return `last: ${formatMeasurement(last.value, last.unit, ageMonthsThen)}, ${timeAgo(last.measurementDate, now)}`;
+}
+
+function toMetric(value: number, unit: string): number {
+  if (unit === "in") return value * 2.54;
+  if (unit === "lbs") return value * 0.453592;
+  return value;
+}
+
+const MONTH_MS = 30.4375 * 86_400_000;
+
+function plausibilityWarningFor(
+  value: server.CheckupValue,
+  type: "height" | "weight",
+  ageMonths: number | null,
+  gender: number,
+  last: server.GrowthData | null,
+  now: Date
+): string {
+  const metric = toMetric(value.value, value.unit);
+  const shown = formatMeasurement(value.value, value.unit, ageMonths);
+  const row = ageMonths !== null ? getPercentileRow(ageMonths, gender, type) : null;
+  if (row && ageMonths !== null) {
+    const [low, high] = type === "height" ? [0.8, 1.2] : [0.5, 1.8];
+    if (metric < row.p3 * low || metric > row.p97 * high) {
+      return `${shown} is unusual for someone ${formatAgeAtMeasurement(ageMonths)} old.`;
+    }
+  }
+  if (last) {
+    const monthsSince = (now.getTime() - new Date(last.measurementDate).getTime()) / MONTH_MS;
+    if (monthsSince <= 12) {
+      const ratio = metric / toMetric(last.value, last.unit);
+      const baby = ageMonths !== null && ageMonths < 24;
+      const [low, high] =
+        type === "height" ? [0.95, baby ? 1.6 : 1.25] : baby ? [0.6, 2.5] : [0.7, 1.45];
+      if (ratio < low || ratio > high) {
+        const before = formatMeasurement(last.value, last.unit);
+        return `${shown} is a big change from ${before} ${timeAgo(last.measurementDate, now)}.`;
+      }
+    }
+  }
+  return "";
+}
+
+export function plausibilityWarning(
+  values: CheckupValues,
+  ageMonths: number | null,
+  gender: number,
+  growth: server.GrowthData[],
+  now: Date
+): string {
+  const warnings = [
+    values.height &&
+      plausibilityWarningFor(
+        values.height,
+        "height",
+        ageMonths,
+        gender,
+        latestOf(growth, server.Height),
+        now
+      ),
+    values.weight &&
+      plausibilityWarningFor(
+        values.weight,
+        "weight",
+        ageMonths,
+        gender,
+        latestOf(growth, server.Weight),
+        now
+      ),
+  ].filter(Boolean);
+  if (warnings.length === 0) return "";
+  return `${warnings.join(" ")} Check the number and the unit, then save again to keep it.`;
 }

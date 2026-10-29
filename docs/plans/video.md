@@ -147,12 +147,19 @@ Processing, which is the part worth getting right:
   moves the moov atom to the front so playback starts before the file is
   downloaded. It costs seconds and no quality, and it is the whole fix for
   "the video won't start until it's loaded".
-- No automatic re-encoding in v1, including HEVC. iPhone HEVC uploads can
-  make transcoding the common path, which is too expensive to assume on the
-  small VPS. Remux HEVC with `-tag:v hvc1` for Apple playback compatibility;
-  use it only for HEVC streams. Browser playback still depends on the OS,
-  decoder, codec profile, and clip, so download-only access is an explicit
-  accepted v1 fallback rather than a promise of universal playback.
+- HEVC uploads are converted to a browser-compatible H.264/AAC MP4 while
+  retaining the untouched original. HDR is tone-mapped to SDR and rotation is
+  applied before scaling to at most 1920 pixels on either axis. Encoding runs
+  serially in the existing niced worker, with two codec threads, one filter
+  thread, and a one-hour timeout. The host needs FFmpeg with libx264, AAC,
+  zscale and tonemap support; a missing encoder/filter leaves the original
+  available and reports a retryable processing failure.
+- Admin → Video Processing → Reprocess failed / HEVC videos upgrades existing
+  HEVC playback files from stored originals and retries failures. Videos show
+  processing while queued. Run this once after deployment; converted videos
+  are no longer eligible. No iOS change or re-upload is required. Playback
+  derivatives may be larger than HEVC originals; stored-byte accounting uses
+  the actual completed output size.
 - Probe and retain video/audio codec information. The player checks
   `canPlayType` with a codec-specific MIME string, not just `video/mp4`;
   its answer is a hint, not proof that the actual clip will play. Handle

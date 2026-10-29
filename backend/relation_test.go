@@ -3,6 +3,7 @@ package backend
 import (
 	"family/cfg"
 	"os"
+	"slices"
 	"testing"
 
 	"go.hasen.dev/vbeam"
@@ -468,6 +469,29 @@ func TestFamilyTimelineCarriesTheEdges(t *testing.T) {
 			if got != want {
 				t.Errorf("relation %d = %+v, want %+v", want.Id, got, want)
 			}
+		}
+	})
+}
+
+func TestAddingAPartnerCanMakeThemAParentToo(t *testing.T) {
+	fx := setupResultsFixture(t)
+
+	resp, err := callAs(t, fx, AddPerson, AddPersonRequest{
+		Name: "Jordan", Birthdate: "1988-02-03",
+		Stated: StatedPartner, AnchorId: fx.alice.Id,
+		ChildIds: []int{fx.bob.Id, fx.carol.Id},
+	})
+	if err != nil {
+		t.Fatalf("AddPerson: %v", err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, child := range []Person{fx.bob, fx.carol} {
+			if !slices.Contains(parentsOf(tx, child.Id), resp.Person.Id) {
+				t.Errorf("%s's parents = %v, want Jordan (%d) among them", child.Name, parentsOf(tx, child.Id), resp.Person.Id)
+			}
+		}
+		if !slices.Contains(partnersOf(tx, fx.alice.Id), resp.Person.Id) {
+			t.Error("Jordan should still be Alice's partner")
 		}
 	})
 }

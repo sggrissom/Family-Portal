@@ -132,7 +132,7 @@ func featuresOutdated(f PhotoFeatures, found bool) bool {
 
 func similarPhotos(a, b PhotoFeatures, aDate, bDate time.Time) bool {
 	d := vision.HammingDistance(a.Hash, b.Hash)
-	if d <= duplicateDistance {
+	if d <= duplicateDistance && vision.Informative(a.Hash) && vision.Informative(b.Hash) {
 		return true
 	}
 	gap := aDate.Sub(bDate)

@@ -25,6 +25,8 @@ import {
   emptyMatchupDraft,
   hasMatchup,
   matchupToDraft,
+  opponentFromEventName,
+  outcomeContradictsScore,
   outcomeFromScore,
   outcomeOptions,
   runSummary,
@@ -645,7 +647,7 @@ function usedValues(state: CompetitionState, pick: (a: server.Appearance) => str
 function onScoreInput(draft: MatchupDraft, field: "scoreFor" | "scoreAgainst", value: string) {
   const derivedBefore = outcomeFromScore(draft);
   draft[field] = value;
-  if (draft.outcome === "" || draft.outcome === derivedBefore) {
+  if (draft.outcome === "" || draft.outcome === derivedBefore || outcomeContradictsScore(draft)) {
     draft.outcome = outcomeFromScore(draft);
   }
   vlens.scheduleRedraw();
@@ -923,7 +925,7 @@ function onStartNew(state: CompetitionState, data: CompetitionPageData, entryId:
     entryId,
     occurredAt: toDateInputValue(data.detail.event.startDate),
     notes: "",
-    matchup: emptyMatchupDraft(),
+    matchup: { ...emptyMatchupDraft(), opponent: opponentFromEventName(data.detail.event.name) },
     showMatchup: sport,
     photoIds: [],
     browsing: false,

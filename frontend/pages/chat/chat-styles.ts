@@ -663,3 +663,24 @@ block(`
   transform: scale(0.95);
 }
 `);
+
+block(`
+.message-text a {
+  color: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+`);
+
+block(`
+.chat-family-select {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+}
+`);

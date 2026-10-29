@@ -621,6 +621,8 @@ func TestAppearanceMatchupValidation(t *testing.T) {
 		{"unknown outcome", MatchupInput{Outcome: "forfeit"}, ErrInvalidOutcome},
 		{"negative score", MatchupInput{ScoreFor: intPtr(-1)}, ErrMatchupScoreOutOfRange},
 		{"huge score", MatchupInput{ScoreAgainst: intPtr(maxMatchupScore + 1)}, ErrMatchupScoreOutOfRange},
+		{"won while behind", MatchupInput{Outcome: OutcomeWin, ScoreFor: intPtr(1), ScoreAgainst: intPtr(3)}, ErrOutcomeContradictsScore},
+		{"drew while ahead", MatchupInput{Outcome: OutcomeDraw, ScoreFor: intPtr(2), ScoreAgainst: intPtr(1)}, ErrOutcomeContradictsScore},
 	} {
 		matchup := tc.matchup
 		fx.as(t, func(ctx *vbeam.Context) {

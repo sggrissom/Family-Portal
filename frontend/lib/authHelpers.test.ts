@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("vlens/core", () => ({ setRoute: vi.fn() }));
+vi.mock("./navigate", () => ({ navigate: vi.fn() }));
 vi.mock("../server", () => ({ GetAuthContext: vi.fn() }));
-import { setRoute } from "vlens/core";
+import { navigate } from "./navigate";
 import { GetAuthContext } from "../server";
 import { clearAuth, getAuth, setAuth } from "./authCache";
 import { ensureAuthInFetch, ensureNoAuthInFetch } from "./authHelpers";
@@ -39,7 +39,7 @@ describe("browser session restoration", () => {
       credentials: "include",
     });
     expect(getAuth()).toEqual(user);
-    expect(setRoute).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("restores a refresh-only session from the homepage or login page", async () => {
@@ -47,7 +47,7 @@ describe("browser session restoration", () => {
     vi.mocked(GetAuthContext).mockResolvedValue([{ ...user, id: 0 }, ""]);
     expect(await ensureNoAuthInFetch()).toBe(false);
     expect(getAuth()).toEqual(user);
-    expect(setRoute).toHaveBeenCalledWith("/dashboard");
+    expect(navigate).toHaveBeenCalledWith("/dashboard");
   });
 
   it("does not refresh a valid access cookie", async () => {
@@ -67,12 +67,12 @@ describe("browser session restoration", () => {
     fetchMock.mockResolvedValue({ ok: false });
     expect(await ensureAuthInFetch()).toBe(false);
     expect(getAuth()).toBeNull();
-    expect(setRoute).toHaveBeenCalledWith("/login");
+    expect(navigate).toHaveBeenCalledWith("/login");
   });
 
   it("allows an anonymous visitor to stay on the public page", async () => {
     fetchMock.mockResolvedValue({ ok: false });
     expect(await ensureNoAuthInFetch()).toBe(true);
-    expect(setRoute).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

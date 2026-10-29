@@ -22,6 +22,7 @@ import { Icon } from "./Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
@@ -30,7 +31,7 @@ import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/when";
 import { mediaAccept } from "../lib/mediaUpload";
-import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
+import { handOffPhotos, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import { isTypingTarget } from "../lib/search";
 import {
   ModalDialogState,
@@ -67,6 +68,7 @@ interface NavState {
   moreOpen: boolean;
   selectedPersonId: number | null;
   faceCount: number | null;
+  facesEnabled: boolean;
   dialog: ModalDialogState;
   moreDialog: ModalDialogState;
 }
@@ -82,6 +84,7 @@ const useNav = vlens.declareHook((): NavState => {
     moreOpen: false,
     selectedPersonId: null,
     faceCount: null,
+    facesEnabled: false,
     dialog: newModalDialog(),
     moreDialog: newModalDialog(),
   };
@@ -317,15 +320,17 @@ export const AddSheet = () => {
             hidden
             onChange={vlens.cachePartial(photosPicked, state)}
           />
-          <a
-            href={addPath("/add-growth", personId)}
-            onClick={vlens.cachePartial(formChosen, state)}
-          >
-            <span className="add-sheet-icon" aria-hidden="true">
-              <Icon symbol={Ruler} />
-            </span>
-            {copy.addSheet.measurement}
-          </a>
+          {!people.find(p => p.id === personId)?.isPregnancy && (
+            <a
+              href={addPath("/add-growth", personId)}
+              onClick={vlens.cachePartial(formChosen, state)}
+            >
+              <span className="add-sheet-icon" aria-hidden="true">
+                <Icon symbol={Ruler} />
+              </span>
+              {copy.addSheet.measurement}
+            </a>
+          )}
           <a
             href={addPath("/add-milestone", personId)}
             onClick={vlens.cachePartial(formChosen, state)}
@@ -366,12 +371,14 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
       <li>
         <a href="/manage-tags">{copy.account.tags}</a>
       </li>
-      <li>
-        <a href="/faces">
-          {copy.account.faceReview}
-          {state.faceCount ? <span className="count-badge">{state.faceCount}</span> : null}
-        </a>
-      </li>
+      {state.facesEnabled && (
+        <li>
+          <a href="/faces">
+            {copy.account.faceReview}
+            {state.faceCount ? <span className="count-badge">{state.faceCount}</span> : null}
+          </a>
+        </li>
+      )}
       <li>
         <a href="/settings">{copy.account.settings}</a>
       </li>
@@ -391,8 +398,8 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
 );
 
 function defaultPerson(people: server.Person[]): number | null {
-  const candidates = [contextPersonId(window.location.pathname), readLastPerson()];
-  return candidates.find(id => id !== null && people.some(p => p.id === id)) ?? null;
+  const id = contextPersonId(window.location.pathname);
+  return people.some(p => p.id === id) ? id : null;
 }
 
 export function openAddSheet() {
@@ -418,7 +425,8 @@ async function openSheet(state: NavState) {
   familyPeople = chipOrder(
     (resp.people || []).filter(person => auth.canContribute(person.familyId)),
     resp.relations || [],
-    auth.getAuth()?.familyId ?? 0
+    auth.getAuth()?.familyId ?? 0,
+    { includeUnborn: true }
   );
   if (state.sheetOpen) {
     state.selectedPersonId = defaultPerson(familyPeople);
@@ -482,7 +490,7 @@ function photosPicked(state: NavState, event: Event) {
   rememberReturn(currentPath());
   const personId = state.selectedPersonId;
   closeSheet(state);
-  core.setRoute(addPath("/add-photo", personId));
+  navigate(addPath("/add-photo", personId));
 }
 
 function choosePerson(state: NavState, personId: number) {
@@ -504,7 +512,7 @@ function installSearchShortcut() {
     event.preventDefault();
     const input = document.getElementById("searchInput");
     if (input) input.focus();
-    else core.setRoute("/search");
+    else navigate("/search");
   });
 }
 
@@ -557,6 +565,7 @@ async function loadFaceCount(state: NavState) {
   state.faceCount = 0;
   const [resp] = await server.GetFaceReview({});
   if (!resp || !resp.enabled) return;
+  state.facesEnabled = true;
   state.faceCount = resp.unknownCount + resp.autoCount;
   vlens.scheduleRedraw();
 }

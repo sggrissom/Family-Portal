@@ -3,6 +3,7 @@ import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
@@ -219,7 +220,7 @@ function openPhoto(
 ) {
   remember(state);
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(photo.image.id, true, matchStartMs(photo)));
+  navigate(viewPhotoRoute(photo.image.id, true, matchStartMs(photo)));
 }
 
 function focusOnMount(state: SearchState, el: HTMLInputElement | null) {
@@ -442,7 +443,7 @@ const Groups = ({
 
       {result.moments.length > 0 && (
         <Group
-          title={g.moments}
+          title={momentsTitle(result.moments)}
           action={
             result.momentCount > result.moments.length && (
               <button
@@ -622,6 +623,13 @@ const PersonRow = ({ person, terms }: { person: server.Person; terms: string[] }
   );
 };
 
+function momentsTitle(moments: server.Milestone[]): string {
+  const g = copy.search.groups;
+  const interviews = moments.filter(m => m.interviewId).length;
+  if (interviews === 0) return g.moments;
+  return interviews === moments.length ? g.interviews : g.momentsAndInterviews;
+}
+
 type MomentItem =
   | { kind: "moment"; moment: server.Milestone }
   | { kind: "interview"; group: InterviewGroup };
@@ -661,6 +669,7 @@ const Moments = ({
               group={item.group}
               person={people.get(item.group.personId)}
               interview={interviews.get(item.group.interviewId)}
+              matchesOnly
             />
           </div>
         ) : (
