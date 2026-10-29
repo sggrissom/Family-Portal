@@ -158,6 +158,9 @@ export function heightValue(entry: CheckupEntry): Parsed {
   }
   if (blank(entry.height)) return { value: null, error: "" };
   const value = parseAmount(entry.height);
+  if (isNaN(Number(entry.height))) {
+    return { value: null, error: "Height should be a number, like 42.5" };
+  }
   if (!(value > 0)) return { value: null, error: "Enter a height above zero" };
   return { value: { value, unit: entry.heightUnit }, error: "" };
 }
@@ -174,6 +177,9 @@ export function weightValue(entry: CheckupEntry): Parsed {
   }
   if (blank(entry.weight)) return { value: null, error: "" };
   const value = parseAmount(entry.weight);
+  if (isNaN(Number(entry.weight))) {
+    return { value: null, error: "Weight should be a number, like 38.2" };
+  }
   if (!(value > 0)) return { value: null, error: "Enter a weight above zero" };
   return { value: { value, unit: entry.weightUnit === "kg" ? "kg" : "lbs" }, error: "" };
 }
@@ -181,9 +187,9 @@ export function weightValue(entry: CheckupEntry): Parsed {
 export function checkupValues(entry: CheckupEntry): CheckupValues & { error: string } {
   const height = heightValue(entry);
   const weight = weightValue(entry);
+  const fieldErrors = [height.error, weight.error].filter(Boolean);
   const error =
-    height.error ||
-    weight.error ||
+    fieldErrors.join(". ") ||
     (!height.value && !weight.value ? "Enter a height, a weight, or both" : "");
   if (error) return { height: null, weight: null, error };
   return { height: height.value, weight: weight.value, error: "" };

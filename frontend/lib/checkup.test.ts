@@ -83,7 +83,12 @@ describe("checkupValues", () => {
   });
 
   it("rejects values that are not measurements", () => {
-    expect(checkupValues(entry({ height: "abc" })).error).toBe("Enter a height above zero");
+    expect(checkupValues(entry({ height: "abc" })).error).toBe(
+      "Height should be a number, like 42.5"
+    );
+    expect(checkupValues(entry({ height: "abc", weight: "0" })).error).toBe(
+      "Height should be a number, like 42.5. Enter a weight above zero"
+    );
     expect(checkupValues(entry({ weight: "0" })).error).toBe("Enter a weight above zero");
     expect(checkupValues(entry({ weightUnit: "lb-oz", pounds: "7", ounces: "16" })).error).toBe(
       "Enter a weight in pounds and ounces under 16"
@@ -108,10 +113,12 @@ describe("parseAmount", () => {
 
 describe("single measurements", () => {
   it("rejects malformed, negative, and non-finite values the same way for both", () => {
-    for (const text of ["12abc", "-3", "Infinity"]) {
+    for (const text of ["-3", "Infinity"]) {
       expect(heightValue(entry({ height: text })).error, text).toBe("Enter a height above zero");
       expect(weightValue(entry({ weight: text })).error, text).toBe("Enter a weight above zero");
     }
+    expect(heightValue(entry({ height: "12abc" })).error).toContain("should be a number");
+    expect(weightValue(entry({ weight: "12abc" })).error).toContain("should be a number");
     expect(heightValue(entry({ heightUnit: "ft-in", feet: "3", inches: "-2" })).error).toBe(
       "Enter a height in feet and inches"
     );

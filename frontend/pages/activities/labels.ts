@@ -10,6 +10,7 @@ export interface ActivityLabels {
   appearance: string;
   appearancePlural: string;
   roster: string;
+  entryTraits: boolean;
 }
 
 const dance: ActivityLabels = {
@@ -20,6 +21,7 @@ const dance: ActivityLabels = {
   appearance: "Performance",
   appearancePlural: "Performances",
   roster: "Dancers",
+  entryTraits: true,
 };
 
 const sport: ActivityLabels = {
@@ -30,6 +32,7 @@ const sport: ActivityLabels = {
   appearance: "Game",
   appearancePlural: "Games",
   roster: "Players",
+  entryTraits: false,
 };
 
 const generic: ActivityLabels = {
@@ -40,6 +43,7 @@ const generic: ActivityLabels = {
   appearance: "Appearance",
   appearancePlural: "Appearances",
   roster: "Members",
+  entryTraits: true,
 };
 
 export const ActivityKindDance = "dance";

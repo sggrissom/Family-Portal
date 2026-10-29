@@ -31,7 +31,7 @@ import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/when";
 import { mediaAccept } from "../lib/mediaUpload";
-import { handOffPhotos, readLastPerson, rememberReturn, writeLastPerson } from "../lib/addFlow";
+import { handOffPhotos, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import { isTypingTarget } from "../lib/search";
 import {
   ModalDialogState,
@@ -398,8 +398,8 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
 );
 
 function defaultPerson(people: server.Person[]): number | null {
-  const candidates = [contextPersonId(window.location.pathname), readLastPerson()];
-  return candidates.find(id => id !== null && people.some(p => p.id === id)) ?? null;
+  const id = contextPersonId(window.location.pathname);
+  return people.some(p => p.id === id) ? id : null;
 }
 
 export function openAddSheet() {

@@ -89,23 +89,24 @@ real landscape phone before fixing.
 
 ## Forms and defaults
 
-- [ ] The + sheet remembers the last person (`last-person-id`) even outside
+- [x] The + sheet remembers the last person (`last-person-id`) even outside
   that person's context. Add photos from the Photos tab arrived with Leo
   preselected, so tapping Sofia and Leo tagged only Sofia. Fine for one-person
   forms, risky for multi-tag photos.
-- [ ] Validation reports one field at a time (height, then weight on the next
+- [x] Validation reports one field at a time (height, then weight on the next
   submit).
-- [ ] "abc" as a height says "Enter a height above zero" — right outcome, odd
+- [x] "abc" as a height says "Enter a height above zero" — right outcome, odd
   message.
-- [ ] Photo upload: "Retry" on a non-image file can never succeed, and Done
+- [x] Photo upload: "Retry" on a non-image file can never succeed, and Done
   stays blocked until the bad file is removed. Done could skip it.
-- [ ] Add photos accepts `image/*` only, though video is enabled in local
-  config.
-- [ ] The book year dropdown runs 2026 → 1960 (the oldest family birth year)
+- [x] Add photos accepts `image/*` only, though video is enabled in local
+  config. *(Intended: video is also a per-family switch the site admin turns
+  on in Admin → Users; `mediaAccept` already takes video once it's on.)*
+- [x] The book year dropdown runs 2026 → 1960 (the oldest family birth year)
   for everyone, including a 6-year-old.
-- [ ] Team form shows dance fields (Format, Style) on a Sport program, and the
+- [x] Team form shows dance fields (Format, Style) on a Sport program, and the
   Players list includes the unborn baby and grandma, adults first.
-- [ ] Event form has "Against" separate from the event name, so "vs Red Foxes"
+- [x] Event form has "Against" separate from the event name, so "vs Red Foxes"
   gets typed twice. Pre-fill one from the other.
 
 ## Multi-family accounts
