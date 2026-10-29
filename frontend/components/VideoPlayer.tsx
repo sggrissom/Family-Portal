@@ -23,6 +23,8 @@ type PlayerState = {
   renewals: number;
   watching: boolean;
   element: HTMLVideoElement | null;
+  attempt: number;
+  renewing: boolean;
 };
 
 const usePlayerState = vlens.declareHook(
@@ -38,6 +40,8 @@ const usePlayerState = vlens.declareHook(
     renewals: 0,
     watching: false,
     element: null,
+    attempt: 0,
+    renewing: false,
   })
 );
 
@@ -49,6 +53,8 @@ async function probe(url: string): Promise<number | null> {
       headers: { Range: "bytes=0-0" },
       credentials: "omit",
     });
+    // Some servers ignore Range; don't keep downloading an entire video.
+    await resp.body?.cancel();
     return resp.status;
   } catch {
     return null;
@@ -56,13 +62,21 @@ async function probe(url: string): Promise<number | null> {
 }
 
 async function renew(state: PlayerState) {
+  if (state.renewing) return;
+  state.renewing = true;
+  const photoId = state.photoId;
+  const attempt = ++state.attempt;
   state.resumeAt = state.position;
   state.resumePlaying = state.playing;
   state.renewals++;
-  const [fresh] = await server.GetVideoPlayback({ id: state.photoId });
+  const [fresh] = await server.GetVideoPlayback({ id: photoId });
+  if (state.photoId !== photoId || state.attempt !== attempt) return;
+  state.renewing = false;
   if (fresh) {
     state.playback = fresh;
     state.problem = "";
+    // A redraw during the request may already have mounted the old URL.
+    state.attempt++;
   } else {
     state.problem = "network";
   }
@@ -72,10 +86,19 @@ async function renew(state: PlayerState) {
 async function onPlaybackError(state: PlayerState, event: Event) {
   const video = event.currentTarget as HTMLVideoElement;
   const playback = state.playback;
-  if (!playback) return;
+  if (!playback || state.element !== video || state.renewing) return;
+  const attempt = state.attempt;
+  const errorCode = video.error?.code ?? 0;
   const status = await probe(video.currentSrc || playback.playbackUrl);
+  if (
+    state.attempt !== attempt ||
+    state.playback !== playback ||
+    state.element !== video ||
+    !video.error
+  )
+    return;
   const problem = classifyPlaybackError(
-    video.error?.code ?? 0,
+    errorCode,
     status,
     Date.now(),
     new Date(playback.expiresAt).getTime()
@@ -159,6 +182,7 @@ export const VideoPlayer = ({
 }) => {
   const state = usePlayerState();
   if (state.photoId !== photo.id) {
+    state.attempt++;
     Object.assign(state, {
       photoId: photo.id,
       playback,
@@ -171,6 +195,7 @@ export const VideoPlayer = ({
       renewals: 0,
       watching: false,
       element: null,
+      renewing: false,
     });
   }
   const transcriptPanel = (
@@ -230,18 +255,35 @@ export const VideoPlayer = ({
     type => document.createElement("video").canPlayType(type),
     p.mimeType
   );
-  if (state.problem === "unsupported" || (!likely && !state.forcePlay)) {
+  if (
+    state.problem === "unsupported" ||
+    state.problem === "decode" ||
+    (!likely && !state.forcePlay)
+  ) {
     return (
       <div className="video-player">
         <Poster photo={photo} />
         <p className="video-player-note">
-          <strong>This browser can't play this video</strong>
-          It was recorded in a format this browser or device doesn't support (often HEVC from an
-          iPhone on a computer without HEVC playback). Download the original to watch it, or open it
-          on another device.
+          <strong>
+            {state.problem === "decode"
+              ? "Playback stopped"
+              : "This browser couldn't play this video"}
+          </strong>
+          {state.problem === "decode"
+            ? "The video couldn't be decoded. Try loading it again."
+            : "Try loading it again. If it still won't play, its format may not be supported on this device. You can also download the original."}
         </p>
         <div className="video-player-actions">
           <DownloadLink playback={p} />
+          {state.problem && (
+            <button
+              className="btn btn-outline"
+              disabled={state.renewing}
+              onClick={() => retry(state)}
+            >
+              <Icon symbol={RotateCcw} /> Try again
+            </button>
+          )}
           {!likely && state.problem !== "unsupported" && (
             <button className="btn btn-outline" onClick={() => playAnyway(state)}>
               Try playing anyway
@@ -256,7 +298,7 @@ export const VideoPlayer = ({
   return (
     <div className="video-player">
       <video
-        key={p.playbackUrl}
+        key={`${photo.id}:${state.attempt}:${p.playbackUrl}`}
         ref={el => {
           state.element = el;
         }}
