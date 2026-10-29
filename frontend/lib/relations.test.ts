@@ -3,6 +3,7 @@ import * as server from "@app/server";
 import {
   childrenOf,
   coAnchorSuggestions,
+  syncPartnerChildren,
   parentsOf,
   partnersOf,
   siblingsOf,
@@ -123,5 +124,25 @@ describe("syncCoAnchors", () => {
     state.ids = [];
     syncCoAnchors(state, family, server.StatedChild, 9, 2);
     expect(state.ids).toEqual([1]);
+  });
+});
+
+describe("syncPartnerChildren", () => {
+  const parentOf = (fromId: number, toId: number): server.Relation => ({
+    id: fromId * 100 + toId,
+    fromId,
+    toId,
+    kind: server.RelationParent,
+  });
+
+  it("offers the anchor's children to a new partner, all ticked", () => {
+    const state = { key: "", ids: [] as number[] };
+    const relations = [parentOf(1, 3), parentOf(1, 4)];
+    expect(syncPartnerChildren(state, relations, server.StatedPartner, 1)).toEqual([3, 4]);
+    expect(state.ids).toEqual([3, 4]);
+    state.ids = [3];
+    syncPartnerChildren(state, relations, server.StatedPartner, 1);
+    expect(state.ids).toEqual([3]);
+    expect(syncPartnerChildren(state, relations, server.StatedSibling, 1)).toEqual([]);
   });
 });

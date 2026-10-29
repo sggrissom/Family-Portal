@@ -12,11 +12,14 @@ import { FamilySelect } from "../../components/FamilySelect";
 import { FamilyLinksSection } from "../../components/FamilyLinks";
 import { FamilyMembersSection } from "../../components/FamilyMembers";
 import { FamilyPlacesSection } from "../../components/FamilyPlaces";
+import { formatLongDate } from "../../lib/dateUtils";
+import { isValidBirthday } from "../../lib/growthPercentiles";
 import "./settings-styles";
 
 type Data = {
   familyInfo: server.FamilyInfoResponse;
   people: server.Person[];
+  relations: server.Relation[];
   links: server.FamilyLinkView[];
   members: server.FamilyMemberView[];
   callerIsOwner: boolean;
@@ -48,6 +51,8 @@ type MergeForm = {
   previewData: {
     sourceName: string;
     targetName: string;
+    sourceDetail: string;
+    targetDetail: string;
     milestoneCount: number;
     growthCount: number;
     photoCount: number;
@@ -202,6 +207,7 @@ export async function fetch(route: string, prefix: string) {
     return vlens.rpcOk({
       familyInfo: { id: 0, name: "", inviteCode: "", families: [] },
       people: [],
+      relations: [],
       links: [],
       members: [],
       callerIsOwner: false,
@@ -218,6 +224,7 @@ export async function fetch(route: string, prefix: string) {
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
     people: peopleResp?.people || [],
+    relations: peopleResp?.relations || [],
     links: linksResp?.links || [],
     members: membersResp?.members || [],
     callerIsOwner: membersResp?.callerIsOwner || false,
@@ -454,7 +461,17 @@ async function onExportDataClicked(exportForm: ExportForm) {
   }
 }
 
-async function onMergePreview(form: MergeForm, people: server.Person[], event: Event) {
+function mergeDetail(person: server.Person, data: Data): string {
+  const born = isValidBirthday(person.birthday)
+    ? `born ${formatLongDate(person.birthday)}`
+    : "no birthday";
+  const links = data.relations.filter(r => r.fromId === person.id || r.toId === person.id).length;
+  const parts = [born, links === 1 ? "1 relationship" : `${links} relationships`];
+  if (data.members.some(m => m.personId === person.id)) parts.push("has an account");
+  return parts.join(" · ");
+}
+
+async function onMergePreview(form: MergeForm, people: server.Person[], data: Data, event: Event) {
   event.preventDefault();
 
   if (form.sourcePersonId === 0 || form.targetPersonId === 0) {
@@ -490,6 +507,8 @@ async function onMergePreview(form: MergeForm, people: server.Person[], event: E
     form.previewData = {
       sourceName: sourcePerson.name,
       targetName: targetPerson.name,
+      sourceDetail: mergeDetail(sourcePerson, data),
+      targetDetail: mergeDetail(targetPerson, data),
       milestoneCount: sourceData.milestones?.length || 0,
       growthCount: sourceData.growthData?.length || 0,
       photoCount: sourceData.photos?.length || 0,
@@ -949,7 +968,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               )}
 
               {!mergeForm.showConfirmation && (
-                <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, mergeable)}>
+                <form onSubmit={vlens.cachePartial(onMergePreview, mergeForm, mergeable, data)}>
                   <div className="merge-selectors">
                     <div className="form-group">
                       <label htmlFor="sourcePerson">Merge From (will be deleted)</label>
@@ -968,7 +987,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         <option value="0">Select person to merge from...</option>
                         {mergeable.map(person => (
                           <option key={person.id} value={person.id}>
-                            {person.name}
+                            {person.name} — {mergeDetail(person, data)}
                           </option>
                         ))}
                       </select>
@@ -993,7 +1012,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                         <option value="0">Select person to merge into...</option>
                         {mergeable.map(person => (
                           <option key={person.id} value={person.id}>
-                            {person.name}
+                            {person.name} — {mergeDetail(person, data)}
                           </option>
                         ))}
                       </select>
@@ -1020,10 +1039,18 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                   <div className="merge-preview">
                     <p>
                       <strong>Source:</strong> {mergeForm.previewData.sourceName} (will be deleted)
+                      <br />
+                      <small>{mergeForm.previewData.sourceDetail}</small>
                     </p>
                     <p>
                       <strong>Target:</strong> {mergeForm.previewData.targetName} (will keep all
                       data)
+                      <br />
+                      <small>{mergeForm.previewData.targetDetail}</small>
+                    </p>
+                    <p className="form-hint">
+                      The target keeps its own name and birthday. Relationships, records and any
+                      account move over from the source.
                     </p>
                     <div className="merge-stats">
                       <p>The following will be moved from source to target:</p>

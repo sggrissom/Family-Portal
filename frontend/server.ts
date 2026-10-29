@@ -48,16 +48,8 @@ export const BookItemPhoto: BookItemKind = 1;
 export const BookItemInterview: BookItemKind = 2;
 
 // Errors
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrVideoNotFound = "Video not found or access denied";
-export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
-export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
-export const ErrVideoUploadNotFound = "That upload could not be found.";
-export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
-export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
+export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
+export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -67,26 +59,34 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
-export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrInterviewNotFound = "Interview not found or not in your family";
-export const ErrInterviewInProgress = "There's already an interview in progress for this person";
-export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
-export const ErrMediaNotFound = "media object not found";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
 export const ErrLinkNotFound = "Family link not found";
 export const ErrLinkToSelf = "A family cannot be linked to itself";
 export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrTranscriptNotFound = "Transcript not found or access denied";
-export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrMediaNotFound = "media object not found";
+export const ErrInterviewNotFound = "Interview not found or not in your family";
+export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
 export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
+export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
+export const ErrVideoUploadNotFound = "That upload could not be found.";
+export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
+export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrVideoNotFound = "Video not found or access denied";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 
 export interface CreateAccountRequest {
     name: string
@@ -97,6 +97,7 @@ export interface CreateAccountRequest {
     initialPersonName: string
     initialPersonGender: number
     initialPersonBirthdate: string
+    claimPersonId: number
 }
 
 export interface CreateAccountResponse {
@@ -135,6 +136,15 @@ export interface JoinFamilyResponse {
     success: boolean
     error: string
     auth: AuthResponse
+}
+
+export interface GetInviteClaimsRequest {
+    code: string
+}
+
+export interface GetInviteClaimsResponse {
+    familyName: string
+    claims: InviteClaim[]
 }
 
 export interface ListFamilyMembersRequest {
@@ -278,6 +288,7 @@ export interface AddPersonRequest {
     stated: StatedRelation
     anchorId: number
     additionalAnchorIds: number[]
+    childIds: number[]
 }
 
 export interface GetPersonResponse {
@@ -1947,6 +1958,11 @@ export interface FamilyInfo {
     isPrimary: boolean
 }
 
+export interface InviteClaim {
+    personId: number
+    name: string
+}
+
 export interface FamilyMemberView {
     userId: number
     name: string
@@ -1955,6 +1971,7 @@ export interface FamilyMemberView {
     joinedAt: string
     isOwner: boolean
     isSelf: boolean
+    personId: number
 }
 
 export interface FamilyLinkView {
@@ -3127,6 +3144,10 @@ export async function GetFamilyInfo(data: Empty): Promise<rpc.Response<FamilyInf
 
 export async function JoinFamily(data: JoinFamilyRequest): Promise<rpc.Response<JoinFamilyResponse>> {
     return await rpc.call<JoinFamilyResponse>('JoinFamily', JSON.stringify(data));
+}
+
+export async function GetInviteClaims(data: GetInviteClaimsRequest): Promise<rpc.Response<GetInviteClaimsResponse>> {
+    return await rpc.call<GetInviteClaimsResponse>('GetInviteClaims', JSON.stringify(data));
 }
 
 export async function ListFamilyMembers(data: ListFamilyMembersRequest): Promise<rpc.Response<ListFamilyMembersResponse>> {

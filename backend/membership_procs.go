@@ -31,6 +31,7 @@ type FamilyMemberView struct {
 	JoinedAt time.Time   `json:"joinedAt"`
 	IsOwner  bool        `json:"isOwner"`
 	IsSelf   bool        `json:"isSelf"`
+	PersonId int         `json:"personId"`
 }
 
 type ListFamilyMembersRequest struct {
@@ -92,6 +93,7 @@ func familyMemberViews(tx *vbolt.Tx, familyId int, callerId int) []FamilyMemberV
 			JoinedAt: membership.JoinedAt,
 			IsOwner:  user.Id == ownerId,
 			IsSelf:   user.Id == callerId,
+			PersonId: user.PersonId,
 		})
 	}
 
