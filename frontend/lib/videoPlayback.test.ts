@@ -18,7 +18,12 @@ describe("classifyPlaybackError", () => {
 
   it("calls a reachable file the browser won't decode unsupported", () => {
     expect(classifyPlaybackError(4, 206, now, later)).toBe("unsupported");
-    expect(classifyPlaybackError(3, 200, now, later)).toBe("unsupported");
+    expect(classifyPlaybackError(3, 200, now, later)).toBe("decode");
+  });
+
+  it("does not call an aborted or cleared error an unsupported format", () => {
+    expect(classifyPlaybackError(1, 206, now, later)).toBe("network");
+    expect(classifyPlaybackError(0, 206, now, later)).toBe("network");
   });
 
   it("treats an unreachable file as a connection problem", () => {
