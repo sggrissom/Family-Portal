@@ -8,7 +8,12 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
 import { RELATION_OPTIONS } from "../../lib/routeHelpers";
-import { CoAnchorState, CoAnchorSuggestion, syncCoAnchors } from "../../lib/relations";
+import {
+  CoAnchorState,
+  CoAnchorSuggestion,
+  syncCoAnchors,
+  syncPartnerChildren,
+} from "../../lib/relations";
 import { CoAnchorPicker } from "../../components/CoAnchorPicker";
 import "./add-person-styles";
 
@@ -28,6 +33,7 @@ type AddPersonForm = {
   isPregnancy: boolean;
   familyId: number;
   coAnchors: CoAnchorState;
+  partnerChildren: CoAnchorState;
   error: string;
   loading: boolean;
   success: boolean;
@@ -43,6 +49,7 @@ const useAddPersonForm = vlens.declareHook(
     isPregnancy: false,
     familyId: 0,
     coAnchors: { key: "", ids: [] },
+    partnerChildren: { key: "", ids: [] },
     error: "",
     loading: false,
     success: false,
@@ -80,6 +87,12 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
   const suggestions = relation
     ? syncCoAnchors(form.coAnchors, data.relations, relation.value, 0, form.anchorId)
     : [];
+  const partnerChildren = syncPartnerChildren(
+    form.partnerChildren,
+    data.relations,
+    relation?.value ?? null,
+    form.anchorId
+  );
 
   return (
     <div>
@@ -90,12 +103,20 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
           people={data.people}
           families={data.families}
           suggestions={suggestions}
+          partnerChildren={partnerChildren}
           relationLabel={relation ? relation.label : ""}
         />
       </main>
       <Footer />
     </div>
   );
+}
+
+function togglePartnerChild(form: AddPersonForm, childId: number, event: Event) {
+  const checked = (event.currentTarget as HTMLInputElement).checked;
+  const ids = form.partnerChildren.ids.filter(id => id !== childId);
+  form.partnerChildren.ids = checked ? [...ids, childId] : ids;
+  vlens.scheduleRedraw();
 }
 
 function targetFamilyId(form: AddPersonForm): number {
@@ -134,6 +155,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       stated: relation ? relation.value : server.StatedNone,
       anchorId: relation ? form.anchorId : 0,
       additionalAnchorIds: relation ? form.coAnchors.ids : [],
+      childIds: relation?.value === server.StatedPartner ? form.partnerChildren.ids : [],
     });
 
     form.loading = false;
@@ -143,6 +165,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.name = "";
       form.relationIndex = -1;
       form.coAnchors = { key: "", ids: [] };
+      form.partnerChildren = { key: "", ids: [] };
       form.gender = 2;
       form.birthdate = "";
       form.isPregnancy = false;
@@ -175,6 +198,7 @@ interface AddPersonPageProps {
   people: server.Person[];
   families: server.FamilyLabel[];
   suggestions: CoAnchorSuggestion[];
+  partnerChildren: number[];
   relationLabel: string;
 }
 
@@ -183,6 +207,7 @@ const AddPersonPage = ({
   people,
   families,
   suggestions,
+  partnerChildren,
   relationLabel,
 }: AddPersonPageProps) => (
   <div className="add-person-page">
@@ -283,6 +308,25 @@ const AddPersonPage = ({
               relationLabel={relationLabel}
               disabled={form.loading}
             />
+            {partnerChildren.length > 0 && (
+              <div className="co-anchor-picker">
+                <span className="co-anchor-title">
+                  Also the {form.gender === 1 ? "mother" : form.gender === 0 ? "father" : "parent"}{" "}
+                  of
+                </span>
+                {partnerChildren.map(childId => (
+                  <label key={childId} className="co-anchor-option">
+                    <input
+                      type="checkbox"
+                      checked={form.partnerChildren.ids.includes(childId)}
+                      disabled={form.loading}
+                      onInput={vlens.cachePartial(togglePartnerChild, form, childId)}
+                    />
+                    <span>{people.find(p => p.id === childId)?.name ?? "Unknown"}</span>
+                  </label>
+                ))}
+              </div>
+            )}
             <p className="form-hint">
               Everyone else's relationship is worked out from this — a grandchild is a daughter or
               son of one of your children.

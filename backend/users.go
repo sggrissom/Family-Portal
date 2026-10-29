@@ -16,6 +16,7 @@ func RegisterUserMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetAuthContext)
 	vbeam.RegisterProc(app, GetFamilyInfo)
 	vbeam.RegisterProc(app, JoinFamily)
+	vbeam.RegisterProc(app, GetInviteClaims)
 }
 
 type CreateAccountRequest struct {
@@ -27,6 +28,9 @@ type CreateAccountRequest struct {
 	InitialPersonName      string `json:"initialPersonName,omitempty"`
 	InitialPersonGender    int    `json:"initialPersonGender,omitempty"`
 	InitialPersonBirthdate string `json:"initialPersonBirthdate,omitempty"`
+	// ClaimPersonId links the account to an existing adult in the family the
+	// invite code names, in place of adding an initial person.
+	ClaimPersonId int `json:"claimPersonId,omitempty"`
 }
 
 type LoginRequest struct {
@@ -354,7 +358,13 @@ func createAccountTx(tx *vbolt.Tx, req CreateAccountRequest) (user User, auth Au
 	}
 
 	user = AddUserTx(tx, req, hash)
-	if req.InitialPersonBirthdate != "" {
+	if req.ClaimPersonId != 0 {
+		if !claimableBy(tx, user.FamilyId, req.ClaimPersonId) {
+			return User{}, AuthResponse{}, "That person can't be linked to a new account"
+		}
+		user.PersonId = req.ClaimPersonId
+		vbolt.Write(tx, UsersBkt, user.Id, &user)
+	} else if req.InitialPersonBirthdate != "" {
 		person, personErr := AddInitialPersonForAccountTx(tx, req, user.FamilyId)
 		if personErr != nil {
 			return User{}, AuthResponse{}, personErr.Error()

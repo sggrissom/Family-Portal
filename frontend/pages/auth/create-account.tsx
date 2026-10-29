@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
+import * as server from "../../server";
 import { navigate } from "../../lib/navigate";
 import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
@@ -21,6 +22,9 @@ type CreateAccountForm = {
   initialPersonName: string;
   initialPersonGender: number;
   initialPersonBirthdate: string;
+  claimsFor: string;
+  claims: server.InviteClaim[];
+  claimPersonId: number;
   error: string;
   loading: boolean;
 };
@@ -39,6 +43,9 @@ const useCreateAccountForm = vlens.declareHook(
     initialPersonName: "",
     initialPersonGender: 2,
     initialPersonBirthdate: "",
+    claimsFor: "",
+    claims: [],
+    claimPersonId: 0,
     error: "",
     loading: false,
   })
@@ -56,6 +63,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
     const codeParam = urlParams.get("code");
     if (codeParam) {
       form.familyCode = codeParam;
+      loadClaims(form);
       vlens.scheduleRedraw();
     }
   }
@@ -69,6 +77,20 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
       <Footer />
     </div>
   );
+}
+
+async function loadClaims(form: CreateAccountForm) {
+  const code = form.familyCode.trim();
+  if (code === form.claimsFor) return;
+  form.claimsFor = code;
+  form.claims = [];
+  form.claimPersonId = 0;
+  if (!code) return;
+  const [resp] = await server.GetInviteClaims({ code });
+  if (resp && form.claimsFor === code) {
+    form.claims = resp.claims ?? [];
+    vlens.scheduleRedraw();
+  }
 }
 
 async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
@@ -91,7 +113,8 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
         familyCode: form.familyCode,
         initialPersonName: form.initialPersonName || form.name,
         initialPersonGender: form.initialPersonGender,
-        initialPersonBirthdate: form.initialPersonBirthdate,
+        initialPersonBirthdate: form.claimPersonId ? "" : form.initialPersonBirthdate,
+        claimPersonId: form.familyCode ? form.claimPersonId : 0,
       }),
     });
 
@@ -208,54 +231,81 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
           />
         </div>
 
-        <fieldset className="form-section">
-          <legend>Your family profile</legend>
-          <p className="section-hint">
-            {form.familyCode
-              ? "We’ll add you to the family as an adult so photos, moments, and family timelines can include you too."
-              : "We’ll add you as the first adult in this family so photos, moments, and family timelines can include you too."}
-          </p>
+        {form.claims.length > 0 && (
+          <fieldset className="form-section">
+            <legend>Are you already in this family?</legend>
+            <p className="section-hint">
+              If someone added you before inviting you, pick yourself so your account joins that
+              profile instead of making a second one.
+            </p>
+            {[...form.claims, { personId: 0, name: "No, add me as someone new" }].map(claim => (
+              <label key={claim.personId} className="checkbox-option">
+                <input
+                  type="radio"
+                  name="claimPersonId"
+                  checked={form.claimPersonId === claim.personId}
+                  onChange={() => {
+                    form.claimPersonId = claim.personId;
+                    vlens.scheduleRedraw();
+                  }}
+                  disabled={form.loading}
+                />
+                <span>{claim.name}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
-          <div className="form-group">
-            <label htmlFor="initialPersonName">Profile Name (Optional)</label>
-            <input
-              type="text"
-              id="initialPersonName"
-              placeholder="Name to show in your family"
-              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonName"))}
-              disabled={form.loading}
-            />
-            <small className="form-hint">Leave blank to use your account name.</small>
-          </div>
+        {form.claimPersonId === 0 && (
+          <fieldset className="form-section">
+            <legend>Your family profile</legend>
+            <p className="section-hint">
+              {form.familyCode
+                ? "We’ll add you to the family as an adult so photos, moments, and family timelines can include you too."
+                : "We’ll add you as the first adult in this family so photos, moments, and family timelines can include you too."}
+            </p>
 
-          <div className="form-group">
-            <label htmlFor="initialPersonGender">Gender</label>
-            <select
-              id="initialPersonGender"
-              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonGender"))}
-              disabled={form.loading}
-            >
-              <option value={2}>Not specified</option>
-              <option value={0}>Male</option>
-              <option value={1}>Female</option>
-            </select>
-          </div>
+            <div className="form-group">
+              <label htmlFor="initialPersonName">Profile Name (Optional)</label>
+              <input
+                type="text"
+                id="initialPersonName"
+                placeholder="Name to show in your family"
+                {...vlens.attrsBindInput(vlens.ref(form, "initialPersonName"))}
+                disabled={form.loading}
+              />
+              <small className="form-hint">Leave blank to use your account name.</small>
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="initialPersonBirthdate">Birthday (Required)</label>
-            <input
-              type="date"
-              id="initialPersonBirthdate"
-              {...vlens.attrsBindInput(vlens.ref(form, "initialPersonBirthdate"))}
-              required
-              aria-describedby="birthdayHint"
-              disabled={form.loading}
-            />
-            <small id="birthdayHint" className="form-hint">
-              Ages on the timeline are worked out from it.
-            </small>
-          </div>
-        </fieldset>
+            <div className="form-group">
+              <label htmlFor="initialPersonGender">Gender</label>
+              <select
+                id="initialPersonGender"
+                {...vlens.attrsBindInput(vlens.ref(form, "initialPersonGender"))}
+                disabled={form.loading}
+              >
+                <option value={2}>Not specified</option>
+                <option value={0}>Male</option>
+                <option value={1}>Female</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="initialPersonBirthdate">Birthday (Required)</label>
+              <input
+                type="date"
+                id="initialPersonBirthdate"
+                {...vlens.attrsBindInput(vlens.ref(form, "initialPersonBirthdate"))}
+                required
+                aria-describedby="birthdayHint"
+                disabled={form.loading}
+              />
+              <small id="birthdayHint" className="form-hint">
+                Ages on the timeline are worked out from it.
+              </small>
+            </div>
+          </fieldset>
+        )}
 
         <div className="form-group">
           <label htmlFor="familyCode">Family Code (Optional)</label>
@@ -264,6 +314,7 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
             id="familyCode"
             placeholder="Enter family invite code"
             {...vlens.attrsBindInput(vlens.ref(form, "familyCode"))}
+            onBlur={() => loadClaims(form)}
             disabled={form.loading}
           />
           <small className="form-hint">

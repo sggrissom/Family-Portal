@@ -34,25 +34,26 @@ real landscape phone before fixing.
   interview opens the ask page still scrolled down from the long setup page, so
   the question is off-screen. Other route changes may do the same.
 - [x] **B9 — Typo.** "Not yet at a event" on a team card with no results.
-- [ ] **B10 — Blank page on first load (unconfirmed).** Twice a page rendered
+- [ ] **B10 — Blank page on first load (unconfirmed).** *(Still open: didn't
+  reproduce across the headless runs while working through this list.)* Twice a page rendered
   fully blank on a cold load (`/` and `/profile/3`) and was fine on reload. No
   console errors were captured.
 
 ## Family setup
 
-- [ ] **Joining by invite creates a duplicate person.** Dana added "Marco
+- [x] **Joining by invite creates a duplicate person.** Dana added "Marco
   Rivera" with the kids linked; Marco then joined by invite link and got a
   second, unlinked "Marco Rivera". Offer "Are you one of these?" from the
   family's adults without an account and link the account instead. The join
   form also says "We'll add you as the first adult in this family" when the
   family already has adults.
-- [ ] **Merge People is hard to use safely.** Both pickers list two identical
+- [x] **Merge People is hard to use safely.** Both pickers list two identical
   "Marco Rivera" entries, and the confirm step reads "Source: Marco Rivera →
   Target: Marco Rivera". Merging the wrong way deletes the person holding the
   relationships. Show birthday, relationship count and "has an account" next to
   each name in the pickers and on the confirm step. (It did correctly move the
   account to the kept person.)
-- [ ] **Kids added before the spouse make the spouse a step-parent.** Sign up,
+- [x] **Kids added before the spouse make the spouse a step-parent.** Sign up,
   add two children, then add a wife: she shows as "stepmother (implied)". The
   co-parent checkbox only appears when adding a child to someone who already
   has a partner. After saving a partner, ask "Is Jordan also the parent of Ada

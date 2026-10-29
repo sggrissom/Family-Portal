@@ -119,3 +119,20 @@ export function syncCoAnchors(
   }
   return suggestions;
 }
+
+// syncPartnerChildren offers a new partner as the other parent of the
+// anchor's children, preselecting all of them whenever the anchor changes.
+export function syncPartnerChildren(
+  state: CoAnchorState,
+  relations: server.Relation[],
+  stated: server.StatedRelation | null,
+  anchorId: number
+): number[] {
+  const children = stated === server.StatedPartner ? childrenOf(relations, anchorId) : [];
+  const key = `${stated}:${anchorId}:${children.join(",")}`;
+  if (state.key !== key) {
+    state.key = key;
+    state.ids = [...children];
+  }
+  return children;
+}

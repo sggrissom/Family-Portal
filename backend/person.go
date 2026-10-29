@@ -46,6 +46,9 @@ type AddPersonRequest struct {
 	// AdditionalAnchorIds states the same relation against more people, so a
 	// child can be linked to both parents as they are added.
 	AdditionalAnchorIds []int `json:"additionalAnchorIds,omitempty"`
+	// ChildIds makes the new person a parent of these people too, so a
+	// partner added after the children isn't left a step-parent.
+	ChildIds []int `json:"childIds,omitempty"`
 }
 
 type UpdatePersonRequest struct {
@@ -395,6 +398,12 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 	if req.Stated != StatedNone && req.AnchorId != 0 {
 		anchorIds := append([]int{req.AnchorId}, req.AdditionalAnchorIds...)
 		if relErr := applyStatedRelationTx(ctx.Tx, user, person.Id, req.Stated, anchorIds); relErr != nil {
+			err = relErr
+			return
+		}
+	}
+	if len(req.ChildIds) > 0 {
+		if relErr := applyStatedRelationTx(ctx.Tx, user, person.Id, StatedParent, req.ChildIds); relErr != nil {
 			err = relErr
 			return
 		}
