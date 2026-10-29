@@ -23,7 +23,11 @@ async function load(state: VideoPanelState) {
 }
 
 async function retryFailed(state: VideoPanelState) {
-  if (!confirm("Retry every video whose processing failed but whose original is still stored?")) {
+  if (
+    !confirm(
+      "Retry failed videos and convert existing HEVC videos for browser playback? Their originals must still be stored."
+    )
+  ) {
     return;
   }
   state.retrying = true;
@@ -35,7 +39,7 @@ async function retryFailed(state: VideoPanelState) {
     ? error
     : result && result.queued > 0
       ? `Requeued ${result.queued} video${result.queued === 1 ? "" : "s"}.`
-      : "No failed videos to retry.";
+      : "No videos need reprocessing.";
   await load(state);
 }
 
@@ -70,7 +74,7 @@ export const VideoPanel = () => {
             onClick={() => retryFailed(state)}
             disabled={state.retrying || !stats.isRunning}
           >
-            {state.retrying ? "Retrying…" : "Retry failed videos"}
+            {state.retrying ? "Retrying…" : "Reprocess failed / HEVC videos"}
           </button>
           {state.result && <p className="last-reprocess">{state.result}</p>}
           {stats.recentAttempts.length > 0 && (
