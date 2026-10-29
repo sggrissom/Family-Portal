@@ -161,3 +161,8 @@ export function outcomeContradictsScore(draft: MatchupDraft): boolean {
   if (derived === "" || draft.outcome === "" || draft.outcome === derived) return false;
   return derived !== OutcomeDraw;
 }
+
+export function opponentFromEventName(name: string): string {
+  const match = /^\s*(?:vs\.?|v\.?|versus|at|@)\s+(.+?)\s*$/i.exec(name);
+  return match ? match[1] : "";
+}

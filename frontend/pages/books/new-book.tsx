@@ -240,7 +240,7 @@ const NewBook = ({ data, familyId }: { data: NewBookData; familyId: number }) =>
       : defaultTitle(preset, chosen, period, form.yearKind, form.age);
   const choice = PRESET_CHOICES.find(p => p.value === preset)!;
   const firstYear = new Date(
-    Math.min(...people.map(p => Date.parse(p.birthday)), Date.now())
+    Math.min(...(chosen.length ? chosen : people).map(p => Date.parse(p.birthday)), Date.now())
   ).getUTCFullYear();
   const years = Array.from(
     { length: parseInt(today.slice(0, 4)) - firstYear + 1 },

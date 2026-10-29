@@ -12,7 +12,7 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
 import { localDateString } from "../../lib/when";
-import { readLastPerson, returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
+import { returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { peopleChanges, takenLabel, type QueuedPhoto } from "../../lib/photoUploadQueue";
@@ -101,9 +101,7 @@ export function view(route: string, prefix: string, data: AddPhotoData): preact.
   }
 
   const fromRoute = getIdFromRoute(route);
-  const initial = [fromRoute, readLastPerson()].find(
-    id => id !== null && data.people.some(p => p.id === id)
-  );
+  const initial = data.people.some(p => p.id === fromRoute) ? fromRoute : null;
   const form = useAddPhotoForm(initial ?? null);
 
   if (!form.handedOff) {
@@ -259,8 +257,8 @@ function editDate(form: AddPhotoForm) {
 function onDone(form: AddPhotoForm, event: Event) {
   event.preventDefault();
   if (form.finishing) return;
-  if (form.items.some(item => item.state === "failed")) {
-    form.error = "Some photos did not upload. Retry or remove them first.";
+  if (form.items.length > 0 && form.items.every(item => item.state === "failed")) {
+    form.error = "None of these uploaded. Retry or remove them.";
     vlens.scheduleRedraw();
     return;
   }
@@ -269,6 +267,7 @@ function onDone(form: AddPhotoForm, event: Event) {
     vlens.scheduleRedraw();
     return;
   }
+  for (const item of form.items.filter(item => item.state === "failed")) remove(form, item);
   form.finishing = true;
   form.error = "";
   vlens.scheduleRedraw();
@@ -498,6 +497,10 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
           <div className="error-message" role="alert">
             {form.error}
           </div>
+        )}
+
+        {!form.finishing && form.items.some(item => item.state === "failed") && (
+          <p className="form-hint">Done skips the ones that didn’t upload.</p>
         )}
 
         <div className="entry-actions">
