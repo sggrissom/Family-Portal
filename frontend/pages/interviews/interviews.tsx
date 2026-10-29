@@ -104,7 +104,9 @@ const PersonRow = ({ row }: { row: server.FamilyInterviewRow }) => {
                   formatLongDate(row.last.date),
                   row.count
                 )
-              : t.never}
+              : row.inProgress.id
+                ? t.firstUnderWay
+                : t.never}
           </small>
         </span>
       </a>

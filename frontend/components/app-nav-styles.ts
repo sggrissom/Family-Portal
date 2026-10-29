@@ -247,6 +247,9 @@ block(`
   z-index: 20;
   width: 240px;
   max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 88px - var(--bottom-bar-space));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   background: var(--surface);
   border: 1px solid var(--border);

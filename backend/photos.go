@@ -146,8 +146,10 @@ type ListFamilyPhotosResponse struct {
 	NextCursor string `json:"nextCursor"`
 	// For a Query: the people named in it, and "semantic" or, when the vision
 	// daemon is unavailable, "text" (titles and descriptions only).
-	MatchedPersonIds []int  `json:"matchedPersonIds"`
-	SearchMode       string `json:"searchMode"`
+	MatchedPersonIds   []int  `json:"matchedPersonIds"`
+	SearchMode         string `json:"searchMode"`
+	FacesEnabled       bool   `json:"facesEnabled"`
+	SuggestionsEnabled bool   `json:"suggestionsEnabled"`
 }
 
 type AddPeopleToPhotoRequest struct {
@@ -1331,6 +1333,8 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 	if err != nil {
 		return
 	}
+	resp.FacesEnabled = cfg.EnableFaceTagging
+	resp.SuggestionsEnabled = globalVisionClient != nil
 
 	personIds := req.PersonIds
 	if req.PersonId > 0 {
