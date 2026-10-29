@@ -1,15 +1,17 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import { When, localDateString } from "../lib/when";
+import { When, ageDate, localDateString } from "../lib/when";
+import { formatLongDate } from "../lib/dateUtils";
 import { copy } from "../lib/copy";
 import "./when-control-styles";
 
 interface WhenControlProps {
   when: When;
   disabled?: boolean;
+  birthday?: string;
 }
 
-export const WhenControl = ({ when, disabled }: WhenControlProps) => (
+export const WhenControl = ({ when, disabled, birthday }: WhenControlProps) => (
   <div className="when-control">
     <select
       className="when-select"
@@ -58,5 +60,18 @@ export const WhenControl = ({ when, disabled }: WhenControlProps) => (
         />
       </span>
     )}
+
+    {when.mode === "age" && <AgePreview when={when} birthday={birthday} />}
   </div>
 );
+
+const AgePreview = ({ when, birthday }: { when: When; birthday?: string }) => {
+  const date = birthday ? ageDate(birthday, when) : null;
+  if (!date) return null;
+  const future = date > localDateString(new Date());
+  return (
+    <span className={future ? "when-age-date when-age-future" : "when-age-date"}>
+      {future ? "That age hasn't happened yet" : formatLongDate(date)}
+    </span>
+  );
+};

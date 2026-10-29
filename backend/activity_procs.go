@@ -69,6 +69,19 @@ func parseActivityDate(value *string) (time.Time, error) {
 	return parsed, nil
 }
 
+func parseActivityDateRange(start, end *string) (startDate, endDate time.Time, err error) {
+	if startDate, err = parseActivityDate(start); err != nil {
+		return
+	}
+	if endDate, err = parseActivityDate(end); err != nil {
+		return
+	}
+	if !startDate.IsZero() && !endDate.IsZero() && endDate.Before(startDate) {
+		err = errors.New("The end date is before the start date")
+	}
+	return
+}
+
 type ListActivitiesRequest struct {
 	FamilyId int `json:"familyId,omitempty"`
 }
@@ -306,11 +319,7 @@ func CreateSeason(ctx *vbeam.Context, req CreateSeasonRequest) (resp SeasonRespo
 		err = ErrNameRequired
 		return
 	}
-	startDate, err := parseActivityDate(req.StartDate)
-	if err != nil {
-		return
-	}
-	endDate, err := parseActivityDate(req.EndDate)
+	startDate, endDate, err := parseActivityDateRange(req.StartDate, req.EndDate)
 	if err != nil {
 		return
 	}
@@ -350,11 +359,7 @@ func UpdateSeason(ctx *vbeam.Context, req UpdateSeasonRequest) (resp SeasonRespo
 		err = ErrNameRequired
 		return
 	}
-	startDate, err := parseActivityDate(req.StartDate)
-	if err != nil {
-		return
-	}
-	endDate, err := parseActivityDate(req.EndDate)
+	startDate, endDate, err := parseActivityDateRange(req.StartDate, req.EndDate)
 	if err != nil {
 		return
 	}
@@ -447,11 +452,7 @@ func CreateEvent(ctx *vbeam.Context, req CreateEventRequest) (resp EventResponse
 		err = ErrNameRequired
 		return
 	}
-	startDate, err := parseActivityDate(req.StartDate)
-	if err != nil {
-		return
-	}
-	endDate, err := parseActivityDate(req.EndDate)
+	startDate, endDate, err := parseActivityDateRange(req.StartDate, req.EndDate)
 	if err != nil {
 		return
 	}
@@ -493,11 +494,7 @@ func UpdateEvent(ctx *vbeam.Context, req UpdateEventRequest) (resp EventResponse
 		err = ErrNameRequired
 		return
 	}
-	startDate, err := parseActivityDate(req.StartDate)
-	if err != nil {
-		return
-	}
-	endDate, err := parseActivityDate(req.EndDate)
+	startDate, endDate, err := parseActivityDateRange(req.StartDate, req.EndDate)
 	if err != nil {
 		return
 	}

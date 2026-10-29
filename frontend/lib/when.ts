@@ -25,13 +25,28 @@ export function localDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export function whenProblem(when: When): string {
+export function ageDate(birthday: string, when: When): string | null {
+  const years = parseInt(when.ageYears);
+  const months = when.ageMonths === "" ? 0 : parseInt(when.ageMonths);
+  const born = new Date(birthday);
+  if (isNaN(years) || isNaN(months) || isNaN(born.getTime()) || born.getUTCFullYear() < 1000) {
+    return null;
+  }
+  const date = new Date(
+    Date.UTC(born.getUTCFullYear() + years, born.getUTCMonth() + months, born.getUTCDate())
+  );
+  return date.toISOString().slice(0, 10);
+}
+
+export function whenProblem(when: When, birthday?: string): string {
   if (when.mode === "date" && !when.date) return "Pick a date";
   if (when.mode === "age") {
     const years = parseInt(when.ageYears);
     const months = when.ageMonths === "" ? 0 : parseInt(when.ageMonths);
     if (isNaN(years) || years < 0) return "Enter an age in years";
     if (isNaN(months) || months < 0 || months > 11) return "Months should be 0 to 11";
+    const date = birthday ? ageDate(birthday, when) : null;
+    if (date && date > localDateString(new Date())) return "That age hasn't happened yet";
   }
   return "";
 }

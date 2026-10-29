@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -186,7 +186,7 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
     vlens.scheduleRedraw();
     return;
   }
-  core.setRoute(`/profile/${milestone.personId}`);
+  navigate(`/profile/${milestone.personId}`);
 }
 
 interface EditMilestonePageProps {

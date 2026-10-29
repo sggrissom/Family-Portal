@@ -22,6 +22,7 @@ import { Icon } from "./Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
@@ -482,7 +483,7 @@ function photosPicked(state: NavState, event: Event) {
   rememberReturn(currentPath());
   const personId = state.selectedPersonId;
   closeSheet(state);
-  core.setRoute(addPath("/add-photo", personId));
+  navigate(addPath("/add-photo", personId));
 }
 
 function choosePerson(state: NavState, personId: number) {
@@ -504,7 +505,7 @@ function installSearchShortcut() {
     event.preventDefault();
     const input = document.getElementById("searchInput");
     if (input) input.focus();
-    else core.setRoute("/search");
+    else navigate("/search");
   });
 }
 

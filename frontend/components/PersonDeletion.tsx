@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import "./person-deletion-styles";
 
@@ -61,7 +61,7 @@ async function onDeleteClicked(state: PersonDeletionState, personId: number) {
   state.busy = false;
   if (resp && resp.success) {
     state.loadedFor = 0;
-    core.setRoute("/dashboard");
+    navigate("/dashboard");
   } else {
     state.error = err || "Could not delete this person";
   }

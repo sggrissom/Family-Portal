@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -88,7 +88,7 @@ export function view(
 
         <div className="iv-field">
           <span className="entry-label">{t.when}</span>
-          <WhenControl when={state.when} disabled={state.saving} />
+          <WhenControl when={state.when} disabled={state.saving} birthday={data.person.birthday} />
         </div>
 
         {sections.map(section => (
@@ -222,7 +222,7 @@ export function view(
 }
 
 async function save(state: PastState, data: server.GetInterviewSetupResponse) {
-  const problem = whenProblem(state.when);
+  const problem = whenProblem(state.when, data.person.birthday);
   if (problem) {
     state.error = problem;
     vlens.scheduleRedraw();
@@ -259,5 +259,5 @@ async function save(state: PastState, data: server.GetInterviewSetupResponse) {
     return;
   }
   state.source = null;
-  core.setRoute(`/interview/${resp.interview.id}`);
+  navigate(`/interview/${resp.interview.id}`);
 }

@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import {
@@ -101,7 +101,7 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
     if (result.success) {
       rpc.setAuthHeaders({ "x-auth-token": result.token });
       auth.setAuth(result.auth);
-      core.setRoute("/dashboard");
+      navigate("/dashboard");
     } else {
       form.error = result.error || "Failed to create account";
     }

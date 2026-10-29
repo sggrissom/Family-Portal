@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { copy } from "../../lib/copy";
 import { uploadPhoto } from "../../lib/photoUpload";
@@ -584,5 +584,5 @@ async function finish(state: AskState) {
     return;
   }
   state.source = null;
-  core.setRoute(`/interview/${state.interview.id}`);
+  navigate(`/interview/${state.interview.id}`);
 }

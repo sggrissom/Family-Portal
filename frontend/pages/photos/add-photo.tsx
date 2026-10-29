@@ -2,7 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -322,12 +322,12 @@ async function finish(form: AddPhotoForm) {
 
   form.items.forEach(item => URL.revokeObjectURL(item.previewUrl));
   const fallback = form.personIds.length === 1 ? `/profile/${form.personIds[0]}` : "/photos";
-  core.setRoute(takeReturnPath(fallback));
+  navigate(takeReturnPath(fallback));
 }
 
 function cancel(event: Event) {
   event.preventDefault();
-  core.setRoute(takeReturnPath("/dashboard"));
+  navigate(takeReturnPath("/dashboard"));
 }
 
 function statusLabel(item: UploadItem): string {

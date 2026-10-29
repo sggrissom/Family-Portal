@@ -1,4 +1,4 @@
-import * as core from "vlens/core";
+import { navigate } from "./navigate";
 import * as auth from "./authCache";
 import * as server from "../server";
 
@@ -52,13 +52,13 @@ async function restoreSession(): Promise<boolean> {
 
 export async function ensureAuthInFetch(): Promise<boolean> {
   if (await restoreSession()) return true;
-  core.setRoute("/login");
+  navigate("/login");
   return false;
 }
 
 export async function ensureNoAuthInFetch(): Promise<boolean> {
   if (await restoreSession()) {
-    core.setRoute("/dashboard");
+    navigate("/dashboard");
     return false;
   }
   return true;
@@ -68,7 +68,7 @@ export function requireAuthInView(): auth.AuthCache | null {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
     auth.clearAuth();
-    core.setRoute("/login");
+    navigate("/login");
     return null;
   }
   return currentAuth;

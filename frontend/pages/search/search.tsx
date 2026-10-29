@@ -3,6 +3,7 @@ import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
@@ -219,7 +220,7 @@ function openPhoto(
 ) {
   remember(state);
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(photo.image.id, true, matchStartMs(photo)));
+  navigate(viewPhotoRoute(photo.image.id, true, matchStartMs(photo)));
 }
 
 function focusOnMount(state: SearchState, el: HTMLInputElement | null) {

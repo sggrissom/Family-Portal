@@ -300,10 +300,12 @@ function approxPercentileRank(value: number, row: PercentileRow): number | "belo
   return 50;
 }
 
-function ordinalSuffix(n: number): string {
-  if (n === 1) return "st";
-  if (n === 2) return "nd";
-  if (n === 3) return "rd";
+export function ordinalSuffix(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return "th";
+  if (n % 10 === 1) return "st";
+  if (n % 10 === 2) return "nd";
+  if (n % 10 === 3) return "rd";
   return "th";
 }
 

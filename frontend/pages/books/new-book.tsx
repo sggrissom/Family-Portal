@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -206,7 +206,7 @@ async function create(
     form.error = createErr || "Could not create the book";
     return;
   }
-  core.setRoute(`/book/${created.book.id}`);
+  navigate(`/book/${created.book.id}`);
 }
 
 export function view(route: string, prefix: string, data: NewBookData): preact.ComponentChild {

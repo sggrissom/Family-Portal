@@ -633,7 +633,7 @@ const EntryRow = ({
         </span>
         <span className="event-count">
           {count === 0
-            ? `Not yet at a ${labels.event.toLowerCase()}`
+            ? `Not at any ${labels.event.toLowerCase()} yet`
             : count === 1
               ? `1 ${labels.appearance.toLowerCase()}`
               : `${count} ${labels.appearancePlural.toLowerCase()}`}
