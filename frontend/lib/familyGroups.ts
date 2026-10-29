@@ -143,12 +143,16 @@ export function groupFamily(people: server.Person[], relations: server.Relation[
 export function chipOrder(
   people: server.Person[],
   relations: server.Relation[],
-  familyId: number
+  familyId: number,
+  { includeUnborn = false } = {}
 ): server.Person[] {
   const groups = groupFamily(people, relations);
   const generations = groups.filter(g => g.key !== "unlinked").reverse();
   const unlinked = groups.filter(g => g.key === "unlinked");
-  const ordered = [...generations, ...unlinked].flatMap(g => g.people).filter(p => !p.isPregnancy);
+  const ordered = [
+    ...(includeUnborn ? people.filter(p => p.isPregnancy) : []),
+    ...[...generations, ...unlinked].flatMap(g => g.people).filter(p => !p.isPregnancy),
+  ];
   return [
     ...ordered.filter(p => p.familyId === familyId),
     ...ordered.filter(p => p.familyId !== familyId),

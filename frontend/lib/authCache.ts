@@ -12,6 +12,16 @@ export interface AuthCache {
   families?: FamilyRef[];
 }
 
+let _newAccount = false;
+
+export function markNewAccount() {
+  _newAccount = true;
+}
+
+export function isNewAccount(): boolean {
+  return _newAccount;
+}
+
 let _auth: AuthCache | null = (() => {
   try {
     return JSON.parse(localStorage.getItem("auth-cache")!) as AuthCache;

@@ -90,10 +90,7 @@ function nudgeAction(nudge: server.DashboardNudge): string {
 const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashboardResponse }) => {
   const people = data.people || [];
   const familyId = user.familyId;
-  const strip = [
-    ...people.filter(p => p.isPregnancy),
-    ...chipOrder(people, data.relations || [], familyId),
-  ];
+  const strip = chipOrder(people, data.relations || [], familyId, { includeUnborn: true });
   const names = chipLabels(people);
   const peopleById = new Map(people.map(p => [p.id, p]));
   const dismissed = readDismissed();
@@ -110,7 +107,9 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
 
   return (
     <div className="home-page">
-      <h1 className="home-greeting">Welcome back, {user.name}!</h1>
+      <h1 className="home-greeting">
+        {auth.isNewAccount() ? "Welcome" : "Welcome back"}, {user.name}!
+      </h1>
 
       <FamilyStrip people={strip} names={names} />
 

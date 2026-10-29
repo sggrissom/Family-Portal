@@ -124,7 +124,8 @@ export async function fetch(
   const ordered = chipOrder(
     (people.people || []).filter(person => auth.canContribute(person.familyId)),
     people.relations || [],
-    auth.getAuth()?.familyId ?? 0
+    auth.getAuth()?.familyId ?? 0,
+    { includeUnborn: true }
   );
   return [{ people: ordered, tags: tags.tags.filter(tag => auth.canContribute(tag.familyId)) }, ""];
 }

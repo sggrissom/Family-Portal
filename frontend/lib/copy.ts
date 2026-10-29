@@ -73,7 +73,7 @@ export const copy = {
     title: "Moment",
     who: "Who is this about?",
     whatHappened: "What happened?",
-    placeholder: "Wrote her name for the first time",
+    placeholder: "Rode a bike without training wheels",
     whatTheySaid: "What did they say?",
     quotePlaceholder: "The moon is following our car!",
     context: "Context (optional)",
