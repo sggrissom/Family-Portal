@@ -78,13 +78,13 @@ real landscape phone before fixing.
 
 ## Timelines
 
-- [ ] History and Story are mostly "X turned N" rows. With six people (one born
+- [x] History and Story are mostly "X turned N" rows. With six people (one born
   1960) the 2024 section is birthdays plus one photo, and an adult's Story is
   40 birthday rows and nothing else. Hide or collapse birthdays, at least for
   adults.
-- [ ] Measurement detail lists every relative with "No height data recorded
+- [x] Measurement detail lists every relative with "No height data recorded
   yet." Drop empty relatives or summarise them in one line.
-- [ ] A game result doesn't appear in the child's Story; it shows "vs Red Foxes
+- [x] A game result doesn't appear in the child's Story; it shows "vs Red Foxes
   / Blue Hawks" but not the outcome or score.
 
 ## Forms and defaults

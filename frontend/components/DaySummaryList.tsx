@@ -10,6 +10,7 @@ import { InterviewCards } from "./InterviewCard";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageInMonths, computePercentileLabel, isValidBirthday } from "../lib/growthPercentiles";
 import { copy } from "../lib/copy";
+import { matchupParts } from "../lib/matchups";
 import "./day-summary-styles";
 
 interface DaySummaryListProps {
@@ -116,7 +117,15 @@ const EventCard = ({
       </span>
       {dayEvent.appearances.map(({ detail, personIds }) => {
         const who = personIds.filter(id => id !== subjectId).map(name);
-        const results = (detail.results ?? []).map(r => r.label).filter(l => l.trim());
+        const opponentNamed = dayEvent.event.name
+          .toLowerCase()
+          .includes(detail.appearance.opponent.toLowerCase());
+        const matchup = matchupParts(
+          opponentNamed ? { ...detail.appearance, opponent: "" } : detail.appearance
+        );
+        const results = [...matchup, ...(detail.results ?? []).map(r => r.label)].filter(l =>
+          l.trim()
+        );
         return (
           <span key={detail.appearance.id} className="day-event-line">
             {detail.entry.name}

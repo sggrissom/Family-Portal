@@ -52,9 +52,12 @@ export function scoreText(m: Matchup): string {
   return `${m.scoreFor ?? "?"}–${m.scoreAgainst ?? "?"}`;
 }
 
+function resultText(m: Matchup): string {
+  return [outcomeLabel(m.outcome), scoreText(m)].filter(part => part).join(" ");
+}
+
 export function matchupParts(m: Matchup): string[] {
-  const result = [outcomeLabel(m.outcome), scoreText(m)].filter(part => part).join(" ");
-  return [m.round, m.opponent ? `vs ${m.opponent}` : "", result].filter(part => part);
+  return [m.round, m.opponent ? `vs ${m.opponent}` : "", resultText(m)].filter(part => part);
 }
 
 export function tallyOutcomes(matchups: Matchup[]): OutcomeTally {

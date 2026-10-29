@@ -30,6 +30,7 @@ import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
 import { summarizeDays } from "../../lib/daySummary";
+import { CHILDHOOD_BIRTHDAYS } from "../../lib/history";
 import { chapterTitle, storyChapters } from "../../lib/story";
 import { Metric, chartPoints, percentileBand } from "../../lib/ageChart";
 import { latestOf, timeAgo } from "../../lib/checkup";
@@ -456,7 +457,12 @@ const StoryTab = ({
     },
     [person],
     isValidBirthday(person.birthday) && !person.isPregnancy
-      ? { from: person.birthday.slice(0, 10), to: today }
+      ? {
+          from: person.birthday.slice(0, 10),
+          to: today,
+          maxAge: CHILDHOOD_BIRTHDAYS,
+          fromFirstRecord: true,
+        }
       : undefined
   );
 

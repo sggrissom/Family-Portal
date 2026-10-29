@@ -61,7 +61,8 @@ function eachDay(from: string, to: string): string[] {
 export function birthdaysBetween(
   people: server.Person[],
   from: string,
-  to: string
+  to: string,
+  maxAge = Infinity
 ): Map<string, Birthday[]> {
   const byDay = new Map<string, Birthday[]>();
   for (const day of eachDay(from, to)) {
@@ -71,7 +72,8 @@ export function birthdaysBetween(
       const born = new Date(person.birthday);
       if (isNaN(born.getTime())) continue;
       const age = year - born.getUTCFullYear();
-      if (age <= 0 || born.getUTCMonth() + 1 !== month || born.getUTCDate() !== date) continue;
+      if (age <= 0 || age > maxAge) continue;
+      if (born.getUTCMonth() + 1 !== month || born.getUTCDate() !== date) continue;
       const list = byDay.get(day) ?? [];
       list.push({ personId: person.id, age });
       byDay.set(day, list);
@@ -83,7 +85,7 @@ export function birthdaysBetween(
 export function summarizeDays(
   records: DayRecords,
   people: server.Person[],
-  range?: { from: string; to: string }
+  range?: { from: string; to: string; maxAge?: number; fromFirstRecord?: boolean }
 ): DaySummary[] {
   const days = new Map<string, DaySummary>();
   const summary = (day: string) => {
@@ -102,12 +104,6 @@ export function summarizeDays(
     }
     return found;
   };
-
-  if (range) {
-    for (const [day, birthdays] of birthdaysBetween(people, range.from, range.to)) {
-      summary(day).birthdays = birthdays;
-    }
-  }
 
   const { groups, loose } = groupInterviewAnswers(records.milestones);
   for (const milestone of loose) {
@@ -162,6 +158,14 @@ export function summarizeDays(
     if (entry.photos.photoIds.length < MOSAIC_SIZE) entry.photos.photoIds.push(image.id);
     for (const person of inPhoto ?? []) {
       if (!entry.photos.personIds.includes(person.id)) entry.photos.personIds.push(person.id);
+    }
+  }
+
+  const start = range?.fromFirstRecord ? [...days.keys()].sort()[0] : range?.from;
+  if (range && start) {
+    const from = start > range.from ? start : range.from;
+    for (const [day, birthdays] of birthdaysBetween(people, from, range.to, range.maxAge)) {
+      summary(day).birthdays = birthdays;
     }
   }
 

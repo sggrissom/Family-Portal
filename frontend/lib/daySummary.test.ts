@@ -191,3 +191,44 @@ describe("dayLabel", () => {
     expect(dayLabel("2025-12-31", "2026-01-02")).toBe("Wednesday, Dec 31, 2025");
   });
 });
+
+describe("childhood birthdays", () => {
+  const kid = person(5, "Kid", "2010-03-01T00:00:00Z");
+  const adult = person(6, "Adult", "1960-03-01T00:00:00Z");
+  const photo = (date: string) =>
+    ({
+      image: { id: 1, photoDate: date },
+      people: [],
+      similar: [],
+      match: null,
+    }) as unknown as server.PhotoWithPeople;
+
+  it("leaves out birthdays past the age limit", () => {
+    const days = summarizeDays({ photos: [], milestones: [], growth: [] }, [kid, adult], {
+      from: "2026-02-01",
+      to: "2026-03-31",
+      maxAge: 18,
+    });
+    expect(days.map(d => d.birthdays)).toEqual([[{ personId: 5, age: 16 }]]);
+  });
+
+  it("starts birthdays at the first record when asked", () => {
+    const days = summarizeDays(
+      { photos: [photo("2024-06-01T00:00:00Z")], milestones: [], growth: [] },
+      [kid],
+      {
+        from: "2010-03-01",
+        to: "2026-03-31",
+        fromFirstRecord: true,
+      }
+    );
+    expect(days.flatMap(d => d.birthdays.map(b => b.age))).toEqual([16, 15]);
+    expect(
+      summarizeDays({ photos: [], milestones: [], growth: [] }, [kid], {
+        from: "2010-03-01",
+        to: "2026-03-31",
+        fromFirstRecord: true,
+      })
+    ).toEqual([]);
+  });
+});
