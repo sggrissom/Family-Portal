@@ -5,6 +5,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import { logInfo } from "../../lib/logger";
+import { linkParts } from "../../lib/linkify";
 import {
   useChatWebsocket,
   connectWebSocket,
@@ -81,6 +82,13 @@ interface ChatPageProps {
   data: server.GetChatMessagesResponse;
 }
 
+function scrollToNewest() {
+  const messagesContainer = document.querySelector(".chat-messages");
+  if (messagesContainer) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+}
+
 const ChatPage = ({ user, data }: ChatPageProps) => {
   const messageForm = useMessageForm();
   const chatState = useChatState();
@@ -89,6 +97,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   if (data.messages && !chatState.initialized) {
     chatState.messages = data.messages;
     chatState.initialized = true;
+    setTimeout(scrollToNewest, 0);
   }
 
   const wsHandlers: WebSocketEventHandlers = {
@@ -102,12 +111,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
         chatState.messages = [message, ...chatState.messages];
         vlens.scheduleRedraw();
 
-        setTimeout(() => {
-          const messagesContainer = document.querySelector(".chat-messages");
-          if (messagesContainer) {
-            messagesContainer.scrollTop = 0;
-          }
-        }, 100);
+        setTimeout(scrollToNewest, 100);
       }
     },
 
@@ -223,12 +227,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
     chatState.messages = [optimisticMessage, ...chatState.messages];
     vlens.scheduleRedraw();
 
-    setTimeout(() => {
-      const messagesContainer = document.querySelector(".chat-messages");
-      if (messagesContainer) {
-        messagesContainer.scrollTop = 0;
-      }
-    }, 50);
+    setTimeout(scrollToNewest, 50);
 
     try {
       const [result, error] = await server.SendMessage({
@@ -379,7 +378,17 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
         <div className="message-content">
           {!isCurrentUser && <div className="message-sender">{msg.userName}</div>}
           <div className="message-bubble">
-            <p className="message-text">{msg.content}</p>
+            <p className="message-text">
+              {linkParts(msg.content).map((part, i) =>
+                part.href ? (
+                  <a key={i} href={part.href} target="_blank" rel="noopener noreferrer">
+                    {part.text}
+                  </a>
+                ) : (
+                  part.text
+                )
+              )}
+            </p>
             <div className="message-footer">
               <span className="message-timestamp">{formatTimestamp(msg.createdAt)}</span>
               {isPending && <span className="message-status">Sending...</span>}
@@ -401,10 +410,10 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
   };
 
   const todayKey = getTodayKey();
-  const newestFirstMessages = [...chatState.messages].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const oldestFirstMessages = [...chatState.messages].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
-  const threads = newestFirstMessages.reduce<
+  const threads = oldestFirstMessages.reduce<
     { key: string; label: string; messages: server.ChatMessage[] }[]
   >((acc, msg) => {
     const dayKey = getDayKey(msg.createdAt);

@@ -443,7 +443,7 @@ const Groups = ({
 
       {result.moments.length > 0 && (
         <Group
-          title={g.moments}
+          title={momentsTitle(result.moments)}
           action={
             result.momentCount > result.moments.length && (
               <button
@@ -623,6 +623,13 @@ const PersonRow = ({ person, terms }: { person: server.Person; terms: string[] }
   );
 };
 
+function momentsTitle(moments: server.Milestone[]): string {
+  const g = copy.search.groups;
+  const interviews = moments.filter(m => m.interviewId).length;
+  if (interviews === 0) return g.moments;
+  return interviews === moments.length ? g.interviews : g.momentsAndInterviews;
+}
+
 type MomentItem =
   | { kind: "moment"; moment: server.Milestone }
   | { kind: "interview"; group: InterviewGroup };
@@ -662,6 +669,7 @@ const Moments = ({
               group={item.group}
               person={people.get(item.group.personId)}
               interview={interviews.get(item.group.interviewId)}
+              matchesOnly
             />
           </div>
         ) : (

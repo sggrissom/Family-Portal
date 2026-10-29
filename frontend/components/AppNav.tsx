@@ -68,6 +68,7 @@ interface NavState {
   moreOpen: boolean;
   selectedPersonId: number | null;
   faceCount: number | null;
+  facesEnabled: boolean;
   dialog: ModalDialogState;
   moreDialog: ModalDialogState;
 }
@@ -83,6 +84,7 @@ const useNav = vlens.declareHook((): NavState => {
     moreOpen: false,
     selectedPersonId: null,
     faceCount: null,
+    facesEnabled: false,
     dialog: newModalDialog(),
     moreDialog: newModalDialog(),
   };
@@ -369,12 +371,14 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
       <li>
         <a href="/manage-tags">{copy.account.tags}</a>
       </li>
-      <li>
-        <a href="/faces">
-          {copy.account.faceReview}
-          {state.faceCount ? <span className="count-badge">{state.faceCount}</span> : null}
-        </a>
-      </li>
+      {state.facesEnabled && (
+        <li>
+          <a href="/faces">
+            {copy.account.faceReview}
+            {state.faceCount ? <span className="count-badge">{state.faceCount}</span> : null}
+          </a>
+        </li>
+      )}
       <li>
         <a href="/settings">{copy.account.settings}</a>
       </li>
@@ -561,6 +565,7 @@ async function loadFaceCount(state: NavState) {
   state.faceCount = 0;
   const [resp] = await server.GetFaceReview({});
   if (!resp || !resp.enabled) return;
+  state.facesEnabled = true;
   state.faceCount = resp.unknownCount + resp.autoCount;
   vlens.scheduleRedraw();
 }

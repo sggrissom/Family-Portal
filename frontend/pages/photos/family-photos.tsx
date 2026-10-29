@@ -39,7 +39,14 @@ export async function fetch(
   const filters = serverFilters(parseFilterQuery(route.split("?")[1] ?? ""));
   if (!(await ensureAuthInFetch())) {
     return rpc.ok<FamilyPhotosData>({
-      first: { photos: [], nextCursor: "", matchedPersonIds: [], searchMode: "" },
+      first: {
+        photos: [],
+        nextCursor: "",
+        matchedPersonIds: [],
+        searchMode: "",
+        facesEnabled: false,
+        suggestionsEnabled: false,
+      },
       filters,
     });
   }
@@ -190,10 +197,12 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
           >
             Filters{photoFilter.hasActiveFilters() && " •"}
           </button>
-          <nav className="photo-tools" aria-label="Photo tools">
-            <a href="/faces">Faces</a>
-            <a href="/suggestions">Suggestions</a>
-          </nav>
+          {(data.first.facesEnabled || data.first.suggestionsEnabled) && (
+            <nav className="photo-tools" aria-label="Photo tools">
+              {data.first.facesEnabled && <a href="/faces">Faces</a>}
+              {data.first.suggestionsEnabled && <a href="/suggestions">Suggestions</a>}
+            </nav>
+          )}
           {photoFilter.hasActiveFilters() && (
             <div className="photo-active-filters">
               <span>{photoFilter.getFilterSummary()}</span>

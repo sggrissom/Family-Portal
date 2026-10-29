@@ -174,21 +174,25 @@ export const BookReader = ({ book }: { book: Book }) => (
       </div>
     </header>
 
-    <nav className="book-contents" aria-label="Chapters">
-      <h2>Contents</h2>
-      <ol>
-        {book.chapters
-          .filter(chapter => chapter.title)
-          .map(chapter => (
-            <li key={chapter.id}>
-              <button type="button" onClick={() => scrollToChapter(chapter.id)}>
-                <span>{chapter.title}</span>
-                {chapter.dates && <span className="book-contents-dates">{chapter.dates}</span>}
-              </button>
-            </li>
-          ))}
-      </ol>
-    </nav>
+    {book.chapters.some(chapter => chapter.title) ? (
+      <nav className="book-contents" aria-label="Chapters">
+        <h2>Contents</h2>
+        <ol>
+          {book.chapters
+            .filter(chapter => chapter.title)
+            .map(chapter => (
+              <li key={chapter.id}>
+                <button type="button" onClick={() => scrollToChapter(chapter.id)}>
+                  <span>{chapter.title}</span>
+                  {chapter.dates && <span className="book-contents-dates">{chapter.dates}</span>}
+                </button>
+              </li>
+            ))}
+        </ol>
+      </nav>
+    ) : (
+      <p className="book-empty">Nothing is recorded for {book.dates} yet.</p>
+    )}
 
     {book.chapters.map(chapter => (
       <section

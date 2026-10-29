@@ -65,15 +65,17 @@ export function view(
           </>
         )}
 
-        <p className="books-samples">
-          Sample books:{" "}
-          {SAMPLES.map((sample, i) => (
-            <span key={sample.value}>
-              {i > 0 && " · "}
-              <a href={`/book/sample?sample=${sample.value}`}>{sample.label.toLowerCase()}</a>
-            </span>
-          ))}
-        </p>
+        {DEBUG && (
+          <p className="books-samples">
+            Sample books:{" "}
+            {SAMPLES.map((sample, i) => (
+              <span key={sample.value}>
+                {i > 0 && " · "}
+                <a href={`/book/sample?sample=${sample.value}`}>{sample.label.toLowerCase()}</a>
+              </span>
+            ))}
+          </p>
+        )}
       </main>
       <Footer />
     </div>

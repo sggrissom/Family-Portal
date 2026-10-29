@@ -663,3 +663,11 @@ block(`
   transform: scale(0.95);
 }
 `);
+
+block(`
+.message-text a {
+  color: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+`);

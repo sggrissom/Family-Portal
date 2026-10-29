@@ -123,25 +123,26 @@ real landscape phone before fixing.
 
 ## Layout and copy
 
-- [ ] The email-confirm banner and bottom nav are fixed and tall; in a short
-  window they covered the Add Family Member submit button.
-- [ ] The account dropdown can't clear the fixed bottom nav in a short window,
+- [x] The email-confirm banner and bottom nav are fixed and tall; in a short
+  window they covered the Add Family Member submit button. *(Not reproducible
+  at 844×390 or 667×375 — an artifact of the 207px-tall test window.)*
+- [x] The account dropdown can't clear the fixed bottom nav in a short window,
   so Log out was unreachable by click.
-- [ ] Photo grouping merges different photos: three distinct uploads from 2023,
+- [x] Photo grouping merges different photos: three distinct uploads from 2023,
   2024 and 2025 showed as one card ("1 photo · +2 similar", dated 2/14/2025,
   naming one person).
-- [ ] A book with nothing in range shows "CONTENTS ❦" and an empty body, with
+- [x] A book with nothing in range shows "CONTENTS ❦" and an empty body, with
   no "nothing recorded in 2024" note.
-- [ ] The Books page links "Sample books: rich · sparse · uneven · family year".
+- [x] The Books page links "Sample books: rich · sparse · uneven · family year".
   These read as dev fixtures and aren't DEBUG-gated
   (`frontend/pages/books/books.tsx`).
-- [ ] Faces and Suggestions links show in the Photos header even when those
+- [x] Faces and Suggestions links show in the Photos header even when those
   services aren't running; both pages then say there's nothing to review. Gate
   them on availability.
-- [ ] Interviews card says "No interviews yet" next to "Continue · 2 of 46".
-- [ ] Search snippet says "1 of 46 answers" for an interview with two answers,
+- [x] Interviews card says "No interviews yet" next to "Continue · 2 of 46".
+- [x] Search snippet says "1 of 46 answers" for an interview with two answers,
   and lists the interview under MOMENTS.
-- [ ] Chat shows newest messages on top and doesn't linkify URLs.
+- [x] Chat shows newest messages on top and doesn't linkify URLs.
 
 ## Checked and fine
 

@@ -347,3 +347,16 @@ func TestDeletingAPhotoDropsItsFeatures(t *testing.T) {
 		}
 	})
 }
+
+func TestFlatPhotosAreNotDuplicatesAcrossTime(t *testing.T) {
+	fx := setupResultsFixture(t)
+
+	first := fx.addPhotoAt(t, "plain-2023.jpg", featuresEpoch)
+	second := fx.addPhotoAt(t, "plain-2024.jpg", featuresEpoch.AddDate(1, 0, 0))
+	fx.recordFeatures(t, first, 0, 0.5)
+	fx.recordFeatures(t, second, 1, 0.5)
+
+	if g := fx.groupIdOf(t, second); g != 0 {
+		t.Errorf("two featureless photos a year apart were grouped (%d)", g)
+	}
+}
