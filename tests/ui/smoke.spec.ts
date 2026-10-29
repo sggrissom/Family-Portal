@@ -87,9 +87,7 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await page.getByRole("button", { name: "Create Account" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(
-      page.getByRole("heading", { name: `Welcome back, ${account.name}!` })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome, ${account.name}!` })).toBeVisible();
 
     // Signup creates the account holder as the family's first person, using
     // the account name when no profile name is given.
@@ -348,7 +346,7 @@ test("a measurement and a moment are edited without losing their units", async (
 
     await page.locator("#height").fill("99abc");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("above zero");
+    await expect(page.getByRole("alert")).toContainText("should be a number");
     await expect(page.locator("#height")).toHaveValue("99abc");
 
     await page.locator("#height").fill("99.5");
