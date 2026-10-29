@@ -270,6 +270,13 @@ func TestBestSameAge(t *testing.T) {
 	if got := bestSameAge(options, 16); got != 12 {
 		t.Errorf("best = %d, want closest two-person age 12", got)
 	}
+	adults := []SameAgeOption{{60, 2}, {462, 4}}
+	if got := bestSameAge(adults, 60); got != 60 {
+		t.Errorf("best = %d, want the childhood age over the parents' 462", got)
+	}
+	if got := bestSameAge([]SameAgeOption{{462, 2}}, 0); got != 462 {
+		t.Errorf("adults only = %d, want 462", got)
+	}
 	if got := bestSameAge(nil, 16); got != 16 {
 		t.Errorf("empty fallback = %d, want 16", got)
 	}

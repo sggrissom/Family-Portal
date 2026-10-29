@@ -15,6 +15,7 @@ import "./add-person-styles";
 type Data = {
   people: server.Person[];
   relations: server.Relation[];
+  families: server.FamilyLabel[];
   selfPersonId: number;
 };
 
@@ -55,6 +56,7 @@ export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({
     people: resp?.people ?? [],
     relations: resp?.relations ?? [],
+    families: resp?.families ?? [],
     selfPersonId: currentAuth?.personId ?? 0,
   });
 }
@@ -67,7 +69,10 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
 
   const form = useAddPersonForm();
   if (form.anchorId === 0) {
-    const preferred = data.people.find(p => p.id === data.selfPersonId) ?? data.people[0];
+    const familyId = targetFamilyId(form);
+    const inFamily = data.people.filter(p => p.familyId === familyId);
+    const preferred =
+      inFamily.find(p => p.id === data.selfPersonId) ?? inFamily[0] ?? data.people[0];
     form.anchorId = preferred ? preferred.id : 0;
   }
 
@@ -83,6 +88,7 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
         <AddPersonPage
           form={form}
           people={data.people}
+          families={data.families}
           suggestions={suggestions}
           relationLabel={relation ? relation.label : ""}
         />
@@ -90,6 +96,25 @@ export function view(route: string, prefix: string, data: Data): preact.Componen
       <Footer />
     </div>
   );
+}
+
+function targetFamilyId(form: AddPersonForm): number {
+  if (form.familyId) return form.familyId;
+  const families = auth_.contributableFamilies();
+  return (families.find(f => f.isPrimary) ?? families[0])?.id ?? 0;
+}
+
+function familyName(families: server.FamilyLabel[], familyId: number): string {
+  return families.find(f => f.id === familyId)?.name || "Family";
+}
+
+function anchorGroups(people: server.Person[], familyId: number) {
+  const ids = [familyId, ...new Set(people.map(p => p.familyId))].filter(
+    (id, i, all) => all.indexOf(id) === i
+  );
+  return ids
+    .map(id => ({ familyId: id, people: people.filter(p => p.familyId === id) }))
+    .filter(group => group.people.length > 0);
 }
 
 async function onAddPersonClicked(form: AddPersonForm, event: Event) {
@@ -105,7 +130,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       gender: form.gender,
       birthdate: form.birthdate,
       isPregnancy: form.isPregnancy,
-      familyId: form.familyId,
+      familyId: targetFamilyId(form),
       stated: relation ? relation.value : server.StatedNone,
       anchorId: relation ? form.anchorId : 0,
       additionalAnchorIds: relation ? form.coAnchors.ids : [],
@@ -148,11 +173,18 @@ function onRelationPicked(form: AddPersonForm, event: Event) {
 interface AddPersonPageProps {
   form: AddPersonForm;
   people: server.Person[];
+  families: server.FamilyLabel[];
   suggestions: CoAnchorSuggestion[];
   relationLabel: string;
 }
 
-const AddPersonPage = ({ form, people, suggestions, relationLabel }: AddPersonPageProps) => (
+const AddPersonPage = ({
+  form,
+  people,
+  families,
+  suggestions,
+  relationLabel,
+}: AddPersonPageProps) => (
   <div className="add-person-page">
     <div className="auth-card">
       <div className="auth-header">
@@ -178,9 +210,13 @@ const AddPersonPage = ({ form, people, suggestions, relationLabel }: AddPersonPa
           value={form.familyId}
           onChange={familyId => {
             form.familyId = familyId;
+            form.anchorId = 0;
           }}
           disabled={form.loading}
         />
+        {families.length > 1 && auth_.contributableFamilies().length < 2 && (
+          <p className="form-hint">Adds to {familyName(families, targetFamilyId(form))}.</p>
+        )}
 
         <div className="form-group">
           <label htmlFor="name">Name</label>
@@ -221,11 +257,23 @@ const AddPersonPage = ({ form, people, suggestions, relationLabel }: AddPersonPa
                 }}
                 disabled={form.loading || form.relationIndex < 0}
               >
-                {people.map(person => (
-                  <option key={person.id} value={String(person.id)}>
-                    {person.name}
-                  </option>
-                ))}
+                {anchorGroups(people, targetFamilyId(form)).map((group, _, groups) =>
+                  groups.length > 1 ? (
+                    <optgroup key={group.familyId} label={familyName(families, group.familyId)}>
+                      {group.people.map(person => (
+                        <option key={person.id} value={String(person.id)}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    group.people.map(person => (
+                      <option key={person.id} value={String(person.id)}>
+                        {person.name}
+                      </option>
+                    ))
+                  )
+                )}
               </select>
             </div>
             <CoAnchorPicker

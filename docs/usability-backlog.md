@@ -111,15 +111,15 @@ real landscape phone before fixing.
 
 ## Multi-family accounts
 
-- [ ] Adding a person never says which family it goes into. The view-only
+- [x] Adding a person never says which family it goes into. The view-only
   sitter added "Sitter Test"; it went silently into their own household, but
   the relationship dropdown listed only the other family's people, and the
   dashboard mixes both families' people with no labels.
-- [ ] Chat is per-family and unlabeled. Grandma lands in an empty chat for the
+- [x] Chat is per-family and unlabeled. Grandma lands in an empty chat for the
   two-person grandparents' family and can't reach the Whitfield thread, with
   nothing saying whose chat it is. Label the family in the add-person form,
   chat header and dashboard groups.
-- [ ] Same age opens on "Everyone at 38 years 6 months" (the parents' age). A
+- [x] Same age opens on "Everyone at 38 years 6 months" (the parents' age). A
   child's age, or the youngest child's, would be a more useful default.
 
 ## Layout and copy

@@ -283,3 +283,26 @@ block(`
   color: var(--muted);
 }
 `);
+
+block(`
+.family-strip-family {
+  flex-shrink: 0;
+  align-self: center;
+  max-width: 72px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+`);
+
+block(`
+.family-strip-family:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+`);

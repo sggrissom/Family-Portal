@@ -6,6 +6,7 @@ import (
 	"family/cfg"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -493,11 +494,12 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			http.Error(w, "Authentication failed", http.StatusUnauthorized)
 			return
 		}
-		var member bool
+		var familyId int
+		var accessErr error
 		vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
-			member = CanAccessFamily(tx, user, user.FamilyId, AccessView)
+			familyId, accessErr = chatFamilyFor(tx, user, r.URL.Query().Get("family"))
 		})
-		if !member {
+		if accessErr != nil {
 			http.Error(w, "Not a member of this family", http.StatusForbidden)
 			return
 		}
@@ -518,7 +520,7 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 			conn:     conn,
 			send:     make(chan []byte, 256),
 			userId:   user.Id,
-			familyId: user.FamilyId,
+			familyId: familyId,
 			userName: user.Name,
 			lastSeen: time.Now(),
 			ctx:      ctx,
@@ -530,6 +532,11 @@ func HandleWebSocketChat(app *vbeam.Application) http.HandlerFunc {
 		go client.writePump()
 		go client.readPump()
 	}
+}
+
+func chatFamilyFor(tx *vbolt.Tx, user User, requested string) (int, error) {
+	familyId, _ := strconv.Atoi(requested)
+	return ResolveActingFamily(tx, user, max(familyId, 0), AccessView)
 }
 
 func authenticateWebSocketRequest(r *http.Request, app *vbeam.Application) (User, error) {

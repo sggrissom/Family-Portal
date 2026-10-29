@@ -192,16 +192,26 @@ func sameAgeDefaults(ctx *vbeam.Context, user User, candidates []FamilyTimelineI
 			from = &candidates[i].Person
 		}
 	}
-	if from == nil {
+	youngest := func(keep func(Person) bool) *Person {
+		var found *Person
 		for i := range candidates {
 			person := &candidates[i].Person
-			if !CanAccessFamily(ctx.Tx, user, person.FamilyId, AccessContribute) {
-				continue
-			}
-			if from == nil || person.Birthday.After(from.Birthday) {
-				from = person
+			if keep(*person) && (found == nil || person.Birthday.After(found.Birthday)) {
+				found = person
 			}
 		}
+		return found
+	}
+	contributes := func(p Person) bool { return CanAccessFamily(ctx.Tx, user, p.FamilyId, AccessContribute) }
+	child := func(p Person) bool { return monthsBetween(p.Birthday, today) < 18*12 }
+	if from == nil {
+		from = youngest(func(p Person) bool { return contributes(p) && child(p) })
+	}
+	if from == nil {
+		from = youngest(child)
+	}
+	if from == nil {
+		from = youngest(contributes)
 	}
 	if from != nil {
 		fromPersonId = from.Id
@@ -384,6 +394,15 @@ func sameAgeOptionList(counts map[int]int) []SameAgeOption {
 }
 
 func bestSameAge(options []SameAgeOption, fallback int) int {
+	var childhood []SameAgeOption
+	for _, option := range options {
+		if option.AgeMonths < 18*12 && option.PeopleCount > 0 {
+			childhood = append(childhood, option)
+		}
+	}
+	if len(childhood) > 0 {
+		options = childhood
+	}
 	best, count := fallback, 0
 	for _, option := range options {
 		if option.PeopleCount > count || (option.PeopleCount == count && math.Abs(float64(option.AgeMonths-fallback)) < math.Abs(float64(best-fallback))) {
