@@ -25,6 +25,7 @@ import {
   emptyMatchupDraft,
   hasMatchup,
   matchupToDraft,
+  outcomeContradictsScore,
   outcomeFromScore,
   outcomeOptions,
   runSummary,
@@ -645,7 +646,7 @@ function usedValues(state: CompetitionState, pick: (a: server.Appearance) => str
 function onScoreInput(draft: MatchupDraft, field: "scoreFor" | "scoreAgainst", value: string) {
   const derivedBefore = outcomeFromScore(draft);
   draft[field] = value;
-  if (draft.outcome === "" || draft.outcome === derivedBefore) {
+  if (draft.outcome === "" || draft.outcome === derivedBefore || outcomeContradictsScore(draft)) {
     draft.outcome = outcomeFromScore(draft);
   }
   vlens.scheduleRedraw();

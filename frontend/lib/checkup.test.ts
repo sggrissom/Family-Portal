@@ -12,6 +12,7 @@ import {
   weightValue,
   latestOf,
   newUnitPrefs,
+  plausibilityWarning,
   rememberUnits,
   timeAgo,
 } from "./checkup";
@@ -241,5 +242,56 @@ describe("describeLast", () => {
     expect(timeAgo("2026-09-20T08:00:00Z", now)).toBe("7 days ago");
     expect(timeAgo("2026-08-20T08:00:00Z", now)).toBe("5 weeks ago");
     expect(timeAgo("2023-09-20T08:00:00Z", now)).toBe("3 years ago");
+  });
+});
+
+describe("plausibilityWarning", () => {
+  const now = new Date("2026-06-01T12:00:00");
+  const nineYears = 9 * 12;
+
+  it("warns about a weight far outside the range for the age", () => {
+    const warning = plausibilityWarning(
+      { height: null, weight: { value: 610, unit: "lbs" } },
+      nineYears,
+      server.Female,
+      [],
+      now
+    );
+    expect(warning).toContain("610 lbs is unusual");
+  });
+
+  it("accepts an ordinary measurement", () => {
+    expect(
+      plausibilityWarning(
+        { height: { value: 133, unit: "cm" }, weight: { value: 62, unit: "lbs" } },
+        nineYears,
+        server.Female,
+        [growth(1, server.Weight, 60, "lbs", "2026-03-01")],
+        now
+      )
+    ).toBe("");
+  });
+
+  it("warns about a big jump from a recent measurement, even for an adult", () => {
+    const warning = plausibilityWarning(
+      { height: null, weight: { value: 180, unit: "kg" } },
+      40 * 12,
+      server.Male,
+      [growth(1, server.Weight, 180, "lbs", "2026-05-01")],
+      now
+    );
+    expect(warning).toContain("big change from 180 lbs");
+  });
+
+  it("ignores an old measurement and an unknown age", () => {
+    expect(
+      plausibilityWarning(
+        { height: null, weight: { value: 180, unit: "kg" } },
+        null,
+        server.Male,
+        [growth(1, server.Weight, 180, "lbs", "2024-01-01")],
+        now
+      )
+    ).toBe("");
   });
 });

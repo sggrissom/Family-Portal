@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newWhen, whenProblem, whenRequest } from "./when";
+import { ageDate, newWhen, whenProblem, whenRequest } from "./when";
 
 const now = new Date(2026, 8, 27, 9, 30);
 
@@ -39,5 +39,20 @@ describe("whenProblem", () => {
     expect(whenProblem({ ...newWhen(), mode: "age", ageYears: "2", ageMonths: "12" })).toBe(
       "Months should be 0 to 11"
     );
+  });
+});
+
+describe("ageDate", () => {
+  it("resolves an age against a stored birthday", () => {
+    const when = { ...newWhen(), mode: "age" as const, ageYears: "2", ageMonths: "3" };
+    expect(ageDate("2020-02-14T00:00:00Z", when)).toBe("2022-05-14");
+  });
+
+  it("refuses an age that hasn't happened yet", () => {
+    const when = { ...newWhen(), mode: "age" as const, ageYears: "9" };
+    const sixYearsAgo = `${new Date().getUTCFullYear() - 6}-01-01T00:00:00Z`;
+    expect(whenProblem(when, sixYearsAgo)).toBe("That age hasn't happened yet");
+    expect(whenProblem({ ...when, ageYears: "5" }, sixYearsAgo)).toBe("");
+    expect(whenProblem(when)).toBe("");
   });
 });

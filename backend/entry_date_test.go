@@ -66,6 +66,10 @@ func TestResolveEntryDate(t *testing.T) {
 	if _, err := resolveEntryDate("Measurement", "date", nil, nil, nil, birthday); err == nil || !strings.HasPrefix(err.Error(), "Measurement date is required") {
 		t.Fatalf("measurement missing-date error = %v", err)
 	}
+	sixYearsAgo := dayStart(time.Now().UTC()).AddDate(-6, 0, 0)
+	if _, err := resolveEntryDate("Moment", "age", nil, intPtr(9), nil, sixYearsAgo); err == nil {
+		t.Fatal("expected an age older than the person to be rejected")
+	}
 }
 
 func TestEntryProcsResolveDatesOnAddAndUpdate(t *testing.T) {

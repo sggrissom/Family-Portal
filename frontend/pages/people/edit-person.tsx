@@ -1,7 +1,7 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -108,7 +108,7 @@ async function onUpdatePersonClicked(form: EditPersonForm, personId: number, eve
     form.loading = false;
 
     if (resp) {
-      core.setRoute(`/profile/${personId}`);
+      navigate(`/profile/${personId}`);
     } else {
       form.error = err || "Failed to update family member";
     }

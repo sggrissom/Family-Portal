@@ -6,6 +6,7 @@ import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth from "../../lib/authCache";
 import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
@@ -74,7 +75,7 @@ interface FamilyPhotosPageProps {
 
 function openPhoto(photoId: number, photos: server.PhotoWithPeople[], startMs = 0) {
   saveSequence({ ids: photos.map(p => p.image.id), backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(photoId, true, startMs));
+  navigate(viewPhotoRoute(photoId, true, startMs));
 }
 
 const useSearchDraft = vlens.declareHook(() => ({ text: "", syncedTo: "" }));
@@ -92,7 +93,7 @@ function matchedNames(photos: server.PhotoWithPeople[], ids: number[]): string {
 
 function openStack(cover: server.PhotoWithPeople) {
   saveSequence({ ids: [cover.image.id, ...(cover.similar ?? [])], backRoute: core.getRoute() });
-  core.setRoute(viewPhotoRoute(cover.image.id, true));
+  navigate(viewPhotoRoute(cover.image.id, true));
 }
 
 const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {

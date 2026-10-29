@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { copy } from "../../lib/copy";
 import { canContribute } from "../../lib/authCache";
@@ -356,7 +356,7 @@ async function saveDetails(state: ViewState, change: Partial<server.UpdateInterv
     return;
   }
   if (change.status === "in-progress") {
-    core.setRoute(`/interview/${i.id}/ask`);
+    navigate(`/interview/${i.id}/ask`);
     return;
   }
   const dateMoved = resp.interview.date !== i.date;
@@ -426,5 +426,5 @@ async function onDelete(state: ViewState) {
     vlens.scheduleRedraw();
     return;
   }
-  core.setRoute(`/profile/${resp.personId}?tab=interviews`);
+  navigate(`/profile/${resp.personId}?tab=interviews`);
 }

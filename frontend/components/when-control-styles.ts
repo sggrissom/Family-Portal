@@ -55,3 +55,16 @@ block(`
   font: inherit;
 }
 `);
+
+block(`
+.when-age-date {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+`);
+
+block(`
+.when-age-future {
+  color: var(--danger);
+}
+`);

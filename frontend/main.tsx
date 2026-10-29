@@ -1,5 +1,6 @@
 import * as vlens from "vlens";
-import { getRoute, replaceRoute, setRoute, setErrorView, type RouteHandler } from "vlens/core";
+import { getRoute, replaceRoute, setErrorView, type RouteHandler } from "vlens/core";
+import { navigate } from "./lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as preact from "preact";
 import * as server from "./server";
@@ -18,7 +19,7 @@ function customErrorView(route: string, prefix: string, error: string): preact.C
     auth.clearAuth();
 
     setTimeout(() => {
-      setRoute("/");
+      navigate("/");
     }, 0);
 
     return preact.h("div", { className: "auth-failure-redirect" }, [

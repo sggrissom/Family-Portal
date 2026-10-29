@@ -1,19 +1,13 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { copy } from "../../lib/copy";
 import { When, whenProblem, whenRequest } from "../../lib/when";
-import {
-  CheckupEntry,
-  EDIT_WEIGHT_UNITS,
-  entryForRecord,
-  heightValue,
-  weightValue,
-} from "../../lib/checkup";
+import { CheckupEntry, entryForRecord, heightValue, weightValue } from "../../lib/checkup";
 import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
 import { canContribute } from "../../lib/authCache";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
@@ -133,7 +127,7 @@ async function save(form: EditGrowthForm, record: server.GrowthData, event: Even
     vlens.scheduleRedraw();
     return;
   }
-  core.setRoute(`/profile/${record.personId}`);
+  navigate(`/profile/${record.personId}`);
 }
 
 const EditGrowthPage = ({ form, record }: { form: EditGrowthForm; record: server.GrowthData }) => {
@@ -163,7 +157,7 @@ const EditGrowthPage = ({ form, record }: { form: EditGrowthForm; record: server
         {form.kind === "height" ? (
           <HeightField entry={form.entry} disabled={disabled} />
         ) : (
-          <WeightField entry={form.entry} disabled={disabled} units={EDIT_WEIGHT_UNITS} />
+          <WeightField entry={form.entry} disabled={disabled} />
         )}
 
         <div className="entry-actions">

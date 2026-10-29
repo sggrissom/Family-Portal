@@ -33,7 +33,11 @@ func resolveEntryDate(noun string, inputType string, date *string, ageYears *int
 			}
 			months = *ageMonths
 		}
-		return dayStart(birthday).AddDate(*ageYears, months, 0), nil
+		resolved := dayStart(birthday).AddDate(*ageYears, months, 0)
+		if resolved.After(dayStart(time.Now().UTC()).AddDate(0, 0, 1)) {
+			return time.Time{}, errors.New("That age hasn't happened yet")
+		}
+		return resolved, nil
 	}
 	return time.Time{}, validateEntryInputType(inputType)
 }

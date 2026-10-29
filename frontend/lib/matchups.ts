@@ -130,6 +130,7 @@ export function draftError(draft: MatchupDraft): string {
   if (parseScore(draft.scoreFor) === undefined || parseScore(draft.scoreAgainst) === undefined) {
     return "A score must be a whole number.";
   }
+  if (outcomeContradictsScore(draft)) return "The outcome doesn't match the score.";
   return "";
 }
 
@@ -150,4 +151,10 @@ export function outcomeFromScore(draft: MatchupDraft): string {
   if (ours > theirs) return OutcomeWin;
   if (ours < theirs) return OutcomeLoss;
   return OutcomeDraw;
+}
+
+export function outcomeContradictsScore(draft: MatchupDraft): boolean {
+  const derived = outcomeFromScore(draft);
+  if (derived === "" || draft.outcome === "" || draft.outcome === derived) return false;
+  return derived !== OutcomeDraw;
 }

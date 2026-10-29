@@ -1,6 +1,6 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -262,5 +262,5 @@ async function start(state: SetupState, data: server.GetInterviewSetupResponse) 
     vlens.scheduleRedraw();
     return;
   }
-  core.setRoute(`/interview/${resp.interview.id}/ask`);
+  navigate(`/interview/${resp.interview.id}/ask`);
 }

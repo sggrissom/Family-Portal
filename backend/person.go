@@ -506,6 +506,13 @@ func validateAddPersonRequest(req AddPersonRequest) error {
 	if req.Birthdate == "" {
 		return errors.New("Birthdate is required")
 	}
+	birthday, err := time.Parse("2006-01-02", req.Birthdate)
+	if err != nil {
+		return errors.New("Invalid birthdate format. Use YYYY-MM-DD")
+	}
+	if !req.IsPregnancy && birthday.After(time.Now().UTC().AddDate(0, 0, 1)) {
+		return errors.New("That birthday is in the future. For an expected baby, tick \"Baby isn't born yet\".")
+	}
 	return nil
 }
 

@@ -2,7 +2,7 @@ import { Mic } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header } from "../../layout";
@@ -216,7 +216,7 @@ async function deleteBook(state: EditorState, bookId: number) {
     vlens.scheduleRedraw();
     return;
   }
-  core.setRoute("/books");
+  navigate("/books");
 }
 
 export function view(

@@ -2,7 +2,7 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
 import * as auth_ from "../../lib/authCache";
-import * as core from "vlens/core";
+import { navigate } from "../../lib/navigate";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
@@ -123,7 +123,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.isPregnancy = false;
       form.familyId = 0;
 
-      core.setRoute("/dashboard");
+      navigate("/dashboard");
     } else {
       form.error = err || "Failed to add family member";
     }

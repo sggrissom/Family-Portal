@@ -69,12 +69,7 @@ export const HeightField = ({ entry, disabled, note }: FieldProps) => (
   </div>
 );
 
-export const WeightField = ({
-  entry,
-  disabled,
-  note,
-  units = WEIGHT_UNITS,
-}: FieldProps & { units?: { value: WeightUnit; label: string }[] }) => (
+export const WeightField = ({ entry, disabled, note }: FieldProps) => (
   <div className="checkup-field">
     <div className="checkup-field-head">
       <label htmlFor={entry.weightUnit === "lb-oz" ? "pounds" : "weight"}>
@@ -82,7 +77,7 @@ export const WeightField = ({
       </label>
       <SegmentedControl
         label={copy.measurement.weightUnit}
-        options={units}
+        options={WEIGHT_UNITS}
         value={entry.weightUnit}
         onChange={vlens.cachePartial(setWeightUnit, entry)}
         disabled={disabled}
