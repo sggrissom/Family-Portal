@@ -4,6 +4,8 @@ import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
+import * as auth from "../../lib/authCache";
+import { navigate } from "../../lib/navigate";
 import { logInfo } from "../../lib/logger";
 import { linkParts } from "../../lib/linkify";
 import {
@@ -53,7 +55,16 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.GetChatMessagesResponse>({ messages: [] });
   }
 
-  return server.GetChatMessages({ limit: null, offset: null, familyId: 0 });
+  return server.GetChatMessages({ limit: null, offset: null, familyId: chatFamilyId(route) });
+}
+
+function chatFamilyId(route: string): number {
+  const requested = Number(new URLSearchParams(route.split("?")[1] ?? "").get("family"));
+  return requested > 0 ? requested : (auth.getAuth()?.familyId ?? 0);
+}
+
+function familyName(familyId: number): string {
+  return auth.getFamilies().find(f => f.id === familyId)?.name || "Family";
 }
 
 export function view(
@@ -70,7 +81,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="chat-container">
-        <ChatPage user={currentAuth} data={data} />
+        <ChatPage user={currentAuth} data={data} familyId={chatFamilyId(route)} />
       </main>
       <Footer />
     </div>
@@ -80,6 +91,7 @@ export function view(
 interface ChatPageProps {
   user: any;
   data: server.GetChatMessagesResponse;
+  familyId: number;
 }
 
 function scrollToNewest() {
@@ -89,10 +101,13 @@ function scrollToNewest() {
   }
 }
 
-const ChatPage = ({ user, data }: ChatPageProps) => {
+const ChatPage = ({ user, data, familyId }: ChatPageProps) => {
   const messageForm = useMessageForm();
   const chatState = useChatState();
   const wsState = useChatWebsocket();
+  wsState.familyId = familyId;
+  const families = auth.getFamilies();
+  const canPost = auth.canContribute(familyId);
 
   if (data.messages && !chatState.initialized) {
     chatState.messages = data.messages;
@@ -216,7 +231,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
 
     const optimisticMessage: server.ChatMessage = {
       id: -Date.now(),
-      familyId: user.familyId,
+      familyId,
       userId: user.id,
       userName: user.name,
       content: messageContent,
@@ -233,7 +248,7 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       const [result, error] = await server.SendMessage({
         content: messageContent,
         clientMessageId: clientMessageId,
-        familyId: 0,
+        familyId,
       });
 
       if (result && !error) {
@@ -484,7 +499,25 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
       <div className="chat-header">
         <div className="chat-header-content">
           <h1>Family Chat</h1>
-          <p>Stay connected with your family</p>
+          {families.length > 1 ? (
+            <select
+              className="chat-family-select"
+              aria-label="Which family"
+              value={String(familyId)}
+              onInput={e => {
+                destroyWebSocket(wsState);
+                navigate(`/chat?family=${(e.currentTarget as HTMLSelectElement).value}`);
+              }}
+            >
+              {families.map(f => (
+                <option key={f.id} value={String(f.id)}>
+                  {f.name || `Family ${f.id}`}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p>Stay connected with your family</p>
+          )}
         </div>
         {isWebSocketSupported() && (
           <div className="connection-status">
@@ -517,13 +550,15 @@ const ChatPage = ({ user, data }: ChatPageProps) => {
             <input
               type="text"
               aria-label="Message"
-              placeholder="Type your message..."
+              placeholder={
+                canPost ? `Message ${familyName(familyId)}…` : "You can read this chat but not post"
+              }
               value={messageForm.message}
               onInput={e => {
                 messageForm.message = (e.target as HTMLInputElement).value;
                 vlens.scheduleRedraw();
               }}
-              disabled={messageForm.sending}
+              disabled={messageForm.sending || !canPost}
               className="message-input"
               autoComplete="off"
             />

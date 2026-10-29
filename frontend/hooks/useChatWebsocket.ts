@@ -84,6 +84,7 @@ export interface WebSocketState {
   lastActivityTime: number;
   watchdogInterval: number | null;
   watchdogTimeout: number;
+  familyId: number;
 }
 
 export const useChatWebsocket = vlens.declareHook(
@@ -106,6 +107,7 @@ export const useChatWebsocket = vlens.declareHook(
     lastActivityTime: 0,
     watchdogInterval: null,
     watchdogTimeout: 90000,
+    familyId: 0,
   })
 );
 
@@ -127,7 +129,8 @@ export function connectWebSocket(
   try {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat`;
+    const query = state.familyId ? `?family=${state.familyId}` : "";
+    const wsUrl = `${protocol}//${host}/ws/chat${query}`;
 
     const socket = new WebSocket(wsUrl);
     state.socket = socket;

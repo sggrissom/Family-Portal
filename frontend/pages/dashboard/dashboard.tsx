@@ -111,7 +111,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
         {auth.isNewAccount() ? "Welcome" : "Welcome back"}, {user.name}!
       </h1>
 
-      <FamilyStrip people={strip} names={names} />
+      <FamilyStrip people={strip} names={names} families={data.families ?? []} />
 
       {nudges.length > 0 && (
         <div className="home-nudges">
@@ -245,12 +245,16 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
 const FamilyStrip = ({
   people,
   names,
+  families,
 }: {
   people: server.Person[];
   names: Map<number, string>;
+  families: server.FamilyLabel[];
 }) => {
   const photoStatus = usePhotoStatus();
   const today = new Date();
+  const labelFamilies = new Set(people.map(p => p.familyId)).size > 1;
+  const familyName = (id: number) => families.find(f => f.id === id)?.name || "Family";
 
   return (
     <nav className="family-strip" aria-label="Family">
@@ -258,33 +262,41 @@ const FamilyStrip = ({
         const age = person.isPregnancy
           ? dueSummary(person.birthday, today)
           : compactAge(person.birthday, today);
+        const startsFamily =
+          labelFamilies && (index === 0 || people[index - 1].familyId !== person.familyId);
         return (
-          <a
-            key={person.id}
-            href={`/profile/${person.id}`}
-            aria-label={age ? `${person.name}, ${age}` : person.name}
-            className={person.isPregnancy ? "family-strip-person pregnancy" : "family-strip-person"}
-          >
-            <span className="family-strip-avatar" aria-hidden="true">
-              {person.profilePhotoId ? (
-                <ProfileImage
-                  photoId={person.profilePhotoId}
-                  alt=""
-                  loading={index < 6 ? "eager" : "lazy"}
-                  status={photoStatus.getStatus(person.profilePhotoId)}
-                  cropX={person.profileCropX}
-                  cropY={person.profileCropY}
-                  cropScale={person.profileCropScale}
-                />
-              ) : person.isPregnancy ? (
-                <Icon symbol={Baby} />
-              ) : (
-                initial(person.name)
-              )}
-            </span>
-            <span className="family-strip-name">{names.get(person.id) ?? person.name}</span>
-            <span className="family-strip-age">{age}</span>
-          </a>
+          <preact.Fragment key={person.id}>
+            {startsFamily && (
+              <span className="family-strip-family">{familyName(person.familyId)}</span>
+            )}
+            <a
+              href={`/profile/${person.id}`}
+              aria-label={age ? `${person.name}, ${age}` : person.name}
+              className={
+                person.isPregnancy ? "family-strip-person pregnancy" : "family-strip-person"
+              }
+            >
+              <span className="family-strip-avatar" aria-hidden="true">
+                {person.profilePhotoId ? (
+                  <ProfileImage
+                    photoId={person.profilePhotoId}
+                    alt=""
+                    loading={index < 6 ? "eager" : "lazy"}
+                    status={photoStatus.getStatus(person.profilePhotoId)}
+                    cropX={person.profileCropX}
+                    cropY={person.profileCropY}
+                    cropScale={person.profileCropScale}
+                  />
+                ) : person.isPregnancy ? (
+                  <Icon symbol={Baby} />
+                ) : (
+                  initial(person.name)
+                )}
+              </span>
+              <span className="family-strip-name">{names.get(person.id) ?? person.name}</span>
+              <span className="family-strip-age">{age}</span>
+            </a>
+          </preact.Fragment>
         );
       })}
       {auth.canContributeAnywhere() && (
