@@ -366,8 +366,12 @@ test("a measurement and a moment are edited without losing their units", async (
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("dialog").getByRole("link", { name: "Moment" }).click();
     await expect(page).toHaveURL(/\/add-milestone/);
-    const chip = page.getByRole("button", { name: kid.name });
-    if ((await chip.getAttribute("aria-pressed")) !== "true") await chip.click();
+    // As above, wait for the form so the closing sheet's chip isn't matched.
+    await expect(page.getByRole("heading", { name: "Moment", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: kid.name })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     await page.locator("#description").fill("Rode a bike");
     await page.getByLabel("When").selectOption("date");
     await page.getByLabel("Date", { exact: true }).fill("2024-05-04");
