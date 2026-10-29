@@ -282,6 +282,27 @@ func (t mediaTools) remux(ctx context.Context, src, dst string, p videoProbe) er
 	return err
 }
 
+// preparePlayback copies H.264 losslessly and converts HEVC to an SDR H.264
+// derivative. FFmpeg applies the display matrix before the filters, preserving
+// portrait orientation. Limit encoder/filter threads on the shared VPS.
+func (t mediaTools) preparePlayback(ctx context.Context, src, dst string, p videoProbe) error {
+	if p.VideoCodec != "hevc" {
+		return t.remux(ctx, src, dst, p)
+	}
+	filter := ""
+	if p.HDR {
+		filter = strings.Replace(hdrTonemap, "format=yuvj420p", "format=yuv420p", 1) + ","
+	}
+	filter += "scale=w='min(1920,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1"
+	args := []string{"-nostdin", "-v", "error", "-y", "-threads", "2", "-filter_threads", "1", "-i", src,
+		"-map", "0:v:0", "-map", "0:a:0?", "-vf", filter,
+		"-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p", "-threads", "2",
+		"-c:a", "aac", "-b:a", "160k", "-metadata:s:v:0", "rotate=0",
+		"-movflags", "+faststart", "-f", "mp4", dst}
+	_, err := t.run(ctx, time.Hour, t.ffmpeg, args...)
+	return err
+}
+
 const hdrTonemap = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuvj420p"
 
 func (t mediaTools) poster(ctx context.Context, src, dst string, p videoProbe) error {
