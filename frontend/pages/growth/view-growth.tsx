@@ -154,7 +154,9 @@ const ViewGrowthPage = ({
     familyMembers.map(item => ({ person: item.person, growthData: item.growthData }))
   );
 
-  const { siblings, parents, others } = splitComparisonsByRelation(comparisons, relationGroups);
+  const withData = comparisons.filter(e => e.atSameAge || e.atSameValue);
+  const withoutData = comparisons.filter(e => !e.atSameAge && !e.atSameValue);
+  const { siblings, parents, others } = splitComparisonsByRelation(withData, relationGroups);
 
   return (
     <section className="view-growth-measurement">
@@ -243,6 +245,12 @@ const ViewGrowthPage = ({
                   measurementType={growthData.measurementType}
                 />
               )}
+              {withoutData.length > 0 && (
+                <p className="comparison-empty">
+                  No {getMeasurementTypeLabel(growthData.measurementType).toLowerCase()} recorded
+                  yet for {listNames(withoutData.map(e => e.person.name))}.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -268,8 +276,12 @@ interface ComparisonGroupProps {
   measurementType: server.MeasurementType;
 }
 
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupProps) => {
-  const typeLabel = getMeasurementTypeLabel(measurementType).toLowerCase();
   return (
     <div className="comparison-group">
       <h3>{title}</h3>
@@ -279,37 +291,33 @@ const ComparisonGroup = ({ title, entries, measurementType }: ComparisonGroupPro
             <a href={`/profile/${entry.person.id}`} className="comparison-person-name">
               {entry.person.name}
             </a>
-            {!entry.atSameAge && !entry.atSameValue ? (
-              <p className="comparison-empty">No {typeLabel} data recorded yet.</p>
-            ) : (
-              <div className="comparison-rows">
-                <ComparisonRow
-                  icon={<Icon symbol={CalendarDays} />}
-                  label="At the same age"
-                  point={entry.atSameAge}
-                  renderText={p => (
-                    <>
-                      At <strong>{p.ageLabel}</strong> old, {entry.person.name} measured{" "}
-                      <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> —{" "}
-                      {describeValueComparison(p, measurementType)}
-                    </>
-                  )}
-                />
-                <ComparisonRow
-                  icon={<Icon symbol={Target} />}
-                  label="Reached this measurement"
-                  point={entry.atSameValue}
-                  renderText={p => (
-                    <>
-                      {entry.person.name} reached{" "}
-                      <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> at{" "}
-                      <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)}) —{" "}
-                      {describeAgeComparison(p)}
-                    </>
-                  )}
-                />
-              </div>
-            )}
+            <div className="comparison-rows">
+              <ComparisonRow
+                icon={<Icon symbol={CalendarDays} />}
+                label="At the same age"
+                point={entry.atSameAge}
+                renderText={p => (
+                  <>
+                    At <strong>{p.ageLabel}</strong> old, {entry.person.name} measured{" "}
+                    <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> —{" "}
+                    {describeValueComparison(p, measurementType)}
+                  </>
+                )}
+              />
+              <ComparisonRow
+                icon={<Icon symbol={Target} />}
+                label="Reached this measurement"
+                point={entry.atSameValue}
+                renderText={p => (
+                  <>
+                    {entry.person.name} reached{" "}
+                    <strong>{formatMeasurement(p.value, p.unit, p.ageMonths)}</strong> at{" "}
+                    <strong>{p.ageLabel}</strong> old (on {formatDate(p.date)}) —{" "}
+                    {describeAgeComparison(p)}
+                  </>
+                )}
+              />
+            </div>
           </div>
         ))}
       </div>

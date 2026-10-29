@@ -12,6 +12,8 @@ export const HISTORY_TYPES: HistoryType[] = [
   "birthdays",
 ];
 
+export const CHILDHOOD_BIRTHDAYS = 18;
+
 export interface HistoryFilters {
   personIds: number[];
   types: HistoryType[];
@@ -21,7 +23,7 @@ export interface HistoryFilters {
 export interface HistoryView {
   records: DayRecords;
   birthdayPeople: server.Person[];
-  range: { from: string; to: string } | null;
+  range: { from: string; to: string; maxAge: number } | null;
 }
 
 function appearanceDate(a: server.TimelineAppearance): string {
@@ -93,6 +95,8 @@ export function historyView(
     birthdayPeople: showBirthdays
       ? (timeline.people ?? []).map(item => item.person).filter(p => wantPerson(p.id))
       : [],
-    range: showBirthdays ? { from: `${Math.min(...years)}-01-01`, to: today } : null,
+    range: showBirthdays
+      ? { from: `${Math.min(...years)}-01-01`, to: today, maxAge: CHILDHOOD_BIRTHDAYS }
+      : null,
   };
 }
