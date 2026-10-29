@@ -61,18 +61,18 @@ real landscape phone before fixing.
 
 ## Sign-up and people
 
-- [ ] Birthday is required at sign-up but not marked as such; Family Code says
+- [x] Birthday is required at sign-up but not marked as such; Family Code says
   "(Optional)" and Birthday says nothing, so the first submit fails on a field
   below the fold.
-- [ ] Password rules ("at least 8 characters") only appear after a failed
+- [x] Password rules ("at least 8 characters") only appear after a failed
   submit.
-- [ ] A brand-new account is greeted with "Welcome back, Dana Rivera!" seconds
+- [x] A brand-new account is greeted with "Welcome back, Dana Rivera!" seconds
   after sign-up.
-- [ ] Gender wording and defaults differ: sign-up says "Prefer not to say"
+- [x] Gender wording and defaults differ: sign-up says "Prefer not to say"
   (default); Add family member says "Unknown" and defaults to Male.
-- [ ] The moment placeholder is gendered ("Wrote her name for the first time")
+- [x] The moment placeholder is gendered ("Wrote her name for the first time")
   regardless of who it's for.
-- [ ] The unborn baby can't be picked in the + sheet, so there's no way to log
+- [x] The unborn baby can't be picked in the + sheet, so there's no way to log
   an ultrasound photo or pregnancy moment, even though the model supports it
   (seed data has a "Twenty-week scan" photo).
 

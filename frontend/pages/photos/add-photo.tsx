@@ -72,7 +72,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const ordered = chipOrder(
     (people.people || []).filter(person => auth.canContribute(person.familyId)),
     people.relations || [],
-    auth.getAuth()?.familyId ?? 0
+    auth.getAuth()?.familyId ?? 0,
+    { includeUnborn: true }
   );
   return [
     {

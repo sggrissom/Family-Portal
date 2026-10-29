@@ -101,6 +101,7 @@ async function onCreateAccountClicked(form: CreateAccountForm, event: Event) {
     if (result.success) {
       rpc.setAuthHeaders({ "x-auth-token": result.token });
       auth.setAuth(result.auth);
+      auth.markNewAccount();
       navigate("/dashboard");
     } else {
       form.error = result.error || "Failed to create account";
@@ -186,8 +187,13 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
             placeholder="Create a password"
             {...vlens.attrsBindInput(vlens.ref(form, "password"))}
             required
+            minLength={8}
+            aria-describedby="passwordHint"
             disabled={form.loading}
           />
+          <small id="passwordHint" className="form-hint">
+            At least 8 characters.
+          </small>
         </div>
 
         <div className="form-group">
@@ -205,12 +211,13 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
         <fieldset className="form-section">
           <legend>Your family profile</legend>
           <p className="section-hint">
-            We’ll add you as the first adult in this family so photos, moments, and family timelines
-            can include you too.
+            {form.familyCode
+              ? "We’ll add you to the family as an adult so photos, moments, and family timelines can include you too."
+              : "We’ll add you as the first adult in this family so photos, moments, and family timelines can include you too."}
           </p>
 
           <div className="form-group">
-            <label htmlFor="initialPersonName">Profile Name</label>
+            <label htmlFor="initialPersonName">Profile Name (Optional)</label>
             <input
               type="text"
               id="initialPersonName"
@@ -228,21 +235,25 @@ const CreateAccountPage = ({ form, providers }: CreateAccountPageProps) => (
               {...vlens.attrsBindInput(vlens.ref(form, "initialPersonGender"))}
               disabled={form.loading}
             >
-              <option value={2}>Prefer not to say</option>
+              <option value={2}>Not specified</option>
               <option value={0}>Male</option>
               <option value={1}>Female</option>
             </select>
           </div>
 
           <div className="form-group">
-            <label htmlFor="initialPersonBirthdate">Birthday</label>
+            <label htmlFor="initialPersonBirthdate">Birthday (Required)</label>
             <input
               type="date"
               id="initialPersonBirthdate"
               {...vlens.attrsBindInput(vlens.ref(form, "initialPersonBirthdate"))}
               required
+              aria-describedby="birthdayHint"
               disabled={form.loading}
             />
+            <small id="birthdayHint" className="form-hint">
+              Ages on the timeline are worked out from it.
+            </small>
           </div>
         </fieldset>
 

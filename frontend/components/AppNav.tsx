@@ -318,15 +318,17 @@ export const AddSheet = () => {
             hidden
             onChange={vlens.cachePartial(photosPicked, state)}
           />
-          <a
-            href={addPath("/add-growth", personId)}
-            onClick={vlens.cachePartial(formChosen, state)}
-          >
-            <span className="add-sheet-icon" aria-hidden="true">
-              <Icon symbol={Ruler} />
-            </span>
-            {copy.addSheet.measurement}
-          </a>
+          {!people.find(p => p.id === personId)?.isPregnancy && (
+            <a
+              href={addPath("/add-growth", personId)}
+              onClick={vlens.cachePartial(formChosen, state)}
+            >
+              <span className="add-sheet-icon" aria-hidden="true">
+                <Icon symbol={Ruler} />
+              </span>
+              {copy.addSheet.measurement}
+            </a>
+          )}
           <a
             href={addPath("/add-milestone", personId)}
             onClick={vlens.cachePartial(formChosen, state)}
@@ -419,7 +421,8 @@ async function openSheet(state: NavState) {
   familyPeople = chipOrder(
     (resp.people || []).filter(person => auth.canContribute(person.familyId)),
     resp.relations || [],
-    auth.getAuth()?.familyId ?? 0
+    auth.getAuth()?.familyId ?? 0,
+    { includeUnborn: true }
   );
   if (state.sheetOpen) {
     state.selectedPersonId = defaultPerson(familyPeople);

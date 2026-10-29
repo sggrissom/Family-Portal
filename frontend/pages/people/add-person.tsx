@@ -37,7 +37,7 @@ const useAddPersonForm = vlens.declareHook(
     name: "",
     relationIndex: -1,
     anchorId: 0,
-    gender: 0,
+    gender: 2,
     birthdate: "",
     isPregnancy: false,
     familyId: 0,
@@ -118,7 +118,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.name = "";
       form.relationIndex = -1;
       form.coAnchors = { key: "", ids: [] };
-      form.gender = 0;
+      form.gender = 2;
       form.birthdate = "";
       form.isPregnancy = false;
       form.familyId = 0;
@@ -249,9 +249,9 @@ const AddPersonPage = ({ form, people, suggestions, relationLabel }: AddPersonPa
             {...vlens.attrsBindInput(vlens.ref(form, "gender"))}
             disabled={form.loading}
           >
+            <option value={2}>Not specified</option>
             <option value={0}>Male</option>
             <option value={1}>Female</option>
-            <option value={2}>Unknown</option>
           </select>
         </div>
 

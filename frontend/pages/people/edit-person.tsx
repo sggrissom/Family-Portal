@@ -178,9 +178,9 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
             {...vlens.attrsBindInput(vlens.ref(form, "gender"))}
             disabled={form.loading}
           >
+            <option value={2}>Not specified</option>
             <option value={0}>Male</option>
             <option value={1}>Female</option>
-            <option value={2}>Unknown</option>
           </select>
         </div>
 
