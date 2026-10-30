@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VNode } from "preact";
 import { VideoPlayer } from "./VideoPlayer";
-import type { Image, GetVideoPlaybackResponse } from "../server";
+import type { Image, GetVideoPlaybackResponse, GetVideoTranscriptResponse } from "../server";
 
 const mocks = vi.hoisted(() => ({
   state: null as any,
@@ -118,5 +118,62 @@ describe("video error recovery", () => {
     pending.resolve({ status: 206 });
     await checking;
     expect(mocks.state.problem).toBe("");
+  });
+});
+
+describe("captions", () => {
+  const transcript = (texts: string[]) =>
+    ({
+      captionUrl: "/api/photo/1/captions",
+      automatic: true,
+      language: "en",
+      segments: texts.map((text, i) => ({ startMs: i * 1000, endMs: i * 1000 + 900, text })),
+    }) as GetVideoTranscriptResponse;
+
+  function mountWith(t: GetVideoTranscriptResponse | null, video: any) {
+    const vnode = find(
+      VideoPlayer({ photo: { id: 1, status: 0 } as Image, playback, transcript: t }),
+      "video"
+    )!;
+    (vnode.ref as (el: unknown) => void)(video);
+    return vnode;
+  }
+
+  it("adds cues in script instead of a <track>, which stops iOS Safari playing the video", () => {
+    vi.stubGlobal(
+      "VTTCue",
+      class {
+        constructor(
+          public startTime: number,
+          public endTime: number,
+          public text: string
+        ) {}
+      }
+    );
+    const cues: any[] = [];
+    const track = {
+      cues,
+      addCue: (c: any) => cues.push(c),
+      removeCue: (c: any) => cues.splice(cues.indexOf(c), 1),
+    };
+    const video = { addTextTrack: vi.fn(() => track) };
+
+    const vnode = mountWith(transcript(["hi", "there"]), video);
+    expect(find(vnode, "track")).toBeUndefined();
+    expect(video.addTextTrack).toHaveBeenCalledWith("captions", "English (automatic)", "en");
+    expect(cues.map(c => [c.startTime, c.endTime, c.text])).toEqual([
+      [0, 0.9, "hi"],
+      [1, 1.9, "there"],
+    ]);
+
+    mountWith(transcript(["edited"]), video);
+    expect(video.addTextTrack).toHaveBeenCalledTimes(1);
+    expect(cues.map(c => c.text)).toEqual(["edited"]);
+  });
+
+  it("adds no track without a transcript", () => {
+    const video = { addTextTrack: vi.fn() };
+    mountWith(null, video);
+    expect(video.addTextTrack).not.toHaveBeenCalled();
   });
 });
