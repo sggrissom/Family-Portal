@@ -133,6 +133,35 @@ function onLoadedMetadata(state: PlayerState, event: Event) {
   }
 }
 
+// iOS Safari hands <track> elements to AVFoundation, which then refuses to play
+// the video at all, so captions are built from the transcript in script.
+const captionTracks = new WeakMap<
+  HTMLVideoElement,
+  { track: TextTrack; segments: server.TranscriptSegment[] }
+>();
+
+function syncCaptions(
+  video: HTMLVideoElement,
+  transcript: server.GetVideoTranscriptResponse | null
+) {
+  const segments = transcript?.captionUrl ? transcript.segments : [];
+  let entry = captionTracks.get(video);
+  if (entry?.segments === segments) return;
+  if (!entry) {
+    if (segments.length === 0) return;
+    const label = transcript?.automatic ? "English (automatic)" : "English";
+    entry = {
+      track: video.addTextTrack("captions", label, transcript?.language || "en"),
+      segments,
+    };
+    captionTracks.set(video, entry);
+  }
+  entry.segments = segments;
+  const track = entry.track;
+  for (const cue of Array.from(track.cues ?? [])) track.removeCue(cue);
+  for (const s of segments) track.addCue(new VTTCue(s.startMs / 1000, s.endMs / 1000, s.text));
+}
+
 function retry(state: PlayerState) {
   state.renewals = 0;
   renew(state);
@@ -301,6 +330,7 @@ export const VideoPlayer = ({
         key={`${photo.id}:${state.attempt}:${p.playbackUrl}`}
         ref={el => {
           state.element = el;
+          if (el) syncCaptions(el, transcript);
         }}
         src={uploadUrl(p.playbackUrl)}
         poster={photo.filePath ? `/api/photo/${photo.id}/xlarge` : undefined}
@@ -314,16 +344,7 @@ export const VideoPlayer = ({
         onTimeUpdate={e => onProgress(state, e)}
         onPlay={e => onProgress(state, e)}
         onPause={e => onProgress(state, e)}
-      >
-        {transcript?.captionUrl && (
-          <track
-            kind="captions"
-            src={transcript.captionUrl}
-            srcLang={transcript.language || "en"}
-            label={transcript.automatic ? "English (automatic)" : "English"}
-          />
-        )}
-      </video>
+      />
       {state.problem === "network" && (
         <p className="video-player-note" role="alert">
           <strong>Playback stopped</strong>
