@@ -13,7 +13,7 @@ proposals are kept in [Not planned](not-planned.md).
 
 | Plan | Purpose |
 | --- | --- |
-| [Approximate dates and ages](plans/approximate-dates.md) | Record partial historical knowledge honestly and keep the uncertainty when browsing and comparing. Manual entry first; optional AI estimation only after evaluation. The foundation for old photos and cross-generation views. |
+| [Approximate dates and ages](plans/approximate-dates.md) | Preserve uncertain dates and age-period descriptions such as “at age 4” without inventing birthday events. Covers moments/media, sitewide date and age behavior, migration and correction, mobile, and exports. Manual support first; optional AI estimation later. |
 | [Video](plans/video.md) | Videos alongside photos, with private object storage for the bytes. |
 | [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
