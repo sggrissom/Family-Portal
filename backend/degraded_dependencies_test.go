@@ -4,6 +4,7 @@ import (
 	"family/cfg"
 	"os"
 	"testing"
+	"time"
 
 	"go.hasen.dev/vbolt"
 )
@@ -46,6 +47,40 @@ func TestAFullPhotoQueueRefusesInsteadOfBlocking(t *testing.T) {
 	}
 	if err := QueuePhotoProcessing(PhotoProcessingJob{ImageId: 2}); err == nil {
 		t.Error("QueuePhotoProcessing blocked or accepted a job with no room")
+	}
+}
+
+func TestAFullPhotoQueueDefersUploadsWhileTheWorkerRuns(t *testing.T) {
+	previous := globalPhotoWorker
+	pw := &PhotoWorker{jobQueue: make(chan PhotoProcessingJob, 1)}
+	pw.start()
+	globalPhotoWorker = pw
+	t.Cleanup(func() {
+		pw.stop(nil)
+		waitForBacklogFeeders()
+		globalPhotoWorker = previous
+	})
+
+	if err := QueuePhotoProcessing(PhotoProcessingJob{ImageId: 1, FileData: []byte("a")}); err != nil {
+		t.Fatalf("first photo rejected: %v", err)
+	}
+	if err := QueuePhotoProcessing(PhotoProcessingJob{ImageId: 2, FileData: []byte("b")}); err != nil {
+		t.Fatalf("overflow photo rejected: %v", err)
+	}
+
+	if job := <-pw.jobQueue; job.ImageId != 1 {
+		t.Fatalf("first job = %d, want 1", job.ImageId)
+	}
+	select {
+	case job := <-pw.jobQueue:
+		if job.ImageId != 2 {
+			t.Errorf("deferred job = %d, want 2", job.ImageId)
+		}
+		if job.FileData != nil {
+			t.Error("deferred job kept its file bytes; it should read the original from disk")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("deferred photo never reached the queue")
 	}
 }
 

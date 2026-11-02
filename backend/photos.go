@@ -799,26 +799,26 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	file.Seek(0, 0)
 	fileData, err := io.ReadAll(file)
 	if err != nil {
-		log.Printf("Failed to read file for processing queue: %v", err)
-	} else {
-		job := PhotoProcessingJob{
-			ImageId:        image.Id,
-			FamilyId:       image.FamilyId,
-			FilePath:       image.FilePath,
-			FileData:       fileData,
-			MimeType:       mimeType,
-			OriginalWidth:  width,
-			OriginalHeight: height,
-		}
+		log.Printf("Failed to read file for processing queue, worker will read the original: %v", err)
+		fileData = nil
+	}
+	job := PhotoProcessingJob{
+		ImageId:        image.Id,
+		FamilyId:       image.FamilyId,
+		FilePath:       image.FilePath,
+		FileData:       fileData,
+		MimeType:       mimeType,
+		OriginalWidth:  width,
+		OriginalHeight: height,
+	}
 
-		if err := QueuePhotoProcessing(job); err != nil {
-			log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
-			markPhotoFailed(image.Id)
-			RespondUnavailableError(w, r,
-				"The photo could not be processed right now. Please try again in a few minutes.",
-				err.Error())
-			return
-		}
+	if err := QueuePhotoProcessing(job); err != nil {
+		log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
+		markPhotoFailed(image.Id)
+		RespondUnavailableError(w, r,
+			"The photo could not be processed right now. Please try again in a few minutes.",
+			err.Error())
+		return
 	}
 
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{

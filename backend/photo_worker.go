@@ -150,9 +150,28 @@ func QueuePhotoProcessing(job PhotoProcessingJob) error {
 		log.Printf("Photo %d queued for background processing (queue length: %d)", job.ImageId, len(globalPhotoWorker.jobQueue))
 		return nil
 	default:
+	}
+
+	// The original is already on disk, so a burst of uploads waits for room
+	// instead of failing photos that were saved.
+	pw := activePhotoWorker()
+	if pw == nil {
 		log.Printf("Cannot queue photo %d: processing queue is full", job.ImageId)
 		return fmt.Errorf("processing queue is full")
 	}
+	job.FileData = nil
+	log.Printf("Photo %d deferred until the processing queue has room", job.ImageId)
+	backlogFeeders.Add(1)
+	go func() {
+		defer backlogFeeders.Done()
+		if err := pw.queueBlocking(job); err != nil {
+			LogWarn(LogCategoryWorker, "Deferred photo was not queued; it will show as stuck", map[string]interface{}{
+				"photoId": job.ImageId,
+				"error":   err.Error(),
+			})
+		}
+	}()
+	return nil
 }
 
 func (pw *PhotoWorker) Start() {
