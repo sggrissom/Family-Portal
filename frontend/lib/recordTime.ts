@@ -1,4 +1,5 @@
 import { RecordTime } from "../server";
+import { monthsOld } from "./sameAge";
 
 export interface RecordTimeFields {
   meaning: string;
@@ -206,4 +207,30 @@ export function exactRecordTime(date: string, source = "family"): RecordTime {
     ...range,
     resolverVersion: 1,
   };
+}
+
+export function isExactRecord(rt: RecordTime | undefined | null): boolean {
+  return !rt || isExactDay(rt);
+}
+
+export function recordDateLabel(
+  rt: RecordTime | undefined | null,
+  date: string,
+  formatExact: (date: string) => string
+): string {
+  return isExactRecord(rt) ? formatExact(date) : recordTimeLabel(rt!);
+}
+
+export function recordGroupLabel(rt: RecordTime): string {
+  const label = recordTimeLabel(rt);
+  if (rt.basis !== "calendar" || rt.estimated || rt.meaning === "period") return label;
+  return rt.precision === "range" ? `Sometime ${label}` : `Sometime in ${label}`;
+}
+
+export function recordMonthsOld(
+  rt: RecordTime | undefined | null,
+  date: string,
+  birthday: string
+): number {
+  return isExactRecord(rt) ? monthsOld(birthday, date) : -1;
 }

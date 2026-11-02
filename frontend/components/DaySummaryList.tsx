@@ -36,8 +36,8 @@ export const DaySummaryList = ({
   return (
     <div className="day-summaries">
       {days.map(day => (
-        <section key={day.day} className="day-summary">
-          <h3 className="day-summary-label">{dayLabel(day.day, today)}</h3>
+        <section key={`${day.day}|${day.period}`} className="day-summary">
+          <h3 className="day-summary-label">{day.period || dayLabel(day.day, today)}</h3>
           {day.birthdays.map(b => (
             <div key={`b${b.personId}`} className="day-birthday">
               <Icon symbol={Cake} /> {copy.home.turned(name(b.personId), b.age)}
@@ -71,7 +71,7 @@ export const DaySummaryList = ({
               name={c.personId === subjectId ? null : name(c.personId)}
             />
           ))}
-          {day.photos && <PhotoMosaic day={day.day} photos={day.photos} name={name} />}
+          {day.photos && <PhotoMosaic day={day} photos={day.photos} name={name} />}
         </section>
       ))}
     </div>
@@ -190,13 +190,18 @@ const PhotoMosaic = ({
   photos,
   name,
 }: {
-  day: string;
+  day: DaySummary;
   photos: PhotoGroup;
   name: (id: number) => string;
 }) => {
   const who = photos.personIds.map(name).join(", ");
+  const href = !day.period
+    ? `/photos?from=${day.day}&to=${day.day}`
+    : day.periodFrom
+      ? `/photos?from=${day.periodFrom}&to=${day.periodTo}`
+      : "/photos";
   return (
-    <a href={`/photos?from=${day}&to=${day}`} className="day-mosaic">
+    <a href={href} className="day-mosaic">
       <span className={`day-mosaic-grid count-${Math.min(photos.photoIds.length, 4)}`}>
         {photos.photoIds.map(id => (
           <img key={id} src={`/api/photo/${id}/thumb`} alt="" loading="lazy" />

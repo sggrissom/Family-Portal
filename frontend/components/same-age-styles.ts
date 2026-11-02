@@ -87,6 +87,12 @@ block(`
 `);
 
 block(`
+.same-age-period {
+  color: var(--muted);
+}
+`);
+
+block(`
 .same-age-milestone:hover,
 .same-age-name:hover {
   color: var(--accent);

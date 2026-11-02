@@ -1,5 +1,6 @@
 import * as server from "../server";
 import { InterviewGroup, groupInterviewAnswers } from "./interviews";
+import { isExactRecord, recordGroupLabel } from "./recordTime";
 
 export interface PhotoGroup {
   count: number;
@@ -25,6 +26,9 @@ export interface DayEvent {
 
 export interface DaySummary {
   day: string;
+  period: string;
+  periodFrom: string;
+  periodTo: string;
   birthdays: Birthday[];
   milestones: server.Milestone[];
   interviews: InterviewGroup[];
@@ -88,11 +92,18 @@ export function summarizeDays(
   range?: { from: string; to: string; maxAge?: number; fromFirstRecord?: boolean }
 ): DaySummary[] {
   const days = new Map<string, DaySummary>();
-  const summary = (day: string) => {
-    let found = days.get(day);
+  const periods = new Map<string, DaySummary>();
+  const summary = (day: string, period?: Omit<Place, "key">) => {
+    const map = period ? periods : days;
+    const key = period ? `${period.day}|${period.periodTo}|${period.period}` : day;
+    let found = map.get(key);
     if (!found) {
       found = {
         day,
+        period: "",
+        periodFrom: "",
+        periodTo: "",
+        ...period,
         birthdays: [],
         milestones: [],
         interviews: [],
@@ -100,15 +111,20 @@ export function summarizeDays(
         checkups: [],
         photos: null,
       };
-      days.set(day, found);
+      map.set(key, found);
     }
     return found;
+  };
+  const place = (rt: server.RecordTime | undefined, date: string) => {
+    if (isExactRecord(rt)) return summary(dayKey(date));
+    const p = periodOf(rt!);
+    return summary(p.day, p);
   };
 
   const { groups, loose } = groupInterviewAnswers(records.milestones);
   for (const milestone of loose) {
-    const day = dayKey(milestone.milestoneDate);
-    if (day) summary(day).milestones.push(milestone);
+    if (isExactRecord(milestone.recordTime) && !dayKey(milestone.milestoneDate)) continue;
+    place(milestone.recordTime, milestone.milestoneDate).milestones.push(milestone);
   }
   for (const group of groups) {
     const day = dayKey(group.date);
@@ -150,9 +166,8 @@ export function summarizeDays(
     (a, b) => b.image.photoDate.localeCompare(a.image.photoDate) || b.image.id - a.image.id
   );
   for (const { image, people: inPhoto } of photosNewestFirst) {
-    const day = dayKey(image.photoDate);
-    if (!day) continue;
-    const entry = summary(day);
+    if (isExactRecord(image.recordTime) && !dayKey(image.photoDate)) continue;
+    const entry = place(image.recordTime, image.photoDate);
     entry.photos ??= { count: 0, photoIds: [], personIds: [] };
     entry.photos.count++;
     if (entry.photos.photoIds.length < MOSAIC_SIZE) entry.photos.photoIds.push(image.id);
@@ -169,7 +184,28 @@ export function summarizeDays(
     }
   }
 
-  return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+  return [...days.values(), ...periods.values()].sort(
+    (a, b) => b.day.localeCompare(a.day) || a.period.localeCompare(b.period)
+  );
+}
+
+interface Place {
+  day: string;
+  period: string;
+  periodFrom: string;
+  periodTo: string;
+}
+
+function periodOf(rt: server.RecordTime): Place {
+  if (!rt.resolved) return { day: "", period: "Date unknown", periodFrom: "", periodTo: "" };
+  const last = new Date(rt.end + "T00:00:00Z");
+  last.setUTCDate(last.getUTCDate() - 1);
+  return {
+    day: rt.start,
+    period: recordGroupLabel(rt),
+    periodFrom: rt.start,
+    periodTo: last.toISOString().slice(0, 10),
+  };
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -210,6 +246,10 @@ export interface MonthGroup {
 export function groupByMonth(days: DaySummary[]): MonthGroup[] {
   const groups: MonthGroup[] = [];
   for (const day of days) {
+    if (day.period && day.periodFrom.slice(0, 7) !== day.periodTo.slice(0, 7)) {
+      groups.push({ month: `${day.day.slice(0, 7)}|${day.period}`, label: "", days: [day] });
+      continue;
+    }
     const month = day.day.slice(0, 7);
     let group = groups[groups.length - 1];
     if (!group || group.month !== month) {

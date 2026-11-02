@@ -15,11 +15,11 @@ import { getCategoryIcon, getCategoryLabel } from "../../lib/milestoneHelpers";
 import { MilestoneText } from "../../components/MilestoneText";
 import { formatDate } from "../../lib/dateUtils";
 import { formatAgeAtMeasurement, isValidBirthday } from "../../lib/growthPercentiles";
-import { monthsOld } from "../../lib/sameAge";
 import { localDateString } from "../../lib/when";
 import { copy } from "../../lib/copy";
 import { interviewTitle } from "../../lib/interviews";
 import "./view-milestone-styles";
+import { recordDateLabel, recordMonthsOld } from "../../lib/recordTime";
 
 type ViewMilestoneData = {
   milestone: server.Milestone | null;
@@ -42,7 +42,7 @@ export async function fetch(
 
   let sameAge: server.GetSameAgeResponse | null = null;
   if (person && isValidBirthday(person.birthday)) {
-    const age = monthsOld(person.birthday, milestone.milestoneDate);
+    const age = recordMonthsOld(milestone.recordTime, milestone.milestoneDate, person.birthday);
     if (age >= 0) {
       [sameAge] = await server.GetSameAge({
         includeAvailableAges: false,
@@ -128,7 +128,7 @@ const ViewMilestonePage = ({
   const isAnswer = milestone.category === "interview";
   const age =
     person && isValidBirthday(person.birthday)
-      ? monthsOld(person.birthday, milestone.milestoneDate)
+      ? recordMonthsOld(milestone.recordTime, milestone.milestoneDate, person.birthday)
       : null;
 
   return (
@@ -161,7 +161,7 @@ const ViewMilestonePage = ({
           {age !== null &&
             age >= 0 &&
             ` · ${copy.milestoneDetail.atAge(formatAgeAtMeasurement(age))}`}
-          {` · ${formatDate(milestone.milestoneDate)}`}
+          {` · ${recordDateLabel(milestone.recordTime, milestone.milestoneDate, formatDate)}`}
         </p>
         <PhotoStrip photoIds={milestone.photoIds} />
         {canContribute(milestone.familyId) && (

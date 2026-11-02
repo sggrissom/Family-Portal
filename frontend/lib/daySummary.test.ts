@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as server from "@app/server";
+import { exactRecordTime } from "./recordTime";
 import { birthdaysBetween, dayKey, dayLabel, groupByMonth, summarizeDays } from "./daySummary";
 
 const person = (
@@ -104,6 +105,9 @@ describe("summarizeDays", () => {
     expect(days).toEqual([
       {
         day: "2026-09-26",
+        period: "",
+        periodFrom: "",
+        periodTo: "",
         birthdays: [{ personId: 2, age: 7 }],
         milestones: [],
         interviews: [],
@@ -153,6 +157,9 @@ describe("groupByMonth", () => {
   it("keeps days in order under their month", () => {
     const day = (d: string) => ({
       day: d,
+      period: "",
+      periodFrom: "",
+      periodTo: "",
       birthdays: [],
       milestones: [],
       interviews: [],
@@ -230,5 +237,63 @@ describe("childhood birthdays", () => {
         fromFirstRecord: true,
       })
     ).toEqual([]);
+  });
+});
+
+describe("approximate records", () => {
+  const rt = (fields: Partial<server.RecordTime>): server.RecordTime => ({
+    ...exactRecordTime("2000-01-01"),
+    ...fields,
+  });
+  const ageFour = rt({
+    meaning: "period",
+    basis: "age",
+    precision: "year",
+    from: "",
+    anchorPersonId: 1,
+    ageYears: 4,
+    start: "2027-05-02",
+    end: "2028-05-02",
+  });
+
+  it("groups periods under their label, never a day", () => {
+    const painting = { ...milestone(1, 1, "2027-05-02T00:00:00Z"), recordTime: ageFour };
+    const party = {
+      ...milestone(2, 1, "2027-05-02T00:00:00Z"),
+      recordTime: exactRecordTime("2027-05-02"),
+    };
+    const undated = {
+      ...milestone(3, 1, "0001-01-01T00:00:00Z"),
+      recordTime: rt({ basis: "unknown", precision: "unknown", from: "", resolved: false }),
+    };
+    const days = summarizeDays({ photos: [], milestones: [painting, party, undated], growth: [] }, [
+      clara,
+    ]);
+    expect(days.map(d => [d.day, d.period, d.milestones.map(m => m.id)])).toEqual([
+      ["2027-05-02", "", [2]],
+      ["2027-05-02", "At age 4", [1]],
+      ["", "Date unknown", [3]],
+    ]);
+    expect(days[1].periodTo).toBe("2028-05-01");
+  });
+
+  it("gives a period longer than a month its own group", () => {
+    const painting = { ...milestone(1, 1, "2027-05-02T00:00:00Z"), recordTime: ageFour };
+    const october = {
+      ...milestone(2, 1, "2026-10-01T00:00:00Z"),
+      recordTime: rt({
+        precision: "month",
+        from: "2026-10",
+        start: "2026-10-01",
+        end: "2026-11-01",
+      }),
+    };
+    const groups = groupByMonth(
+      summarizeDays({ photos: [], milestones: [painting, october], growth: [] }, [clara])
+    );
+    expect(groups.map(g => [g.label, g.days.map(d => d.period)])).toEqual([
+      ["", ["At age 4"]],
+      ["October 2026", ["Sometime in October 2026"]],
+    ]);
   });
 });
