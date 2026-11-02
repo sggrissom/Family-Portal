@@ -26,6 +26,7 @@ import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
+import { approximateDatesEnabled } from "../lib/recordTimeSettings";
 import { Destination, activeDestination, addPath, contextPersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
@@ -377,6 +378,11 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
             {copy.account.faceReview}
             {state.faceCount ? <span className="count-badge">{state.faceCount}</span> : null}
           </a>
+        </li>
+      )}
+      {approximateDatesEnabled() && (
+        <li>
+          <a href="/date-review">{copy.account.dateReview}</a>
         </li>
       )}
       <li>

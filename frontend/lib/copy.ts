@@ -18,6 +18,7 @@ export const copy = {
     signedInAs: "Signed in as",
     tags: "Tags",
     faceReview: "Face review",
+    dateReview: "Birthday dates",
     settings: "Settings",
     importExport: "Import/Export",
     admin: "Admin",
@@ -52,6 +53,25 @@ export const copy = {
     date: "Date",
     years: "Age in years",
     months: "and months",
+  },
+  dateReview: {
+    title: "Birthday dates",
+    intro:
+      "Ages used to be saved as the birthday itself, so “at age 4” became a party on the fourth birthday. Pick the ones that weren't really on that day.",
+    none: "Nothing to review. No birthday has more than one moment or photo on it.",
+    disabled: "Approximate dates aren't turned on for this server yet, so nothing can be changed.",
+    clusterTitle: (name: string, age: number, day: string) =>
+      `${name}'s birthday at ${age} · ${day}`,
+    clusterHint: (age: number) =>
+      `Untick anything that really happened on the birthday. The rest become “at age ${age}.”`,
+    keep: "Stays on the birthday",
+    meaning: "What do these describe?",
+    describes: (age: number) => `They describe age ${age}`,
+    happened: (age: number) => `They happened sometime at ${age}`,
+    apply: (n: number) => (n === 1 ? "Change 1 record" : `Change ${n} records`),
+    changed: (n: number) => (n === 1 ? "Changed 1 record." : `Changed ${n} records.`),
+    undo: "Undo",
+    failed: "Those dates could not be changed. Please try again.",
   },
   recordWhen: {
     month: "A month…",
