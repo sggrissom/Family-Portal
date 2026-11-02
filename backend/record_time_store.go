@@ -33,11 +33,15 @@ func legacyRecordTime(at time.Time) RecordTime {
 // An exact day follows the timestamp, which is all older writers change; any
 // other assertion owns the timestamp, which becomes its sort key.
 func syncRecordTime(tx *vbolt.Tx, rt *RecordTime, at *time.Time) {
-	if rt.Version == 0 {
+	if rt.Version == 0 || (rt.Source == SourceLegacy && rt.Basis == BasisUnknown && !at.IsZero()) {
 		*rt = legacyRecordTime(*at)
 		return
 	}
 	if rt.ExactDay() {
+		if at.IsZero() {
+			start, _, _, _ := parseCivil(rt.From)
+			*at = start.Time()
+		}
 		if day := civilOf(*at).String(); day != rt.From || !rt.Resolved {
 			rt.From = day
 			resolveRecordTime(rt, RecordAnchor{})
@@ -125,14 +129,14 @@ func UnanchorRecords(tx *vbolt.Tx, personId int) {
 	})
 }
 
-// BackfillRecordTimes gives every moment and photo written before RecordTime
-// existed an exact-day assertion with legacy provenance. That preserves
-// today's behaviour; it does not prove those dates were exact. Records that
-// already carry an assertion are left alone, so it is safe to re-run.
+// BackfillRecordTimes persists the exact-day, legacy-provenance assertion
+// that decoding gives every moment and photo written before RecordTime. That
+// preserves today's behaviour; it does not prove those dates were exact.
+// Records with any other assertion are left alone, so it is safe to re-run.
 func BackfillRecordTimes(tx *vbolt.Tx) (milestones, images int) {
 	milestoneUpdates := map[int]Milestone{}
 	vbolt.IterateAll(tx, MilestoneBkt, func(id int, m Milestone) bool {
-		if m.RecordTime.Version == 0 {
+		if m.RecordTime.Source == SourceLegacy {
 			milestoneUpdates[id] = m
 		}
 		return true
@@ -143,7 +147,7 @@ func BackfillRecordTimes(tx *vbolt.Tx) (milestones, images int) {
 
 	imageUpdates := map[int]Image{}
 	vbolt.IterateAll(tx, ImagesBkt, func(id int, image Image) bool {
-		if image.RecordTime.Version == 0 {
+		if image.RecordTime.Source == SourceLegacy {
 			imageUpdates[id] = image
 		}
 		return true

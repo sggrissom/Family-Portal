@@ -1087,6 +1087,7 @@ export interface ListFamilyPhotosRequest {
     placeKey: string
     collapseSimilar: boolean
     query: string
+    exactDatesOnly: boolean
 }
 
 export interface ListFamilyPhotosResponse {
@@ -2507,6 +2508,7 @@ export interface SameAgeRow {
     height: GrowthData | null
     weight: GrowthData | null
     milestones: Milestone[]
+    contextMilestones: Milestone[]
     interviews: Interview[]
     photoIds: number[]
     portraits: PortraitPhoto[]
@@ -3043,6 +3045,8 @@ export interface ExportVideo {
     title: string
     description: string
     photo_date: string
+    record_time: RecordTime | null
+    date_label: string
     original_filename: string
     file_name: string
     mime_type: string

@@ -119,6 +119,8 @@ type ListFamilyPhotosRequest struct {
 	// instead of by date. Names of visible people in it narrow the results to
 	// photos of all of them.
 	Query string `json:"query,omitempty"`
+	// ExactDatesOnly leaves out photos whose date is approximate or unknown.
+	ExactDatesOnly bool `json:"exactDatesOnly,omitempty"`
 }
 
 type PhotoWithPeople struct {
@@ -243,6 +245,9 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	}
 	if version >= 6 {
 		PackRecordTime(&self.RecordTime, buf)
+	}
+	if !buf.Writing && self.RecordTime.Version == 0 {
+		self.RecordTime = legacyRecordTime(self.PhotoDate)
 	}
 }
 
@@ -1352,6 +1357,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		personIds = append([]int{req.PersonId}, personIds...)
 	}
 	listing := newPhotoListing(ctx.Tx, user, personIds, req.TagIds, req.PlaceKey, dateFrom, dateTo)
+	listing.exactOnly = req.ExactDatesOnly
 	limit := min(req.Limit, maxPhotoPageSize)
 
 	var page []Image

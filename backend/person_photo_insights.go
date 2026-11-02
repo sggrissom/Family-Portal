@@ -148,7 +148,7 @@ func GetPersonPhotoInsights(ctx *vbeam.Context, req GetPersonPhotoInsightsReques
 			}
 		}
 
-		if img.IsVideo() {
+		if img.IsVideo() || !img.RecordTime.ExactDay() {
 			continue
 		}
 		c := scorePortrait(ctx.Tx, img, person, len(inPhoto))

@@ -331,7 +331,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		if img.PhotoDate.Unix() < floor {
 			break
 		}
-		if img.Status == 0 && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
+		if img.Status == 0 && img.RecordTime.ExactDay() && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
 			candidates = append(candidates, img)
 		}
 	}
@@ -383,6 +383,15 @@ func ageInMonths(birthday, at time.Time) int {
 	return months
 }
 
+// exactAgeInMonths is the person's age at an exact-day record, or -1 when the
+// record has no single day to measure from.
+func exactAgeInMonths(person Person, rt RecordTime, at time.Time) int {
+	if !rt.ExactDay() {
+		return -1
+	}
+	return ageInMonths(person.Birthday, at)
+}
+
 type embeddedMilestone struct {
 	milestone Milestone
 	vector    []float32
@@ -422,7 +431,7 @@ func GetMilestoneMatches(ctx *vbeam.Context, req GetMilestoneMatchesRequest) (re
 	}
 	resp.Matches = []MilestoneMatch{}
 	person := GetPersonById(ctx.Tx, milestone.PersonId)
-	resp.AgeMonths = ageInMonths(person.Birthday, milestone.MilestoneDate)
+	resp.AgeMonths = exactAgeInMonths(person, milestone.RecordTime, milestone.MilestoneDate)
 	own := embeddedMilestonesOf(ctx.Tx, person.Id)
 	var target []float32
 	for _, m := range own {
@@ -452,7 +461,7 @@ func GetMilestoneMatches(ctx *vbeam.Context, req GetMilestoneMatchesRequest) (re
 		match := theirs[i].milestone
 		other.Age = calculateAge(other.Birthday)
 		resp.Matches = append(resp.Matches, MilestoneMatch{
-			Person: other, Milestone: match, AgeMonths: ageInMonths(other.Birthday, match.MilestoneDate),
+			Person: other, Milestone: match, AgeMonths: exactAgeInMonths(other, match.RecordTime, match.MilestoneDate),
 		})
 	}
 	sort.Slice(resp.Matches, func(i, j int) bool { return resp.Matches[i].Person.Birthday.Before(resp.Matches[j].Person.Birthday) })

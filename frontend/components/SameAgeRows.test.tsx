@@ -26,6 +26,7 @@ const emptyRow = (id: number, name: string): SameAgeRow =>
     weight: null,
     photoIds: [],
     milestones: [],
+    contextMilestones: [],
     interviews: [],
     portraits: [],
   }) as SameAgeRow;

@@ -16,6 +16,7 @@ export function photosRequest(
     placeKey: "",
     collapseSimilar: false,
     query: "",
+    exactDatesOnly: false,
     ...fields,
   };
 }

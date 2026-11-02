@@ -214,6 +214,7 @@ type photoListing struct {
 	places    *placeResolver
 	newest    photoKey
 	oldest    int64
+	exactOnly bool
 }
 
 func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, placeKey string, dateFrom string, dateTo string) photoListing {
@@ -303,6 +304,9 @@ func (l photoListing) keys() []photoKey {
 // access check that family streams get from their index.
 func (l photoListing) passes(image Image) bool {
 	if image.Status == 2 || (l.withTag != nil && !l.withTag[image.Id]) {
+		return false
+	}
+	if l.exactOnly && !image.RecordTime.ExactDay() {
 		return false
 	}
 	if len(l.personIds) > 0 && !CanAccessPhoto(l.tx, l.user, image, AccessView) {

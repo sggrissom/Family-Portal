@@ -142,7 +142,7 @@ func dashboardRecent(ctx *vbeam.Context, today time.Time, items []FamilyTimeline
 
 	for _, item := range items {
 		for _, milestone := range item.Milestones {
-			if day := dayOf(milestone.MilestoneDate); day >= from && day <= to {
+			if day := dayOf(milestone.MilestoneDate); milestone.RecordTime.ExactDay() && day >= from && day <= to {
 				recent.Milestones = append(recent.Milestones, milestone)
 			}
 		}
@@ -156,7 +156,7 @@ func dashboardRecent(ctx *vbeam.Context, today time.Time, items []FamilyTimeline
 	recent.Interviews = interviewsOfAnswers(ctx.Tx, recent.Milestones)
 
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
-		DateFrom: from, DateTo: to, Limit: dashboardRecentPhotos,
+		DateFrom: from, DateTo: to, Limit: dashboardRecentPhotos, ExactDatesOnly: true,
 	})
 	recent.Photos = photos.Photos
 	return
@@ -172,7 +172,7 @@ func onThisDay(ctx *vbeam.Context, today time.Time, items []FamilyTimelineItem) 
 		year := DashboardYear{YearsAgo: yearsAgo, Photos: []Image{}, Milestones: []Milestone{}}
 		for _, item := range items {
 			for _, milestone := range item.Milestones {
-				if d := dayOf(milestone.MilestoneDate); d >= from && d <= to {
+				if d := dayOf(milestone.MilestoneDate); milestone.RecordTime.ExactDay() && d >= from && d <= to {
 					year.Milestones = append(year.Milestones, milestone)
 				}
 			}
@@ -182,7 +182,7 @@ func onThisDay(ctx *vbeam.Context, today time.Time, items []FamilyTimelineItem) 
 
 		var photos ListFamilyPhotosResponse
 		photos, err = ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
-			DateFrom: from, DateTo: to, Limit: onThisDayPhotos,
+			DateFrom: from, DateTo: to, Limit: onThisDayPhotos, ExactDatesOnly: true,
 		})
 		if err != nil {
 			return

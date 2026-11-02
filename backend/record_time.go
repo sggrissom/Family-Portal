@@ -449,3 +449,65 @@ func (rt RecordTime) Label() string {
 	}
 	return "Date unknown"
 }
+
+// OverlapsTimes is Overlaps for a half-open range of UTC-labelled days.
+func (rt RecordTime) OverlapsTimes(from, to time.Time) bool {
+	return rt.Overlaps(civilOf(from).String(), civilOf(to).String())
+}
+
+// AgeMonthsFor is the half-open span of person's age, in months, that rt
+// covers. An age assertion anchored to the person answers without a birthday;
+// anything else needs a calendar placement and the person's birthday.
+func (rt RecordTime) AgeMonthsFor(person Person) (from, to int, ok bool) {
+	if rt.Basis == BasisAge && rt.AnchorPersonId == person.Id && person.Id != 0 {
+		switch rt.Precision {
+		case PrecisionYear:
+			return rt.AgeYears * 12, (rt.AgeYears + 1) * 12, true
+		case PrecisionMonth:
+			months := rt.AgeYears*12 + rt.AgeMonths
+			return months, months + 1, true
+		case PrecisionRange:
+			return rt.AgeYears * 12, (rt.AgeToYears + 1) * 12, true
+		}
+	}
+	if !rt.Resolved || !anchorOf(person).BirthdayKnown {
+		return 0, 0, false
+	}
+	start, _, _, _ := parseCivil(rt.Start)
+	end, _, _, _ := parseCivil(rt.End)
+	return ageInMonths(person.Birthday, start.Time()), ageInMonths(person.Birthday, end.addDays(-1).Time()) + 1, true
+}
+
+// Years lists the calendar years rt's range touches, at most limit of them.
+func (rt RecordTime) Years(limit int) []int {
+	if !rt.Resolved {
+		return nil
+	}
+	start, _, _, _ := parseCivil(rt.Start)
+	end, _, _, _ := parseCivil(rt.End)
+	var years []int
+	for y := start.Year; y <= end.addDays(-1).Year && len(years) < limit; y++ {
+		years = append(years, y)
+	}
+	return years
+}
+
+// recordFileDate names a record's date in a filename without inventing a day.
+func recordFileDate(rt RecordTime) string {
+	if rt.ExactDay() {
+		return rt.From
+	}
+	slug := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 'a' - 'A'
+		}
+		return '-'
+	}, rt.Label())
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
+	return strings.Trim(slug, "-")
+}
