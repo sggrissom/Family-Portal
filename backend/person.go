@@ -740,7 +740,23 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	return
 }
 
-func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Image {
+// withOverlappingApprox adds the approximately dated photos the date index
+// placed outside the window but whose span overlaps it.
+func withOverlappingApprox(tx *vbolt.Tx, photoIds []int, approxIds []int, inWindow func(RecordTime) bool) []int {
+	have := map[int]bool{}
+	for _, id := range photoIds {
+		have[id] = true
+	}
+	for _, id := range approxIds {
+		if !have[id] && inWindow(GetImageById(tx, id).RecordTime) {
+			have[id] = true
+			photoIds = append(photoIds, id)
+		}
+	}
+	return photoIds
+}
+
+func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool, recordInWindow func(RecordTime) bool) []Image {
 	photos := []Image{}
 	for _, familyId := range familiesVisibleTo(tx, user) {
 		var photoIds []int
@@ -750,6 +766,13 @@ func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Im
 			}
 			return true
 		})
+		var untaggedApprox []int
+		for _, id := range approxPhotoIds(tx, ImageApproxByFamilyIndex, familyId) {
+			if len(GetPhotoPersonsByPhoto(tx, id)) == 0 {
+				untaggedApprox = append(untaggedApprox, id)
+			}
+		}
+		photoIds = withOverlappingApprox(tx, photoIds, untaggedApprox, recordInWindow)
 		for _, photoId := range photoIds {
 			photo := GetImageById(tx, photoId)
 			if photo.Id == 0 {
@@ -832,6 +855,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 				}
 				return true
 			})
+			photoIds = withOverlappingApprox(ctx.Tx, photoIds, approxPhotoIds(ctx.Tx, ImageApproxByPersonIndex, person.Id), recordInWindow)
 			timelineItem.Photos = make([]Image, 0, len(photoIds))
 			for _, photoId := range photoIds {
 				photo := GetImageById(ctx.Tx, photoId)
@@ -864,7 +888,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 
 	resp.UntaggedPhotos = []Image{}
 	if req.IncludeUntaggedPhotos && !req.SkipPhotos {
-		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow)
+		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow, recordInWindow)
 	}
 
 	resp.Years = make([]int, 0, len(years))

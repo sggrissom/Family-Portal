@@ -238,3 +238,78 @@ func TestRecordFileDate(t *testing.T) {
 		t.Errorf("estimate = %q", got)
 	}
 }
+
+func yearRange(from, to string) RecordTime {
+	return RecordTime{Version: RecordTimeVersion, Meaning: MeaningOccurrence, Basis: BasisCalendar,
+		Precision: PrecisionRange, From: from, To: to, Source: SourceFamily}
+}
+
+func (fx rtConsumerFixture) listPhotos(req ListFamilyPhotosRequest) (titles []string, cursor string) {
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, err := ListFamilyPhotos(fx.ctx(tx), req)
+		if err != nil {
+			fx.t.Fatal(err)
+		}
+		for _, p := range resp.Photos {
+			titles = append(titles, p.Image.Title)
+		}
+		cursor = resp.NextCursor
+	})
+	return
+}
+
+func TestPhotoDateFilterFindsOverlappingApproximatePhotos(t *testing.T) {
+	fx := setupRecordTimeConsumers(t)
+	fx.addPhoto("school years", yearRange("2022", "2025"), time.Time{})
+	fx.addPhoto("sometime at four", ageOccurrence(fx.person.Id, 4), time.Time{})
+	fx.addPhoto("shoebox", unknownRecordTime(SourceFamily), time.Time{})
+	for _, d := range []string{"2024-03-01", "2024-08-01", "2024-11-01"} {
+		fx.addPhoto(d, exactRecordTime(day(d), SourceFamily), day(d))
+	}
+
+	all, _ := fx.listPhotos(ListFamilyPhotosRequest{})
+	if slices.Index(all, "shoebox") < slices.Index(all, "school years") {
+		t.Errorf("unfiltered = %v, want the undated photo after every dated one", all)
+	}
+
+	var paged []string
+	cursor := ""
+	for {
+		titles, next := fx.listPhotos(ListFamilyPhotosRequest{DateFrom: "2024-06-01", DateTo: "2024-12-31", Limit: 2, Cursor: cursor})
+		paged = append(paged, titles...)
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+	want := "2024-11-01,2024-08-01,sometime at four,school years"
+	if strings.Join(paged, ",") != want {
+		t.Errorf("second half of 2024, two per page = %v, want %s", paged, want)
+	}
+
+	first, _ := fx.listPhotos(ListFamilyPhotosRequest{DateFrom: "2024-01-01", DateTo: "2024-05-31"})
+	if strings.Join(first, ",") != "2024-03-01,school years" {
+		t.Errorf("first half of 2024 = %v; age 4 starts on 2024-06-15", first)
+	}
+
+	exact, _ := fx.listPhotos(ListFamilyPhotosRequest{DateFrom: "2024-06-01", DateTo: "2024-12-31", ExactDatesOnly: true})
+	if strings.Join(exact, ",") != "2024-11-01,2024-08-01" {
+		t.Errorf("exact only = %v", exact)
+	}
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, err := GetFamilyTimeline(fx.ctx(tx), GetFamilyTimelineRequest{From: "2023-01-01", To: "2023-12-31"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var titles []string
+		for _, item := range resp.People {
+			for _, p := range item.Photos {
+				titles = append(titles, p.Title)
+			}
+		}
+		if !slices.Contains(titles, "school years") || slices.Contains(titles, "shoebox") {
+			t.Errorf("2023 timeline photos = %v", titles)
+		}
+	})
+}
