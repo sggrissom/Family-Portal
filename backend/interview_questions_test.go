@@ -34,7 +34,7 @@ func (fx resultsFixture) recordInterview(t *testing.T, person Person, day time.T
 		for questionId, text := range answers {
 			interview.QuestionIds = append(interview.QuestionIds, questionId)
 			q := GetInterviewQuestionById(tx, questionId)
-			writeMilestone(tx, Milestone{
+			writeMilestone(tx, &Milestone{
 				Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: person.Id, FamilyId: person.FamilyId,
 				Description: text, Category: CategoryInterview, Context: q.Text, MilestoneDate: interview.Date,
 				InterviewId: interview.Id, QuestionId: questionId,

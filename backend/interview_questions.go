@@ -480,7 +480,7 @@ func mergeInterviewQuestionsTx(tx *vbolt.Tx, user User, req MergeInterviewQuesti
 	}
 	for _, m := range answers {
 		m.QuestionId = into.Id
-		writeMilestone(tx, m)
+		writeMilestone(tx, &m)
 		answeredInto[m.InterviewId] = true
 	}
 	for _, interview := range familyInterviews(tx, familyId) {

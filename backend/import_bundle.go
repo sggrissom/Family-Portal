@@ -307,11 +307,17 @@ func importPhotos(
 		image.FileSize = int(size)
 		image.Title = photo.Title
 		image.Description = photo.Description
-		image.PhotoDate = wallClockUTC(photo.PhotoDate)
+		recordTime, photoDate, err := importRecordTime(photo.RecordTime, wallClockUTC(photo.PhotoDate), personIdMapping, false)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("Photo %q was imported without its date: %s", photo.Title, err.Error()))
+			recordTime, photoDate = unknownRecordTime(SourceLegacy), time.Time{}
+		}
+		image.PhotoDate = photoDate
+		image.RecordTime = recordTime
 		image.Status = 0
 		image.CreatedAt = time.Now()
 
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		writeImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		ReindexPhotoDates(tx, image.Id)
 		photoIdMapping[photo.Id] = image.Id

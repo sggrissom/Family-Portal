@@ -122,7 +122,7 @@ func TestSearchRanksDescriptionMatchesFirst(t *testing.T) {
 	inContext := fx.addMilestoneOn(t, fx.alice, "Laughed all day", "behavior", day("2020-01-01"))
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		inContext.Context = "at the zoo"
-		writeMilestone(tx, inContext)
+		writeMilestone(tx, &inContext)
 		vbolt.TxCommit(tx)
 	})
 	inDescription := fx.addMilestoneOn(t, fx.alice, "Zoo trip", "first", day("2019-01-01"))

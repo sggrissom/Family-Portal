@@ -221,7 +221,7 @@ func (w *videoWorker) process(imageId int) error {
 				return
 			}
 			current.OriginalKey = finalKey
-			vbolt.Write(tx, ImagesBkt, current.Id, &current)
+			writeImage(tx, &current)
 			vbolt.TxCommit(tx)
 		})
 		if gone {
@@ -322,7 +322,7 @@ func (w *videoWorker) process(imageId int) error {
 		if current.Id == 0 || current.Status != 1 {
 			return
 		}
-		if probe.HasCreatedAt && current.PhotoDate.Equal(image.PhotoDate) {
+		if probe.HasCreatedAt && current.PhotoDate.Equal(image.PhotoDate) && current.RecordTime.ExactDay() && current.RecordTime.Source != SourceFamily {
 			if current.Title == generateDefaultVideoTitle(current.OriginalFilename, current.PhotoDate) {
 				current.Title = generateDefaultVideoTitle(current.OriginalFilename, probe.CreatedAt)
 			}
@@ -337,7 +337,7 @@ func (w *videoWorker) process(imageId int) error {
 		current.VideoCodec = playbackProbe.VideoMime
 		current.AudioCodec = playbackProbe.AudioMime
 		current.DerivedBytes = int(remuxInfo.Size() + posterBytes)
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		ReindexPhotoDates(tx, current.Id)
 		vbolt.TxCommit(tx)
 		published = true
@@ -370,7 +370,7 @@ func (w *videoWorker) reject(image Image, start time.Time, reason string, cause 
 		current.Status = 2
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	kickMediaJanitor()
@@ -396,7 +396,7 @@ func (w *videoWorker) fail(image Image, start time.Time, reason string, keepOrig
 		current.Status = 2
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	detail := reason
@@ -547,7 +547,7 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 		image.Status = 1
 		image.ProcessingError = ""
 		image.DerivedBytes = image.FileSize + videoPosterAllowance
-		vbolt.Write(ctx.Tx, ImagesBkt, id, &image)
+		writeImage(ctx.Tx, &image)
 	}
 	vbolt.TxCommit(ctx.Tx)
 	globalVideoWorker.add(ids...)

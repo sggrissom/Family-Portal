@@ -416,14 +416,14 @@ func CompleteVideoUpload(ctx *vbeam.Context, req CompleteVideoUploadRequest) (re
 		FileSize:         upload.DeclaredBytes,
 		Title:            title,
 		Description:      upload.Description,
-		PhotoDate:        upload.FallbackDate,
 		CreatedAt:        time.Now(),
 		Status:           1,
 		MediaKind:        MediaVideo,
 		OriginalKey:      upload.Key,
 		DerivedBytes:     upload.DeclaredBytes + videoPosterAllowance,
 	}
-	vbolt.Write(ctx.Tx, ImagesBkt, image.Id, &image)
+	setExactDate(&image.RecordTime, &image.PhotoDate, upload.FallbackDate, SourceMetadata, user.Id)
+	writeImage(ctx.Tx, &image)
 	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByFamilyIndex, image.Id, image.FamilyId)
 	ReindexPhotoDates(ctx.Tx, image.Id)
 	for _, person := range people {

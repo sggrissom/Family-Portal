@@ -88,7 +88,7 @@ func TestQuoteContextSurvivesExportAndImport(t *testing.T) {
 	quote := fx.addMilestoneOn(t, fx.alice, "Can we have pancakes for dinner", "quote", fx.alice.Birthday.AddDate(4, 0, 0))
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		quote.Context = "Every single night"
-		writeMilestone(tx, quote)
+		writeMilestone(tx, &quote)
 		vbolt.TxCommit(tx)
 	})
 

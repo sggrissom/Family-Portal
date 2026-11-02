@@ -53,7 +53,7 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 		CreatedAt:        s.now,
 		Status:           1,
 	}
-	vbolt.Write(s.tx, ImagesBkt, photo.Id, &photo)
+	writeImage(s.tx, &photo)
 	vbolt.SetTargetSingleTerm(s.tx, ImageByFamilyIndex, photo.Id, familyId)
 	ReindexPhotoDates(s.tx, photo.Id)
 

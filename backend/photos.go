@@ -172,31 +172,32 @@ type RemovePersonFromPhotoResponse struct {
 }
 
 type Image struct {
-	Id               int       `json:"id"`
-	FamilyId         int       `json:"familyId"`
-	OwnerUserId      int       `json:"ownerUserId"`
-	OriginalFilename string    `json:"originalFilename"`
-	MimeType         string    `json:"mimeType"`
-	FileSize         int       `json:"fileSize"`
-	Width            int       `json:"width"`
-	Height           int       `json:"height"`
-	FilePath         string    `json:"filePath"`
-	Title            string    `json:"title"`
-	Description      string    `json:"description"`
-	PhotoDate        time.Time `json:"photoDate"`
-	CreatedAt        time.Time `json:"createdAt"`
-	Status           int       `json:"status"`
-	AnalysisStatus   int       `json:"analysisStatus"`
-	AnalysisVersion  int       `json:"-"`
-	TagIds           []int     `json:"tagIds,omitempty"`
-	MediaKind        MediaKind `json:"mediaKind"`
-	DurationMs       int       `json:"durationMs,omitempty"`
-	VideoCodec       string    `json:"videoCodec,omitempty"`
-	AudioCodec       string    `json:"audioCodec,omitempty"`
-	ProcessingError  string    `json:"processingError,omitempty"`
-	OriginalKey      string    `json:"-"`
-	PlaybackKey      string    `json:"-"`
-	DerivedBytes     int       `json:"-"`
+	Id               int        `json:"id"`
+	FamilyId         int        `json:"familyId"`
+	OwnerUserId      int        `json:"ownerUserId"`
+	OriginalFilename string     `json:"originalFilename"`
+	MimeType         string     `json:"mimeType"`
+	FileSize         int        `json:"fileSize"`
+	Width            int        `json:"width"`
+	Height           int        `json:"height"`
+	FilePath         string     `json:"filePath"`
+	Title            string     `json:"title"`
+	Description      string     `json:"description"`
+	PhotoDate        time.Time  `json:"photoDate"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	Status           int        `json:"status"`
+	AnalysisStatus   int        `json:"analysisStatus"`
+	AnalysisVersion  int        `json:"-"`
+	TagIds           []int      `json:"tagIds,omitempty"`
+	MediaKind        MediaKind  `json:"mediaKind"`
+	DurationMs       int        `json:"durationMs,omitempty"`
+	VideoCodec       string     `json:"videoCodec,omitempty"`
+	AudioCodec       string     `json:"audioCodec,omitempty"`
+	ProcessingError  string     `json:"processingError,omitempty"`
+	OriginalKey      string     `json:"-"`
+	PlaybackKey      string     `json:"-"`
+	DerivedBytes     int        `json:"-"`
+	RecordTime       RecordTime `json:"recordTime"`
 }
 
 type PhotoPerson struct {
@@ -209,7 +210,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(5, buf)
+	version := vpack.Version(6, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -239,6 +240,9 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 		vpack.String(&self.OriginalKey, buf)
 		vpack.String(&self.PlaybackKey, buf)
 		vpack.Int(&self.DerivedBytes, buf)
+	}
+	if version >= 6 {
+		PackRecordTime(&self.RecordTime, buf)
 	}
 }
 
@@ -771,12 +775,16 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
 			Title:            title,
 			Description:      description,
-			PhotoDate:        calculatedPhotoDate,
 			CreatedAt:        time.Now(),
 			Status:           1,
 		}
+		dateSource := SourceFamily
+		if inputType == "auto" {
+			dateSource = SourceMetadata
+		}
+		setExactDate(&image.RecordTime, &image.PhotoDate, calculatedPhotoDate, dateSource, user.Id)
 
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		writeImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		ReindexPhotoDates(tx, image.Id)
 
@@ -847,7 +855,7 @@ func markPhotoFailed(imageId int) {
 			return
 		}
 		image.Status = 2
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		writeImage(tx, &image)
 		vbolt.TxCommit(tx)
 	})
 }
@@ -1141,17 +1149,19 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		if err != nil {
 			return
 		}
+		if !calculatedPhotoDate.Equal(photo.PhotoDate) || !photo.RecordTime.ExactDay() {
+			setExactDate(&photo.RecordTime, &photo.PhotoDate, calculatedPhotoDate, SourceFamily, user.Id)
+		}
 	}
 
 	photo.Title = strings.TrimSpace(req.Title)
 	photo.Description = strings.TrimSpace(req.Description)
-	photo.PhotoDate = calculatedPhotoDate
 
 	if photo.Title == "" {
 		photo.Title = generateDefaultTitle(photo.OriginalFilename, calculatedPhotoDate)
 	}
 
-	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
+	writeImage(ctx.Tx, &photo)
 	ReindexPhotoDates(ctx.Tx, photo.Id)
 
 	resp.Image = photo
@@ -1211,6 +1221,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
+	vbolt.DeleteTargetTerms(tx, ImageByAnchorIndex, photo.Id)
 	ReindexPhotoDates(tx, photo.Id)
 }
 

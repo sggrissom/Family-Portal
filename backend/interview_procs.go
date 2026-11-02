@@ -89,7 +89,7 @@ func setInterviewDate(tx *vbolt.Tx, interview *Interview, date time.Time) {
 	for _, m := range interviewAnswers(tx, interview.Id) {
 		if !m.MilestoneDate.Equal(interview.Date) {
 			m.MilestoneDate = interview.Date
-			writeMilestone(tx, m)
+			writeMilestone(tx, &m)
 		}
 	}
 }
@@ -363,7 +363,7 @@ func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req
 	case text != "" && existing.Id > 0:
 		answer = existing
 		answer.Description = text
-		writeMilestone(tx, answer)
+		writeMilestone(tx, &answer)
 	case text != "":
 		q := GetInterviewQuestionById(tx, req.QuestionId)
 		answer = Milestone{
@@ -378,7 +378,7 @@ func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req
 			InterviewId:   interview.Id,
 			QuestionId:    q.Id,
 		}
-		writeMilestone(tx, answer)
+		writeMilestone(tx, &answer)
 	}
 	writeInterview(tx, interview)
 	return interview, answer, nil
