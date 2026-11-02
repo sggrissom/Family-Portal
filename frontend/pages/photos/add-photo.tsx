@@ -18,6 +18,15 @@ import { PersonChips, scrollSelectedChipIntoView } from "../../components/Person
 import { peopleChanges, takenLabel, type QueuedPhoto } from "../../lib/photoUploadQueue";
 import "./add-photo-styles";
 import "../../components/entry-form-styles";
+import {
+  RecordWhen,
+  newRecordWhen,
+  recordWhenFrom,
+  recordWhenProblem,
+  recordWhenTime,
+} from "../../lib/recordWhen";
+import { approximateDatesEnabled } from "../../lib/recordTimeSettings";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 
 type UploadItem = QueuedPhoto & {
   image: server.Image | null;
@@ -34,6 +43,7 @@ type AddPhotoForm = {
   pumping: boolean;
   editingDate: boolean;
   newDate: string;
+  newWhen: RecordWhen;
   finishing: boolean;
   dragActive: boolean;
   handedOff: boolean;
@@ -50,6 +60,7 @@ const useAddPhotoForm = vlens.declareHook((personId: number | null): AddPhotoFor
     pumping: false,
     editingDate: false,
     newDate: "",
+    newWhen: newRecordWhen(),
     finishing: false,
     dragActive: false,
     handedOff: false,
@@ -251,6 +262,8 @@ function editDate(form: AddPhotoForm) {
   form.editingDate = true;
   const first = form.items.find(item => item.image)?.image;
   form.newDate = first ? first.photoDate.split("T")[0] : localDateString(new Date());
+  form.newWhen = recordWhenFrom(first?.recordTime, form.newDate);
+  if (form.personIds.length === 1) form.newWhen.anchorPersonId = form.personIds[0];
   vlens.scheduleRedraw();
 }
 
@@ -262,8 +275,15 @@ function onDone(form: AddPhotoForm, event: Event) {
     vlens.scheduleRedraw();
     return;
   }
-  if (form.editingDate && !form.newDate) {
-    form.error = "Pick the date these were taken";
+  const problem = !form.editingDate
+    ? ""
+    : approximateDatesEnabled()
+      ? recordWhenProblem(form.newWhen, false, undefined, new Date())
+      : form.newDate
+        ? ""
+        : "Pick the date these were taken";
+  if (problem) {
+    form.error = problem;
     vlens.scheduleRedraw();
     return;
   }
@@ -276,6 +296,7 @@ function onDone(form: AddPhotoForm, event: Event) {
 
 async function finish(form: AddPhotoForm) {
   const caption = form.caption.trim();
+  const approximate = approximateDatesEnabled();
   const problems: string[] = [];
 
   for (const item of form.items) {
@@ -298,10 +319,12 @@ async function finish(form: AddPhotoForm) {
         id: image.id,
         title: caption || (form.editingDate ? "" : image.title),
         description: image.description,
-        inputType: form.editingDate ? "date" : "keep",
-        photoDate: form.editingDate ? form.newDate : "",
+        inputType: form.editingDate && !approximate ? "date" : "keep",
+        photoDate: form.editingDate && !approximate ? form.newDate : "",
         ageYears: null,
         ageMonths: null,
+        recordTime:
+          form.editingDate && approximate ? recordWhenTime(form.newWhen, new Date(), false) : null,
       });
       if (resp) item.image = resp.image;
       else problems.push(err);
@@ -469,7 +492,16 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
         {(taken || form.editingDate) && (
           <div className="photo-taken">
             <span className="entry-label">{copy.photos.taken}</span>
-            {form.editingDate ? (
+            {form.editingDate && approximateDatesEnabled() ? (
+              <RecordWhenControl
+                when={form.newWhen}
+                approximate={true}
+                isMoment={false}
+                disabled={form.finishing}
+                anchors={people.filter(p => form.personIds.includes(p.id))}
+                birthday={people.find(p => p.id === form.newWhen.anchorPersonId)?.birthday}
+              />
+            ) : form.editingDate ? (
               <input
                 type="date"
                 className="when-date"

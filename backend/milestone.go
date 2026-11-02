@@ -33,6 +33,9 @@ type AddMilestoneRequest struct {
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
 	TagIds        []int   `json:"tagIds,omitempty"`
+	// RecordTime, when present, replaces InputType and the legacy date fields.
+	RecordTime *RecordTime `json:"recordTime,omitempty"`
+	UserId     int         `json:"-"`
 }
 
 type AddMilestoneResponse struct {
@@ -58,6 +61,9 @@ type UpdateMilestoneRequest struct {
 	AgeMonths     *int    `json:"ageMonths,omitempty"`
 	PhotoIds      []int   `json:"photoIds,omitempty"`
 	TagIds        []int   `json:"tagIds,omitempty"`
+	// RecordTime, when present, replaces InputType and the legacy date fields.
+	RecordTime *RecordTime `json:"recordTime,omitempty"`
+	UserId     int         `json:"-"`
 }
 
 type UpdateMilestoneResponse struct {
@@ -409,18 +415,23 @@ func removeMilestoneTagsByTag(tx *vbolt.Tx, tagId int) {
 
 func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milestone, error) {
 	var milestone Milestone
-	var err error
 
 	person := GetPersonById(tx, req.PersonId)
 	if person.Id == 0 || !CanFamilyAccess(tx, familyId, person.FamilyId, AccessContribute) {
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if err != nil {
-		return milestone, err
+	if req.RecordTime != nil {
+		if err := applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate); err != nil {
+			return milestone, err
+		}
+	} else {
+		date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+		if err != nil {
+			return milestone, err
+		}
+		setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, req.UserId)
 	}
-	setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, 0)
 
 	milestone.Id = vbolt.NextIntId(tx, MilestoneBkt)
 	milestone.PersonId = req.PersonId
@@ -458,12 +469,8 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	if milestone.Category == CategoryInterview {
 		milestone.Description = strings.TrimSpace(req.Description)
 	} else {
-		date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-		if err != nil {
+		if err := updateMilestoneDate(tx, familyId, req, person, &milestone); err != nil {
 			return milestone, err
-		}
-		if !date.Equal(milestone.MilestoneDate) || !milestone.RecordTime.ExactDay() {
-			setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, 0)
 		}
 		setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 	}
@@ -481,6 +488,28 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		}
 	}
 	return milestone, nil
+}
+
+func updateMilestoneDate(tx *vbolt.Tx, familyId int, req UpdateMilestoneRequest, person Person, milestone *Milestone) error {
+	if req.RecordTime != nil {
+		return applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate)
+	}
+	if req.InputType == "date" {
+		keep, err := keepsApproximateDate(milestone.RecordTime, milestone.MilestoneDate, req.MilestoneDate)
+		if keep || err != nil {
+			return err
+		}
+	} else if !milestone.RecordTime.ExactDay() {
+		return ErrApproximateDateNeedsUpdate
+	}
+	date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	if err != nil {
+		return err
+	}
+	if !date.Equal(milestone.MilestoneDate) || !milestone.RecordTime.ExactDay() {
+		setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, req.UserId)
+	}
+	return nil
 }
 
 func setMilestoneText(milestone *Milestone, description string, category string, context string) {
@@ -591,7 +620,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	return nil
 }
 
-func validateMilestoneFields(description string, category string, inputType string) error {
+func validateMilestoneFields(description string, category string, inputType string, hasRecordTime bool) error {
 	if strings.TrimSpace(description) == "" {
 		return errors.New("Description is required")
 	}
@@ -599,6 +628,9 @@ func validateMilestoneFields(description string, category string, inputType stri
 	case "development", "behavior", "health", "achievement", "first", "quote", "artwork", "other", CategoryInterview:
 	default:
 		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, artwork, other")
+	}
+	if hasRecordTime {
+		return nil
 	}
 	return validateEntryInputType(inputType)
 }
@@ -614,7 +646,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		err = errors.New("Person ID is required")
 		return
 	}
-	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType, req.RecordTime != nil); err != nil {
 		return
 	}
 	if req.Category == CategoryInterview {
@@ -628,6 +660,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 	}
 
 	vbeam.UseWriteTx(ctx)
+	req.UserId = user.Id
 	milestone, err := AddMilestoneTx(ctx.Tx, req, familyId)
 	if err != nil {
 		return
@@ -698,7 +731,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		err = errors.New("Moment ID is required")
 		return
 	}
-	if err = validateMilestoneFields(req.Description, req.Category, req.InputType); err != nil {
+	if err = validateMilestoneFields(req.Description, req.Category, req.InputType, req.RecordTime != nil); err != nil {
 		return
 	}
 
@@ -708,6 +741,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 	}
 
 	vbeam.UseWriteTx(ctx)
+	req.UserId = user.Id
 	milestone, err := UpdateMilestoneTx(ctx.Tx, req, existing.FamilyId)
 	if err != nil {
 		return

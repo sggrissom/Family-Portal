@@ -13,6 +13,15 @@ import "./edit-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { recordDateLabel } from "../../lib/recordTime";
+import {
+  RecordWhen,
+  newRecordWhen,
+  recordWhenFrom,
+  recordWhenProblem,
+  recordWhenTime,
+} from "../../lib/recordWhen";
+import { approximateDatesEnabled } from "../../lib/recordTimeSettings";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 
 type EditPhotoData = {
   photo: server.GetPhotoResponse;
@@ -34,6 +43,7 @@ type EditPhotoForm = {
   photoDate: string;
   ageYears: string;
   ageMonths: string;
+  when: RecordWhen;
   tagIds: number[];
   loading: boolean;
   error: string;
@@ -48,6 +58,7 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
       photoDate: "",
       ageYears: "",
       ageMonths: "",
+      when: newRecordWhen(),
       tagIds: [],
       loading: false,
       error: "",
@@ -63,6 +74,7 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     photoDate: photoDate,
     ageYears: "",
     ageMonths: "",
+    when: recordWhenFrom(photo.recordTime, photo.photoDate),
     tagIds: photo.tagIds ?? [],
     loading: false,
     error: "",
@@ -118,17 +130,46 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
     <div>
       <Header isHome={false} />
       <main id="app" className="edit-photo-container">
-        <EditPhotoPage form={form} photo={data.photo.image} allTags={data.tags} />
+        <EditPhotoPage
+          form={form}
+          photo={data.photo.image}
+          people={data.photo.people ?? []}
+          allTags={data.tags}
+        />
       </main>
       <Footer />
     </div>
   );
 }
 
-async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Event) {
+async function onSubmitEdit(
+  form: EditPhotoForm,
+  photo: server.Image,
+  people: server.Person[],
+  event: Event
+) {
   event.preventDefault();
   form.loading = true;
   form.error = "";
+
+  if (approximateDatesEnabled()) {
+    const anchor = people.find(p => p.id === form.when.anchorPersonId);
+    const problem = recordWhenProblem(form.when, false, anchor?.birthday, new Date());
+    if (problem) {
+      form.error = problem;
+      form.loading = false;
+      vlens.scheduleRedraw();
+      return;
+    }
+    await saveEdit(form, photo, {
+      inputType: "keep",
+      photoDate: "",
+      ageYears: null,
+      ageMonths: null,
+      recordTime: recordWhenTime(form.when, new Date(), false),
+    });
+    return;
+  }
 
   if (form.inputType === "date" && !form.photoDate) {
     form.error = "Please select a date";
@@ -144,15 +185,24 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
     return;
   }
 
+  await saveEdit(form, photo, {
+    inputType: form.inputType === "today" ? "date" : form.inputType,
+    photoDate: form.inputType === "today" ? localDateString(new Date()) : form.photoDate,
+    ageYears: form.ageYears ? parseInt(form.ageYears) : null,
+    ageMonths: form.ageMonths ? parseInt(form.ageMonths) : null,
+    recordTime: null,
+  });
+}
+
+type DateFields = Omit<server.UpdatePhotoRequest, "id" | "title" | "description">;
+
+async function saveEdit(form: EditPhotoForm, photo: server.Image, date: DateFields) {
   try {
     const updateRequest: server.UpdatePhotoRequest = {
       id: photo.id,
       title: form.title.trim(),
       description: form.description.trim(),
-      inputType: form.inputType === "today" ? "date" : form.inputType,
-      photoDate: form.inputType === "today" ? localDateString(new Date()) : form.photoDate,
-      ageYears: form.ageYears ? parseInt(form.ageYears) : null,
-      ageMonths: form.ageMonths ? parseInt(form.ageMonths) : null,
+      ...date,
     };
 
     const [resp, err] = await server.UpdatePhoto(updateRequest);
@@ -182,10 +232,15 @@ async function onSubmitEdit(form: EditPhotoForm, photo: server.Image, event: Eve
 interface EditPhotoPageProps {
   form: EditPhotoForm;
   photo: server.Image;
+  people: server.Person[];
   allTags: server.Tag[];
 }
 
-const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
+const EditPhotoPage = ({ form, photo, people, allTags }: EditPhotoPageProps) => {
+  const approximate = approximateDatesEnabled();
+  if (form.when.anchorPersonId === 0 && people.length === 1)
+    form.when.anchorPersonId = people[0].id;
+  const anchor = people.find(p => p.id === form.when.anchorPersonId);
   return (
     <div className="edit-photo-page">
       <div className="auth-card">
@@ -213,7 +268,10 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
           </div>
         )}
 
-        <form className="auth-form" onSubmit={vlens.cachePartial(onSubmitEdit, form, photo)}>
+        <form
+          className="auth-form"
+          onSubmit={vlens.cachePartial(onSubmitEdit, form, photo, people)}
+        >
           <div className="form-group">
             <label htmlFor="title">Photo Title (Optional)</label>
             <input
@@ -236,98 +294,116 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
             />
           </div>
 
-          <div className="form-group">
-            <label>When was this photo taken?</label>
-            <div className="radio-group">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="auto"
-                  checked={form.inputType === "auto"}
-                  onChange={() => onInputTypeChange(form, "auto")}
-                  disabled={form.loading}
-                />
-                <span>Auto (from photo)</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="today"
-                  checked={form.inputType === "today"}
-                  onChange={() => onInputTypeChange(form, "today")}
-                  disabled={form.loading}
-                />
-                <span>Today</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="date"
-                  checked={form.inputType === "date"}
-                  onChange={() => onInputTypeChange(form, "date")}
-                  disabled={form.loading}
-                />
-                <span>Specific Date</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="inputType"
-                  value="age"
-                  checked={form.inputType === "age"}
-                  onChange={() => onInputTypeChange(form, "age")}
-                  disabled={form.loading}
-                />
-                <span>At Age</span>
-              </label>
-            </div>
-          </div>
-
-          {form.inputType === "date" && (
+          {approximate && (
             <div className="form-group">
-              <label htmlFor="date">Date</label>
-              <input
-                id="date"
-                type="date"
-                {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                max={localDateString(new Date())}
-                required
+              <span className="form-group-caption">When was this photo taken?</span>
+              <RecordWhenControl
+                when={form.when}
+                approximate={true}
+                isMoment={false}
                 disabled={form.loading}
+                birthday={anchor && !anchor.isPregnancy ? anchor.birthday : undefined}
+                anchors={people}
               />
             </div>
           )}
 
-          {form.inputType === "age" && (
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label htmlFor="ageYears">Age (Years)</label>
-                <input
-                  id="ageYears"
-                  type="number"
-                  min="0"
-                  max="100"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
-                  placeholder="5"
-                  required
-                  disabled={form.loading}
-                />
+          {!approximate && (
+            <>
+              <div className="form-group">
+                <label>When was this photo taken?</label>
+                <div className="radio-group">
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="inputType"
+                      value="auto"
+                      checked={form.inputType === "auto"}
+                      onChange={() => onInputTypeChange(form, "auto")}
+                      disabled={form.loading}
+                    />
+                    <span>Auto (from photo)</span>
+                  </label>
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="inputType"
+                      value="today"
+                      checked={form.inputType === "today"}
+                      onChange={() => onInputTypeChange(form, "today")}
+                      disabled={form.loading}
+                    />
+                    <span>Today</span>
+                  </label>
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="inputType"
+                      value="date"
+                      checked={form.inputType === "date"}
+                      onChange={() => onInputTypeChange(form, "date")}
+                      disabled={form.loading}
+                    />
+                    <span>Specific Date</span>
+                  </label>
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="inputType"
+                      value="age"
+                      checked={form.inputType === "age"}
+                      onChange={() => onInputTypeChange(form, "age")}
+                      disabled={form.loading}
+                    />
+                    <span>At Age</span>
+                  </label>
+                </div>
               </div>
-              <div className="form-group flex-1">
-                <label htmlFor="ageMonths">Months</label>
-                <input
-                  id="ageMonths"
-                  type="number"
-                  min="0"
-                  max="11"
-                  {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
-                  placeholder="6"
-                  disabled={form.loading}
-                />
-              </div>
-            </div>
+
+              {form.inputType === "date" && (
+                <div className="form-group">
+                  <label htmlFor="date">Date</label>
+                  <input
+                    id="date"
+                    type="date"
+                    {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
+                    max={localDateString(new Date())}
+                    required
+                    disabled={form.loading}
+                  />
+                </div>
+              )}
+
+              {form.inputType === "age" && (
+                <div className="form-row">
+                  <div className="form-group flex-2">
+                    <label htmlFor="ageYears">Age (Years)</label>
+                    <input
+                      id="ageYears"
+                      type="number"
+                      min="0"
+                      max="100"
+                      {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
+                      placeholder="5"
+                      required
+                      disabled={form.loading}
+                    />
+                  </div>
+                  <div className="form-group flex-1">
+                    <label htmlFor="ageMonths">Months</label>
+                    <input
+                      id="ageMonths"
+                      type="number"
+                      min="0"
+                      max="11"
+                      {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
+                      placeholder="6"
+                      disabled={form.loading}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {allTags.length > 0 && (

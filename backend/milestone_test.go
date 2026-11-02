@@ -383,7 +383,7 @@ func TestMilestoneValidation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateMilestoneFields(test.request.Description, test.request.Category, test.request.InputType)
+			err := validateMilestoneFields(test.request.Description, test.request.Category, test.request.InputType, false)
 			if test.shouldError && err == nil {
 				t.Errorf("Expected validation error for %s, but got none", test.name)
 			}

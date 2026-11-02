@@ -20,7 +20,7 @@ export interface RecordRange {
   resolved: boolean;
 }
 
-interface Civil {
+export interface Civil {
   year: number;
   month: number;
   day: number;
@@ -42,7 +42,7 @@ function addDays(d: Civil, n: number): Civil {
   return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
 }
 
-function civilString(d: Civil): string {
+export function civilString(d: Civil): string {
   const pad = (n: number, w: number) => String(n).padStart(w, "0");
   return `${pad(d.year, 4)}-${pad(d.month, 2)}-${pad(d.day, 2)}`;
 }
@@ -85,6 +85,7 @@ export function resolveRecordTime(rt: RecordTimeFields, birthday: string | null)
     start = from.start;
     end = to.end;
   } else if (rt.basis === "age") {
+    if (![rt.ageYears, rt.ageMonths, rt.ageToYears].every(Number.isInteger)) return unresolved;
     const born = birthday ? parseCivil(birthday.slice(0, 10)) : null;
     if (!born) return unresolved;
     const b = born.start;
@@ -203,7 +204,7 @@ export function exactRecordTime(date: string, source = "family"): RecordTime {
     source,
     note: "",
     changedBy: 0,
-    changedAt: "",
+    changedAt: "0001-01-01T00:00:00Z",
     ...range,
     resolverVersion: 1,
   };

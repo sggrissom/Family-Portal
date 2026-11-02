@@ -78,6 +78,8 @@ type UpdatePhotoRequest struct {
 	PhotoDate   string `json:"photoDate,omitempty"`
 	AgeYears    *int   `json:"ageYears,omitempty"`
 	AgeMonths   *int   `json:"ageMonths,omitempty"`
+	// RecordTime, when present, replaces InputType and the legacy date fields.
+	RecordTime *RecordTime `json:"recordTime,omitempty"`
 }
 
 type UpdatePhotoResponse struct {
@@ -583,6 +585,14 @@ func extractExifDate(fileData []byte) (time.Time, error) {
 	return wallClockUTC(tm), nil
 }
 
+// exactDateOf is the record's day when it has one, and zero otherwise.
+func exactDateOf(rt RecordTime, at time.Time) time.Time {
+	if rt.ExactDay() {
+		return at
+	}
+	return time.Time{}
+}
+
 func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	if !photoDate.IsZero() {
 		return fmt.Sprintf("Photo from %s", photoDate.Format("Jan 2, 2006"))
@@ -658,6 +668,14 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	description := strings.TrimSpace(r.FormValue("description"))
 	inputType := r.FormValue("inputType")
 	photoDate := r.FormValue("photoDate")
+	var requestedTime *RecordTime
+	if raw := r.FormValue("recordTime"); raw != "" {
+		requestedTime = &RecordTime{}
+		if err := json.Unmarshal([]byte(raw), requestedTime); err != nil {
+			RespondValidationError(w, r, "The photo date could not be read.", err.Error())
+			return
+		}
+	}
 
 	var ageYears, ageMonths *int
 	if ageYearsStr := r.FormValue("ageYears"); ageYearsStr != "" {
@@ -748,14 +766,28 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		if len(validPersons) > 0 {
 			referencePerson = validPersons[0]
 		}
-		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeValidation, "That photo date could not be worked out. Check the date or age you entered.", err.Error())
-			return
+		var recordTime RecordTime
+		var calculatedPhotoDate time.Time
+		if requestedTime != nil {
+			if err := applyRecordTime(tx, familyId, user.Id, *requestedTime, false, &recordTime, &calculatedPhotoDate); err != nil {
+				uploadErr = NewAppError(ErrCodeValidation, err.Error())
+				return
+			}
+		} else {
+			calculatedPhotoDate, err = calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
+			if err != nil {
+				uploadErr = NewAppError(ErrCodeValidation, "That photo date could not be worked out. Check the date or age you entered.", err.Error())
+				return
+			}
+			dateSource := SourceFamily
+			if inputType == "auto" {
+				dateSource = SourceMetadata
+			}
+			setExactDate(&recordTime, &calculatedPhotoDate, calculatedPhotoDate, dateSource, user.Id)
 		}
 
 		if title == "" {
-			title = generateDefaultTitle(fileHeader.Filename, calculatedPhotoDate)
+			title = generateDefaultTitle(fileHeader.Filename, exactDateOf(recordTime, calculatedPhotoDate))
 		}
 
 		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
@@ -780,14 +812,11 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
 			Title:            title,
 			Description:      description,
+			PhotoDate:        calculatedPhotoDate,
+			RecordTime:       recordTime,
 			CreatedAt:        time.Now(),
 			Status:           1,
 		}
-		dateSource := SourceFamily
-		if inputType == "auto" {
-			dateSource = SourceMetadata
-		}
-		setExactDate(&image.RecordTime, &image.PhotoDate, calculatedPhotoDate, dateSource, user.Id)
 
 		writeImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
@@ -1148,22 +1177,15 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		referencePerson = people[0]
 	}
 
-	calculatedPhotoDate := photo.PhotoDate
-	if req.InputType != "keep" {
-		calculatedPhotoDate, err = calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
-		if err != nil {
-			return
-		}
-		if !calculatedPhotoDate.Equal(photo.PhotoDate) || !photo.RecordTime.ExactDay() {
-			setExactDate(&photo.RecordTime, &photo.PhotoDate, calculatedPhotoDate, SourceFamily, user.Id)
-		}
+	if err = updatePhotoDate(ctx.Tx, user, req, referencePerson, &photo); err != nil {
+		return
 	}
 
 	photo.Title = strings.TrimSpace(req.Title)
 	photo.Description = strings.TrimSpace(req.Description)
 
 	if photo.Title == "" {
-		photo.Title = generateDefaultTitle(photo.OriginalFilename, calculatedPhotoDate)
+		photo.Title = generateDefaultTitle(photo.OriginalFilename, exactDateOf(photo.RecordTime, photo.PhotoDate))
 	}
 
 	writeImage(ctx.Tx, &photo)
@@ -1173,6 +1195,31 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
 	vbolt.TxCommit(ctx.Tx)
 	return
+}
+
+func updatePhotoDate(tx *vbolt.Tx, user User, req UpdatePhotoRequest, referencePerson Person, photo *Image) error {
+	if req.RecordTime != nil {
+		return applyRecordTime(tx, photo.FamilyId, user.Id, *req.RecordTime, false, &photo.RecordTime, &photo.PhotoDate)
+	}
+	if req.InputType == "keep" {
+		return nil
+	}
+	if req.InputType == "date" {
+		keep, err := keepsApproximateDate(photo.RecordTime, photo.PhotoDate, &req.PhotoDate)
+		if keep || err != nil {
+			return err
+		}
+	} else if !photo.RecordTime.ExactDay() {
+		return ErrApproximateDateNeedsUpdate
+	}
+	date, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
+	if err != nil {
+		return err
+	}
+	if !date.Equal(photo.PhotoDate) || !photo.RecordTime.ExactDay() {
+		setExactDate(&photo.RecordTime, &photo.PhotoDate, date, SourceFamily, user.Id)
+	}
+	return nil
 }
 
 func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoResponse, err error) {
@@ -1269,6 +1316,9 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 		return errors.New("Invalid photo ID")
 	}
 
+	if req.RecordTime != nil {
+		return nil
+	}
 	if req.InputType == "" {
 		return errors.New("Input type is required")
 	}
