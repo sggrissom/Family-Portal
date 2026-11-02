@@ -1,6 +1,6 @@
 # Approximate dates, age-based records, and periods
 
-Status: implementation plan; not implemented. Updated 2026-11-01.
+Status: in progress (phase 1 contract: [approximate-dates-contract.md](approximate-dates-contract.md)). Updated 2026-11-02.
 Manual entry and end-to-end date semantics are the release scope. AI estimation
 remains an optional later experiment, not a dependency or provider commitment.
 
