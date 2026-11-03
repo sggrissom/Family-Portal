@@ -12,6 +12,7 @@ import { ViewOnlyPage } from "../../components/ErrorPage";
 import "./edit-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
+import { recordDateLabel } from "../../lib/recordTime";
 
 type EditPhotoData = {
   photo: server.GetPhotoResponse;
@@ -197,7 +198,8 @@ const EditPhotoPage = ({ form, photo, allTags }: EditPhotoPageProps) => {
           <ThumbnailImage photoId={photo.id} alt={photo.title} className="preview-image" />
           <div className="photo-info">
             <div>
-              <strong>Current Date:</strong> {formatPhotoDate(photo.photoDate)}
+              <strong>Current Date:</strong>{" "}
+              {recordDateLabel(photo.recordTime, photo.photoDate, formatPhotoDate)}
             </div>
             <div>
               <strong>Uploaded:</strong> {formatPhotoDate(photo.createdAt)}

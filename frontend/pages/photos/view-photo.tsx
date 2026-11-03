@@ -32,6 +32,7 @@ import {
   viewPhotoRoute,
   SequencePosition,
 } from "../../lib/photoSequence";
+import { isExactRecord, recordDateLabel } from "../../lib/recordTime";
 
 type ViewPhotoData = {
   image: server.Image | null;
@@ -49,7 +50,9 @@ type ViewPhotoData = {
 
 const CHILD_MAX_MONTHS = 18 * 12;
 
-function firstChildIn(people: server.Person[], photoDate: string): [number, number] {
+function firstChildIn(people: server.Person[], image: server.Image): [number, number] {
+  if (!isExactRecord(image.recordTime)) return [0, 0];
+  const photoDate = image.photoDate;
   for (const person of people) {
     if (person.isPregnancy || !isValidBirthday(person.birthday)) continue;
     const age = monthsOld(person.birthday, photoDate);
@@ -58,7 +61,9 @@ function firstChildIn(people: server.Person[], photoDate: string): [number, numb
   return [0, 0];
 }
 
-function compareHref(route: string, people: server.Person[], photoDate: string): string {
+function compareHref(route: string, people: server.Person[], image: server.Image): string {
+  if (!isExactRecord(image.recordTime)) return "";
+  const photoDate = image.photoDate;
   const personId = parseInt(new URLSearchParams(route.split("?")[1] ?? "").get("person") ?? "");
   const person = people.find(p => p.id === personId);
   if (!person || person.isPregnancy || !isValidBirthday(person.birthday)) return "";
@@ -71,7 +76,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   const [photoResp, photoErr] = await server.GetPhoto({ id: photoId });
   if (photoErr) return [null, photoErr];
   const [childId, childAge] = photoResp
-    ? firstChildIn(photoResp.people ?? [], photoResp.image.photoDate)
+    ? firstChildIn(photoResp.people ?? [], photoResp.image)
     : [0, 0];
   const isVideo = photoResp?.image.mediaKind === server.MediaVideo;
   const [[tagsResp], [facesResp], [sameAge], [playback], [transcript]] = await Promise.all([
@@ -103,9 +108,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       faces: facesResp ?? null,
       sameAge: sameAge ?? null,
       childId,
-      compareHref: photoResp
-        ? compareHref(route, photoResp.people ?? [], photoResp.image.photoDate)
-        : "",
+      compareHref: photoResp ? compareHref(route, photoResp.people ?? [], photoResp.image) : "",
       playback: playback ?? null,
       transcript: transcript ?? null,
     },
@@ -637,7 +640,8 @@ const ViewPhotoPage = ({
         <div className="photo-metadata">
           <h1 className="view-photo-title">{photo.title}</h1>
           <div className="view-photo-date">
-            <Icon symbol={CalendarDays} /> {formatPhotoDate(photo.photoDate)}
+            <Icon symbol={CalendarDays} />{" "}
+            {recordDateLabel(photo.recordTime, photo.photoDate, formatPhotoDate)}
           </div>
           {compareHref && (
             <a href={compareHref} className="view-photo-compare">

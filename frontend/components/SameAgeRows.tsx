@@ -8,6 +8,7 @@ import { groupInterviewAnswers, interviewsById } from "../lib/interviews";
 import { formatMeasurement } from "../lib/weightFormat";
 import { ageTitle, hasSameAgeRecords, monthsOld, sameAgePath } from "../lib/sameAge";
 import { copy } from "../lib/copy";
+import { recordTimeLabel } from "../lib/recordTime";
 import "./same-age-styles";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -84,6 +85,13 @@ export const SameAgeRows = ({
             {groupInterviewAnswers(row.milestones ?? []).loose.map(m => (
               <a key={m.id} href={`/milestone/${m.id}`} className="same-age-milestone">
                 <span aria-hidden="true">{getCategoryIcon(m.category)}</span>{" "}
+                <MilestoneText milestone={m} />
+              </a>
+            ))}
+            {(row.contextMilestones ?? []).map(m => (
+              <a key={m.id} href={`/milestone/${m.id}`} className="same-age-milestone context">
+                <span aria-hidden="true">{getCategoryIcon(m.category)}</span>{" "}
+                <small className="same-age-period">{recordTimeLabel(m.recordTime)} · </small>
                 <MilestoneText milestone={m} />
               </a>
             ))}

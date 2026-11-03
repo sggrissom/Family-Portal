@@ -1,6 +1,7 @@
 import * as server from "../server";
 import { monthsOld, photoAge } from "./sameAge";
 import { formatMeasurement } from "./weightFormat";
+import { isExactRecord, recordTimeLabel } from "./recordTime";
 
 export type Density = "brief" | "balanced" | "detailed";
 
@@ -47,6 +48,7 @@ export interface BookPhoto {
   width: number;
   height: number;
   day: string;
+  dateLabel?: string;
   caption: string;
   detail: string;
 }
@@ -56,6 +58,7 @@ export interface BookMoment {
   text: string;
   context: string;
   day: string;
+  dateLabel?: string;
   detail: string;
   first: boolean;
 }
@@ -627,6 +630,7 @@ export function insertByDay(r: Resolved, items: server.BookItem[], item: server.
 
 export function photoDetail(r: Resolved, image: server.Image): string {
   const day = dayOf(image.photoDate);
+  if (!isMulti(r) && !isExactRecord(image.recordTime)) return "";
   if (isMulti(r)) {
     const names = (r.photoPeople.get(image.id) ?? [])
       .map(id => r.person.get(id)?.name ?? "")
@@ -639,12 +643,17 @@ export function photoDetail(r: Resolved, image: server.Image): string {
     : "";
 }
 
+function inexactLabel(rt: server.RecordTime | undefined): string | undefined {
+  return isExactRecord(rt) ? undefined : recordTimeLabel(rt!);
+}
+
 function toPhoto(image: server.Image, r: Resolved, caption?: string): BookPhoto {
   return {
     id: image.id,
     width: image.width,
     height: image.height,
     day: dayOf(image.photoDate),
+    dateLabel: inexactLabel(image.recordTime),
     caption: caption || originalCaption(image),
     detail: photoDetail(r, image),
   };
@@ -659,7 +668,11 @@ function toMoment(m: server.Milestone, r: Resolved): BookMoment {
     text: m.description.trim(),
     context: (m.context ?? "").trim(),
     day,
-    detail: isRealDay(born) && day >= born ? photoAge(born, day + "T00:00:00Z") : "",
+    dateLabel: inexactLabel(m.recordTime),
+    detail:
+      isExactRecord(m.recordTime) && isRealDay(born) && day >= born
+        ? photoAge(born, day + "T00:00:00Z")
+        : "",
     first: m.category === "first",
   };
 }

@@ -26,6 +26,7 @@ import {
   yearsToReach,
 } from "../../lib/photoPages";
 import "./history-styles";
+import { recordDateLabel } from "../../lib/recordTime";
 
 const FIRST_LOAD_ENTRIES = 50;
 
@@ -343,7 +344,7 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
           {months.map(month => (
             <section key={month.month} className="history-month">
               {firstMonthOfYear.has(month.month) && <span id={`year-${month.month.slice(0, 4)}`} />}
-              <h2 className="history-month-label">{month.label}</h2>
+              {month.label && <h2 className="history-month-label">{month.label}</h2>}
               <DaySummaryList
                 days={month.days}
                 people={everyone}
@@ -406,7 +407,10 @@ const SearchResults = ({ state, people }: { state: HistoryState; people: server.
             ) : (
               <>
                 <MilestoneText milestone={m} />
-                <small className="history-result-date"> · {formatDate(m.milestoneDate)}</small>
+                <small className="history-result-date">
+                  {" "}
+                  · {recordDateLabel(m.recordTime, m.milestoneDate, formatDate)}
+                </small>
               </>
             )}
           </span>
@@ -422,5 +426,7 @@ function answerSource(
   person: server.Person | undefined
 ): string {
   const interview = interviews.get(m.interviewId);
-  return interview && person ? interviewTitle(interview, person) : formatDate(m.milestoneDate);
+  return interview && person
+    ? interviewTitle(interview, person)
+    : recordDateLabel(m.recordTime, m.milestoneDate, formatDate);
 }

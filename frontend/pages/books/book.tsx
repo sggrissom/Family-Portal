@@ -316,7 +316,7 @@ const BlockView = ({ block }: { block: Block }) => {
 
 const When = ({ moment }: { moment: BookMoment }) => (
   <p className="book-when">
-    {shortDay(moment.day)}
+    {moment.dateLabel ?? shortDay(moment.day)}
     {moment.detail && <span> · {moment.detail}</span>}
   </p>
 );
@@ -353,7 +353,7 @@ const PhotoFigure = ({
     <figcaption>
       {photo.caption && <span className="book-caption">{photo.caption}</span>}
       <span className="book-caption-when">
-        {shortDay(photo.day)}
+        {photo.dateLabel ?? shortDay(photo.day)}
         {photo.detail && ` · ${photo.detail}`}
       </span>
     </figcaption>
@@ -387,7 +387,7 @@ const BookImage = ({
     <div className={`book-image ${className ?? ""}`} style={{ aspectRatio: ratio }}>
       <ResponsiveImage
         photoId={photo.id}
-        alt={photo.caption || `Photo from ${shortDay(photo.day)}`}
+        alt={photo.caption || `Photo from ${photo.dateLabel ?? shortDay(photo.day)}`}
         sizes={sizes}
         loading={eager ? "eager" : "lazy"}
         fetchpriority={eager ? "high" : "auto"}
