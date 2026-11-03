@@ -31,7 +31,7 @@ jobs:
   build-test:
     # Keep this check name stable for existing branch protection rules.
     name: Build, Typecheck, and Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # New commits supersede validation, but must not interrupt a running deploy.
     # github.ref separates main, release, and each pull request's merge ref.
     concurrency:
@@ -142,7 +142,7 @@ jobs:
   security:
     if: github.event_name == 'push' || github.base_ref == 'release'
     name: Dependency and secret scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: ${{ github.workflow }}-security-${{ github.ref }}
       cancel-in-progress: true
@@ -191,7 +191,7 @@ jobs:
   # Actions notification settings. Keep a direct link in the run summary too.
   report-failure:
     name: Report post-merge validation failure
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-test, security]
     if: >-
       always() && github.event_name == 'push' &&
@@ -219,7 +219,7 @@ jobs:
 
   deploy:
     name: Deploy to ${{ github.ref_name == 'release' && 'production' || 'staging' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-test, security]
     if: github.event_name == 'push'
     environment:
