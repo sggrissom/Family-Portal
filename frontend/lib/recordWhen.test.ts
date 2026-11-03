@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   RecordWhen,
+  isApproximateMode,
   newRecordWhen,
+  recordWhenControls,
   recordWhenFrom,
   recordWhenPreview,
   recordWhenProblem,
   recordWhenRequest,
   recordWhenTime,
+  setRecordWhenMode,
 } from "./recordWhen";
 import { recordTimeLabel, resolveRecordTime } from "./recordTime";
 
@@ -14,6 +17,18 @@ const now = new Date("2026-11-02T12:00:00");
 const w = (fields: Partial<RecordWhen>): RecordWhen => ({ ...newRecordWhen(7), ...fields });
 
 describe("recordWhenTime", () => {
+  it.each(["today", "yesterday", "unknown"] as const)(
+    "%s ignores hidden period and estimate fields even without a mode-change event",
+    mode => {
+      const when = w({ mode, meaning: "period", estimated: true, around: "invalid" });
+      const rt = recordWhenRequest(when, true, true, now).recordTime!;
+      expect(rt.meaning).toBe("occurrence");
+      expect(rt.estimated).toBe(false);
+      expect(rt.around).toBe("");
+      expect(recordWhenProblem(when, true, undefined, now)).toBe("");
+    }
+  );
+
   it("blank months is a whole year of age, typed zero is month precision", () => {
     const year = recordWhenTime(w({ mode: "age", ageYears: "4", meaning: "period" }), now, true);
     expect([year.precision, year.anchorPersonId, recordTimeLabel(year)]).toEqual([
@@ -63,6 +78,79 @@ describe("recordWhenTime", () => {
       const rt = recordWhenTime(w(fields), now, true);
       expect(recordWhenTime(recordWhenFrom(rt, ""), now, true)).toEqual(rt);
     }
+  });
+});
+
+describe("date mode transitions", () => {
+  it.each(["today", "yesterday", "unknown"] as const)(
+    "clears incompatible choices when switching an estimated age period to %s",
+    mode => {
+      const when = w({
+        mode: "age",
+        ageYears: "6",
+        ageToYears: "9",
+        meaning: "period",
+        estimated: true,
+        around: "8",
+      });
+      setRecordWhenMode(when, mode);
+      expect([when.meaning, when.estimated, when.around]).toEqual(["", false, ""]);
+      const rt = recordWhenRequest(when, true, true, now).recordTime!;
+      expect(rt.meaning).toBe("occurrence");
+      expect(rt.estimated).toBe(false);
+      expect(rt.basis).toBe(mode === "unknown" ? "unknown" : "calendar");
+      if (mode !== "unknown") {
+        expect(rt.precision).toBe("day");
+        expect(rt.from).toBe(mode === "today" ? "2026-11-02" : "2026-11-01");
+        expect(isApproximateMode(when)).toBe(false);
+      }
+    }
+  );
+
+  it("doesn't carry a central age into an estimated calendar range", () => {
+    const when = w({
+      mode: "age",
+      ageYears: "6",
+      ageToYears: "9",
+      meaning: "period",
+      estimated: true,
+      around: "8",
+    });
+    setRecordWhenMode(when, "range");
+    when.from = "1968";
+    when.to = "1972";
+    expect(when.around).toBe("");
+    expect(recordWhenProblem(when, true, undefined, now)).toBe("");
+    expect(recordTimeLabel(recordWhenTime(when, now, true))).toBe("Around 1968–1972");
+    when.around = "1970";
+    expect(recordWhenTime(when, now, true).around).toBe("1970");
+    setRecordWhenMode(when, "age");
+    expect(when.around).toBe("");
+  });
+
+  it("hides and ignores a best guess when an age range becomes a single age", () => {
+    const when = w({ mode: "age", ageYears: "4", ageToYears: "6", estimated: true, around: "5" });
+    when.ageToYears = "";
+    expect(recordWhenControls(when).bestGuess).toBe(false);
+    expect(recordWhenTime(when, now, true).around).toBe("");
+    expect(recordTimeLabel(recordWhenTime(when, now, true))).toBe("Around age 4");
+  });
+
+  it("doesn't expose a stale age range's best guess in calendar date entry", () => {
+    const when = w({ mode: "age", ageYears: "4", ageToYears: "6", estimated: true, around: "5" });
+    setRecordWhenMode(when, "date");
+    when.date = "2022-10-31";
+    expect(recordWhenControls(when).bestGuess).toBe(false);
+    expect(recordWhenProblem(when, true, undefined, now)).toBe("");
+    expect(recordTimeLabel(recordWhenTime(when, now, true))).toBe("Around Oct 31, 2022");
+  });
+
+  it("treats a period on a calendar day as approximate for photo suggestions", () => {
+    const when = w({ mode: "date", date: "2022-10-31", meaning: "period" });
+    expect(isApproximateMode(when)).toBe(true);
+    expect(recordWhenTime(when, now, true).meaning).toBe("period");
+    setRecordWhenMode(when, "today");
+    expect(isApproximateMode(when)).toBe(false);
   });
 });
 
