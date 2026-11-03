@@ -84,16 +84,40 @@ const isAge = (w: RecordWhen) => w.mode === "age";
 
 const str = (value: unknown) => String(value ?? "").trim();
 
+// Keep visible controls, validation, and serialization on the same rules.
+export function recordWhenControls(w: RecordWhen) {
+  const exactShortcut = w.mode === "today" || w.mode === "yesterday";
+  const editable = !exactShortcut && w.mode !== "unknown";
+  return {
+    meaning: editable,
+    estimate: editable,
+    bestGuess: w.mode === "range" || (isAge(w) && str(w.ageToYears) !== ""),
+  };
+}
+
+export function setRecordWhenMode(w: RecordWhen, mode: RecordWhenMode): void {
+  if (w.mode === mode) return;
+  w.mode = mode;
+  // A central age and a central calendar date aren't interchangeable. Even
+  // between calendar modes, don't silently reuse a guess for another window.
+  w.around = "";
+  const controls = recordWhenControls(w);
+  if (!controls.meaning) w.meaning = "";
+  if (!controls.estimate) w.estimated = false;
+}
+
 export function recordWhenTime(w: RecordWhen, now: Date, isMoment: boolean): server.RecordTime {
+  const controls = recordWhenControls(w);
+  const estimated = controls.estimate && w.estimated;
   const rt: server.RecordTime = {
     version: 1,
-    meaning: isMoment && w.meaning === "period" ? "period" : "occurrence",
+    meaning: isMoment && controls.meaning && w.meaning === "period" ? "period" : "occurrence",
     basis: "calendar",
     precision: "day",
-    estimated: w.estimated && w.mode !== "unknown",
+    estimated,
     from: "",
     to: "",
-    around: w.estimated ? str(w.around) : "",
+    around: estimated && controls.bestGuess ? str(w.around) : "",
     anchorPersonId: 0,
     ageYears: 0,
     ageMonths: 0,
@@ -173,12 +197,13 @@ export function recordWhenProblem(
       if (isMoment && !w.meaning) return "Choose whether it happened then or describes that age";
       break;
   }
-  if (w.estimated && str(w.around)) {
-    const ok = isAge(w) ? whole(w.around) : !!parseCivil(str(w.around));
+  const rt = recordWhenTime(w, now, isMoment);
+  if (rt.around) {
+    const ok = isAge(w) ? whole(rt.around) : !!parseCivil(rt.around);
     if (!ok) return isAge(w) ? "The best guess should be an age in years" : "Check the best guess";
   }
   if (w.mode === "unknown") return "";
-  const range = resolveRecordTime(recordWhenTime(w, now, isMoment), birthday ?? null);
+  const range = resolveRecordTime(rt, birthday ?? null);
   if (range.resolved && range.start > localDateString(now)) {
     return isAge(w) ? "That age hasn't happened yet" : "That date hasn't happened yet";
   }
@@ -211,8 +236,11 @@ export function recordWhenPreview(
 }
 
 export function isApproximateMode(w: RecordWhen): boolean {
+  const controls = recordWhenControls(w);
   return (
-    w.estimated || !["today", "yesterday", "date"].includes(w.mode) || (isAge(w) && !!w.meaning)
+    !["today", "yesterday", "date"].includes(w.mode) ||
+    (controls.estimate && w.estimated) ||
+    (controls.meaning && w.meaning === "period")
   );
 }
 
