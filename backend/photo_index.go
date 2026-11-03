@@ -18,6 +18,11 @@ import (
 var ImageByFamilyDateIndex = vbolt.IndexExt(&cfg.Info, "image_by_family_date", vpack.FInt, packDateKey, vpack.FInt)
 var ImageByPersonDateIndex = vbolt.IndexExt(&cfg.Info, "image_by_person_date", vpack.FInt, packDateKey, vpack.FInt)
 
+// The approximate indexes hold only photos whose date is not an exact day, so
+// a date filter can find those that start before the window but overlap it.
+var ImageApproxByFamilyIndex = vbolt.Index(&cfg.Info, "image_approx_by_family", vpack.FInt, vpack.FInt)
+var ImageApproxByPersonIndex = vbolt.Index(&cfg.Info, "image_approx_by_person", vpack.FInt, vpack.FInt)
+
 // PhotoWordIndex maps each word of a photo's title and description to the
 // photo. Words are packed without a length prefix, so a cursor can seek to
 // every word that starts with a search term.
@@ -65,6 +70,8 @@ func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
 		vbolt.DeleteTargetTerms(tx, ImageByFamilyDateIndex, photoId)
 		vbolt.DeleteTargetTerms(tx, ImageByPersonDateIndex, photoId)
 		vbolt.DeleteTargetTerms(tx, PhotoWordIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, photoId)
 		return
 	}
 	words := searchFieldWords(image.Title, image.Description)
@@ -82,6 +89,19 @@ func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
 		personIds = append(personIds, photoPerson.PersonId)
 	}
 	vbolt.SetTargetTermsUniform(tx, ImageByPersonDateIndex, image.Id, personIds, seconds)
+
+	if image.RecordTime.ExactDay() {
+		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, image.Id)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, image.Id)
+	} else {
+		vbolt.SetTargetSingleTerm(tx, ImageApproxByFamilyIndex, image.Id, image.FamilyId)
+		vbolt.SetTargetTermsPlain(tx, ImageApproxByPersonIndex, image.Id, personIds)
+	}
+}
+
+func approxPhotoIds(tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], term int) (ids []int) {
+	vbolt.ReadTermTargets(tx, index, term, &ids, vbolt.Window{})
+	return
 }
 
 func BackfillPhotoDateIndexes(tx *vbolt.Tx) {
@@ -167,18 +187,47 @@ func (s *photoStream) pop() Image {
 	return image
 }
 
+func (s *photoStream) headKey() photoKey {
+	return photoKeyOf(s.head)
+}
+
+// imageStream is a newest-first source of photos with the key each sorts by.
+type imageStream interface {
+	peek(tx *vbolt.Tx) bool
+	headKey() photoKey
+	pop() Image
+}
+
+type keyedImage struct {
+	image Image
+	key   photoKey
+}
+
+// sliceStream serves photos already loaded and sorted newest first.
+type sliceStream struct {
+	items []keyedImage
+}
+
+func (s *sliceStream) peek(*vbolt.Tx) bool { return len(s.items) > 0 }
+func (s *sliceStream) headKey() photoKey   { return s.items[0].key }
+func (s *sliceStream) pop() Image {
+	image := s.items[0].image
+	s.items = s.items[1:]
+	return image
+}
+
 // mergePhotoStreams yields photos from every stream newest first, each photo
 // once, strictly older than start and no older than stop, until visit returns
 // false.
-func mergePhotoStreams(tx *vbolt.Tx, streams []*photoStream, start photoKey, stop int64, visit func(Image) bool) {
+func mergePhotoStreams(tx *vbolt.Tx, streams []imageStream, start photoKey, stop int64, visit func(Image, photoKey) bool) {
 	seen := make(map[int]bool)
 	for {
-		var newest *photoStream
+		var newest imageStream
 		for _, stream := range streams {
 			if !stream.peek(tx) {
 				continue
 			}
-			if newest == nil || photoKeyOf(stream.head).newerThan(photoKeyOf(newest.head)) {
+			if newest == nil || stream.headKey().newerThan(newest.headKey()) {
 				newest = stream
 			}
 		}
@@ -186,8 +235,8 @@ func mergePhotoStreams(tx *vbolt.Tx, streams []*photoStream, start photoKey, sto
 			return
 		}
 
+		key := newest.headKey()
 		image := newest.pop()
-		key := photoKeyOf(image)
 		if key.seconds < stop {
 			return
 		}
@@ -195,7 +244,7 @@ func mergePhotoStreams(tx *vbolt.Tx, streams []*photoStream, start photoKey, sto
 			continue
 		}
 		seen[image.Id] = true
-		if !visit(image) {
+		if !visit(image, key) {
 			return
 		}
 	}
@@ -215,6 +264,10 @@ type photoListing struct {
 	newest    photoKey
 	oldest    int64
 	exactOnly bool
+	// windowStart and windowEnd are the date filter as civil days, half-open;
+	// empty when there is no filter.
+	windowStart string
+	windowEnd   string
 }
 
 func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, placeKey string, dateFrom string, dateTo string) photoListing {
@@ -227,13 +280,16 @@ func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, pla
 		newest:    photoKey{seconds: math.MaxInt64, id: math.MaxInt},
 		oldest:    math.MinInt64,
 	}
+	l.windowStart, l.windowEnd = "0001-01-01", "9999-12-31"
 	if dateTo != "" {
 		end, _ := time.Parse(dateOnlyLayout, dateTo)
 		l.newest = photoKey{seconds: end.AddDate(0, 0, 1).Unix() - 1, id: math.MaxInt}
+		l.windowEnd = dayOf(end.AddDate(0, 0, 1))
 	}
 	if dateFrom != "" {
 		begin, _ := time.Parse(dateOnlyLayout, dateFrom)
 		l.oldest = begin.Unix()
+		l.windowStart = dateFrom
 	}
 	if len(tagIds) > 0 {
 		l.withTag = make(map[int]bool)
@@ -246,37 +302,72 @@ func newPhotoListing(tx *vbolt.Tx, user User, personIds []int, tagIds []int, pla
 	return l
 }
 
-// listingTerm is one index term the listing reads photos from.
+// listingTerm is one index term the listing reads photos from, with the
+// index of that term's approximately dated photos.
 type listingTerm struct {
-	index *vbolt.IndexInfo[int, int, int64]
-	term  int
+	index  *vbolt.IndexInfo[int, int, int64]
+	approx *vbolt.IndexInfo[int, int, uint16]
+	term   int
 }
 
 func (l photoListing) terms() (terms []listingTerm) {
 	if len(l.personIds) > 0 {
 		for _, personId := range l.personIds {
-			terms = append(terms, listingTerm{ImageByPersonDateIndex, personId})
+			terms = append(terms, listingTerm{ImageByPersonDateIndex, ImageApproxByPersonIndex, personId})
 		}
 		return
 	}
 	for _, familyId := range familiesVisibleTo(l.tx, l.user) {
-		terms = append(terms, listingTerm{ImageByFamilyDateIndex, familyId})
+		terms = append(terms, listingTerm{ImageByFamilyDateIndex, ImageApproxByFamilyIndex, familyId})
 	}
 	for _, person := range linkedPeopleVisibleTo(l.tx, l.user, ScopePhotos) {
-		terms = append(terms, listingTerm{ImageByPersonDateIndex, person.Id})
+		terms = append(terms, listingTerm{ImageByPersonDateIndex, ImageApproxByPersonIndex, person.Id})
 	}
 	return
+}
+
+// overlapping lists approximately dated photos that start before the date
+// window but overlap it. The date indexes place them by their start, so a
+// window scan alone would miss them; they sort at the window's oldest edge.
+func (l photoListing) overlapping() []keyedImage {
+	if l.oldest == math.MinInt64 {
+		return nil
+	}
+	seen := map[int]bool{}
+	var items []keyedImage
+	for _, t := range l.terms() {
+		for _, id := range approxPhotoIds(l.tx, t.approx, t.term) {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			image := GetImageById(l.tx, id)
+			if image.Id == 0 || image.PhotoDate.Unix() >= l.oldest || !image.RecordTime.Overlaps(l.windowStart, l.windowEnd) {
+				continue
+			}
+			items = append(items, keyedImage{image, photoKey{seconds: l.oldest, id: image.Id}})
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].key.newerThan(items[j].key) })
+	return items
 }
 
 // read visits the listing's photos newest first from start, which is clamped
 // to the date window, until visit returns false.
 func (l photoListing) read(start photoKey, visit func(Image) bool) {
+	l.readKeyed(start, func(image Image, _ photoKey) bool { return visit(image) })
+}
+
+func (l photoListing) readKeyed(start photoKey, visit func(Image, photoKey) bool) {
 	if start.newerThan(l.newest) {
 		start = l.newest
 	}
-	var streams []*photoStream
+	var streams []imageStream
 	for _, t := range l.terms() {
 		streams = append(streams, newPhotoStream(t.index, t.term, start))
+	}
+	if spill := l.overlapping(); len(spill) > 0 {
+		streams = append(streams, &sliceStream{items: spill})
 	}
 	mergePhotoStreams(l.tx, streams, start, l.oldest, visit)
 }
@@ -285,6 +376,10 @@ func (l photoListing) read(start photoKey, visit func(Image) bool) {
 func (l photoListing) keys() []photoKey {
 	seen := map[int]bool{}
 	var keys []photoKey
+	for _, item := range l.overlapping() {
+		seen[item.image.Id] = true
+		keys = append(keys, item.key)
+	}
 	for _, t := range l.terms() {
 		vbolt.IterateTerm(l.tx, t.index, t.term, func(id int, seconds int64) bool {
 			key := photoKey{seconds: seconds, id: id}
@@ -323,10 +418,17 @@ func (l photoListing) passes(image Image) bool {
 	return true
 }
 
+func (l photoListing) inWindow(image Image) bool {
+	if !image.RecordTime.ExactDay() && l.oldest != math.MinInt64 {
+		return image.RecordTime.Overlaps(l.windowStart, l.windowEnd)
+	}
+	return image.PhotoDate.Unix() >= l.oldest && !photoKeyOf(image).newerThan(l.newest)
+}
+
 // shows reports whether a photo read from anywhere, such as a group's cover,
 // would appear in this listing.
 func (l photoListing) shows(image Image) bool {
-	if image.PhotoDate.Unix() < l.oldest || photoKeyOf(image).newerThan(l.newest) || !l.passes(image) {
+	if !l.inWindow(image) || !l.passes(image) {
 		return false
 	}
 	if len(l.personIds) == 0 {
@@ -345,8 +447,9 @@ func (l photoListing) shows(image Image) bool {
 // the rest of its group.
 func browsePhotos(l photoListing, start photoKey, limit int, collapse bool) (page []Image, similarTo map[int][]int, nextCursor string) {
 	groups := map[int]photoGroup{}
+	var last photoKey
 	similarTo = map[int][]int{}
-	l.read(start, func(image Image) bool {
+	l.readKeyed(start, func(image Image, key photoKey) bool {
 		if !l.passes(image) {
 			return true
 		}
@@ -368,10 +471,11 @@ func browsePhotos(l photoListing, start photoKey, limit int, collapse bool) (pag
 			}
 		}
 		if limit > 0 && len(page) == limit {
-			nextCursor = photoKeyOf(page[limit-1]).String()
+			nextCursor = last.String()
 			return false
 		}
 		page = append(page, image)
+		last = key
 		return true
 	})
 	return

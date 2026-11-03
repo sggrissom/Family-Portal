@@ -331,6 +331,15 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 			}
 			return true
 		})
+		for _, photoId := range approxPhotoIds(tx, ImageApproxByFamilyIndex, familyId) {
+			image := GetImageById(tx, photoId)
+			if recordInRange(image.RecordTime) && !photoIds[photoId] && len(GetPhotoPersonsByPhoto(tx, photoId)) == 0 {
+				addPhoto(image)
+				if photoIds[photoId] {
+					sources.Untagged = append(sources.Untagged, photoId)
+				}
+			}
+		}
 	}
 
 	sort.Slice(sources.Milestones, func(i, j int) bool {
