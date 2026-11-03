@@ -1,6 +1,10 @@
 # Approximate dates, age-based records, and periods
 
-Status: in progress (phase 1 contract: [approximate-dates-contract.md](approximate-dates-contract.md)). Updated 2026-11-02.
+Status: web/backend in review as stacked PRs #230–#236 (2026-11-02); writes are
+behind `APPROXIMATE_DATES=on`. Contract and inventory:
+[approximate-dates-contract.md](approximate-dates-contract.md). Still to do before
+enabling in prod: the iOS companion changes, raising the iOS minimum version, and
+the staging acceptance run on migrated data.
 Manual entry and end-to-end date semantics are the release scope. AI estimation
 remains an optional later experiment, not a dependency or provider commitment.
 

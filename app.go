@@ -275,6 +275,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterGrowthMethods(app)
 	backend.RegisterMilestoneMethods(app)
 	backend.RegisterRecordTimeMethods(app)
+	backend.RegisterRecordTimeReviewMethods(app)
 	backend.RegisterInterviewQuestionMethods(app)
 	backend.RegisterInterviewMethods(app)
 	backend.RegisterInterviewViewMethods(app)
