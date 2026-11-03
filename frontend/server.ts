@@ -2048,6 +2048,7 @@ export interface Milestone {
     tagIds: number[]
     interviewId: number
     questionId: number
+    recordTime: RecordTime
 }
 
 export interface Image {
@@ -2072,6 +2073,7 @@ export interface Image {
     videoCodec: string
     audioCodec: string
     processingError: string
+    recordTime: RecordTime
 }
 
 export interface Interview {
@@ -2900,6 +2902,29 @@ export interface AdminMobileVersionPlatform {
     updateMessage: string
     allowedHosts: string[]
     warnings: string[]
+}
+
+export interface RecordTime {
+    version: number
+    meaning: string
+    basis: string
+    precision: string
+    estimated: boolean
+    from: string
+    to: string
+    around: string
+    anchorPersonId: number
+    ageYears: number
+    ageMonths: number
+    ageToYears: number
+    source: string
+    note: string
+    changedBy: number
+    changedAt: string
+    start: string
+    end: string
+    resolved: boolean
+    resolverVersion: number
 }
 
 export interface ImportRow {

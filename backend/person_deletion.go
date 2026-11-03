@@ -109,6 +109,7 @@ func deletePersonTx(tx *vbolt.Tx, person Person) {
 	for _, growth := range GetPersonGrowthDataTx(tx, person.Id) {
 		_ = DeleteGrowthDataTx(tx, growth.Id, growth.FamilyId)
 	}
+	UnanchorRecords(tx, person.Id)
 	repointUserPersonTx(tx, person.Id, 0)
 	deletePersonRecordTx(tx, person)
 }

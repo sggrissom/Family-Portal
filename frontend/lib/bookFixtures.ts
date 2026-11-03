@@ -9,6 +9,7 @@ import {
   draftSelection,
   firstBirthday,
 } from "./book";
+import { exactRecordTime } from "./recordTime";
 
 type Writing = { introduction?: string; letter?: string; signature?: string };
 
@@ -78,6 +79,7 @@ function milestones(list: M[], personId = 1, firstId = 1): server.Milestone[] {
     tagIds: [],
     interviewId: 0,
     questionId: 0,
+    recordTime: exactRecordTime(day(offset)),
   }));
 }
 
@@ -106,6 +108,7 @@ function photos(list: P[]): server.Image[] {
     videoCodec: "",
     audioCodec: "",
     processingError: "",
+    recordTime: exactRecordTime(day(offset)),
   }));
 }
 

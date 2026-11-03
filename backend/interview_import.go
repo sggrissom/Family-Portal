@@ -692,7 +692,7 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 			Description: text, Category: CategoryInterview, Context: renderQuestion(q.Text, person, interview.Date),
 			MilestoneDate: interview.Date, CreatedAt: time.Now(), InterviewId: interview.Id, QuestionId: q.Id,
 		}
-		writeMilestone(tx, m)
+		writeMilestone(tx, &m)
 		answerIds = append(answerIds, m.Id)
 	}
 	if len(interview.QuestionIds) == 0 {

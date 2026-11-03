@@ -1,3 +1,5 @@
+import { RecordTime } from "../server";
+
 export interface RecordTimeFields {
   meaning: string;
   basis: string;
@@ -167,4 +169,41 @@ export function recordTimeLabel(rt: RecordTimeFields): string {
     return rt.meaning === "period" ? `At ${age}` : `Sometime at ${age}`;
   }
   return "Date unknown";
+}
+
+export function exactRecordTime(date: string, source = "family"): RecordTime {
+  const from = date.slice(0, 10);
+  const range = resolveRecordTime(
+    {
+      meaning: "occurrence",
+      basis: "calendar",
+      precision: "day",
+      estimated: false,
+      from,
+      ageYears: 0,
+      ageMonths: 0,
+      ageToYears: 0,
+    },
+    null
+  );
+  return {
+    version: 1,
+    meaning: "occurrence",
+    basis: "calendar",
+    precision: "day",
+    estimated: false,
+    from,
+    to: "",
+    around: "",
+    anchorPersonId: 0,
+    ageYears: 0,
+    ageMonths: 0,
+    ageToYears: 0,
+    source,
+    note: "",
+    changedBy: 0,
+    changedAt: "",
+    ...range,
+    resolverVersion: 1,
+  };
 }

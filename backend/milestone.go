@@ -92,18 +92,19 @@ type SearchMilestonesResponse struct {
 }
 
 type Milestone struct {
-	Id            int       `json:"id"`
-	PersonId      int       `json:"personId"`
-	FamilyId      int       `json:"familyId"`
-	Description   string    `json:"description"`
-	Category      string    `json:"category"`
-	Context       string    `json:"context"`
-	MilestoneDate time.Time `json:"milestoneDate"`
-	CreatedAt     time.Time `json:"createdAt"`
-	PhotoIds      []int     `json:"photoIds,omitempty"`
-	TagIds        []int     `json:"tagIds,omitempty"`
-	InterviewId   int       `json:"interviewId,omitempty"`
-	QuestionId    int       `json:"questionId,omitempty"`
+	Id            int        `json:"id"`
+	PersonId      int        `json:"personId"`
+	FamilyId      int        `json:"familyId"`
+	Description   string     `json:"description"`
+	Category      string     `json:"category"`
+	Context       string     `json:"context"`
+	MilestoneDate time.Time  `json:"milestoneDate"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	PhotoIds      []int      `json:"photoIds,omitempty"`
+	TagIds        []int      `json:"tagIds,omitempty"`
+	InterviewId   int        `json:"interviewId,omitempty"`
+	QuestionId    int        `json:"questionId,omitempty"`
+	RecordTime    RecordTime `json:"recordTime"`
 }
 
 type MilestonePhoto struct {
@@ -132,7 +133,7 @@ func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
 }
 
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
-	version := vpack.Version(3, buf)
+	version := vpack.Version(4, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -146,6 +147,9 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	if version >= 3 {
 		vpack.Int(&self.InterviewId, buf)
 		vpack.Int(&self.QuestionId, buf)
+	}
+	if version >= 4 {
+		PackRecordTime(&self.RecordTime, buf)
 	}
 }
 
@@ -247,8 +251,10 @@ func DropMilestoneSearchIndex(tx *vbolt.Tx) {
 	}
 }
 
-func writeMilestone(tx *vbolt.Tx, milestone Milestone) {
-	vbolt.Write(tx, MilestoneBkt, milestone.Id, &milestone)
+func writeMilestone(tx *vbolt.Tx, milestone *Milestone) {
+	syncRecordTime(tx, &milestone.RecordTime, &milestone.MilestoneDate)
+	vbolt.Write(tx, MilestoneBkt, milestone.Id, milestone)
+	vbolt.SetTargetTermsPlain(tx, MilestoneByAnchorIndex, milestone.Id, anchorTerm(milestone.RecordTime))
 	vbolt.SetTargetSingleTerm(tx, MilestoneByPersonIndex, milestone.Id, milestone.PersonId)
 	vbolt.SetTargetSingleTerm(tx, MilestoneByFamilyIndex, milestone.Id, milestone.FamilyId)
 	vbolt.SetTargetTermsPlain(tx, MilestoneByInterviewIndex, milestone.Id, positiveTerm(milestone.InterviewId))
@@ -407,10 +413,11 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+	date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 	if err != nil {
 		return milestone, err
 	}
+	setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, 0)
 
 	milestone.Id = vbolt.NextIntId(tx, MilestoneBkt)
 	milestone.PersonId = req.PersonId
@@ -418,7 +425,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 	setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 	milestone.CreatedAt = time.Now()
 
-	writeMilestone(tx, milestone)
+	writeMilestone(tx, &milestone)
 
 	if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
 		return milestone, err
@@ -448,14 +455,17 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	if milestone.Category == CategoryInterview {
 		milestone.Description = strings.TrimSpace(req.Description)
 	} else {
-		milestone.MilestoneDate, err = resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
+		date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
 		if err != nil {
 			return milestone, err
+		}
+		if !date.Equal(milestone.MilestoneDate) || !milestone.RecordTime.ExactDay() {
+			setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, 0)
 		}
 		setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 	}
 
-	writeMilestone(tx, milestone)
+	writeMilestone(tx, &milestone)
 
 	if req.PhotoIds != nil {
 		if err := setMilestonePhotos(tx, milestone, req.PhotoIds); err != nil {
@@ -572,6 +582,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	vbolt.DeleteTargetTerms(tx, MilestoneByFamilyIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByInterviewIndex, milestone.Id)
 	vbolt.DeleteTargetTerms(tx, MilestoneByQuestionIndex, milestone.Id)
+	vbolt.DeleteTargetTerms(tx, MilestoneByAnchorIndex, milestone.Id)
 	vbolt.Delete(tx, MilestoneBkt, milestone.Id)
 
 	return nil

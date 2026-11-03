@@ -456,6 +456,7 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+	ReresolveAnchoredRecords(ctx.Tx, person.Id)
 	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
 
 	resp.Person = person
@@ -663,9 +664,10 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	milestones := GetPersonMilestonesTx(ctx.Tx, req.SourcePersonId)
 	for _, milestone := range milestones {
 		milestone.PersonId = req.TargetPersonId
-		writeMilestone(ctx.Tx, milestone)
+		writeMilestone(ctx.Tx, &milestone)
 	}
 	movePersonInterviewsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	ReanchorRecords(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	resp.MergedMilestones = len(milestones)
 
 	photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.SourcePersonId)

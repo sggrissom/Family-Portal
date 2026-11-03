@@ -152,7 +152,7 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string)
 		}
 		previous, _ := GetVideoFrames(tx, image.Id)
 		current.DerivedBytes += thumbs - previous.ThumbBytes
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		writeVideoFramesTx(tx, &VideoFrames{
 			ImageId: current.Id, FamilyId: current.FamilyId,
 			Model: clipModelId, Version: videoFramesVersion,

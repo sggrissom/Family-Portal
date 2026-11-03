@@ -210,7 +210,7 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		img = GetImageById(tx, job.ImageId)
 		img.AnalysisStatus = 2
 		img.AnalysisVersion = currentAnalysisVersion
-		vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		writeImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
 	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d: %d face(s), %d auto-tagged", job.ImageId, len(faces), tagged)
@@ -344,7 +344,7 @@ func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error 
 			return
 		}
 		img.AnalysisStatus = status
-		vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		writeImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
 	return updateErr
