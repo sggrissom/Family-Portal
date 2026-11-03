@@ -264,6 +264,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 		Interviews:  []BookInterview{},
 	}
 	inRange := func(t time.Time) bool { return !t.Before(start) && t.Before(limit) }
+	recordInRange := func(rt RecordTime) bool { return rt.OverlapsTimes(start, limit) }
 	selected := map[int]bool{}
 	for _, person := range people {
 		person.Age = calculatePersonAge(person.Birthday, person.IsPregnancy)
@@ -291,7 +292,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 
 	for _, person := range people {
 		for _, milestone := range GetPersonMilestonesTx(tx, person.Id) {
-			if milestone.FamilyId != person.FamilyId || !inRange(milestone.MilestoneDate) || milestone.InterviewId > 0 {
+			if milestone.FamilyId != person.FamilyId || !recordInRange(milestone.RecordTime) || milestone.InterviewId > 0 {
 				continue
 			}
 			milestone.PhotoIds = GetMilestonePhotoIds(tx, milestone.Id)
@@ -302,7 +303,7 @@ func bookSourcesTx(tx *vbolt.Tx, user User, familyId int, people []Person, start
 			}
 		}
 		for _, image := range GetPersonImages(tx, person.Id) {
-			if inRange(image.PhotoDate) || keepPhotoIds[image.Id] {
+			if recordInRange(image.RecordTime) || keepPhotoIds[image.Id] {
 				addPhoto(image)
 			}
 		}

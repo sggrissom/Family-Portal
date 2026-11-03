@@ -15,6 +15,8 @@ type ExportVideo struct {
 	Title            string            `json:"title"`
 	Description      string            `json:"description"`
 	PhotoDate        time.Time         `json:"photo_date"`
+	RecordTime       *RecordTime       `json:"record_time,omitempty"`
+	DateLabel        string            `json:"date_label,omitempty"`
 	OriginalFilename string            `json:"original_filename"`
 	FileName         string            `json:"file_name"`
 	MimeType         string            `json:"mime_type"`
@@ -52,7 +54,7 @@ func videoExportFileName(image Image) string {
 	if name == "" {
 		name = "video" + path.Ext(image.OriginalKey)
 	}
-	return fmt.Sprintf("%s_%d_%s", image.PhotoDate.Format("2006-01-02"), image.Id, name)
+	return fmt.Sprintf("%s_%d_%s", recordFileDate(image.RecordTime), image.Id, name)
 }
 
 func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
@@ -70,6 +72,8 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 			Title:            image.Title,
 			Description:      image.Description,
 			PhotoDate:        image.PhotoDate,
+			RecordTime:       &image.RecordTime,
+			DateLabel:        image.RecordTime.Label(),
 			OriginalFilename: image.OriginalFilename,
 			FileName:         videoExportFileName(image),
 			MimeType:         image.MimeType,

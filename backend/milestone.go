@@ -151,6 +151,9 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	if version >= 4 {
 		PackRecordTime(&self.RecordTime, buf)
 	}
+	if !buf.Writing && self.RecordTime.Version == 0 {
+		self.RecordTime = legacyRecordTime(self.MilestoneDate)
+	}
 }
 
 func PackMilestonePhoto(self *MilestonePhoto, buf *vpack.Buffer) {

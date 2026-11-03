@@ -762,6 +762,8 @@ func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Im
 	return photos
 }
 
+const timelineMaxSpanYears = 20
+
 func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -781,6 +783,23 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		day := date.Format(dateOnlyLayout)
 		return (from == "" || day >= from) && (to == "" || day <= to)
 	}
+	recordInWindow := func(rt RecordTime) bool {
+		for _, year := range rt.Years(timelineMaxSpanYears) {
+			years[year] = true
+		}
+		if from == "" && to == "" {
+			return true
+		}
+		start, end := "0001-01-01", "9999-12-31"
+		if from != "" {
+			start = from
+		}
+		if to != "" {
+			last, _, _, _ := parseCivil(to)
+			end = last.addDays(1).String()
+		}
+		return rt.Overlaps(start, end)
+	}
 
 	people := GetVisiblePeople(ctx.Tx, user)
 	labelPeopleFor(ctx.Tx, user, people)
@@ -793,7 +812,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		if !req.SkipMilestones && CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
 			timelineItem.Milestones = []Milestone{}
 			for _, milestone := range GetPersonMilestonesTx(ctx.Tx, person.Id) {
-				if !inWindow(milestone.MilestoneDate) {
+				if !recordInWindow(milestone.RecordTime) {
 					continue
 				}
 				milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)

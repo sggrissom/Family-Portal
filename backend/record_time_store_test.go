@@ -23,7 +23,7 @@ func agePeriod(anchor, years int) RecordTime {
 		Precision: PrecisionYear, AnchorPersonId: anchor, AgeYears: years, Source: SourceFamily}
 }
 
-func TestPackMilestoneReadsV3WithoutRecordTime(t *testing.T) {
+func TestPackMilestoneReadsV3AsLegacyExact(t *testing.T) {
 	packV3 := func(self *Milestone, buf *vpack.Buffer) {
 		vpack.Version(3, buf)
 		vpack.Int(&self.Id, buf)
@@ -41,7 +41,7 @@ func TestPackMilestoneReadsV3WithoutRecordTime(t *testing.T) {
 		MilestoneDate: day("2024-06-15"), CreatedAt: day("2024-06-16")}
 	var got Milestone
 	vpack.FromBytesInto(vpack.ToBytes(&old, packV3), &got, PackMilestone)
-	if got.Id != 4 || !got.MilestoneDate.Equal(old.MilestoneDate) || got.RecordTime.Version != 0 {
+	if got.Id != 4 || !got.MilestoneDate.Equal(old.MilestoneDate) || got.RecordTime.Source != SourceLegacy || got.RecordTime.From != "2024-06-15" {
 		t.Fatalf("v3 decode = %+v", got)
 	}
 }
@@ -79,9 +79,17 @@ func TestBackfillRecordTimesIsLegacyExactAndIdempotent(t *testing.T) {
 			t.Errorf("photo = %+v at %v", photo.RecordTime, photo.PhotoDate)
 		}
 
-		milestones, images := BackfillRecordTimes(tx)
-		if milestones != 0 || images != 0 {
-			t.Errorf("re-run backfilled %d moments, %d photos", milestones, images)
+		before := GetMilestoneById(tx, 1)
+		BackfillRecordTimes(tx)
+		if after := GetMilestoneById(tx, 1); after.RecordTime != before.RecordTime || !after.MilestoneDate.Equal(before.MilestoneDate) {
+			t.Errorf("re-run changed %+v to %+v", before.RecordTime, after.RecordTime)
+		}
+
+		edited := GetMilestoneById(tx, 1)
+		setExactDate(&edited.RecordTime, &edited.MilestoneDate, day("2024-06-16"), SourceFamily, 1)
+		writeMilestone(tx, &edited)
+		if milestones, _ := BackfillRecordTimes(tx); milestones != 1 {
+			t.Errorf("re-run touched %d moments, want only the legacy one", milestones)
 		}
 	})
 }
