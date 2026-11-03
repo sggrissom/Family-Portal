@@ -6,6 +6,7 @@
     "lib": ["es2020", "dom"],
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
     "strict": true,
