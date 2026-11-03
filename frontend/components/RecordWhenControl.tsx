@@ -1,7 +1,13 @@
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../server";
-import { RecordWhen, recordWhenPreview } from "../lib/recordWhen";
+import {
+  RecordWhen,
+  RecordWhenMode,
+  recordWhenControls,
+  recordWhenPreview,
+  setRecordWhenMode,
+} from "../lib/recordWhen";
 import { WhenControl } from "./WhenControl";
 import { When, localDateString } from "../lib/when";
 import { copy } from "../lib/copy";
@@ -25,6 +31,7 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
   const now = new Date();
   const preview = recordWhenPreview(when, isMoment, birthday, now);
   const exactModes = when.mode === "today" || when.mode === "yesterday";
+  const controls = recordWhenControls(when);
   return (
     <div className="record-when">
       <div className="when-control">
@@ -32,7 +39,11 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
           className="when-select"
           aria-label={copy.when.label}
           disabled={disabled}
-          {...vlens.attrsBindInput(vlens.ref(when, "mode"))}
+          value={when.mode}
+          onChange={e => {
+            setRecordWhenMode(when, (e.target as HTMLSelectElement).value as RecordWhenMode);
+            vlens.scheduleRedraw();
+          }}
         >
           <option value="today">{copy.when.today}</option>
           <option value="yesterday">{copy.when.yesterday}</option>
@@ -155,7 +166,7 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
         </label>
       )}
 
-      {isMoment && (when.mode === "age" || (!exactModes && when.mode !== "unknown")) && (
+      {isMoment && controls.meaning && (
         <div className="record-when-row" role="radiogroup" aria-label={t.meaning}>
           <label>
             <input
@@ -180,7 +191,7 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
         </div>
       )}
 
-      {when.mode !== "unknown" && !exactModes && (
+      {controls.estimate && (
         <div className="record-when-row">
           <label>
             <input
@@ -190,17 +201,16 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
             />{" "}
             {t.estimate}
           </label>
-          {when.estimated &&
-            (when.mode === "range" || String(when.ageToYears ?? "").trim() !== "") && (
-              <input
-                type="text"
-                className="when-date when-range"
-                aria-label={t.bestGuess}
-                placeholder={when.mode === "age" ? "8" : "1970"}
-                disabled={disabled}
-                {...vlens.attrsBindInput(vlens.ref(when, "around"))}
-              />
-            )}
+          {when.estimated && controls.bestGuess && (
+            <input
+              type="text"
+              className="when-date when-range"
+              aria-label={t.bestGuess}
+              placeholder={when.mode === "age" ? "8" : "1970"}
+              disabled={disabled}
+              {...vlens.attrsBindInput(vlens.ref(when, "around"))}
+            />
+          )}
         </div>
       )}
 
