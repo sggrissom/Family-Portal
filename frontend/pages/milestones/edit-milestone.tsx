@@ -23,10 +23,9 @@ import {
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
-  TagPicker,
   suggestPhotos,
-  toggleId,
 } from "./MilestoneFields";
+import { TagPicker, toggleId } from "../../components/TagPicker";
 
 type EditMilestoneForm = {
   description: string;
@@ -293,7 +292,12 @@ const EditMilestonePage = ({ form, milestone, tags, birthday }: EditMilestonePag
           />
         </div>
 
-        <TagPicker tags={tags} selected={form.tagIds} disabled={disabled} />
+        <TagPicker
+          label={copy.milestone.tags}
+          tags={tags}
+          selected={form.tagIds}
+          disabled={disabled}
+        />
 
         <div className="entry-actions">
           <a href={`/profile/${milestone.personId}`} className="btn btn-secondary">

@@ -9,6 +9,9 @@ import { Header, Footer } from "../../layout";
 import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { ViewOnlyPage } from "../../components/ErrorPage";
 import "./edit-photo-styles";
+import "../../components/entry-form-styles";
+import { copy } from "../../lib/copy";
+import { TagPicker } from "../../components/TagPicker";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { recordDateLabel } from "../../lib/recordTime";
@@ -65,13 +68,6 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
   };
 });
 
-function onToggleTag(form: EditPhotoForm, tagId: number) {
-  const idx = form.tagIds.indexOf(tagId);
-  if (idx >= 0) form.tagIds.splice(idx, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
 export function view(route: string, prefix: string, data: EditPhotoData): preact.ComponentChild {
   const currentAuth = auth.getAuth();
   if (!currentAuth || currentAuth.id <= 0) {
@@ -84,7 +80,7 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
     return (
       <div>
         <Header isHome={false} />
-        <main id="app" className="edit-photo-container">
+        <main id="app" className="entry-container">
           <div className="error-page">
             <h1>Error</h1>
             <p>Photo not found or access denied</p>
@@ -107,7 +103,7 @@ export function view(route: string, prefix: string, data: EditPhotoData): preact
   return (
     <div>
       <Header isHome={false} />
-      <main id="app" className="edit-photo-container">
+      <main id="app" className="entry-container">
         <EditPhotoPage
           form={form}
           photo={data.photo.image}
@@ -163,12 +159,12 @@ async function saveEdit(form: EditPhotoForm, photo: server.Image, recordTime: se
       await server.UpdatePhotoTags({ photoId: photo.id, tagIds: form.tagIds });
       navigate(`/view-photo/${photo.id}`);
     } else {
-      form.error = "Failed to update photo";
+      form.error = copy.photos.saveFailed;
       form.loading = false;
       vlens.scheduleRedraw();
     }
   } catch (error) {
-    form.error = "Failed to update photo";
+    form.error = copy.photos.saveFailed;
     form.loading = false;
     vlens.scheduleRedraw();
   }
@@ -186,105 +182,79 @@ const EditPhotoPage = ({ form, photo, people, allTags }: EditPhotoPageProps) => 
     form.when.anchorPersonId = people[0].id;
   const anchor = people.find(p => p.id === form.when.anchorPersonId);
   return (
-    <div className="edit-photo-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Edit Photo</h1>
-          <p>Update photo details and information</p>
-        </div>
+    <div className="entry-card">
+      <h1 className="entry-title">{copy.photos.editTitle}</h1>
 
-        <div className="photo-preview">
-          <ThumbnailImage photoId={photo.id} alt={photo.title} className="preview-image" />
-          <div className="photo-info">
-            <div>
-              <strong>Current Date:</strong>{" "}
-              {recordDateLabel(photo.recordTime, photo.photoDate, formatPhotoDate)}
-            </div>
-            <div>
-              <strong>Uploaded:</strong> {formatPhotoDate(photo.createdAt)}
-            </div>
-          </div>
+      <div className="edit-photo-preview">
+        <ThumbnailImage photoId={photo.id} alt={photo.title} className="preview-image" />
+        <div className="photo-info">
+          <span>{recordDateLabel(photo.recordTime, photo.photoDate, formatPhotoDate)}</span>
+          <span>
+            {copy.photos.uploadedOn} {formatPhotoDate(photo.createdAt)}
+          </span>
         </div>
+      </div>
 
+      <form
+        className="entry-form"
+        onSubmit={vlens.cachePartial(onSubmitEdit, form, photo, people)}
+        noValidate
+      >
         {form.error && (
           <div className="error-message" role="alert">
             {form.error}
           </div>
         )}
 
-        <form
-          className="auth-form"
-          onSubmit={vlens.cachePartial(onSubmitEdit, form, photo, people)}
-        >
-          <div className="form-group">
-            <label htmlFor="title">Photo Title (Optional)</label>
-            <input
-              id="title"
-              type="text"
-              {...vlens.attrsBindInput(vlens.ref(form, "title"))}
-              placeholder="Leave empty to auto-generate from date or filename"
-              disabled={form.loading}
-            />
-          </div>
+        <div className="entry-field">
+          <label htmlFor="title">{copy.photos.caption}</label>
+          <input
+            id="title"
+            type="text"
+            placeholder={copy.photos.captionPlaceholder}
+            disabled={form.loading}
+            {...vlens.attrsBindInput(vlens.ref(form, "title"))}
+          />
+        </div>
 
-          <div className="form-group">
-            <label htmlFor="description">Description (Optional)</label>
-            <textarea
-              id="description"
-              {...vlens.attrsBindInput(vlens.ref(form, "description"))}
-              placeholder="Add any details about this photo..."
-              rows={3}
-              disabled={form.loading}
-            />
-          </div>
+        <div className="entry-field">
+          <label htmlFor="description">{copy.photos.description}</label>
+          <textarea
+            id="description"
+            rows={3}
+            placeholder={copy.photos.captionPlaceholder}
+            disabled={form.loading}
+            {...vlens.attrsBindInput(vlens.ref(form, "description"))}
+          />
+        </div>
 
-          <div className="form-group">
-            <span className="form-group-caption">When was this photo taken?</span>
-            <RecordWhenControl
-              when={form.when}
-              isMoment={false}
-              disabled={form.loading}
-              birthday={anchor && !anchor.isPregnancy ? anchor.birthday : undefined}
-              anchors={people}
-            />
-          </div>
+        <div className="entry-subject">
+          <span className="entry-label">{copy.photos.taken}</span>
+          <RecordWhenControl
+            when={form.when}
+            isMoment={false}
+            disabled={form.loading}
+            birthday={anchor && !anchor.isPregnancy ? anchor.birthday : undefined}
+            anchors={people}
+          />
+        </div>
 
-          {allTags.length > 0 && (
-            <div className="form-group">
-              <span className="form-group-caption" id="tagPickerLabel">
-                Tags
-              </span>
-              <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-                {allTags.map(tag => {
-                  const selected = form.tagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`tag-pill${selected ? " selected" : ""}`}
-                      style={{ borderColor: tag.color }}
-                      aria-pressed={selected}
-                      onClick={vlens.cachePartial(onToggleTag, form, tag.id)}
-                    >
-                      <span className="tag-color-dot" style={{ background: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+        <TagPicker
+          label={copy.photos.tags}
+          tags={allTags}
+          selected={form.tagIds}
+          disabled={form.loading}
+        />
 
-          <div className="form-actions">
-            <a href={`/view-photo/${photo.id}`} className="btn btn-secondary">
-              Cancel
-            </a>
-            <button type="submit" className="btn btn-primary auth-submit" disabled={form.loading}>
-              {form.loading ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="entry-actions">
+          <a href={`/view-photo/${photo.id}`} className="btn btn-secondary">
+            {copy.measurement.cancel}
+          </a>
+          <button type="submit" className="btn btn-primary" disabled={form.loading}>
+            {form.loading ? copy.photos.finishing : copy.photos.save}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

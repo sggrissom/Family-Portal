@@ -18,6 +18,7 @@ import { PersonChips, scrollSelectedChipIntoView } from "../../components/Person
 import { peopleChanges, takenLabel, type QueuedPhoto } from "../../lib/photoUploadQueue";
 import "./add-photo-styles";
 import "../../components/entry-form-styles";
+import { TagPicker } from "../../components/TagPicker";
 import {
   RecordWhen,
   newRecordWhen,
@@ -248,13 +249,6 @@ function togglePerson(form: AddPhotoForm, personId: number) {
   vlens.scheduleRedraw();
 }
 
-function toggleTag(form: AddPhotoForm, tagId: number) {
-  const index = form.tagIds.indexOf(tagId);
-  if (index >= 0) form.tagIds.splice(index, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
 function editDate(form: AddPhotoForm) {
   form.editingDate = true;
   const first = form.items.find(item => item.image)?.image;
@@ -451,32 +445,12 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
           />
         </div>
 
-        {tags.length > 0 && (
-          <div className="entry-field">
-            <span className="entry-label" id="tagPickerLabel">
-              {copy.photos.tags}
-            </span>
-            <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-              {tags.map(tag => {
-                const selected = form.tagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className={`tag-pill${selected ? " selected" : ""}`}
-                    style={{ borderColor: tag.color }}
-                    aria-pressed={selected}
-                    disabled={form.finishing}
-                    onClick={vlens.cachePartial(toggleTag, form, tag.id)}
-                  >
-                    <span className="tag-color-dot" style={{ background: tag.color }} />
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <TagPicker
+          label={copy.photos.tags}
+          tags={tags}
+          selected={form.tagIds}
+          disabled={form.finishing}
+        />
 
         {(taken || form.editingDate) && (
           <div className="photo-taken">

@@ -27,10 +27,9 @@ import {
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
-  TagPicker,
   suggestPhotos,
-  toggleId,
 } from "./MilestoneFields";
+import { TagPicker, toggleId } from "../../components/TagPicker";
 
 type AddMilestoneForm = {
   personId: number | null;
@@ -362,7 +361,12 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
               )}
             </div>
 
-            <TagPicker tags={tags} selected={form.tagIds} disabled={disabled} />
+            <TagPicker
+              label={copy.milestone.tags}
+              tags={tags}
+              selected={form.tagIds}
+              disabled={disabled}
+            />
           </div>
         </details>
 
