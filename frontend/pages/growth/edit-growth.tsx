@@ -18,6 +18,7 @@ import { canContribute } from "../../lib/authCache";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { RecordWhenControl } from "../../components/RecordWhenControl";
+import { FormError } from "../../components/FormError";
 import "../../components/entry-form-styles";
 
 type MeasurementKind = "height" | "weight";
@@ -153,11 +154,7 @@ const EditGrowthPage = ({ form, record }: { form: EditGrowthForm; record: server
           <RecordWhenControl when={form.when} isMoment={false} exact disabled={disabled} />
         </div>
 
-        {form.error && (
-          <div className="error-message" role="alert">
-            {form.error}
-          </div>
-        )}
+        <FormError message={form.error} />
 
         {form.kind === "height" ? (
           <HeightField entry={form.entry} disabled={disabled} />
