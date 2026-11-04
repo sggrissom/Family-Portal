@@ -1,6 +1,6 @@
 import * as server from "../server";
 import { localDateString } from "./when";
-import { usePhotoStatus } from "../hooks/usePhotoStatus";
+import { usePhotoStatus, Status } from "../hooks/usePhotoStatus";
 
 export { isVideoFile, videoFileProblem, durationProblem, formatDuration } from "./videoFiles";
 
@@ -94,7 +94,7 @@ export async function uploadVideo(
   }
 
   const image = await complete(begun.uploadId);
-  if (image.status === 1) {
+  if (image.status === Status.Processing) {
     usePhotoStatus().startMonitoring(image.id, image.status);
   }
   return image;

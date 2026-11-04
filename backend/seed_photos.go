@@ -51,7 +51,7 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 		Description:      description,
 		PhotoDate:        on,
 		CreatedAt:        s.now,
-		Status:           1,
+		Status:           PhotoProcessing,
 	}
 	writeImage(s.tx, &photo)
 	vbolt.SetTargetSingleTerm(s.tx, ImageByFamilyIndex, photo.Id, familyId)

@@ -59,7 +59,7 @@ func GetVideoPlayback(ctx *vbeam.Context, req GetVideoPlaybackRequest) (resp Get
 	if store == nil {
 		return
 	}
-	if image.Status == 0 && image.PlaybackKey != "" {
+	if image.Status == PhotoReady && image.PlaybackKey != "" {
 		resp.PlaybackUrl, resp.ExpiresAt, err = store.PlaybackURL(image.PlaybackKey, MediaURLOptions{
 			ContentType: playbackContentType, TTL: mediaPlaybackTTL,
 		})
@@ -67,7 +67,7 @@ func GetVideoPlayback(ctx *vbeam.Context, req GetVideoPlaybackRequest) (resp Get
 			return
 		}
 	}
-	if image.OriginalKey != "" && image.Status != 1 {
+	if image.OriginalKey != "" && image.Status != PhotoProcessing {
 		resp.DownloadUrl, resp.ExpiresAt, err = store.PlaybackURL(image.OriginalKey, MediaURLOptions{
 			ContentType: image.MimeType, DownloadName: image.OriginalFilename, TTL: mediaPlaybackTTL,
 		})

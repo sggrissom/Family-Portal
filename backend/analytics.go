@@ -211,9 +211,9 @@ func GetAnalyticsOverview(ctx *vbeam.Context, req Empty) (resp AnalyticsOverview
 	photosProcessing := 0
 	photosFailed := 0
 	for _, photo := range photos {
-		if photo.Status == 1 {
+		if photo.Status == PhotoProcessing {
 			photosProcessing++
-		} else if photo.Status == 2 {
+		} else if photo.Status == PhotoFailed {
 			photosFailed++
 		}
 	}
@@ -521,9 +521,9 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 	processingCount := 0
 	failedCount := 0
 	for _, photo := range photos {
-		if photo.Status == 1 {
+		if photo.Status == PhotoProcessing {
 			processingCount++
-		} else if photo.Status == 2 {
+		} else if photo.Status == PhotoFailed {
 			failedCount++
 		}
 	}
@@ -542,13 +542,13 @@ func GetSystemAnalytics(ctx *vbeam.Context, req Empty) (resp SystemAnalyticsResp
 	var failures []FailedPhoto
 	for _, photo := range photos {
 		switch {
-		case photo.Status == 2:
+		case photo.Status == PhotoFailed:
 			failures = append(failures, FailedPhoto{
 				Id:        photo.Id,
 				FilePath:  photo.FilePath,
 				CreatedAt: photo.CreatedAt.Format("2006-01-02 15:04"),
 			})
-		case photo.Status == 1 && photo.CreatedAt.Before(stuckBefore):
+		case photo.Status == PhotoProcessing && photo.CreatedAt.Before(stuckBefore):
 			resp.PhotoFailures.Stuck++
 		}
 	}

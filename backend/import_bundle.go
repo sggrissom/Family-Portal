@@ -308,7 +308,7 @@ func importPhotos(
 		}
 		image.PhotoDate = photoDate
 		image.RecordTime = recordTime
-		image.Status = 0
+		image.Status = PhotoReady
 		image.CreatedAt = time.Now()
 
 		writeImage(tx, &image)

@@ -68,7 +68,7 @@ func videoFramesOutdated(f VideoFrames, found bool) bool {
 }
 
 func videoNeedsFrames(tx *vbolt.Tx, image Image) bool {
-	if !image.IsVideo() || image.Status != 0 || image.PlaybackKey == "" {
+	if !image.IsVideo() || image.Status != PhotoReady || image.PlaybackKey == "" {
 		return false
 	}
 	f, found := GetVideoFrames(tx, image.Id)

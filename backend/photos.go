@@ -170,6 +170,19 @@ type RemovePersonFromPhotoResponse struct {
 	Success bool `json:"success"`
 }
 
+const (
+	PhotoReady      = 0
+	PhotoProcessing = 1
+	PhotoFailed     = 2
+)
+
+const (
+	AnalysisPending = 0
+	AnalysisRunning = 1
+	AnalysisDone    = 2
+	AnalysisFailed  = 3
+)
+
 type Image struct {
 	Id               int        `json:"id"`
 	FamilyId         int        `json:"familyId"`
@@ -774,7 +787,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			PhotoDate:        calculatedPhotoDate,
 			RecordTime:       recordTime,
 			CreatedAt:        time.Now(),
-			Status:           1,
+			Status:           PhotoProcessing,
 		}
 
 		writeImage(tx, &image)
@@ -844,7 +857,7 @@ func markPhotoFailed(imageId int) {
 		if !vbolt.Read(tx, ImagesBkt, imageId, &image) || image.Id == 0 {
 			return
 		}
-		image.Status = 2
+		image.Status = PhotoFailed
 		writeImage(tx, &image)
 		vbolt.TxCommit(tx)
 	})
@@ -893,12 +906,12 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if image.Status == 1 {
+	if image.Status == PhotoProcessing {
 		serveProcessingPlaceholder(w, r, image.IsVideo())
 		return
 	}
 
-	if image.Status == 2 {
+	if image.Status == PhotoFailed {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}

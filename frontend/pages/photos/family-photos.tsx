@@ -136,7 +136,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
 
       if (
         currentStatus === Status.Unknown &&
-        photo.status === 1 &&
+        photo.status === Status.Processing &&
         !photoStatus.isMonitoring(photo.id)
       ) {
         photoStatus.startMonitoring(photo.id, photo.status);

@@ -323,7 +323,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		if img.PhotoDate.Unix() < floor {
 			break
 		}
-		if img.Status == 0 && img.RecordTime.ExactDay() && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
+		if img.Status == PhotoReady && img.RecordTime.ExactDay() && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
 			candidates = append(candidates, img)
 		}
 	}

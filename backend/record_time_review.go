@@ -152,7 +152,7 @@ func ListBirthdayClusters(ctx *vbeam.Context, req Empty) (resp ListBirthdayClust
 			}
 		}
 		for _, image := range GetPersonImages(ctx.Tx, person.Id) {
-			if image.Status == 2 || !CanAccessFamily(ctx.Tx, user, image.FamilyId, AccessContribute) {
+			if image.Status == PhotoFailed || !CanAccessFamily(ctx.Tx, user, image.FamilyId, AccessContribute) {
 				continue
 			}
 			if age, ok := birthdayAge(person, image.RecordTime); ok {

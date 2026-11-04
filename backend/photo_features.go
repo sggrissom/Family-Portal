@@ -169,7 +169,7 @@ func linkSimilarTx(tx *vbolt.Tx, f *PhotoFeatures, date time.Time) {
 			continue
 		}
 		otherImage := GetImageById(tx, id)
-		if otherImage.Id == 0 || otherImage.Status != 0 || !similarPhotos(*f, other, date, otherImage.PhotoDate) {
+		if otherImage.Id == 0 || otherImage.Status != PhotoReady || !similarPhotos(*f, other, date, otherImage.PhotoDate) {
 			continue
 		}
 		if other.GroupId > 0 {
@@ -222,7 +222,7 @@ func groupOf(tx *vbolt.Tx, groupId int, cache map[int]photoGroup) (photoGroup, b
 	}
 	var members []PhotoFeatures
 	for _, f := range readFeatures(tx, FeaturesByGroupIndex, groupId) {
-		if img := GetImageById(tx, f.PhotoId); img.Id != 0 && img.Status == 0 {
+		if img := GetImageById(tx, f.PhotoId); img.Id != 0 && img.Status == PhotoReady {
 			members = append(members, f)
 		}
 	}
@@ -271,7 +271,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 		img = GetImageById(tx, photoId)
 		current, found = GetPhotoFeatures(tx, photoId)
 	})
-	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !featuresOutdated(current, found) {
+	if img.Id == 0 || img.Status != PhotoReady || img.IsVideo() || !featuresOutdated(current, found) {
 		return
 	}
 
@@ -325,7 +325,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 func photosNeedingFeatures(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, img Image) bool {
-			if img.Status == 0 && !img.IsVideo() {
+			if img.Status == PhotoReady && !img.IsVideo() {
 				f, found := GetPhotoFeatures(tx, img.Id)
 				if featuresOutdated(f, found) {
 					ids = append(ids, img.Id)

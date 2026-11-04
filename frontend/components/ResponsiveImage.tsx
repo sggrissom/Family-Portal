@@ -1,5 +1,6 @@
 import * as preact from "preact";
 import "./responsive-image-styles";
+import { Status } from "../lib/photoStatus";
 
 interface ResponsiveImageProps {
   photoId: number;
@@ -39,8 +40,9 @@ export const ResponsiveImage = ({
 
   const src = `/api/photo/${photoId}/medium`;
 
-  const wrapperClass = status === 1 ? "processing-image-wrapper" : undefined;
-  const imageClass = status === 1 ? `${className || ""} processing-image`.trim() : className;
+  const wrapperClass = status === Status.Processing ? "processing-image-wrapper" : undefined;
+  const imageClass =
+    status === Status.Processing ? `${className || ""} processing-image`.trim() : className;
 
   const imageElement = (
     <picture>
@@ -62,7 +64,7 @@ export const ResponsiveImage = ({
     </picture>
   );
 
-  if (status === 1) {
+  if (status === Status.Processing) {
     return (
       <div className={wrapperClass}>
         {imageElement}
