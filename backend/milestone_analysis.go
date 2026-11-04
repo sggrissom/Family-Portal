@@ -6,7 +6,6 @@ import (
 	"family/cfg"
 	"family/vision"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -106,7 +105,7 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 		return errRetryLater
 	}
 	if err != nil {
-		log.Printf("[VISION] Milestone %d embedding failed: %v", milestoneId, err)
+		LogWarn(LogCategoryWorker, "Milestone embedding failed", map[string]interface{}{"milestoneId": milestoneId, "error": err.Error()})
 		return nil
 	}
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -155,13 +154,6 @@ func QueueMilestoneEmbedding(milestoneId int) {
 	if globalMilestoneWorker != nil {
 		globalMilestoneWorker.add(milestoneId)
 	}
-}
-
-func MilestoneQueueLength() int {
-	if globalMilestoneWorker == nil {
-		return 0
-	}
-	return globalMilestoneWorker.length()
 }
 
 func StopMilestoneWorker(ctx context.Context) bool {

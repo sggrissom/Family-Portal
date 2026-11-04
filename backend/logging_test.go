@@ -194,27 +194,6 @@ func TestLogErrorWithRequest(t *testing.T) {
 	}
 }
 
-func TestLogDebug(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
-	LogDebug(LogCategoryWorker, "debug message")
-
-	output := buf.String()
-	if !strings.Contains(output, "debug message") {
-		t.Errorf("Expected log to contain 'debug message', got: %s", output)
-	}
-
-	if !strings.Contains(output, "DEBUG") {
-		t.Errorf("Expected log to contain 'DEBUG', got: %s", output)
-	}
-
-	if !strings.Contains(output, "WORKER") {
-		t.Errorf("Expected log to contain 'WORKER', got: %s", output)
-	}
-}
-
 func TestGetClientIP(t *testing.T) {
 	t.Run("X-Forwarded-For header", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)

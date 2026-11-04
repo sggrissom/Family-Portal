@@ -6,7 +6,6 @@ import (
 	"family/cfg"
 	"family/vision"
 	"image"
-	"log"
 	"math"
 	"os"
 	"sort"
@@ -282,7 +281,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 	if next.HashVersion < hashAnalyzerVersion || next.QualityVersion < qualityAnalyzerVersion {
 		decoded, err := featureSourceImage(img)
 		if err != nil {
-			log.Printf("[FEATURES] Could not open photo %d: %v", img.Id, err)
+			LogWarn(LogCategoryWorker, "Photo features could not open the photo", map[string]interface{}{"photoId": img.Id, "error": err.Error()})
 			return
 		} else {
 			if next.HashVersion < hashAnalyzerVersion {
@@ -298,7 +297,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 		next.HasLocation, next.Latitude, next.Longitude, next.CityId = false, 0, 0, 0
 		lat, lng, ok, readErr := exifLocation(photoOriginalPath(img.FilePath))
 		if readErr != nil {
-			log.Printf("[FEATURES] Could not read original for photo %d: %v", img.Id, readErr)
+			LogWarn(LogCategoryWorker, "Photo features could not read the original", map[string]interface{}{"photoId": img.Id, "error": readErr.Error()})
 		} else if ok {
 			next.HasLocation, next.Latitude, next.Longitude = true, lat, lng
 			if city, ok := NearestCity(lat, lng); ok {

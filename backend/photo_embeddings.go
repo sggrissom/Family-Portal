@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"image/jpeg"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -208,7 +207,7 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 
 	data, err := embeddingSourceBytes(img)
 	if err != nil {
-		log.Printf("[VISION] No readable image for photo %d: %v", photoId, err)
+		LogWarn(LogCategoryWorker, "Photo embedding found no readable image", map[string]interface{}{"photoId": photoId, "error": err.Error()})
 		return nil
 	}
 	vector, model, err := client.embedImage(data)
@@ -221,11 +220,11 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 	}
 	noteVisionReachable(true)
 	if err != nil {
-		log.Printf("[VISION] Embedding failed for photo %d: %v", photoId, err)
+		LogWarn(LogCategoryWorker, "Photo embedding failed", map[string]interface{}{"photoId": photoId, "error": err.Error()})
 		return nil
 	}
 	if model != clipModelId {
-		log.Printf("[VISION] Daemon returned model %q, want %q; skipping photo %d", model, clipModelId, photoId)
+		LogWarn(LogCategoryWorker, "Vision daemon returned the wrong model", map[string]interface{}{"photoId": photoId, "model": model, "want": clipModelId})
 		return nil
 	}
 

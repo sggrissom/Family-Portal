@@ -372,7 +372,3 @@ func WrapApplication(app *vbeam.Application) http.Handler {
 					backend.NewBearerTokenWrapper(
 						backend.NewSecurityWrapper(app))))))
 }
-
-func MakeSecureApplication() http.Handler {
-	return WrapApplication(MakeApplication())
-}

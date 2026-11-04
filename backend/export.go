@@ -8,7 +8,6 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -108,11 +107,11 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 	dataEntry, err := zw.Create("data.json")
 	if err != nil {
-		log.Printf("[EXPORT] Failed to create data.json ZIP entry: %v", err)
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not write data.json", map[string]interface{}{"error": err.Error()})
 		return
 	}
 	if _, err := dataEntry.Write(jsonBytes); err != nil {
-		log.Printf("[EXPORT] Failed to write data.json: %v", err)
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not write data.json", map[string]interface{}{"error": err.Error()})
 		return
 	}
 
@@ -120,17 +119,17 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		diskPath := filepath.Join(cfg.StaticDir, ep.ZipPath)
 		f, err := os.Open(diskPath)
 		if err != nil {
-			log.Printf("[EXPORT] Skipping photo %d (%s): %v", ep.Id, diskPath, err)
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a photo whose original is unreadable", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			continue
 		}
 		entry, err := zw.Create(ep.ZipPath)
 		if err != nil {
-			log.Printf("[EXPORT] Failed to create ZIP entry for photo %d: %v", ep.Id, err)
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export could not add a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
 			continue
 		}
 		if _, err := io.Copy(entry, f); err != nil {
-			log.Printf("[EXPORT] Failed to write photo %d to ZIP: %v", ep.Id, err)
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
 			return
 		}

@@ -84,20 +84,3 @@ func GetUserFromContext(r *http.Request) (User, bool) {
 	user, ok := r.Context().Value(UserContextKey).(User)
 	return user, ok
 }
-
-func RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
-	return AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := GetUserFromContext(r)
-		if !ok {
-			RespondAuthError(w, r, "Authentication required")
-			return
-		}
-
-		if user.Id != AdminUserId {
-			RespondForbiddenError(w, r, "Admin access required")
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}

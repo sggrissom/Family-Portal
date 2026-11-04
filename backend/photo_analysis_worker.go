@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -168,7 +167,7 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 			return errRetryLater
 		}
 		if err != nil {
-			log.Printf("[FACE_ANALYSIS] Failed to update face embedding for person %d: %v", job.PersonId, err)
+			LogWarn(LogCategoryWorker, "Face embedding update failed", map[string]interface{}{"personId": job.PersonId, "error": err.Error()})
 		}
 		return nil
 	}
@@ -180,16 +179,14 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		return nil
 	}
 
-	log.Printf("[FACE_ANALYSIS] Starting analysis of photo %d", job.ImageId)
-
 	if err := aw.setAnalysisStatus(job.ImageId, 1); err != nil {
-		log.Printf("[FACE_ANALYSIS] Failed to set analyzing status for photo %d: %v", job.ImageId, err)
+		LogWarn(LogCategoryWorker, "Face analysis could not start", map[string]interface{}{"photoId": job.ImageId, "error": err.Error()})
 		return nil
 	}
 
 	faces, err := detectFaces(aw.client, img)
 	if err != nil {
-		log.Printf("[FACE_ANALYSIS] Face detection failed for photo %d: %v", job.ImageId, err)
+		LogWarn(LogCategoryWorker, "Face detection failed", map[string]interface{}{"photoId": job.ImageId, "error": err.Error()})
 		if errors.Is(err, errRetryLater) {
 			aw.setAnalysisStatus(job.ImageId, 0)
 			return errRetryLater
@@ -211,7 +208,9 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		writeImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
-	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d: %d face(s), %d auto-tagged", job.ImageId, len(faces), tagged)
+	LogInfo(LogCategoryWorker, "Face analysis finished", map[string]interface{}{
+		"photoId": job.ImageId, "faces": len(faces), "autoTagged": tagged,
+	})
 	return nil
 }
 
@@ -393,7 +392,7 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 		descriptor = pickProfileFace(person, nil, detected)
 	}
 	if len(descriptor) != 128 {
-		log.Printf("[FACE_ANALYSIS] No face found in profile photo for person %d", personId)
+		LogInfo(LogCategoryWorker, "No face found in a profile photo", map[string]interface{}{"personId": personId})
 		return nil
 	}
 
@@ -408,7 +407,8 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 		tagged = RematchFamilyFacesTx(tx, p.FamilyId)
 		vbolt.TxCommit(tx)
 	})
-
-	log.Printf("[FACE_ANALYSIS] Updated face embedding for person %d (%d photos newly auto-tagged)", personId, tagged)
+	LogInfo(LogCategoryWorker, "Face embedding updated", map[string]interface{}{
+		"personId": personId, "autoTagged": tagged,
+	})
 	return nil
 }

@@ -320,31 +320,6 @@ func TestGetOptimalImageFormat(t *testing.T) {
 	}
 }
 
-func TestGetImageMimeType(t *testing.T) {
-	testCases := []struct {
-		format   string
-		expected string
-	}{
-		{"webp", "image/webp"},
-		{"avif", "image/avif"},
-		{"png", "image/png"},
-		{"jpeg", "image/jpeg"},
-		{"jpg", "image/jpeg"},
-		{"gif", "image/gif"},
-		{"unknown", "image/jpeg"},
-		{"", "image/jpeg"},
-	}
-
-	for _, tc := range testCases {
-		t.Run("Format: "+tc.format, func(t *testing.T) {
-			result := GetImageMimeType(tc.format)
-			if result != tc.expected {
-				t.Errorf("Expected %s, got %s", tc.expected, result)
-			}
-		})
-	}
-}
-
 func TestImageSizeDefinitions(t *testing.T) {
 	sizes := []ImageSize{
 		ThumbnailSize, MediumSize,

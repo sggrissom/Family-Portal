@@ -7,7 +7,6 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -281,7 +280,7 @@ func importPhotos(
 
 		diskPath := filepath.Join(cfg.StaticDir, photo.ZipPath)
 		if err := writeZipEntryToDisk(zf, diskPath); err != nil {
-			log.Printf("[IMPORT] Failed to write photo %s: %v", diskPath, err)
+			LogWarn(LogCategoryPhoto, "Import could not write a photo", map[string]interface{}{"path": photo.ZipPath, "error": err.Error()})
 			skipped++
 			continue
 		}

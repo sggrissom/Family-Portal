@@ -208,13 +208,6 @@ func TestRequireFamilyAccess(t *testing.T) {
 		if err := RequireFamilyAccess(tx, fx.userB, fx.userA.FamilyId, AccessView); err == nil {
 			t.Error("foreign family should be refused")
 		}
-
-		if err := RequireFamilyAccessFrom(tx, fx.userA.FamilyId, fx.userA.FamilyId, AccessAdmin); err != nil {
-			t.Errorf("same family should be permitted, got %v", err)
-		}
-		if err := RequireFamilyAccessFrom(tx, fx.userB.FamilyId, fx.userA.FamilyId, AccessView); err == nil {
-			t.Error("foreign family should be refused")
-		}
 	})
 }
 
@@ -276,9 +269,6 @@ func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 
 		if people := GetVisiblePeople(tx, fx.userB); len(people) != 0 {
 			t.Errorf("GetVisiblePeople leaked %d people to a foreign family", len(people))
-		}
-		if images := GetVisibleImages(tx, fx.userB); len(images) != 0 {
-			t.Errorf("GetVisibleImages leaked %d images to a foreign family", len(images))
 		}
 		if tags := getVisibleTags(tx, fx.userB); len(tags) != 0 {
 			t.Errorf("getVisibleTags leaked %d tags to a foreign family", len(tags))

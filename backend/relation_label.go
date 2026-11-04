@@ -60,15 +60,6 @@ func RelationLabel(tx *vbolt.Tx, subject Person, target Person) string {
 	return match.term.forGender(target.Gender)
 }
 
-// RelationGroup buckets the relationship for grouping in the UI.
-func RelationGroup(tx *vbolt.Tx, subject Person, target Person) string {
-	match, found := relationBetween(tx, subject, target)
-	if !found {
-		return ""
-	}
-	return match.group
-}
-
 func relationBetween(tx *vbolt.Tx, subject Person, target Person) (relationMatch, bool) {
 	if subject.Id == 0 || target.Id == 0 || subject.Id == target.Id {
 		return relationMatch{}, false

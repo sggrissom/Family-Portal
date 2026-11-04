@@ -356,11 +356,6 @@ func GetAppearanceById(tx *vbolt.Tx, id int) (appearance Appearance) {
 	return
 }
 
-func GetResultById(tx *vbolt.Tx, id int) (result Result) {
-	vbolt.Read(tx, ResultBkt, id, &result)
-	return
-}
-
 func readByTerm[T any](tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], bkt *vbolt.BucketInfo[int, T], term int) []T {
 	items := []T{}
 	var ids []int
@@ -712,13 +707,6 @@ func canAccessAppearance(tx *vbolt.Tx, user User, appearance Appearance, need Ac
 		return false
 	}
 	return canAccessEntry(tx, user, GetEntryById(tx, appearance.EntryId), need)
-}
-
-func canAccessResult(tx *vbolt.Tx, user User, result Result, need AccessLevel) bool {
-	if result.Id == 0 {
-		return false
-	}
-	return canAccessAppearance(tx, user, GetAppearanceById(tx, result.AppearanceId), need)
 }
 
 func canAccessSeason(tx *vbolt.Tx, user User, season Season, need AccessLevel) bool {

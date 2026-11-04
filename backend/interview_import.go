@@ -356,10 +356,6 @@ func questionTokens(text string) []string {
 	return tokens
 }
 
-func normalizeQuestion(text string) string {
-	return strings.Join(questionTokens(text), " ")
-}
-
 func tokenOverlap(a, b []string) float64 {
 	if len(a) == 0 || len(b) == 0 {
 		return 0

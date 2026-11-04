@@ -148,9 +148,6 @@ func TestVisibleFamiliesAndRostersSpanMemberships(t *testing.T) {
 		if tags := getVisibleTags(tx, fx.both); len(tags) != 1 || tags[0].Id != fx.tagB.Id {
 			t.Errorf("expected the secondary family's tag to be visible, got %v", tags)
 		}
-		if images := GetVisibleImages(tx, fx.both); len(images) != 1 || images[0].Id != fx.imageB.Id {
-			t.Errorf("expected the secondary family's image to be visible, got %v", images)
-		}
 	})
 }
 
@@ -195,18 +192,12 @@ func TestNonMemberIsDeniedEveryEntity(t *testing.T) {
 		if _, err := ActingFamilyForPerson(tx, fx.outsider, fx.personA.Id, AccessView); err == nil {
 			t.Error("ActingFamilyForPerson allowed a non-member")
 		}
-		if _, err := ActingFamilyFor(tx, fx.outsider, fx.imageB.FamilyId, AccessView); err == nil {
-			t.Error("ActingFamilyFor allowed a non-member")
-		}
 		if _, err := ResolveActingFamily(tx, fx.outsider, fx.famB, AccessContribute); err == nil {
 			t.Error("ResolveActingFamily allowed a non-member")
 		}
 
 		if people := GetVisiblePeople(tx, fx.outsider); len(people) != 0 {
 			t.Errorf("outsider saw %d people", len(people))
-		}
-		if images := GetVisibleImages(tx, fx.outsider); len(images) != 0 {
-			t.Errorf("outsider saw %d images", len(images))
 		}
 		if tags := getVisibleTags(tx, fx.outsider); len(tags) != 0 {
 			t.Errorf("outsider saw %d tags", len(tags))

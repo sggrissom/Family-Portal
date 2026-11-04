@@ -227,7 +227,7 @@ handles it uniformly:
 - Non-zero is checked with `RequireFamilyAccess` at the level the proc needs.
   A family the caller can't reach answers the same as one that doesn't exist.
 - Procs naming an existing record don't take a `familyId` at all — the record
-  names its own family (`ActingFamilyFor`, `ActingFamilyForPerson`).
+  names its own family (`ActingFamilyForPerson`).
 
 Because writes resolve through `RequireFamilyAccess` and not through the link
 path, a linked family can never be chosen as an acting family for a write.
@@ -241,7 +241,7 @@ path, a linked family can never be chosen as an acting family for a write.
 | Person detail / list | `CanAccessPerson`, `GetVisiblePeople` | yes, per scope |
 | Growth | `GetGrowthDataForUser` (`growth.go:133`) | yes |
 | Milestones + search | `GetMilestoneForUser`, `SearchVisibleMilestones` | yes |
-| Photos list + detail + serve | `GetVisibleImages`, `CanAccessPhoto` | yes |
+| Photos list + detail + serve | `CanAccessPhoto` | yes |
 | Activities | `canAccessEntry` (`activity.go:659`) | yes |
 | Tags | `getVisibleTags` via `sharedInFamilies` | yes |
 | Chat (REST + WebSocket) | `CanAccessFamily`, `CanFamilyAccess` | **no — household only** |
