@@ -177,6 +177,26 @@ describe("recordWhenProblem", () => {
     expect(problem({ mode: "age", ageYears: "6" })).toBe("");
     expect(problem({ mode: "age", ageYears: "4", anchorPersonId: 0 })).toMatch(/whose age/);
   });
+
+  it("keeps the best guess inside the range", () => {
+    const problem = (fields: Partial<RecordWhen>) =>
+      recordWhenProblem(
+        w({ meaning: "occurrence", estimated: true, ...fields }),
+        true,
+        "2020-06-15",
+        now
+      );
+    const range = { mode: "range", from: "2026-01", to: "2026-03" } as const;
+    expect(problem({ ...range, around: "2025-01" })).toMatch(/inside the range/);
+    expect(problem({ ...range, around: "2026-04" })).toMatch(/inside the range/);
+    expect(problem({ ...range, around: "2026" })).toMatch(/inside the range/);
+    expect(problem({ ...range, around: "2026-03-31" })).toBe("");
+    expect(problem({ ...range, around: "2026-02" })).toBe("");
+    const ages = { mode: "age", ageYears: "2", ageToYears: "4" } as const;
+    expect(problem({ ...ages, around: "5" })).toMatch(/inside the age range/);
+    expect(problem({ ...ages, around: "1" })).toMatch(/inside the age range/);
+    expect(problem({ ...ages, around: "4" })).toBe("");
+  });
 });
 
 describe("recordWhenPreview", () => {
