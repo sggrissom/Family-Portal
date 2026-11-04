@@ -13,7 +13,7 @@ const (
 
 	uploadReadTimeout = 10 * time.Minute
 
-	importReadTimeout = 30 * time.Minute
+	importReadTimeout = 40 * time.Minute
 
 	downloadWriteTimeout = 30 * time.Minute
 
@@ -31,7 +31,7 @@ func requestDeadlines(r *http.Request) (read, write time.Duration) {
 	case "/api/upload-photo":
 		return uploadReadTimeout, defaultWriteTimeout
 	case "/api/import-bundle":
-		return importReadTimeout, defaultWriteTimeout
+		return importReadTimeout, importReadTimeout + defaultWriteTimeout
 	case "/api/export-bundle", SnapshotPath:
 		return defaultReadTimeout, downloadWriteTimeout
 	}

@@ -2,7 +2,6 @@ package backend
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"family/cfg"
 	"fmt"
@@ -39,20 +38,14 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 		requestedFamilyId = parsed
 	}
 
-	file, _, err := r.FormFile("file")
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		RespondValidationError(w, r, "No file provided", err.Error())
 		return
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(file)
-	if err != nil {
-		RespondInternalError(w, r, "Failed to read file", err.Error())
-		return
-	}
-
-	zipReader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	zipReader, err := zip.NewReader(file, header.Size)
 	if err != nil {
 		RespondValidationError(w, r, "Invalid ZIP file", err.Error())
 		return
