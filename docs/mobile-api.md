@@ -335,21 +335,27 @@ device's zone either.
 
 ### The one that actually bites
 
-Growth records, milestones, and photo dates take an `inputType`:
+Growth records and historical interviews take an `inputType`. Milestones
+(`AddMilestone`, `UpdateMilestone`), photo edits (`UpdatePhoto`) and
+`SuggestMilestonePhotos` take a `recordTime` instead; `UpdatePhoto` without one
+leaves the date alone.
 
 | `inputType` | Fields | Server behavior |
 | --- | --- | --- |
 | `"today"` | none | the server's current **UTC** day |
 | `"date"` | `measurementDate: "YYYY-MM-DD"` | parsed as given |
 | `"age"` | `ageYears`, `ageMonths` (0–11) | birthday + that offset |
-| `"keep"` | none | `UpdatePhoto` only: the photo's date is left as it is |
-| `"auto"` | `photoDate: "YYYY-MM-DD"` (optional) | photos only: the EXIF capture time, else `photoDate`, else the server's current UTC time |
 
 **Send `"date"` with the device's local calendar date. Never send `"today"`.**
 The server is not in the user's time zone, so `"today"` from a phone at 8pm can
 land on tomorrow. `"date"` is the only form where the record matches the day the
-user believes they entered. With `"auto"`, send the device's local day as
-`photoDate` so a photo without EXIF still lands on the uploader's day.
+user believes they entered.
+
+A photo upload takes an optional `recordTime` form field (JSON). Without one,
+the photo is dated by its EXIF capture time, else by `photoDate`
+(`"YYYY-MM-DD"`), else by the server's current UTC time; send the device's
+local day as `photoDate` so a photo without EXIF still lands on the uploader's
+day.
 
 ---
 
@@ -426,8 +432,8 @@ Milestone entry can use three suggestion procs, all of which return an empty
 answer rather than an error when the analysis daemon is down, except that text
 opening with a double quotation mark is suggested as `quote` without it:
 `SuggestMilestoneCategory` (`{description, personId}` → `{category}`),
-`SuggestMilestonePhotos` (the person plus `AddMilestone`'s date fields →
-`{photoIds, ranked}`), and `GetMilestoneMatches` (`{milestoneId}` → the same
+`SuggestMilestonePhotos` (`{personId, description, recordTime, excludeIds}` →
+`{photoIds, ranked}`; empty unless `recordTime` is an exact day), and `GetMilestoneMatches` (`{milestoneId}` → the same
 milestone in other people's records, with their ages in months).
 
 `GetPersonPhotoInsights` (`{personId}`) returns `growingUp` (one photo per
@@ -515,7 +521,7 @@ Content-Type: multipart/form-data
 | --- | --- |
 | `photo` | the file |
 | `title`, `description` | trimmed |
-| `inputType`, `photoDate`, `ageYears`, `ageMonths` | §5 |
+| `recordTime`, `photoDate` | §5; both optional |
 | `personIds` | a **JSON array in a form field**: `"[3,7]"` |
 | `familyId` | omit or blank for the primary family |
 

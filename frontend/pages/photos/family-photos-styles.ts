@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "../../components/tag-picker-styles";
 
 import "./photos-styles";
 
@@ -339,15 +340,6 @@ block(`
 .tag-filter-label input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
-}
-`);
-
-block(`
-.tag-color-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 `);
 

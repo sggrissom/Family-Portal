@@ -81,7 +81,7 @@ func setupFamilyLinkFixture(t *testing.T) (familyLinkFixture, func()) {
 			PersonId:    fx.alice.Id,
 			Description: "First day of school",
 			Category:    "development",
-			InputType:   "today",
+			RecordTime:  onToday(),
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx: %v", err)
@@ -343,12 +343,8 @@ func TestSharedPersonShowsUpInListPaths(t *testing.T) {
 			t.Error("an unshared sibling appeared on the roster")
 		}
 
-		images := GetVisibleImages(tx, fx.userB)
-		var sawAlicePhoto, sawUntagged bool
-		for _, image := range images {
-			sawAlicePhoto = sawAlicePhoto || image.Id == fx.alicePhoto.Id
-			sawUntagged = sawUntagged || image.Id == fx.untaggedPhoto.Id
-		}
+		sawAlicePhoto := CanAccessPhoto(tx, fx.userB, fx.alicePhoto, AccessView)
+		sawUntagged := CanAccessPhoto(tx, fx.userB, fx.untaggedPhoto, AccessView)
 		if !sawAlicePhoto {
 			t.Error("a photo of the shared child is missing from the photo list")
 		}

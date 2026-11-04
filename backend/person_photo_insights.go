@@ -128,7 +128,7 @@ func GetPersonPhotoInsights(ctx *vbeam.Context, req GetPersonPhotoInsightsReques
 	stream := newPhotoStream(ImageByPersonDateIndex, person.Id, photoKey{seconds: math.MaxInt64, id: math.MaxInt})
 	for stream.peek(ctx.Tx) {
 		img := stream.pop()
-		if img.Status != 0 || !CanAccessPhoto(ctx.Tx, user, img, AccessView) {
+		if img.Status != PhotoReady || !CanAccessPhoto(ctx.Tx, user, img, AccessView) {
 			continue
 		}
 		inPhoto := GetPhotoPersonsByPhoto(ctx.Tx, img.Id)
@@ -148,7 +148,7 @@ func GetPersonPhotoInsights(ctx *vbeam.Context, req GetPersonPhotoInsightsReques
 			}
 		}
 
-		if img.IsVideo() {
+		if img.IsVideo() || !img.RecordTime.ExactDay() {
 			continue
 		}
 		c := scorePortrait(ctx.Tx, img, person, len(inPhoto))

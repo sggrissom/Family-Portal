@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"family/cfg"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -119,7 +118,7 @@ func (w *videoAnalysisWorker) process(imageId int) error {
 
 	source, err := localCopyOf(w.ctx, store, image.PlaybackKey, workDir)
 	if errors.Is(err, ErrMediaNotFound) {
-		log.Printf("[VIDEO_ANALYSIS] Video %d has no playback file", imageId)
+		LogWarn(LogCategoryWorker, "Video analysis found no playback file", map[string]interface{}{"videoId": imageId})
 		return nil
 	}
 	if err != nil {
@@ -147,12 +146,12 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string)
 	stored := false
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, image.Id)
-		if current.Id == 0 || current.Status != 0 || current.PlaybackKey != image.PlaybackKey {
+		if current.Id == 0 || current.Status != PhotoReady || current.PlaybackKey != image.PlaybackKey {
 			return
 		}
 		previous, _ := GetVideoFrames(tx, image.Id)
 		current.DerivedBytes += thumbs - previous.ThumbBytes
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		writeVideoFramesTx(tx, &VideoFrames{
 			ImageId: current.Id, FamilyId: current.FamilyId,
 			Model: clipModelId, Version: videoFramesVersion,
@@ -166,7 +165,6 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string)
 		return nil
 	}
 	QueuePhotoEmbedding(image.Id)
-	log.Printf("[VIDEO_ANALYSIS] Video %d: %d frames", image.Id, len(frames))
 	return nil
 }
 
@@ -176,18 +174,17 @@ func (w *videoAnalysisWorker) analyzeSpeech(image Image, source, workDir string)
 		return nil
 	}
 	if err != nil {
-		log.Printf("[VIDEO_ANALYSIS] Could not transcribe video %d: %v", image.Id, err)
+		LogWarn(LogCategoryWorker, "Video transcription failed", map[string]interface{}{"videoId": image.Id, "error": err.Error()})
 		t.Status, t.Segments = TranscriptFailed, nil
 	}
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, image.Id)
 		existing, found := GetVideoTranscriptRecord(tx, image.Id)
-		if current.Id == 0 || current.Status != 0 || current.PlaybackKey != image.PlaybackKey || (found && transcriptSettled(existing)) {
+		if current.Id == 0 || current.Status != PhotoReady || current.PlaybackKey != image.PlaybackKey || (found && transcriptSettled(existing)) {
 			return
 		}
 		writeVideoTranscriptTx(tx, &t)
 		vbolt.TxCommit(tx)
 	})
-	log.Printf("[VIDEO_ANALYSIS] Video %d: transcript status %d, %d segments", image.Id, t.Status, len(t.Segments))
 	return nil
 }

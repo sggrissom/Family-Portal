@@ -372,6 +372,15 @@ func validateImportMilestone(milestone ExportMilestone, index int, validPersonId
 		return errors.New("Milestone at index " + formatIndex(index) + " has empty description")
 	}
 
+	if milestone.RecordTime != nil {
+		if err := validateRecordTime(*milestone.RecordTime, true); err != nil {
+			return errors.New("Milestone at index " + formatIndex(index) + " has an invalid date: " + err.Error())
+		}
+		if milestone.RecordTime.Basis == BasisAge && !validPersonIds[milestone.RecordTime.AnchorPersonId] {
+			return errors.New("Milestone at index " + formatIndex(index) + " is dated by the age of unknown person ID " + formatIndex(milestone.RecordTime.AnchorPersonId))
+		}
+		return nil
+	}
 	if milestone.MilestoneDate.Year() < 1900 || milestone.MilestoneDate.After(time.Now()) {
 		return errors.New("Milestone at index " + formatIndex(index) + " has invalid date")
 	}
@@ -681,10 +690,18 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			continue
 		}
 
-		if milestone.MilestoneDate.Year() == 1 {
+		if milestone.RecordTime == nil {
+			if milestone.MilestoneDate.Year() == 1 {
+				continue
+			}
+			milestone.MilestoneDate = dayStart(milestone.MilestoneDate)
+		}
+		recordTime, date, err := importRecordTime(milestone.RecordTime, milestone.MilestoneDate, personIdMapping, true)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Moment %q: %s", milestone.Description, err.Error()))
 			continue
 		}
-		milestone.MilestoneDate = dayStart(milestone.MilestoneDate)
+		milestone.MilestoneDate = date
 
 		if isDuplicateMilestone(tx, newPersonId, milestone.MilestoneDate, milestone.Description) {
 			skippedCount++
@@ -699,9 +716,10 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			Category:      milestone.Category,
 			Context:       milestone.Context,
 			MilestoneDate: milestone.MilestoneDate,
+			RecordTime:    recordTime,
 			CreatedAt:     time.Now(),
 		}
-		writeMilestone(tx, newMilestone)
+		writeMilestone(tx, &newMilestone)
 
 		for _, tagName := range milestone.TagNames {
 			if tagId, ok := tagNameToId[strings.ToLower(tagName)]; ok {

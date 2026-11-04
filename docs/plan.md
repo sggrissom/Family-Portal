@@ -13,12 +13,26 @@ proposals are kept in [Not planned](not-planned.md).
 
 | Plan | Purpose |
 | --- | --- |
-| [Approximate dates and ages](plans/approximate-dates.md) | Record partial historical knowledge honestly and keep the uncertainty when browsing and comparing. Manual entry first; optional AI estimation only after evaluation. The foundation for old photos and cross-generation views. |
-| [Video](plans/video.md) | Videos alongside photos, with private object storage for the bytes. |
+| [Approximate dates and ages](plans/approximate-dates.md) | Preserve uncertain dates and age-period descriptions such as “at age 4” without inventing birthday events. Covers moments/media, sitewide date and age behavior, migration and correction, mobile, and exports. Manual support first; optional AI estimation later. |
 | [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
 
 ## Follow-ups to shipped features
+
+**Video.** Upload, processing, playback, export and the S3-compatible (R2/B2)
+backend are built; video is opt-in per family.
+
+- Real-device checks of iPhone H.264, HEVC, HDR and portrait clips on
+  iOS/Safari and Linux/Chrome: playback starts, HDR looks right.
+- Resumable S3 multipart uploads above ~100 MB, if single PUTs prove fragile.
+- Open question: whether photos follow video into the bucket.
+
+**Search.** Global search is built on web.
+
+- Chat message search, with jump-to-message.
+- Typo tolerance (edit distance 1 on words of 5+ characters) if prefix
+  matching proves not to be enough.
+- Searching book text and unanswered interview questions.
 
 **Books.** First-year, personal year, family year and custom books are built.
 

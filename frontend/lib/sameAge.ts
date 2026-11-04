@@ -121,6 +121,7 @@ export function hasSameAgeRecords(row: SameAgeRow): boolean {
     !!row.height ||
     !!row.weight ||
     (row.milestones ?? []).length > 0 ||
+    (row.contextMilestones ?? []).length > 0 ||
     (row.photoIds ?? []).length > 0 ||
     (row.portraits ?? []).length > 0
   );

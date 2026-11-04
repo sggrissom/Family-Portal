@@ -49,7 +49,7 @@ func BenchmarkSearch(b *testing.B) {
 				date := start.AddDate(0, 0, i*4).Format(dateOnlyLayout)
 				text := fmt.Sprintf("%s %s %s", benchWords[i%20], benchWords[(i*7)%20], benchWords[(i*13)%20])
 				if _, err := AddMilestoneTx(tx, AddMilestoneRequest{
-					PersonId: people[i%4].Id, Description: text, Category: "development", InputType: "date", MilestoneDate: &date,
+					PersonId: people[i%4].Id, Description: text, Category: "development", RecordTime: onDay(date),
 				}, user.FamilyId); err != nil {
 					b.Fatal(err)
 				}

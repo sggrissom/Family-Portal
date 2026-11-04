@@ -223,21 +223,37 @@ func (s *searcher) person(id int) Person {
 	return p
 }
 
-func (s *searcher) ageMatches(parsed parsedSearch, personId int, at time.Time) bool {
-	birthday := s.person(personId).Birthday
-	if birthday.IsZero() {
-		return false
-	}
-	months := ageInMonths(birthday, at)
-	return months >= *parsed.AgeFromMonth && months < *parsed.AgeToMonth
+func (s *searcher) ageMatches(parsed parsedSearch, personId int, rt RecordTime) bool {
+	from, to, ok := rt.AgeMonthsFor(s.person(personId))
+	return ok && from < *parsed.AgeToMonth && to > *parsed.AgeFromMonth
 }
 
 func (p parsedSearch) hasFilters() bool {
 	return len(p.PersonIds) > 0 || p.AgeFromMonth != nil || p.Year != 0 || p.Month != 0 || p.Category != ""
 }
 
-func dateMatches(parsed parsedSearch, at time.Time) bool {
-	return (parsed.Year == 0 || at.Year() == parsed.Year) && (parsed.Month == 0 || int(at.Month()) == parsed.Month)
+// dateMatches is an overlap test for a year or month. A month with no year
+// matches only records known to fall within one such month.
+func dateMatches(parsed parsedSearch, rt RecordTime) bool {
+	switch {
+	case parsed.Year == 0 && parsed.Month == 0:
+		return true
+	case parsed.Year == 0:
+		if !rt.Resolved {
+			return false
+		}
+		start, _, _, _ := parseCivil(rt.Start)
+		end, _, _, _ := parseCivil(rt.End)
+		last := end.addDays(-1)
+		return start.Year == last.Year && start.Month == last.Month && int(start.Month) == parsed.Month
+	}
+	from := civilDate{parsed.Year, time.January, 1}
+	to := from.addMonths(12)
+	if parsed.Month != 0 {
+		from = civilDate{parsed.Year, time.Month(parsed.Month), 1}
+		to = from.addMonths(1)
+	}
+	return rt.Overlaps(from.String(), to.String())
 }
 
 func hasOneOfEach(have []int, groups [][]int) bool {
@@ -308,10 +324,10 @@ func (s *searcher) matchMoments(parsed parsedSearch, terms []string, limit int) 
 		if len(parsed.PersonIds) > 0 && !hasOneOfEach([]int{m.PersonId}, [][]int{parsed.PersonIds}) {
 			continue
 		}
-		if parsed.AgeFromMonth != nil && !s.ageMatches(parsed, m.PersonId, m.MilestoneDate) {
+		if parsed.AgeFromMonth != nil && !s.ageMatches(parsed, m.PersonId, m.RecordTime) {
 			continue
 		}
-		if !dateMatches(parsed, m.MilestoneDate) || (parsed.Category != "" && m.Category != parsed.Category) {
+		if !dateMatches(parsed, m.RecordTime) || (parsed.Category != "" && m.Category != parsed.Category) {
 			continue
 		}
 		candidates = append(candidates, m)
@@ -401,7 +417,7 @@ func (s *searcher) photoAgeMatches(parsed parsedSearch, image Image, present []i
 		named[id] = true
 	}
 	for _, id := range present {
-		if (len(named) == 0 || named[id]) && s.ageMatches(parsed, id, image.PhotoDate) {
+		if (len(named) == 0 || named[id]) && s.ageMatches(parsed, id, image.RecordTime) {
 			return true
 		}
 	}
@@ -411,7 +427,7 @@ func (s *searcher) photoAgeMatches(parsed parsedSearch, image Image, present []i
 func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[int]PhotoPlace) (out []PhotoWithPeople, more bool, semantic bool) {
 	l := s.photoListing(parsed)
 	keep := func(image Image) bool {
-		if !l.passes(image) || !dateMatches(parsed, image.PhotoDate) {
+		if !l.passes(image) || !dateMatches(parsed, image.RecordTime) {
 			return false
 		}
 		if len(parsed.personGroups) == 0 && parsed.AgeFromMonth == nil {

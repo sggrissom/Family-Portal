@@ -44,40 +44,34 @@ func TestAddMilestone(t *testing.T) {
 
 	validRequests := []AddMilestoneRequest{
 		{
-			PersonId:      testPerson.Id,
-			Description:   "First words",
-			Category:      "development",
-			InputType:     "date",
-			MilestoneDate: stringPtr("2021-06-15"),
+			PersonId:    testPerson.Id,
+			Description: "First words",
+			Category:    "development",
+			RecordTime:  onDay("2021-06-15"),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "Started walking",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(2),
+			RecordTime:  atAge(testPerson, 1, 2),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "Today's achievement",
 			Category:    "achievement",
-			InputType:   "today",
+			RecordTime:  onToday(),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "First birthday party",
 			Category:    "first",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(0),
+			RecordTime:  atAge(testPerson, 1, 0),
 		},
 		{
-			PersonId:      testPerson.Id,
-			Description:   "Doctor checkup went well",
-			Category:      "health",
-			InputType:     "date",
-			MilestoneDate: stringPtr("2023-01-15"),
+			PersonId:    testPerson.Id,
+			Description: "Doctor checkup went well",
+			Category:    "health",
+			RecordTime:  onDay("2023-01-15"),
 		},
 	}
 
@@ -121,7 +115,7 @@ func TestAddMilestone(t *testing.T) {
 				PersonId:    99999,
 				Description: "Test milestone",
 				Category:    "development",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			description: "non-existent person",
 		},
@@ -206,7 +200,7 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 			PersonId:    testPerson.Id,
 			Description: "First photo milestone",
 			Category:    "development",
-			InputType:   "today",
+			RecordTime:  onToday(),
 			PhotoIds:    []int{1, 2},
 		}
 		milestone, err := AddMilestoneTx(tx, req, testUser.FamilyId)
@@ -236,7 +230,7 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 			Id:          milestone.Id,
 			Description: "Updated milestone",
 			Category:    "development",
-			InputType:   "today",
+			RecordTime:  onToday(),
 			PhotoIds:    []int{2, 3},
 		}
 		_, err = UpdateMilestoneTx(tx, updateReq, testUser.FamilyId)
@@ -253,7 +247,7 @@ func TestMilestonePhotoAssociations(t *testing.T) {
 			Id:          milestone.Id,
 			Description: "Updated milestone",
 			Category:    "development",
-			InputType:   "today",
+			RecordTime:  onToday(),
 			PhotoIds:    []int{},
 		}
 		_, err = UpdateMilestoneTx(tx, clearReq, testUser.FamilyId)
@@ -279,11 +273,10 @@ func TestMilestoneValidation(t *testing.T) {
 		{
 			name: "valid development milestone with date",
 			request: AddMilestoneRequest{
-				PersonId:      1,
-				Description:   "First words",
-				Category:      "development",
-				InputType:     "date",
-				MilestoneDate: stringPtr("2023-06-15"),
+				PersonId:    1,
+				Description: "First words",
+				Category:    "development",
+				RecordTime:  onDay("2023-06-15"),
 			},
 			shouldError: false,
 		},
@@ -293,9 +286,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "Started sharing toys",
 				Category:    "behavior",
-				InputType:   "age",
-				AgeYears:    intPtr(2),
-				AgeMonths:   intPtr(6),
+				RecordTime:  onToday(),
 			},
 			shouldError: false,
 		},
@@ -305,7 +296,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "Doctor checkup",
 				Category:    "health",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: false,
 		},
@@ -315,7 +306,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "Won a prize",
 				Category:    "achievement",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: false,
 		},
@@ -325,7 +316,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "First day of school",
 				Category:    "first",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: false,
 		},
@@ -335,7 +326,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "Something special",
 				Category:    "other",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: false,
 		},
@@ -345,7 +336,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "",
 				Category:    "development",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: true,
 		},
@@ -355,7 +346,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "   ",
 				Category:    "development",
-				InputType:   "today",
+				RecordTime:  onToday(),
 			},
 			shouldError: true,
 		},
@@ -365,17 +356,7 @@ func TestMilestoneValidation(t *testing.T) {
 				PersonId:    1,
 				Description: "Test milestone",
 				Category:    "invalid",
-				InputType:   "today",
-			},
-			shouldError: true,
-		},
-		{
-			name: "invalid input type",
-			request: AddMilestoneRequest{
-				PersonId:    1,
-				Description: "Test milestone",
-				Category:    "development",
-				InputType:   "invalid",
+				RecordTime:  onToday(),
 			},
 			shouldError: true,
 		},
@@ -383,7 +364,7 @@ func TestMilestoneValidation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateMilestoneFields(test.request.Description, test.request.Category, test.request.InputType)
+			err := validateMilestoneFields(test.request.Description, test.request.Category)
 			if test.shouldError && err == nil {
 				t.Errorf("Expected validation error for %s, but got none", test.name)
 			}
@@ -429,35 +410,28 @@ func TestMultipleMilestones(t *testing.T) {
 
 	milestones := []AddMilestoneRequest{
 		{
-			PersonId:      testPerson.Id,
-			Description:   "First smile",
-			Category:      "development",
-			InputType:     "date",
-			MilestoneDate: stringPtr("2020-03-01"),
+			PersonId:    testPerson.Id,
+			Description: "First smile",
+			Category:    "development",
+			RecordTime:  onDay("2020-03-01"),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "Started crawling",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(0),
-			AgeMonths:   intPtr(8),
+			RecordTime:  atAge(testPerson, 0, 8),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "First birthday",
 			Category:    "first",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(0),
+			RecordTime:  atAge(testPerson, 1, 0),
 		},
 		{
 			PersonId:    testPerson.Id,
 			Description: "Started being more social",
 			Category:    "behavior",
-			InputType:   "age",
-			AgeYears:    intPtr(2),
-			AgeMonths:   intPtr(3),
+			RecordTime:  atAge(testPerson, 2, 3),
 		},
 	}
 

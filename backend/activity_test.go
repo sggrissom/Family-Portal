@@ -361,7 +361,8 @@ func TestDeleteFamilyActivitiesLeavesNoOrphans(t *testing.T) {
 		if GetEntryById(tx, fx.groupEntry.Id).Id != 0 {
 			t.Error("the entry record itself survived the sweep")
 		}
-		if GetResultById(tx, fx.adjudicate.Id).Id != 0 {
+		var result Result
+		if vbolt.Read(tx, ResultBkt, fx.adjudicate.Id, &result); result.Id != 0 {
 			t.Error("the result record itself survived the sweep")
 		}
 	})
@@ -407,10 +408,6 @@ func TestDeletingAPersonClearsTheirActivityJoinsEverywhere(t *testing.T) {
 }
 
 func TestActivitiesScopeIsOptInAndAdditive(t *testing.T) {
-	if DefaultLinkScopes().Activities {
-		t.Error("new links share activities by default")
-	}
-
 	legacyMask := ScopePeople.bit() | ScopeMilestones.bit() | ScopePhotos.bit() | ScopeGrowth.bit()
 	if linkScopesFromMask(legacyMask).Activities {
 		t.Error("a mask written before the feature existed decodes as sharing activities")
@@ -437,9 +434,6 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 		if canAccessAppearance(tx, fx.userB, fx.groupAppr, AccessView) {
 			t.Error("an appearance was readable through a link that does not share activities")
 		}
-		if canAccessResult(tx, fx.userB, fx.adjudicate, AccessView) {
-			t.Error("a result was readable through a link that does not share activities")
-		}
 		if !canAccessEntry(tx, fx.userA, fx.soloEntry, AccessContribute) {
 			t.Error("the owning family lost access to its own routine")
 		}
@@ -453,9 +447,6 @@ func TestCanAccessEntryFollowsTheRoster(t *testing.T) {
 		}
 		if !canAccessAppearance(tx, fx.userB, fx.groupAppr, AccessView) {
 			t.Error("that routine's appearance was denied")
-		}
-		if !canAccessResult(tx, fx.userB, fx.adjudicate, AccessView) {
-			t.Error("that appearance's result was denied")
 		}
 
 		if canAccessEntry(tx, fx.userB, fx.soloEntry, AccessView) {

@@ -43,6 +43,7 @@ import {
 import { EditorNotes } from "./book";
 import "./book-styles";
 import "./edit-book-styles";
+import { isExactRecord, recordDateLabel, recordTimeLabel } from "../../lib/recordTime";
 
 export async function fetch(route: string, prefix: string) {
   return server.GetBook({ id: getIdFromRoute(route) || 0 });
@@ -521,7 +522,7 @@ const CoverPicker = ({ state, r }: { state: EditorState; r: Resolved }) => {
               <button
                 type="button"
                 aria-pressed={photo.id === state.coverPhotoId ? "true" : "false"}
-                aria-label={`Use the photo from ${shortDay(dayOf(photo.photoDate))} as the cover`}
+                aria-label={`Use the photo from ${recordDateLabel(photo.recordTime, dayOf(photo.photoDate), shortDay)} as the cover`}
                 onClick={() => {
                   state.coverPhotoId = photo.id;
                   state.pickingCover = false;
@@ -540,7 +541,14 @@ const CoverPicker = ({ state, r }: { state: EditorState; r: Resolved }) => {
 
 function detailOf(r: Resolved, item: server.BookItem): string {
   const day = itemDay(r, item) ?? "";
-  const parts = [shortDay(day)];
+  const rt =
+    item.kind === server.BookItemMilestone
+      ? r.milestones.get(item.sourceId)?.recordTime
+      : item.kind === server.BookItemInterview
+        ? undefined
+        : r.photos.get(item.sourceId)?.recordTime;
+  const exact = isExactRecord(rt);
+  const parts = [exact ? shortDay(day) : recordTimeLabel(rt!)];
   if (item.kind === server.BookItemMilestone || item.kind === server.BookItemInterview) {
     const personId =
       item.kind === server.BookItemInterview
@@ -548,7 +556,7 @@ function detailOf(r: Resolved, item: server.BookItem): string {
         : r.milestones.get(item.sourceId)?.personId;
     const person = personId ? r.person.get(personId) : undefined;
     if (person && isMulti(r)) parts.push(person.name);
-    if (person && dayOf(person.birthday) <= day) {
+    if (person && exact && dayOf(person.birthday) <= day) {
       parts.push(photoAge(person.birthday, day + "T00:00:00Z"));
     }
   } else {
@@ -768,7 +776,7 @@ const LeftOut = ({ state, r }: { state: EditorState; r: Resolved }) => {
                       {getCategoryIcon(m.category)} {m.description}
                       <span className="book-editor-hint">
                         {" "}
-                        · {shortDay(dayOf(m.milestoneDate))}
+                        · {recordDateLabel(m.recordTime, dayOf(m.milestoneDate), shortDay)}
                       </span>
                     </span>
                     <button type="button" onClick={() => addItem(state, r, milestoneItem(r, m))}>

@@ -26,6 +26,7 @@ import { parseFilterQuery, serverFilters } from "../../lib/photoFilterQuery";
 import { PHOTO_PAGE_SIZE, photosRequest } from "../../lib/photoPages";
 import { matchStartMs, saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import "./family-photos-styles";
+import { recordDateLabel } from "../../lib/recordTime";
 
 type FamilyPhotosData = {
   first: server.ListFamilyPhotosResponse;
@@ -135,7 +136,7 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
 
       if (
         currentStatus === Status.Unknown &&
-        photo.status === 1 &&
+        photo.status === Status.Processing &&
         !photoStatus.isMonitoring(photo.id)
       ) {
         photoStatus.startMonitoring(photo.id, photo.status);
@@ -437,7 +438,11 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                           photoWithPeople.image.title
                         ) && <h3 className="photo-title">{photoWithPeople.image.title}</h3>}
                         <div className="photo-date">
-                          {formatPhotoDate(photoWithPeople.image.photoDate)}
+                          {recordDateLabel(
+                            photoWithPeople.image.recordTime,
+                            photoWithPeople.image.photoDate,
+                            formatPhotoDate
+                          )}
                         </div>
                         {photoWithPeople.image.description && (
                           <div className="photo-description">

@@ -48,8 +48,32 @@ export const BookItemPhoto: BookItemKind = 1;
 export const BookItemInterview: BookItemKind = 2;
 
 // Errors
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrInterviewNotFound = "Interview not found or not in your family";
+export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
 export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
 export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrTranscriptNotFound = "Transcript not found or access denied";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrCorrectionNotFound = "That correction could not be found";
+export const ErrVideoNotFound = "Video not found or access denied";
+export const ErrMediaNotFound = "media object not found";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -59,34 +83,12 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
-export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
-export const ErrTranscriptNotFound = "Transcript not found or access denied";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrMediaNotFound = "media object not found";
-export const ErrInterviewNotFound = "Interview not found or not in your family";
-export const ErrInterviewInProgress = "There's already an interview in progress for this person";
-export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
 export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
 export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
 export const ErrVideoUploadNotFound = "That upload could not be found.";
 export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
-export const ErrVideoNotFound = "Video not found or access denied";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
+export const ErrDateRequired = "Choose when this happened";
 
 export interface CreateAccountRequest {
     name: string
@@ -486,12 +488,9 @@ export interface AddMilestoneRequest {
     description: string
     category: string
     context: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
     photoIds: number[]
     tagIds: number[]
+    recordTime: RecordTime | null
 }
 
 export interface AddMilestoneResponse {
@@ -519,12 +518,9 @@ export interface UpdateMilestoneRequest {
     description: string
     category: string
     context: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
     photoIds: number[]
     tagIds: number[]
+    recordTime: RecordTime | null
 }
 
 export interface UpdateMilestoneResponse {
@@ -556,6 +552,29 @@ export interface UpdateMilestoneTagsRequest {
 }
 
 export interface UpdateMilestoneTagsResponse {
+}
+
+export interface ListBirthdayClustersResponse {
+    clusters: BirthdayCluster[]
+    people: Person[]
+}
+
+export interface CorrectRecordTimesRequest {
+    changes: RecordTimeChange[]
+}
+
+export interface CorrectRecordTimesResponse {
+    correctionId: number
+    changed: number
+}
+
+export interface UndoRecordTimeCorrectionRequest {
+    correctionId: number
+}
+
+export interface UndoRecordTimeCorrectionResponse {
+    restored: number
+    skipped: number
 }
 
 export interface GetInterviewQuestionsRequest {
@@ -1050,10 +1069,7 @@ export interface UpdatePhotoRequest {
     id: number
     title: string
     description: string
-    inputType: string
-    photoDate: string
-    ageYears: number | null
-    ageMonths: number | null
+    recordTime: RecordTime | null
 }
 
 export interface UpdatePhotoResponse {
@@ -1087,6 +1103,7 @@ export interface ListFamilyPhotosRequest {
     placeKey: string
     collapseSimilar: boolean
     query: string
+    exactDatesOnly: boolean
 }
 
 export interface ListFamilyPhotosResponse {
@@ -1337,10 +1354,7 @@ export interface SuggestMilestoneCategoryResponse {
 export interface SuggestMilestonePhotosRequest {
     personId: number
     description: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
+    recordTime: RecordTime
     excludeIds: number[]
 }
 
@@ -2048,6 +2062,7 @@ export interface Milestone {
     tagIds: number[]
     interviewId: number
     questionId: number
+    recordTime: RecordTime
 }
 
 export interface Image {
@@ -2072,6 +2087,7 @@ export interface Image {
     videoCodec: string
     audioCodec: string
     processingError: string
+    recordTime: RecordTime
 }
 
 export interface Interview {
@@ -2133,6 +2149,42 @@ export interface RelationLabelEntry {
 export interface CheckupValue {
     value: number
     unit: string
+}
+
+export interface RecordTime {
+    version: number
+    meaning: string
+    basis: string
+    precision: string
+    estimated: boolean
+    from: string
+    to: string
+    around: string
+    anchorPersonId: number
+    ageYears: number
+    ageMonths: number
+    ageToYears: number
+    source: string
+    note: string
+    changedBy: number
+    changedAt: string
+    start: string
+    end: string
+    resolved: boolean
+    resolverVersion: number
+}
+
+export interface BirthdayCluster {
+    personId: number
+    age: number
+    day: string
+    records: BirthdayClusterRecord[]
+}
+
+export interface RecordTimeChange {
+    kind: string
+    id: number
+    recordTime: RecordTime
 }
 
 export interface InterviewQuestion {
@@ -2505,6 +2557,7 @@ export interface SameAgeRow {
     height: GrowthData | null
     weight: GrowthData | null
     milestones: Milestone[]
+    contextMilestones: Milestone[]
     interviews: Interview[]
     photoIds: number[]
     portraits: PortraitPhoto[]
@@ -2902,6 +2955,14 @@ export interface AdminMobileVersionPlatform {
     warnings: string[]
 }
 
+export interface BirthdayClusterRecord {
+    kind: string
+    id: number
+    text: string
+    photoId: number
+    recordTime: RecordTime
+}
+
 export interface ImportRow {
     raw: string
     answer: string
@@ -3018,6 +3079,8 @@ export interface ExportVideo {
     title: string
     description: string
     photo_date: string
+    record_time: RecordTime | null
+    date_label: string
     original_filename: string
     file_name: string
     mime_type: string
@@ -3308,6 +3371,18 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
+}
+
+export async function ListBirthdayClusters(data: Empty): Promise<rpc.Response<ListBirthdayClustersResponse>> {
+    return await rpc.call<ListBirthdayClustersResponse>('ListBirthdayClusters', JSON.stringify(data));
+}
+
+export async function CorrectRecordTimes(data: CorrectRecordTimesRequest): Promise<rpc.Response<CorrectRecordTimesResponse>> {
+    return await rpc.call<CorrectRecordTimesResponse>('CorrectRecordTimes', JSON.stringify(data));
+}
+
+export async function UndoRecordTimeCorrection(data: UndoRecordTimeCorrectionRequest): Promise<rpc.Response<UndoRecordTimeCorrectionResponse>> {
+    return await rpc.call<UndoRecordTimeCorrectionResponse>('UndoRecordTimeCorrection', JSON.stringify(data));
 }
 
 export async function GetInterviewQuestions(data: GetInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {

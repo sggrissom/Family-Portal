@@ -66,12 +66,6 @@ func (l *workerLifecycle) drainContext() context.Context {
 	return l.drainCtx
 }
 
-func (l *workerLifecycle) stopImmediately() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), stopWaitTimeout)
-	defer cancel()
-	return l.stopAndWait(ctx, false)
-}
-
 func (l *workerLifecycle) stopAndWait(ctx context.Context, drain bool) bool {
 	var drainCtx context.Context
 	if drain {

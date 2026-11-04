@@ -68,3 +68,36 @@ block(`
   color: var(--danger);
 }
 `);
+
+block(`
+.record-when {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+`);
+
+block(`
+.record-when-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+`);
+
+block(`
+.when-year,
+.when-range {
+  width: 96px;
+}
+`);
+
+block(`
+.record-when-preview {
+  margin: 0;
+  color: var(--muted);
+  text-align: right;
+}
+`);

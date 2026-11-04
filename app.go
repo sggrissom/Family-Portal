@@ -173,6 +173,16 @@ func OpenDB(dbpath string) *vbolt.DB {
 		})
 	})
 
+	// Migration: every moment and photo gets an exact-day RecordTime with
+	// legacy provenance (docs/plans/approximate-dates-contract.md).
+	vbolt.ApplyDBProcess(dbConnection, "2026-1102-backfill-record-times", func() {
+		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
+			milestones, images := backend.BackfillRecordTimes(tx)
+			log.Printf("Backfilled record times: %d moments, %d photos", milestones, images)
+			vbolt.TxCommit(tx)
+		})
+	})
+
 	return dbConnection
 }
 
@@ -264,6 +274,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterRelationMethods(app)
 	backend.RegisterGrowthMethods(app)
 	backend.RegisterMilestoneMethods(app)
+	backend.RegisterRecordTimeReviewMethods(app)
 	backend.RegisterInterviewQuestionMethods(app)
 	backend.RegisterInterviewMethods(app)
 	backend.RegisterInterviewViewMethods(app)
@@ -360,8 +371,4 @@ func WrapApplication(app *vbeam.Application) http.Handler {
 				backend.NewRequestSizeLimitWrapper(
 					backend.NewBearerTokenWrapper(
 						backend.NewSecurityWrapper(app))))))
-}
-
-func MakeSecureApplication() http.Handler {
-	return WrapApplication(MakeApplication())
 }

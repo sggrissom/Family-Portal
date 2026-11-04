@@ -1,4 +1,5 @@
 import { block } from "vlens/css";
+import "../../components/tag-picker-styles";
 
 block(`
 .view-photo-container {
@@ -332,15 +333,6 @@ block(`
   font-size: 0.8rem;
 }
 `);
-block(`
-.tag-color-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-`);
-
 block(`
 @media (max-width: 768px) {
   .view-photo-container {

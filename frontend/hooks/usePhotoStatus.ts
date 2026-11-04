@@ -1,13 +1,9 @@
 import * as vlens from "vlens";
 import * as server from "../server";
 import { logWarn } from "../lib/logger";
+import { Status } from "../lib/photoStatus";
 
-export enum Status {
-  Unknown = -1,
-  Done = 0,
-  Processing = 1,
-  Failed = 2,
-}
+export { Status };
 
 type PhotoId = number;
 
@@ -142,7 +138,7 @@ async function pollPhotoStatuses() {
         changed = true;
       }
 
-      if (next === Status.Done || next === Status.Failed) {
+      if (next === Status.Ready || next === Status.Failed) {
         state.pollingPhotos.delete(photoId);
       }
     }

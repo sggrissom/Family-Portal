@@ -221,7 +221,7 @@ func TestFamilyTimelineWindow(t *testing.T) {
 		for _, date := range []string{"2022-06-01", "2024-01-03"} {
 			if _, err := AddMilestoneTx(tx, AddMilestoneRequest{
 				PersonId: fx.kid.Id, Description: "walked", Category: "motor",
-				InputType: "date", MilestoneDate: &date,
+				RecordTime: onDay(date),
 			}, fx.kid.FamilyId); err != nil {
 				t.Fatalf("AddMilestoneTx: %v", err)
 			}

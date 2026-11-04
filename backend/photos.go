@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -43,16 +42,6 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdatePhotoTags)
 }
 
-type AddPhotoRequest struct {
-	PersonIds   []int  `json:"personIds"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	InputType   string `json:"inputType"`
-	PhotoDate   string `json:"photoDate,omitempty"`
-	AgeYears    *int   `json:"ageYears,omitempty"`
-	AgeMonths   *int   `json:"ageMonths,omitempty"`
-}
-
 type AddPhotoResponse struct {
 	Image Image `json:"image"`
 }
@@ -74,10 +63,8 @@ type UpdatePhotoRequest struct {
 	Id          int    `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	InputType   string `json:"inputType"`
-	PhotoDate   string `json:"photoDate,omitempty"`
-	AgeYears    *int   `json:"ageYears,omitempty"`
-	AgeMonths   *int   `json:"ageMonths,omitempty"`
+	// RecordTime, when absent, leaves the date alone.
+	RecordTime *RecordTime `json:"recordTime,omitempty"`
 }
 
 type UpdatePhotoResponse struct {
@@ -119,6 +106,8 @@ type ListFamilyPhotosRequest struct {
 	// instead of by date. Names of visible people in it narrow the results to
 	// photos of all of them.
 	Query string `json:"query,omitempty"`
+	// ExactDatesOnly leaves out photos whose date is approximate or unknown.
+	ExactDatesOnly bool `json:"exactDatesOnly,omitempty"`
 }
 
 type PhotoWithPeople struct {
@@ -171,32 +160,46 @@ type RemovePersonFromPhotoResponse struct {
 	Success bool `json:"success"`
 }
 
+const (
+	PhotoReady      = 0
+	PhotoProcessing = 1
+	PhotoFailed     = 2
+)
+
+const (
+	AnalysisPending = 0
+	AnalysisRunning = 1
+	AnalysisDone    = 2
+	AnalysisFailed  = 3
+)
+
 type Image struct {
-	Id               int       `json:"id"`
-	FamilyId         int       `json:"familyId"`
-	OwnerUserId      int       `json:"ownerUserId"`
-	OriginalFilename string    `json:"originalFilename"`
-	MimeType         string    `json:"mimeType"`
-	FileSize         int       `json:"fileSize"`
-	Width            int       `json:"width"`
-	Height           int       `json:"height"`
-	FilePath         string    `json:"filePath"`
-	Title            string    `json:"title"`
-	Description      string    `json:"description"`
-	PhotoDate        time.Time `json:"photoDate"`
-	CreatedAt        time.Time `json:"createdAt"`
-	Status           int       `json:"status"`
-	AnalysisStatus   int       `json:"analysisStatus"`
-	AnalysisVersion  int       `json:"-"`
-	TagIds           []int     `json:"tagIds,omitempty"`
-	MediaKind        MediaKind `json:"mediaKind"`
-	DurationMs       int       `json:"durationMs,omitempty"`
-	VideoCodec       string    `json:"videoCodec,omitempty"`
-	AudioCodec       string    `json:"audioCodec,omitempty"`
-	ProcessingError  string    `json:"processingError,omitempty"`
-	OriginalKey      string    `json:"-"`
-	PlaybackKey      string    `json:"-"`
-	DerivedBytes     int       `json:"-"`
+	Id               int        `json:"id"`
+	FamilyId         int        `json:"familyId"`
+	OwnerUserId      int        `json:"ownerUserId"`
+	OriginalFilename string     `json:"originalFilename"`
+	MimeType         string     `json:"mimeType"`
+	FileSize         int        `json:"fileSize"`
+	Width            int        `json:"width"`
+	Height           int        `json:"height"`
+	FilePath         string     `json:"filePath"`
+	Title            string     `json:"title"`
+	Description      string     `json:"description"`
+	PhotoDate        time.Time  `json:"photoDate"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	Status           int        `json:"status"`
+	AnalysisStatus   int        `json:"analysisStatus"`
+	AnalysisVersion  int        `json:"-"`
+	TagIds           []int      `json:"tagIds,omitempty"`
+	MediaKind        MediaKind  `json:"mediaKind"`
+	DurationMs       int        `json:"durationMs,omitempty"`
+	VideoCodec       string     `json:"videoCodec,omitempty"`
+	AudioCodec       string     `json:"audioCodec,omitempty"`
+	ProcessingError  string     `json:"processingError,omitempty"`
+	OriginalKey      string     `json:"-"`
+	PlaybackKey      string     `json:"-"`
+	DerivedBytes     int        `json:"-"`
+	RecordTime       RecordTime `json:"recordTime"`
 }
 
 type PhotoPerson struct {
@@ -209,7 +212,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(5, buf)
+	version := vpack.Version(6, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -239,6 +242,12 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 		vpack.String(&self.OriginalKey, buf)
 		vpack.String(&self.PlaybackKey, buf)
 		vpack.Int(&self.DerivedBytes, buf)
+	}
+	if version >= 6 {
+		PackRecordTime(&self.RecordTime, buf)
+	}
+	if !buf.Writing && self.RecordTime.Version == 0 {
+		self.RecordTime = legacyRecordTime(self.PhotoDate)
 	}
 }
 
@@ -341,29 +350,6 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	var imageIds []int
 	vbolt.ReadTermTargets(tx, ImageByFamilyIndex, familyId, &imageIds, vbolt.Window{})
 	vbolt.ReadSlice(tx, ImagesBkt, imageIds, &images)
-	return
-}
-
-func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
-	seen := make(map[int]bool)
-	add := func(image Image) {
-		if image.Id == 0 || seen[image.Id] {
-			return
-		}
-		seen[image.Id] = true
-		images = append(images, image)
-	}
-
-	for _, familyId := range familiesVisibleTo(tx, user) {
-		for _, image := range GetFamilyImages(tx, familyId) {
-			add(image)
-		}
-	}
-	for _, person := range linkedPeopleVisibleTo(tx, user, ScopePhotos) {
-		for _, image := range GetPersonImages(tx, person.Id) {
-			add(image)
-		}
-	}
 	return
 }
 
@@ -574,6 +560,14 @@ func extractExifDate(fileData []byte) (time.Time, error) {
 	return wallClockUTC(tm), nil
 }
 
+// exactDateOf is the record's day when it has one, and zero otherwise.
+func exactDateOf(rt RecordTime, at time.Time) time.Time {
+	if rt.ExactDay() {
+		return at
+	}
+	return time.Time{}
+}
+
 func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	if !photoDate.IsZero() {
 		return fmt.Sprintf("Photo from %s", photoDate.Format("Jan 2, 2006"))
@@ -581,19 +575,16 @@ func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 }
 
-// For "auto", photoDate is the uploader's local day, used when the file has
-// no EXIF date.
-func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
-	if inputType == "auto" {
-		if exifDate, err := extractExifDate(fileData); err == nil {
-			return exifDate, nil
-		}
-		if fallback, err := time.Parse("2006-01-02", photoDate); err == nil {
-			return fallback, nil
-		}
-		return wallClockUTC(time.Now().UTC()), nil
+// Without a recordTime, a photo is dated by its EXIF date, then by
+// fallbackDay (the uploader's local day), then by now.
+func uploadedPhotoDate(fallbackDay string, fileData []byte) time.Time {
+	if exifDate, err := extractExifDate(fileData); err == nil {
+		return exifDate
 	}
-	return resolveEntryDate("Photo", inputType, &photoDate, ageYears, ageMonths, person.Birthday)
+	if fallback, err := time.Parse("2006-01-02", fallbackDay); err == nil {
+		return fallback
+	}
+	return wallClockUTC(time.Now().UTC())
 }
 
 func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
@@ -647,18 +638,13 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 
 	description := strings.TrimSpace(r.FormValue("description"))
-	inputType := r.FormValue("inputType")
 	photoDate := r.FormValue("photoDate")
-
-	var ageYears, ageMonths *int
-	if ageYearsStr := r.FormValue("ageYears"); ageYearsStr != "" {
-		if years, err := strconv.Atoi(ageYearsStr); err == nil {
-			ageYears = &years
-		}
-	}
-	if ageMonthsStr := r.FormValue("ageMonths"); ageMonthsStr != "" {
-		if months, err := strconv.Atoi(ageMonthsStr); err == nil {
-			ageMonths = &months
+	var requestedTime *RecordTime
+	if raw := r.FormValue("recordTime"); raw != "" {
+		requestedTime = &RecordTime{}
+		if err := json.Unmarshal([]byte(raw), requestedTime); err != nil {
+			RespondValidationError(w, r, "The photo date could not be read.", err.Error())
+			return
 		}
 	}
 
@@ -686,6 +672,24 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
+	if err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+	filePath := "photos/" + uniqueFilename
+
+	file.Seek(0, 0)
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+	if err := writePhotoOriginal(filePath, fileData); err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+
 	var image Image
 	var validPersons []Person
 	var uploadErr *AppError
@@ -697,7 +701,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Before the file lands on disk: a later rejection leaves orphaned bytes.
 		if quotaErr := CheckStorageAccepts(tx, familyId, fileHeader.Size); quotaErr != nil {
 			uploadErr = quotaErr
 			return
@@ -715,48 +718,19 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		}
-
-		photosDir := filepath.Join(cfg.StaticDir, "photos")
-		err = os.MkdirAll(photosDir, 0755)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		}
-
-		file.Seek(0, 0)
-		fileData, err := io.ReadAll(file)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		}
-
-		var referencePerson Person
-		if len(validPersons) > 0 {
-			referencePerson = validPersons[0]
-		}
-		calculatedPhotoDate, err := calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeValidation, "That photo date could not be worked out. Check the date or age you entered.", err.Error())
-			return
+		var recordTime RecordTime
+		var calculatedPhotoDate time.Time
+		if requestedTime != nil {
+			if err := applyRecordTime(tx, familyId, user.Id, *requestedTime, false, &recordTime, &calculatedPhotoDate); err != nil {
+				uploadErr = NewAppError(ErrCodeValidation, err.Error())
+				return
+			}
+		} else {
+			setExactDate(&recordTime, &calculatedPhotoDate, uploadedPhotoDate(photoDate, fileData), SourceMetadata, user.Id)
 		}
 
 		if title == "" {
-			title = generateDefaultTitle(fileHeader.Filename, calculatedPhotoDate)
-		}
-
-		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
-		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
-		if origFile, err := os.Create(originalPath); err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		} else {
-			origFile.Write(fileData)
-			origFile.Close()
+			title = generateDefaultTitle(fileHeader.Filename, exactDateOf(recordTime, calculatedPhotoDate))
 		}
 
 		image = Image{
@@ -768,15 +742,16 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			FileSize:         int(fileHeader.Size),
 			Width:            width,
 			Height:           height,
-			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
+			FilePath:         filePath,
 			Title:            title,
 			Description:      description,
 			PhotoDate:        calculatedPhotoDate,
+			RecordTime:       recordTime,
 			CreatedAt:        time.Now(),
-			Status:           1,
+			Status:           PhotoProcessing,
 		}
 
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		writeImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		ReindexPhotoDates(tx, image.Id)
 
@@ -787,6 +762,9 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		vbolt.TxCommit(tx)
 	})
 
+	if uploadErr != nil || image.Id == 0 {
+		os.Remove(photoOriginalPath(filePath))
+	}
 	if uploadErr != nil {
 		RespondWithError(w, r, uploadErr, statusForErrorCode(uploadErr.Code))
 		return
@@ -796,29 +774,23 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file.Seek(0, 0)
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		log.Printf("Failed to read file for processing queue: %v", err)
-	} else {
-		job := PhotoProcessingJob{
-			ImageId:        image.Id,
-			FamilyId:       image.FamilyId,
-			FilePath:       image.FilePath,
-			FileData:       fileData,
-			MimeType:       mimeType,
-			OriginalWidth:  width,
-			OriginalHeight: height,
-		}
+	job := PhotoProcessingJob{
+		ImageId:        image.Id,
+		FamilyId:       image.FamilyId,
+		FilePath:       image.FilePath,
+		FileData:       fileData,
+		MimeType:       mimeType,
+		OriginalWidth:  width,
+		OriginalHeight: height,
+	}
 
-		if err := QueuePhotoProcessing(job); err != nil {
-			log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
-			markPhotoFailed(image.Id)
-			RespondUnavailableError(w, r,
-				"The photo could not be processed right now. Please try again in a few minutes.",
-				err.Error())
-			return
-		}
+	if err := QueuePhotoProcessing(job); err != nil {
+		LogErrorWithRequest(r, LogCategoryPhoto, "Upload could not queue its photo for processing", map[string]interface{}{"photoId": image.Id, "error": err.Error()})
+		markPhotoFailed(image.Id)
+		RespondUnavailableError(w, r,
+			"The photo could not be processed right now. Please try again in a few minutes.",
+			err.Error())
+		return
 	}
 
 	LogInfoWithRequest(r, LogCategoryPhoto, "Photo upload completed", map[string]interface{}{
@@ -846,8 +818,8 @@ func markPhotoFailed(imageId int) {
 		if !vbolt.Read(tx, ImagesBkt, imageId, &image) || image.Id == 0 {
 			return
 		}
-		image.Status = 2
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		image.Status = PhotoFailed
+		writeImage(tx, &image)
 		vbolt.TxCommit(tx)
 	})
 }
@@ -895,12 +867,12 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if image.Status == 1 {
+	if image.Status == PhotoProcessing {
 		serveProcessingPlaceholder(w, r, image.IsVideo())
 		return
 	}
 
-	if image.Status == 2 {
+	if image.Status == PhotoFailed {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -917,53 +889,31 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	acceptHeader := r.Header.Get("Accept")
 	optimalFormat := GetOptimalImageFormat(acceptHeader)
 
-	validSizes := map[string]bool{
-		"small": true, "thumb": true, "medium": true,
-		"large": true, "xlarge": true, "xxlarge": true, "original": true,
-	}
-
-	if (sizeVariant != "" && !validSizes[sizeVariant]) || (image.IsVideo() && sizeVariant == "original") {
+	if (sizeVariant != "" && sizeVariant != "original" && !isPhotoSize(sizeVariant)) || (image.IsVideo() && sizeVariant == "original") {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 
 	if sizeVariant == "" {
-		sizeVariant = "large"
+		sizeVariant = LargeSize.Name
 	}
 
-	basePath := filepath.Join(cfg.StaticDir, image.FilePath)
-	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	var fullPath string
-	var contentType string
-
-	if sizeVariant == "original" {
-		fullPath = baseFilename + "_original" + filepath.Ext(basePath)
-		contentType = image.MimeType
-	} else {
-		for _, format := range []string{optimalFormat, "webp", "jpeg"} {
-			var ext string
-			switch format {
-			case "webp":
-				ext = ".webp"
-				contentType = "image/webp"
-			case "avif":
-				ext = ".avif"
-				contentType = "image/avif"
-			default:
-				ext = ".jpg"
-				contentType = "image/jpeg"
-			}
-
-			if sizeVariant == "large" {
-				fullPath = baseFilename + ext
-			} else {
-				fullPath = baseFilename + "_" + sizeVariant + ext
-			}
-
-			if _, err := os.Stat(fullPath); err == nil {
+	fullPath, contentType := photoOriginalPath(image.FilePath), image.MimeType
+	if sizeVariant != "original" {
+		fullPath = ""
+		candidates := []struct{ size, format string }{
+			{sizeVariant, optimalFormat}, {sizeVariant, "webp"}, {sizeVariant, "jpeg"}, {LargeSize.Name, "jpeg"},
+		}
+		for _, c := range candidates {
+			path := photoVariantPath(image.FilePath, c.size, c.format)
+			if _, err := os.Stat(path); err == nil {
+				fullPath = path
+				_, contentType = photoFormatFile(c.format)
 				break
 			}
+		}
+		if fullPath == "" {
+			fullPath, contentType = photoOriginalPath(image.FilePath), image.MimeType
 		}
 	}
 
@@ -974,26 +924,9 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		if sizeVariant != "original" {
-			fallbackPath := baseFilename + ".jpg"
-			if _, err := os.Stat(fallbackPath); err == nil {
-				fullPath = fallbackPath
-				contentType = "image/jpeg"
-			} else {
-				originalPath := baseFilename + "_original" + filepath.Ext(basePath)
-				if _, err := os.Stat(originalPath); err == nil {
-					fullPath = originalPath
-					contentType = image.MimeType
-				} else {
-					http.Error(w, "Not found", http.StatusNotFound)
-					return
-				}
-			}
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
+	if _, err := os.Stat(fullPath); err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", contentType)
@@ -1129,29 +1062,20 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		return
 	}
 
-	people := GetPhotoPeople(ctx.Tx, photo.Id)
-	var referencePerson Person
-	if len(people) > 0 {
-		referencePerson = people[0]
-	}
-
-	calculatedPhotoDate := photo.PhotoDate
-	if req.InputType != "keep" {
-		calculatedPhotoDate, err = calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
-		if err != nil {
+	if req.RecordTime != nil {
+		if err = applyRecordTime(ctx.Tx, photo.FamilyId, user.Id, *req.RecordTime, false, &photo.RecordTime, &photo.PhotoDate); err != nil {
 			return
 		}
 	}
 
 	photo.Title = strings.TrimSpace(req.Title)
 	photo.Description = strings.TrimSpace(req.Description)
-	photo.PhotoDate = calculatedPhotoDate
 
 	if photo.Title == "" {
-		photo.Title = generateDefaultTitle(photo.OriginalFilename, calculatedPhotoDate)
+		photo.Title = generateDefaultTitle(photo.OriginalFilename, exactDateOf(photo.RecordTime, photo.PhotoDate))
 	}
 
-	vbolt.Write(ctx.Tx, ImagesBkt, photo.Id, &photo)
+	writeImage(ctx.Tx, &photo)
 	ReindexPhotoDates(ctx.Tx, photo.Id)
 
 	resp.Image = photo
@@ -1211,72 +1135,14 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 
 	vbolt.Delete(tx, ImagesBkt, photo.Id)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
+	vbolt.DeleteTargetTerms(tx, ImageByAnchorIndex, photo.Id)
 	ReindexPhotoDates(tx, photo.Id)
-}
-
-func deletePhotoFiles(photo Image) error {
-	deleteVideoFrameFiles(photo)
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	sizes := []string{"small", "thumb", "medium", "large", "xlarge", "xxlarge"}
-	formats := []string{"jpg", "webp", "avif", "png"}
-
-	var filesToDelete []string
-
-	for _, size := range sizes {
-		for _, format := range formats {
-			var fileName string
-			if size == "large" {
-				fileName = base + "." + format
-			} else {
-				fileName = base + "_" + size + "." + format
-			}
-			filesToDelete = append(filesToDelete, fileName)
-		}
-	}
-
-	filesToDelete = append(filesToDelete, base+"_original"+filepath.Ext(basePath))
-
-	var lastError error
-	for _, filePath := range filesToDelete {
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			lastError = err
-		}
-	}
-
-	return lastError
 }
 
 func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	if req.Id <= 0 {
 		return errors.New("Invalid photo ID")
 	}
-
-	if req.InputType == "" {
-		return errors.New("Input type is required")
-	}
-
-	validInputTypes := []string{"auto", "today", "date", "age", "keep"}
-	isValid := false
-	for _, validType := range validInputTypes {
-		if req.InputType == validType {
-			isValid = true
-			break
-		}
-	}
-	if !isValid {
-		return errors.New("Invalid input type")
-	}
-
-	if req.InputType == "date" && req.PhotoDate == "" {
-		return errors.New("Photo date is required when input type is 'date'")
-	}
-
-	if req.InputType == "age" && req.AgeYears == nil {
-		return errors.New("Age years is required when input type is 'age'")
-	}
-
 	return nil
 }
 
@@ -1341,6 +1207,7 @@ func ListFamilyPhotos(ctx *vbeam.Context, req ListFamilyPhotosRequest) (resp Lis
 		personIds = append([]int{req.PersonId}, personIds...)
 	}
 	listing := newPhotoListing(ctx.Tx, user, personIds, req.TagIds, req.PlaceKey, dateFrom, dateTo)
+	listing.exactOnly = req.ExactDatesOnly
 	limit := min(req.Limit, maxPhotoPageSize)
 
 	var page []Image

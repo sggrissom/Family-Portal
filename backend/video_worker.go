@@ -6,7 +6,6 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -117,7 +116,7 @@ func StopVideoWorker(ctx context.Context) bool {
 func videosNeedingProcessing(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if image.IsVideo() && image.Status == 1 {
+			if image.IsVideo() && image.Status == PhotoProcessing {
 				ids = append(ids, image.Id)
 			}
 			return true
@@ -177,7 +176,7 @@ func (w *videoWorker) process(imageId int) error {
 	start := time.Now()
 	var image Image
 	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) { image = GetImageById(tx, imageId) })
-	if image.Id == 0 || !image.IsVideo() || image.Status != 1 {
+	if image.Id == 0 || !image.IsVideo() || image.Status != PhotoProcessing {
 		return nil
 	}
 	store := activeMediaStore()
@@ -210,7 +209,7 @@ func (w *videoWorker) process(imageId int) error {
 				w.fail(image, start, "The uploaded file is missing.", false)
 				return nil
 			}
-			log.Printf("[VIDEO] Could not move video %d into place: %v", imageId, err)
+			LogWarn(LogCategoryWorker, "Could not move a video into place", map[string]interface{}{"videoId": imageId, "error": err.Error()})
 			return errRetryLater
 		}
 		gone := false
@@ -221,7 +220,7 @@ func (w *videoWorker) process(imageId int) error {
 				return
 			}
 			current.OriginalKey = finalKey
-			vbolt.Write(tx, ImagesBkt, current.Id, &current)
+			writeImage(tx, &current)
 			vbolt.TxCommit(tx)
 		})
 		if gone {
@@ -290,7 +289,7 @@ func (w *videoWorker) process(imageId int) error {
 	outputs := videoOutputs{posterPath: "photos/" + mediaId + ".jpg"}
 	posterBytes, err := writeImageVariants(outputs.posterPath, variants)
 	if err == nil {
-		err = os.WriteFile(originalPathIn(cfg.StaticDir, outputs.posterPath), posterData, 0644)
+		err = writePhotoOriginal(outputs.posterPath, posterData)
 		posterBytes += int64(len(posterData))
 	}
 	if err != nil {
@@ -309,7 +308,7 @@ func (w *videoWorker) process(imageId int) error {
 		if w.ctx.Err() != nil {
 			return nil
 		}
-		log.Printf("[VIDEO] Could not store the playback file for video %d: %v", imageId, err)
+		LogWarn(LogCategoryWorker, "Could not store a video playback file", map[string]interface{}{"videoId": imageId, "error": err.Error()})
 		return errRetryLater
 	}
 
@@ -319,16 +318,16 @@ func (w *videoWorker) process(imageId int) error {
 	published := false
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, imageId)
-		if current.Id == 0 || current.Status != 1 {
+		if current.Id == 0 || current.Status != PhotoProcessing {
 			return
 		}
-		if probe.HasCreatedAt && current.PhotoDate.Equal(image.PhotoDate) {
+		if probe.HasCreatedAt && current.PhotoDate.Equal(image.PhotoDate) && current.RecordTime.ExactDay() && current.RecordTime.Source != SourceFamily {
 			if current.Title == generateDefaultVideoTitle(current.OriginalFilename, current.PhotoDate) {
 				current.Title = generateDefaultVideoTitle(current.OriginalFilename, probe.CreatedAt)
 			}
 			current.PhotoDate = probe.CreatedAt
 		}
-		current.Status = 0
+		current.Status = PhotoReady
 		current.ProcessingError = ""
 		current.FilePath = outputs.posterPath
 		current.PlaybackKey = outputs.playbackKey
@@ -337,13 +336,12 @@ func (w *videoWorker) process(imageId int) error {
 		current.VideoCodec = playbackProbe.VideoMime
 		current.AudioCodec = playbackProbe.AudioMime
 		current.DerivedBytes = int(remuxInfo.Size() + posterBytes)
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		ReindexPhotoDates(tx, current.Id)
 		vbolt.TxCommit(tx)
 		published = true
 	})
 	if !published {
-		log.Printf("[VIDEO] Video %d was deleted while processing; discarding its outputs", imageId)
 		outputs.discard(store)
 		return nil
 	}
@@ -351,7 +349,6 @@ func (w *videoWorker) process(imageId int) error {
 	QueuePhotoEmbedding(imageId)
 	QueueVideoAnalysis(imageId)
 	w.record(imageId, start, "ready", "")
-	log.Printf("[VIDEO] Video %d ready in %v (%s, %s)", imageId, time.Since(start), probe.VideoMime, probe.Duration)
 	return nil
 }
 
@@ -367,10 +364,10 @@ func (w *videoWorker) reject(image Image, start time.Time, reason string, cause 
 		}
 		queueMediaDeletionTx(tx, current.OriginalKey)
 		current.OriginalKey = ""
-		current.Status = 2
+		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	kickMediaJanitor()
@@ -393,10 +390,10 @@ func (w *videoWorker) fail(image Image, start time.Time, reason string, keepOrig
 		if !keepOriginal {
 			current.OriginalKey = ""
 		}
-		current.Status = 2
+		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		vbolt.Write(tx, ImagesBkt, current.Id, &current)
+		writeImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	detail := reason
@@ -544,10 +541,10 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 	})
 	for _, id := range ids {
 		image := GetImageById(ctx.Tx, id)
-		image.Status = 1
+		image.Status = PhotoProcessing
 		image.ProcessingError = ""
 		image.DerivedBytes = image.FileSize + videoPosterAllowance
-		vbolt.Write(ctx.Tx, ImagesBkt, id, &image)
+		writeImage(ctx.Tx, &image)
 	}
 	vbolt.TxCommit(ctx.Tx)
 	globalVideoWorker.add(ids...)
@@ -559,6 +556,6 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 // using the retained original, without requiring another upload.
 func videoNeedsRetry(image Image) bool {
 	return image.IsVideo() && image.OriginalKey != "" &&
-		(image.Status == 2 || (image.Status == 0 &&
+		(image.Status == PhotoFailed || (image.Status == PhotoReady &&
 			(strings.HasPrefix(image.VideoCodec, "hvc1") || strings.HasPrefix(image.VideoCodec, "hev1"))))
 }

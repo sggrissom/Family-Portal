@@ -29,7 +29,7 @@ import { copy } from "../lib/copy";
 import { Destination, activeDestination, addPath, contextPersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
-import { localDateString } from "../lib/when";
+import { localDateString } from "../lib/dateUtils";
 import { mediaAccept } from "../lib/mediaUpload";
 import { handOffPhotos, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import { isTypingTarget } from "../lib/search";
@@ -379,6 +379,9 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
           </a>
         </li>
       )}
+      <li>
+        <a href="/date-review">{copy.account.dateReview}</a>
+      </li>
       <li>
         <a href="/settings">{copy.account.settings}</a>
       </li>

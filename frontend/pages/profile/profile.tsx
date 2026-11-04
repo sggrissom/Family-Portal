@@ -43,10 +43,10 @@ import {
   isValidBirthday,
 } from "../../lib/growthPercentiles";
 import { formatMeasurement } from "../../lib/weightFormat";
-import { formatDate, formatLongDate } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import { formatDate, formatLongDate, localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import "./profile-styles";
+import { recordDateLabel, recordMonthsOld } from "../../lib/recordTime";
 
 type ProfileData = {
   person: server.GetPersonResponse;
@@ -523,7 +523,7 @@ const QuotesTab = ({ person, quotes }: { person: server.Person; quotes: server.M
     <div className="profile-quotes">
       {sorted.map(quote => {
         const age = isValidBirthday(person.birthday)
-          ? monthsOld(person.birthday, quote.milestoneDate)
+          ? recordMonthsOld(quote.recordTime, quote.milestoneDate, person.birthday)
           : -1;
         return (
           <a key={quote.id} href={`/milestone/${quote.id}`} className="profile-quote">
@@ -533,7 +533,7 @@ const QuotesTab = ({ person, quotes }: { person: server.Person; quotes: server.M
             {quote.context && <p className="profile-quote-context">{quote.context}</p>}
             <small className="profile-quote-when">
               {age >= 0 && `${formatAgeAtMeasurement(age)} · `}
-              {formatDate(quote.milestoneDate)}
+              {recordDateLabel(quote.recordTime, quote.milestoneDate, formatDate)}
             </small>
           </a>
         );
@@ -557,7 +557,7 @@ const ArtworkTab = ({
     <div className="profile-artwork">
       {sorted.map(piece => {
         const age = isValidBirthday(person.birthday)
-          ? monthsOld(person.birthday, piece.milestoneDate)
+          ? recordMonthsOld(piece.recordTime, piece.milestoneDate, person.birthday)
           : -1;
         const cover = piece.photoIds?.[0];
         const more = (piece.photoIds?.length ?? 0) - 1;
@@ -575,7 +575,9 @@ const ArtworkTab = ({
             </div>
             <span className="profile-artwork-title">{piece.description}</span>
             <small className="profile-artwork-when">
-              {age >= 0 ? formatAgeAtMeasurement(age) : formatDate(piece.milestoneDate)}
+              {age >= 0
+                ? formatAgeAtMeasurement(age)
+                : recordDateLabel(piece.recordTime, piece.milestoneDate, formatDate)}
             </small>
           </a>
         );

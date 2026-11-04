@@ -348,13 +348,12 @@ func (s *seeder) tag(familyId int, name, color string) Tag {
 }
 
 func (s *seeder) milestone(person Person, on time.Time, description, category string, tags ...Tag) {
-	date := on.Format("2006-01-02")
+	rt := exactRecordTime(on, SourceFamily)
 	milestone, err := AddMilestoneTx(s.tx, AddMilestoneRequest{
-		PersonId:      person.Id,
-		Description:   description,
-		Category:      category,
-		InputType:     "date",
-		MilestoneDate: &date,
+		PersonId:    person.Id,
+		Description: description,
+		Category:    category,
+		RecordTime:  &rt,
 	}, person.FamilyId)
 	if err != nil {
 		s.fail(fmt.Errorf("milestone %q: %w", description, err))

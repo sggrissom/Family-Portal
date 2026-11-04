@@ -51,9 +51,9 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 		Description:      description,
 		PhotoDate:        on,
 		CreatedAt:        s.now,
-		Status:           1,
+		Status:           PhotoProcessing,
 	}
-	vbolt.Write(s.tx, ImagesBkt, photo.Id, &photo)
+	writeImage(s.tx, &photo)
 	vbolt.SetTargetSingleTerm(s.tx, ImageByFamilyIndex, photo.Id, familyId)
 	ReindexPhotoDates(s.tx, photo.Id)
 
@@ -109,6 +109,14 @@ var processSeedPhotos = ProcessSeedPhotos
 func ProcessSeedPhotos(db *vbolt.DB, jobs []PhotoProcessingJob) {
 	if len(jobs) == 0 {
 		return
+	}
+	for _, job := range jobs {
+		if err := writePhotoOriginal(job.FilePath, job.FileData); err != nil {
+			LogErrorSimple(LogCategoryWorker, "Failed to write a seeded photo's original", map[string]interface{}{
+				"photoId": job.ImageId,
+				"error":   err.Error(),
+			})
+		}
 	}
 	if pw := activePhotoWorker(); pw != nil {
 		queueBacklog(pw, jobs,

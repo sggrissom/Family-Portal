@@ -106,12 +106,12 @@ func TestGetSystemHealthIsQuietWhenNothingIsWrong(t *testing.T) {
 	token := adminContext(t, db)
 
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 	InitializePhotoWorker(5, db)
 	t.Cleanup(func() {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	})
 

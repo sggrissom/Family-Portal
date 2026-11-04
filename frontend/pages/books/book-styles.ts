@@ -604,14 +604,6 @@ block(`
 `);
 
 block(`
-.book-missing {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 40px 16px;
-}
-`);
-
-block(`
 @media (min-width: 720px) {
   .book-moment.has-photo {
     grid-template-columns: 1.1fr 1fr;
@@ -678,8 +670,7 @@ block(`
 `);
 
 block(`
-.books-lede,
-.books-empty {
+.books-lede {
   color: var(--muted);
 }
 `);

@@ -1,6 +1,6 @@
 import * as server from "../server";
-import { localDateString } from "./when";
-import { usePhotoStatus } from "../hooks/usePhotoStatus";
+import { localDateString } from "./dateUtils";
+import { usePhotoStatus, Status } from "../hooks/usePhotoStatus";
 
 async function uploadErrorMessage(response: Response): Promise<string> {
   const fallback = `Upload failed with status ${response.status}`;
@@ -25,7 +25,6 @@ export async function uploadPhoto(
   if (familyId !== undefined) {
     formData.append("familyId", String(familyId));
   }
-  formData.append("inputType", "auto");
   formData.append("photoDate", localDateString(new Date()));
   formData.append("photo", file);
 
@@ -40,7 +39,7 @@ export async function uploadPhoto(
   }
 
   const image: server.Image = (await response.json()).image;
-  if (image.status === 1) {
+  if (image.status === Status.Processing) {
     usePhotoStatus().startMonitoring(image.id, image.status);
   }
   return image;

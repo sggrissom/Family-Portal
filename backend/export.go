@@ -8,12 +8,10 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -109,11 +107,11 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 	dataEntry, err := zw.Create("data.json")
 	if err != nil {
-		log.Printf("[EXPORT] Failed to create data.json ZIP entry: %v", err)
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not write data.json", map[string]interface{}{"error": err.Error()})
 		return
 	}
 	if _, err := dataEntry.Write(jsonBytes); err != nil {
-		log.Printf("[EXPORT] Failed to write data.json: %v", err)
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not write data.json", map[string]interface{}{"error": err.Error()})
 		return
 	}
 
@@ -121,17 +119,17 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		diskPath := filepath.Join(cfg.StaticDir, ep.ZipPath)
 		f, err := os.Open(diskPath)
 		if err != nil {
-			log.Printf("[EXPORT] Skipping photo %d (%s): %v", ep.Id, diskPath, err)
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a photo whose original is unreadable", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			continue
 		}
 		entry, err := zw.Create(ep.ZipPath)
 		if err != nil {
-			log.Printf("[EXPORT] Failed to create ZIP entry for photo %d: %v", ep.Id, err)
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export could not add a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
 			continue
 		}
 		if _, err := io.Copy(entry, f); err != nil {
-			log.Printf("[EXPORT] Failed to write photo %d to ZIP: %v", ep.Id, err)
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
 			return
 		}
@@ -143,12 +141,10 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	images := GetFamilyImages(tx, familyId)
 	result := make([]ExportPhoto, 0, len(images))
 	for _, img := range images {
-		if img.Status != 0 || img.IsVideo() {
+		if img.Status != PhotoReady || img.IsVideo() {
 			continue
 		}
-		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))
-		ext := filepath.Ext(img.FilePath)
-		zipPath := fmt.Sprintf("photos/%s_original%s", baseName, ext)
+		zipPath := "photos/" + originalFileName(img.FilePath)
 
 		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
 		personIds := make([]int, 0, len(photoPersons))
@@ -161,6 +157,8 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 			Title:       img.Title,
 			Description: img.Description,
 			PhotoDate:   img.PhotoDate,
+			RecordTime:  &img.RecordTime,
+			DateLabel:   img.RecordTime.Label(),
 			ZipPath:     zipPath,
 			PersonIds:   personIds,
 			TagIds:      GetPhotoTagIds(tx, img.Id),
@@ -189,13 +187,15 @@ type ExportRelation struct {
 }
 
 type ExportPhoto struct {
-	Id          int       `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	PhotoDate   time.Time `json:"photo_date"`
-	ZipPath     string    `json:"zip_path"`
-	PersonIds   []int     `json:"person_ids"`
-	TagIds      []int     `json:"tag_ids"`
+	Id          int         `json:"id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	PhotoDate   time.Time   `json:"photo_date"`
+	RecordTime  *RecordTime `json:"record_time,omitempty"`
+	DateLabel   string      `json:"date_label,omitempty"`
+	ZipPath     string      `json:"zip_path"`
+	PersonIds   []int       `json:"person_ids"`
+	TagIds      []int       `json:"tag_ids"`
 }
 
 type ExportDataStructure struct {
@@ -234,18 +234,20 @@ type ExportDataStructure struct {
 }
 
 type ExportMilestone struct {
-	Id            int       `json:"id"`
-	PersonId      int       `json:"personId"`
-	FamilyId      int       `json:"familyId"`
-	Description   string    `json:"description"`
-	Category      string    `json:"category"`
-	Context       string    `json:"context,omitempty"`
-	MilestoneDate time.Time `json:"milestoneDate"`
-	CreatedAt     time.Time `json:"createdAt"`
-	PersonName    string    `json:"personName"`
-	TagNames      []string  `json:"tagNames,omitempty"`
-	InterviewId   int       `json:"interviewId,omitempty"`
-	QuestionId    int       `json:"questionId,omitempty"`
+	Id            int         `json:"id"`
+	PersonId      int         `json:"personId"`
+	FamilyId      int         `json:"familyId"`
+	Description   string      `json:"description"`
+	Category      string      `json:"category"`
+	Context       string      `json:"context,omitempty"`
+	MilestoneDate time.Time   `json:"milestoneDate"`
+	RecordTime    *RecordTime `json:"recordTime,omitempty"`
+	DateLabel     string      `json:"dateLabel,omitempty"`
+	CreatedAt     time.Time   `json:"createdAt"`
+	PersonName    string      `json:"personName"`
+	TagNames      []string    `json:"tagNames,omitempty"`
+	InterviewId   int         `json:"interviewId,omitempty"`
+	QuestionId    int         `json:"questionId,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -406,6 +408,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			Category:      milestone.Category,
 			Context:       milestone.Context,
 			MilestoneDate: milestone.MilestoneDate,
+			RecordTime:    &milestone.RecordTime,
+			DateLabel:     milestone.RecordTime.Label(),
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,
 			TagNames:      tagNames,

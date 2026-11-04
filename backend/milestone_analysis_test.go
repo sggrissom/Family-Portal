@@ -17,7 +17,7 @@ func (fx resultsFixture) addMilestoneOn(t *testing.T, person Person, text, categ
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		var err error
 		m, err = AddMilestoneTx(tx, AddMilestoneRequest{
-			PersonId: person.Id, Description: text, Category: category, InputType: "date", MilestoneDate: &day,
+			PersonId: person.Id, Description: text, Category: category, RecordTime: onDay(day),
 		}, fx.familyId)
 		if err != nil {
 			t.Fatal(err)
@@ -156,9 +156,9 @@ func TestSuggestMilestonePhotosRanksNearbyPhotosOfThePerson(t *testing.T) {
 	fx.setEmbedding(t, bike, nudged(0, 1, 0.2))
 	fx.setEmbedding(t, cake, axis(1))
 
-	date := day.Format("2006-01-02")
+	when := exactRecordTime(day, SourceFamily)
 	resp, err := callAs(t, fx, SuggestMilestonePhotos, SuggestMilestonePhotosRequest{
-		PersonId: fx.alice.Id, Description: "first bike ride", InputType: "date", MilestoneDate: &date,
+		PersonId: fx.alice.Id, Description: "first bike ride", RecordTime: when,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -168,10 +168,18 @@ func TestSuggestMilestonePhotosRanksNearbyPhotosOfThePerson(t *testing.T) {
 	}
 
 	resp, _ = callAs(t, fx, SuggestMilestonePhotos, SuggestMilestonePhotosRequest{
-		PersonId: fx.alice.Id, Description: "first bike ride", InputType: "date", MilestoneDate: &date,
+		PersonId: fx.alice.Id, Description: "first bike ride", RecordTime: when,
 		ExcludeIds: []int{bike.Id},
 	})
 	if !slices.Equal(resp.PhotoIds, []int{cake.Id}) {
 		t.Errorf("with bike attached: %v", resp.PhotoIds)
+	}
+
+	when.Estimated = true
+	resp, _ = callAs(t, fx, SuggestMilestonePhotos, SuggestMilestonePhotosRequest{
+		PersonId: fx.alice.Id, Description: "first bike ride", RecordTime: when,
+	})
+	if len(resp.PhotoIds) != 0 {
+		t.Errorf("an estimated day got suggestions: %v", resp.PhotoIds)
 	}
 }

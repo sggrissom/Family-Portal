@@ -102,17 +102,17 @@ func TestMilestoneSavesTagsInTheSameTransaction(t *testing.T) {
 		}
 	}
 
-	plain, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Clapped", Category: "first", InputType: "today"})
+	plain, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Clapped", Category: "first", RecordTime: onToday()})
 	if err != nil || len(tagsOf(plain.Milestone.Id)) != 0 {
 		t.Fatalf("omitted tags on add: %+v, %v", plain, err)
 	}
-	tagged, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Laughed", Category: "first", InputType: "today", TagIds: []int{first.Id, funny.Id, first.Id}})
+	tagged, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Laughed", Category: "first", RecordTime: onToday(), TagIds: []int{first.Id, funny.Id, first.Id}})
 	if err != nil || !slices.Equal(tagsOf(tagged.Milestone.Id), []int{first.Id, funny.Id}) || !slices.Equal(tagged.Milestone.TagIds, tagsOf(tagged.Milestone.Id)) {
 		t.Fatalf("tags on add: %+v, %v", tagged, err)
 	}
 	drain()
 
-	if _, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Leaked", Category: "first", InputType: "today", TagIds: []int{first.Id, foreign.Id}}); err == nil {
+	if _, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Leaked", Category: "first", RecordTime: onToday(), TagIds: []int{first.Id, foreign.Id}}); err == nil {
 		t.Fatal("add accepted another family's tag")
 	}
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
@@ -121,7 +121,7 @@ func TestMilestoneSavesTagsInTheSameTransaction(t *testing.T) {
 		}
 	})
 
-	update := UpdateMilestoneRequest{Id: tagged.Milestone.Id, Description: "Laughed loudly", Category: "first", InputType: "today"}
+	update := UpdateMilestoneRequest{Id: tagged.Milestone.Id, Description: "Laughed loudly", Category: "first", RecordTime: onToday()}
 	if _, err := callAs(t, fx, UpdateMilestone, update); err != nil || !slices.Equal(tagsOf(tagged.Milestone.Id), []int{first.Id, funny.Id}) {
 		t.Fatalf("omitted tags on update changed them: %v, %v", tagsOf(tagged.Milestone.Id), err)
 	}

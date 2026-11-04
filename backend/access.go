@@ -53,13 +53,6 @@ func RequireFamilyAccess(tx *vbolt.Tx, user User, familyId int, need AccessLevel
 	return nil
 }
 
-func RequireFamilyAccessFrom(tx *vbolt.Tx, actingFamilyId int, familyId int, need AccessLevel) error {
-	if !CanFamilyAccess(tx, actingFamilyId, familyId, need) {
-		return ErrFamilyAccessDenied
-	}
-	return nil
-}
-
 // familiesVisibleTo lists the families the user holds a membership in,
 // primary first and the rest in id order.
 func familiesVisibleTo(tx *vbolt.Tx, user User) []int {
@@ -178,16 +171,6 @@ func ResolveActingFamily(tx *vbolt.Tx, user User, requestedFamilyId int, need Ac
 		return 0, err
 	}
 	return familyId, nil
-}
-
-func ActingFamilyFor(tx *vbolt.Tx, user User, recordFamilyId int, need AccessLevel) (int, error) {
-	if recordFamilyId == 0 {
-		return 0, ErrFamilyAccessDenied
-	}
-	if err := RequireFamilyAccess(tx, user, recordFamilyId, need); err != nil {
-		return 0, err
-	}
-	return recordFamilyId, nil
 }
 
 func ActingFamilyForPerson(tx *vbolt.Tx, user User, personId int, need AccessLevel) (int, error) {

@@ -32,7 +32,7 @@ import {
   pastYear,
   yearOfAge,
 } from "../../lib/bookPlans";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import "./book-styles";
 import "./edit-book-styles";
 

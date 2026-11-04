@@ -83,8 +83,11 @@ type SameAgeRow struct {
 	Height     *GrowthData `json:"height"`
 	Weight     *GrowthData `json:"weight"`
 	Milestones []Milestone `json:"milestones"`
-	Interviews []Interview `json:"interviews"`
-	PhotoIds   []int       `json:"photoIds"`
+	// ContextMilestones are approximate or period moments whose span
+	// overlaps this age, narrowest first. They are never placed at the age.
+	ContextMilestones []Milestone `json:"contextMilestones"`
+	Interviews        []Interview `json:"interviews"`
+	PhotoIds          []int       `json:"photoIds"`
 	// Portraits are the photos in the window that best show this person,
 	// best first, for the side-by-side montage.
 	Portraits []PortraitPhoto `json:"portraits"`
@@ -159,9 +162,15 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		if dayOf(target) > dayOf(today) {
 			continue
 		}
-		row := SameAgeRow{Person: item.Person, Date: target, Milestones: []Milestone{}}
+		row := SameAgeRow{Person: item.Person, Date: target, Milestones: []Milestone{}, ContextMilestones: []Milestone{}}
 
 		for _, milestone := range item.Milestones {
+			if !milestone.RecordTime.ExactDay() {
+				if sameAgeOverlaps(milestone.RecordTime, item.Person, resp.AgeMonths) {
+					row.ContextMilestones = append(row.ContextMilestones, milestone)
+				}
+				continue
+			}
 			if absDuration(milestone.MilestoneDate.Sub(target)) <= recordWindow {
 				row.Milestones = append(row.Milestones, milestone)
 			}
@@ -169,6 +178,7 @@ func GetSameAge(ctx *vbeam.Context, req GetSameAgeRequest) (resp GetSameAgeRespo
 		sort.Slice(row.Milestones, func(i, j int) bool {
 			return row.Milestones[i].MilestoneDate.Before(row.Milestones[j].MilestoneDate)
 		})
+		sortByNarrowestSpan(row.ContextMilestones, item.Person)
 		row.Interviews = interviewsOfAnswers(ctx.Tx, row.Milestones)
 
 		row.Height = nearestGrowth(item.GrowthData, Height, target, growthWindow)
@@ -225,6 +235,30 @@ func sameAgeDefaults(ctx *vbeam.Context, user User, candidates []FamilyTimelineI
 	return
 }
 
+// sameAgeOverlaps reports whether an approximate record's age span overlaps
+// the same half-step window exact records use.
+func sameAgeOverlaps(rt RecordTime, person Person, ageMonths int) bool {
+	from, to, ok := rt.AgeMonthsFor(person)
+	if !ok {
+		return false
+	}
+	half := sameAgeStep(ageMonths) / 2
+	return from < ageMonths+half+1 && to > ageMonths-half
+}
+
+func sortByNarrowestSpan(milestones []Milestone, person Person) {
+	width := func(m Milestone) int {
+		from, to, _ := m.RecordTime.AgeMonthsFor(person)
+		return to - from
+	}
+	sort.SliceStable(milestones, func(i, j int) bool {
+		if wi, wj := width(milestones[i]), width(milestones[j]); wi != wj {
+			return wi < wj
+		}
+		return milestones[i].Id < milestones[j].Id
+	})
+}
+
 func absDuration(d time.Duration) time.Duration {
 	if d < 0 {
 		return -d
@@ -256,10 +290,11 @@ func sameAgePhotosFor(ctx *vbeam.Context, person Person, ageMonths int) (ids []i
 	}
 	from, to := sameAgePhotoDays(person.Birthday, ageMonths)
 	photos, err := ListFamilyPhotos(ctx, ListFamilyPhotosRequest{
-		PersonId: person.Id,
-		DateFrom: from,
-		DateTo:   to,
-		Limit:    sameAgePhotoCandidates,
+		PersonId:       person.Id,
+		DateFrom:       from,
+		DateTo:         to,
+		Limit:          sameAgePhotoCandidates,
+		ExactDatesOnly: true,
 	})
 	if err != nil {
 		return
@@ -294,7 +329,7 @@ func sameAgePhotosFor(ctx *vbeam.Context, person Person, ageMonths int) (ids []i
 }
 
 func (row SameAgeRow) hasRecords() bool {
-	return row.Height != nil || row.Weight != nil || len(row.Milestones) > 0 || len(row.PhotoIds) > 0
+	return row.Height != nil || row.Weight != nil || len(row.Milestones) > 0 || len(row.ContextMilestones) > 0 || len(row.PhotoIds) > 0
 }
 
 // sortSameAgeRows puts the person the comparison starts from first, then
@@ -358,7 +393,9 @@ func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, 
 			}
 		}
 		for _, m := range item.Milestones {
-			add(m.MilestoneDate, false, false)
+			if m.RecordTime.ExactDay() {
+				add(m.MilestoneDate, false, false)
+			}
 		}
 		for _, g := range item.GrowthData {
 			if g.MeasurementType == Height || g.MeasurementType == Weight {
@@ -369,7 +406,7 @@ func sameAgeOptions(ctx *vbeam.Context, user User, people []FamilyTimelineItem, 
 		// Apply the listing's visibility/deleted-photo filter before counting.
 		listing := newPhotoListing(ctx.Tx, user, []int{item.Person.Id}, nil, "", "", "")
 		vbolt.IterateTerm(ctx.Tx, ImageByPersonDateIndex, item.Person.Id, func(id int, seconds int64) bool {
-			if image := GetImageById(ctx.Tx, id); !image.IsVideo() && listing.passes(image) {
+			if image := GetImageById(ctx.Tx, id); !image.IsVideo() && image.RecordTime.ExactDay() && listing.passes(image) {
 				add(time.Unix(seconds, 0), false, true)
 			}
 			return true

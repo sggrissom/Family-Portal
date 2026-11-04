@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -83,7 +82,7 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 		if isPhotoProcessed(photo) {
 			processedCount++
 		}
-		if photo.Status == 0 {
+		if photo.Status == PhotoReady {
 			features, found := GetPhotoFeatures(ctx.Tx, photo.Id)
 			if featuresOutdated(features, found) {
 				resp.FeaturesPending++
@@ -100,16 +99,16 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 			}
 		}
 		switch photo.AnalysisStatus {
-		case 0:
+		case AnalysisPending:
 			resp.AnalysisPending++
-		case 1:
+		case AnalysisRunning:
 			resp.AnalysisAnalyzing++
-		case 2:
+		case AnalysisDone:
 			resp.AnalysisDone++
 			if photo.AnalysisVersion < currentAnalysisVersion {
 				resp.AnalysisOutdated++
 			}
-		case 3:
+		case AnalysisFailed:
 			resp.AnalysisFailed++
 		}
 	}
@@ -196,47 +195,7 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 }
 
 func isPhotoProcessed(photo Image) bool {
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	modernFormats := []string{".avif", ".webp"}
-	sizes := []string{"", "_small", "_thumb", "_medium", "_large", "_xlarge", "_xxlarge"}
-
-	for _, format := range modernFormats {
-		for _, size := range sizes {
-			var fileName string
-			if size == "" || size == "_large" {
-				fileName = baseFilename + format
-			} else {
-				fileName = baseFilename + size + format
-			}
-
-			if _, err := os.Stat(fileName); err == nil {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func getOriginalPhotoPath(photo Image) string {
-	return originalPathIn(cfg.StaticDir, photo.FilePath)
-}
-
-func cleanupOldVariants(baseFilename string) {
-	oldVariants := []string{
-		baseFilename + ".jpg",
-		baseFilename + "_thumb.jpg",
-		baseFilename + "_medium.jpg",
-		baseFilename + "_small.jpg",
-		baseFilename + "_xlarge.jpg",
-		baseFilename + "_xxlarge.jpg",
-	}
-
-	for _, variant := range oldVariants {
-		os.Remove(variant)
-	}
+	return hasModernVariant(photo.FilePath)
 }
 
 func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStats, err error) {
@@ -275,7 +234,7 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if !image.IsVideo() && (image.AnalysisStatus == 3 || imageNeedsAnalysis(image)) {
+		if !image.IsVideo() && (image.AnalysisStatus == AnalysisFailed || imageNeedsAnalysis(image)) {
 			toQueue = append(toQueue, image)
 		} else {
 			resp.Skipped++
@@ -286,9 +245,9 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 	if len(toQueue) > 0 {
 		vbeam.UseWriteTx(ctx)
 		for _, image := range toQueue {
-			if image.AnalysisStatus == 3 {
-				image.AnalysisStatus = 0
-				vbolt.Write(ctx.Tx, ImagesBkt, image.Id, &image)
+			if image.AnalysisStatus == AnalysisFailed {
+				image.AnalysisStatus = AnalysisPending
+				writeImage(ctx.Tx, &image)
 			}
 		}
 		vbolt.TxCommit(ctx.Tx)
@@ -337,12 +296,6 @@ type PhotoConsistencyReport struct {
 	VideosMissing []MissingOriginal `json:"videosMissing"`
 }
 
-func originalPathIn(staticDir, filePath string) string {
-	base := filepath.Join(staticDir, filePath)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext) + "_original" + ext
-}
-
 func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoConsistencyReport {
 	start := time.Now()
 	report := PhotoConsistencyReport{
@@ -362,7 +315,7 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 		}
 		path := originalPathIn(staticDir, image.FilePath)
 		referenced[filepath.Base(path)] = true
-		if image.IsVideo() && image.Status != 0 {
+		if image.IsVideo() && image.Status != PhotoReady {
 			return true
 		}
 		if _, err := os.Stat(path); err != nil {
@@ -396,7 +349,7 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 	var orphans []OrphanOriginal
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.Contains(name, "_original.") || referenced[name] {
+		if entry.IsDir() || !isOriginalFileName(name) || referenced[name] {
 			continue
 		}
 		orphan := OrphanOriginal{Name: name}

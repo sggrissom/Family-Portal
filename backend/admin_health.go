@@ -336,11 +336,11 @@ func collectVideoProblems(tx *vbolt.Tx) VideoProblems {
 			return true
 		}
 		switch {
-		case image.Status == 2 && image.OriginalKey != "":
+		case image.Status == PhotoFailed && image.OriginalKey != "":
 			problems.Failed++
-		case image.Status == 2:
+		case image.Status == PhotoFailed:
 			problems.Rejected++
-		case image.Status == 1 && image.CreatedAt.Before(stuckBefore):
+		case image.Status == PhotoProcessing && image.CreatedAt.Before(stuckBefore):
 			problems.Stuck++
 		}
 		return true
@@ -367,12 +367,12 @@ func collectPhotoProblems(tx *vbolt.Tx) PhotoProblems {
 			return true
 		}
 		switch {
-		case image.Status == 2:
+		case image.Status == PhotoFailed:
 			problems.Failed++
-		case image.Status == 1 && image.CreatedAt.Before(stuckBefore):
+		case image.Status == PhotoProcessing && image.CreatedAt.Before(stuckBefore):
 			problems.Stuck++
 		}
-		if image.AnalysisStatus == 3 {
+		if image.AnalysisStatus == AnalysisFailed {
 			problems.AnalysisFailed++
 		}
 		return true

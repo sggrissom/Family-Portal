@@ -9,11 +9,9 @@ import (
 	"fmt"
 	"image/jpeg"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -180,9 +178,8 @@ func VisionStatus() string {
 }
 
 func embeddingSourceBytes(img Image) ([]byte, error) {
-	base := strings.TrimSuffix(filepath.Join(cfg.StaticDir, img.FilePath), filepath.Ext(img.FilePath))
-	if data, err := os.ReadFile(base + "_medium.jpg"); err == nil {
-		return data, nil
+	if path := photoSourcePath(img.FilePath, MediumSize.Name); path != "" {
+		return os.ReadFile(path)
 	}
 	decoded, err := featureSourceImage(img)
 	if err != nil {
@@ -204,13 +201,13 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 		img = GetImageById(tx, photoId)
 		current, found = GetPhotoEmbedding(tx, photoId)
 	})
-	if img.Id == 0 || img.Status != 0 || !embeddingOutdated(current, found) {
+	if img.Id == 0 || img.Status != PhotoReady || !embeddingOutdated(current, found) {
 		return nil
 	}
 
 	data, err := embeddingSourceBytes(img)
 	if err != nil {
-		log.Printf("[VISION] No readable image for photo %d: %v", photoId, err)
+		LogWarn(LogCategoryWorker, "Photo embedding found no readable image", map[string]interface{}{"photoId": photoId, "error": err.Error()})
 		return nil
 	}
 	vector, model, err := client.embedImage(data)
@@ -223,11 +220,11 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 	}
 	noteVisionReachable(true)
 	if err != nil {
-		log.Printf("[VISION] Embedding failed for photo %d: %v", photoId, err)
+		LogWarn(LogCategoryWorker, "Photo embedding failed", map[string]interface{}{"photoId": photoId, "error": err.Error()})
 		return nil
 	}
 	if model != clipModelId {
-		log.Printf("[VISION] Daemon returned model %q, want %q; skipping photo %d", model, clipModelId, photoId)
+		LogWarn(LogCategoryWorker, "Vision daemon returned the wrong model", map[string]interface{}{"photoId": photoId, "model": model, "want": clipModelId})
 		return nil
 	}
 
@@ -249,7 +246,7 @@ func embedPhoto(db *vbolt.DB, client *visionClient, photoId int) error {
 func photosNeedingEmbedding(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, img Image) bool {
-			if img.Status == 0 {
+			if img.Status == PhotoReady {
 				e, found := GetPhotoEmbedding(tx, img.Id)
 				if embeddingOutdated(e, found) {
 					ids = append(ids, img.Id)

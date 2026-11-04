@@ -87,7 +87,7 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		milestoneDate := "2024-02-10"
 		fx.milestone, err = AddMilestoneTx(tx, AddMilestoneRequest{
 			PersonId: fx.person.Id, Description: "First word", Category: "development",
-			InputType: "date", MilestoneDate: &milestoneDate,
+			RecordTime: onDay(milestoneDate),
 		}, fx.ownerFamily)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx() error = %v", err)
@@ -247,7 +247,7 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		{"AddMilestone", func(ctx *vbeam.Context) error {
 			_, err := AddMilestone(ctx, AddMilestoneRequest{
 				PersonId: fx.person.Id, Description: "Injected", Category: "development",
-				InputType: "date", MilestoneDate: &date,
+				RecordTime: onDay(date),
 			})
 			return err
 		}},
@@ -262,7 +262,7 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		{"UpdateMilestone", func(ctx *vbeam.Context) error {
 			_, err := UpdateMilestone(ctx, UpdateMilestoneRequest{
 				Id: fx.milestone.Id, Description: "Rewritten", Category: "development",
-				InputType: "date", MilestoneDate: &date,
+				RecordTime: onDay(date),
 			})
 			return err
 		}},
@@ -287,7 +287,7 @@ func TestProceduresRefuseAnotherFamilysRecords(t *testing.T) {
 		}},
 		{"UpdatePhoto", func(ctx *vbeam.Context) error {
 			_, err := UpdatePhoto(ctx, UpdatePhotoRequest{
-				Id: fx.photo.Id, Title: "Mine now", InputType: "date", PhotoDate: date,
+				Id: fx.photo.Id, Title: "Mine now", RecordTime: onDay(date),
 			})
 			return err
 		}},

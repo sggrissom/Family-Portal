@@ -7,26 +7,31 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { copy } from "../../lib/copy";
-import { When, whenProblem, whenRequest } from "../../lib/when";
+import {
+  RecordWhen,
+  recordWhenFrom,
+  recordWhenLookup,
+  recordWhenProblem,
+  recordWhenTime,
+} from "../../lib/recordWhen";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
 import { canContribute } from "../../lib/authCache";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
-import { WhenControl } from "../../components/WhenControl";
 import {
   MilestonePhotoUploads,
   CategoryChips,
   MilestoneTextFields,
   SuggestedPhotos,
-  TagPicker,
   suggestPhotos,
-  toggleId,
 } from "./MilestoneFields";
+import { TagPicker, toggleId } from "../../components/TagPicker";
 
 type EditMilestoneForm = {
   description: string;
   category: string;
   context: string;
-  when: When;
+  when: RecordWhen;
   photoIds: number[];
   tagIds: number[];
   error: string;
@@ -45,12 +50,7 @@ const useEditMilestoneForm = vlens.declareHook(
     description: milestone.description,
     category: milestone.category,
     context: milestone.context ?? "",
-    when: {
-      mode: "date",
-      date: milestone.milestoneDate.split("T")[0],
-      ageYears: "",
-      ageMonths: "",
-    },
+    when: recordWhenFrom(milestone.recordTime, milestone.milestoneDate),
     photoIds: [...(milestone.photoIds ?? [])],
     tagIds: [...(milestone.tagIds ?? [])],
     error: "",
@@ -69,7 +69,7 @@ const useEditMilestoneForm = vlens.declareHook(
 // a moment after the description or date stop changing.
 function scheduleLookup(form: EditMilestoneForm, milestone: server.Milestone) {
   const text = form.description.trim();
-  const when = whenProblem(form.when) ? null : whenRequest(form.when, new Date());
+  const when = recordWhenLookup(form.when, new Date());
   const key = JSON.stringify([text, when]);
   if (key === form.lookupKey) return;
   form.lookupKey = key;
@@ -88,6 +88,7 @@ function scheduleLookup(form: EditMilestoneForm, milestone: server.Milestone) {
 type EditMilestoneData = {
   milestone: server.GetMilestoneResponse;
   tags: server.Tag[];
+  birthday: string;
 };
 
 export async function fetch(
@@ -104,8 +105,11 @@ export async function fetch(
   if (milestoneErr) return [null, milestoneErr];
 
   const [tagsResp] = await server.ListTags({});
+  const [peopleResp] = await server.ListPeople({});
+  const person = peopleResp?.people.find(p => p.id === milestone!.milestone.personId);
+  const birthday = person && !person.isPregnancy ? person.birthday : "";
 
-  return [{ milestone: milestone!, tags: tagsResp?.tags ?? [] }, ""];
+  return [{ milestone: milestone!, tags: tagsResp?.tags ?? [], birthday }, ""];
 }
 
 export function view(
@@ -140,7 +144,12 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="entry-container">
-        <EditMilestonePage form={form} milestone={milestone} tags={data.tags} />
+        <EditMilestonePage
+          form={form}
+          milestone={milestone}
+          tags={data.tags}
+          birthday={data.birthday}
+        />
       </main>
       <Footer />
     </div>
@@ -152,11 +161,22 @@ function chooseCategory(form: EditMilestoneForm, category: string) {
   vlens.scheduleRedraw();
 }
 
-async function save(form: EditMilestoneForm, milestone: server.Milestone, event: Event) {
+async function save(
+  form: EditMilestoneForm,
+  milestone: server.Milestone,
+  birthday: string,
+  event: Event
+) {
   event.preventDefault();
   if (form.saving || form.uploading) return;
 
-  const problem = !form.description.trim() ? copy.milestone.needsText : whenProblem(form.when);
+  const when = { ...form.when, anchorPersonId: form.when.anchorPersonId || milestone.personId };
+  const isAnswer = milestone.category === "interview";
+  const problem = !form.description.trim()
+    ? copy.milestone.needsText
+    : isAnswer
+      ? ""
+      : recordWhenProblem(when, true, birthday, new Date());
   if (problem) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -167,18 +187,14 @@ async function save(form: EditMilestoneForm, milestone: server.Milestone, event:
   form.error = "";
   vlens.scheduleRedraw();
 
-  const when = whenRequest(form.when, new Date());
   const [resp, err] = await server.UpdateMilestone({
     id: milestone.id,
     description: form.description.trim(),
     category: form.category,
     context: form.context.trim(),
-    inputType: when.inputType,
-    milestoneDate: when.date,
-    ageYears: when.ageYears,
-    ageMonths: when.ageMonths,
     photoIds: form.photoIds,
     tagIds: form.tagIds,
+    recordTime: isAnswer ? null : recordWhenTime(when, new Date(), true),
   });
   if (!resp) {
     form.error = err || "That moment could not be saved. Please try again.";
@@ -193,9 +209,10 @@ interface EditMilestonePageProps {
   form: EditMilestoneForm;
   milestone: server.Milestone;
   tags: server.Tag[];
+  birthday: string;
 }
 
-const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) => {
+const EditMilestonePage = ({ form, milestone, tags, birthday }: EditMilestonePageProps) => {
   const disabled = form.saving || form.uploading;
   const isAnswer = milestone.category === "interview";
   if (BROWSER && !isAnswer) scheduleLookup(form, milestone);
@@ -205,7 +222,11 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
         {isAnswer ? copy.interview.editAnswer : copy.milestone.editTitle}
       </h1>
 
-      <form className="entry-form" onSubmit={vlens.cachePartial(save, form, milestone)} noValidate>
+      <form
+        className="entry-form"
+        onSubmit={vlens.cachePartial(save, form, milestone, birthday)}
+        noValidate
+      >
         {form.error && (
           <div className="error-message" role="alert">
             {form.error}
@@ -235,7 +256,12 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
 
             <div className="entry-subject">
               <span className="entry-label">{copy.when.label}</span>
-              <WhenControl when={form.when} disabled={disabled} />
+              <RecordWhenControl
+                when={form.when}
+                isMoment={true}
+                disabled={disabled}
+                birthday={birthday}
+              />
             </div>
           </>
         )}
@@ -266,7 +292,12 @@ const EditMilestonePage = ({ form, milestone, tags }: EditMilestonePageProps) =>
           />
         </div>
 
-        <TagPicker tags={tags} selected={form.tagIds} disabled={disabled} />
+        <TagPicker
+          label={copy.milestone.tags}
+          tags={tags}
+          selected={form.tagIds}
+          disabled={disabled}
+        />
 
         <div className="entry-actions">
           <a href={`/profile/${milestone.personId}`} className="btn btn-secondary">

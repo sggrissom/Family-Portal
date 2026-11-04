@@ -9,13 +9,10 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"log"
 	"math"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -119,9 +116,9 @@ func imageNeedsAnalysis(image Image) bool {
 	switch image.AnalysisStatus {
 	// Retry old failures once on startup as well; older workers recorded
 	// daemon outages as permanent failures.
-	case 0, 1, 3:
+	case AnalysisPending, AnalysisRunning, AnalysisFailed:
 		return true
-	case 2:
+	case AnalysisDone:
 		return image.AnalysisVersion < currentAnalysisVersion
 	}
 	return false
@@ -130,7 +127,7 @@ func imageNeedsAnalysis(image Image) bool {
 func photosNeedingAnalysis(db *vbolt.DB) (jobs []PhotoAnalysisJob) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if image.Status == 0 && imageNeedsAnalysis(image) {
+			if image.Status == PhotoReady && imageNeedsAnalysis(image) {
 				jobs = append(jobs, PhotoAnalysisJob{ImageId: image.Id, FamilyId: image.FamilyId})
 			}
 			return true
@@ -170,7 +167,7 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 			return errRetryLater
 		}
 		if err != nil {
-			log.Printf("[FACE_ANALYSIS] Failed to update face embedding for person %d: %v", job.PersonId, err)
+			LogWarn(LogCategoryWorker, "Face embedding update failed", map[string]interface{}{"personId": job.PersonId, "error": err.Error()})
 		}
 		return nil
 	}
@@ -182,21 +179,19 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		return nil
 	}
 
-	log.Printf("[FACE_ANALYSIS] Starting analysis of photo %d", job.ImageId)
-
-	if err := aw.setAnalysisStatus(job.ImageId, 1); err != nil {
-		log.Printf("[FACE_ANALYSIS] Failed to set analyzing status for photo %d: %v", job.ImageId, err)
+	if err := aw.setAnalysisStatus(job.ImageId, AnalysisRunning); err != nil {
+		LogWarn(LogCategoryWorker, "Face analysis could not start", map[string]interface{}{"photoId": job.ImageId, "error": err.Error()})
 		return nil
 	}
 
 	faces, err := detectFaces(aw.client, img)
 	if err != nil {
-		log.Printf("[FACE_ANALYSIS] Face detection failed for photo %d: %v", job.ImageId, err)
+		LogWarn(LogCategoryWorker, "Face detection failed", map[string]interface{}{"photoId": job.ImageId, "error": err.Error()})
 		if errors.Is(err, errRetryLater) {
-			aw.setAnalysisStatus(job.ImageId, 0)
+			aw.setAnalysisStatus(job.ImageId, AnalysisPending)
 			return errRetryLater
 		}
-		aw.setAnalysisStatus(job.ImageId, 3)
+		aw.setAnalysisStatus(job.ImageId, AnalysisFailed)
 		return nil
 	}
 
@@ -208,12 +203,14 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		}
 		tagged = RecordPhotoFacesTx(tx, img.Id, faces)
 		img = GetImageById(tx, job.ImageId)
-		img.AnalysisStatus = 2
+		img.AnalysisStatus = AnalysisDone
 		img.AnalysisVersion = currentAnalysisVersion
-		vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		writeImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
-	log.Printf("[FACE_ANALYSIS] Completed analysis of photo %d: %d face(s), %d auto-tagged", job.ImageId, len(faces), tagged)
+	LogInfo(LogCategoryWorker, "Face analysis finished", map[string]interface{}{
+		"photoId": job.ImageId, "faces": len(faces), "autoTagged": tagged,
+	})
 	return nil
 }
 
@@ -252,7 +249,7 @@ func callRecognize(client *http.Client, req recognizeRequest) (recognizeResponse
 }
 
 func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
-	path := analysisImagePath(img)
+	path := photoSourcePath(img.FilePath, XLargeSize.Name, LargeSize.Name, MediumSize.Name)
 	data, dataSize, dataErr := analysisImageData(img)
 	if path == "" && dataErr != nil {
 		return nil, fmt.Errorf("no readable image for photo %d: %w", img.Id, dataErr)
@@ -271,7 +268,7 @@ func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
 // The display variants are too small for the detector to find faces in group
 // shots, so analysis works from the original, upright and capped in size.
 func analysisImageData(img Image) ([]byte, image.Point, error) {
-	decoded, err := imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
+	decoded, err := imaging.Open(photoOriginalPath(img.FilePath), imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, image.Point{}, err
 	}
@@ -324,17 +321,6 @@ func toDetectedFaces(result recognizeResponse, size image.Point) []DetectedFace 
 	return faces
 }
 
-func analysisImagePath(img Image) string {
-	basePath := filepath.Join(cfg.StaticDir, img.FilePath)
-	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-	for _, candidate := range []string{base + "_xlarge.jpg", base + ".jpg", base + "_medium.jpg"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return ""
-}
-
 func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error {
 	var updateErr error
 	vbolt.WithWriteTx(aw.db, func(tx *vbolt.Tx) {
@@ -344,7 +330,7 @@ func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error 
 			return
 		}
 		img.AnalysisStatus = status
-		vbolt.Write(tx, ImagesBkt, img.Id, &img)
+		writeImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
 	return updateErr
@@ -406,7 +392,7 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 		descriptor = pickProfileFace(person, nil, detected)
 	}
 	if len(descriptor) != 128 {
-		log.Printf("[FACE_ANALYSIS] No face found in profile photo for person %d", personId)
+		LogInfo(LogCategoryWorker, "No face found in a profile photo", map[string]interface{}{"personId": personId})
 		return nil
 	}
 
@@ -421,7 +407,8 @@ func updatePersonEmbedding(db *vbolt.DB, client *http.Client, personId int) erro
 		tagged = RematchFamilyFacesTx(tx, p.FamilyId)
 		vbolt.TxCommit(tx)
 	})
-
-	log.Printf("[FACE_ANALYSIS] Updated face embedding for person %d (%d photos newly auto-tagged)", personId, tagged)
+	LogInfo(LogCategoryWorker, "Face embedding updated", map[string]interface{}{
+		"personId": personId, "autoTagged": tagged,
+	})
 	return nil
 }

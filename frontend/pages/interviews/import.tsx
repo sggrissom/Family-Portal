@@ -4,7 +4,7 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { canContribute } from "../../lib/authCache";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import {
   ImportDraft,

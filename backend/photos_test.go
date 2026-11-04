@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -367,249 +368,6 @@ func TestGenerateDefaultTitle(t *testing.T) {
 	}
 }
 
-func TestCalculatePhotoDate(t *testing.T) {
-	testPerson := Person{
-		Id:       1,
-		Birthday: time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC),
-	}
-
-	t.Run("Today input type", func(t *testing.T) {
-		result, err := calculatePhotoDate("today", "", nil, nil, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if result != dayStart(result) || time.Since(result) > 24*time.Hour {
-			t.Errorf("Expected today's UTC calendar day, got %v", result)
-		}
-	})
-
-	t.Run("Date input type with valid date", func(t *testing.T) {
-		dateString := "2023-06-15"
-		expected := time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)
-
-		result, err := calculatePhotoDate("date", dateString, nil, nil, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if !result.Equal(expected) {
-			t.Errorf("Expected date %v, got %v", expected, result)
-		}
-	})
-
-	t.Run("Date input type without date", func(t *testing.T) {
-		_, err := calculatePhotoDate("date", "", nil, nil, testPerson, nil)
-		if err == nil {
-			t.Error("Expected error for missing date")
-		}
-
-		expectedError := "Photo date is required"
-		if !strings.Contains(err.Error(), expectedError) {
-			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
-		}
-	})
-
-	t.Run("Age input type", func(t *testing.T) {
-		years := 2
-		months := 6
-
-		result, err := calculatePhotoDate("age", "", &years, &months, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if want := testPerson.Birthday.AddDate(2, 6, 0); !result.Equal(want) {
-			t.Errorf("Expected %v, the same date milestones and measurements get, got %v", want, result)
-		}
-	})
-
-	t.Run("Age months outside 0-11", func(t *testing.T) {
-		years, months := 1, 12
-		if _, err := calculatePhotoDate("age", "", &years, &months, testPerson, nil); err == nil {
-			t.Error("Expected an error for month 12, as milestones and measurements give")
-		}
-	})
-
-	t.Run("Age input type without years", func(t *testing.T) {
-		_, err := calculatePhotoDate("age", "", nil, nil, testPerson, nil)
-		if err == nil {
-			t.Error("Expected error for missing age years")
-		}
-
-		expectedError := "Age years must be non-negative"
-		if !strings.Contains(err.Error(), expectedError) {
-			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
-		}
-	})
-
-	t.Run("Invalid input type", func(t *testing.T) {
-		_, err := calculatePhotoDate("invalid", "", nil, nil, testPerson, nil)
-		if err == nil {
-			t.Error("Expected error for invalid input type")
-		}
-
-		expectedError := "Input type must be"
-		if !strings.Contains(err.Error(), expectedError) {
-			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
-		}
-	})
-
-	t.Run("Auto input type fallback", func(t *testing.T) {
-		invalidImageData := []byte("not an image")
-
-		result, err := calculatePhotoDate("auto", "", nil, nil, testPerson, invalidImageData)
-		if err != nil {
-			t.Errorf("Expected no error with auto fallback, got %v", err)
-		}
-
-		if time.Since(result) > time.Minute || result.Location() != time.UTC {
-			t.Errorf("Expected the current UTC time for auto fallback, got %v", result)
-		}
-	})
-
-	t.Run("Auto input type uses the uploader's day without EXIF", func(t *testing.T) {
-		result, err := calculatePhotoDate("auto", "2024-12-31", nil, nil, testPerson, []byte("not an image"))
-		if err != nil || result != time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC) {
-			t.Errorf("got %v, %v; want the supplied local day", result, err)
-		}
-	})
-}
-
-func TestUploadPhotoHandlerValidation(t *testing.T) {
-	testDBPath := "test_upload_validation.db"
-	db := vbolt.Open(testDBPath)
-	vbolt.InitBuckets(db, &cfg.Info)
-	defer os.Remove(testDBPath)
-	defer db.Close()
-
-	appDb = db
-
-	t.Run("Method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/upload-photo", nil)
-		recorder := httptest.NewRecorder()
-
-		uploadPhotoHandler(recorder, req)
-
-		if recorder.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
-		}
-	})
-
-	t.Run("File too large", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/upload-photo", nil)
-		req.ContentLength = 60 << 20
-		recorder := httptest.NewRecorder()
-
-		uploadPhotoHandler(recorder, req)
-
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, recorder.Code)
-		}
-
-		if !strings.Contains(recorder.Body.String(), "too large") {
-			t.Error("Expected 'too large' in response body")
-		}
-	})
-
-	t.Run("Unauthenticated request", func(t *testing.T) {
-		var buf bytes.Buffer
-		writer := multipart.NewWriter(&buf)
-		writer.WriteField("personId", "1")
-		writer.Close()
-
-		req := httptest.NewRequest("POST", "/api/upload-photo", &buf)
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-		recorder := httptest.NewRecorder()
-
-		uploadPhotoHandler(recorder, req)
-
-		if recorder.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, recorder.Code)
-		}
-	})
-}
-
-func TestValidateUpdatePhotoRequest(t *testing.T) {
-	t.Run("Valid request", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Id:          1,
-			Title:       "Valid Title",
-			Description: "Valid description",
-			InputType:   "today",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err != nil {
-			t.Errorf("Expected no error for valid request, got %v", err)
-		}
-	})
-
-	t.Run("Missing ID", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Title:     "Valid Title",
-			InputType: "today",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err == nil {
-			t.Error("Expected error for missing ID")
-		}
-	})
-
-	t.Run("Empty title", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Id:        1,
-			Title:     "",
-			InputType: "today",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-	})
-
-	t.Run("Invalid input type", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Id:        1,
-			Title:     "Valid Title",
-			InputType: "invalid",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err == nil {
-			t.Error("Expected error for invalid input type")
-		}
-	})
-
-	t.Run("Date input without date", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Id:        1,
-			Title:     "Valid Title",
-			InputType: "date",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err == nil {
-			t.Error("Expected error for date input without date")
-		}
-	})
-
-	t.Run("Age input without years", func(t *testing.T) {
-		req := UpdatePhotoRequest{
-			Id:        1,
-			Title:     "Valid Title",
-			InputType: "age",
-		}
-
-		err := validateUpdatePhotoRequest(req)
-		if err == nil {
-			t.Error("Expected error for age input without years")
-		}
-	})
-}
-
 func TestUpdatePhotoKeepsDate(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -630,7 +388,7 @@ func TestUpdatePhotoKeepsDate(t *testing.T) {
 	var resp UpdatePhotoResponse
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		resp, err = UpdatePhoto(&vbeam.Context{Tx: tx, Token: token}, UpdatePhotoRequest{
-			Id: fx.photo.Id, Title: "Fireworks", InputType: "keep",
+			Id: fx.photo.Id, Title: "Fireworks",
 		})
 	})
 	if err != nil {
@@ -683,5 +441,57 @@ func TestServePhotoOriginalDownloadNamesTheUploadedFile(t *testing.T) {
 	rec = get(fmt.Sprintf("/api/photo/%d/original", fx.photo.Id))
 	if got := rec.Header().Get("Content-Disposition"); got != "" {
 		t.Errorf("inline original sent Content-Disposition %q", got)
+	}
+}
+
+func TestRejectedUploadLeavesNoFileBehind(t *testing.T) {
+	fx := setupMatrixFixture(t)
+	photosDir := filepath.Join(cfg.StaticDir, "photos")
+	if err := os.MkdirAll(photosDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	listing := func() map[string]bool {
+		entries, _ := os.ReadDir(photosDir)
+		names := map[string]bool{}
+		for _, e := range entries {
+			names[e.Name()] = true
+		}
+		return names
+	}
+	before := listing()
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	form.WriteField("familyId", fmt.Sprint(fx.famA))
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", `form-data; name="photo"; filename="rejected.png"`)
+	header.Set("Content-Type", "image/png")
+	part, _ := form.CreatePart(header)
+	part.Write(createTestImage(20, 20))
+	form.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload-photo", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, fx.joined["viewer"]))
+	rec := httptest.NewRecorder()
+	uploadPhotoHandler(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer upload = %d %s, want 403", rec.Code, rec.Body.String())
+	}
+	for name := range listing() {
+		if !before[name] {
+			t.Errorf("rejected upload left %s on disk", name)
+			os.Remove(filepath.Join(photosDir, name))
+		}
+	}
+}
+
+func TestUploadedPhotoDateFallsBackFromExifToTheUploadersDay(t *testing.T) {
+	if got := uploadedPhotoDate("2023-06-15", createTestImage(4, 4)); !got.Equal(time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("no EXIF: got %v, want the uploader's day", got)
+	}
+	if d := time.Since(uploadedPhotoDate("", nil)); d > 15*time.Hour || d < -15*time.Hour {
+		t.Errorf("no EXIF or day: %v from now, want now", d)
 	}
 }

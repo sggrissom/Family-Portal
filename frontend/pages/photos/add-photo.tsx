@@ -11,13 +11,22 @@ import { mediaAccept, mediaFileProblem, noVideo, uploadMedia } from "../../lib/m
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import { returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
 import { peopleChanges, takenLabel, type QueuedPhoto } from "../../lib/photoUploadQueue";
 import "./add-photo-styles";
 import "../../components/entry-form-styles";
+import { TagPicker } from "../../components/TagPicker";
+import {
+  RecordWhen,
+  newRecordWhen,
+  recordWhenFrom,
+  recordWhenProblem,
+  recordWhenTime,
+} from "../../lib/recordWhen";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 
 type UploadItem = QueuedPhoto & {
   image: server.Image | null;
@@ -33,7 +42,7 @@ type AddPhotoForm = {
   items: UploadItem[];
   pumping: boolean;
   editingDate: boolean;
-  newDate: string;
+  newWhen: RecordWhen;
   finishing: boolean;
   dragActive: boolean;
   handedOff: boolean;
@@ -49,7 +58,7 @@ const useAddPhotoForm = vlens.declareHook((personId: number | null): AddPhotoFor
     items: [],
     pumping: false,
     editingDate: false,
-    newDate: "",
+    newWhen: newRecordWhen(),
     finishing: false,
     dragActive: false,
     handedOff: false,
@@ -240,17 +249,14 @@ function togglePerson(form: AddPhotoForm, personId: number) {
   vlens.scheduleRedraw();
 }
 
-function toggleTag(form: AddPhotoForm, tagId: number) {
-  const index = form.tagIds.indexOf(tagId);
-  if (index >= 0) form.tagIds.splice(index, 1);
-  else form.tagIds.push(tagId);
-  vlens.scheduleRedraw();
-}
-
 function editDate(form: AddPhotoForm) {
   form.editingDate = true;
   const first = form.items.find(item => item.image)?.image;
-  form.newDate = first ? first.photoDate.split("T")[0] : localDateString(new Date());
+  form.newWhen = recordWhenFrom(
+    first?.recordTime,
+    first ? first.photoDate.split("T")[0] : localDateString(new Date())
+  );
+  if (form.personIds.length === 1) form.newWhen.anchorPersonId = form.personIds[0];
   vlens.scheduleRedraw();
 }
 
@@ -262,8 +268,11 @@ function onDone(form: AddPhotoForm, event: Event) {
     vlens.scheduleRedraw();
     return;
   }
-  if (form.editingDate && !form.newDate) {
-    form.error = "Pick the date these were taken";
+  const problem = form.editingDate
+    ? recordWhenProblem(form.newWhen, false, undefined, new Date())
+    : "";
+  if (problem) {
+    form.error = problem;
     vlens.scheduleRedraw();
     return;
   }
@@ -298,10 +307,7 @@ async function finish(form: AddPhotoForm) {
         id: image.id,
         title: caption || (form.editingDate ? "" : image.title),
         description: image.description,
-        inputType: form.editingDate ? "date" : "keep",
-        photoDate: form.editingDate ? form.newDate : "",
-        ageYears: null,
-        ageMonths: null,
+        recordTime: form.editingDate ? recordWhenTime(form.newWhen, new Date(), false) : null,
       });
       if (resp) item.image = resp.image;
       else problems.push(err);
@@ -439,44 +445,23 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
           />
         </div>
 
-        {tags.length > 0 && (
-          <div className="entry-field">
-            <span className="entry-label" id="tagPickerLabel">
-              {copy.photos.tags}
-            </span>
-            <div className="tag-picker" role="group" aria-labelledby="tagPickerLabel">
-              {tags.map(tag => {
-                const selected = form.tagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className={`tag-pill${selected ? " selected" : ""}`}
-                    style={{ borderColor: tag.color }}
-                    aria-pressed={selected}
-                    disabled={form.finishing}
-                    onClick={vlens.cachePartial(toggleTag, form, tag.id)}
-                  >
-                    <span className="tag-color-dot" style={{ background: tag.color }} />
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <TagPicker
+          label={copy.photos.tags}
+          tags={tags}
+          selected={form.tagIds}
+          disabled={form.finishing}
+        />
 
         {(taken || form.editingDate) && (
           <div className="photo-taken">
             <span className="entry-label">{copy.photos.taken}</span>
             {form.editingDate ? (
-              <input
-                type="date"
-                className="when-date"
-                aria-label={copy.photos.taken}
-                max={localDateString(new Date())}
+              <RecordWhenControl
+                when={form.newWhen}
+                isMoment={false}
                 disabled={form.finishing}
-                {...vlens.attrsBindInput(vlens.ref(form, "newDate"))}
+                anchors={people.filter(p => form.personIds.includes(p.id))}
+                birthday={people.find(p => p.id === form.newWhen.anchorPersonId)?.birthday}
               />
             ) : (
               <span>

@@ -7,7 +7,6 @@ import (
 	"family/vision"
 	"fmt"
 	"image/jpeg"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,7 +68,7 @@ func videoFramesOutdated(f VideoFrames, found bool) bool {
 }
 
 func videoNeedsFrames(tx *vbolt.Tx, image Image) bool {
-	if !image.IsVideo() || image.Status != 0 || image.PlaybackKey == "" {
+	if !image.IsVideo() || image.Status != PhotoReady || image.PlaybackKey == "" {
 		return false
 	}
 	f, found := GetVideoFrames(tx, image.Id)
@@ -179,7 +178,7 @@ func bestFrame(frames []VideoFrame, query []float32) (score float64, offsetMs in
 func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) ([]VideoFrame, int, error) {
 	probe, err := w.tools.probe(w.ctx, source)
 	if err != nil {
-		log.Printf("[VIDEO_ANALYSIS] Could not probe video %d: %v", image.Id, err)
+		LogWarn(LogCategoryWorker, "Video analysis could not probe the video", map[string]interface{}{"videoId": image.Id, "error": err.Error()})
 		return nil, 0, nil
 	}
 	convert := ""
@@ -191,7 +190,7 @@ func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) 
 		"-vf", vision.FrameSelectFilter(probe.Duration, convert),
 		"-fps_mode", "vfr", "-q:v", "4", filepath.Join(workDir, "frame-%03d.jpg"))
 	if err != nil {
-		log.Printf("[VIDEO_ANALYSIS] Could not sample frames from video %d: %v", image.Id, err)
+		LogWarn(LogCategoryWorker, "Video analysis could not sample frames", map[string]interface{}{"videoId": image.Id, "error": err.Error()})
 		return nil, 0, nil
 	}
 	times := vision.ParseFrameTimes(stderr)
@@ -214,7 +213,7 @@ func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) 
 			return nil, 0, errRetryLater
 		}
 		if err != nil || model != clipModelId {
-			log.Printf("[VIDEO_ANALYSIS] Frame %d of video %d not embedded: %v %s", i, image.Id, err, model)
+			LogWarn(LogCategoryWorker, "Video frame not embedded", map[string]interface{}{"videoId": image.Id, "frame": i, "model": model, "error": fmt.Sprint(err)})
 			continue
 		}
 		noteVisionReachable(true)

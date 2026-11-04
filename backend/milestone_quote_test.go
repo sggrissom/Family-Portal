@@ -13,7 +13,7 @@ func TestQuoteKeepsTheWordsAndContext(t *testing.T) {
 
 	added, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{
 		PersonId: fx.alice.Id, Description: "  “The moon is following our car!” ", Category: "quote",
-		Context: "On the drive home from Grandma's", InputType: "date", MilestoneDate: &day,
+		Context: "On the drive home from Grandma's", RecordTime: onDay(day),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestQuoteKeepsTheWordsAndContext(t *testing.T) {
 
 	updated, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{
 		Id: quote.Id, Description: "Said the moon follows the car", Category: "behavior",
-		Context: "kept by mistake", InputType: "date", MilestoneDate: &day,
+		Context: "kept by mistake", RecordTime: onDay(day),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestQuoteContextSurvivesExportAndImport(t *testing.T) {
 	quote := fx.addMilestoneOn(t, fx.alice, "Can we have pancakes for dinner", "quote", fx.alice.Birthday.AddDate(4, 0, 0))
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		quote.Context = "Every single night"
-		writeMilestone(tx, quote)
+		writeMilestone(tx, &quote)
 		vbolt.TxCommit(tx)
 	})
 

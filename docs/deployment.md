@@ -455,9 +455,8 @@ filesystem could not be measured trades a rare problem for a total one.
 
 ## Video
 
-The design is `docs/plans/video.md`; what degrades how is in
-`docs/degraded-dependencies.md`. Video is opt-in per family: an admin turns it
-on from **Admin → Users** ("Turn on family video").
+What degrades how is in `docs/degraded-dependencies.md`. Video is opt-in per
+family: an admin turns it on from **Admin → Users** ("Turn on family video").
 
 ### Phase 1: local disk
 

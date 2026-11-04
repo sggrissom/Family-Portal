@@ -687,20 +687,6 @@ func (c *Client) handleIncomingMessage(wsMsg WSMessage) {
 	}
 }
 
-func (h *ChatHub) GetFamilyConnectionCount(familyId int) int {
-	if h == nil {
-		return 0
-	}
-
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	if clients, ok := h.families[familyId]; ok {
-		return len(clients)
-	}
-	return 0
-}
-
 func (h *ChatHub) GetOnlineUsers(familyId int) []int {
 	if h == nil {
 		return nil

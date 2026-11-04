@@ -6,12 +6,9 @@ import (
 	"family/cfg"
 	"family/vision"
 	"image"
-	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -172,7 +169,7 @@ func linkSimilarTx(tx *vbolt.Tx, f *PhotoFeatures, date time.Time) {
 			continue
 		}
 		otherImage := GetImageById(tx, id)
-		if otherImage.Id == 0 || otherImage.Status != 0 || !similarPhotos(*f, other, date, otherImage.PhotoDate) {
+		if otherImage.Id == 0 || otherImage.Status != PhotoReady || !similarPhotos(*f, other, date, otherImage.PhotoDate) {
 			continue
 		}
 		if other.GroupId > 0 {
@@ -225,7 +222,7 @@ func groupOf(tx *vbolt.Tx, groupId int, cache map[int]photoGroup) (photoGroup, b
 	}
 	var members []PhotoFeatures
 	for _, f := range readFeatures(tx, FeaturesByGroupIndex, groupId) {
-		if img := GetImageById(tx, f.PhotoId); img.Id != 0 && img.Status == 0 {
+		if img := GetImageById(tx, f.PhotoId); img.Id != 0 && img.Status == PhotoReady {
 			members = append(members, f)
 		}
 	}
@@ -243,13 +240,10 @@ func groupOf(tx *vbolt.Tx, groupId int, cache map[int]photoGroup) (photoGroup, b
 }
 
 func featureSourceImage(img Image) (image.Image, error) {
-	base := strings.TrimSuffix(filepath.Join(cfg.StaticDir, img.FilePath), filepath.Ext(img.FilePath))
-	for _, candidate := range []string{base + "_medium.jpg", base + "_xlarge.jpg", base + ".jpg"} {
-		if decoded, err := imaging.Open(candidate); err == nil {
-			return decoded, nil
-		}
+	if path := photoSourcePath(img.FilePath, MediumSize.Name, XLargeSize.Name, LargeSize.Name); path != "" {
+		return imaging.Open(path)
 	}
-	return imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
+	return imaging.Open(photoOriginalPath(img.FilePath), imaging.AutoOrientation(true))
 }
 
 func exifLocation(path string) (lat, lng float64, ok bool, readErr error) {
@@ -277,7 +271,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 		img = GetImageById(tx, photoId)
 		current, found = GetPhotoFeatures(tx, photoId)
 	})
-	if img.Id == 0 || img.Status != 0 || img.IsVideo() || !featuresOutdated(current, found) {
+	if img.Id == 0 || img.Status != PhotoReady || img.IsVideo() || !featuresOutdated(current, found) {
 		return
 	}
 
@@ -287,7 +281,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 	if next.HashVersion < hashAnalyzerVersion || next.QualityVersion < qualityAnalyzerVersion {
 		decoded, err := featureSourceImage(img)
 		if err != nil {
-			log.Printf("[FEATURES] Could not open photo %d: %v", img.Id, err)
+			LogWarn(LogCategoryWorker, "Photo features could not open the photo", map[string]interface{}{"photoId": img.Id, "error": err.Error()})
 			return
 		} else {
 			if next.HashVersion < hashAnalyzerVersion {
@@ -301,9 +295,9 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 	}
 	if next.PlaceVersion < placeAnalyzerVersion {
 		next.HasLocation, next.Latitude, next.Longitude, next.CityId = false, 0, 0, 0
-		lat, lng, ok, readErr := exifLocation(getOriginalPhotoPath(img))
+		lat, lng, ok, readErr := exifLocation(photoOriginalPath(img.FilePath))
 		if readErr != nil {
-			log.Printf("[FEATURES] Could not read original for photo %d: %v", img.Id, readErr)
+			LogWarn(LogCategoryWorker, "Photo features could not read the original", map[string]interface{}{"photoId": img.Id, "error": readErr.Error()})
 		} else if ok {
 			next.HasLocation, next.Latitude, next.Longitude = true, lat, lng
 			if city, ok := NearestCity(lat, lng); ok {
@@ -331,7 +325,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 func photosNeedingFeatures(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, img Image) bool {
-			if img.Status == 0 && !img.IsVideo() {
+			if img.Status == PhotoReady && !img.IsVideo() {
 				f, found := GetPhotoFeatures(tx, img.Id)
 				if featuresOutdated(f, found) {
 					ids = append(ids, img.Id)

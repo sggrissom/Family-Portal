@@ -224,7 +224,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			if m.Context == "" {
 				m.Context = renderQuestion(GetInterviewQuestionById(tx, q).Text, person, date)
 			}
-			writeMilestone(tx, m)
+			writeMilestone(tx, &m)
 			for _, tagName := range em.TagNames {
 				if tagId, ok := in.tagNameToId[strings.ToLower(tagName)]; ok {
 					addTagToMilestone(tx, m.Id, tagId, person.FamilyId)

@@ -9,7 +9,7 @@ func TestArtworkKeepsItsPhotosOnThePerson(t *testing.T) {
 
 	added, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{
 		PersonId: fx.alice.Id, Description: "Drew the whole family as dinosaurs", Category: "artwork",
-		Context: "only quotes keep this", InputType: "date", MilestoneDate: &day, PhotoIds: []int{drawing.Id},
+		Context: "only quotes keep this", RecordTime: onDay(day), PhotoIds: []int{drawing.Id},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestUnknownCategoryIsStillRejected(t *testing.T) {
 	day := "2019-03-12"
 	_, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{
 		PersonId: fx.alice.Id, Description: "Report card", Category: "documents",
-		InputType: "date", MilestoneDate: &day,
+		RecordTime: onDay(day),
 	})
 	if err == nil {
 		t.Error("an unknown category was accepted")

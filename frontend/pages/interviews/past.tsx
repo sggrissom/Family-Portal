@@ -5,8 +5,13 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
-import { When, whenProblem, whenRequest } from "../../lib/when";
-import { WhenControl } from "../../components/WhenControl";
+import {
+  RecordWhen,
+  exactWhenProblem,
+  exactWhenRequest,
+  newRecordWhen,
+} from "../../lib/recordWhen";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 import { copy } from "../../lib/copy";
 import { firstName, questionRef } from "../../lib/interviews";
 import "./interview-styles";
@@ -23,7 +28,7 @@ type Extra = { text: string; answer: string; keep: boolean };
 
 type PastState = {
   source: server.GetInterviewSetupResponse | null;
-  when: When;
+  when: RecordWhen;
   answers: Record<string, string>;
   extras: Extra[];
   showRetired: boolean;
@@ -36,7 +41,7 @@ type PastState = {
 const usePast = vlens.declareHook(
   (_personId: number): PastState => ({
     source: null,
-    when: { mode: "age", date: "", ageYears: "", ageMonths: "" },
+    when: { ...newRecordWhen(), mode: "age" },
     answers: {},
     extras: [],
     showRetired: false,
@@ -88,7 +93,13 @@ export function view(
 
         <div className="iv-field">
           <span className="entry-label">{t.when}</span>
-          <WhenControl when={state.when} disabled={state.saving} birthday={data.person.birthday} />
+          <RecordWhenControl
+            when={state.when}
+            isMoment={false}
+            exact
+            disabled={state.saving}
+            birthday={data.person.birthday}
+          />
         </div>
 
         {sections.map(section => (
@@ -222,13 +233,13 @@ export function view(
 }
 
 async function save(state: PastState, data: server.GetInterviewSetupResponse) {
-  const problem = whenProblem(state.when, data.person.birthday);
+  const problem = exactWhenProblem(state.when, data.person.birthday);
   if (problem) {
     state.error = problem;
     vlens.scheduleRedraw();
     return;
   }
-  const when = whenRequest(state.when, new Date());
+  const when = exactWhenRequest(state.when, new Date());
   const answers: server.ImportAnswer[] = Object.entries(state.answers)
     .filter(([, a]) => a.trim())
     .map(([ref, answer]) => ({ ref, answer, newText: "", keep: false }));

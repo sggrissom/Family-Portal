@@ -7,7 +7,6 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -95,6 +94,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 	var resp ImportDataResponse
 	var importErr error
 	var importedMilestoneIds []int
+	var photoJobs []PhotoProcessingJob
 	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
 		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessContribute)
 		if resolveErr != nil {
@@ -145,7 +145,8 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 		var photoIdMapping map[int]int
 		if len(importData.Photos) > 0 {
-			imported, skipped, mapping, photoWarnings := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
+			imported, skipped, mapping, jobs, photoWarnings := importPhotos(tx, familyId, user.Id, importData.Photos, personIdMapping, tagIdMapping, zipReader)
+			photoJobs = jobs
 			resp.ImportedPhotos = imported
 			resp.SkippedPhotos = skipped
 			photoIdMapping = mapping
@@ -218,6 +219,14 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 	for _, id := range importedMilestoneIds {
 		QueueMilestoneEmbedding(id)
 	}
+	for _, job := range photoJobs {
+		if err := QueuePhotoProcessing(job); err != nil {
+			LogWarnWithRequest(r, LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
+				"photoId": job.ImageId,
+				"error":   err.Error(),
+			})
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -230,7 +239,7 @@ func importPhotos(
 	personIdMapping map[int]int,
 	tagIdMapping map[int]int,
 	zipReader *zip.Reader,
-) (imported, skipped int, photoIdMapping map[int]int, warnings []string) {
+) (imported, skipped int, photoIdMapping map[int]int, jobs []PhotoProcessingJob, warnings []string) {
 	photoIdMapping = make(map[int]int)
 	zipFiles := make(map[string]*zip.File, len(zipReader.File))
 	for _, zf := range zipReader.File {
@@ -248,7 +257,7 @@ func importPhotos(
 		incoming += int64(zf.UncompressedSize64)
 	}
 	if diskErr := CheckDiskHeadroom(cfg.StaticDir, incoming, cfg.MinFreeDiskBytes); diskErr != nil {
-		return 0, len(photos), photoIdMapping, []string{
+		return 0, len(photos), photoIdMapping, nil, []string{
 			"The server is low on storage, so no photos were imported. Everything else in the bundle was.",
 		}
 	}
@@ -276,17 +285,18 @@ func importPhotos(
 		}
 		used += size
 
-		fileName := filepath.Base(photo.ZipPath)
-		ext := filepath.Ext(fileName)
-		base := strings.TrimSuffix(fileName, ext)
-		base = strings.TrimSuffix(base, "_original")
-		filePath := "photos/" + base + ext
+		// A fresh name, so importing into the server that exported the bundle
+		// does not share files with the photo it came from.
+		uniqueFilename, err := generateUniqueFilename(filePathForOriginal(filepath.Base(photo.ZipPath)))
+		if err != nil {
+			skipped++
+			continue
+		}
+		filePath := "photos/" + uniqueFilename
+		mimeType := zipExtToMime(filepath.Ext(filePath))
 
-		mimeType := zipExtToMime(ext)
-
-		diskPath := filepath.Join(cfg.StaticDir, photo.ZipPath)
-		if err := writeZipEntryToDisk(zf, diskPath); err != nil {
-			log.Printf("[IMPORT] Failed to write photo %s: %v", diskPath, err)
+		if err := writeZipEntryToDisk(zf, photoOriginalPath(filePath)); err != nil {
+			LogWarn(LogCategoryPhoto, "Import could not write a photo", map[string]interface{}{"path": photo.ZipPath, "error": err.Error()})
 			skipped++
 			continue
 		}
@@ -307,14 +317,26 @@ func importPhotos(
 		image.FileSize = int(size)
 		image.Title = photo.Title
 		image.Description = photo.Description
-		image.PhotoDate = wallClockUTC(photo.PhotoDate)
-		image.Status = 0
+		recordTime, photoDate, err := importRecordTime(photo.RecordTime, wallClockUTC(photo.PhotoDate), personIdMapping, false)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("Photo %q was imported without its date: %s", photo.Title, err.Error()))
+			recordTime, photoDate = unknownRecordTime(SourceLegacy), time.Time{}
+		}
+		image.PhotoDate = photoDate
+		image.RecordTime = recordTime
+		image.Status = PhotoProcessing
 		image.CreatedAt = time.Now()
 
-		vbolt.Write(tx, ImagesBkt, image.Id, &image)
+		writeImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		ReindexPhotoDates(tx, image.Id)
 		photoIdMapping[photo.Id] = image.Id
+		jobs = append(jobs, PhotoProcessingJob{
+			ImageId:  image.Id,
+			FamilyId: familyId,
+			FilePath: filePath,
+			MimeType: mimeType,
+		})
 
 		for _, tagId := range newTagIds {
 			addTagToPhoto(tx, image.Id, tagId, familyId)

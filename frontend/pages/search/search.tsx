@@ -38,6 +38,7 @@ import {
 } from "../../lib/search";
 import "../../components/day-summary-styles";
 import "./search-styles";
+import { recordDateLabel } from "../../lib/recordTime";
 
 const DEBOUNCE_MS = 150;
 const SHOW_ALL_MOMENTS = 100;
@@ -713,7 +714,10 @@ const MomentRow = ({
           — <Marked text={moment.context} terms={terms} />
         </small>
       )}
-      <small className="search-moment-date"> · {formatDate(moment.milestoneDate)}</small>
+      <small className="search-moment-date">
+        {" "}
+        · {recordDateLabel(moment.recordTime, moment.milestoneDate, formatDate)}
+      </small>
     </span>
   </a>
 );

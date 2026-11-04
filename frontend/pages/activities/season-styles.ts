@@ -50,48 +50,6 @@ block(`
 `);
 
 block(`
-.event-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-`);
-
-block(`
-.event-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 0;
-  border-bottom: 1px solid var(--border);
-}
-`);
-
-block(`
-.event-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-}
-`);
-
-block(`
-.event-name {
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: none;
-}
-`);
-
-block(`
-a.event-name:hover {
-  text-decoration: underline;
-}
-`);
-
-block(`
 .event-meta {
   color: var(--muted);
   font-size: 0.85rem;

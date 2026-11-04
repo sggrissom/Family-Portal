@@ -82,7 +82,7 @@ func TestDeletePersonRemovesEverythingThatNamesThem(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		milestone, err := AddMilestoneTx(tx, AddMilestoneRequest{
 			PersonId: fx.alice.Id, Description: "First steps", Category: "development",
-			InputType: "age", AgeYears: intPtr(1), AgeMonths: intPtr(0),
+			RecordTime: atAge(fx.alice, 1, 0),
 		}, fx.familyId)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx() error = %v", err)

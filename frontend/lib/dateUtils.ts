@@ -115,3 +115,11 @@ export const formatLongDate = (dateString: string): string => {
     timeZone: "UTC",
   });
 };
+
+// The viewer's local calendar day, which is what "today" means for a record.
+export function localDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}

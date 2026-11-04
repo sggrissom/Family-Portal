@@ -19,7 +19,7 @@ import { MilestoneText } from "../../components/MilestoneText";
 import { InterviewCards } from "../../components/InterviewCard";
 import { activityKindIcon } from "../activities/labels";
 import { groupInterviewAnswers, interviewsById } from "../../lib/interviews";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import "./dashboard-styles";
 

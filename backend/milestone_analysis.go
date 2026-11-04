@@ -6,7 +6,6 @@ import (
 	"family/cfg"
 	"family/vision"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -106,7 +105,7 @@ func embedMilestone(db *vbolt.DB, client *visionClient, milestoneId int) error {
 		return errRetryLater
 	}
 	if err != nil {
-		log.Printf("[VISION] Milestone %d embedding failed: %v", milestoneId, err)
+		LogWarn(LogCategoryWorker, "Milestone embedding failed", map[string]interface{}{"milestoneId": milestoneId, "error": err.Error()})
 		return nil
 	}
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
@@ -155,13 +154,6 @@ func QueueMilestoneEmbedding(milestoneId int) {
 	if globalMilestoneWorker != nil {
 		globalMilestoneWorker.add(milestoneId)
 	}
-}
-
-func MilestoneQueueLength() int {
-	if globalMilestoneWorker == nil {
-		return 0
-	}
-	return globalMilestoneWorker.length()
 }
 
 func StopMilestoneWorker(ctx context.Context) bool {
@@ -283,12 +275,9 @@ func SuggestMilestoneCategory(ctx *vbeam.Context, req SuggestMilestoneCategoryRe
 }
 
 type SuggestMilestonePhotosRequest struct {
-	PersonId      int     `json:"personId"`
-	Description   string  `json:"description"`
-	InputType     string  `json:"inputType"`
-	MilestoneDate *string `json:"milestoneDate,omitempty"`
-	AgeYears      *int    `json:"ageYears,omitempty"`
-	AgeMonths     *int    `json:"ageMonths,omitempty"`
+	PersonId    int        `json:"personId"`
+	Description string     `json:"description"`
+	RecordTime  RecordTime `json:"recordTime"`
 	// Photos already attached, left out of the suggestions.
 	ExcludeIds []int `json:"excludeIds,omitempty"`
 }
@@ -301,7 +290,8 @@ type SuggestMilestonePhotosResponse struct {
 }
 
 // SuggestMilestonePhotos finds photos of the person from about two weeks
-// either side of the milestone, best match to the description first.
+// either side of the milestone's day, best match to the description first.
+// A moment without an exact day gets no suggestions.
 func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosRequest) (resp SuggestMilestonePhotosResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -314,10 +304,11 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		err = errors.New("Person not found or not in your family")
 		return
 	}
-	date, dateErr := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if dateErr != nil {
+	if !req.RecordTime.ExactDay() || validateRecordTime(req.RecordTime, false) != nil {
 		return
 	}
+	day, _, _, _ := parseCivil(req.RecordTime.From)
+	date := day.Time()
 
 	excluded := map[int]bool{}
 	for _, id := range req.ExcludeIds {
@@ -331,7 +322,7 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		if img.PhotoDate.Unix() < floor {
 			break
 		}
-		if img.Status == 0 && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
+		if img.Status == PhotoReady && img.RecordTime.ExactDay() && !excluded[img.Id] && CanAccessPhoto(ctx.Tx, user, img, AccessView) {
 			candidates = append(candidates, img)
 		}
 	}
@@ -383,6 +374,15 @@ func ageInMonths(birthday, at time.Time) int {
 	return months
 }
 
+// exactAgeInMonths is the person's age at an exact-day record, or -1 when the
+// record has no single day to measure from.
+func exactAgeInMonths(person Person, rt RecordTime, at time.Time) int {
+	if !rt.ExactDay() {
+		return -1
+	}
+	return ageInMonths(person.Birthday, at)
+}
+
 type embeddedMilestone struct {
 	milestone Milestone
 	vector    []float32
@@ -422,7 +422,7 @@ func GetMilestoneMatches(ctx *vbeam.Context, req GetMilestoneMatchesRequest) (re
 	}
 	resp.Matches = []MilestoneMatch{}
 	person := GetPersonById(ctx.Tx, milestone.PersonId)
-	resp.AgeMonths = ageInMonths(person.Birthday, milestone.MilestoneDate)
+	resp.AgeMonths = exactAgeInMonths(person, milestone.RecordTime, milestone.MilestoneDate)
 	own := embeddedMilestonesOf(ctx.Tx, person.Id)
 	var target []float32
 	for _, m := range own {
@@ -452,7 +452,7 @@ func GetMilestoneMatches(ctx *vbeam.Context, req GetMilestoneMatchesRequest) (re
 		match := theirs[i].milestone
 		other.Age = calculateAge(other.Birthday)
 		resp.Matches = append(resp.Matches, MilestoneMatch{
-			Person: other, Milestone: match, AgeMonths: ageInMonths(other.Birthday, match.MilestoneDate),
+			Person: other, Milestone: match, AgeMonths: exactAgeInMonths(other, match.RecordTime, match.MilestoneDate),
 		})
 	}
 	sort.Slice(resp.Matches, func(i, j int) bool { return resp.Matches[i].Person.Birthday.Before(resp.Matches[j].Person.Birthday) })

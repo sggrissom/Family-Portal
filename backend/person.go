@@ -456,6 +456,7 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
+	ReresolveAnchoredRecords(ctx.Tx, person.Id)
 	person.Relationship = RelationLabel(ctx.Tx, viewerPerson(ctx.Tx, user), person)
 
 	resp.Person = person
@@ -663,9 +664,10 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	milestones := GetPersonMilestonesTx(ctx.Tx, req.SourcePersonId)
 	for _, milestone := range milestones {
 		milestone.PersonId = req.TargetPersonId
-		writeMilestone(ctx.Tx, milestone)
+		writeMilestone(ctx.Tx, &milestone)
 	}
 	movePersonInterviewsTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	ReanchorRecords(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
 	resp.MergedMilestones = len(milestones)
 
 	photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.SourcePersonId)
@@ -738,7 +740,23 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	return
 }
 
-func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Image {
+// withOverlappingApprox adds the approximately dated photos the date index
+// placed outside the window but whose span overlaps it.
+func withOverlappingApprox(tx *vbolt.Tx, photoIds []int, approxIds []int, inWindow func(RecordTime) bool) []int {
+	have := map[int]bool{}
+	for _, id := range photoIds {
+		have[id] = true
+	}
+	for _, id := range approxIds {
+		if !have[id] && inWindow(GetImageById(tx, id).RecordTime) {
+			have[id] = true
+			photoIds = append(photoIds, id)
+		}
+	}
+	return photoIds
+}
+
+func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool, recordInWindow func(RecordTime) bool) []Image {
 	photos := []Image{}
 	for _, familyId := range familiesVisibleTo(tx, user) {
 		var photoIds []int
@@ -748,6 +766,13 @@ func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Im
 			}
 			return true
 		})
+		var untaggedApprox []int
+		for _, id := range approxPhotoIds(tx, ImageApproxByFamilyIndex, familyId) {
+			if len(GetPhotoPersonsByPhoto(tx, id)) == 0 {
+				untaggedApprox = append(untaggedApprox, id)
+			}
+		}
+		photoIds = withOverlappingApprox(tx, photoIds, untaggedApprox, recordInWindow)
 		for _, photoId := range photoIds {
 			photo := GetImageById(tx, photoId)
 			if photo.Id == 0 {
@@ -759,6 +784,8 @@ func untaggedPhotos(tx *vbolt.Tx, user User, inWindow func(time.Time) bool) []Im
 	}
 	return photos
 }
+
+const timelineMaxSpanYears = 20
 
 func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp GetFamilyTimelineResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
@@ -779,6 +806,23 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		day := date.Format(dateOnlyLayout)
 		return (from == "" || day >= from) && (to == "" || day <= to)
 	}
+	recordInWindow := func(rt RecordTime) bool {
+		for _, year := range rt.Years(timelineMaxSpanYears) {
+			years[year] = true
+		}
+		if from == "" && to == "" {
+			return true
+		}
+		start, end := "0001-01-01", "9999-12-31"
+		if from != "" {
+			start = from
+		}
+		if to != "" {
+			last, _, _, _ := parseCivil(to)
+			end = last.addDays(1).String()
+		}
+		return rt.Overlaps(start, end)
+	}
 
 	people := GetVisiblePeople(ctx.Tx, user)
 	labelPeopleFor(ctx.Tx, user, people)
@@ -791,7 +835,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 		if !req.SkipMilestones && CanAccessPerson(ctx.Tx, user, person, ScopeMilestones, AccessView) {
 			timelineItem.Milestones = []Milestone{}
 			for _, milestone := range GetPersonMilestonesTx(ctx.Tx, person.Id) {
-				if !inWindow(milestone.MilestoneDate) {
+				if !recordInWindow(milestone.RecordTime) {
 					continue
 				}
 				milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
@@ -811,6 +855,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 				}
 				return true
 			})
+			photoIds = withOverlappingApprox(ctx.Tx, photoIds, approxPhotoIds(ctx.Tx, ImageApproxByPersonIndex, person.Id), recordInWindow)
 			timelineItem.Photos = make([]Image, 0, len(photoIds))
 			for _, photoId := range photoIds {
 				photo := GetImageById(ctx.Tx, photoId)
@@ -843,7 +888,7 @@ func GetFamilyTimeline(ctx *vbeam.Context, req GetFamilyTimelineRequest) (resp G
 
 	resp.UntaggedPhotos = []Image{}
 	if req.IncludeUntaggedPhotos && !req.SkipPhotos {
-		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow)
+		resp.UntaggedPhotos = untaggedPhotos(ctx.Tx, user, inWindow, recordInWindow)
 	}
 
 	resp.Years = make([]int, 0, len(years))
