@@ -245,19 +245,27 @@ export interface MonthGroup {
 
 export function groupByMonth(days: DaySummary[]): MonthGroup[] {
   const groups: MonthGroup[] = [];
+  const labeled = new Set<string>();
+  let openMonth = "";
   for (const day of days) {
     if (day.period && day.periodFrom.slice(0, 7) !== day.periodTo.slice(0, 7)) {
-      groups.push({ month: `${day.day.slice(0, 7)}|${day.period}`, label: "", days: [day] });
+      groups.push({ month: `${day.day.slice(0, 7)}|${groups.length}`, label: "", days: [day] });
+      openMonth = "";
       continue;
     }
     const month = day.day.slice(0, 7);
-    let group = groups[groups.length - 1];
-    if (!group || group.month !== month) {
+    if (openMonth !== month) {
       const [year, m] = month.split("-").map(Number);
-      group = { month, label: `${MONTH_NAMES[m - 1]} ${year}`, days: [] };
-      groups.push(group);
+      const repeat = labeled.has(month);
+      labeled.add(month);
+      groups.push({
+        month: repeat ? `${month}|${groups.length}` : month,
+        label: repeat ? "" : `${MONTH_NAMES[m - 1]} ${year}`,
+        days: [],
+      });
+      openMonth = month;
     }
-    group.days.push(day);
+    groups[groups.length - 1].days.push(day);
   }
   return groups;
 }
