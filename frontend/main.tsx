@@ -115,7 +115,6 @@ async function main() {
     guarded("/routine/", () => import("@app/pages/activities/routine")),
     guarded("/activities", () => import("@app/pages/activities/activities")),
     guarded("/faces", () => import("@app/pages/faces/faces")),
-    guarded("/date-review", () => import("@app/pages/dates/review")),
     guarded("/suggestions", () => import("@app/pages/suggestions/suggestions")),
     guarded("/manage-tags", () => import("@app/pages/tags/manage-tags")),
     guarded("/import", () => import("@app/pages/settings/import")),
