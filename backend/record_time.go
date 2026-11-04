@@ -229,10 +229,11 @@ func validateCalendarAssertion(rt RecordTime) error {
 	if rt.AnchorPersonId != 0 || rt.AgeYears != 0 || rt.AgeMonths != 0 || rt.AgeToYears != 0 {
 		return errors.New("A calendar date can't also have an age")
 	}
-	_, fromEnd, fromPrecision, err := parseCivil(rt.From)
+	fromStart, fromEnd, fromPrecision, err := parseCivil(rt.From)
 	if err != nil {
 		return err
 	}
+	end := fromEnd
 	switch rt.Precision {
 	case PrecisionDay, PrecisionMonth, PrecisionYear:
 		if rt.To != "" {
@@ -249,12 +250,17 @@ func validateCalendarAssertion(rt RecordTime) error {
 		if toEnd.String() < fromEnd.String() {
 			return errors.New("The range ends before it starts")
 		}
+		end = toEnd
 	default:
 		return errors.New("Unsupported date precision")
 	}
 	if rt.Around != "" {
-		if _, _, _, err := parseCivil(rt.Around); err != nil {
+		aroundStart, aroundEnd, _, err := parseCivil(rt.Around)
+		if err != nil {
 			return err
+		}
+		if aroundStart.String() < fromStart.String() || aroundEnd.String() > end.String() {
+			return errors.New("The best guess should fall inside the range")
 		}
 	}
 	return nil
@@ -293,8 +299,16 @@ func validateAgeAssertion(rt RecordTime) error {
 		return errors.New("Unsupported age precision")
 	}
 	if rt.Around != "" {
-		if n, err := strconv.Atoi(rt.Around); err != nil || n < 0 {
+		n, err := strconv.Atoi(rt.Around)
+		if err != nil || n < 0 {
 			return errors.New("An estimated age is a whole number of years")
+		}
+		maxAge := rt.AgeYears
+		if rt.Precision == PrecisionRange {
+			maxAge = rt.AgeToYears
+		}
+		if n < rt.AgeYears || n > maxAge {
+			return errors.New("The best guess should fall inside the age range")
 		}
 	}
 	return nil
