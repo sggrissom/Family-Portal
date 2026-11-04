@@ -74,7 +74,7 @@ func useTestMailWorker(t *testing.T, queueSize int) *MailWorker {
 	worker.Start()
 
 	t.Cleanup(func() {
-		worker.Stop()
+		worker.stopImmediately()
 		globalMailWorker = originalWorker
 		mailRetryDelays = originalDelays
 	})

@@ -70,14 +70,14 @@ func TestInitializePhotoWorker(t *testing.T) {
 	})
 
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	}
 }
 
 func TestQueuePhotoProcessing(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -109,7 +109,7 @@ func TestQueuePhotoProcessing(t *testing.T) {
 		InitializePhotoWorker(5, db)
 		defer func() {
 			if globalPhotoWorker != nil {
-				globalPhotoWorker.Stop()
+				globalPhotoWorker.stopImmediately()
 				globalPhotoWorker = nil
 			}
 		}()
@@ -130,13 +130,13 @@ func TestQueuePhotoProcessing(t *testing.T) {
 		InitializePhotoWorker(2, db)
 		defer func() {
 			if globalPhotoWorker != nil {
-				globalPhotoWorker.Stop()
+				globalPhotoWorker.stopImmediately()
 				globalPhotoWorker = nil
 			}
 		}()
 
 		if globalPhotoWorker != nil {
-			globalPhotoWorker.Stop()
+			globalPhotoWorker.stopImmediately()
 		}
 
 		for i := 1; i <= 2; i++ {
@@ -170,14 +170,14 @@ func TestQueuePhotoProcessing(t *testing.T) {
 	})
 
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	}
 }
 
 func TestGetQueueLength(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -205,7 +205,7 @@ func TestGetQueueLength(t *testing.T) {
 
 	t.Run("Queue with jobs", func(t *testing.T) {
 		if globalPhotoWorker != nil {
-			globalPhotoWorker.Stop()
+			globalPhotoWorker.stopImmediately()
 		}
 
 		globalPhotoWorker = &PhotoWorker{
@@ -229,7 +229,7 @@ func TestGetQueueLength(t *testing.T) {
 	})
 
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	}
 }
@@ -264,13 +264,13 @@ func TestPhotoWorkerStartStop(t *testing.T) {
 	})
 
 	t.Run("Stop worker", func(t *testing.T) {
-		worker.Stop()
+		worker.stopImmediately()
 
 		if worker.isRunning() {
 			t.Error("Expected worker to not be running after stop")
 		}
 
-		worker.Stop()
+		worker.stopImmediately()
 		if worker.isRunning() {
 			t.Error("Expected worker to still be stopped after second stop")
 		}
@@ -410,7 +410,7 @@ func TestUpdatePhotoComplete(t *testing.T) {
 
 func TestGetProcessingStats(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -435,13 +435,13 @@ func TestGetProcessingStats(t *testing.T) {
 		InitializePhotoWorker(10, db)
 		defer func() {
 			if globalPhotoWorker != nil {
-				globalPhotoWorker.Stop()
+				globalPhotoWorker.stopImmediately()
 				globalPhotoWorker = nil
 			}
 		}()
 
 		if globalPhotoWorker != nil {
-			globalPhotoWorker.Stop()
+			globalPhotoWorker.stopImmediately()
 		}
 
 		for i := 1; i <= 3; i++ {
@@ -464,40 +464,9 @@ func TestGetProcessingStats(t *testing.T) {
 	})
 
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	}
-}
-
-func TestStopPhotoWorker(t *testing.T) {
-	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
-	}
-	globalPhotoWorker = nil
-
-	t.Run("Stop when no worker", func(t *testing.T) {
-		StopPhotoWorker()
-	})
-
-	testDBPath := "test_stop_worker.db"
-	db := vbolt.Open(testDBPath)
-	vbolt.InitBuckets(db, &cfg.Info)
-	defer os.Remove(testDBPath)
-	defer db.Close()
-
-	t.Run("Stop running worker", func(t *testing.T) {
-		InitializePhotoWorker(5, db)
-
-		if !globalPhotoWorker.isRunning() {
-			t.Error("Expected worker to be running before stop")
-		}
-
-		StopPhotoWorker()
-
-		if globalPhotoWorker.isRunning() {
-			t.Error("Expected worker to be stopped after StopPhotoWorker")
-		}
-	})
 }
 
 func TestPhotoProcessingJobStruct(t *testing.T) {

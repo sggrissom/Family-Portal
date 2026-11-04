@@ -137,15 +137,10 @@ type PushWorker struct {
 	jwtToken    string
 	tokenExpiry time.Time
 
+	attempts    attemptLog[PushAttempt]
 	statsMu     sync.Mutex
-	sent        int
-	failed      int
 	deactivated int
 	suppressed  int
-	lastSentAt  time.Time
-	lastError   string
-	lastErrorAt time.Time
-	recent      []PushAttempt
 }
 
 var globalPushWorker *PushWorker
@@ -255,22 +250,7 @@ func QueuePushNotification(job PushNotificationJob) error {
 }
 
 func (pw *PushWorker) recordAttempt(attempt PushAttempt) {
-	pw.statsMu.Lock()
-	defer pw.statsMu.Unlock()
-
-	if attempt.Success {
-		pw.sent++
-		pw.lastSentAt = attempt.Time
-	} else {
-		pw.failed++
-		pw.lastError = attempt.Reason
-		pw.lastErrorAt = attempt.Time
-	}
-
-	pw.recent = append(pw.recent, attempt)
-	if len(pw.recent) > maxRecentPushAttempts {
-		pw.recent = pw.recent[len(pw.recent)-maxRecentPushAttempts:]
-	}
+	pw.attempts.record(attempt.Time, attempt.Success, attempt.Reason, attempt, maxRecentPushAttempts)
 }
 
 func (pw *PushWorker) recordSuppression() {
@@ -300,11 +280,6 @@ func (pw *PushWorker) Start() {
 
 	go pw.processJobs(quit, done)
 	LogInfo(LogCategoryWorker, "Push notification worker started")
-}
-
-func (pw *PushWorker) Stop() {
-	pw.stopImmediately()
-	LogInfo(LogCategoryWorker, "Push notification worker stopped")
 }
 
 func (pw *PushWorker) StopAndDrain(ctx context.Context) bool {
@@ -574,39 +549,27 @@ func (pw *PushWorker) getAPNsJWT() (string, error) {
 	return signedToken, nil
 }
 
-func GetPushQueueLength() int {
-	if globalPushWorker == nil {
-		return 0
-	}
-	return len(globalPushWorker.jobQueue)
-}
-
 func GetPushWorkerStats() PushWorkerStats {
 	if globalPushWorker == nil {
 		return PushWorkerStats{RecentAttempts: []PushAttempt{}}
 	}
 
 	pw := globalPushWorker
+	stats := pw.attempts.stats()
 	pw.statsMu.Lock()
 	defer pw.statsMu.Unlock()
-
-	recent := make([]PushAttempt, 0, len(pw.recent))
-	for i := len(pw.recent) - 1; i >= 0; i-- {
-		recent = append(recent, pw.recent[i])
-	}
-
 	return PushWorkerStats{
 		Enabled:        true,
 		IsRunning:      pw.isRunning(),
 		QueueLength:    len(pw.jobQueue),
-		Sent:           pw.sent,
-		Failed:         pw.failed,
+		Sent:           stats.succeeded,
+		Failed:         stats.failed,
 		Deactivated:    pw.deactivated,
 		Suppressed:     pw.suppressed,
-		LastSentAt:     pw.lastSentAt,
-		LastError:      pw.lastError,
-		LastErrorAt:    pw.lastErrorAt,
-		RecentAttempts: recent,
+		LastSentAt:     stats.lastSuccess,
+		LastError:      stats.lastError,
+		LastErrorAt:    stats.lastErrorAt,
+		RecentAttempts: stats.recent,
 	}
 }
 
@@ -641,19 +604,6 @@ func GetAPNsConfigInfo() APNsConfigInfo {
 		info.BundleId != "" && info.KeyPath != "" && info.Environment != ""
 
 	return info
-}
-
-func StopPushWorker() {
-	if globalPushWorker != nil {
-		globalPushWorker.Stop()
-	}
-}
-
-func stopPushWorkerAndDrain(ctx context.Context) bool {
-	if globalPushWorker == nil {
-		return true
-	}
-	return globalPushWorker.StopAndDrain(ctx)
 }
 
 func IsPushWorkerEnabled() bool {

@@ -14,7 +14,7 @@ import (
 
 func TestRequeueStuckPhotos(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -47,7 +47,7 @@ func TestRequeueStuckPhotos(t *testing.T) {
 		InitializePhotoWorker(10, db)
 		defer func() {
 			waitForBacklogFeeders()
-			globalPhotoWorker.Stop()
+			globalPhotoWorker.stopImmediately()
 			globalPhotoWorker = nil
 		}()
 
@@ -146,7 +146,7 @@ func TestRevokeUserSessions(t *testing.T) {
 
 func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -159,7 +159,7 @@ func TestPhotoWorkerRecordsAttempts(t *testing.T) {
 
 	InitializePhotoWorker(5, db)
 	defer func() {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 		globalPhotoWorker = nil
 	}()
 

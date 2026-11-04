@@ -757,7 +757,7 @@ func TestAdminUserInfo(t *testing.T) {
 
 func TestReprocessAllPhotosQueues(t *testing.T) {
 	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
+		globalPhotoWorker.stopImmediately()
 	}
 	globalPhotoWorker = nil
 
@@ -805,7 +805,7 @@ func TestReprocessAllPhotosQueues(t *testing.T) {
 		InitializePhotoWorker(10, db)
 		defer func() {
 			waitForBacklogFeeders()
-			globalPhotoWorker.Stop()
+			globalPhotoWorker.stopImmediately()
 			globalPhotoWorker = nil
 		}()
 
