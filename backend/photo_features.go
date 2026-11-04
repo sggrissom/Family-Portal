@@ -9,9 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -243,13 +241,10 @@ func groupOf(tx *vbolt.Tx, groupId int, cache map[int]photoGroup) (photoGroup, b
 }
 
 func featureSourceImage(img Image) (image.Image, error) {
-	base := strings.TrimSuffix(filepath.Join(cfg.StaticDir, img.FilePath), filepath.Ext(img.FilePath))
-	for _, candidate := range []string{base + "_medium.jpg", base + "_xlarge.jpg", base + ".jpg"} {
-		if decoded, err := imaging.Open(candidate); err == nil {
-			return decoded, nil
-		}
+	if path := photoSourcePath(img.FilePath, MediumSize.Name, XLargeSize.Name, LargeSize.Name); path != "" {
+		return imaging.Open(path)
 	}
-	return imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
+	return imaging.Open(photoOriginalPath(img.FilePath), imaging.AutoOrientation(true))
 }
 
 func exifLocation(path string) (lat, lng float64, ok bool, readErr error) {
@@ -301,7 +296,7 @@ func analyzePhotoFeatures(db *vbolt.DB, photoId int) {
 	}
 	if next.PlaceVersion < placeAnalyzerVersion {
 		next.HasLocation, next.Latitude, next.Longitude, next.CityId = false, 0, 0, 0
-		lat, lng, ok, readErr := exifLocation(getOriginalPhotoPath(img))
+		lat, lng, ok, readErr := exifLocation(photoOriginalPath(img.FilePath))
 		if readErr != nil {
 			log.Printf("[FEATURES] Could not read original for photo %d: %v", img.Id, readErr)
 		} else if ok {

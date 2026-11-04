@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -196,47 +195,7 @@ func ReprocessAllPhotos(ctx *vbeam.Context, req ReprocessAllPhotosRequest) (resp
 }
 
 func isPhotoProcessed(photo Image) bool {
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	modernFormats := []string{".avif", ".webp"}
-	sizes := []string{"", "_small", "_thumb", "_medium", "_large", "_xlarge", "_xxlarge"}
-
-	for _, format := range modernFormats {
-		for _, size := range sizes {
-			var fileName string
-			if size == "" || size == "_large" {
-				fileName = baseFilename + format
-			} else {
-				fileName = baseFilename + size + format
-			}
-
-			if _, err := os.Stat(fileName); err == nil {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func getOriginalPhotoPath(photo Image) string {
-	return originalPathIn(cfg.StaticDir, photo.FilePath)
-}
-
-func cleanupOldVariants(baseFilename string) {
-	oldVariants := []string{
-		baseFilename + ".jpg",
-		baseFilename + "_thumb.jpg",
-		baseFilename + "_medium.jpg",
-		baseFilename + "_small.jpg",
-		baseFilename + "_xlarge.jpg",
-		baseFilename + "_xxlarge.jpg",
-	}
-
-	for _, variant := range oldVariants {
-		os.Remove(variant)
-	}
+	return hasModernVariant(photo.FilePath)
 }
 
 func GetPhotoProcessingStats(ctx *vbeam.Context, req Empty) (resp ProcessingStats, err error) {
@@ -337,12 +296,6 @@ type PhotoConsistencyReport struct {
 	VideosMissing []MissingOriginal `json:"videosMissing"`
 }
 
-func originalPathIn(staticDir, filePath string) string {
-	base := filepath.Join(staticDir, filePath)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext) + "_original" + ext
-}
-
 func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoConsistencyReport {
 	start := time.Now()
 	report := PhotoConsistencyReport{
@@ -396,7 +349,7 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 	var orphans []OrphanOriginal
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.Contains(name, "_original.") || referenced[name] {
+		if entry.IsDir() || !isOriginalFileName(name) || referenced[name] {
 			continue
 		}
 		orphan := OrphanOriginal{Name: name}

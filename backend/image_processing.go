@@ -122,12 +122,11 @@ func ProcessAndSaveMultipleSizes(imageData []byte, mimeType string) (map[string]
 	results := make(map[string][]byte)
 
 	sizes := []ImageSize{ThumbnailSize, MediumSize, LargeSize, XLargeSize}
-	formats := []string{"jpeg", "webp", "avif"}
 
 	var width, height int
 
 	for _, size := range sizes {
-		for _, format := range formats {
+		for _, format := range photoFormats {
 			data, w, h, err := ProcessImage(bytes.NewReader(imageData), mimeType, size, format)
 			if err != nil {
 				continue

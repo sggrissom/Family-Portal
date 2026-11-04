@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -146,9 +145,7 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 		if img.Status != 0 || img.IsVideo() {
 			continue
 		}
-		baseName := strings.TrimSuffix(filepath.Base(img.FilePath), filepath.Ext(img.FilePath))
-		ext := filepath.Ext(img.FilePath)
-		zipPath := fmt.Sprintf("photos/%s_original%s", baseName, ext)
+		zipPath := "photos/" + originalFileName(img.FilePath)
 
 		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
 		personIds := make([]int, 0, len(photoPersons))

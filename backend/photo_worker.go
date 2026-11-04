@@ -3,12 +3,9 @@ package backend
 import (
 	"context"
 	"errors"
-	"family/cfg"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -246,7 +243,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 
 	sourceData := job.FileData
 	if len(sourceData) == 0 {
-		sourceData, err = os.ReadFile(getOriginalPhotoPath(Image{FilePath: job.FilePath}))
+		sourceData, err = os.ReadFile(photoOriginalPath(job.FilePath))
 		if err != nil {
 			log.Printf("[PHOTO_PROCESSING] FAILED to read original for photo ID %d: %v", job.ImageId, err)
 			pw.updatePhotoStatus(job.ImageId, 2)
@@ -256,7 +253,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	}
 
 	if job.Reprocess {
-		cleanupOldVariants(strings.TrimSuffix(filepath.Join(cfg.StaticDir, job.FilePath), filepath.Ext(job.FilePath)))
+		removePhotoVariants(job.FilePath)
 	}
 
 	log.Printf("[PHOTO_PROCESSING] Processing image formats and sizes for photo %d", job.ImageId)
@@ -270,7 +267,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	log.Printf("[PHOTO_PROCESSING] Generated %d image variants for photo %d", len(processedImages), job.ImageId)
 
 	log.Printf("[PHOTO_PROCESSING] Saving image variants to disk for photo %d", job.ImageId)
-	err = pw.saveImageVariants(job, processedImages)
+	_, err = writeImageVariants(job.FilePath, processedImages)
 	if err != nil {
 		log.Printf("[PHOTO_PROCESSING] FAILED to save photo variants for ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2)
@@ -309,79 +306,6 @@ func (pw *PhotoWorker) discardJobFiles(job PhotoProcessingJob) {
 			"error":   err.Error(),
 		})
 	}
-}
-
-func (pw *PhotoWorker) saveImageVariants(job PhotoProcessingJob, processedImages map[string][]byte) error {
-	if _, err := writeImageVariants(job.FilePath, processedImages); err != nil {
-		return err
-	}
-
-	if len(job.FileData) > 0 {
-		photosDir := filepath.Join(cfg.StaticDir, "photos")
-		baseFilename := strings.TrimSuffix(filepath.Base(job.FilePath), filepath.Ext(job.FilePath))
-		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(job.FilePath))
-		if origFile, err := os.Create(originalPath); err == nil {
-			origFile.Write(job.FileData)
-			origFile.Close()
-		}
-	}
-
-	return nil
-}
-
-// writeImageVariants writes resized variants beside filePath (relative to
-// StaticDir) and returns the bytes written.
-func writeImageVariants(filePath string, processedImages map[string][]byte) (int64, error) {
-	photosDir := filepath.Join(cfg.StaticDir, "photos")
-
-	err := os.MkdirAll(photosDir, 0755)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create photos directory: %w", err)
-	}
-
-	baseFilename := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	var written int64
-
-	for key, data := range processedImages {
-		parts := strings.Split(key, "_")
-		if len(parts) != 2 {
-			continue
-		}
-		sizeName, format := parts[0], parts[1]
-
-		var ext string
-		switch format {
-		case "webp":
-			ext = ".webp"
-		case "avif":
-			ext = ".avif"
-		case "png":
-			ext = ".png"
-		default:
-			ext = ".jpg"
-		}
-
-		var fileName string
-		if sizeName == "large" {
-			fileName = baseFilename + ext
-		} else {
-			fileName = baseFilename + "_" + sizeName + ext
-		}
-
-		variantPath := filepath.Join(photosDir, fileName)
-		if file, err := os.Create(variantPath); err == nil {
-			_, writeErr := file.Write(data)
-			file.Close()
-			if writeErr != nil {
-				return written, fmt.Errorf("failed to write file %s: %w", variantPath, writeErr)
-			}
-			written += int64(len(data))
-		} else {
-			return written, fmt.Errorf("failed to create file %s: %w", variantPath, err)
-		}
-	}
-
-	return written, nil
 }
 
 func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {

@@ -500,50 +500,6 @@ func TestStopPhotoWorker(t *testing.T) {
 	})
 }
 
-func TestSaveImageVariants(t *testing.T) {
-	testDBPath := "test_save_variants.db"
-	db := vbolt.Open(testDBPath)
-	vbolt.InitBuckets(db, &cfg.Info)
-	defer os.Remove(testDBPath)
-	defer db.Close()
-
-	tempDir := filepath.Join(os.TempDir(), "test_photos")
-	defer os.RemoveAll(tempDir)
-
-	worker := &PhotoWorker{db: db}
-
-	job := PhotoProcessingJob{
-		ImageId:  1,
-		FilePath: "test_image.jpg",
-		FileData: createTestImageData(50, 50),
-	}
-
-	processedImages := map[string][]byte{
-		"thumb_webp": createTestImageData(100, 100),
-		"medium_jpg": createTestImageData(300, 300),
-		"large_png":  createTestImageData(800, 800),
-	}
-
-	t.Run("Save variants successfully", func(t *testing.T) {
-		err := worker.saveImageVariants(job, processedImages)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-	})
-
-	t.Run("Invalid variant key format", func(t *testing.T) {
-		invalidProcessedImages := map[string][]byte{
-			"invalid_key_format_here": createTestImageData(100, 100),
-			"thumb_webp":              createTestImageData(100, 100),
-		}
-
-		err := worker.saveImageVariants(job, invalidProcessedImages)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-	})
-}
-
 func TestPhotoProcessingJobStruct(t *testing.T) {
 	job := PhotoProcessingJob{
 		ImageId:        123,

@@ -276,13 +276,8 @@ func importPhotos(
 		}
 		used += size
 
-		fileName := filepath.Base(photo.ZipPath)
-		ext := filepath.Ext(fileName)
-		base := strings.TrimSuffix(fileName, ext)
-		base = strings.TrimSuffix(base, "_original")
-		filePath := "photos/" + base + ext
-
-		mimeType := zipExtToMime(ext)
+		filePath := filePathForOriginal(filepath.Base(photo.ZipPath))
+		mimeType := zipExtToMime(filepath.Ext(filePath))
 
 		diskPath := filepath.Join(cfg.StaticDir, photo.ZipPath)
 		if err := writeZipEntryToDisk(zf, diskPath); err != nil {

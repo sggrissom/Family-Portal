@@ -110,6 +110,14 @@ func ProcessSeedPhotos(db *vbolt.DB, jobs []PhotoProcessingJob) {
 	if len(jobs) == 0 {
 		return
 	}
+	for _, job := range jobs {
+		if err := writePhotoOriginal(job.FilePath, job.FileData); err != nil {
+			LogErrorSimple(LogCategoryWorker, "Failed to write a seeded photo's original", map[string]interface{}{
+				"photoId": job.ImageId,
+				"error":   err.Error(),
+			})
+		}
+	}
 	if pw := activePhotoWorker(); pw != nil {
 		queueBacklog(pw, jobs,
 			"Failed to queue seeded photo for processing",
