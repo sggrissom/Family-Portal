@@ -43,13 +43,13 @@ func TestFeaturesRetryAfterSourcesAreRestored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	variantPath := filepath.Join(filepath.Dir(getOriginalPhotoPath(p)), "recovery-missing_medium.jpg")
+	variantPath := filepath.Join(filepath.Dir(photoOriginalPath(p.FilePath)), "recovery-missing_medium.jpg")
 	if err := os.WriteFile(variantPath, variant, 0644); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Remove(variantPath) })
 	for _, photo := range []Image{p, medium} {
-		path := getOriginalPhotoPath(photo)
+		path := photoOriginalPath(photo.FilePath)
 		if err := os.WriteFile(path, original, 0644); err != nil {
 			t.Fatal(err)
 		}

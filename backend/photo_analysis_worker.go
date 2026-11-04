@@ -14,8 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -252,7 +250,7 @@ func callRecognize(client *http.Client, req recognizeRequest) (recognizeResponse
 }
 
 func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
-	path := analysisImagePath(img)
+	path := photoSourcePath(img.FilePath, XLargeSize.Name, LargeSize.Name, MediumSize.Name)
 	data, dataSize, dataErr := analysisImageData(img)
 	if path == "" && dataErr != nil {
 		return nil, fmt.Errorf("no readable image for photo %d: %w", img.Id, dataErr)
@@ -271,7 +269,7 @@ func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
 // The display variants are too small for the detector to find faces in group
 // shots, so analysis works from the original, upright and capped in size.
 func analysisImageData(img Image) ([]byte, image.Point, error) {
-	decoded, err := imaging.Open(getOriginalPhotoPath(img), imaging.AutoOrientation(true))
+	decoded, err := imaging.Open(photoOriginalPath(img.FilePath), imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, image.Point{}, err
 	}
@@ -322,17 +320,6 @@ func toDetectedFaces(result recognizeResponse, size image.Point) []DetectedFace 
 		faces = append(faces, face)
 	}
 	return faces
-}
-
-func analysisImagePath(img Image) string {
-	basePath := filepath.Join(cfg.StaticDir, img.FilePath)
-	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-	for _, candidate := range []string{base + "_xlarge.jpg", base + ".jpg", base + "_medium.jpg"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return ""
 }
 
 func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error {

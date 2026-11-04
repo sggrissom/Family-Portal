@@ -709,6 +709,24 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
+	if err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+	filePath := "photos/" + uniqueFilename
+
+	file.Seek(0, 0)
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+	if err := writePhotoOriginal(filePath, fileData); err != nil {
+		RespondUnexpectedError(w, r, err)
+		return
+	}
+
 	var image Image
 	var validPersons []Person
 	var uploadErr *AppError
@@ -720,7 +738,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Before the file lands on disk: a later rejection leaves orphaned bytes.
 		if quotaErr := CheckStorageAccepts(tx, familyId, fileHeader.Size); quotaErr != nil {
 			uploadErr = quotaErr
 			return
@@ -736,26 +753,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				validPersons = append(validPersons, person)
 			}
-		}
-
-		uniqueFilename, err := generateUniqueFilename(fileHeader.Filename)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		}
-
-		photosDir := filepath.Join(cfg.StaticDir, "photos")
-		err = os.MkdirAll(photosDir, 0755)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		}
-
-		file.Seek(0, 0)
-		fileData, err := io.ReadAll(file)
-		if err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
 		}
 
 		var referencePerson Person
@@ -786,16 +783,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			title = generateDefaultTitle(fileHeader.Filename, exactDateOf(recordTime, calculatedPhotoDate))
 		}
 
-		baseFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename))
-		originalPath := filepath.Join(photosDir, baseFilename+"_original"+filepath.Ext(uniqueFilename))
-		if origFile, err := os.Create(originalPath); err != nil {
-			uploadErr = NewAppError(ErrCodeInternal, unexpectedErrorMessage, err.Error())
-			return
-		} else {
-			origFile.Write(fileData)
-			origFile.Close()
-		}
-
 		image = Image{
 			Id:               vbolt.NextIntId(tx, ImagesBkt),
 			FamilyId:         familyId,
@@ -805,7 +792,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			FileSize:         int(fileHeader.Size),
 			Width:            width,
 			Height:           height,
-			FilePath:         fmt.Sprintf("photos/%s", uniqueFilename),
+			FilePath:         filePath,
 			Title:            title,
 			Description:      description,
 			PhotoDate:        calculatedPhotoDate,
@@ -825,6 +812,9 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		vbolt.TxCommit(tx)
 	})
 
+	if uploadErr != nil || image.Id == 0 {
+		os.Remove(photoOriginalPath(filePath))
+	}
 	if uploadErr != nil {
 		RespondWithError(w, r, uploadErr, statusForErrorCode(uploadErr.Code))
 		return
@@ -834,12 +824,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file.Seek(0, 0)
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		log.Printf("Failed to read file for processing queue, worker will read the original: %v", err)
-		fileData = nil
-	}
 	job := PhotoProcessingJob{
 		ImageId:        image.Id,
 		FamilyId:       image.FamilyId,
@@ -955,53 +939,31 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 	acceptHeader := r.Header.Get("Accept")
 	optimalFormat := GetOptimalImageFormat(acceptHeader)
 
-	validSizes := map[string]bool{
-		"small": true, "thumb": true, "medium": true,
-		"large": true, "xlarge": true, "xxlarge": true, "original": true,
-	}
-
-	if (sizeVariant != "" && !validSizes[sizeVariant]) || (image.IsVideo() && sizeVariant == "original") {
+	if (sizeVariant != "" && sizeVariant != "original" && !isPhotoSize(sizeVariant)) || (image.IsVideo() && sizeVariant == "original") {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 
 	if sizeVariant == "" {
-		sizeVariant = "large"
+		sizeVariant = LargeSize.Name
 	}
 
-	basePath := filepath.Join(cfg.StaticDir, image.FilePath)
-	baseFilename := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	var fullPath string
-	var contentType string
-
-	if sizeVariant == "original" {
-		fullPath = baseFilename + "_original" + filepath.Ext(basePath)
-		contentType = image.MimeType
-	} else {
-		for _, format := range []string{optimalFormat, "webp", "jpeg"} {
-			var ext string
-			switch format {
-			case "webp":
-				ext = ".webp"
-				contentType = "image/webp"
-			case "avif":
-				ext = ".avif"
-				contentType = "image/avif"
-			default:
-				ext = ".jpg"
-				contentType = "image/jpeg"
-			}
-
-			if sizeVariant == "large" {
-				fullPath = baseFilename + ext
-			} else {
-				fullPath = baseFilename + "_" + sizeVariant + ext
-			}
-
-			if _, err := os.Stat(fullPath); err == nil {
+	fullPath, contentType := photoOriginalPath(image.FilePath), image.MimeType
+	if sizeVariant != "original" {
+		fullPath = ""
+		candidates := []struct{ size, format string }{
+			{sizeVariant, optimalFormat}, {sizeVariant, "webp"}, {sizeVariant, "jpeg"}, {LargeSize.Name, "jpeg"},
+		}
+		for _, c := range candidates {
+			path := photoVariantPath(image.FilePath, c.size, c.format)
+			if _, err := os.Stat(path); err == nil {
+				fullPath = path
+				_, contentType = photoFormatFile(c.format)
 				break
 			}
+		}
+		if fullPath == "" {
+			fullPath, contentType = photoOriginalPath(image.FilePath), image.MimeType
 		}
 	}
 
@@ -1012,26 +974,9 @@ func servePhotoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		if sizeVariant != "original" {
-			fallbackPath := baseFilename + ".jpg"
-			if _, err := os.Stat(fallbackPath); err == nil {
-				fullPath = fallbackPath
-				contentType = "image/jpeg"
-			} else {
-				originalPath := baseFilename + "_original" + filepath.Ext(basePath)
-				if _, err := os.Stat(originalPath); err == nil {
-					fullPath = originalPath
-					contentType = image.MimeType
-				} else {
-					http.Error(w, "Not found", http.StatusNotFound)
-					return
-				}
-			}
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
+	if _, err := os.Stat(fullPath); err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", contentType)
@@ -1242,40 +1187,6 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
 	vbolt.DeleteTargetTerms(tx, ImageByAnchorIndex, photo.Id)
 	ReindexPhotoDates(tx, photo.Id)
-}
-
-func deletePhotoFiles(photo Image) error {
-	deleteVideoFrameFiles(photo)
-	basePath := filepath.Join(cfg.StaticDir, photo.FilePath)
-	base := strings.TrimSuffix(basePath, filepath.Ext(basePath))
-
-	sizes := []string{"small", "thumb", "medium", "large", "xlarge", "xxlarge"}
-	formats := []string{"jpg", "webp", "avif", "png"}
-
-	var filesToDelete []string
-
-	for _, size := range sizes {
-		for _, format := range formats {
-			var fileName string
-			if size == "large" {
-				fileName = base + "." + format
-			} else {
-				fileName = base + "_" + size + "." + format
-			}
-			filesToDelete = append(filesToDelete, fileName)
-		}
-	}
-
-	filesToDelete = append(filesToDelete, base+"_original"+filepath.Ext(basePath))
-
-	var lastError error
-	for _, filePath := range filesToDelete {
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			lastError = err
-		}
-	}
-
-	return lastError
 }
 
 func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {

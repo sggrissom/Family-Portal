@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -180,9 +179,8 @@ func VisionStatus() string {
 }
 
 func embeddingSourceBytes(img Image) ([]byte, error) {
-	base := strings.TrimSuffix(filepath.Join(cfg.StaticDir, img.FilePath), filepath.Ext(img.FilePath))
-	if data, err := os.ReadFile(base + "_medium.jpg"); err == nil {
-		return data, nil
+	if path := photoSourcePath(img.FilePath, MediumSize.Name); path != "" {
+		return os.ReadFile(path)
 	}
 	decoded, err := featureSourceImage(img)
 	if err != nil {

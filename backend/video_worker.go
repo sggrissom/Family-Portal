@@ -290,7 +290,7 @@ func (w *videoWorker) process(imageId int) error {
 	outputs := videoOutputs{posterPath: "photos/" + mediaId + ".jpg"}
 	posterBytes, err := writeImageVariants(outputs.posterPath, variants)
 	if err == nil {
-		err = os.WriteFile(originalPathIn(cfg.StaticDir, outputs.posterPath), posterData, 0644)
+		err = writePhotoOriginal(outputs.posterPath, posterData)
 		posterBytes += int64(len(posterData))
 	}
 	if err != nil {

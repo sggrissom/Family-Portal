@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -517,5 +518,48 @@ func TestServePhotoOriginalDownloadNamesTheUploadedFile(t *testing.T) {
 	rec = get(fmt.Sprintf("/api/photo/%d/original", fx.photo.Id))
 	if got := rec.Header().Get("Content-Disposition"); got != "" {
 		t.Errorf("inline original sent Content-Disposition %q", got)
+	}
+}
+
+func TestRejectedUploadLeavesNoFileBehind(t *testing.T) {
+	fx := setupMatrixFixture(t)
+	photosDir := filepath.Join(cfg.StaticDir, "photos")
+	if err := os.MkdirAll(photosDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	listing := func() map[string]bool {
+		entries, _ := os.ReadDir(photosDir)
+		names := map[string]bool{}
+		for _, e := range entries {
+			names[e.Name()] = true
+		}
+		return names
+	}
+	before := listing()
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	form.WriteField("familyId", fmt.Sprint(fx.famA))
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", `form-data; name="photo"; filename="rejected.png"`)
+	header.Set("Content-Type", "image/png")
+	part, _ := form.CreatePart(header)
+	part.Write(createTestImage(20, 20))
+	form.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload-photo", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, fx.joined["viewer"]))
+	rec := httptest.NewRecorder()
+	uploadPhotoHandler(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer upload = %d %s, want 403", rec.Code, rec.Body.String())
+	}
+	for name := range listing() {
+		if !before[name] {
+			t.Errorf("rejected upload left %s on disk", name)
+			os.Remove(filepath.Join(photosDir, name))
+		}
 	}
 }
