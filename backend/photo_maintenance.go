@@ -82,7 +82,7 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 		if isPhotoProcessed(photo) {
 			processedCount++
 		}
-		if photo.Status == 0 {
+		if photo.Status == PhotoReady {
 			features, found := GetPhotoFeatures(ctx.Tx, photo.Id)
 			if featuresOutdated(features, found) {
 				resp.FeaturesPending++
@@ -99,16 +99,16 @@ func GetPhotoStats(ctx *vbeam.Context, req GetPhotoStatsRequest) (resp GetPhotoS
 			}
 		}
 		switch photo.AnalysisStatus {
-		case 0:
+		case AnalysisPending:
 			resp.AnalysisPending++
-		case 1:
+		case AnalysisRunning:
 			resp.AnalysisAnalyzing++
-		case 2:
+		case AnalysisDone:
 			resp.AnalysisDone++
 			if photo.AnalysisVersion < currentAnalysisVersion {
 				resp.AnalysisOutdated++
 			}
-		case 3:
+		case AnalysisFailed:
 			resp.AnalysisFailed++
 		}
 	}
@@ -234,7 +234,7 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 
 	var toQueue []Image
 	vbolt.IterateAll(ctx.Tx, ImagesBkt, func(key int, image Image) bool {
-		if !image.IsVideo() && (image.AnalysisStatus == 3 || imageNeedsAnalysis(image)) {
+		if !image.IsVideo() && (image.AnalysisStatus == AnalysisFailed || imageNeedsAnalysis(image)) {
 			toQueue = append(toQueue, image)
 		} else {
 			resp.Skipped++
@@ -245,8 +245,8 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 	if len(toQueue) > 0 {
 		vbeam.UseWriteTx(ctx)
 		for _, image := range toQueue {
-			if image.AnalysisStatus == 3 {
-				image.AnalysisStatus = 0
+			if image.AnalysisStatus == AnalysisFailed {
+				image.AnalysisStatus = AnalysisPending
 				writeImage(ctx.Tx, &image)
 			}
 		}
@@ -315,7 +315,7 @@ func ScanPhotoConsistency(tx *vbolt.Tx, staticDir string, listLimit int) PhotoCo
 		}
 		path := originalPathIn(staticDir, image.FilePath)
 		referenced[filepath.Base(path)] = true
-		if image.IsVideo() && image.Status != 0 {
+		if image.IsVideo() && image.Status != PhotoReady {
 			return true
 		}
 		if _, err := os.Stat(path); err != nil {

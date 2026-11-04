@@ -398,7 +398,7 @@ func (l photoListing) keys() []photoKey {
 // Person streams are not limited to the user's families, so they need the
 // access check that family streams get from their index.
 func (l photoListing) passes(image Image) bool {
-	if image.Status == 2 || (l.withTag != nil && !l.withTag[image.Id]) {
+	if image.Status == PhotoFailed || (l.withTag != nil && !l.withTag[image.Id]) {
 		return false
 	}
 	if l.exactOnly && !image.RecordTime.ExactDay() {

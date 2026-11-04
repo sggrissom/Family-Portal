@@ -87,7 +87,7 @@ func transcriptOutdated(t VideoTranscript, found bool) bool {
 }
 
 func videoNeedsTranscript(tx *vbolt.Tx, image Image) bool {
-	if !image.IsVideo() || image.Status != 0 || image.PlaybackKey == "" {
+	if !image.IsVideo() || image.Status != PhotoReady || image.PlaybackKey == "" {
 		return false
 	}
 	t, found := GetVideoTranscriptRecord(tx, image.Id)
@@ -270,7 +270,7 @@ func transcriptResponse(tx *vbolt.Tx, user User, image Image) (resp GetVideoTran
 	resp.CanEdit = CanAccessFamily(tx, user, image.FamilyId, AccessContribute)
 	t, found := GetVideoTranscriptRecord(tx, image.Id)
 	if !found {
-		resp.Pending = image.Status == 0 && resp.Available
+		resp.Pending = image.Status == PhotoReady && resp.Available
 		resp.Status = TranscriptNoSpeech
 		return
 	}

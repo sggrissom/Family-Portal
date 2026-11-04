@@ -229,7 +229,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		}
 	}
 
-	err := pw.updatePhotoStatus(job.ImageId, 1)
+	err := pw.updatePhotoStatus(job.ImageId, PhotoProcessing)
 	if err != nil {
 		if errors.Is(err, errPhotoRecordGone) {
 			pw.discardJobFiles(job)
@@ -243,7 +243,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	if len(sourceData) == 0 {
 		sourceData, err = os.ReadFile(photoOriginalPath(job.FilePath))
 		if err != nil {
-			pw.updatePhotoStatus(job.ImageId, 2)
+			pw.updatePhotoStatus(job.ImageId, PhotoFailed)
 			outcome(false, "original file is missing: "+err.Error())
 			return
 		}
@@ -255,14 +255,14 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 
 	processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(sourceData, job.MimeType)
 	if err != nil {
-		pw.updatePhotoStatus(job.ImageId, 2)
+		pw.updatePhotoStatus(job.ImageId, PhotoFailed)
 		outcome(false, "could not decode or re-encode the image: "+err.Error())
 		return
 	}
 
 	_, err = writeImageVariants(job.FilePath, processedImages)
 	if err != nil {
-		pw.updatePhotoStatus(job.ImageId, 2)
+		pw.updatePhotoStatus(job.ImageId, PhotoFailed)
 		outcome(false, "could not write the variants to disk: "+err.Error())
 		return
 	}
@@ -273,7 +273,7 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 			pw.discardJobFiles(job)
 			return
 		}
-		pw.updatePhotoStatus(job.ImageId, 2)
+		pw.updatePhotoStatus(job.ImageId, PhotoFailed)
 		outcome(false, "could not mark the photo complete: "+err.Error())
 		return
 	}
@@ -331,7 +331,7 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 			return
 		}
 
-		image.Status = 0
+		image.Status = PhotoReady
 		if width > 0 {
 			image.Width = width
 		}

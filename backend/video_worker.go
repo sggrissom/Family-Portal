@@ -116,7 +116,7 @@ func StopVideoWorker(ctx context.Context) bool {
 func videosNeedingProcessing(db *vbolt.DB) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if image.IsVideo() && image.Status == 1 {
+			if image.IsVideo() && image.Status == PhotoProcessing {
 				ids = append(ids, image.Id)
 			}
 			return true
@@ -176,7 +176,7 @@ func (w *videoWorker) process(imageId int) error {
 	start := time.Now()
 	var image Image
 	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) { image = GetImageById(tx, imageId) })
-	if image.Id == 0 || !image.IsVideo() || image.Status != 1 {
+	if image.Id == 0 || !image.IsVideo() || image.Status != PhotoProcessing {
 		return nil
 	}
 	store := activeMediaStore()
@@ -318,7 +318,7 @@ func (w *videoWorker) process(imageId int) error {
 	published := false
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, imageId)
-		if current.Id == 0 || current.Status != 1 {
+		if current.Id == 0 || current.Status != PhotoProcessing {
 			return
 		}
 		if probe.HasCreatedAt && current.PhotoDate.Equal(image.PhotoDate) && current.RecordTime.ExactDay() && current.RecordTime.Source != SourceFamily {
@@ -327,7 +327,7 @@ func (w *videoWorker) process(imageId int) error {
 			}
 			current.PhotoDate = probe.CreatedAt
 		}
-		current.Status = 0
+		current.Status = PhotoReady
 		current.ProcessingError = ""
 		current.FilePath = outputs.posterPath
 		current.PlaybackKey = outputs.playbackKey
@@ -364,7 +364,7 @@ func (w *videoWorker) reject(image Image, start time.Time, reason string, cause 
 		}
 		queueMediaDeletionTx(tx, current.OriginalKey)
 		current.OriginalKey = ""
-		current.Status = 2
+		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
 		writeImage(tx, &current)
@@ -390,7 +390,7 @@ func (w *videoWorker) fail(image Image, start time.Time, reason string, keepOrig
 		if !keepOriginal {
 			current.OriginalKey = ""
 		}
-		current.Status = 2
+		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
 		writeImage(tx, &current)
@@ -541,7 +541,7 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 	})
 	for _, id := range ids {
 		image := GetImageById(ctx.Tx, id)
-		image.Status = 1
+		image.Status = PhotoProcessing
 		image.ProcessingError = ""
 		image.DerivedBytes = image.FileSize + videoPosterAllowance
 		writeImage(ctx.Tx, &image)
@@ -556,6 +556,6 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 // using the retained original, without requiring another upload.
 func videoNeedsRetry(image Image) bool {
 	return image.IsVideo() && image.OriginalKey != "" &&
-		(image.Status == 2 || (image.Status == 0 &&
+		(image.Status == PhotoFailed || (image.Status == PhotoReady &&
 			(strings.HasPrefix(image.VideoCodec, "hvc1") || strings.HasPrefix(image.VideoCodec, "hev1"))))
 }

@@ -60,7 +60,7 @@ func videoExportFileName(image Image) string {
 func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 	result := []ExportVideo{}
 	for _, image := range GetFamilyImages(tx, familyId) {
-		if !image.IsVideo() || image.OriginalKey == "" || image.Status == 1 {
+		if !image.IsVideo() || image.OriginalKey == "" || image.Status == PhotoProcessing {
 			continue
 		}
 		personIds := []int{}
@@ -81,7 +81,7 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 			DurationMs:       image.DurationMs,
 			PersonIds:        personIds,
 			TagIds:           GetPhotoTagIds(tx, image.Id),
-			Available:        image.Status == 0,
+			Available:        image.Status == PhotoReady,
 			Transcript:       exportTranscript(tx, image.Id),
 		})
 	}

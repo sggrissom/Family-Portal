@@ -2,6 +2,7 @@ import * as server from "../server";
 import { monthsOld, photoAge } from "./sameAge";
 import { formatMeasurement } from "./weightFormat";
 import { isExactRecord, recordTimeLabel } from "./recordTime";
+import { Status } from "./photoStatus";
 
 export type Density = "brief" | "balanced" | "detailed";
 
@@ -322,7 +323,7 @@ export function resolveSource(source: BookSource, selection: Selection): Resolve
   let undatedPhotos = 0;
   let unreadyPhotos = 0;
   for (const image of source.photos ?? []) {
-    if (image.status !== 0) unreadyPhotos++;
+    if (image.status !== Status.Ready) unreadyPhotos++;
     else if (!isRealDay(dayOf(image.photoDate))) undatedPhotos++;
     else photos.set(image.id, image);
   }

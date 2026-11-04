@@ -146,7 +146,7 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string)
 	stored := false
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, image.Id)
-		if current.Id == 0 || current.Status != 0 || current.PlaybackKey != image.PlaybackKey {
+		if current.Id == 0 || current.Status != PhotoReady || current.PlaybackKey != image.PlaybackKey {
 			return
 		}
 		previous, _ := GetVideoFrames(tx, image.Id)
@@ -180,7 +180,7 @@ func (w *videoAnalysisWorker) analyzeSpeech(image Image, source, workDir string)
 	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
 		current := GetImageById(tx, image.Id)
 		existing, found := GetVideoTranscriptRecord(tx, image.Id)
-		if current.Id == 0 || current.Status != 0 || current.PlaybackKey != image.PlaybackKey || (found && transcriptSettled(existing)) {
+		if current.Id == 0 || current.Status != PhotoReady || current.PlaybackKey != image.PlaybackKey || (found && transcriptSettled(existing)) {
 			return
 		}
 		writeVideoTranscriptTx(tx, &t)

@@ -417,7 +417,7 @@ func CompleteVideoUpload(ctx *vbeam.Context, req CompleteVideoUploadRequest) (re
 		Title:            title,
 		Description:      upload.Description,
 		CreatedAt:        time.Now(),
-		Status:           1,
+		Status:           PhotoProcessing,
 		MediaKind:        MediaVideo,
 		OriginalKey:      upload.Key,
 		DerivedBytes:     upload.DeclaredBytes + videoPosterAllowance,
