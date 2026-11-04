@@ -275,12 +275,9 @@ func SuggestMilestoneCategory(ctx *vbeam.Context, req SuggestMilestoneCategoryRe
 }
 
 type SuggestMilestonePhotosRequest struct {
-	PersonId      int     `json:"personId"`
-	Description   string  `json:"description"`
-	InputType     string  `json:"inputType"`
-	MilestoneDate *string `json:"milestoneDate,omitempty"`
-	AgeYears      *int    `json:"ageYears,omitempty"`
-	AgeMonths     *int    `json:"ageMonths,omitempty"`
+	PersonId    int        `json:"personId"`
+	Description string     `json:"description"`
+	RecordTime  RecordTime `json:"recordTime"`
 	// Photos already attached, left out of the suggestions.
 	ExcludeIds []int `json:"excludeIds,omitempty"`
 }
@@ -293,7 +290,8 @@ type SuggestMilestonePhotosResponse struct {
 }
 
 // SuggestMilestonePhotos finds photos of the person from about two weeks
-// either side of the milestone, best match to the description first.
+// either side of the milestone's day, best match to the description first.
+// A moment without an exact day gets no suggestions.
 func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosRequest) (resp SuggestMilestonePhotosResponse, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -306,10 +304,11 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 		err = errors.New("Person not found or not in your family")
 		return
 	}
-	date, dateErr := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if dateErr != nil {
+	if !req.RecordTime.ExactDay() || validateRecordTime(req.RecordTime, false) != nil {
 		return
 	}
+	day, _, _, _ := parseCivil(req.RecordTime.From)
+	date := day.Time()
 
 	excluded := map[int]bool{}
 	for _, id := range req.ExcludeIds {

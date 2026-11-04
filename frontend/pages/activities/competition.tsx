@@ -8,8 +8,13 @@ import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
-import { formatDate, formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import {
+  formatDate,
+  formatDateRange,
+  isRealDate,
+  toDateInputValue,
+  localDateString,
+} from "../../lib/dateUtils";
 import { PagedPhotoPicker } from "../../components/PhotoPicker";
 import {
   MediaUploadButton,

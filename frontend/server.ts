@@ -1354,10 +1354,7 @@ export interface SuggestMilestoneCategoryResponse {
 export interface SuggestMilestonePhotosRequest {
     personId: number
     description: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
+    recordTime: RecordTime
     excludeIds: number[]
 }
 

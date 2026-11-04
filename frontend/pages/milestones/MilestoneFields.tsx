@@ -3,7 +3,6 @@ import * as preact from "preact";
 import * as vlens from "vlens";
 import * as server from "../../server";
 import { copy } from "../../lib/copy";
-import { WhenRequest } from "../../lib/when";
 import {
   MediaUploadButton,
   MediaUploadError,
@@ -164,16 +163,13 @@ export const CategoryChips = ({ value, suggested, onChange, disabled }: Category
 export async function suggestPhotos(
   personId: number,
   description: string,
-  when: WhenRequest,
+  recordTime: server.RecordTime,
   excludeIds: number[]
 ): Promise<number[]> {
   const [resp] = await server.SuggestMilestonePhotos({
     personId,
     description,
-    inputType: when.inputType,
-    milestoneDate: when.date,
-    ageYears: when.ageYears,
-    ageMonths: when.ageMonths,
+    recordTime,
     excludeIds,
   });
   return resp?.photoIds ?? [];

@@ -1,5 +1,5 @@
 import * as server from "../server";
-import { localDateString } from "./when";
+import { localDateString } from "./dateUtils";
 import { usePhotoStatus, Status } from "../hooks/usePhotoStatus";
 
 async function uploadErrorMessage(response: Response): Promise<string> {
@@ -25,7 +25,6 @@ export async function uploadPhoto(
   if (familyId !== undefined) {
     formData.append("familyId", String(familyId));
   }
-  formData.append("inputType", "auto");
   formData.append("photoDate", localDateString(new Date()));
   formData.append("photo", file);
 

@@ -1,7 +1,6 @@
 import * as server from "../server";
-import { When, WhenRequest, localDateString, whenProblem, whenRequest } from "./when";
 import { civilString, parseCivil, recordTimeLabel, resolveRecordTime } from "./recordTime";
-import { formatLongDate } from "./dateUtils";
+import { formatLongDate, localDateString } from "./dateUtils";
 
 export type RecordWhenMode =
   | "today"
@@ -244,13 +243,67 @@ export function isApproximateMode(w: RecordWhen): boolean {
   );
 }
 
-function legacyWhen(w: RecordWhen): When {
-  const mode = w.mode === "today" || w.mode === "yesterday" || w.mode === "age" ? w.mode : "date";
-  return { mode, date: w.date, ageYears: w.ageYears, ageMonths: w.ageMonths };
+// Photo suggestions only search around an exact day.
+export function recordWhenLookup(w: RecordWhen, now: Date): server.RecordTime | null {
+  if (isApproximateMode(w) || recordWhenProblem(w, false, undefined, now)) return null;
+  return recordWhenTime(w, now, false);
 }
 
-// Photo suggestions only search around an exact day or age.
-export function recordWhenLookup(w: RecordWhen, now: Date): WhenRequest | null {
-  if (isApproximateMode(w) || whenProblem(legacyWhen(w), undefined)) return null;
-  return whenRequest(legacyWhen(w), now);
+// Measurements and interviews are dated by an exact day or an age, which the
+// server resolves against the birthday. RecordWhenControl's exact mode offers
+// only those.
+export interface WhenRequest {
+  inputType: "date" | "age";
+  date: string | null;
+  ageYears: number | null;
+  ageMonths: number | null;
+}
+
+export function ageDate(birthday: string, w: RecordWhen): string | null {
+  const years = parseInt(str(w.ageYears));
+  const months = str(w.ageMonths) === "" ? 0 : parseInt(str(w.ageMonths));
+  const born = new Date(birthday);
+  if (isNaN(years) || isNaN(months) || isNaN(born.getTime()) || born.getUTCFullYear() < 1000) {
+    return null;
+  }
+  const date = new Date(
+    Date.UTC(born.getUTCFullYear() + years, born.getUTCMonth() + months, born.getUTCDate())
+  );
+  return date.toISOString().slice(0, 10);
+}
+
+export function exactWhenProblem(w: RecordWhen, birthday?: string): string {
+  if (w.mode === "date" && !w.date) return "Pick a date";
+  if (w.mode === "age") {
+    const years = parseInt(str(w.ageYears));
+    const months = str(w.ageMonths) === "" ? 0 : parseInt(str(w.ageMonths));
+    if (isNaN(years) || years < 0) return "Enter an age in years";
+    if (isNaN(months) || months < 0 || months > 11) return "Months should be 0 to 11";
+    const date = birthday ? ageDate(birthday, w) : null;
+    if (date && date > localDateString(new Date())) return "That age hasn't happened yet";
+  }
+  return "";
+}
+
+export function exactWhenRequest(w: RecordWhen, now: Date): WhenRequest {
+  const day = (date: string): WhenRequest => ({
+    inputType: "date",
+    date,
+    ageYears: null,
+    ageMonths: null,
+  });
+  switch (w.mode) {
+    case "today":
+      return day(localDateString(now));
+    case "yesterday":
+      return day(yesterday(now));
+    case "age":
+      return {
+        inputType: "age",
+        date: null,
+        ageYears: parseInt(str(w.ageYears)),
+        ageMonths: str(w.ageMonths) === "" ? 0 : parseInt(str(w.ageMonths)),
+      };
+  }
+  return day(w.date);
 }

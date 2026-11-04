@@ -42,16 +42,6 @@ func RegisterPhotoMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdatePhotoTags)
 }
 
-type AddPhotoRequest struct {
-	PersonIds   []int  `json:"personIds"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	InputType   string `json:"inputType"`
-	PhotoDate   string `json:"photoDate,omitempty"`
-	AgeYears    *int   `json:"ageYears,omitempty"`
-	AgeMonths   *int   `json:"ageMonths,omitempty"`
-}
-
 type AddPhotoResponse struct {
 	Image Image `json:"image"`
 }
@@ -585,19 +575,16 @@ func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 }
 
-// For "auto", photoDate is the uploader's local day, used when the file has
-// no EXIF date.
-func calculatePhotoDate(inputType string, photoDate string, ageYears *int, ageMonths *int, person Person, fileData []byte) (time.Time, error) {
-	if inputType == "auto" {
-		if exifDate, err := extractExifDate(fileData); err == nil {
-			return exifDate, nil
-		}
-		if fallback, err := time.Parse("2006-01-02", photoDate); err == nil {
-			return fallback, nil
-		}
-		return wallClockUTC(time.Now().UTC()), nil
+// Without a recordTime, a photo is dated by its EXIF date, then by
+// fallbackDay (the uploader's local day), then by now.
+func uploadedPhotoDate(fallbackDay string, fileData []byte) time.Time {
+	if exifDate, err := extractExifDate(fileData); err == nil {
+		return exifDate
 	}
-	return resolveEntryDate("Photo", inputType, &photoDate, ageYears, ageMonths, person.Birthday)
+	if fallback, err := time.Parse("2006-01-02", fallbackDay); err == nil {
+		return fallback
+	}
+	return wallClockUTC(time.Now().UTC())
 }
 
 func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
@@ -651,7 +638,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 
 	description := strings.TrimSpace(r.FormValue("description"))
-	inputType := r.FormValue("inputType")
 	photoDate := r.FormValue("photoDate")
 	var requestedTime *RecordTime
 	if raw := r.FormValue("recordTime"); raw != "" {
@@ -659,18 +645,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal([]byte(raw), requestedTime); err != nil {
 			RespondValidationError(w, r, "The photo date could not be read.", err.Error())
 			return
-		}
-	}
-
-	var ageYears, ageMonths *int
-	if ageYearsStr := r.FormValue("ageYears"); ageYearsStr != "" {
-		if years, err := strconv.Atoi(ageYearsStr); err == nil {
-			ageYears = &years
-		}
-	}
-	if ageMonthsStr := r.FormValue("ageMonths"); ageMonthsStr != "" {
-		if months, err := strconv.Atoi(ageMonthsStr); err == nil {
-			ageMonths = &months
 		}
 	}
 
@@ -744,10 +718,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var referencePerson Person
-		if len(validPersons) > 0 {
-			referencePerson = validPersons[0]
-		}
 		var recordTime RecordTime
 		var calculatedPhotoDate time.Time
 		if requestedTime != nil {
@@ -756,16 +726,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			calculatedPhotoDate, err = calculatePhotoDate(inputType, photoDate, ageYears, ageMonths, referencePerson, fileData)
-			if err != nil {
-				uploadErr = NewAppError(ErrCodeValidation, "That photo date could not be worked out. Check the date or age you entered.", err.Error())
-				return
-			}
-			dateSource := SourceFamily
-			if inputType == "auto" {
-				dateSource = SourceMetadata
-			}
-			setExactDate(&recordTime, &calculatedPhotoDate, calculatedPhotoDate, dateSource, user.Id)
+			setExactDate(&recordTime, &calculatedPhotoDate, uploadedPhotoDate(photoDate, fileData), SourceMetadata, user.Id)
 		}
 
 		if title == "" {

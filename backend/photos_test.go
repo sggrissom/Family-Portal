@@ -368,83 +368,6 @@ func TestGenerateDefaultTitle(t *testing.T) {
 	}
 }
 
-func TestCalculatePhotoDate(t *testing.T) {
-	testPerson := Person{
-		Id:       1,
-		Birthday: time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC),
-	}
-
-	t.Run("Today input type", func(t *testing.T) {
-		result, err := calculatePhotoDate("today", "", nil, nil, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if result != dayStart(result) || time.Since(result) > 24*time.Hour {
-			t.Errorf("Expected today's UTC calendar day, got %v", result)
-		}
-	})
-
-	t.Run("Date input type with valid date", func(t *testing.T) {
-		dateString := "2023-06-15"
-		expected := time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)
-
-		result, err := calculatePhotoDate("date", dateString, nil, nil, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if !result.Equal(expected) {
-			t.Errorf("Expected date %v, got %v", expected, result)
-		}
-	})
-
-	t.Run("Date input type without date", func(t *testing.T) {
-		_, err := calculatePhotoDate("date", "", nil, nil, testPerson, nil)
-		if err == nil {
-			t.Error("Expected error for missing date")
-		}
-
-		expectedError := "Photo date is required"
-		if !strings.Contains(err.Error(), expectedError) {
-			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
-		}
-	})
-
-	t.Run("Age input type", func(t *testing.T) {
-		years := 2
-		months := 6
-
-		result, err := calculatePhotoDate("age", "", &years, &months, testPerson, nil)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		if want := testPerson.Birthday.AddDate(2, 6, 0); !result.Equal(want) {
-			t.Errorf("Expected %v, the same date milestones and measurements get, got %v", want, result)
-		}
-	})
-
-	t.Run("Age months outside 0-11", func(t *testing.T) {
-		years, months := 1, 12
-		if _, err := calculatePhotoDate("age", "", &years, &months, testPerson, nil); err == nil {
-			t.Error("Expected an error for month 12, as milestones and measurements give")
-		}
-	})
-
-	t.Run("Age input type without years", func(t *testing.T) {
-		_, err := calculatePhotoDate("age", "", nil, nil, testPerson, nil)
-		if err == nil {
-			t.Error("Expected error for missing age years")
-		}
-
-		expectedError := "Age years must be non-negative"
-		if !strings.Contains(err.Error(), expectedError) {
-			t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
-		}
-	})
-}
-
 func TestUpdatePhotoKeepsDate(t *testing.T) {
 	fx, cleanup := setupIsolationFixture(t)
 	defer cleanup()
@@ -561,5 +484,14 @@ func TestRejectedUploadLeavesNoFileBehind(t *testing.T) {
 			t.Errorf("rejected upload left %s on disk", name)
 			os.Remove(filepath.Join(photosDir, name))
 		}
+	}
+}
+
+func TestUploadedPhotoDateFallsBackFromExifToTheUploadersDay(t *testing.T) {
+	if got := uploadedPhotoDate("2023-06-15", createTestImage(4, 4)); !got.Equal(time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("no EXIF: got %v, want the uploader's day", got)
+	}
+	if d := time.Since(uploadedPhotoDate("", nil)); d > 15*time.Hour || d < -15*time.Hour {
+		t.Errorf("no EXIF or day: %v from now, want now", d)
 	}
 }

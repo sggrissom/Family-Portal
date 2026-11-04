@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   RecordWhen,
+  ageDate,
+  exactWhenProblem,
+  exactWhenRequest,
   isApproximateMode,
   newRecordWhen,
   recordWhenControls,
@@ -190,15 +193,75 @@ describe("recordWhenPreview", () => {
 });
 
 describe("recordWhenLookup", () => {
-  it("searches around an exact day or age only", () => {
-    expect(recordWhenLookup(w({ mode: "date", date: "2022-10-31" }), now)).toEqual({
-      inputType: "date",
-      date: "2022-10-31",
-      ageYears: null,
-      ageMonths: null,
+  it("searches around an exact day only", () => {
+    expect(recordWhenLookup(w({ mode: "date", date: "2022-10-31" }), now)).toMatchObject({
+      basis: "calendar",
+      precision: "day",
+      estimated: false,
+      from: "2022-10-31",
     });
     expect(recordWhenLookup(w({ mode: "year", year: "1970" }), now)).toBeNull();
     expect(recordWhenLookup(w({ mode: "date", date: "" }), now)).toBeNull();
+    expect(recordWhenLookup(w({ mode: "age", ageYears: "2" }), now)).toBeNull();
+  });
+});
+
+describe("exactWhenRequest", () => {
+  const today = new Date(2026, 8, 27, 9, 30);
+
+  it("sends today and yesterday as local dates, not the server's", () => {
+    expect(exactWhenRequest(w({ mode: "today" }), today)).toEqual({
+      inputType: "date",
+      date: "2026-09-27",
+      ageYears: null,
+      ageMonths: null,
+    });
+    expect(exactWhenRequest(w({ mode: "yesterday" }), today).date).toBe("2026-09-26");
+    expect(exactWhenRequest(w({ mode: "yesterday" }), new Date(2026, 2, 1)).date).toBe(
+      "2026-02-28"
+    );
+  });
+
+  it("sends a picked date as is", () => {
+    expect(exactWhenRequest(w({ mode: "date", date: "2025-12-24" }), today)).toMatchObject({
+      inputType: "date",
+      date: "2025-12-24",
+    });
+  });
+
+  it("treats blank months as zero", () => {
+    expect(exactWhenRequest(w({ mode: "age", ageYears: "3" }), today)).toMatchObject({
+      inputType: "age",
+      ageYears: 3,
+      ageMonths: 0,
+    });
+  });
+});
+
+describe("exactWhenProblem", () => {
+  it("needs a date or an age when those are chosen", () => {
+    expect(exactWhenProblem(w({ mode: "today" }))).toBe("");
+    expect(exactWhenProblem(w({ mode: "date" }))).toBe("Pick a date");
+    expect(exactWhenProblem(w({ mode: "age" }))).toBe("Enter an age in years");
+    expect(exactWhenProblem(w({ mode: "age", ageYears: "2", ageMonths: "12" }))).toBe(
+      "Months should be 0 to 11"
+    );
+  });
+
+  it("refuses an age that hasn't happened yet", () => {
+    const when = w({ mode: "age", ageYears: "9" });
+    const sixYearsAgo = `${new Date().getUTCFullYear() - 6}-01-01T00:00:00Z`;
+    expect(exactWhenProblem(when, sixYearsAgo)).toBe("That age hasn't happened yet");
+    expect(exactWhenProblem({ ...when, ageYears: "5" }, sixYearsAgo)).toBe("");
+    expect(exactWhenProblem(when)).toBe("");
+  });
+});
+
+describe("ageDate", () => {
+  it("resolves an age against a stored birthday", () => {
+    expect(ageDate("2020-02-14T00:00:00Z", w({ mode: "age", ageYears: "2", ageMonths: "3" }))).toBe(
+      "2022-05-14"
+    );
   });
 });
 

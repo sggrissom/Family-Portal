@@ -10,11 +10,17 @@ import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";
-import { WhenControl } from "../../components/WhenControl";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
-import { When, WhenRequest, newWhen, whenProblem, whenRequest } from "../../lib/when";
+import {
+  RecordWhen,
+  WhenRequest,
+  exactWhenProblem,
+  exactWhenRequest,
+  newRecordWhen,
+} from "../../lib/recordWhen";
 import {
   CheckupEntry,
   checkupValues,
@@ -60,7 +66,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 type CheckupForm = {
   personId: number | null;
   entry: CheckupEntry;
-  when: When;
+  when: RecordWhen;
   defaultsApplied: boolean;
   error: string;
   acceptedWarning: string;
@@ -71,7 +77,7 @@ const useCheckupForm = vlens.declareHook(
   (initialPersonId: number | null): CheckupForm => ({
     personId: initialPersonId,
     entry: newEntry(),
-    when: newWhen(),
+    when: newRecordWhen(),
     defaultsApplied: false,
     error: "",
     acceptedWarning: "",
@@ -160,7 +166,8 @@ async function saveCheckup(form: CheckupForm, data: AddGrowthData, event: Event)
   }
   const values = checkupValues(form.entry);
   const problem =
-    values.error || whenProblem(form.when, data.people.find(p => p.id === form.personId)?.birthday);
+    values.error ||
+    exactWhenProblem(form.when, data.people.find(p => p.id === form.personId)?.birthday);
   if (problem) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -169,7 +176,7 @@ async function saveCheckup(form: CheckupForm, data: AddGrowthData, event: Event)
 
   const personId = form.personId;
   const now = new Date();
-  const when = whenRequest(form.when, now);
+  const when = exactWhenRequest(form.when, now);
   const person = data.people.find(p => p.id === personId);
   const warning = plausibilityWarning(
     values,
@@ -255,7 +262,13 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
               <span className="entry-subject-missing">{copy.measurement.pickPerson}</span>
             )}
           </span>
-          <WhenControl when={form.when} disabled={disabled} birthday={person?.birthday} />
+          <RecordWhenControl
+            when={form.when}
+            isMoment={false}
+            exact
+            disabled={disabled}
+            birthday={person?.birthday}
+          />
         </div>
 
         {form.error && (

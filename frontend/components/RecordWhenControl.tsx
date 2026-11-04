@@ -4,11 +4,12 @@ import * as server from "../server";
 import {
   RecordWhen,
   RecordWhenMode,
+  ageDate,
   recordWhenControls,
   recordWhenPreview,
   setRecordWhenMode,
 } from "../lib/recordWhen";
-import { localDateString } from "../lib/when";
+import { formatLongDate, localDateString } from "../lib/dateUtils";
 import { copy } from "../lib/copy";
 import "./when-control-styles";
 
@@ -18,15 +19,19 @@ interface RecordWhenControlProps {
   disabled?: boolean;
   birthday?: string;
   anchors?: server.Person[];
+  // Only an exact day or an age: for measurements and interviews.
+  exact?: boolean;
 }
 
 export const RecordWhenControl = (props: RecordWhenControlProps) => {
-  const { when, isMoment, disabled, birthday, anchors } = props;
+  const { when, isMoment, disabled, birthday, anchors, exact } = props;
   const t = copy.recordWhen;
   const now = new Date();
   const preview = recordWhenPreview(when, isMoment, birthday, now);
   const exactModes = when.mode === "today" || when.mode === "yesterday";
-  const controls = recordWhenControls(when);
+  const controls = exact
+    ? { meaning: false, estimate: false, bestGuess: false }
+    : recordWhenControls(when);
   return (
     <div className="record-when">
       <div className="when-control">
@@ -43,11 +48,11 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
           <option value="today">{copy.when.today}</option>
           <option value="yesterday">{copy.when.yesterday}</option>
           <option value="date">{copy.when.pickDate}</option>
-          <option value="month">{t.month}</option>
-          <option value="year">{t.year}</option>
-          <option value="range">{t.range}</option>
+          {!exact && <option value="month">{t.month}</option>}
+          {!exact && <option value="year">{t.year}</option>}
+          {!exact && <option value="range">{t.range}</option>}
           <option value="age">{copy.when.byAge}</option>
-          <option value="unknown">{t.unknown}</option>
+          {!exact && <option value="unknown">{t.unknown}</option>}
         </select>
 
         {when.mode === "date" && (
@@ -124,22 +129,25 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
               disabled={disabled}
               {...vlens.attrsBindInput(vlens.ref(when, "ageMonths"))}
             />
-            <span aria-hidden="true">{t.to}</span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              inputmode="numeric"
-              aria-label={t.ageTo}
-              placeholder="yrs"
-              disabled={disabled}
-              {...vlens.attrsBindInput(vlens.ref(when, "ageToYears"))}
-            />
+            {!exact && <span aria-hidden="true">{t.to}</span>}
+            {!exact && (
+              <input
+                type="number"
+                min="0"
+                max="100"
+                inputmode="numeric"
+                aria-label={t.ageTo}
+                placeholder="yrs"
+                disabled={disabled}
+                {...vlens.attrsBindInput(vlens.ref(when, "ageToYears"))}
+              />
+            )}
           </span>
         )}
+        {exact && when.mode === "age" && <AgePreview when={when} birthday={birthday} />}
       </div>
 
-      {when.mode === "age" && anchors && anchors.length > 1 && (
+      {!exact && when.mode === "age" && anchors && anchors.length > 1 && (
         <label className="record-when-row">
           {t.whoseAge}
           <select
@@ -209,7 +217,7 @@ export const RecordWhenControl = (props: RecordWhenControlProps) => {
         </div>
       )}
 
-      {!exactModes && preview.label && (
+      {!exact && !exactModes && preview.label && (
         <p className="record-when-preview" aria-live="polite">
           <strong>{preview.label}</strong>
           {preview.bounds && <span> · {preview.bounds}</span>}
@@ -223,3 +231,14 @@ function setMeaning(when: RecordWhen, meaning: "occurrence" | "period") {
   when.meaning = meaning;
   vlens.scheduleRedraw();
 }
+
+const AgePreview = ({ when, birthday }: { when: RecordWhen; birthday?: string }) => {
+  const date = birthday ? ageDate(birthday, when) : null;
+  if (!date) return null;
+  const future = date > localDateString(new Date());
+  return (
+    <span className={future ? "when-age-date when-age-future" : "when-age-date"}>
+      {future ? "That age hasn't happened yet" : formatLongDate(date)}
+    </span>
+  );
+};

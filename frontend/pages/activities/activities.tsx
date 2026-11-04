@@ -8,8 +8,7 @@ import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { FamilySelect } from "../../components/FamilySelect";
-import { formatDateRange, toDateInputValue } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import { formatDateRange, toDateInputValue, localDateString } from "../../lib/dateUtils";
 import { dayKey, dayLabel } from "../../lib/daySummary";
 import { EventFocus, seasonPhase, seasonProgress } from "../../lib/activityHome";
 import {

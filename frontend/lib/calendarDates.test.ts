@@ -5,11 +5,12 @@ import {
   formatDateRange,
   formatDateTime,
   formatLongDate,
+  localDateString,
 } from "./dateUtils";
 import { ageInMonths } from "./growthPercentiles";
 import { timeAgo } from "./checkup";
 import { monthsOld } from "./sameAge";
-import { localDateString, whenRequest, newWhen } from "./when";
+import { exactWhenRequest, newRecordWhen } from "./recordWhen";
 
 const zones = ["UTC", "America/Chicago", "America/Los_Angeles", "Asia/Tokyo", "Pacific/Kiritimati"];
 
@@ -44,7 +45,7 @@ describe.each(zones)("calendar dates in %s", zone => {
       expect(localDateString(now)).toBe("2024-04-01");
       expect(ageInMonths("2024-03-01", now)).toBe(1);
       expect(monthsOld("2024-03-01", localDateString(now))).toBe(1);
-      expect(whenRequest(newWhen(), now).date).toBe("2024-04-01");
+      expect(exactWhenRequest(newRecordWhen(), now).date).toBe("2024-04-01");
       expect(timeAgo("2024-04-01T00:00:00Z", now)).toBe("today");
       expect(timeAgo("2024-03-31T00:00:00Z", now)).toBe("yesterday");
     }
@@ -58,7 +59,7 @@ describe.each(zones)("calendar dates in %s", zone => {
     ] as const) {
       const now = new Date(2024, month, day, 0, 30);
       expect(timeAgo(previous + "T00:00:00Z", now)).toBe("yesterday");
-      expect(whenRequest({ ...newWhen(), mode: "yesterday" }, now).date).toBe(previous);
+      expect(exactWhenRequest({ ...newRecordWhen(), mode: "yesterday" }, now).date).toBe(previous);
     }
   });
 });
