@@ -333,7 +333,7 @@ export function view(route: string, prefix: string, data: SeasonPageData): preac
               </p>
             </div>
           ) : (
-            <div className="entry-cards">
+            <div className="season-entries">
               {state.entries.map(entryView =>
                 state.editingEntryId === entryView.entry.id ? (
                   <EntryFormFields
@@ -635,13 +635,13 @@ const EntryRow = ({
   const count = state.entryAppearanceCounts[entry.id] ?? 0;
 
   return (
-    <article className="entry-card">
-      <div className="entry-card-main">
-        <a className="entry-card-name" href={`/routine/${entry.id}`}>
+    <article className="season-entry">
+      <div className="season-entry-main">
+        <a className="season-entry-name" href={`/routine/${entry.id}`}>
           {entry.name}
         </a>
         {traits && <span className="event-meta">{traits}</span>}
-        <span className="entry-card-roster">
+        <span className="season-entry-roster">
           {roster.length > 0 ? roster.join(", ") : `No ${labels.roster.toLowerCase()} yet`}
         </span>
         <span className="event-count">
