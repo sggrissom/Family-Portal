@@ -30,6 +30,7 @@ import {
   suggestPhotos,
 } from "./MilestoneFields";
 import { TagPicker, toggleId } from "../../components/TagPicker";
+import { FormError } from "../../components/FormError";
 
 type AddMilestoneForm = {
   personId: number | null;
@@ -282,11 +283,7 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
         onSubmit={vlens.cachePartial(onSubmitMilestone, form, people)}
         noValidate
       >
-        {form.error && (
-          <div className="error-message" role="alert">
-            {form.error}
-          </div>
-        )}
+        <FormError message={form.error} />
 
         <MilestoneTextFields form={form} disabled={disabled} textareaRef={focusOnMount} />
 

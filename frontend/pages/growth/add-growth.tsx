@@ -41,6 +41,7 @@ import {
   saveUnitPrefs,
   writeLastPerson,
 } from "../../lib/addFlow";
+import { FormError } from "../../components/FormError";
 import "../../components/entry-form-styles";
 
 type AddGrowthData = {
@@ -271,11 +272,7 @@ const CheckupPage = ({ form, data }: { form: CheckupForm; data: AddGrowthData })
           />
         </div>
 
-        {form.error && (
-          <div className="error-message" role="alert">
-            {form.error}
-          </div>
-        )}
+        <FormError message={form.error} />
 
         <HeightField
           entry={form.entry}
