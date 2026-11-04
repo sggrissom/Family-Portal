@@ -81,7 +81,7 @@ func setupFamilyLinkFixture(t *testing.T) (familyLinkFixture, func()) {
 			PersonId:    fx.alice.Id,
 			Description: "First day of school",
 			Category:    "development",
-			InputType:   "today",
+			RecordTime:  onToday(),
 		}, fx.famA)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx: %v", err)

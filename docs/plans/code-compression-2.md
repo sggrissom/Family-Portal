@@ -139,26 +139,23 @@ sends the full file.
 - [ ] Verify against a real bundle import, then create imported photos as
       processing and queue them after commit, like upload does.
 
-## 7. One date entry path (after approximate dates ships)
+## 7. One date entry path
 
-While `APPROXIMATE_DATES` is off in prod, every entry screen carries two date
-paths: `WhenControl` + `lib/when.ts` + `inputType/photoDate/ageYears/ageMonths`
-request fields resolved by `resolveEntryDate`/`calculatePhotoDate`, and
+The `APPROXIMATE_DATES` flag is gone: moment entry and photo edits use only
 `RecordWhenControl` + `lib/recordWhen.ts` + `RecordTime` resolved by
-`applyRecordTime`. `approximateDatesEnabled()` branches in 12 places across
-`add-milestone`, `edit-milestone`, `add-photo`, `edit-photo` and
-`record_time_entry.go`.
+`applyRecordTime`, and their legacy request fields are removed. iOS
+compatibility was not kept (the app isn't released).
 
-Once the flag is on in prod and the iOS minimum version has passed #151/#152:
-
-- [ ] Delete the flag and the legacy branch on web.
-- [ ] Delete `WhenControl`, `lib/when.ts` (keep `localDateString` wherever it
-      ends up), and growth's use of it.
-- [ ] Keep the legacy request fields server-side only as long as old iOS builds
-      can still send them; then remove `resolveEntryDate` and
-      `calculatePhotoDate`.
-
-This is the largest compression available, but it can't start yet.
+- [x] Delete the flag and the legacy branch on web.
+- [x] Remove `inputType/milestoneDate/photoDate/ageYears/ageMonths` from
+      `AddMilestone`, `UpdateMilestone` and `UpdatePhoto`.
+- [ ] Move growth and interview dates onto `RecordWhenControl`, then delete
+      `WhenControl` and `lib/when.ts` (keep `localDateString` wherever it ends
+      up).
+- [ ] Photo upload still takes `inputType` (`"auto"` reads EXIF) through
+      `calculatePhotoDate`; `SuggestMilestonePhotos` still takes `inputType`
+      fields. Once those take a `RecordTime`, `resolveEntryDate` is left to
+      growth and interviews only.
 
 ## Looked at and left alone
 

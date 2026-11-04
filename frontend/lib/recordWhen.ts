@@ -244,31 +244,13 @@ export function isApproximateMode(w: RecordWhen): boolean {
   );
 }
 
-export function legacyWhen(w: RecordWhen): When {
+function legacyWhen(w: RecordWhen): When {
   const mode = w.mode === "today" || w.mode === "yesterday" || w.mode === "age" ? w.mode : "date";
   return { mode, date: w.date, ageYears: w.ageYears, ageMonths: w.ageMonths };
 }
 
-export function recordWhenCheck(
-  w: RecordWhen,
-  approximate: boolean,
-  isMoment: boolean,
-  birthday: string | undefined,
-  now: Date
-): string {
-  return approximate
-    ? recordWhenProblem(w, isMoment, birthday, now)
-    : whenProblem(legacyWhen(w), birthday);
-}
-
-export function recordWhenRequest(
-  w: RecordWhen,
-  approximate: boolean,
-  isMoment: boolean,
-  now: Date
-): WhenRequest & { recordTime: server.RecordTime | null } {
-  return {
-    ...whenRequest(legacyWhen(w), now),
-    recordTime: approximate ? recordWhenTime(w, now, isMoment) : null,
-  };
+// Photo suggestions only search around an exact day or age.
+export function recordWhenLookup(w: RecordWhen, now: Date): WhenRequest | null {
+  if (isApproximateMode(w) || whenProblem(legacyWhen(w), undefined)) return null;
+  return whenRequest(legacyWhen(w), now);
 }

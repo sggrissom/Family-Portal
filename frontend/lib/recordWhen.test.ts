@@ -7,7 +7,7 @@ import {
   recordWhenFrom,
   recordWhenPreview,
   recordWhenProblem,
-  recordWhenRequest,
+  recordWhenLookup,
   recordWhenTime,
   setRecordWhenMode,
 } from "./recordWhen";
@@ -21,7 +21,7 @@ describe("recordWhenTime", () => {
     "%s ignores hidden period and estimate fields even without a mode-change event",
     mode => {
       const when = w({ mode, meaning: "period", estimated: true, around: "invalid" });
-      const rt = recordWhenRequest(when, true, true, now).recordTime!;
+      const rt = recordWhenTime(when, now, true);
       expect(rt.meaning).toBe("occurrence");
       expect(rt.estimated).toBe(false);
       expect(rt.around).toBe("");
@@ -95,7 +95,7 @@ describe("date mode transitions", () => {
       });
       setRecordWhenMode(when, mode);
       expect([when.meaning, when.estimated, when.around]).toEqual(["", false, ""]);
-      const rt = recordWhenRequest(when, true, true, now).recordTime!;
+      const rt = recordWhenTime(when, now, true);
       expect(rt.meaning).toBe("occurrence");
       expect(rt.estimated).toBe(false);
       expect(rt.basis).toBe(mode === "unknown" ? "unknown" : "calendar");
@@ -189,18 +189,25 @@ describe("recordWhenPreview", () => {
   });
 });
 
-describe("recordWhenRequest", () => {
-  it("sends only legacy fields while approximate dates are off", () => {
-    const req = recordWhenRequest(w({ mode: "date", date: "2022-10-31" }), false, true, now);
-    expect(req.recordTime).toBeNull();
-    expect([req.inputType, req.date]).toEqual(["date", "2022-10-31"]);
+describe("recordWhenLookup", () => {
+  it("searches around an exact day or age only", () => {
+    expect(recordWhenLookup(w({ mode: "date", date: "2022-10-31" }), now)).toEqual({
+      inputType: "date",
+      date: "2022-10-31",
+      ageYears: null,
+      ageMonths: null,
+    });
+    expect(recordWhenLookup(w({ mode: "year", year: "1970" }), now)).toBeNull();
+    expect(recordWhenLookup(w({ mode: "date", date: "" }), now)).toBeNull();
   });
+});
 
-  it("sends the assertion when on, without derived bounds", () => {
-    const req = recordWhenRequest(w({ mode: "year", year: "1970" }), true, false, now);
-    expect(req.recordTime?.from).toBe("1970");
-    expect(req.recordTime?.resolved).toBe(false);
-    expect(resolveRecordTime(req.recordTime!, null).start).toBe("1970-01-01");
+describe("recordWhenTime bounds", () => {
+  it("sends the assertion without derived bounds", () => {
+    const rt = recordWhenTime(w({ mode: "year", year: "1970" }), now, false);
+    expect(rt.from).toBe("1970");
+    expect(rt.resolved).toBe(false);
+    expect(resolveRecordTime(rt, null).start).toBe("1970-01-01");
   });
 });
 

@@ -387,7 +387,7 @@ func TestSameAgeDefaultFollowsTheView(t *testing.T) {
 		for _, p := range []Person{fx.alice, fx.bob} {
 			if _, err := AddMilestoneTx(tx, AddMilestoneRequest{
 				PersonId: p.Id, Description: "Crawled", Category: "development",
-				InputType: "date", MilestoneDate: &nine,
+				RecordTime: onDay(nine),
 			}, fx.familyId); err != nil {
 				t.Fatal(err)
 			}

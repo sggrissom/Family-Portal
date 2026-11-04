@@ -68,11 +68,10 @@ func setupAccessFixture(t *testing.T) (accessFixture, func()) {
 		fx.records["GrowthData"] = growth.FamilyId
 
 		milestone, err := AddMilestoneTx(tx, AddMilestoneRequest{
-			PersonId:      person.Id,
-			Description:   "First steps",
-			Category:      "development",
-			InputType:     "date",
-			MilestoneDate: stringPtr("2021-08-01"),
+			PersonId:    person.Id,
+			Description: "First steps",
+			Category:    "development",
+			RecordTime:  onDay("2021-08-01"),
 		}, famA)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx: %v", err)
@@ -308,11 +307,10 @@ func TestFamilyScopedHelpersDenyForeignFamily(t *testing.T) {
 		}
 
 		if _, err := AddMilestoneTx(tx, AddMilestoneRequest{
-			PersonId:      personId,
-			Description:   "Should not land",
-			Category:      "development",
-			InputType:     "date",
-			MilestoneDate: stringPtr("2021-09-01"),
+			PersonId:    personId,
+			Description: "Should not land",
+			Category:    "development",
+			RecordTime:  onDay("2021-09-01"),
 		}, foreign); err == nil {
 			t.Error("AddMilestoneTx allowed writing against a foreign family's person")
 		}

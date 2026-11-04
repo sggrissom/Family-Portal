@@ -8,14 +8,12 @@ import {
   recordWhenPreview,
   setRecordWhenMode,
 } from "../lib/recordWhen";
-import { WhenControl } from "./WhenControl";
-import { When, localDateString } from "../lib/when";
+import { localDateString } from "../lib/when";
 import { copy } from "../lib/copy";
 import "./when-control-styles";
 
 interface RecordWhenControlProps {
   when: RecordWhen;
-  approximate: boolean;
   isMoment: boolean;
   disabled?: boolean;
   birthday?: string;
@@ -23,10 +21,7 @@ interface RecordWhenControlProps {
 }
 
 export const RecordWhenControl = (props: RecordWhenControlProps) => {
-  const { when, approximate, isMoment, disabled, birthday, anchors } = props;
-  if (!approximate) {
-    return <WhenControl when={when as unknown as When} disabled={disabled} birthday={birthday} />;
-  }
+  const { when, isMoment, disabled, birthday, anchors } = props;
   const t = copy.recordWhen;
   const now = new Date();
   const preview = recordWhenPreview(when, isMoment, birthday, now);

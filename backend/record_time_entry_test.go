@@ -1,9 +1,9 @@
 package backend
 
 import (
-	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"go.hasen.dev/vbolt"
 )
@@ -23,15 +23,11 @@ func TestMomentEntryWithRecordTime(t *testing.T) {
 		return m, err
 	}
 
-	if _, err := add(agePeriod(fx.person.Id, 4)); !errors.Is(err, ErrApproximateDatesOff) {
-		t.Fatalf("with the flag off: %v", err)
-	}
 	exact, err := add(exactRecordTime(day("2024-06-15"), SourceFamily))
 	if err != nil || !exact.MilestoneDate.Equal(day("2024-06-15")) || exact.RecordTime.ChangedBy != fx.owner.Id {
-		t.Fatalf("an exact day is allowed with the flag off: %+v %v", exact.RecordTime, err)
+		t.Fatalf("exact day: %+v %v", exact.RecordTime, err)
 	}
 
-	t.Setenv("APPROXIMATE_DATES", "on")
 	m, err := add(agePeriod(fx.person.Id, 4))
 	if err != nil {
 		t.Fatal(err)
@@ -72,17 +68,6 @@ func TestMomentEntryWithRecordTime(t *testing.T) {
 		})
 		return out, err
 	}
-	same := "2024-06-15"
-	if out, err := update(UpdateMilestoneRequest{InputType: "date", MilestoneDate: &same, Description: "watercolours"}); err != nil || out.RecordTime.Label() != "At age 4" || out.Description != "watercolours" {
-		t.Errorf("an older client resending the shown date keeps the period: %+v %v", out.RecordTime, err)
-	}
-	other := "2024-07-01"
-	if _, err := update(UpdateMilestoneRequest{InputType: "date", MilestoneDate: &other}); !errors.Is(err, ErrApproximateDateNeedsUpdate) {
-		t.Errorf("a legacy date change must not flatten the period: %v", err)
-	}
-	if stored := GetMilestoneFromDB(t, fx, m.Id); stored.RecordTime.Label() != "At age 4" {
-		t.Errorf("after the rejected edit: %+v", stored.RecordTime)
-	}
 	party := exactRecordTime(day("2024-06-20"), SourceFamily)
 	if out, err := update(UpdateMilestoneRequest{RecordTime: &party}); err != nil || !out.RecordTime.ExactDay() || !out.MilestoneDate.Equal(day("2024-06-20")) {
 		t.Errorf("changing back to an exact day: %+v %v %v", out.RecordTime, out.MilestoneDate, err)
@@ -96,7 +81,6 @@ func GetMilestoneFromDB(t *testing.T, fx rtConsumerFixture, id int) (m Milestone
 
 func TestPhotoUpdateWithRecordTime(t *testing.T) {
 	fx := setupRecordTimeConsumers(t)
-	t.Setenv("APPROXIMATE_DATES", "on")
 	update := func(req UpdatePhotoRequest) (UpdatePhotoResponse, error) {
 		var resp UpdatePhotoResponse
 		var err error
@@ -119,10 +103,21 @@ func TestPhotoUpdateWithRecordTime(t *testing.T) {
 	if _, err := update(UpdatePhotoRequest{RecordTime: &period}); err == nil {
 		t.Error("a photo can't describe a period")
 	}
-	if resp, err := update(UpdatePhotoRequest{InputType: "keep", Title: "Grandma"}); err != nil || resp.Image.RecordTime.Label() != "Around 1970 (1968–1972)" {
+	if resp, err := update(UpdatePhotoRequest{Title: "Grandma"}); err != nil || resp.Image.RecordTime.Label() != "Around 1970 (1968–1972)" {
 		t.Errorf("keep: %+v %v", resp.Image.RecordTime, err)
 	}
-	if _, err := update(UpdatePhotoRequest{InputType: "today"}); !errors.Is(err, ErrApproximateDateNeedsUpdate) {
-		t.Errorf("legacy today on an estimate: %v", err)
-	}
+}
+
+func onDay(day string) *RecordTime {
+	start, _, _, _ := parseCivil(day)
+	rt := exactRecordTime(start.Time(), SourceFamily)
+	return &rt
+}
+
+func onToday() *RecordTime {
+	return onDay(civilOf(time.Now().UTC()).String())
+}
+
+func atAge(person Person, years, months int) *RecordTime {
+	return onDay(civilOf(dayStart(person.Birthday).AddDate(years, months, 0)).String())
 }

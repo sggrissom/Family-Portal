@@ -242,9 +242,7 @@ func TestGetPersonWithMilestones(t *testing.T) {
 			PersonId:    testPerson.Id,
 			Description: "First words",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(3),
+			RecordTime:  atAge(testPerson, 1, 3),
 		}
 		_, err = AddMilestoneTx(tx, milestoneReq1, testUser.FamilyId)
 		if err != nil {
@@ -255,9 +253,7 @@ func TestGetPersonWithMilestones(t *testing.T) {
 			PersonId:    testPerson.Id,
 			Description: "Started walking",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(6),
+			RecordTime:  atAge(testPerson, 1, 6),
 		}
 		_, err = AddMilestoneTx(tx, milestoneReq2, testUser.FamilyId)
 		if err != nil {
@@ -362,9 +358,7 @@ func TestMergePeople(t *testing.T) {
 			PersonId:    sourcePerson.Id,
 			Description: "First words from source",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(3),
+			RecordTime:  atAge(sourcePerson, 1, 3),
 		}
 		_, err = AddMilestoneTx(tx, milestoneReq1, testUser.FamilyId)
 		if err != nil {
@@ -375,9 +369,7 @@ func TestMergePeople(t *testing.T) {
 			PersonId:    targetPerson.Id,
 			Description: "First words from target",
 			Category:    "development",
-			InputType:   "age",
-			AgeYears:    intPtr(1),
-			AgeMonths:   intPtr(2),
+			RecordTime:  atAge(targetPerson, 1, 2),
 		}
 		_, err = AddMilestoneTx(tx, milestoneReq2, testUser.FamilyId)
 		if err != nil {

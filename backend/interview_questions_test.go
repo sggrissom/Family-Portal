@@ -399,7 +399,7 @@ func TestNormalMomentFormsCannotTouchInterviewAnswers(t *testing.T) {
 	day := "2020-01-01"
 
 	if _, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{
-		PersonId: fx.alice.Id, Description: "pizza", Category: CategoryInterview, InputType: "today",
+		PersonId: fx.alice.Id, Description: "pizza", Category: CategoryInterview, RecordTime: onToday(),
 	}); err != ErrInterviewCategory {
 		t.Errorf("AddMilestone(interview) err = %v, want ErrInterviewCategory", err)
 	}
@@ -408,20 +408,20 @@ func TestNormalMomentFormsCannotTouchInterviewAnswers(t *testing.T) {
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { answer = interviewAnswers(tx, interview.Id)[0] })
 
 	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{
-		Id: answer.Id, Description: "pizza", Category: "other", InputType: "date", MilestoneDate: &day,
+		Id: answer.Id, Description: "pizza", Category: "other", RecordTime: onDay(day),
 	}); err != ErrInterviewCategory {
 		t.Errorf("switching an answer out of interview: err = %v", err)
 	}
 
 	plain := fx.addMilestoneOn(t, fx.alice, "Lost a tooth", "first", time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))
 	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{
-		Id: plain.Id, Description: "Lost a tooth", Category: CategoryInterview, InputType: "date", MilestoneDate: &day,
+		Id: plain.Id, Description: "Lost a tooth", Category: CategoryInterview, RecordTime: onDay(day),
 	}); err != ErrInterviewCategory {
 		t.Errorf("switching a moment into interview: err = %v", err)
 	}
 
 	updated, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{
-		Id: answer.Id, Description: " pepperoni pizza ", Category: CategoryInterview, InputType: "date", MilestoneDate: &day,
+		Id: answer.Id, Description: " pepperoni pizza ", Category: CategoryInterview, RecordTime: onDay(day),
 	})
 	if err != nil {
 		t.Fatal(err)

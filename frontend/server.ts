@@ -60,8 +60,6 @@ export const ErrLinkExists = "These families are already linked in that directio
 export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
 export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
 export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrApproximateDatesOff = "Approximate dates aren't turned on yet";
-export const ErrApproximateDateNeedsUpdate = "This has an approximate date. Update the app to change it.";
 export const ErrPersonNotFound = "Person not found or not in your family";
 export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrFaceNotFound = "Face not found or access denied";
@@ -90,6 +88,7 @@ export const ErrVideoUnavailable = "Video uploads are not available on this serv
 export const ErrVideoUploadNotFound = "That upload could not be found.";
 export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
+export const ErrDateRequired = "Choose when this happened";
 
 export interface CreateAccountRequest {
     name: string
@@ -489,10 +488,6 @@ export interface AddMilestoneRequest {
     description: string
     category: string
     context: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
     photoIds: number[]
     tagIds: number[]
     recordTime: RecordTime | null
@@ -523,10 +518,6 @@ export interface UpdateMilestoneRequest {
     description: string
     category: string
     context: string
-    inputType: string
-    milestoneDate: string | null
-    ageYears: number | null
-    ageMonths: number | null
     photoIds: number[]
     tagIds: number[]
     recordTime: RecordTime | null
@@ -563,15 +554,9 @@ export interface UpdateMilestoneTagsRequest {
 export interface UpdateMilestoneTagsResponse {
 }
 
-export interface RecordTimeSettings {
-    approximateDates: boolean
-    version: number
-}
-
 export interface ListBirthdayClustersResponse {
     clusters: BirthdayCluster[]
     people: Person[]
-    enabled: boolean
 }
 
 export interface CorrectRecordTimesRequest {
@@ -1084,10 +1069,6 @@ export interface UpdatePhotoRequest {
     id: number
     title: string
     description: string
-    inputType: string
-    photoDate: string
-    ageYears: number | null
-    ageMonths: number | null
     recordTime: RecordTime | null
 }
 
@@ -3393,10 +3374,6 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
-}
-
-export async function GetRecordTimeSettings(data: Empty): Promise<rpc.Response<RecordTimeSettings>> {
-    return await rpc.call<RecordTimeSettings>('GetRecordTimeSettings', JSON.stringify(data));
 }
 
 export async function ListBirthdayClusters(data: Empty): Promise<rpc.Response<ListBirthdayClustersResponse>> {

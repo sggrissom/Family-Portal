@@ -41,7 +41,6 @@ type BirthdayCluster struct {
 type ListBirthdayClustersResponse struct {
 	Clusters []BirthdayCluster `json:"clusters"`
 	People   []Person          `json:"people"`
-	Enabled  bool              `json:"enabled"`
 }
 
 type RecordTimeChange struct {
@@ -133,7 +132,6 @@ func ListBirthdayClusters(ctx *vbeam.Context, req Empty) (resp ListBirthdayClust
 		err = ErrAuthFailure
 		return
 	}
-	resp.Enabled = ApproximateDatesEnabled()
 	resp.Clusters = []BirthdayCluster{}
 	resp.People = []Person{}
 

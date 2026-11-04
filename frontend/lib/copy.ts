@@ -59,7 +59,6 @@ export const copy = {
     intro:
       "Ages used to be saved as the birthday itself, so “at age 4” became a party on the fourth birthday. Pick the ones that weren't really on that day.",
     none: "Nothing to review. No birthday has more than one moment or photo on it.",
-    disabled: "Approximate dates aren't turned on for this server yet, so nothing can be changed.",
     clusterTitle: (name: string, age: number, day: string) =>
       `${name}'s birthday at ${age} · ${day}`,
     clusterHint: (age: number) =>

@@ -86,7 +86,7 @@ func setupDeletionFixture(t *testing.T) deletionFixture {
 		milestoneDate := "2024-02-02"
 		fx.milestone, err = AddMilestoneTx(tx, AddMilestoneRequest{
 			PersonId: fx.person.Id, Description: "First words", Category: "development",
-			InputType: "date", MilestoneDate: &milestoneDate,
+			RecordTime: onDay(milestoneDate),
 		}, fx.familyId)
 		if err != nil {
 			t.Fatalf("AddMilestoneTx() error = %v", err)

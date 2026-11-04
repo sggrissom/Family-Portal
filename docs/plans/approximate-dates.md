@@ -1,10 +1,9 @@
 # Approximate dates, age-based records, and periods
 
-Status: web/backend in review as stacked PRs #230–#236 (2026-11-02); writes are
-behind `APPROXIMATE_DATES=on`. Contract and inventory:
-[approximate-dates-contract.md](approximate-dates-contract.md). Still to do before
-enabling in prod: the iOS companion changes, raising the iOS minimum version, and
-the staging acceptance run on migrated data.
+Status: shipped on web/backend (stacked PRs #230–#236). The `APPROXIMATE_DATES`
+flag has been removed: approximate writes are always on, and milestone and
+photo edits take only `recordTime`. Contract and inventory:
+[approximate-dates-contract.md](approximate-dates-contract.md).
 Manual entry and end-to-end date semantics are the release scope. AI estimation
 remains an optional later experiment, not a dependency or provider commitment.
 

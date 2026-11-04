@@ -7,16 +7,13 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { copy } from "../../lib/copy";
-import { whenRequest } from "../../lib/when";
 import {
   RecordWhen,
-  isApproximateMode,
-  legacyWhen,
-  recordWhenCheck,
   recordWhenFrom,
-  recordWhenRequest,
+  recordWhenLookup,
+  recordWhenProblem,
+  recordWhenTime,
 } from "../../lib/recordWhen";
-import { approximateDatesEnabled } from "../../lib/recordTimeSettings";
 import { RecordWhenControl } from "../../components/RecordWhenControl";
 import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
 import { canContribute } from "../../lib/authCache";
@@ -73,10 +70,7 @@ const useEditMilestoneForm = vlens.declareHook(
 // a moment after the description or date stop changing.
 function scheduleLookup(form: EditMilestoneForm, milestone: server.Milestone) {
   const text = form.description.trim();
-  const when =
-    isApproximateMode(form.when) || recordWhenCheck(form.when, false, true, undefined, new Date())
-      ? null
-      : whenRequest(legacyWhen(form.when), new Date());
+  const when = recordWhenLookup(form.when, new Date());
   const key = JSON.stringify([text, when]);
   if (key === form.lookupKey) return;
   form.lookupKey = key;
@@ -178,10 +172,12 @@ async function save(
   if (form.saving || form.uploading) return;
 
   const when = { ...form.when, anchorPersonId: form.when.anchorPersonId || milestone.personId };
-  const approximate = approximateDatesEnabled();
+  const isAnswer = milestone.category === "interview";
   const problem = !form.description.trim()
     ? copy.milestone.needsText
-    : recordWhenCheck(when, approximate, true, birthday, new Date());
+    : isAnswer
+      ? ""
+      : recordWhenProblem(when, true, birthday, new Date());
   if (problem) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -192,19 +188,14 @@ async function save(
   form.error = "";
   vlens.scheduleRedraw();
 
-  const request = recordWhenRequest(when, approximate, true, new Date());
   const [resp, err] = await server.UpdateMilestone({
     id: milestone.id,
     description: form.description.trim(),
     category: form.category,
     context: form.context.trim(),
-    inputType: request.inputType,
-    milestoneDate: request.date,
-    ageYears: request.ageYears,
-    ageMonths: request.ageMonths,
     photoIds: form.photoIds,
     tagIds: form.tagIds,
-    recordTime: milestone.category === "interview" ? null : request.recordTime,
+    recordTime: isAnswer ? null : recordWhenTime(when, new Date(), true),
   });
   if (!resp) {
     form.error = err || "That moment could not be saved. Please try again.";
@@ -268,7 +259,6 @@ const EditMilestonePage = ({ form, milestone, tags, birthday }: EditMilestonePag
               <span className="entry-label">{copy.when.label}</span>
               <RecordWhenControl
                 when={form.when}
-                approximate={approximateDatesEnabled()}
                 isMoment={true}
                 disabled={disabled}
                 birthday={birthday}

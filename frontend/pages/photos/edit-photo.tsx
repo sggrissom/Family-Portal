@@ -1,4 +1,3 @@
-import { localDateString } from "../../lib/when";
 import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -20,7 +19,6 @@ import {
   recordWhenProblem,
   recordWhenTime,
 } from "../../lib/recordWhen";
-import { approximateDatesEnabled } from "../../lib/recordTimeSettings";
 import { RecordWhenControl } from "../../components/RecordWhenControl";
 
 type EditPhotoData = {
@@ -39,10 +37,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 type EditPhotoForm = {
   title: string;
   description: string;
-  inputType: string;
-  photoDate: string;
-  ageYears: string;
-  ageMonths: string;
   when: RecordWhen;
   tagIds: number[];
   loading: boolean;
@@ -54,10 +48,6 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     return {
       title: "",
       description: "",
-      inputType: "auto",
-      photoDate: "",
-      ageYears: "",
-      ageMonths: "",
       when: newRecordWhen(),
       tagIds: [],
       loading: false,
@@ -65,27 +55,15 @@ const useEditPhotoForm = vlens.declareHook((photo?: server.Image): EditPhotoForm
     };
   }
 
-  const photoDate = photo.photoDate ? new Date(photo.photoDate).toISOString().split("T")[0] : "";
-
   return {
     title: photo.title || "",
     description: photo.description || "",
-    inputType: "date",
-    photoDate: photoDate,
-    ageYears: "",
-    ageMonths: "",
     when: recordWhenFrom(photo.recordTime, photo.photoDate),
     tagIds: photo.tagIds ?? [],
     loading: false,
     error: "",
   };
 });
-
-function onInputTypeChange(form: EditPhotoForm, inputType: string) {
-  form.inputType = inputType;
-  form.error = "";
-  vlens.scheduleRedraw();
-}
 
 function onToggleTag(form: EditPhotoForm, tagId: number) {
   const idx = form.tagIds.indexOf(tagId);
@@ -152,57 +130,24 @@ async function onSubmitEdit(
   form.loading = true;
   form.error = "";
 
-  if (approximateDatesEnabled()) {
-    const anchor = people.find(p => p.id === form.when.anchorPersonId);
-    const problem = recordWhenProblem(form.when, false, anchor?.birthday, new Date());
-    if (problem) {
-      form.error = problem;
-      form.loading = false;
-      vlens.scheduleRedraw();
-      return;
-    }
-    await saveEdit(form, photo, {
-      inputType: "keep",
-      photoDate: "",
-      ageYears: null,
-      ageMonths: null,
-      recordTime: recordWhenTime(form.when, new Date(), false),
-    });
-    return;
-  }
-
-  if (form.inputType === "date" && !form.photoDate) {
-    form.error = "Please select a date";
+  const anchor = people.find(p => p.id === form.when.anchorPersonId);
+  const problem = recordWhenProblem(form.when, false, anchor?.birthday, new Date());
+  if (problem) {
+    form.error = problem;
     form.loading = false;
     vlens.scheduleRedraw();
     return;
   }
-
-  if (form.inputType === "age" && (form.ageYears === "" || parseInt(form.ageYears) < 0)) {
-    form.error = "Please enter a valid age";
-    form.loading = false;
-    vlens.scheduleRedraw();
-    return;
-  }
-
-  await saveEdit(form, photo, {
-    inputType: form.inputType === "today" ? "date" : form.inputType,
-    photoDate: form.inputType === "today" ? localDateString(new Date()) : form.photoDate,
-    ageYears: form.ageYears ? parseInt(form.ageYears) : null,
-    ageMonths: form.ageMonths ? parseInt(form.ageMonths) : null,
-    recordTime: null,
-  });
+  await saveEdit(form, photo, recordWhenTime(form.when, new Date(), false));
 }
 
-type DateFields = Omit<server.UpdatePhotoRequest, "id" | "title" | "description">;
-
-async function saveEdit(form: EditPhotoForm, photo: server.Image, date: DateFields) {
+async function saveEdit(form: EditPhotoForm, photo: server.Image, recordTime: server.RecordTime) {
   try {
     const updateRequest: server.UpdatePhotoRequest = {
       id: photo.id,
       title: form.title.trim(),
       description: form.description.trim(),
-      ...date,
+      recordTime,
     };
 
     const [resp, err] = await server.UpdatePhoto(updateRequest);
@@ -237,7 +182,6 @@ interface EditPhotoPageProps {
 }
 
 const EditPhotoPage = ({ form, photo, people, allTags }: EditPhotoPageProps) => {
-  const approximate = approximateDatesEnabled();
   if (form.when.anchorPersonId === 0 && people.length === 1)
     form.when.anchorPersonId = people[0].id;
   const anchor = people.find(p => p.id === form.when.anchorPersonId);
@@ -294,117 +238,16 @@ const EditPhotoPage = ({ form, photo, people, allTags }: EditPhotoPageProps) => 
             />
           </div>
 
-          {approximate && (
-            <div className="form-group">
-              <span className="form-group-caption">When was this photo taken?</span>
-              <RecordWhenControl
-                when={form.when}
-                approximate={true}
-                isMoment={false}
-                disabled={form.loading}
-                birthday={anchor && !anchor.isPregnancy ? anchor.birthday : undefined}
-                anchors={people}
-              />
-            </div>
-          )}
-
-          {!approximate && (
-            <>
-              <div className="form-group">
-                <label>When was this photo taken?</label>
-                <div className="radio-group">
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="inputType"
-                      value="auto"
-                      checked={form.inputType === "auto"}
-                      onChange={() => onInputTypeChange(form, "auto")}
-                      disabled={form.loading}
-                    />
-                    <span>Auto (from photo)</span>
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="inputType"
-                      value="today"
-                      checked={form.inputType === "today"}
-                      onChange={() => onInputTypeChange(form, "today")}
-                      disabled={form.loading}
-                    />
-                    <span>Today</span>
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="inputType"
-                      value="date"
-                      checked={form.inputType === "date"}
-                      onChange={() => onInputTypeChange(form, "date")}
-                      disabled={form.loading}
-                    />
-                    <span>Specific Date</span>
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="inputType"
-                      value="age"
-                      checked={form.inputType === "age"}
-                      onChange={() => onInputTypeChange(form, "age")}
-                      disabled={form.loading}
-                    />
-                    <span>At Age</span>
-                  </label>
-                </div>
-              </div>
-
-              {form.inputType === "date" && (
-                <div className="form-group">
-                  <label htmlFor="date">Date</label>
-                  <input
-                    id="date"
-                    type="date"
-                    {...vlens.attrsBindInput(vlens.ref(form, "photoDate"))}
-                    max={localDateString(new Date())}
-                    required
-                    disabled={form.loading}
-                  />
-                </div>
-              )}
-
-              {form.inputType === "age" && (
-                <div className="form-row">
-                  <div className="form-group flex-2">
-                    <label htmlFor="ageYears">Age (Years)</label>
-                    <input
-                      id="ageYears"
-                      type="number"
-                      min="0"
-                      max="100"
-                      {...vlens.attrsBindInput(vlens.ref(form, "ageYears"))}
-                      placeholder="5"
-                      required
-                      disabled={form.loading}
-                    />
-                  </div>
-                  <div className="form-group flex-1">
-                    <label htmlFor="ageMonths">Months</label>
-                    <input
-                      id="ageMonths"
-                      type="number"
-                      min="0"
-                      max="11"
-                      {...vlens.attrsBindInput(vlens.ref(form, "ageMonths"))}
-                      placeholder="6"
-                      disabled={form.loading}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <div className="form-group">
+            <span className="form-group-caption">When was this photo taken?</span>
+            <RecordWhenControl
+              when={form.when}
+              isMoment={false}
+              disabled={form.loading}
+              birthday={anchor && !anchor.isPregnancy ? anchor.birthday : undefined}
+              anchors={people}
+            />
+          </div>
 
           {allTags.length > 0 && (
             <div className="form-group">

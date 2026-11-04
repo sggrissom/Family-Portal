@@ -9,7 +9,7 @@ import { recordTimeLabel } from "../../lib/recordTime";
 import { copy } from "../../lib/copy";
 import "./review-styles";
 
-const empty: server.ListBirthdayClustersResponse = { clusters: [], people: [], enabled: false };
+const empty: server.ListBirthdayClustersResponse = { clusters: [], people: [] };
 
 export async function fetch(
   route: string,
@@ -159,7 +159,6 @@ export function view(
             </button>
           </div>
         )}
-        {!data.enabled && <p className="date-review-intro">{t.disabled}</p>}
         {state.clusters.length === 0 && <p className="date-review-empty">{t.none}</p>}
 
         {state.clusters.map(cluster => {
@@ -182,7 +181,7 @@ export function view(
                         <input
                           type="checkbox"
                           checked={included}
-                          disabled={state.busy || !data.enabled}
+                          disabled={state.busy}
                           onChange={vlens.cachePartial(toggle, state, rk)}
                         />
                         <span className="date-review-thumb">
@@ -221,7 +220,7 @@ export function view(
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={state.busy || chosen === 0 || !data.enabled}
+                  disabled={state.busy || chosen === 0}
                   onClick={vlens.cachePartial(apply, state, cluster)}
                 >
                   {t.apply(chosen)}

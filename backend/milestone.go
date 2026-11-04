@@ -23,19 +23,14 @@ func RegisterMilestoneMethods(app *vbeam.Application) {
 }
 
 type AddMilestoneRequest struct {
-	PersonId      int     `json:"personId"`
-	Description   string  `json:"description"`
-	Category      string  `json:"category"`
-	Context       string  `json:"context,omitempty"`
-	InputType     string  `json:"inputType"`
-	MilestoneDate *string `json:"milestoneDate,omitempty"`
-	AgeYears      *int    `json:"ageYears,omitempty"`
-	AgeMonths     *int    `json:"ageMonths,omitempty"`
-	PhotoIds      []int   `json:"photoIds,omitempty"`
-	TagIds        []int   `json:"tagIds,omitempty"`
-	// RecordTime, when present, replaces InputType and the legacy date fields.
-	RecordTime *RecordTime `json:"recordTime,omitempty"`
-	UserId     int         `json:"-"`
+	PersonId    int         `json:"personId"`
+	Description string      `json:"description"`
+	Category    string      `json:"category"`
+	Context     string      `json:"context,omitempty"`
+	PhotoIds    []int       `json:"photoIds,omitempty"`
+	TagIds      []int       `json:"tagIds,omitempty"`
+	RecordTime  *RecordTime `json:"recordTime,omitempty"`
+	UserId      int         `json:"-"`
 }
 
 type AddMilestoneResponse struct {
@@ -51,19 +46,14 @@ type GetPersonMilestonesResponse struct {
 }
 
 type UpdateMilestoneRequest struct {
-	Id            int     `json:"id"`
-	Description   string  `json:"description"`
-	Category      string  `json:"category"`
-	Context       string  `json:"context,omitempty"`
-	InputType     string  `json:"inputType"`
-	MilestoneDate *string `json:"milestoneDate,omitempty"`
-	AgeYears      *int    `json:"ageYears,omitempty"`
-	AgeMonths     *int    `json:"ageMonths,omitempty"`
-	PhotoIds      []int   `json:"photoIds,omitempty"`
-	TagIds        []int   `json:"tagIds,omitempty"`
-	// RecordTime, when present, replaces InputType and the legacy date fields.
-	RecordTime *RecordTime `json:"recordTime,omitempty"`
-	UserId     int         `json:"-"`
+	Id          int         `json:"id"`
+	Description string      `json:"description"`
+	Category    string      `json:"category"`
+	Context     string      `json:"context,omitempty"`
+	PhotoIds    []int       `json:"photoIds,omitempty"`
+	TagIds      []int       `json:"tagIds,omitempty"`
+	RecordTime  *RecordTime `json:"recordTime,omitempty"`
+	UserId      int         `json:"-"`
 }
 
 type UpdateMilestoneResponse struct {
@@ -421,16 +411,11 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 		return milestone, errors.New("Person not found or not in your family")
 	}
 
-	if req.RecordTime != nil {
-		if err := applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate); err != nil {
-			return milestone, err
-		}
-	} else {
-		date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-		if err != nil {
-			return milestone, err
-		}
-		setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, req.UserId)
+	if req.RecordTime == nil {
+		return milestone, ErrDateRequired
+	}
+	if err := applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate); err != nil {
+		return milestone, err
 	}
 
 	milestone.Id = vbolt.NextIntId(tx, MilestoneBkt)
@@ -469,7 +454,10 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 	if milestone.Category == CategoryInterview {
 		milestone.Description = strings.TrimSpace(req.Description)
 	} else {
-		if err := updateMilestoneDate(tx, familyId, req, person, &milestone); err != nil {
+		if req.RecordTime == nil {
+			return milestone, ErrDateRequired
+		}
+		if err := applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate); err != nil {
 			return milestone, err
 		}
 		setMilestoneText(&milestone, req.Description, req.Category, req.Context)
@@ -488,28 +476,6 @@ func UpdateMilestoneTx(tx *vbolt.Tx, req UpdateMilestoneRequest, familyId int) (
 		}
 	}
 	return milestone, nil
-}
-
-func updateMilestoneDate(tx *vbolt.Tx, familyId int, req UpdateMilestoneRequest, person Person, milestone *Milestone) error {
-	if req.RecordTime != nil {
-		return applyRecordTime(tx, familyId, req.UserId, *req.RecordTime, true, &milestone.RecordTime, &milestone.MilestoneDate)
-	}
-	if req.InputType == "date" {
-		keep, err := keepsApproximateDate(milestone.RecordTime, milestone.MilestoneDate, req.MilestoneDate)
-		if keep || err != nil {
-			return err
-		}
-	} else if !milestone.RecordTime.ExactDay() {
-		return ErrApproximateDateNeedsUpdate
-	}
-	date, err := resolveEntryDate("Moment", req.InputType, req.MilestoneDate, req.AgeYears, req.AgeMonths, person.Birthday)
-	if err != nil {
-		return err
-	}
-	if !date.Equal(milestone.MilestoneDate) || !milestone.RecordTime.ExactDay() {
-		setExactDate(&milestone.RecordTime, &milestone.MilestoneDate, date, SourceFamily, req.UserId)
-	}
-	return nil
 }
 
 func setMilestoneText(milestone *Milestone, description string, category string, context string) {
@@ -620,7 +586,7 @@ func DeleteMilestoneTx(tx *vbolt.Tx, milestoneId int, familyId int) error {
 	return nil
 }
 
-func validateMilestoneFields(description string, category string, inputType string, hasRecordTime bool) error {
+func validateMilestoneFields(description string, category string) error {
 	if strings.TrimSpace(description) == "" {
 		return errors.New("Description is required")
 	}
@@ -629,10 +595,7 @@ func validateMilestoneFields(description string, category string, inputType stri
 	default:
 		return errors.New("Category must be one of: development, behavior, health, achievement, first, quote, artwork, other")
 	}
-	if hasRecordTime {
-		return nil
-	}
-	return validateEntryInputType(inputType)
+	return nil
 }
 
 func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMilestoneResponse, err error) {
@@ -646,7 +609,7 @@ func AddMilestone(ctx *vbeam.Context, req AddMilestoneRequest) (resp AddMileston
 		err = errors.New("Person ID is required")
 		return
 	}
-	if err = validateMilestoneFields(req.Description, req.Category, req.InputType, req.RecordTime != nil); err != nil {
+	if err = validateMilestoneFields(req.Description, req.Category); err != nil {
 		return
 	}
 	if req.Category == CategoryInterview {
@@ -731,7 +694,7 @@ func UpdateMilestone(ctx *vbeam.Context, req UpdateMilestoneRequest) (resp Updat
 		err = errors.New("Moment ID is required")
 		return
 	}
-	if err = validateMilestoneFields(req.Description, req.Category, req.InputType, req.RecordTime != nil); err != nil {
+	if err = validateMilestoneFields(req.Description, req.Category); err != nil {
 		return
 	}
 

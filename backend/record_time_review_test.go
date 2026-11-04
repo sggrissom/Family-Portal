@@ -15,14 +15,14 @@ func TestBirthdayClusterReviewCorrectsAndUndoes(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		for _, text := range []string{"loved painting", "afraid of the dark", "favourite song was Baby Shark"} {
 			m, err := AddMilestoneTx(tx, AddMilestoneRequest{PersonId: fx.person.Id, Description: text, Category: "other",
-				InputType: "age", AgeYears: &four}, fx.ownerFamily)
+				RecordTime: atAge(fx.person, four, 0)}, fx.ownerFamily)
 			if err != nil {
 				t.Fatal(err)
 			}
 			ids = append(ids, m.Id)
 		}
 		if _, err := AddMilestoneTx(tx, AddMilestoneRequest{PersonId: fx.person.Id, Description: "only one at two",
-			Category: "other", InputType: "age", AgeYears: &two}, fx.ownerFamily); err != nil {
+			Category: "other", RecordTime: atAge(fx.person, two, 0)}, fx.ownerFamily); err != nil {
 			t.Fatal(err)
 		}
 		vbolt.TxCommit(tx)
@@ -63,10 +63,6 @@ func TestBirthdayClusterReviewCorrectsAndUndoes(t *testing.T) {
 	}
 	ownerToken, _ := generateJwtTokenString(fx.owner)
 
-	if _, err := correct(ownerToken, changes); !errors.Is(err, ErrApproximateDatesOff) {
-		t.Fatalf("with the flag off: %v", err)
-	}
-	t.Setenv("APPROXIMATE_DATES", "on")
 	if _, err := correct(outsiderToken, changes); err == nil {
 		t.Fatal("an outsider corrected another family's moments")
 	}

@@ -9,16 +9,13 @@ import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
-import { whenRequest } from "../../lib/when";
 import {
   RecordWhen,
-  isApproximateMode,
-  legacyWhen,
   newRecordWhen,
-  recordWhenCheck,
-  recordWhenRequest,
+  recordWhenLookup,
+  recordWhenProblem,
+  recordWhenTime,
 } from "../../lib/recordWhen";
-import { approximateDatesEnabled } from "../../lib/recordTimeSettings";
 import { RecordWhenControl } from "../../components/RecordWhenControl";
 import { readLastPerson, returnPath, takeReturnPath, writeLastPerson } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
@@ -84,10 +81,7 @@ const useAddMilestoneForm = vlens.declareHook((personId: number | null): AddMile
 // changing: a category (unless one was picked by hand) and nearby photos.
 function scheduleLookups(form: AddMilestoneForm) {
   const text = form.description.trim();
-  const when =
-    isApproximateMode(form.when) || recordWhenCheck(form.when, false, true, undefined, new Date())
-      ? null
-      : whenRequest(legacyWhen(form.when), new Date());
+  const when = recordWhenLookup(form.when, new Date());
   const key = JSON.stringify([form.personId, text, when]);
   if (key === form.lookupKey) return;
   form.lookupKey = key;
@@ -114,12 +108,11 @@ function scheduleLookups(form: AddMilestoneForm) {
 }
 
 function applyAgeFromText(form: AddMilestoneForm, years: number, months: number) {
-  const approximate = approximateDatesEnabled();
   form.when = {
     ...form.when,
     mode: "age",
     ageYears: String(years),
-    ageMonths: months || !approximate ? String(months) : "",
+    ageMonths: months ? String(months) : "",
     ageToYears: "",
   };
   vlens.scheduleRedraw();
@@ -191,9 +184,8 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
       ? copy.milestone.pickPerson
       : !form.description.trim()
         ? copy.milestone.needsText
-        : recordWhenCheck(
+        : recordWhenProblem(
             { ...form.when, anchorPersonId: personId },
-            approximateDatesEnabled(),
             true,
             people.find(p => p.id === personId)?.birthday,
             new Date()
@@ -208,24 +200,14 @@ async function onSubmitMilestone(form: AddMilestoneForm, people: server.Person[]
   form.error = "";
   vlens.scheduleRedraw();
 
-  const when = recordWhenRequest(
-    { ...form.when, anchorPersonId: personId },
-    approximateDatesEnabled(),
-    true,
-    new Date()
-  );
   const [resp, err] = await server.AddMilestone({
     personId,
     description: form.description.trim(),
     category: form.category,
     context: form.context.trim(),
-    inputType: when.inputType,
-    milestoneDate: when.date,
-    ageYears: when.ageYears,
-    ageMonths: when.ageMonths,
     photoIds: form.photoIds,
     tagIds: form.tagIds,
-    recordTime: when.recordTime,
+    recordTime: recordWhenTime({ ...form.when, anchorPersonId: personId }, new Date(), true),
   });
 
   if (!resp) {
@@ -320,7 +302,6 @@ const AddMilestonePage = ({ form, people, tags }: AddMilestonePageProps) => {
           <span className="entry-label">{copy.when.label}</span>
           <RecordWhenControl
             when={form.when}
-            approximate={approximateDatesEnabled()}
             isMoment={true}
             disabled={disabled}
             birthday={people.find(p => p.id === form.personId)?.birthday}

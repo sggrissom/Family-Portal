@@ -335,14 +335,15 @@ device's zone either.
 
 ### The one that actually bites
 
-Growth records, milestones, and photo dates take an `inputType`:
+Growth records and photo uploads take an `inputType`. Milestones
+(`AddMilestone`, `UpdateMilestone`) and photo edits (`UpdatePhoto`) take a
+`recordTime` instead; `UpdatePhoto` without one leaves the date alone.
 
 | `inputType` | Fields | Server behavior |
 | --- | --- | --- |
 | `"today"` | none | the server's current **UTC** day |
 | `"date"` | `measurementDate: "YYYY-MM-DD"` | parsed as given |
 | `"age"` | `ageYears`, `ageMonths` (0–11) | birthday + that offset |
-| `"keep"` | none | `UpdatePhoto` only: the photo's date is left as it is |
 | `"auto"` | `photoDate: "YYYY-MM-DD"` (optional) | photos only: the EXIF capture time, else `photoDate`, else the server's current UTC time |
 
 **Send `"date"` with the device's local calendar date. Never send `"today"`.**
@@ -426,7 +427,7 @@ Milestone entry can use three suggestion procs, all of which return an empty
 answer rather than an error when the analysis daemon is down, except that text
 opening with a double quotation mark is suggested as `quote` without it:
 `SuggestMilestoneCategory` (`{description, personId}` → `{category}`),
-`SuggestMilestonePhotos` (the person plus `AddMilestone`'s date fields →
+`SuggestMilestonePhotos` (the person plus `inputType` date fields →
 `{photoIds, ranked}`), and `GetMilestoneMatches` (`{milestoneId}` → the same
 milestone in other people's records, with their ages in months).
 

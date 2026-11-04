@@ -17,7 +17,7 @@ func (fx resultsFixture) addMilestoneOn(t *testing.T, person Person, text, categ
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		var err error
 		m, err = AddMilestoneTx(tx, AddMilestoneRequest{
-			PersonId: person.Id, Description: text, Category: category, InputType: "date", MilestoneDate: &day,
+			PersonId: person.Id, Description: text, Category: category, RecordTime: onDay(day),
 		}, fx.familyId)
 		if err != nil {
 			t.Fatal(err)

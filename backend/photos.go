@@ -74,11 +74,7 @@ type UpdatePhotoRequest struct {
 	Id          int    `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	InputType   string `json:"inputType"`
-	PhotoDate   string `json:"photoDate,omitempty"`
-	AgeYears    *int   `json:"ageYears,omitempty"`
-	AgeMonths   *int   `json:"ageMonths,omitempty"`
-	// RecordTime, when present, replaces InputType and the legacy date fields.
+	// RecordTime, when absent, leaves the date alone.
 	RecordTime *RecordTime `json:"recordTime,omitempty"`
 }
 
@@ -1171,14 +1167,10 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		return
 	}
 
-	people := GetPhotoPeople(ctx.Tx, photo.Id)
-	var referencePerson Person
-	if len(people) > 0 {
-		referencePerson = people[0]
-	}
-
-	if err = updatePhotoDate(ctx.Tx, user, req, referencePerson, &photo); err != nil {
-		return
+	if req.RecordTime != nil {
+		if err = applyRecordTime(ctx.Tx, photo.FamilyId, user.Id, *req.RecordTime, false, &photo.RecordTime, &photo.PhotoDate); err != nil {
+			return
+		}
 	}
 
 	photo.Title = strings.TrimSpace(req.Title)
@@ -1195,31 +1187,6 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
 	vbolt.TxCommit(ctx.Tx)
 	return
-}
-
-func updatePhotoDate(tx *vbolt.Tx, user User, req UpdatePhotoRequest, referencePerson Person, photo *Image) error {
-	if req.RecordTime != nil {
-		return applyRecordTime(tx, photo.FamilyId, user.Id, *req.RecordTime, false, &photo.RecordTime, &photo.PhotoDate)
-	}
-	if req.InputType == "keep" {
-		return nil
-	}
-	if req.InputType == "date" {
-		keep, err := keepsApproximateDate(photo.RecordTime, photo.PhotoDate, &req.PhotoDate)
-		if keep || err != nil {
-			return err
-		}
-	} else if !photo.RecordTime.ExactDay() {
-		return ErrApproximateDateNeedsUpdate
-	}
-	date, err := calculatePhotoDate(req.InputType, req.PhotoDate, req.AgeYears, req.AgeMonths, referencePerson, nil)
-	if err != nil {
-		return err
-	}
-	if !date.Equal(photo.PhotoDate) || !photo.RecordTime.ExactDay() {
-		setExactDate(&photo.RecordTime, &photo.PhotoDate, date, SourceFamily, user.Id)
-	}
-	return nil
 }
 
 func DeletePhoto(ctx *vbeam.Context, req DeletePhotoRequest) (resp DeletePhotoResponse, err error) {
@@ -1315,34 +1282,6 @@ func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {
 	if req.Id <= 0 {
 		return errors.New("Invalid photo ID")
 	}
-
-	if req.RecordTime != nil {
-		return nil
-	}
-	if req.InputType == "" {
-		return errors.New("Input type is required")
-	}
-
-	validInputTypes := []string{"auto", "today", "date", "age", "keep"}
-	isValid := false
-	for _, validType := range validInputTypes {
-		if req.InputType == validType {
-			isValid = true
-			break
-		}
-	}
-	if !isValid {
-		return errors.New("Invalid input type")
-	}
-
-	if req.InputType == "date" && req.PhotoDate == "" {
-		return errors.New("Photo date is required when input type is 'date'")
-	}
-
-	if req.InputType == "age" && req.AgeYears == nil {
-		return errors.New("Age years is required when input type is 'age'")
-	}
-
 	return nil
 }
 

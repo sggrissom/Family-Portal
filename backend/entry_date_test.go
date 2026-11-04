@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -82,10 +83,10 @@ func TestEntryProcsResolveDatesOnAddAndUpdate(t *testing.T) {
 	if _, err := callAs(t, fx, UpdateGrowthData, UpdateGrowthDataRequest{MeasurementType: "height", Value: 40, Unit: "in", InputType: "today"}); err == nil || err.Error() != "Growth data ID is required" {
 		t.Fatalf("growth update without id: %v", err)
 	}
-	if _, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{Description: "Waved", Category: "first", InputType: "today"}); err == nil || err.Error() != "Person ID is required" {
+	if _, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{Description: "Waved", Category: "first", RecordTime: onToday()}); err == nil || err.Error() != "Person ID is required" {
 		t.Fatalf("milestone add without person: %v", err)
 	}
-	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Description: "Waved", Category: "first", InputType: "today"}); err == nil || err.Error() != "Moment ID is required" {
+	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Description: "Waved", Category: "first", RecordTime: onToday()}); err == nil || err.Error() != "Moment ID is required" {
 		t.Fatalf("milestone update without id: %v", err)
 	}
 
@@ -101,16 +102,16 @@ func TestEntryProcsResolveDatesOnAddAndUpdate(t *testing.T) {
 		t.Fatal("growth update accepted month 12")
 	}
 
-	milestone, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Waved", Category: "first", InputType: "age", AgeYears: intPtr(1)})
+	milestone, err := callAs(t, fx, AddMilestone, AddMilestoneRequest{PersonId: fx.alice.Id, Description: "Waved", Category: "first", RecordTime: atAge(fx.alice, 1, 0)})
 	if err != nil || !milestone.Milestone.MilestoneDate.Equal(aliceAt(1, 0)) {
 		t.Fatalf("milestone add by age: %+v, %v", milestone, err)
 	}
 	day := "2016-01-02"
-	edited, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Id: milestone.Milestone.Id, Description: "Waved bye", Category: "first", InputType: "date", MilestoneDate: &day})
+	edited, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Id: milestone.Milestone.Id, Description: "Waved bye", Category: "first", RecordTime: onDay(day)})
 	if err != nil || edited.Milestone.MilestoneDate.Format("2006-01-02") != day {
 		t.Fatalf("milestone update by date: %+v, %v", edited, err)
 	}
-	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Id: milestone.Milestone.Id, Description: "Waved bye", Category: "first", InputType: "date"}); err == nil || err.Error() != "Moment date is required when input type is 'date'" {
+	if _, err := callAs(t, fx, UpdateMilestone, UpdateMilestoneRequest{Id: milestone.Milestone.Id, Description: "Waved bye", Category: "first"}); !errors.Is(err, ErrDateRequired) {
 		t.Fatalf("milestone update without date: %v", err)
 	}
 

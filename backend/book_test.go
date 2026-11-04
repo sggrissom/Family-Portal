@@ -75,7 +75,7 @@ func setupBookFixture(t *testing.T) bookFixture {
 		milestone := func(person Person, date, text string, photoIds ...int) Milestone {
 			m, err := AddMilestoneTx(tx, AddMilestoneRequest{
 				PersonId: person.Id, Description: text, Category: "first",
-				InputType: "date", MilestoneDate: &date, PhotoIds: photoIds,
+				RecordTime: onDay(date), PhotoIds: photoIds,
 			}, person.FamilyId)
 			if err != nil {
 				t.Fatalf("AddMilestoneTx(%s) = %v", text, err)

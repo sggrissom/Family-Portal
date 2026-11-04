@@ -195,7 +195,7 @@ func TestAddMilestoneRecordsFamilyProvenance(t *testing.T) {
 		child := Person{Id: 1, FamilyId: 1, Birthday: day("2020-06-15")}
 		vbolt.Write(tx, PeopleBkt, 1, &child)
 		m, err := AddMilestoneTx(tx, AddMilestoneRequest{PersonId: 1, Description: "x", Category: "first",
-			InputType: "date", MilestoneDate: stringPtr("2022-10-31")}, 1)
+			RecordTime: onDay("2022-10-31")}, 1)
 		if err != nil {
 			t.Fatal(err)
 		}

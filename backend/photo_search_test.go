@@ -147,7 +147,7 @@ func TestSearchFollowsPhotoEdits(t *testing.T) {
 	photo := fx.addPhotoAt(t, "p.jpg", featuresEpoch)
 	edit := func(title, description string) {
 		t.Helper()
-		if _, err := callAs(t, fx, UpdatePhoto, UpdatePhotoRequest{Id: photo.Id, Title: title, Description: description, InputType: "keep"}); err != nil {
+		if _, err := callAs(t, fx, UpdatePhoto, UpdatePhotoRequest{Id: photo.Id, Title: title, Description: description}); err != nil {
 			t.Fatal(err)
 		}
 	}
