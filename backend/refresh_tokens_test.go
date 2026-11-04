@@ -199,38 +199,6 @@ func TestValidateRefreshToken(t *testing.T) {
 	})
 }
 
-func TestUpdateRefreshTokenLastUsed(t *testing.T) {
-	db := setupRefreshTokenTestDB(t)
-	defer cleanupRefreshTokenTestDB(db)
-
-	var tokenId int
-	var originalLastUsed time.Time
-
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
-		token, _, _ := CreateRefreshToken(tx, user.Id, 30*24*time.Hour)
-		tokenId = token.Id
-		originalLastUsed = token.LastUsedAt
-		vbolt.TxCommit(tx)
-	})
-
-	time.Sleep(10 * time.Millisecond)
-
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		UpdateRefreshTokenLastUsed(tx, tokenId)
-		vbolt.TxCommit(tx)
-	})
-
-	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		var token RefreshToken
-		vbolt.Read(tx, RefreshTokenBkt, tokenId, &token)
-
-		if !token.LastUsedAt.After(originalLastUsed) {
-			t.Error("LastUsedAt should be updated to a later time")
-		}
-	})
-}
-
 func TestRotateRefreshTokenIssuesASuccessor(t *testing.T) {
 	db := setupRefreshTokenTestDB(t)
 	defer cleanupRefreshTokenTestDB(db)
@@ -523,67 +491,6 @@ func TestCleanupExpiredRefreshTokens(t *testing.T) {
 		if len(tokenIds) != 1 || tokenIds[0] != validToken.Id {
 			t.Errorf("user token index = %v, want [%d]", tokenIds, validToken.Id)
 		}
-	})
-}
-
-func TestHashStoredRefreshTokensUpgradesLegacyRows(t *testing.T) {
-	db := setupRefreshTokenTestDB(t)
-	defer cleanupRefreshTokenTestDB(db)
-
-	rawToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	var legacyId int
-
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		user := createRefreshTokenTestUser(tx, "test@example.com", "Test User")
-		legacy := RefreshToken{
-			Id:         vbolt.NextIntId(tx, RefreshTokenBkt),
-			UserId:     user.Id,
-			TokenHash:  rawToken,
-			ExpiresAt:  time.Now().Add(time.Hour),
-			CreatedAt:  time.Now(),
-			LastUsedAt: time.Now(),
-		}
-		legacyId = legacy.Id
-		vbolt.Write(tx, RefreshTokenBkt, legacy.Id, &legacy)
-		vbolt.Write(tx, RefreshTokenByTokenBkt, rawToken, &legacy.Id)
-		vbolt.SetTargetSingleTerm(tx, RefreshTokenByUserIndex, legacy.Id, legacy.UserId)
-		vbolt.TxCommit(tx)
-	})
-
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		if converted := HashStoredRefreshTokens(tx); converted != 1 {
-			t.Fatalf("HashStoredRefreshTokens() = %d, want 1", converted)
-		}
-		vbolt.TxCommit(tx)
-	})
-
-	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
-		token, found := GetRefreshTokenByToken(tx, rawToken)
-		if !found {
-			t.Fatal("the cookie a user already holds stopped working after the migration")
-		}
-		if token.Id != legacyId {
-			t.Errorf("resolved token id = %d, want %d", token.Id, legacyId)
-		}
-		if token.TokenHash != hashRefreshToken(rawToken) {
-			t.Error("migrated row does not hold the hash")
-		}
-		if token.SessionId != legacyId {
-			t.Errorf("migrated session = %d, want %d", token.SessionId, legacyId)
-		}
-
-		var strayId int
-		vbolt.Read(tx, RefreshTokenByTokenBkt, rawToken, &strayId)
-		if strayId != 0 {
-			t.Error("the lookup entry keyed by the raw token was left behind")
-		}
-	})
-
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		if converted := HashStoredRefreshTokens(tx); converted != 0 {
-			t.Errorf("second HashStoredRefreshTokens() = %d, want 0", converted)
-		}
-		vbolt.TxCommit(tx)
 	})
 }
 

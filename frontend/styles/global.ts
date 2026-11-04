@@ -467,8 +467,7 @@ block(`
 `);
 
 block(`
-.form-group label,
-.form-group-caption {
+.form-group label {
   font-weight: 600;
   color: var(--text);
   font-size: 0.9rem;

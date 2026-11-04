@@ -163,20 +163,3 @@ func GetOptimalImageFormat(acceptHeader string) string {
 	}
 	return "jpeg"
 }
-
-func GetImageMimeType(format string) string {
-	switch format {
-	case "webp":
-		return "image/webp"
-	case "avif":
-		return "image/avif"
-	case "png":
-		return "image/png"
-	case "gif":
-		return "image/gif"
-	case "jpeg", "jpg":
-		return "image/jpeg"
-	default:
-		return "image/jpeg"
-	}
-}

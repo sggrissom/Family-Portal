@@ -145,11 +145,6 @@ func RespondUnexpectedError(w http.ResponseWriter, r *http.Request, cause error)
 	RespondWithError(w, r, appErr, http.StatusInternalServerError)
 }
 
-func RespondConflictError(w http.ResponseWriter, r *http.Request, message string) {
-	err := NewAppError(ErrCodeConflict, message)
-	RespondWithError(w, r, err, http.StatusConflict)
-}
-
 func RespondUnavailableError(w http.ResponseWriter, r *http.Request, message string, details ...string) {
 	err := NewAppError(ErrCodeUnavailable, message, details...)
 	RespondWithError(w, r, err, http.StatusServiceUnavailable)

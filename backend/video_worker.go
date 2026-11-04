@@ -6,7 +6,6 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -210,7 +209,7 @@ func (w *videoWorker) process(imageId int) error {
 				w.fail(image, start, "The uploaded file is missing.", false)
 				return nil
 			}
-			log.Printf("[VIDEO] Could not move video %d into place: %v", imageId, err)
+			LogWarn(LogCategoryWorker, "Could not move a video into place", map[string]interface{}{"videoId": imageId, "error": err.Error()})
 			return errRetryLater
 		}
 		gone := false
@@ -309,7 +308,7 @@ func (w *videoWorker) process(imageId int) error {
 		if w.ctx.Err() != nil {
 			return nil
 		}
-		log.Printf("[VIDEO] Could not store the playback file for video %d: %v", imageId, err)
+		LogWarn(LogCategoryWorker, "Could not store a video playback file", map[string]interface{}{"videoId": imageId, "error": err.Error()})
 		return errRetryLater
 	}
 
@@ -343,7 +342,6 @@ func (w *videoWorker) process(imageId int) error {
 		published = true
 	})
 	if !published {
-		log.Printf("[VIDEO] Video %d was deleted while processing; discarding its outputs", imageId)
 		outputs.discard(store)
 		return nil
 	}
@@ -351,7 +349,6 @@ func (w *videoWorker) process(imageId int) error {
 	QueuePhotoEmbedding(imageId)
 	QueueVideoAnalysis(imageId)
 	w.record(imageId, start, "ready", "")
-	log.Printf("[VIDEO] Video %d ready in %v (%s, %s)", imageId, time.Since(start), probe.VideoMime, probe.Duration)
 	return nil
 }
 

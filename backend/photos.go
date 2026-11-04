@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -348,29 +347,6 @@ func GetFamilyImages(tx *vbolt.Tx, familyId int) (images []Image) {
 	var imageIds []int
 	vbolt.ReadTermTargets(tx, ImageByFamilyIndex, familyId, &imageIds, vbolt.Window{})
 	vbolt.ReadSlice(tx, ImagesBkt, imageIds, &images)
-	return
-}
-
-func GetVisibleImages(tx *vbolt.Tx, user User) (images []Image) {
-	seen := make(map[int]bool)
-	add := func(image Image) {
-		if image.Id == 0 || seen[image.Id] {
-			return
-		}
-		seen[image.Id] = true
-		images = append(images, image)
-	}
-
-	for _, familyId := range familiesVisibleTo(tx, user) {
-		for _, image := range GetFamilyImages(tx, familyId) {
-			add(image)
-		}
-	}
-	for _, person := range linkedPeopleVisibleTo(tx, user, ScopePhotos) {
-		for _, image := range GetPersonImages(tx, person.Id) {
-			add(image)
-		}
-	}
 	return
 }
 
@@ -835,7 +811,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := QueuePhotoProcessing(job); err != nil {
-		log.Printf("Failed to queue photo %d for processing: %v", image.Id, err)
+		LogErrorWithRequest(r, LogCategoryPhoto, "Upload could not queue its photo for processing", map[string]interface{}{"photoId": image.Id, "error": err.Error()})
 		markPhotoFailed(image.Id)
 		RespondUnavailableError(w, r,
 			"The photo could not be processed right now. Please try again in a few minutes.",

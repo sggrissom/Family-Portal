@@ -237,14 +237,6 @@ func (c *appleKeyCache) lookup(kid string) (*rsa.PublicKey, error) {
 	return nil, fmt.Errorf("no Apple public key for kid %q", kid)
 }
 
-func (c *appleKeyCache) reset() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.keys = nil
-	c.fetchedAt = time.Time{}
-	c.lastAttempt = time.Time{}
-}
-
 // appleKeysEndpoint is a variable so tests can point the fetch at a local
 // server instead of reaching out to Apple.
 var appleKeysEndpoint = appleKeysURL

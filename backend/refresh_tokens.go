@@ -116,17 +116,6 @@ func GetRefreshTokenByToken(tx *vbolt.Tx, tokenString string) (RefreshToken, boo
 	return token, token.Id != 0
 }
 
-func UpdateRefreshTokenLastUsed(tx *vbolt.Tx, tokenId int) {
-	var token RefreshToken
-	vbolt.Read(tx, RefreshTokenBkt, tokenId, &token)
-	if token.Id == 0 {
-		return
-	}
-
-	token.LastUsedAt = time.Now()
-	vbolt.Write(tx, RefreshTokenBkt, token.Id, &token)
-}
-
 func RotateRefreshToken(tx *vbolt.Tx, presented string, now time.Time) (RefreshToken, string, error) {
 	token, found := GetRefreshTokenByToken(tx, presented)
 	if !found {
@@ -264,41 +253,4 @@ func RunTokenCleanup(ctx context.Context, db *vbolt.DB) {
 			cleanup()
 		}
 	}
-}
-
-func ValidateRefreshToken(tx *vbolt.Tx, tokenString string) (RefreshToken, bool) {
-	token, found := GetRefreshTokenByToken(tx, tokenString)
-	if !found {
-		return RefreshToken{}, false
-	}
-
-	if token.ExpiresAt.Before(time.Now()) {
-		return RefreshToken{}, false
-	}
-
-	if !token.RotatedAt.IsZero() {
-		return RefreshToken{}, false
-	}
-
-	return token, true
-}
-
-func HashStoredRefreshTokens(tx *vbolt.Tx) int {
-	var legacy []RefreshToken
-	vbolt.IterateAll(tx, RefreshTokenBkt, func(_ int, token RefreshToken) bool {
-		if token.SessionId == 0 {
-			legacy = append(legacy, token)
-		}
-		return true
-	})
-
-	for _, token := range legacy {
-		raw := token.TokenHash
-		vbolt.Delete(tx, RefreshTokenByTokenBkt, raw)
-
-		token.TokenHash = hashRefreshToken(raw)
-		token.SessionId = token.Id
-		writeRefreshToken(tx, token)
-	}
-	return len(legacy)
 }

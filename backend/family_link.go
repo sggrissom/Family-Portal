@@ -180,10 +180,6 @@ type LinkScopes struct {
 	Activities bool `json:"activities"`
 }
 
-func DefaultLinkScopes() LinkScopes {
-	return LinkScopes{People: true, Milestones: true, Photos: true}
-}
-
 func (scopes LinkScopes) ToMask() int {
 	mask := 0
 	if scopes.People {

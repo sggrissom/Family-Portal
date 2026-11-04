@@ -5,7 +5,6 @@ import (
 	"family/cfg"
 	"family/vision"
 	"fmt"
-	"log"
 	"math"
 	"slices"
 	"sort"
@@ -340,7 +339,7 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 		return errRetryLater
 	}
 	if err != nil {
-		log.Printf("[VISION] Could not embed tag phrases: %v", err)
+		LogWarn(LogCategoryWorker, "Could not embed tag phrases", map[string]interface{}{"error": err.Error()})
 		return nil
 	}
 	var scores []labelScore

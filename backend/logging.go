@@ -132,14 +132,6 @@ func LogErrorWithRequest(r *http.Request, category string, message string, data 
 	logStructured(logLevelError, logCategory(category), message, d, r)
 }
 
-func LogDebug(category string, message string, data ...interface{}) {
-	var d interface{}
-	if len(data) > 0 {
-		d = data[0]
-	}
-	logStructured(logLevelDebug, logCategory(category), message, d, nil)
-}
-
 func redactEmail(email string) string {
 	at := strings.LastIndex(email, "@")
 	if at <= 0 {

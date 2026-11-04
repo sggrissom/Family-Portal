@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -109,10 +108,6 @@ func (pw *PhotoWorker) queueBlocking(job PhotoProcessingJob) error {
 
 var backlogFeeders sync.WaitGroup
 
-func waitForBacklogFeeders() {
-	backlogFeeders.Wait()
-}
-
 func queueBacklog(pw *PhotoWorker, jobs []PhotoProcessingJob, failureMsg, doneMsg string) {
 	if pw == nil || len(jobs) == 0 {
 		return
@@ -138,13 +133,11 @@ func queueBacklog(pw *PhotoWorker, jobs []PhotoProcessingJob, failureMsg, doneMs
 
 func QueuePhotoProcessing(job PhotoProcessingJob) error {
 	if globalPhotoWorker == nil {
-		log.Printf("Cannot queue photo %d: worker not initialized", job.ImageId)
 		return fmt.Errorf("photo worker not initialized")
 	}
 
 	select {
 	case globalPhotoWorker.jobQueue <- job:
-		log.Printf("Photo %d queued for background processing (queue length: %d)", job.ImageId, len(globalPhotoWorker.jobQueue))
 		return nil
 	default:
 	}
@@ -153,11 +146,12 @@ func QueuePhotoProcessing(job PhotoProcessingJob) error {
 	// instead of failing photos that were saved.
 	pw := activePhotoWorker()
 	if pw == nil {
-		log.Printf("Cannot queue photo %d: processing queue is full", job.ImageId)
 		return fmt.Errorf("processing queue is full")
 	}
 	job.FileData = nil
-	log.Printf("Photo %d deferred until the processing queue has room", job.ImageId)
+	LogInfo(LogCategoryPhoto, "Photo deferred until the processing queue has room", map[string]interface{}{
+		"photoId": job.ImageId,
+	})
 	backlogFeeders.Add(1)
 	go func() {
 		defer backlogFeeders.Done()
@@ -216,7 +210,6 @@ func (pw *PhotoWorker) processJobs(quit <-chan struct{}, done chan struct{}) {
 
 func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	startTime := time.Now()
-	log.Printf("[PHOTO_PROCESSING] Starting processing of photo ID %d (size: %d bytes)", job.ImageId, len(job.FileData))
 
 	outcome := func(success bool, reason string) {
 		pw.recordAttempt(PhotoAttempt{
@@ -227,16 +220,21 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 			DurationMs: int(time.Since(startTime).Milliseconds()),
 			Reason:     reason,
 		})
+		if !success {
+			LogWarn(LogCategoryPhoto, "Photo processing failed", map[string]interface{}{
+				"photoId":   job.ImageId,
+				"reprocess": job.Reprocess,
+				"reason":    reason,
+			})
+		}
 	}
 
-	log.Printf("[PHOTO_PROCESSING] Setting status to processing for photo %d", job.ImageId)
 	err := pw.updatePhotoStatus(job.ImageId, 1)
 	if err != nil {
 		if errors.Is(err, errPhotoRecordGone) {
 			pw.discardJobFiles(job)
 			return
 		}
-		log.Printf("[PHOTO_PROCESSING] FAILED to update photo %d status to processing: %v", job.ImageId, err)
 		outcome(false, "could not mark the photo as processing: "+err.Error())
 		return
 	}
@@ -245,7 +243,6 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	if len(sourceData) == 0 {
 		sourceData, err = os.ReadFile(photoOriginalPath(job.FilePath))
 		if err != nil {
-			log.Printf("[PHOTO_PROCESSING] FAILED to read original for photo ID %d: %v", job.ImageId, err)
 			pw.updatePhotoStatus(job.ImageId, 2)
 			outcome(false, "original file is missing: "+err.Error())
 			return
@@ -256,34 +253,26 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		removePhotoVariants(job.FilePath)
 	}
 
-	log.Printf("[PHOTO_PROCESSING] Processing image formats and sizes for photo %d", job.ImageId)
 	processedImages, processedWidth, processedHeight, err := ProcessAndSaveMultipleSizes(sourceData, job.MimeType)
 	if err != nil {
-		log.Printf("[PHOTO_PROCESSING] FAILED to process photo ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2)
 		outcome(false, "could not decode or re-encode the image: "+err.Error())
 		return
 	}
-	log.Printf("[PHOTO_PROCESSING] Generated %d image variants for photo %d", len(processedImages), job.ImageId)
 
-	log.Printf("[PHOTO_PROCESSING] Saving image variants to disk for photo %d", job.ImageId)
 	_, err = writeImageVariants(job.FilePath, processedImages)
 	if err != nil {
-		log.Printf("[PHOTO_PROCESSING] FAILED to save photo variants for ID %d: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2)
 		outcome(false, "could not write the variants to disk: "+err.Error())
 		return
 	}
-	log.Printf("[PHOTO_PROCESSING] Successfully saved all variants for photo %d", job.ImageId)
 
-	log.Printf("[PHOTO_PROCESSING] Marking photo %d as completed", job.ImageId)
 	err = pw.updatePhotoComplete(job.ImageId, processedWidth, processedHeight)
 	if err != nil {
 		if errors.Is(err, errPhotoRecordGone) {
 			pw.discardJobFiles(job)
 			return
 		}
-		log.Printf("[PHOTO_PROCESSING] FAILED to mark photo %d as complete: %v", job.ImageId, err)
 		pw.updatePhotoStatus(job.ImageId, 2)
 		outcome(false, "could not mark the photo complete: "+err.Error())
 		return
@@ -294,12 +283,9 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	QueuePhotoEmbedding(job.ImageId)
 
 	outcome(true, "")
-	processingTime := time.Since(startTime)
-	log.Printf("[PHOTO_PROCESSING] ✅ Successfully completed photo ID %d in %v", job.ImageId, processingTime)
 }
 
 func (pw *PhotoWorker) discardJobFiles(job PhotoProcessingJob) {
-	log.Printf("[PHOTO_PROCESSING] Photo %d was deleted mid-processing; discarding its files", job.ImageId)
 	if err := deletePhotoFiles(Image{FilePath: job.FilePath}); err != nil {
 		LogErrorSimple(LogCategoryWorker, "Failed to discard files for a deleted photo", map[string]interface{}{
 			"photoId": job.ImageId,
@@ -310,7 +296,6 @@ func (pw *PhotoWorker) discardJobFiles(job PhotoProcessingJob) {
 
 func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {
 	if pw.db == nil {
-		log.Printf("ERROR: Photo worker has no database reference")
 		return fmt.Errorf("photo worker database not initialized")
 	}
 
@@ -330,17 +315,11 @@ func (pw *PhotoWorker) updatePhotoStatus(imageId int, status int) error {
 		}
 	})
 
-	if updateError != nil {
-		log.Printf("Failed to update photo %d status to %d: %v", imageId, status, updateError)
-	} else {
-		log.Printf("Photo %d status updated to %d", imageId, status)
-	}
 	return updateError
 }
 
 func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error {
 	if pw.db == nil {
-		log.Printf("ERROR: Photo worker has no database reference")
 		return fmt.Errorf("photo worker database not initialized")
 	}
 
@@ -352,7 +331,6 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 			return
 		}
 
-		log.Printf("Marking photo %d as complete (status: %d -> 0)", imageId, image.Status)
 		image.Status = 0
 		if width > 0 {
 			image.Width = width
@@ -365,15 +343,9 @@ func (pw *PhotoWorker) updatePhotoComplete(imageId int, width, height int) error
 
 		if updateError == nil {
 			vbolt.TxCommit(tx)
-			log.Printf("Transaction committed for photo %d", imageId)
 		}
 	})
 
-	if updateError != nil {
-		log.Printf("Failed to mark photo %d as complete: %v", imageId, updateError)
-	} else {
-		log.Printf("Photo %d processing completed (dimensions: %dx%d)", imageId, width, height)
-	}
 	return updateError
 }
 
