@@ -70,7 +70,6 @@ export const ErrAuthFailure = "AuthFailure";
 export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
 export const ErrNoFamily = "User is not part of a family";
 export const ErrMailNotConfigured = "email delivery is not configured";
-export const ErrCorrectionNotFound = "That correction could not be found";
 export const ErrVideoNotFound = "Video not found or access denied";
 export const ErrMediaNotFound = "media object not found";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
@@ -552,29 +551,6 @@ export interface UpdateMilestoneTagsRequest {
 }
 
 export interface UpdateMilestoneTagsResponse {
-}
-
-export interface ListBirthdayClustersResponse {
-    clusters: BirthdayCluster[]
-    people: Person[]
-}
-
-export interface CorrectRecordTimesRequest {
-    changes: RecordTimeChange[]
-}
-
-export interface CorrectRecordTimesResponse {
-    correctionId: number
-    changed: number
-}
-
-export interface UndoRecordTimeCorrectionRequest {
-    correctionId: number
-}
-
-export interface UndoRecordTimeCorrectionResponse {
-    restored: number
-    skipped: number
 }
 
 export interface GetInterviewQuestionsRequest {
@@ -2174,19 +2150,6 @@ export interface RecordTime {
     resolverVersion: number
 }
 
-export interface BirthdayCluster {
-    personId: number
-    age: number
-    day: string
-    records: BirthdayClusterRecord[]
-}
-
-export interface RecordTimeChange {
-    kind: string
-    id: number
-    recordTime: RecordTime
-}
-
 export interface InterviewQuestion {
     id: number
     familyId: number
@@ -2955,14 +2918,6 @@ export interface AdminMobileVersionPlatform {
     warnings: string[]
 }
 
-export interface BirthdayClusterRecord {
-    kind: string
-    id: number
-    text: string
-    photoId: number
-    recordTime: RecordTime
-}
-
 export interface ImportRow {
     raw: string
     answer: string
@@ -3371,18 +3326,6 @@ export async function SearchMilestones(data: SearchMilestonesRequest): Promise<r
 
 export async function UpdateMilestoneTags(data: UpdateMilestoneTagsRequest): Promise<rpc.Response<UpdateMilestoneTagsResponse>> {
     return await rpc.call<UpdateMilestoneTagsResponse>('UpdateMilestoneTags', JSON.stringify(data));
-}
-
-export async function ListBirthdayClusters(data: Empty): Promise<rpc.Response<ListBirthdayClustersResponse>> {
-    return await rpc.call<ListBirthdayClustersResponse>('ListBirthdayClusters', JSON.stringify(data));
-}
-
-export async function CorrectRecordTimes(data: CorrectRecordTimesRequest): Promise<rpc.Response<CorrectRecordTimesResponse>> {
-    return await rpc.call<CorrectRecordTimesResponse>('CorrectRecordTimes', JSON.stringify(data));
-}
-
-export async function UndoRecordTimeCorrection(data: UndoRecordTimeCorrectionRequest): Promise<rpc.Response<UndoRecordTimeCorrectionResponse>> {
-    return await rpc.call<UndoRecordTimeCorrectionResponse>('UndoRecordTimeCorrection', JSON.stringify(data));
 }
 
 export async function GetInterviewQuestions(data: GetInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {

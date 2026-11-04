@@ -380,9 +380,6 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
         </li>
       )}
       <li>
-        <a href="/date-review">{copy.account.dateReview}</a>
-      </li>
-      <li>
         <a href="/settings">{copy.account.settings}</a>
       </li>
       <li>
