@@ -357,10 +357,10 @@ export function ageInMonths(birthday: string | Date, measurementDate: string | D
 export function formatAgeAtMeasurement(ageMonths: number): string {
   if (ageMonths < 0) return "—";
   if (ageMonths < 24) {
-    const mo = Math.round(ageMonths);
+    const mo = Math.floor(ageMonths);
     return mo === 1 ? "1 mo" : `${mo} mo`;
   }
-  const totalMonths = Math.round(ageMonths);
+  const totalMonths = Math.floor(ageMonths);
   const yrs = Math.floor(totalMonths / 12);
   const mos = totalMonths % 12;
   if (mos === 0) return yrs === 1 ? "1 yr" : `${yrs} yr`;
