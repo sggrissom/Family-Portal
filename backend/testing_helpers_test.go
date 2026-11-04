@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -57,4 +58,10 @@ func ValidateRefreshToken(tx *vbolt.Tx, tokenString string) (RefreshToken, bool)
 
 func DefaultLinkScopes() LinkScopes {
 	return LinkScopes{People: true, Milestones: true, Photos: true}
+}
+
+func (l *workerLifecycle) stopImmediately() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), stopWaitTimeout)
+	defer cancel()
+	return l.stopAndWait(ctx, false)
 }

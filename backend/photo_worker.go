@@ -37,33 +37,7 @@ type PhotoWorker struct {
 	workerLifecycle
 	jobQueue chan PhotoProcessingJob
 	db       *vbolt.DB
-
-	statsMu       sync.Mutex
-	processed     int
-	failed        int
-	lastProcessed time.Time
-	lastError     string
-	lastErrorAt   time.Time
-	recent        []PhotoAttempt
-}
-
-func (pw *PhotoWorker) recordAttempt(attempt PhotoAttempt) {
-	pw.statsMu.Lock()
-	defer pw.statsMu.Unlock()
-
-	if attempt.Success {
-		pw.processed++
-		pw.lastProcessed = attempt.Time
-	} else {
-		pw.failed++
-		pw.lastError = attempt.Reason
-		pw.lastErrorAt = attempt.Time
-	}
-
-	pw.recent = append(pw.recent, attempt)
-	if len(pw.recent) > maxRecentPhotoAttempts {
-		pw.recent = pw.recent[len(pw.recent)-maxRecentPhotoAttempts:]
-	}
+	attempts attemptLog[PhotoAttempt]
 }
 
 var globalPhotoWorker *PhotoWorker
@@ -175,11 +149,6 @@ func (pw *PhotoWorker) Start() {
 	LogInfo(LogCategoryWorker, "Photo processing worker started")
 }
 
-func (pw *PhotoWorker) Stop() {
-	pw.stopImmediately()
-	LogInfo(LogCategoryWorker, "Photo processing worker stopped")
-}
-
 func (pw *PhotoWorker) StopAndDrain(ctx context.Context) bool {
 	return pw.stopAndWait(ctx, true)
 }
@@ -212,14 +181,15 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 	startTime := time.Now()
 
 	outcome := func(success bool, reason string) {
-		pw.recordAttempt(PhotoAttempt{
-			Time:       time.Now(),
+		now := time.Now()
+		pw.attempts.record(now, success, reason, PhotoAttempt{
+			Time:       now,
 			ImageId:    job.ImageId,
 			Reprocess:  job.Reprocess,
 			Success:    success,
 			DurationMs: int(time.Since(startTime).Milliseconds()),
 			Reason:     reason,
-		})
+		}, maxRecentPhotoAttempts)
 		if !success {
 			LogWarn(LogCategoryPhoto, "Photo processing failed", map[string]interface{}{
 				"photoId":   job.ImageId,
@@ -366,35 +336,15 @@ func GetProcessingStats() ProcessingStats {
 	}
 
 	pw := globalPhotoWorker
-	pw.statsMu.Lock()
-	defer pw.statsMu.Unlock()
-
-	recent := make([]PhotoAttempt, 0, len(pw.recent))
-	for i := len(pw.recent) - 1; i >= 0; i-- {
-		recent = append(recent, pw.recent[i])
-	}
-
+	stats := pw.attempts.stats()
 	return ProcessingStats{
 		QueueLength:     len(pw.jobQueue),
 		IsRunning:       pw.isRunning(),
-		Processed:       pw.processed,
-		Failed:          pw.failed,
-		LastProcessedAt: pw.lastProcessed,
-		LastError:       pw.lastError,
-		LastErrorAt:     pw.lastErrorAt,
-		RecentAttempts:  recent,
+		Processed:       stats.succeeded,
+		Failed:          stats.failed,
+		LastProcessedAt: stats.lastSuccess,
+		LastError:       stats.lastError,
+		LastErrorAt:     stats.lastErrorAt,
+		RecentAttempts:  stats.recent,
 	}
-}
-
-func StopPhotoWorker() {
-	if globalPhotoWorker != nil {
-		globalPhotoWorker.Stop()
-	}
-}
-
-func stopPhotoWorkerAndDrain(ctx context.Context) bool {
-	if globalPhotoWorker == nil {
-		return true
-	}
-	return globalPhotoWorker.StopAndDrain(ctx)
 }

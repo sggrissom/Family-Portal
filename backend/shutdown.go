@@ -11,58 +11,44 @@ const (
 	workerShutdownTimeout = 10 * time.Second
 )
 
+var workerShutdownOrder = []struct {
+	stuck  string
+	stop   func(context.Context) bool
+	queued func() int
+}{
+	{"Photo worker still had queued photos at shutdown", func(ctx context.Context) bool {
+		return globalPhotoWorker == nil || globalPhotoWorker.StopAndDrain(ctx)
+	}, GetQueueLength},
+	{"Mail worker still had queued messages at shutdown", func(ctx context.Context) bool {
+		return globalMailWorker == nil || globalMailWorker.StopAndDrain(ctx)
+	}, GetMailQueueLength},
+	{"Push worker still had queued notifications at shutdown", func(ctx context.Context) bool {
+		return globalPushWorker == nil || globalPushWorker.StopAndDrain(ctx)
+	}, nil},
+	{"Health monitor did not stop before the deadline", StopHealthMonitor, nil},
+	{"Face analysis worker did not stop before the deadline", StopAnalysisWorker, nil},
+	{"Milestone worker did not stop before the deadline", StopMilestoneWorker, nil},
+	{"Vision worker did not stop before the deadline", StopVisionWorker, nil},
+	{"Video analysis worker did not stop before the deadline", StopVideoAnalysisWorker, nil},
+	{"Video worker did not stop before the deadline", StopVideoWorker, nil},
+	{"Media janitor did not stop before the deadline", StopMediaJanitor, nil},
+	{"Photo features worker did not stop before the deadline", StopFeaturesWorker, nil},
+}
+
 func ShutdownWorkers(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, workerShutdownTimeout)
 	defer cancel()
 
 	clean := true
-
-	if !stopPhotoWorkerAndDrain(ctx) {
-		LogWarn(LogCategoryWorker, "Photo worker still had queued photos at shutdown", map[string]interface{}{
-			"queued": GetQueueLength(),
-		})
-		clean = false
-	}
-	if !stopMailWorkerAndDrain(ctx) {
-		LogWarn(LogCategoryWorker, "Mail worker still had queued messages at shutdown", map[string]interface{}{
-			"queued": GetMailQueueLength(),
-		})
-		clean = false
-	}
-	if !stopPushWorkerAndDrain(ctx) {
-		LogWarn(LogCategoryWorker, "Push worker still had queued notifications at shutdown", nil)
-		clean = false
-	}
-	if !StopHealthMonitor(ctx) {
-		LogWarn(LogCategoryWorker, "Health monitor did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopAnalysisWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Face analysis worker did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopMilestoneWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Milestone worker did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopVisionWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Vision worker did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopVideoAnalysisWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Video analysis worker did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopVideoWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Video worker did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopMediaJanitor(ctx) {
-		LogWarn(LogCategoryWorker, "Media janitor did not stop before the deadline", nil)
-		clean = false
-	}
-	if !StopFeaturesWorker(ctx) {
-		LogWarn(LogCategoryWorker, "Photo features worker did not stop before the deadline", nil)
+	for _, worker := range workerShutdownOrder {
+		if worker.stop(ctx) {
+			continue
+		}
+		var data interface{}
+		if worker.queued != nil {
+			data = map[string]interface{}{"queued": worker.queued()}
+		}
+		LogWarn(LogCategoryWorker, worker.stuck, data)
 		clean = false
 	}
 

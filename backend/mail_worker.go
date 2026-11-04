@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -27,33 +26,11 @@ type MailAttempt struct {
 type MailWorker struct {
 	workerLifecycle
 	jobQueue chan MailJob
-
-	statsMu   sync.Mutex
-	sent      int
-	failed    int
-	lastSent  time.Time
-	lastError string
-	lastErrAt time.Time
-	recent    []MailAttempt
+	attempts attemptLog[MailAttempt]
 }
 
 func (mw *MailWorker) recordAttempt(attempt MailAttempt) {
-	mw.statsMu.Lock()
-	defer mw.statsMu.Unlock()
-
-	if attempt.Success {
-		mw.sent++
-		mw.lastSent = attempt.Time
-	} else {
-		mw.failed++
-		mw.lastError = attempt.Error
-		mw.lastErrAt = attempt.Time
-	}
-
-	mw.recent = append(mw.recent, attempt)
-	if len(mw.recent) > maxRecentMailAttempts {
-		mw.recent = mw.recent[len(mw.recent)-maxRecentMailAttempts:]
-	}
+	mw.attempts.record(attempt.Time, attempt.Success, attempt.Error, attempt, maxRecentMailAttempts)
 }
 
 var globalMailWorker *MailWorker
@@ -106,11 +83,6 @@ func (mw *MailWorker) Start() {
 	}
 
 	go mw.processJobs(quit, done)
-}
-
-func (mw *MailWorker) Stop() {
-	mw.stopImmediately()
-	LogInfo(LogCategoryWorker, "Mail worker stopped")
 }
 
 func (mw *MailWorker) StopAndDrain(ctx context.Context) bool {
@@ -240,23 +212,16 @@ func GetMailWorkerStats() MailWorkerStats {
 	}
 
 	mw := globalMailWorker
-	mw.statsMu.Lock()
-	defer mw.statsMu.Unlock()
-
-	recent := make([]MailAttempt, 0, len(mw.recent))
-	for i := len(mw.recent) - 1; i >= 0; i-- {
-		recent = append(recent, mw.recent[i])
-	}
-
+	stats := mw.attempts.stats()
 	return MailWorkerStats{
 		QueueLength:    len(mw.jobQueue),
 		IsRunning:      mw.isRunning(),
-		Sent:           mw.sent,
-		Failed:         mw.failed,
-		LastSentAt:     mw.lastSent,
-		LastError:      mw.lastError,
-		LastErrorAt:    mw.lastErrAt,
-		RecentAttempts: recent,
+		Sent:           stats.succeeded,
+		Failed:         stats.failed,
+		LastSentAt:     stats.lastSuccess,
+		LastError:      stats.lastError,
+		LastErrorAt:    stats.lastErrorAt,
+		RecentAttempts: stats.recent,
 	}
 }
 
@@ -265,17 +230,4 @@ func GetMailQueueLength() int {
 		return 0
 	}
 	return len(globalMailWorker.jobQueue)
-}
-
-func StopMailWorker() {
-	if globalMailWorker != nil {
-		globalMailWorker.Stop()
-	}
-}
-
-func stopMailWorkerAndDrain(ctx context.Context) bool {
-	if globalMailWorker == nil {
-		return true
-	}
-	return globalMailWorker.StopAndDrain(ctx)
 }
