@@ -447,6 +447,9 @@ func (rt RecordTime) Label() string {
 			age = "age " + strconv.Itoa(rt.AgeYears)
 		case PrecisionMonth:
 			age = "age " + plural(rt.AgeYears, "year") + ", " + plural(rt.AgeMonths, "month")
+			if rt.AgeYears == 0 {
+				age = "age " + plural(rt.AgeMonths, "month")
+			}
 		case PrecisionRange:
 			age = "ages " + strconv.Itoa(rt.AgeYears) + "–" + strconv.Itoa(rt.AgeToYears)
 		}
