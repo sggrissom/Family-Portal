@@ -17,7 +17,7 @@ func TestRequestDeadlinesByRoute(t *testing.T) {
 		{"RPC call", "/rpc/GetDashboard", defaultReadTimeout, defaultWriteTimeout},
 		{"login", "/api/login", defaultReadTimeout, defaultWriteTimeout},
 		{"photo upload", "/api/upload-photo", uploadReadTimeout, defaultWriteTimeout},
-		{"family import", "/api/import-bundle", importReadTimeout, defaultWriteTimeout},
+		{"family import", "/api/import-bundle", importReadTimeout, importReadTimeout + defaultWriteTimeout},
 		{"family export", "/api/export-bundle", defaultReadTimeout, downloadWriteTimeout},
 		{"database snapshot", SnapshotPath, defaultReadTimeout, downloadWriteTimeout},
 		{"photo download", "/api/photo/1234/medium", defaultReadTimeout, downloadWriteTimeout},
