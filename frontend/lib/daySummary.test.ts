@@ -296,4 +296,32 @@ describe("approximate records", () => {
       ["October 2026", ["Sometime in October 2026"]],
     ]);
   });
+
+  it("doesn't repeat a month that a long period interrupts", () => {
+    const day = (d: string, from = "", to = "") => ({
+      day: d,
+      period: from ? "Around age 0" : "",
+      periodFrom: from,
+      periodTo: to,
+      birthdays: [],
+      milestones: [],
+      interviews: [],
+      events: [],
+      checkups: [],
+      photos: null,
+    });
+    const groups = groupByMonth([
+      day("2026-10-19"),
+      day("2026-10-19", "2026-10-19", "2026-11-18"),
+      day("2026-10-17"),
+      day("2026-09-29"),
+    ]);
+    expect(groups.map(g => [g.label, g.days.length])).toEqual([
+      ["October 2026", 1],
+      ["", 1],
+      ["", 1],
+      ["September 2026", 1],
+    ]);
+    expect(new Set(groups.map(g => g.month)).size).toBe(groups.length);
+  });
 });
