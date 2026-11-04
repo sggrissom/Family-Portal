@@ -495,3 +495,54 @@ func TestAddingAPartnerCanMakeThemAParentToo(t *testing.T) {
 		}
 	})
 }
+
+func TestPersonNamesAreTrimmed(t *testing.T) {
+	fx, cleanup := setupRelationFixture(t)
+	defer cleanup()
+	jwtKey = []byte("relation-test-secret-key-at-least-32")
+
+	token, err := generateJwtTokenString(fx.user)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, procErr := AddPerson(&vbeam.Context{Tx: tx, Token: token}, AddPersonRequest{
+			Name:      "  Test Kid  ",
+			Gender:    int(Female),
+			Birthdate: "2020-01-01",
+		})
+		if procErr != nil {
+			t.Fatalf("AddPerson() error = %v", procErr)
+		}
+		if resp.Person.Name != "Test Kid" {
+			t.Errorf("added name = %q, want \"Test Kid\"", resp.Person.Name)
+		}
+	})
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		resp, procErr := UpdatePerson(&vbeam.Context{Tx: tx, Token: token}, UpdatePersonRequest{
+			Id:        fx.kid.Id,
+			Name:      " Mia ",
+			Gender:    int(Female),
+			Birthdate: "2016-04-11",
+		})
+		if procErr != nil {
+			t.Fatalf("UpdatePerson() error = %v", procErr)
+		}
+		if resp.Person.Name != "Mia" {
+			t.Errorf("updated name = %q, want \"Mia\"", resp.Person.Name)
+		}
+	})
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		_, procErr := AddPerson(&vbeam.Context{Tx: tx, Token: token}, AddPersonRequest{
+			Name:      "   ",
+			Gender:    int(Female),
+			Birthdate: "2020-01-01",
+		})
+		if procErr == nil {
+			t.Error("a blank name must be rejected")
+		}
+	})
+}
