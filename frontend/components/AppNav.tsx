@@ -29,7 +29,7 @@ import { copy } from "../lib/copy";
 import { Destination, activeDestination, addPath, contextPersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
-import { localDateString } from "../lib/when";
+import { localDateString } from "../lib/dateUtils";
 import { mediaAccept } from "../lib/mediaUpload";
 import { handOffPhotos, rememberReturn, writeLastPerson } from "../lib/addFlow";
 import { isTypingTarget } from "../lib/search";

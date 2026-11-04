@@ -5,7 +5,7 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { SameAgeRows } from "../../components/SameAgeRows";
 import { SameAgePortraits } from "../../components/SameAgePortraits";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import {
   AGE_SHORTCUTS,

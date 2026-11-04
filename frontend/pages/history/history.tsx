@@ -15,8 +15,7 @@ import { interviewTitle, interviewsById, shortQuestion } from "../../lib/intervi
 import { HISTORY_TYPES, HistoryType, historyView } from "../../lib/history";
 import { getCategoryIcon } from "../../lib/milestoneHelpers";
 import { MilestoneText } from "../../components/MilestoneText";
-import { formatDate } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import { formatDate, localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import {
   firstUnloadedYear,

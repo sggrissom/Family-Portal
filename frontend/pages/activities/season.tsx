@@ -8,8 +8,12 @@ import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
-import { formatDateRange, isRealDate, toDateInputValue } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import {
+  formatDateRange,
+  isRealDate,
+  toDateInputValue,
+  localDateString,
+} from "../../lib/dateUtils";
 import { dayKey, dayLabel } from "../../lib/daySummary";
 import { cellHeadline, eventStatus } from "../../lib/activityResults";
 import { ActivityLabels, activityKindIcon, labelsFor } from "./labels";

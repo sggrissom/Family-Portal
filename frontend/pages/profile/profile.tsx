@@ -43,8 +43,7 @@ import {
   isValidBirthday,
 } from "../../lib/growthPercentiles";
 import { formatMeasurement } from "../../lib/weightFormat";
-import { formatDate, formatLongDate } from "../../lib/dateUtils";
-import { localDateString } from "../../lib/when";
+import { formatDate, formatLongDate, localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
 import "./profile-styles";
 import { recordDateLabel, recordMonthsOld } from "../../lib/recordTime";

@@ -1,5 +1,5 @@
 import * as server from "../server";
-import { localDateString } from "./when";
+import { localDateString } from "./dateUtils";
 import { usePhotoStatus, Status } from "../hooks/usePhotoStatus";
 
 export { isVideoFile, videoFileProblem, durationProblem, formatDuration } from "./videoFiles";

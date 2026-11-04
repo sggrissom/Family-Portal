@@ -6,13 +6,18 @@ import { Header, Footer } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { copy } from "../../lib/copy";
-import { When, whenProblem, whenRequest } from "../../lib/when";
+import {
+  RecordWhen,
+  exactWhenProblem,
+  exactWhenRequest,
+  newRecordWhen,
+} from "../../lib/recordWhen";
 import { CheckupEntry, entryForRecord, heightValue, weightValue } from "../../lib/checkup";
 import { ErrorPage, ViewOnlyPage } from "../../components/ErrorPage";
 import { canContribute } from "../../lib/authCache";
 import { HeightField, WeightField } from "../../components/MeasurementFields";
 import { SegmentedControl } from "../../components/SegmentedControl";
-import { WhenControl } from "../../components/WhenControl";
+import { RecordWhenControl } from "../../components/RecordWhenControl";
 import "../../components/entry-form-styles";
 
 type MeasurementKind = "height" | "weight";
@@ -25,7 +30,7 @@ const KINDS: { value: MeasurementKind; label: string }[] = [
 type EditGrowthForm = {
   kind: MeasurementKind;
   entry: CheckupEntry;
-  when: When;
+  when: RecordWhen;
   error: string;
   saving: boolean;
 };
@@ -34,7 +39,7 @@ const useEditGrowthForm = vlens.declareHook(
   (record: server.GrowthData): EditGrowthForm => ({
     kind: record.measurementType === server.Height ? "height" : "weight",
     entry: entryForRecord(record),
-    when: { mode: "date", date: record.measurementDate.split("T")[0], ageYears: "", ageMonths: "" },
+    when: { ...newRecordWhen(), mode: "date", date: record.measurementDate.split("T")[0] },
     error: "",
     saving: false,
   })
@@ -99,7 +104,7 @@ async function save(form: EditGrowthForm, record: server.GrowthData, event: Even
 
   const parsed = form.kind === "height" ? heightValue(form.entry) : weightValue(form.entry);
   const problem =
-    parsed.error || (parsed.value ? "" : `Enter a ${form.kind}`) || whenProblem(form.when);
+    parsed.error || (parsed.value ? "" : `Enter a ${form.kind}`) || exactWhenProblem(form.when);
   if (problem || !parsed.value) {
     form.error = problem;
     vlens.scheduleRedraw();
@@ -110,7 +115,7 @@ async function save(form: EditGrowthForm, record: server.GrowthData, event: Even
   form.error = "";
   vlens.scheduleRedraw();
 
-  const when = whenRequest(form.when, new Date());
+  const when = exactWhenRequest(form.when, new Date());
   const [resp, err] = await server.UpdateGrowthData({
     id: record.id,
     measurementType: form.kind,
@@ -145,7 +150,7 @@ const EditGrowthPage = ({ form, record }: { form: EditGrowthForm; record: server
             onChange={vlens.cachePartial(setKind, form)}
             disabled={disabled}
           />
-          <WhenControl when={form.when} disabled={disabled} />
+          <RecordWhenControl when={form.when} isMoment={false} exact disabled={disabled} />
         </div>
 
         {form.error && (

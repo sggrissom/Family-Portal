@@ -11,7 +11,7 @@ import { mediaAccept, mediaFileProblem, noVideo, uploadMedia } from "../../lib/m
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { chipOrder } from "../../lib/familyGroups";
 import { copy } from "../../lib/copy";
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import { returnPath, takeHandedOffPhotos, takeReturnPath } from "../../lib/addFlow";
 import { NoFamilyMembersPage } from "../../components/NoFamilyMembersPage";
 import { PersonChips, scrollSelectedChipIntoView } from "../../components/PersonChips";

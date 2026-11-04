@@ -1,6 +1,6 @@
 import { CalendarDays, Download, MapPin, Pencil, Trash2, UserRound } from "lucide-preact";
 import { Icon } from "../../components/Icon";
-import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
+import { formatDate as formatPhotoDate, localDateString } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as core from "vlens/core";
@@ -19,7 +19,6 @@ import { SameAgeStrip } from "../../components/SameAgeRows";
 import { isValidBirthday } from "../../lib/growthPercentiles";
 import { monthsOld, sameAgeForPhoto, sameAgePath } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
-import { localDateString } from "../../lib/when";
 import "./view-photo-styles";
 
 import { getIdFromRoute } from "../../lib/routeHelpers";

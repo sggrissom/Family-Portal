@@ -1,4 +1,4 @@
-import { localDateString } from "../../lib/when";
+import { localDateString } from "../../lib/dateUtils";
 import * as preact from "preact";
 import * as vlens from "vlens";
 import * as rpc from "vlens/rpc";
