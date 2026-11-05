@@ -444,7 +444,7 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 	}
 
 	var candidates []Image
-	var frameAt map[int]int
+	var found map[int]*MediaMatch
 	if parsed.Text == "" {
 		l.read(l.newest, func(image Image) bool {
 			if keep(image) {
@@ -455,14 +455,14 @@ func (s *searcher) matchPhotos(parsed parsedSearch, terms []string, places map[i
 		semantic = true
 	} else {
 		var mode string
-		candidates, frameAt, mode = rankPhotoQuery(l, parsed.Text, photoTextHits(l, terms, places), keep)
+		candidates, found, mode = rankPhotoQuery(l, parsed.Text, photoTextHits(l, terms, places), keep)
 		semantic = mode == "semantic"
 	}
 
 	more = len(candidates) > searchPhotoLimit
 	page := candidates[:min(len(candidates), searchPhotoLimit)]
 	out = photosWithPeople(s.tx, page, nil)
-	attachMatches(out, mediaMatches(s.tx, page, frameAt, terms))
+	attachMatches(out, mediaMatches(s.tx, page, found, terms))
 	return out, more, semantic
 }
 

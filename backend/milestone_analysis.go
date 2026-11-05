@@ -341,6 +341,9 @@ func SuggestMilestonePhotos(ctx *vbeam.Context, req SuggestMilestonePhotosReques
 			sort.SliceStable(candidates, func(i, j int) bool { return scores[candidates[i].Id] > scores[candidates[j].Id] })
 			resp.Ranked = true
 		}
+		if rankSpokenFirst(ctx.Tx, candidates, text) {
+			resp.Ranked = true
+		}
 	}
 	for _, img := range candidates[:min(len(candidates), milestonePhotoLimit)] {
 		resp.PhotoIds = append(resp.PhotoIds, img.Id)
@@ -480,6 +483,33 @@ func visibleMilestones(tx *vbolt.Tx, user User) (out []Milestone) {
 
 // semanticMilestoneScores ranks the candidates by meaning against the
 // query, or returns nil when the daemon can't embed it.
+// rankSpokenFirst moves videos where the description is said, or something
+// meaning it, ahead of the rest, closest first. "First word: mama" should
+// surface the clip where it was said. It reports whether any video matched.
+func rankSpokenFirst(tx *vbolt.Tx, candidates []Image, description string) bool {
+	var families []int
+	for _, img := range candidates {
+		if img.IsVideo() && !containsInt(families, img.FamilyId) {
+			families = append(families, img.FamilyId)
+		}
+	}
+	if !familyHasSpeech(tx, families) {
+		return false
+	}
+	query := embedSpeechQuery(description)
+	if query == nil {
+		return false
+	}
+	spoken := map[int]float64{}
+	for _, img := range candidates {
+		if _, score, ok := spokenMatch(tx, img.FamilyId, img.Id, query); ok {
+			spoken[img.Id] = score
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool { return spoken[candidates[i].Id] > spoken[candidates[j].Id] })
+	return len(spoken) > 0
+}
+
 func semanticMilestoneScores(tx *vbolt.Tx, query string, candidates []Milestone) map[int]float64 {
 	vectors, err := embedSentences(globalVisionClient, []string{query})
 	if err != nil {

@@ -223,24 +223,36 @@ type scoredPhoto struct {
 
 // rankPhotoQuery orders the listing's photos that keep accepts by similarity
 // to the query, keeping those within searchWindow of the best match and above
-// searchMinScore, plus the text hits. Without the daemon, only the text hits
+// searchMinScore, plus the text hits. A video whose transcript means what the
+// query does counts as a text hit. Without the daemon, only the text hits
 // remain. Only photos that can make the cut are loaded. A video scores as its
-// poster or its best frame, and frameAt holds that frame's offset.
-func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(Image) bool) ([]Image, map[int]int, string) {
+// poster or its best frame, and found says where in it the query matched.
+func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(Image) bool) ([]Image, map[int]*MediaMatch, string) {
 	mode := "semantic"
 	vector, err := embedQuery(query)
 	if err != nil {
 		mode = "text"
 	}
-	frameAt := map[int]int{}
+	own := familiesVisibleTo(l.tx, l.user)
+	var sentence []float32
+	if vector != nil && familyHasSpeech(l.tx, own) {
+		sentence = embedSpeechQuery(query)
+	}
+	found := map[int]*MediaMatch{}
 	similarity := func(familyId int, photoId int) (float64, bool) {
 		score, at, fromFrame, known := mediaSimilarity(l.tx, familyId, photoId, vector)
 		if fromFrame {
-			frameAt[photoId] = at
+			found[photoId] = &MediaMatch{Source: MatchFrame, OffsetMs: at}
 		}
 		return score, known
 	}
-	own := familiesVisibleTo(l.tx, l.user)
+	spoken := func(familyId int, photoId int) bool {
+		window, _, ok := spokenMatch(l.tx, familyId, photoId, sentence)
+		if ok {
+			found[photoId] = &MediaMatch{Source: MatchTranscript, OffsetMs: window.StartMs, Snippet: speechSnippet(window.Text)}
+		}
+		return ok
+	}
 
 	var scored []scoredPhoto
 	best := 0.0
@@ -254,6 +266,13 @@ func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(I
 				}
 			}
 		}
+		if !text && known {
+			for _, familyId := range own {
+				if text = spoken(familyId, key.id); text {
+					break
+				}
+			}
+		}
 		if !text && (vector == nil || known && score < searchMinScore) {
 			continue
 		}
@@ -263,6 +282,7 @@ func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(I
 		}
 		if vector != nil && !known {
 			score, _ = similarity(image.FamilyId, image.Id)
+			text = text || spoken(image.FamilyId, image.Id)
 		}
 		best = max(best, score)
 		if text {
@@ -281,12 +301,12 @@ func rankPhotoQuery(l photoListing, query string, hits map[int]bool, keep func(I
 			out = append(out, s.image)
 		}
 	}
-	return out, frameAt, mode
+	return out, found, mode
 }
 
 // mediaMatches says where in each video of page the query matched: a line of
-// its transcript holding the words, or else its best frame.
-func mediaMatches(tx *vbolt.Tx, page []Image, frameAt map[int]int, terms []string) map[int]*MediaMatch {
+// its transcript holding the words, or else where ranking found it.
+func mediaMatches(tx *vbolt.Tx, page []Image, found map[int]*MediaMatch, terms []string) map[int]*MediaMatch {
 	matches := map[int]*MediaMatch{}
 	for _, image := range page {
 		if !image.IsVideo() {
@@ -298,8 +318,8 @@ func mediaMatches(tx *vbolt.Tx, page []Image, frameAt map[int]int, terms []strin
 				continue
 			}
 		}
-		if at, ok := frameAt[image.Id]; ok {
-			matches[image.Id] = &MediaMatch{Source: MatchFrame, OffsetMs: at}
+		if m, ok := found[image.Id]; ok {
+			matches[image.Id] = m
 		}
 	}
 	return matches
@@ -350,11 +370,11 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 		return l.passes(image) && photoHasEveryone(l.tx, image.Id, matched)
 	}
 	var candidates []Image
-	var frameAt map[int]int
+	var found map[int]*MediaMatch
 	var terms []string
 	if query != "" {
 		terms = searchTerms(query)
-		candidates, frameAt, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
+		candidates, found, mode = rankPhotoQuery(l, query, photoTextHits(l, terms, photoPlacesMatchingATerm(l.tx, l.user, terms)), keep)
 	} else {
 		l.read(l.newest, func(image Image) bool {
 			if keep(image) {
@@ -373,6 +393,6 @@ func searchPhotos(l photoListing, query string, offset int, limit int) (page []I
 	if offset < end {
 		page = candidates[offset:end]
 	}
-	matches = mediaMatches(l.tx, page, frameAt, terms)
+	matches = mediaMatches(l.tx, page, found, terms)
 	return
 }
