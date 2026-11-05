@@ -3,10 +3,10 @@
 Status: built on web and backend. The poster, frames and transcripts shipped
 in #193–#196; faces from frames, transcript search by meaning, moment
 suggestions from speech, and frames on /suggestions follow in a later stack.
-iOS shows the transcript under the player (iOS #149). Still open: iOS search
-snippets with `?t=` deep links, iOS captions, cropping video faces from their
-frame in the iOS face review, and calibrating on real family clips (see
-Prototype results).
+iOS shows the transcript under the player (iOS #149), and iOS #169 adds
+search snippets that open at the match, captions, and video face crops from
+their frame. Still open: calibrating on real family clips (see Prototype
+results).
 
 Videos shipped as sealed boxes. Every analyzer the photos go through has an
 explicit `IsVideo` guard (embeddings, tag suggestions, features, face
@@ -369,8 +369,9 @@ quality on real family clips.
 5. **Semantic transcript search and moment suggestions from speech.** Done.
    Vectors live in their own `SpeechVectors` bucket, keyed to the window
    texts, and a transcript write drops any that no longer match.
-6. **iOS.** Transcript panel done. Captions, search snippets with deep links,
-   and frame crops for video faces in face review are still to do.
+6. **iOS.** Done: transcript panel (iOS #149); captions drawn in the
+   player's content overlay, search snippets that open at the match, and
+   video face crops from their frame (iOS #169).
 
 ## Acceptance checks
 
