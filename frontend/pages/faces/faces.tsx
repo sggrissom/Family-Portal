@@ -5,6 +5,8 @@ import * as server from "../../server";
 import { Header, Footer } from "../../layout";
 import { requireAuthInView, ensureAuthInFetch } from "../../lib/authHelpers";
 import { FaceCrop } from "../../components/FaceCrop";
+import { videoFrameOf } from "../../lib/faceCrop";
+import { viewPhotoRoute } from "../../lib/photoSequence";
 import "./faces-styles";
 
 const emptyReview: server.GetFaceReviewResponse = {
@@ -173,8 +175,13 @@ export function view(
             <div className="auto-tag-grid">
               {review.autoTagged.map(face => (
                 <div key={face.id} className="auto-tag-card">
-                  <a href={`/view-photo/${face.photoId}`} title="Open photo">
-                    <FaceCrop photoId={face.photoId} box={face.box} size={96} />
+                  <a href={viewPhotoRoute(face.photoId, false, videoFrameOf(face))} title="Open">
+                    <FaceCrop
+                      photoId={face.photoId}
+                      box={face.box}
+                      frameMs={videoFrameOf(face)}
+                      size={96}
+                    />
                   </a>
                   <div className="auto-tag-name">{personName(review, face.personId)}</div>
                   <div className="auto-tag-actions">
@@ -232,7 +239,7 @@ const FaceGroupCard = ({ state, group, people, familyName }: FaceGroupCardProps)
             aria-pressed={!state.excluded[face.id]}
             onClick={vlens.cachePartial(onToggleFace, state, face.id)}
           >
-            <FaceCrop photoId={face.photoId} box={face.box} />
+            <FaceCrop photoId={face.photoId} box={face.box} frameMs={videoFrameOf(face)} />
           </button>
         ))}
         {hidden > 0 && <div className="face-group-more">+{hidden}</div>}

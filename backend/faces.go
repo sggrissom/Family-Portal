@@ -48,7 +48,11 @@ type PhotoFace struct {
 	RejectedPersonIds []int     `json:"-"`
 	Descriptor        []float32 `json:"-"`
 	CreatedAt         time.Time `json:"createdAt"`
+	FrameMs           int       `json:"frameMs"`
+	FrameCount        int       `json:"frameCount"`
 }
+
+func (f PhotoFace) fromVideo() bool { return f.FrameCount > 0 }
 
 func PackFaceBox(self *FaceBox, buf *vpack.Buffer) {
 	vpack.Float64(&self.Left, buf)
@@ -58,7 +62,7 @@ func PackFaceBox(self *FaceBox, buf *vpack.Buffer) {
 }
 
 func PackPhotoFace(self *PhotoFace, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PhotoId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -69,6 +73,10 @@ func PackPhotoFace(self *PhotoFace, buf *vpack.Buffer) {
 	vpack.Slice(&self.RejectedPersonIds, vpack.Int, buf)
 	packFloat32Slice(&self.Descriptor, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.Int(&self.FrameMs, buf)
+		vpack.Int(&self.FrameCount, buf)
+	}
 }
 
 var PhotoFaceBkt = vbolt.Bucket(&cfg.Info, "photo_faces", vpack.FInt, PackPhotoFace)
@@ -169,7 +177,7 @@ func familyFaceReferences(tx *vbolt.Tx, familyId int) []faceReference {
 			if len(ref.Descriptors) >= faceRefsPerPerson {
 				break
 			}
-			if face.Status == FaceConfirmed && len(face.Descriptor) == 128 {
+			if face.Status == FaceConfirmed && len(face.Descriptor) == 128 && !face.fromVideo() {
 				ref.Descriptors = append(ref.Descriptors, face.Descriptor)
 			}
 		}
@@ -281,7 +289,7 @@ func autoAssignPhotoFacesTx(tx *vbolt.Tx, photo Image, faces []PhotoFace, refs [
 	}
 	var picks []pick
 	for i, face := range faces {
-		if face.Status != FaceUnknown || len(face.Descriptor) != 128 {
+		if face.Status != FaceUnknown || len(face.Descriptor) != 128 || (face.fromVideo() && face.FrameCount < 2) {
 			continue
 		}
 		if match, ok := confidentMatch(rankFaceCandidates(face.Descriptor, refs, face.RejectedPersonIds)); ok {
@@ -306,6 +314,34 @@ func autoAssignPhotoFacesTx(tx *vbolt.Tx, photo Image, faces []PhotoFace, refs [
 	return
 }
 
+// carryFaceDecisions copies what was decided about a previous face found in
+// the same place, or with the same descriptor, onto a fresh detection.
+func carryFaceDecisions(face *PhotoFace, previous []PhotoFace, used []bool, samePlace func(old PhotoFace) bool) {
+	for i, old := range previous {
+		if used[i] {
+			continue
+		}
+		if samePlace(old) || faceEuclideanDistance(old.Descriptor, face.Descriptor) < 0.15 {
+			used[i] = true
+			face.PersonId = old.PersonId
+			face.Status = old.Status
+			face.Distance = old.Distance
+			face.RejectedPersonIds = old.RejectedPersonIds
+			face.CreatedAt = old.CreatedAt
+			return
+		}
+	}
+}
+
+func replacePhotoFacesTx(tx *vbolt.Tx, photoId int, previous, faces []PhotoFace) {
+	for _, old := range previous {
+		deleteFace(tx, old.Id)
+	}
+	for i := range faces {
+		writeFace(tx, &faces[i])
+	}
+}
+
 // Replaces a photo's detected faces with a fresh detection, carrying forward
 // any decisions already made about a face found in the same place.
 func RecordPhotoFacesTx(tx *vbolt.Tx, photoId int, detected []DetectedFace) (tagged int) {
@@ -326,33 +362,100 @@ func RecordPhotoFacesTx(tx *vbolt.Tx, photoId int, detected []DetectedFace) (tag
 			Descriptor: d.Descriptor,
 			CreatedAt:  time.Now(),
 		}
-		for i, old := range previous {
-			if used[i] {
-				continue
-			}
-			samePlace := boxIoU(old.Box, d.Box) > 0.5
-			sameFace := faceEuclideanDistance(old.Descriptor, d.Descriptor) < 0.15
-			if samePlace || sameFace {
-				used[i] = true
-				face.PersonId = old.PersonId
-				face.Status = old.Status
-				face.Distance = old.Distance
-				face.RejectedPersonIds = old.RejectedPersonIds
-				face.CreatedAt = old.CreatedAt
-				break
-			}
-		}
+		carryFaceDecisions(&face, previous, used, func(old PhotoFace) bool { return boxIoU(old.Box, d.Box) > 0.5 })
 		faces = append(faces, face)
 	}
 
-	for _, old := range previous {
-		deleteFace(tx, old.Id)
-	}
-	for i := range faces {
-		writeFace(tx, &faces[i])
+	replacePhotoFacesTx(tx, photoId, previous, faces)
+	return autoAssignPhotoFacesTx(tx, photo, faces, familyFaceReferences(tx, photo.FamilyId))
+}
+
+type FrameFaces struct {
+	OffsetMs int
+	Faces    []DetectedFace
+}
+
+// RecordVideoFacesTx keeps one face for each person or stranger seen in a
+// video rather than one per frame. Faces are grouped across frames, groups
+// that confidently match the same person are merged, and each group keeps its
+// clearest face with the group's centroid as its descriptor. A group seen in
+// only one frame is never tagged automatically.
+func RecordVideoFacesTx(tx *vbolt.Tx, videoId int, frames []FrameFaces) (tagged int) {
+	video := GetImageById(tx, videoId)
+	if video.Id == 0 {
+		return
 	}
 
-	return autoAssignPhotoFacesTx(tx, photo, faces, familyFaceReferences(tx, photo.FamilyId))
+	var detected []PhotoFace
+	for _, frame := range frames {
+		for _, d := range frame.Faces {
+			if len(d.Descriptor) == 128 {
+				detected = append(detected, PhotoFace{
+					PhotoId: video.Id, FamilyId: video.FamilyId,
+					Box: d.Box, Descriptor: d.Descriptor, FrameMs: frame.OffsetMs,
+				})
+			}
+		}
+	}
+	refs := familyFaceReferences(tx, video.FamilyId)
+
+	var groups [][]PhotoFace
+	byPerson := map[int]int{}
+	for _, c := range clusterFaces(detected) {
+		if match, ok := confidentMatch(rankFaceCandidates(clusterCentroid(c), refs, nil)); ok {
+			if i, seen := byPerson[match.PersonId]; seen {
+				groups[i] = append(groups[i], c.faces...)
+				continue
+			}
+			byPerson[match.PersonId] = len(groups)
+		}
+		groups = append(groups, c.faces)
+	}
+
+	previous := GetPhotoFacesTx(tx, videoId)
+	used := make([]bool, len(previous))
+	faces := make([]PhotoFace, 0, len(groups))
+	for _, members := range groups {
+		face := clearestFace(members)
+		frames := map[int]bool{}
+		for _, m := range members {
+			frames[m.FrameMs] = true
+		}
+		face.Id = vbolt.NextIntId(tx, PhotoFaceBkt)
+		face.Descriptor = clusterCentroid(faceCluster{faces: members})
+		face.FrameCount = len(frames)
+		face.CreatedAt = time.Now()
+		carryFaceDecisions(&face, previous, used, func(old PhotoFace) bool {
+			for _, m := range members {
+				if m.FrameMs == old.FrameMs && boxIoU(m.Box, old.Box) > 0.5 {
+					return true
+				}
+			}
+			return false
+		})
+		faces = append(faces, face)
+	}
+
+	replacePhotoFacesTx(tx, videoId, previous, faces)
+	for _, old := range previous {
+		if old.Status == FaceAuto && old.PersonId > 0 {
+			dropAutoTagIfUnbackedTx(tx, videoId, old.PersonId)
+		}
+	}
+	return autoAssignPhotoFacesTx(tx, video, faces, refs)
+}
+
+// clearestFace is the largest face, which is usually the sharpest and the one
+// most worth reviewing.
+func clearestFace(faces []PhotoFace) PhotoFace {
+	best := faces[0]
+	area := func(b FaceBox) float64 { return (b.Right - b.Left) * (b.Bottom - b.Top) }
+	for _, f := range faces[1:] {
+		if area(f.Box) > area(best.Box) {
+			best = f
+		}
+	}
+	return best
 }
 
 func RematchFamilyFacesTx(tx *vbolt.Tx, familyId int) (tagged int) {
@@ -410,9 +513,15 @@ func moveFacesToPersonTx(tx *vbolt.Tx, fromPersonId int, toPersonId int) {
 }
 
 type faceCluster struct {
-	faces  []PhotoFace
-	photos map[int]bool
+	faces []PhotoFace
+	shots map[faceShot]bool
 }
+
+// faceShot is the picture a face was found in: a photo, or one frame of a
+// video. Two faces from the same shot are never the same person.
+type faceShot struct{ photoId, frameMs int }
+
+func (f PhotoFace) shot() faceShot { return faceShot{f.PhotoId, f.FrameMs} }
 
 // A face joins a group only when it is close to every face already in it
 // (bounded to the first few), so lookalike siblings are not chained together.
@@ -428,7 +537,7 @@ func clusterFaces(faces []PhotoFace) []faceCluster {
 			if len(c.faces[0].Descriptor) != 128 {
 				continue
 			}
-			if c.photos[face.PhotoId] {
+			if c.shots[face.shot()] {
 				continue
 			}
 			worst := 0.0
@@ -447,11 +556,11 @@ func clusterFaces(faces []PhotoFace) []faceCluster {
 		}
 		if best >= 0 {
 			clusters[best].faces = append(clusters[best].faces, face)
-			clusters[best].photos[face.PhotoId] = true
+			clusters[best].shots[face.shot()] = true
 		} else {
 			clusters = append(clusters, faceCluster{
-				faces:  []PhotoFace{face},
-				photos: map[int]bool{face.PhotoId: true},
+				faces: []PhotoFace{face},
+				shots: map[faceShot]bool{face.shot(): true},
 			})
 		}
 	}

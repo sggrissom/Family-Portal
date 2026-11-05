@@ -100,7 +100,7 @@ func TestVideoTranscriptsAreSearchableEditableAndRemovable(t *testing.T) {
 
 	aw := newVideoAnalysisWorker(fx.db, fx.worker.tools, nil, e, t.TempDir())
 	t.Cleanup(aw.cancel)
-	if ids := videosNeedingAnalysis(fx.db, false, true); len(ids) != 2 {
+	if ids := videosNeedingAnalysis(fx.db, false, false, true); len(ids) != 2 {
 		t.Fatalf("sweep = %v, want both videos", ids)
 	}
 	for _, v := range []Image{video, silent} {
@@ -108,7 +108,7 @@ func TestVideoTranscriptsAreSearchableEditableAndRemovable(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if ids := videosNeedingAnalysis(fx.db, false, true); len(ids) != 0 {
+	if ids := videosNeedingAnalysis(fx.db, false, false, true); len(ids) != 0 {
 		t.Errorf("still pending: %v", ids)
 	}
 

@@ -2381,6 +2381,8 @@ export interface PhotoFace {
     distance: number
     box: FaceBox
     createdAt: string
+    frameMs: number
+    frameCount: number
 }
 
 export interface FaceReviewFamily {

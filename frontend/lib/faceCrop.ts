@@ -13,6 +13,12 @@ export function hasFaceBox(box: server.FaceBox | null | undefined): box is serve
   return !!box && box.right > box.left && box.bottom > box.top;
 }
 
+// videoFrameOf is the frame a video face was found in, which its box is
+// relative to, or undefined for a face on a photo.
+export function videoFrameOf(face: server.PhotoFace): number | undefined {
+  return face.frameCount > 0 ? face.frameMs : undefined;
+}
+
 export function faceCropLayout(box: server.FaceBox, padding = 0.35): FaceCropLayout {
   const w = box.right - box.left;
   const h = box.bottom - box.top;

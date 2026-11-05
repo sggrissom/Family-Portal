@@ -22,6 +22,7 @@ import (
 
 const (
 	videoFramesVersion = 1
+	videoFacesVersion  = 1
 	frameThumbWidth    = 320
 	framesTimeout      = 10 * time.Minute
 )
@@ -32,12 +33,13 @@ type VideoFrame struct {
 }
 
 type VideoFrames struct {
-	ImageId    int
-	FamilyId   int
-	Model      string
-	Version    int
-	Frames     []VideoFrame
-	ThumbBytes int
+	ImageId      int
+	FamilyId     int
+	Model        string
+	Version      int
+	Frames       []VideoFrame
+	ThumbBytes   int
+	FacesVersion int
 }
 
 func PackVideoFrame(self *VideoFrame, buf *vpack.Buffer) {
@@ -46,13 +48,16 @@ func PackVideoFrame(self *VideoFrame, buf *vpack.Buffer) {
 }
 
 func PackVideoFrames(self *VideoFrames, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.ImageId, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Model, buf)
 	vpack.Int(&self.Version, buf)
 	vpack.Slice(&self.Frames, PackVideoFrame, buf)
 	vpack.Int(&self.ThumbBytes, buf)
+	if version >= 2 {
+		vpack.Int(&self.FacesVersion, buf)
+	}
 }
 
 var VideoFramesBkt = vbolt.Bucket(&cfg.Info, "video_frames", vpack.FInt, PackVideoFrames)
@@ -73,6 +78,16 @@ func videoNeedsFrames(tx *vbolt.Tx, image Image) bool {
 	}
 	f, found := GetVideoFrames(tx, image.Id)
 	return videoFramesOutdated(f, found)
+}
+
+// videoNeedsFaces is a video whose current frames haven't been through face
+// detection. Faces come from the stored frames, so they wait for them.
+func videoNeedsFaces(tx *vbolt.Tx, image Image) bool {
+	if !image.IsVideo() || image.Status != PhotoReady || image.PlaybackKey == "" {
+		return false
+	}
+	f, found := GetVideoFrames(tx, image.Id)
+	return !videoFramesOutdated(f, found) && f.FacesVersion < videoFacesVersion
 }
 
 func writeVideoFramesTx(tx *vbolt.Tx, f *VideoFrames) {
@@ -173,13 +188,28 @@ func bestFrame(frames []VideoFrame, query []float32) (score float64, offsetMs in
 	return
 }
 
-// sampleFrames embeds the video's chosen frames and leaves a thumbnail of
-// each distinct one in the video's frames directory.
-func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) ([]VideoFrame, int, error) {
+type sampledFrames struct {
+	offsets []int
+	files   []string
+}
+
+func (s sampledFrames) fileAt(offsetMs int) (string, bool) {
+	for i, at := range s.offsets {
+		if at == offsetMs {
+			return s.files[i], true
+		}
+	}
+	return "", false
+}
+
+// extractFrames writes the video's sampled frames into workDir. A video
+// ffmpeg can't sample gives no frames rather than an error.
+func (w *videoAnalysisWorker) extractFrames(image Image, source, workDir string) sampledFrames {
+	var s sampledFrames
 	probe, err := w.tools.probe(w.ctx, source)
 	if err != nil {
 		LogWarn(LogCategoryWorker, "Video analysis could not probe the video", map[string]interface{}{"videoId": image.Id, "error": err.Error()})
-		return nil, 0, nil
+		return s
 	}
 	convert := ""
 	if probe.HDR {
@@ -191,15 +221,23 @@ func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) 
 		"-fps_mode", "vfr", "-q:v", "4", filepath.Join(workDir, "frame-%03d.jpg"))
 	if err != nil {
 		LogWarn(LogCategoryWorker, "Video analysis could not sample frames", map[string]interface{}{"videoId": image.Id, "error": err.Error()})
-		return nil, 0, nil
+		return s
 	}
 	times := vision.ParseFrameTimes(stderr)
+	for _, i := range vision.ThinFrames(len(times), vision.MaxFrames) {
+		s.offsets = append(s.offsets, int(times[i]/time.Millisecond))
+		s.files = append(s.files, filepath.Join(workDir, fmt.Sprintf("frame-%03d.jpg", i+1)))
+	}
+	return s
+}
 
+// embedFrames embeds the sampled frames and leaves a thumbnail of each
+// distinct one in the video's frames directory.
+func (w *videoAnalysisWorker) embedFrames(image Image, sampled sampledFrames) ([]VideoFrame, int, error) {
 	var offsets []int
 	var vectors [][]float32
 	var files []string
-	for _, i := range vision.ThinFrames(len(times), vision.MaxFrames) {
-		file := filepath.Join(workDir, fmt.Sprintf("frame-%03d.jpg", i+1))
+	for i, file := range sampled.files {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			continue
@@ -217,7 +255,7 @@ func (w *videoAnalysisWorker) sampleFrames(image Image, source, workDir string) 
 			continue
 		}
 		noteVisionReachable(true)
-		offsets = append(offsets, int(times[i]/time.Millisecond))
+		offsets = append(offsets, sampled.offsets[i])
 		vectors = append(vectors, vector)
 		files = append(files, file)
 	}
