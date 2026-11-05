@@ -77,11 +77,14 @@ func VideoAnalysisQueueLength() int {
 	return globalVideoAnalysisWorker.length()
 }
 
-func videosNeedingAnalysis(db *vbolt.DB, frames, faces, transcripts bool) (ids []int) {
+// videosNeedingAnalysis lists the videos missing a part the worker can
+// produce: frames and transcript meaning with the vision daemon, faces with
+// face tagging, and transcripts with a speech model.
+func videosNeedingAnalysis(db *vbolt.DB, vision, faces, transcripts bool) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if (frames && videoNeedsFrames(tx, image)) || (faces && videoNeedsFaces(tx, image)) ||
-				(transcripts && videoNeedsTranscript(tx, image)) {
+			if (vision && (videoNeedsFrames(tx, image) || videoNeedsSpeechVectors(tx, image))) ||
+				(faces && videoNeedsFaces(tx, image)) || (transcripts && videoNeedsTranscript(tx, image)) {
 				ids = append(ids, image.Id)
 			}
 			return true
@@ -94,8 +97,18 @@ func videosNeedingAnalysis(db *vbolt.DB, frames, faces, transcripts bool) (ids [
 }
 
 // process runs each analysis the video is missing over one local copy of its
-// playback file.
+// playback file, then embeds what its transcript says.
 func (w *videoAnalysisWorker) process(imageId int) error {
+	if err := w.analyzeMedia(imageId); err != nil || w.ctx.Err() != nil {
+		return err
+	}
+	if w.client == nil {
+		return nil
+	}
+	return embedSpeech(w.db, w.client, imageId)
+}
+
+func (w *videoAnalysisWorker) analyzeMedia(imageId int) error {
 	var image Image
 	var needFrames, needFaces, needTranscript bool
 	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) {

@@ -96,11 +96,13 @@ func videoNeedsTranscript(tx *vbolt.Tx, image Image) bool {
 
 func writeVideoTranscriptTx(tx *vbolt.Tx, t *VideoTranscript) {
 	vbolt.Write(tx, VideoTranscriptBkt, t.ImageId, t)
+	dropStaleSpeechVectorsTx(tx, *t)
 	ReindexPhotoDates(tx, t.ImageId)
 }
 
 func deleteVideoTranscriptTx(tx *vbolt.Tx, imageId int) {
 	vbolt.Delete(tx, VideoTranscriptBkt, imageId)
+	deleteSpeechVectorsTx(tx, imageId)
 }
 
 // transcriptWords are the words search indexes for a video, without filler,
@@ -347,6 +349,7 @@ func UpdateVideoTranscript(ctx *vbeam.Context, req UpdateVideoTranscriptRequest)
 	writeVideoTranscriptTx(ctx.Tx, &t)
 	resp = transcriptResponse(ctx.Tx, user, image)
 	vbolt.TxCommit(ctx.Tx)
+	QueueVideoAnalysis(image.Id)
 	return
 }
 

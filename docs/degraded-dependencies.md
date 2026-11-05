@@ -69,6 +69,8 @@ The same worker transcribes videos when `cfg.SpeechModelsDir` holds
 | whisper-cli or ffmpeg fails | Logged and recorded as failed, so it isn't retried every startup. |
 | only music or silence | Voice detection and the transcript cleaner leave nothing, recorded as no speech. |
 | edited or removed transcript | Never rerun, even when the model or version changes. |
+| no vision daemon | Transcripts are stored and found by their words, but not by meaning; their windows are embedded once the daemon is back. |
+| transcript edited or removed | Its meaning vectors are dropped in the same write, so a removed line stops matching at once, and the video is queued to embed the new text. |
 
 With `cfg.EnableFaceTagging` on, the same worker also sends each video's
 stored frames to the face daemon. Faces come from the frames, so they need
