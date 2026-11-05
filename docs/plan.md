@@ -14,7 +14,7 @@ proposals are kept in [Not planned](not-planned.md).
 | Plan | Purpose |
 | --- | --- |
 | [Approximate dates and ages](plans/approximate-dates.md) | Preserve uncertain dates and age-period descriptions such as “at age 4” without inventing birthday events. Covers moments/media, sitewide date and age behavior, migration and correction, mobile, and exports. Manual support first; optional AI estimation later. |
-| [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. |
+| [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. Built on web; iOS search snippets, captions and video face crops remain. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
 
 ## Follow-ups to shipped features

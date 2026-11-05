@@ -3014,6 +3014,7 @@ export interface TagSuggestion {
     score: number
     status: number
     createdAt: string
+    frameMs: number
 }
 
 export interface BookInterview {

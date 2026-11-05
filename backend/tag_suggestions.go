@@ -76,10 +76,11 @@ type TagSuggestion struct {
 	Score     float64   `json:"score"`
 	Status    int       `json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
+	FrameMs   int       `json:"frameMs"`
 }
 
 func PackTagSuggestion(self *TagSuggestion, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PhotoId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -88,6 +89,9 @@ func PackTagSuggestion(self *TagSuggestion, buf *vpack.Buffer) {
 	vpack.Float64(&self.Score, buf)
 	vpack.Int(&self.Status, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.Int(&self.FrameMs, buf)
+	}
 }
 
 var TagSuggestionBkt = vbolt.Bucket(&cfg.Info, "tag_suggestions", vpack.FInt, PackTagSuggestion)
@@ -108,12 +112,16 @@ func suggestKey(tx *vbolt.Tx, familyId int) string {
 	return fmt.Sprintf("%d:%d", autoTagVersion, gen)
 }
 
+// videoSuggestVersion is bumped when suggestions from frames change shape;
+// version 2 records the frame each one was found in.
+const videoSuggestVersion = 2
+
 // photoSuggestKey adds a video's frames to the family key, so new frames
 // rescore it.
 func photoSuggestKey(tx *vbolt.Tx, photoId, familyId int) string {
 	key := suggestKey(tx, familyId)
 	if f, ok := GetVideoFrames(tx, photoId); ok {
-		key += fmt.Sprintf(":f%d", f.Version)
+		key += fmt.Sprintf(":f%d.%d", f.Version, videoSuggestVersion)
 	}
 	return key
 }
@@ -250,8 +258,9 @@ func embedPhrases(client *visionClient, phrases []string) ([][]float32, error) {
 }
 
 type labelScore struct {
-	prob   float64
-	cosine float64
+	prob    float64
+	cosine  float64
+	frameMs int
 }
 
 // scoreLabels is a zero-shot classification: a softmax over the targets and
@@ -279,7 +288,7 @@ func scoreLabels(image []float32, targets, background [][]float32) []labelScore 
 const shortClipMs = 15000
 
 // scoreVideoLabels keeps a label that passes on enough of the video's frames,
-// two unless the clip is short, at its best frame's probability.
+// two unless the clip is short, at its best frame's probability and offset.
 func scoreVideoLabels(frames []VideoFrame, durationMs int, targets, background [][]float32) []labelScore {
 	minFrames := 2
 	if durationMs < shortClipMs || len(frames) < 2 {
@@ -293,6 +302,7 @@ func scoreVideoLabels(frames []VideoFrame, durationMs int, targets, background [
 				passed[i]++
 				if s.prob > best[i].prob {
 					best[i] = s
+					best[i].frameMs = f.OffsetMs
 				}
 			}
 		}
@@ -385,7 +395,7 @@ func suggestTagsForPhoto(db *vbolt.DB, client *visionClient, photoId int) error 
 				Id:      vbolt.NextIntId(tx, TagSuggestionBkt),
 				PhotoId: img.Id, FamilyId: img.FamilyId,
 				TagId: t.tagId, Label: t.label, Score: scores[i].prob,
-				Status: SuggestionPending, CreatedAt: time.Now(),
+				Status: SuggestionPending, CreatedAt: time.Now(), FrameMs: scores[i].frameMs,
 			})
 		}
 		vbolt.Write(tx, SuggestStateBkt, img.Id, &generation)

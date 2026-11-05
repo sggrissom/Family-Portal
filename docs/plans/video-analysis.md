@@ -1,5 +1,13 @@
 # Video analysis
 
+Status: built on web and backend. The poster, frames and transcripts shipped
+in #193–#196; faces from frames, transcript search by meaning, moment
+suggestions from speech, and frames on /suggestions follow in a later stack.
+iOS shows the transcript under the player (iOS #149). Still open: iOS search
+snippets with `?t=` deep links, iOS captions, cropping video faces from their
+frame in the iOS face review, and calibrating on real family clips (see
+Prototype results).
+
 Videos shipped as sealed boxes. Every analyzer the photos go through has an
 explicit `IsVideo` guard (embeddings, tag suggestions, features, face
 analysis), deliberately, because none of them knew what to do with a clip. So
@@ -347,18 +355,22 @@ quality on real family clips.
 
 ## Order of work
 
-0. **Poster through the existing analyzers.** One small PR.
+0. **Poster through the existing analyzers.** Done.
 1. **Prototype bench.** Done for speed and silence; real-clip quality is still
    open (see Prototype results).
-2. **Video analysis worker and frames.** Frame search with `match`, `?t=` deep
-   links, frame tag suggestions, moment suggestions by frame.
-3. **Faces from frames.**
-4. **Transcripts.** Worker part, storage, panel, captions, word search with
-   snippets, editing and removal, export.
-5. **Semantic transcript search and moment suggestions from speech.**
-6. **iOS.** Transcript panel, captions, search snippets and deep links.
-
-Steps 2–5 are a cascaded PR stack, merged bottom-up.
+2. **Video analysis worker and frames.** Done, and suggestions on /suggestions
+   show the frame they were found in.
+3. **Faces from frames.** Done. A group seen in one frame is suggested, never
+   auto-tagged; groups that confidently match one person are merged; the kept
+   face carries the group's centroid as its descriptor and `FrameCount`, so a
+   later rematch keeps the two-frame rule. Faces wait for current frames and
+   carry their own version on `VideoFrames.FacesVersion`.
+4. **Transcripts.** Done.
+5. **Semantic transcript search and moment suggestions from speech.** Done.
+   Vectors live in their own `SpeechVectors` bucket, keyed to the window
+   texts, and a transcript write drops any that no longer match.
+6. **iOS.** Transcript panel done. Captions, search snippets with deep links,
+   and frame crops for video faces in face review are still to do.
 
 ## Acceptance checks
 
