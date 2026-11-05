@@ -70,6 +70,17 @@ The same worker transcribes videos when `cfg.SpeechModelsDir` holds
 | only music or silence | Voice detection and the transcript cleaner leave nothing, recorded as no speech. |
 | edited or removed transcript | Never rerun, even when the model or version changes. |
 
+With `cfg.EnableFaceTagging` on, the same worker also sends each video's
+stored frames to the face daemon. Faces come from the frames, so they need
+the vision daemon too:
+
+| condition | behavior |
+| --- | --- |
+| face tagging off | No face client; videos get no faces and nothing is recorded, so turning it on backfills them. |
+| no frames yet, or frames outdated | Faces wait; the frames run first and faces follow in the same job. |
+| face daemon down | The job is retried with backoff. Frames already stored are kept. |
+| one frame fails to decode or detect | Logged and skipped; the rest of the video's faces are kept. |
+
 ## Video
 
 Video differs from the others in one way: a video's file *is* primary user

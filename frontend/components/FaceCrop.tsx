@@ -6,6 +6,7 @@ import "./face-crop-styles";
 interface FaceCropProps {
   photoId: number;
   box: server.FaceBox;
+  frameMs?: number;
   size?: number;
   fluid?: boolean;
   alt?: string;
@@ -15,6 +16,7 @@ interface FaceCropProps {
 export const FaceCrop = ({
   photoId,
   box,
+  frameMs,
   size = 88,
   fluid = false,
   alt = "Face",
@@ -36,7 +38,15 @@ export const FaceCrop = ({
   }
   return (
     <div className={frameClass} style={frameStyle}>
-      <img src={`/api/photo/${photoId}/medium`} alt={alt} style={faceCropLayout(box)} />
+      <img
+        src={
+          frameMs === undefined
+            ? `/api/photo/${photoId}/medium`
+            : `/api/photo/${photoId}/frame/${frameMs}`
+        }
+        alt={alt}
+        style={faceCropLayout(box)}
+      />
     </div>
   );
 };
