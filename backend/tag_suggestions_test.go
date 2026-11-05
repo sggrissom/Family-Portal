@@ -257,13 +257,13 @@ func TestVideoTagSuggestionsNeedTwoFramesUnlessShort(t *testing.T) {
 	once := video("once.mov", 60000, plainFrame(0), beachFrame(20000), plainFrame(40000))
 	short := video("short.mov", 8000, plainFrame(0), beachFrame(5000))
 
-	if got := fx.suggestionsFor(t, twice); len(got) != 1 || got[0].Label != "Beach" {
-		t.Errorf("beach in two frames: %+v", got)
+	if got := fx.suggestionsFor(t, twice); len(got) != 1 || got[0].Label != "Beach" || got[0].FrameMs != 20000 {
+		t.Errorf("beach in two frames: %+v, want it shown at its first beach frame", got)
 	}
 	if got := fx.suggestionsFor(t, once); len(got) != 0 {
 		t.Errorf("beach in one frame of a long clip: %+v", got)
 	}
-	if got := fx.suggestionsFor(t, short); len(got) != 1 {
+	if got := fx.suggestionsFor(t, short); len(got) != 1 || got[0].FrameMs != 5000 {
 		t.Errorf("beach in one frame of a short clip: %+v", got)
 	}
 

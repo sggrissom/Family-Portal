@@ -156,7 +156,12 @@ const SuggestionGroupCard = ({
             title={state.excluded[s.id] ? "Include this photo" : "Leave this photo out"}
             onClick={vlens.cachePartial(onToggle, state, s.id)}
           >
-            <ThumbnailImage photoId={s.photoId} alt={group.label} className="suggestion-thumb" />
+            <ThumbnailImage
+              photoId={s.photoId}
+              frameMs={s.frameMs}
+              alt={group.label}
+              className="suggestion-thumb"
+            />
             <VideoBadge image={videos.find(v => v.id === s.photoId)} />
           </button>
         ))}

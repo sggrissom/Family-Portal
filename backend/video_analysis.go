@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"family/cfg"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +19,7 @@ type videoAnalysisWorker struct {
 	db      *vbolt.DB
 	tools   mediaTools
 	client  *visionClient
+	faces   *http.Client
 	speech  *speechEngine
 	scratch string
 	ctx     context.Context
@@ -37,10 +39,13 @@ func InitializeVideoAnalysisWorker(db *vbolt.DB) {
 		return
 	}
 	w := newVideoAnalysisWorker(db, globalVideoWorker.tools, globalVisionClient, speech, scratch)
+	if cfg.EnableFaceTagging {
+		w.faces = newFaceClient(cfg.FaceAnalysisSocket)
+	}
 	globalVideoAnalysisWorker = w
-	w.run(func() []int { return videosNeedingAnalysis(db, w.client != nil, w.speech != nil) })
+	w.run(func() []int { return videosNeedingAnalysis(db, w.client != nil, w.faces != nil, w.speech != nil) })
 	LogInfo(LogCategoryWorker, "Video analysis worker started", map[string]interface{}{
-		"frames": w.client != nil, "transcripts": w.speech != nil,
+		"frames": w.client != nil, "faces": w.faces != nil, "transcripts": w.speech != nil,
 	})
 }
 
@@ -72,10 +77,14 @@ func VideoAnalysisQueueLength() int {
 	return globalVideoAnalysisWorker.length()
 }
 
-func videosNeedingAnalysis(db *vbolt.DB, frames, transcripts bool) (ids []int) {
+// videosNeedingAnalysis lists the videos missing a part the worker can
+// produce: frames and transcript meaning with the vision daemon, faces with
+// face tagging, and transcripts with a speech model.
+func videosNeedingAnalysis(db *vbolt.DB, vision, faces, transcripts bool) (ids []int) {
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
-			if (frames && videoNeedsFrames(tx, image)) || (transcripts && videoNeedsTranscript(tx, image)) {
+			if (vision && (videoNeedsFrames(tx, image) || videoNeedsSpeechVectors(tx, image))) ||
+				(faces && videoNeedsFaces(tx, image)) || (transcripts && videoNeedsTranscript(tx, image)) {
 				ids = append(ids, image.Id)
 			}
 			return true
@@ -88,16 +97,27 @@ func videosNeedingAnalysis(db *vbolt.DB, frames, transcripts bool) (ids []int) {
 }
 
 // process runs each analysis the video is missing over one local copy of its
-// playback file.
+// playback file, then embeds what its transcript says.
 func (w *videoAnalysisWorker) process(imageId int) error {
+	if err := w.analyzeMedia(imageId); err != nil || w.ctx.Err() != nil {
+		return err
+	}
+	if w.client == nil {
+		return nil
+	}
+	return embedSpeech(w.db, w.client, imageId)
+}
+
+func (w *videoAnalysisWorker) analyzeMedia(imageId int) error {
 	var image Image
-	var needFrames, needTranscript bool
+	var needFrames, needFaces, needTranscript bool
 	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) {
 		image = GetImageById(tx, imageId)
 		needFrames = w.client != nil && videoNeedsFrames(tx, image) && videoFramesDir(image) != ""
+		needFaces = w.faces != nil && (needFrames || videoNeedsFaces(tx, image))
 		needTranscript = w.speech != nil && videoNeedsTranscript(tx, image)
 	})
-	if !needFrames && !needTranscript {
+	if !needFrames && !needFaces && !needTranscript {
 		return nil
 	}
 	store := activeMediaStore()
@@ -125,8 +145,20 @@ func (w *videoAnalysisWorker) process(imageId int) error {
 		return errRetryLater
 	}
 
+	var sampled sampledFrames
+	if needFrames || needFaces {
+		sampled = w.extractFrames(image, source, workDir)
+		if w.ctx.Err() != nil {
+			return nil
+		}
+	}
 	if needFrames {
-		if err := w.analyzeFrames(image, source, workDir); err != nil || w.ctx.Err() != nil {
+		if err := w.analyzeFrames(image, sampled); err != nil || w.ctx.Err() != nil {
+			return err
+		}
+	}
+	if needFaces {
+		if err := w.analyzeFaces(image, sampled); err != nil || w.ctx.Err() != nil {
 			return err
 		}
 	}
@@ -138,8 +170,8 @@ func (w *videoAnalysisWorker) process(imageId int) error {
 	return nil
 }
 
-func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string) error {
-	frames, thumbs, err := w.sampleFrames(image, source, workDir)
+func (w *videoAnalysisWorker) analyzeFrames(image Image, sampled sampledFrames) error {
+	frames, thumbs, err := w.embedFrames(image, sampled)
 	if w.ctx.Err() != nil || err != nil {
 		return err
 	}
@@ -165,6 +197,48 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, source, workDir string)
 		return nil
 	}
 	QueuePhotoEmbedding(image.Id)
+	return nil
+}
+
+// analyzeFaces looks for faces in each stored frame and records them against
+// the video. The frames must be current; faces wait for them otherwise.
+func (w *videoAnalysisWorker) analyzeFaces(image Image, sampled sampledFrames) error {
+	var stored VideoFrames
+	var found bool
+	vbolt.WithReadTx(w.db, func(tx *vbolt.Tx) { stored, found = GetVideoFrames(tx, image.Id) })
+	if videoFramesOutdated(stored, found) {
+		return nil
+	}
+	var detected []FrameFaces
+	for _, frame := range stored.Frames {
+		file, ok := sampled.fileAt(frame.OffsetMs)
+		if !ok {
+			continue
+		}
+		faces, err := detectFrameFaces(w.faces, file)
+		if errors.Is(err, errRetryLater) {
+			return errRetryLater
+		}
+		if err != nil {
+			LogWarn(LogCategoryWorker, "Video frame face detection failed", map[string]interface{}{"videoId": image.Id, "offsetMs": frame.OffsetMs, "error": err.Error()})
+			continue
+		}
+		detected = append(detected, FrameFaces{OffsetMs: frame.OffsetMs, Faces: faces})
+	}
+	tagged := 0
+	vbolt.WithWriteTx(w.db, func(tx *vbolt.Tx) {
+		current := GetImageById(tx, image.Id)
+		frames, found := GetVideoFrames(tx, image.Id)
+		if current.Id == 0 || current.Status != PhotoReady || current.PlaybackKey != image.PlaybackKey ||
+			!found || frames.Version != stored.Version || frames.Model != stored.Model {
+			return
+		}
+		tagged = RecordVideoFacesTx(tx, image.Id, detected)
+		frames.FacesVersion = videoFacesVersion
+		writeVideoFramesTx(tx, &frames)
+		vbolt.TxCommit(tx)
+	})
+	LogInfo(LogCategoryWorker, "Video face analysis finished", map[string]interface{}{"videoId": image.Id, "frames": len(detected), "autoTagged": tagged})
 	return nil
 }
 

@@ -14,6 +14,7 @@ import { VideoPlayer } from "../../components/VideoPlayer";
 import { uploadUrl } from "../../lib/videoUpload";
 import { CropSelector } from "../../components/CropSelector";
 import { FaceCrop } from "../../components/FaceCrop";
+import { videoFrameOf } from "../../lib/faceCrop";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { SameAgeStrip } from "../../components/SameAgeRows";
 import { isValidBirthday } from "../../lib/growthPercentiles";
@@ -283,7 +284,7 @@ const PhotoFaces = ({
       <div className="photo-faces-list">
         {faces.faces.map(face => (
           <div key={face.id} className="photo-face">
-            <FaceCrop photoId={photo.id} box={face.box} size={72} />
+            <FaceCrop photoId={photo.id} box={face.box} frameMs={videoFrameOf(face)} size={72} />
             {face.personId > 0 ? (
               <div className="photo-face-info">
                 <span className="photo-face-name">{nameOf(face.personId)}</span>

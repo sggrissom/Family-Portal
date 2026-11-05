@@ -295,7 +295,7 @@ block(`
 `);
 
 block(`
-.entry-cards {
+.season-entries {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 0.75rem;
@@ -303,7 +303,7 @@ block(`
 `);
 
 block(`
-.entry-card {
+.season-entry {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -317,7 +317,7 @@ block(`
 `);
 
 block(`
-.entry-card-main {
+.season-entry-main {
   display: grid;
   gap: 0.2rem;
   min-width: 0;
@@ -325,7 +325,7 @@ block(`
 `);
 
 block(`
-.entry-card-name {
+.season-entry-name {
   color: var(--text);
   font-weight: 700;
   text-decoration: none;
@@ -333,19 +333,19 @@ block(`
 `);
 
 block(`
-.entry-card-name:hover {
+.season-entry-name:hover {
   text-decoration: underline;
 }
 `);
 
 block(`
-.entry-card-roster {
+.season-entry-roster {
   font-size: 0.85rem;
 }
 `);
 
 block(`
-.entry-cards .activities-form {
+.season-entries .activities-form {
   grid-column: 1 / -1;
 }
 `);

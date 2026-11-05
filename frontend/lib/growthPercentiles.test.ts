@@ -153,6 +153,12 @@ describe("formatAgeAtMeasurement", () => {
     expect(formatAgeAtMeasurement(12 * 5)).toBe("5 yr");
   });
 
+  it("counts whole months reached, as people state an age", () => {
+    expect(formatAgeAtMeasurement(1.5)).toBe("1 mo");
+    expect(formatAgeAtMeasurement(1.99)).toBe("1 mo");
+    expect(formatAgeAtMeasurement(35.9)).toBe("2 yr 11 mo");
+  });
+
   it("shows a dash for a measurement dated before the birthday", () => {
     expect(formatAgeAtMeasurement(-1)).toBe("—");
   });

@@ -2381,6 +2381,8 @@ export interface PhotoFace {
     distance: number
     box: FaceBox
     createdAt: string
+    frameMs: number
+    frameCount: number
 }
 
 export interface FaceReviewFamily {
@@ -3012,6 +3014,7 @@ export interface TagSuggestion {
     score: number
     status: number
     createdAt: string
+    frameMs: number
 }
 
 export interface BookInterview {

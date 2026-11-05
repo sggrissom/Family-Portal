@@ -575,6 +575,14 @@ func generateDefaultTitle(originalFilename string, photoDate time.Time) string {
 	return strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 }
 
+func defaultMediaTitle(image Image) string {
+	date := exactDateOf(image.RecordTime, image.PhotoDate)
+	if image.IsVideo() {
+		return generateDefaultVideoTitle(image.OriginalFilename, date)
+	}
+	return generateDefaultTitle(image.OriginalFilename, date)
+}
+
 // Without a recordTime, a photo is dated by its EXIF date, then by
 // fallbackDay (the uploader's local day), then by now.
 func uploadedPhotoDate(fallbackDay string, fileData []byte) time.Time {
@@ -1062,6 +1070,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		return
 	}
 
+	oldDefault := defaultMediaTitle(photo)
 	if req.RecordTime != nil {
 		if err = applyRecordTime(ctx.Tx, photo.FamilyId, user.Id, *req.RecordTime, false, &photo.RecordTime, &photo.PhotoDate); err != nil {
 			return
@@ -1071,8 +1080,8 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 	photo.Title = strings.TrimSpace(req.Title)
 	photo.Description = strings.TrimSpace(req.Description)
 
-	if photo.Title == "" {
-		photo.Title = generateDefaultTitle(photo.OriginalFilename, exactDateOf(photo.RecordTime, photo.PhotoDate))
+	if photo.Title == "" || photo.Title == oldDefault {
+		photo.Title = defaultMediaTitle(photo)
 	}
 
 	writeImage(ctx.Tx, &photo)

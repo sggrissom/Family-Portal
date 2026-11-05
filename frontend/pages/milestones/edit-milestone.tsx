@@ -26,6 +26,7 @@ import {
   suggestPhotos,
 } from "./MilestoneFields";
 import { TagPicker, toggleId } from "../../components/TagPicker";
+import { FormError } from "../../components/FormError";
 
 type EditMilestoneForm = {
   description: string;
@@ -227,11 +228,7 @@ const EditMilestonePage = ({ form, milestone, tags, birthday }: EditMilestonePag
         onSubmit={vlens.cachePartial(save, form, milestone, birthday)}
         noValidate
       >
-        {form.error && (
-          <div className="error-message" role="alert">
-            {form.error}
-          </div>
-        )}
+        <FormError message={form.error} />
 
         {isAnswer ? (
           <div className="entry-field">

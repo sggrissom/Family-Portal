@@ -268,7 +268,11 @@ func detectFaces(client *http.Client, img Image) ([]DetectedFace, error) {
 // The display variants are too small for the detector to find faces in group
 // shots, so analysis works from the original, upright and capped in size.
 func analysisImageData(img Image) ([]byte, image.Point, error) {
-	decoded, err := imaging.Open(photoOriginalPath(img.FilePath), imaging.AutoOrientation(true))
+	return analysisFileData(photoOriginalPath(img.FilePath))
+}
+
+func analysisFileData(path string) ([]byte, image.Point, error) {
+	decoded, err := imaging.Open(path, imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, image.Point{}, err
 	}
@@ -282,6 +286,18 @@ func analysisImageData(img Image) ([]byte, image.Point, error) {
 		return nil, image.Point{}, err
 	}
 	return buf.Bytes(), image.Point{X: rgb.Bounds().Dx(), Y: rgb.Bounds().Dy()}, nil
+}
+
+func detectFrameFaces(client *http.Client, file string) ([]DetectedFace, error) {
+	data, size, err := analysisFileData(file)
+	if err != nil {
+		return nil, err
+	}
+	result, err := callRecognize(client, recognizeRequest{ImageData: data})
+	if err != nil {
+		return nil, err
+	}
+	return toDetectedFaces(result, size), nil
 }
 
 func imageSize(path string) image.Point {

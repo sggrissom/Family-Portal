@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -380,6 +381,7 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 		return
 	}
 
+	req.Name = strings.TrimSpace(req.Name)
 	if err = validateAddPersonRequest(req); err != nil {
 		return
 	}
@@ -426,6 +428,7 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 		return
 	}
 
+	req.Name = strings.TrimSpace(req.Name)
 	if err = validateAddPersonRequest(AddPersonRequest{
 		Name:        req.Name,
 		Gender:      req.Gender,

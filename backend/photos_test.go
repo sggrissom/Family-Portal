@@ -495,3 +495,49 @@ func TestUploadedPhotoDateFallsBackFromExifToTheUploadersDay(t *testing.T) {
 		t.Errorf("no EXIF or day: %v from now, want now", d)
 	}
 }
+
+func TestUpdatePhotoDefaultTitleFollowsTheDate(t *testing.T) {
+	fx, cleanup := setupIsolationFixture(t)
+	defer cleanup()
+
+	shot := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		photo := GetImageById(tx, fx.photo.Id)
+		photo.MediaKind = MediaVideo
+		photo.PhotoDate = shot
+		photo.RecordTime = exactRecordTime(shot, SourceMetadata)
+		photo.Title = "Video from Oct 18, 2026"
+		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
+		vbolt.TxCommit(tx)
+	})
+
+	token, err := generateJwtTokenString(fx.owner)
+	if err != nil {
+		t.Fatalf("generateJwtTokenString() error = %v", err)
+	}
+
+	update := func(title string, day time.Time) UpdatePhotoResponse {
+		t.Helper()
+		rt := exactRecordTime(day, SourceFamily)
+		var resp UpdatePhotoResponse
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			resp, err = UpdatePhoto(&vbeam.Context{Tx: tx, Token: token}, UpdatePhotoRequest{
+				Id: fx.photo.Id, Title: title, RecordTime: &rt,
+			})
+		})
+		if err != nil {
+			t.Fatalf("UpdatePhoto() error = %v", err)
+		}
+		return resp
+	}
+
+	if got := update("Video from Oct 18, 2026", shot.AddDate(0, 0, -1)).Image.Title; got != "Video from Oct 17, 2026" {
+		t.Errorf("an untouched default title should follow the date, got %q", got)
+	}
+	if got := update("", shot).Image.Title; got != "Video from Oct 18, 2026" {
+		t.Errorf("a cleared video title should default to a video title, got %q", got)
+	}
+	if got := update("Recital", shot.AddDate(0, 0, -2)).Image.Title; got != "Recital" {
+		t.Errorf("a caption the family wrote must be kept, got %q", got)
+	}
+}
