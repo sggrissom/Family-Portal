@@ -15,6 +15,7 @@ import {
   syncPartnerChildren,
 } from "../../lib/relations";
 import { CoAnchorPicker } from "../../components/CoAnchorPicker";
+import { FormError } from "../../components/FormError";
 import "./add-person-styles";
 
 type Data = {
@@ -223,11 +224,7 @@ const AddPersonPage = ({
         </div>
       )}
 
-      {form.error && (
-        <div className="error-message" role="alert">
-          {form.error}
-        </div>
-      )}
+      <FormError message={form.error} />
 
       <form className="auth-form" onSubmit={vlens.cachePartial(onAddPersonClicked, form)}>
         <FamilySelect

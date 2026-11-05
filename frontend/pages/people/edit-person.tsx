@@ -12,6 +12,7 @@ import { toDateInputValue } from "../../lib/dateUtils";
 import { PersonSharingSection } from "../../components/PersonSharing";
 import { PersonRelationsSection } from "../../components/PersonRelations";
 import { PersonDeletionSection } from "../../components/PersonDeletion";
+import { FormError } from "../../components/FormError";
 import "./add-person-styles";
 
 type EditPersonForm = {
@@ -149,11 +150,7 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
         <p>Update person details</p>
       </div>
 
-      {form.error && (
-        <div className="error-message" role="alert">
-          {form.error}
-        </div>
-      )}
+      <FormError message={form.error} />
 
       <form
         className="auth-form"

@@ -200,6 +200,11 @@ export function recordWhenProblem(
   if (rt.around) {
     const ok = isAge(w) ? whole(rt.around) : !!parseCivil(rt.around);
     if (!ok) return isAge(w) ? "The best guess should be an age in years" : "Check the best guess";
+    if (!aroundInRange(rt)) {
+      return isAge(w)
+        ? "The best guess should fall inside the age range"
+        : "The best guess should fall inside the range";
+    }
   }
   if (w.mode === "unknown") return "";
   const range = resolveRecordTime(rt, birthday ?? null);
@@ -207,6 +212,22 @@ export function recordWhenProblem(
     return isAge(w) ? "That age hasn't happened yet" : "That date hasn't happened yet";
   }
   return "";
+}
+
+function aroundInRange(rt: server.RecordTime): boolean {
+  if (rt.basis === "age") {
+    const around = parseInt(rt.around ?? "");
+    const last = rt.precision === "range" ? rt.ageToYears : rt.ageYears;
+    return around >= rt.ageYears && around <= last;
+  }
+  const around = parseCivil(rt.around);
+  const from = parseCivil(rt.from);
+  const to = rt.precision === "range" ? parseCivil(rt.to) : from;
+  if (!around || !from || !to) return true;
+  return (
+    civilString(around.start) >= civilString(from.start) &&
+    civilString(around.end) <= civilString(to.end)
+  );
 }
 
 export function recordWhenPreview(

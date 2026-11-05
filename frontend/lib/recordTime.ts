@@ -164,6 +164,8 @@ export function recordTimeLabel(rt: RecordTimeFields): string {
   if (rt.basis === "age") {
     let age = "";
     if (rt.precision === "year") age = `age ${rt.ageYears}`;
+    else if (rt.precision === "month" && rt.ageYears === 0)
+      age = `age ${plural(rt.ageMonths, "month")}`;
     else if (rt.precision === "month")
       age = `age ${plural(rt.ageYears, "year")}, ${plural(rt.ageMonths, "month")}`;
     else if (rt.precision === "range") age = `ages ${rt.ageYears}–${rt.ageToYears}`;

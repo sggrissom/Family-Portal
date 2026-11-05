@@ -228,7 +228,7 @@
       "expect": {
         "start": "2021-02-28",
         "end": "2021-03-31",
-        "label": "At age 0 years, 1 month",
+        "label": "At age 1 month",
         "exactDay": false
       }
     },
@@ -292,6 +292,31 @@
         "precision": "range",
         "from": "1972",
         "to": "1968"
+      }
+    },
+    {
+      "name": "best guess outside the range",
+      "record": {
+        "meaning": "occurrence",
+        "basis": "calendar",
+        "precision": "range",
+        "estimated": true,
+        "from": "2026-10",
+        "to": "2026-11",
+        "around": "2025-01"
+      }
+    },
+    {
+      "name": "best guess outside the age range",
+      "record": {
+        "meaning": "occurrence",
+        "basis": "age",
+        "precision": "range",
+        "estimated": true,
+        "anchorPersonId": 1,
+        "ageYears": 6,
+        "ageToYears": 9,
+        "around": "12"
       }
     },
     {

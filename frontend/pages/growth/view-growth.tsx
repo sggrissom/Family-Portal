@@ -1,6 +1,7 @@
 import { CalendarDays, Pencil, Ruler, Scale, Target, Trash2 } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
+import * as core from "vlens/core";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
 import { timelineRequest } from "../../lib/photoPages";
@@ -10,7 +11,6 @@ import { canContribute } from "../../lib/authCache";
 import { formatDate } from "../../lib/dateUtils";
 import { formatMeasurement } from "../../lib/weightFormat";
 import { ErrorPage } from "../../components/ErrorPage";
-import { handleDeleteGrowthData } from "../../lib/timelineHelpers";
 import {
   ageInMonths,
   computePercentileLabel,
@@ -106,6 +106,7 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
               <ViewGrowthPage
                 key={growthData.id}
                 growthData={growthData}
+                shownIds={data.measurements.map(m => m.id)}
                 person={person}
                 familyMembers={data.familyMembers}
                 relationGroups={data.relationGroups}
@@ -120,9 +121,27 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
 
 interface ViewGrowthPageProps {
   growthData: server.GrowthData;
+  shownIds: number[];
   person: server.Person;
   familyMembers: server.FamilyTimelineItem[];
   relationGroups: Map<number, string>;
+}
+
+async function deleteMeasurement(growthData: server.GrowthData, shownIds: number[]) {
+  const type = getMeasurementTypeLabel(growthData.measurementType).toLowerCase();
+  const value = formatMeasurement(growthData.value, growthData.unit);
+  if (!confirm(`Are you sure you want to delete this ${type} measurement of ${value}?`)) return;
+
+  const [resp, err] = await server.DeleteGrowthData({ id: growthData.id });
+  if (!resp?.success) {
+    alert(err || "Failed to delete growth measurement");
+    return;
+  }
+
+  const remaining = shownIds.filter(id => id !== growthData.id);
+  core.replaceRoute(
+    remaining.length ? `/view-growth/${remaining.join(",")}` : `/profile/${growthData.personId}`
+  );
 }
 
 const getMeasurementTypeLabel = (type: server.MeasurementType) =>
@@ -130,6 +149,7 @@ const getMeasurementTypeLabel = (type: server.MeasurementType) =>
 
 const ViewGrowthPage = ({
   growthData,
+  shownIds,
   person,
   familyMembers,
   relationGroups,
@@ -189,14 +209,7 @@ const ViewGrowthPage = ({
             </a>
             <button
               className="btn btn-danger"
-              onClick={() =>
-                handleDeleteGrowthData(
-                  growthData.id,
-                  growthData.measurementType,
-                  growthData.value,
-                  growthData.unit
-                )
-              }
+              onClick={() => deleteMeasurement(growthData, shownIds)}
             >
               <Icon symbol={Trash2} /> Delete
             </button>
