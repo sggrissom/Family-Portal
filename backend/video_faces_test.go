@@ -63,6 +63,49 @@ func TestVideoKeepsOneFacePerPerson(t *testing.T) {
 	}
 }
 
+func TestConfirmingVideoFaceGroupsKeepsEarlierAnswers(t *testing.T) {
+	fx := setupResultsFixture(t)
+	video := fx.addVideoAt(t, "angles.mov", featuresEpoch)
+	crop := box(0.1, 0.1, 0.3, 0.3)
+	fx.recordVideoFaces(t, video,
+		frameFaces(0, DetectedFace{Descriptor: faceVec(0), Box: crop}),
+		frameFaces(5000, DetectedFace{Descriptor: faceVec(40), Box: crop}),
+		frameFaces(10000, DetectedFace{Descriptor: faceVec(80), Box: crop}),
+		frameFaces(15000, DetectedFace{Descriptor: faceVec(120), Box: crop}),
+	)
+
+	faces, _ := fx.facesOn(t, video)
+	if len(faces) != 4 {
+		t.Fatalf("got %d face groups, want 4", len(faces))
+	}
+	for _, ids := range [][]int{{faces[0].Id}, {faces[1].Id}, {faces[2].Id, faces[3].Id}} {
+		resp, err := callAs(t, fx, AssignFaces, AssignFacesRequest{FaceIds: ids, PersonId: fx.alice.Id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.Assigned != len(ids) || resp.Skipped != 0 {
+			t.Errorf("AssignFaces(%v) = %+v, want every face confirmed", ids, resp)
+		}
+	}
+
+	review, err := callAs(t, fx, GetFaceReview, GetFaceReviewRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if review.UnknownCount != 0 || review.AutoCount != 0 {
+		t.Errorf("review still has %d unknown and %d automatic faces", review.UnknownCount, review.AutoCount)
+	}
+	faces, tags := fx.facesOn(t, video)
+	for _, face := range faces {
+		if face.PersonId != fx.alice.Id || face.Status != FaceConfirmed {
+			t.Errorf("face %d lost its confirmation: person %d, status %d", face.Id, face.PersonId, face.Status)
+		}
+	}
+	if len(tags) != 1 || tags[0].PersonId != fx.alice.Id || tags[0].AutoTagged {
+		t.Errorf("video tags = %+v, want one confirmed tag for alice", tags)
+	}
+}
+
 func TestOneFrameOfAPersonOnlySuggests(t *testing.T) {
 	fx := setupResultsFixture(t)
 	fx.setProfileDescriptor(t, fx.alice, faceVec(0))

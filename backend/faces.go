@@ -771,8 +771,9 @@ type AssignFacesResponse struct {
 	Skipped    int `json:"skipped"`
 }
 
-// A person appears once per photo, so another face holding them gives them up.
-// Naming a group never overrides a confirmed face; that group face is skipped.
+// A person can be confirmed on several face groups from different parts of a
+// video. In a still photo, naming one face moves the name from another face,
+// while naming a group leaves existing confirmations in place.
 func AssignFaces(ctx *vbeam.Context, req AssignFacesRequest) (resp AssignFacesResponse, err error) {
 	_, faces, err := loadFacesForEdit(ctx, req.FaceIds)
 	if err != nil {
@@ -800,25 +801,27 @@ func AssignFaces(ctx *vbeam.Context, req AssignFacesRequest) (resp AssignFacesRe
 		if photo.Id == 0 {
 			continue
 		}
-		var holders []PhotoFace
-		confirmedElsewhere := false
-		for _, other := range GetPhotoFacesTx(ctx.Tx, photo.Id) {
-			if other.Id != face.Id && other.PersonId == person.Id {
-				holders = append(holders, other)
-				confirmedElsewhere = confirmedElsewhere || other.Status == FaceConfirmed
+		if !photo.IsVideo() {
+			var holders []PhotoFace
+			confirmedElsewhere := false
+			for _, other := range GetPhotoFacesTx(ctx.Tx, photo.Id) {
+				if other.Id != face.Id && other.PersonId == person.Id {
+					holders = append(holders, other)
+					confirmedElsewhere = confirmedElsewhere || other.Status == FaceConfirmed
+				}
 			}
-		}
-		if confirmedElsewhere && !single {
-			if !containsInt(face.RejectedPersonIds, person.Id) {
-				face.RejectedPersonIds = append(face.RejectedPersonIds, person.Id)
-				writeFace(ctx.Tx, &face)
+			if confirmedElsewhere && !single {
+				if !containsInt(face.RejectedPersonIds, person.Id) {
+					face.RejectedPersonIds = append(face.RejectedPersonIds, person.Id)
+					writeFace(ctx.Tx, &face)
+				}
+				resp.Skipped++
+				continue
 			}
-			resp.Skipped++
-			continue
-		}
-		for _, other := range holders {
-			other.unassign(true)
-			writeFace(ctx.Tx, &other)
+			for _, other := range holders {
+				other.unassign(true)
+				writeFace(ctx.Tx, &other)
+			}
 		}
 		previous := face.PersonId
 		face.PersonId = person.Id
