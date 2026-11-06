@@ -54,6 +54,15 @@ type PhotoFace struct {
 
 func (f PhotoFace) fromVideo() bool { return f.FrameCount > 0 }
 
+func (f *PhotoFace) unassign(reject bool) {
+	if reject && f.PersonId > 0 && !containsInt(f.RejectedPersonIds, f.PersonId) {
+		f.RejectedPersonIds = append(f.RejectedPersonIds, f.PersonId)
+	}
+	f.PersonId = 0
+	f.Status = FaceUnknown
+	f.Distance = 0
+}
+
 func PackFaceBox(self *FaceBox, buf *vpack.Buffer) {
 	vpack.Float64(&self.Left, buf)
 	vpack.Float64(&self.Top, buf)
@@ -274,7 +283,8 @@ func dropAutoTagIfUnbackedTx(tx *vbolt.Tx, photoId int, personId int) {
 
 // Assigns unknown faces within one photo to people, closest pairs first, so two
 // faces never land on the same person and a person already placed on another
-// face of the photo is skipped.
+// face of the photo is skipped. A face someone has already corrected is left
+// for a person to name, so a rejected match never turns into the next guess.
 func autoAssignPhotoFacesTx(tx *vbolt.Tx, photo Image, faces []PhotoFace, refs []faceReference) (tagged int) {
 	taken := make(map[int]bool)
 	for _, face := range faces {
@@ -289,7 +299,7 @@ func autoAssignPhotoFacesTx(tx *vbolt.Tx, photo Image, faces []PhotoFace, refs [
 	}
 	var picks []pick
 	for i, face := range faces {
-		if face.Status != FaceUnknown || len(face.Descriptor) != 128 || (face.fromVideo() && face.FrameCount < 2) {
+		if face.Status != FaceUnknown || len(face.RejectedPersonIds) > 0 || len(face.Descriptor) != 128 || (face.fromVideo() && face.FrameCount < 2) {
 			continue
 		}
 		if match, ok := confidentMatch(rankFaceCandidates(face.Descriptor, refs, face.RejectedPersonIds)); ok {
@@ -486,21 +496,14 @@ func unassignPersonFacesOnPhotoTx(tx *vbolt.Tx, photoId int, personId int, rejec
 		if face.PersonId != personId {
 			continue
 		}
-		face.PersonId = 0
-		face.Status = FaceUnknown
-		face.Distance = 0
-		if reject && !containsInt(face.RejectedPersonIds, personId) {
-			face.RejectedPersonIds = append(face.RejectedPersonIds, personId)
-		}
+		face.unassign(reject)
 		writeFace(tx, &face)
 	}
 }
 
 func unassignPersonFacesTx(tx *vbolt.Tx, personId int) {
 	for _, face := range GetPersonFaces(tx, personId) {
-		face.PersonId = 0
-		face.Status = FaceUnknown
-		face.Distance = 0
+		face.unassign(false)
 		writeFace(tx, &face)
 	}
 }
@@ -765,8 +768,11 @@ type AssignFacesRequest struct {
 type AssignFacesResponse struct {
 	Assigned   int `json:"assigned"`
 	AutoTagged int `json:"autoTagged"`
+	Skipped    int `json:"skipped"`
 }
 
+// A person appears once per photo, so another face holding them gives them up.
+// Naming a group never overrides a confirmed face; that group face is skipped.
 func AssignFaces(ctx *vbeam.Context, req AssignFacesRequest) (resp AssignFacesResponse, err error) {
 	_, faces, err := loadFacesForEdit(ctx, req.FaceIds)
 	if err != nil {
@@ -787,24 +793,34 @@ func AssignFaces(ctx *vbeam.Context, req AssignFacesRequest) (resp AssignFacesRe
 
 	vbeam.UseWriteTx(ctx)
 
+	single := len(faces) == 1
 	families := make(map[int]bool)
 	for _, face := range faces {
 		photo := GetImageById(ctx.Tx, face.PhotoId)
 		if photo.Id == 0 {
 			continue
 		}
-		previous := face.PersonId
+		var holders []PhotoFace
+		confirmedElsewhere := false
 		for _, other := range GetPhotoFacesTx(ctx.Tx, photo.Id) {
 			if other.Id != face.Id && other.PersonId == person.Id {
-				other.PersonId = 0
-				other.Status = FaceUnknown
-				other.Distance = 0
-				if !containsInt(other.RejectedPersonIds, person.Id) {
-					other.RejectedPersonIds = append(other.RejectedPersonIds, person.Id)
-				}
-				writeFace(ctx.Tx, &other)
+				holders = append(holders, other)
+				confirmedElsewhere = confirmedElsewhere || other.Status == FaceConfirmed
 			}
 		}
+		if confirmedElsewhere && !single {
+			if !containsInt(face.RejectedPersonIds, person.Id) {
+				face.RejectedPersonIds = append(face.RejectedPersonIds, person.Id)
+				writeFace(ctx.Tx, &face)
+			}
+			resp.Skipped++
+			continue
+		}
+		for _, other := range holders {
+			other.unassign(true)
+			writeFace(ctx.Tx, &other)
+		}
+		previous := face.PersonId
 		face.PersonId = person.Id
 		face.Status = FaceConfirmed
 		face.Distance = 0
@@ -846,12 +862,7 @@ func RejectFaces(ctx *vbeam.Context, req FaceIdsRequest) (resp FaceIdsResponse, 
 		}
 		personId := face.PersonId
 		wasAuto := face.Status == FaceAuto
-		face.PersonId = 0
-		face.Status = FaceUnknown
-		face.Distance = 0
-		if !containsInt(face.RejectedPersonIds, personId) {
-			face.RejectedPersonIds = append(face.RejectedPersonIds, personId)
-		}
+		face.unassign(true)
 		writeFace(ctx.Tx, &face)
 		if wasAuto {
 			dropAutoTagIfUnbackedTx(ctx.Tx, face.PhotoId, personId)

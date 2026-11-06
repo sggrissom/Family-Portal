@@ -1244,6 +1244,7 @@ export interface AssignFacesRequest {
 export interface AssignFacesResponse {
     assigned: number
     autoTagged: number
+    skipped: number
 }
 
 export interface FaceIdsRequest {
