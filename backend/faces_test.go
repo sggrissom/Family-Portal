@@ -159,6 +159,75 @@ func TestRejectedMatchStaysRejectedThroughReanalysis(t *testing.T) {
 	}
 }
 
+func TestRejectedFaceIsNotRetaggedAsSomeoneElse(t *testing.T) {
+	fx := setupResultsFixture(t)
+	fx.setProfileDescriptor(t, fx.alice, faceVec(0))
+	fx.setProfileDescriptor(t, fx.bob, faceVec(0, 0, 0, 0.3))
+	photo := fx.addPhoto(t, fx.familyId, "cousin.jpg")
+	fx.recordFaces(t, photo, DetectedFace{Descriptor: faceVec(0, 0.1)})
+
+	faces, _ := fx.facesOn(t, photo)
+	if faces[0].PersonId != fx.alice.Id {
+		t.Fatalf("face = %+v, want it auto-tagged as alice", faces[0])
+	}
+	if _, err := callAs(t, fx, RejectFaces, FaceIdsRequest{FaceIds: []int{faces[0].Id}}); err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		if tagged := RematchFamilyFacesTx(tx, fx.familyId); tagged != 0 {
+			t.Errorf("rematch re-tagged a corrected face %d times", tagged)
+		}
+		vbolt.TxCommit(tx)
+	})
+
+	review, _ := callAs(t, fx, GetFaceReview, GetFaceReviewRequest{})
+	if len(review.Groups) != 1 || review.Groups[0].SuggestedPersonId != fx.bob.Id {
+		t.Errorf("review groups = %+v, want the face waiting with bob only suggested", review.Groups)
+	}
+}
+
+func TestNamingAGroupKeepsConfirmedFaces(t *testing.T) {
+	fx := setupResultsFixture(t)
+	party := fx.addPhoto(t, fx.familyId, "party.jpg")
+	solo := fx.addPhoto(t, fx.familyId, "solo.jpg")
+	realBox, lookalikeBox := box(0, 0, 0.1, 0.1), box(0.5, 0, 0.6, 0.1)
+	fx.recordFaces(t, party,
+		DetectedFace{Descriptor: faceVec(10), Box: realBox},
+		DetectedFace{Descriptor: faceVec(70), Box: lookalikeBox},
+	)
+	fx.recordFaces(t, solo, DetectedFace{Descriptor: faceVec(70, 0.1)})
+
+	partyFaces, _ := fx.facesOn(t, party)
+	soloFaces, _ := fx.facesOn(t, solo)
+	real, lookalike := faceAt(partyFaces, realBox), faceAt(partyFaces, lookalikeBox)
+	if _, err := callAs(t, fx, AssignFaces, AssignFacesRequest{FaceIds: []int{real.Id}, PersonId: fx.carol.Id}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := callAs(t, fx, AssignFaces, AssignFacesRequest{FaceIds: []int{lookalike.Id, soloFaces[0].Id}, PersonId: fx.carol.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Assigned != 1 || resp.Skipped != 1 {
+		t.Errorf("resp = %+v, want the solo face named and the party face skipped", resp)
+	}
+	partyFaces, _ = fx.facesOn(t, party)
+	if f := faceAt(partyFaces, realBox); f.PersonId != fx.carol.Id || f.Status != FaceConfirmed {
+		t.Errorf("confirmed face = %+v, want it still confirmed as carol", f)
+	}
+	if f := faceAt(partyFaces, lookalikeBox); f.PersonId != 0 || !containsInt(f.RejectedPersonIds, fx.carol.Id) {
+		t.Errorf("skipped face = %+v, want it unnamed with carol ruled out", f)
+	}
+
+	if _, err := callAs(t, fx, AssignFaces, AssignFacesRequest{FaceIds: []int{lookalike.Id}, PersonId: fx.carol.Id}); err != nil {
+		t.Fatal(err)
+	}
+	partyFaces, _ = fx.facesOn(t, party)
+	if faceAt(partyFaces, lookalikeBox).PersonId != fx.carol.Id || faceAt(partyFaces, realBox).PersonId != 0 {
+		t.Errorf("naming one face did not move carol onto it: %+v", partyFaces)
+	}
+}
+
 func TestRemovingATagRejectsTheFace(t *testing.T) {
 	fx := setupResultsFixture(t)
 	fx.setProfileDescriptor(t, fx.alice, faceVec(0))
