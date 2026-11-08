@@ -80,6 +80,7 @@ async function main() {
     guarded("/reset-password", () => import("@app/pages/auth/reset-password")),
     guarded("/verify-email", () => import("@app/pages/auth/verify-email")),
     guarded("/dashboard", () => import("@app/pages/dashboard/dashboard")),
+    guarded("/explore", () => import("@app/pages/explore/explore")),
     guarded("/same-age", () => import("@app/pages/same-age/same-age")),
     guarded("/books", () => import("@app/pages/books/books")),
     guarded("/book/", () => import("@app/pages/books/book")),

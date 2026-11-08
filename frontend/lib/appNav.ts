@@ -1,5 +1,6 @@
 export type Destination =
   | "home"
+  | "explore"
   | "photos"
   | "growth"
   | "history"
@@ -13,6 +14,7 @@ export type Destination =
 const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/dashboard", "home"],
   ["/profile", "home"],
+  ["/explore", "explore"],
   ["/photos", "photos"],
   ["/view-photo", "photos"],
   ["/edit-photo", "photos"],
@@ -43,6 +45,15 @@ function underPrefix(route: string, prefix: string): boolean {
 export function activeDestination(path: string): Destination | null {
   const match = DESTINATION_PREFIXES.find(([prefix]) => underPrefix(path, prefix));
   return match ? match[1] : null;
+}
+
+export type Section = "home" | "explore" | "search";
+
+export function activeSection(path: string): Section | null {
+  const destination = activeDestination(path);
+  if (destination === null) return null;
+  if (destination === "home" || destination === "search") return destination;
+  return "explore";
 }
 
 export const LEGACY_ROUTES: Record<string, string> = {

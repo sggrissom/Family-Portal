@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { activeDestination, addPath, contextPersonId, legacyRedirect } from "./appNav";
+import {
+  activeDestination,
+  activeSection,
+  addPath,
+  contextPersonId,
+  legacyRedirect,
+} from "./appNav";
 
 describe("activeDestination", () => {
   it("maps each destination and its detail pages", () => {
@@ -30,6 +36,23 @@ describe("activeDestination", () => {
   it("leaves pages outside the bar unmarked", () => {
     expect(activeDestination("/settings")).toBeNull();
     expect(activeDestination("/add-photo")).toBeNull();
+  });
+});
+
+describe("activeSection", () => {
+  it("files every feature under Explore", () => {
+    expect(activeSection("/explore")).toBe("explore");
+    expect(activeSection("/photos")).toBe("explore");
+    expect(activeSection("/history")).toBe("explore");
+    expect(activeSection("/competition/3")).toBe("explore");
+    expect(activeSection("/chat")).toBe("explore");
+  });
+
+  it("keeps Home and Search their own", () => {
+    expect(activeSection("/dashboard")).toBe("home");
+    expect(activeSection("/profile/4")).toBe("home");
+    expect(activeSection("/search?q=walk")).toBe("search");
+    expect(activeSection("/settings")).toBeNull();
   });
 });
 

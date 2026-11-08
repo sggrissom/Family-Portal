@@ -17,6 +17,7 @@ var universalLinkPaths = []string{
 	"/settings",
 	"/photos",
 	"/dashboard",
+	"/explore",
 	"/history",
 	"/growth",
 	"/same-age",
