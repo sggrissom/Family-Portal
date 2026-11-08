@@ -306,3 +306,33 @@ block(`
   border-left: none;
 }
 `);
+
+block(`
+.home-added {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+`);
+
+block(`
+.home-added h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+`);
+
+block(`
+.home-chores h2 {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+`);
+
+block(`
+.home-chores .home-nudge {
+  border-color: var(--border);
+  background: transparent;
+}
+`);
