@@ -95,6 +95,15 @@ func TestPickMemoriesNeverRepeatsAnImage(t *testing.T) {
 	}
 }
 
+func TestPickMemoriesNeverRepeatsAText(t *testing.T) {
+	first := testMemory("a", MemoryQuote, 1, "2018-03-01")
+	second := testMemory("b", MemoryQuote, 2, "2019-03-01")
+	first.Text, second.Text = "Why is the moon following us?", "why is the moon following us? "
+	if picked := pickMemories([]memoryCandidate{first, second}, 1, nil, 5); len(picked) != 1 {
+		t.Fatalf("picked %v, want one of the two identical quotes", memoryKeys(picked))
+	}
+}
+
 func TestPickMemoriesPutsSeenLast(t *testing.T) {
 	pool := varietyPool()
 	var seen []string
