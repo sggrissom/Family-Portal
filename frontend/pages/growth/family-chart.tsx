@@ -22,6 +22,7 @@ import { isValidBirthday } from "../../lib/growthPercentiles";
 import { monthsOld } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
 import "./family-chart-styles";
+import { PageHeader } from "../../components/PageHeader";
 
 type GrowthPageData = {
   people: server.Person[];
@@ -134,14 +135,13 @@ const GrowthPage = ({ data }: { data: GrowthPageData }) => {
 
   return (
     <div className="growth-page">
-      <div className="growth-page-head">
-        <h1>{copy.growthPage.title}</h1>
+      <PageHeader title={copy.growthPage.title}>
         {auth.canContributeAnywhere() && (
           <a href="/add-growth" className="btn btn-primary">
             {copy.growthPage.measure}
           </a>
         )}
-      </div>
+      </PageHeader>
 
       {data.people.length === 0 ? (
         <p className="growth-page-empty">{copy.growthPage.noData}</p>

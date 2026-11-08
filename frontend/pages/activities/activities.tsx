@@ -20,6 +20,8 @@ import {
   labelsForKind,
 } from "./labels";
 import "./activities-styles";
+import { PageHeader } from "../../components/PageHeader";
+import { copy } from "../../lib/copy";
 
 const emptyHome: server.GetActivitiesHomeResponse = {
   familyId: 0,
@@ -130,8 +132,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="activities-container">
-        <div className="activities-title">
-          <h1>Activities</h1>
+        <PageHeader title={copy.nav.activities}>
           {editable && !state.addingActivity && (
             <button
               className="btn btn-secondary btn-small"
@@ -141,7 +142,7 @@ export function view(
               New program
             </button>
           )}
-        </div>
+        </PageHeader>
 
         <FamilySelect
           id="activitiesFamilyId"

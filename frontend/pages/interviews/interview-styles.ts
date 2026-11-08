@@ -4,7 +4,7 @@ block(`
 .iv-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 2rem 1rem 4rem;
+  padding: 24px 16px 4rem;
 }
 `);
 
@@ -916,22 +916,6 @@ block(`
   min-width: 1.5rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-`);
-
-block(`
-.iv-family-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-`);
-
-block(`
-.iv-family-head h1 {
-  margin: 0;
 }
 `);
 

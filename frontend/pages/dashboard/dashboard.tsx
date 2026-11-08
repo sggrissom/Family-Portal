@@ -1,4 +1,4 @@
-import { Baby, Cake, Mic } from "lucide-preact";
+import { Baby, Cake, ChevronLeft, ChevronRight, Mic } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -350,56 +350,106 @@ const FamilyStrip = ({
   const familyName = (id: number) => families.find(f => f.id === id)?.name || "Family";
 
   return (
-    <nav className="family-strip" aria-label="Family">
-      {people.map((person, index) => {
-        const age = person.isPregnancy
-          ? dueSummary(person.birthday, today)
-          : compactAge(person.birthday, today);
-        const startsFamily =
-          labelFamilies && (index === 0 || people[index - 1].familyId !== person.familyId);
-        return (
-          <preact.Fragment key={person.id}>
-            {startsFamily && (
-              <span className="family-strip-family">{familyName(person.familyId)}</span>
-            )}
-            <a
-              href={`/profile/${person.id}`}
-              aria-label={age ? `${person.name}, ${age}` : person.name}
-              className={
-                person.isPregnancy ? "family-strip-person pregnancy" : "family-strip-person"
-              }
-            >
-              <span className="family-strip-avatar" aria-hidden="true">
-                {person.profilePhotoId ? (
-                  <ProfileImage
-                    photoId={person.profilePhotoId}
-                    alt=""
-                    loading={index < 6 ? "eager" : "lazy"}
-                    status={photoStatus.getStatus(person.profilePhotoId)}
-                    cropX={person.profileCropX}
-                    cropY={person.profileCropY}
-                    cropScale={person.profileCropScale}
-                  />
-                ) : person.isPregnancy ? (
-                  <Icon symbol={Baby} />
-                ) : (
-                  initial(person.name)
-                )}
-              </span>
-              <span className="family-strip-name">{names.get(person.id) ?? person.name}</span>
-              <span className="family-strip-age">{age}</span>
-            </a>
-          </preact.Fragment>
-        );
-      })}
-      {auth.canContributeAnywhere() && (
-        <a href="/add-person" className="family-strip-person family-strip-add">
-          <span className="family-strip-avatar" aria-hidden="true">
-            +
-          </span>
-          <span className="family-strip-name">{copy.home.addPerson}</span>
-        </a>
-      )}
-    </nav>
+    <div className="family-strip-wrap">
+      <nav className="family-strip" aria-label="Family" ref={watchStrip} onScroll={stripScrolled}>
+        {people.map((person, index) => {
+          const age = person.isPregnancy
+            ? dueSummary(person.birthday, today)
+            : compactAge(person.birthday, today);
+          const startsFamily =
+            labelFamilies && (index === 0 || people[index - 1].familyId !== person.familyId);
+          return (
+            <preact.Fragment key={person.id}>
+              {startsFamily && (
+                <span className="family-strip-family">{familyName(person.familyId)}</span>
+              )}
+              <a
+                href={`/profile/${person.id}`}
+                aria-label={age ? `${person.name}, ${age}` : person.name}
+                className={
+                  person.isPregnancy ? "family-strip-person pregnancy" : "family-strip-person"
+                }
+              >
+                <span className="family-strip-avatar" aria-hidden="true">
+                  {person.profilePhotoId ? (
+                    <ProfileImage
+                      photoId={person.profilePhotoId}
+                      alt=""
+                      loading={index < 6 ? "eager" : "lazy"}
+                      status={photoStatus.getStatus(person.profilePhotoId)}
+                      cropX={person.profileCropX}
+                      cropY={person.profileCropY}
+                      cropScale={person.profileCropScale}
+                    />
+                  ) : person.isPregnancy ? (
+                    <Icon symbol={Baby} />
+                  ) : (
+                    initial(person.name)
+                  )}
+                </span>
+                <span className="family-strip-name">{names.get(person.id) ?? person.name}</span>
+                <span className="family-strip-age">{age}</span>
+              </a>
+            </preact.Fragment>
+          );
+        })}
+        {auth.canContributeAnywhere() && (
+          <a href="/add-person" className="family-strip-person family-strip-add">
+            <span className="family-strip-avatar" aria-hidden="true">
+              +
+            </span>
+            <span className="family-strip-name">{copy.home.addPerson}</span>
+          </a>
+        )}
+      </nav>
+      <button
+        type="button"
+        className="family-strip-scroll prev"
+        aria-label={copy.home.scrollFamilyBack}
+        tabIndex={-1}
+        onClick={vlens.cachePartial(scrollStrip, -1)}
+      >
+        <Icon symbol={ChevronLeft} />
+      </button>
+      <button
+        type="button"
+        className="family-strip-scroll next"
+        aria-label={copy.home.scrollFamilyOn}
+        tabIndex={-1}
+        onClick={vlens.cachePartial(scrollStrip, 1)}
+      >
+        <Icon symbol={ChevronRight} />
+      </button>
+    </div>
   );
 };
+
+function markStripEdges(strip: HTMLElement) {
+  const wrap = strip.parentElement;
+  if (!wrap) return;
+  const end = strip.scrollWidth - strip.clientWidth;
+  wrap.classList.toggle("more-before", strip.scrollLeft > 4);
+  wrap.classList.toggle("more-after", strip.scrollLeft < end - 4);
+}
+
+let stripResizeWatched = false;
+
+function watchStrip(strip: HTMLElement | null) {
+  if (!strip) return;
+  requestAnimationFrame(() => markStripEdges(strip));
+  if (stripResizeWatched) return;
+  stripResizeWatched = true;
+  window.addEventListener("resize", () => {
+    const current = document.querySelector<HTMLElement>(".family-strip");
+    if (current) markStripEdges(current);
+  });
+}
+
+function stripScrolled(event: Event) {
+  markStripEdges(event.currentTarget as HTMLElement);
+}
+
+function scrollStrip(direction: number) {
+  const strip = document.querySelector<HTMLElement>(".family-strip");
+  strip?.scrollBy({ left: direction * strip.clientWidth * 0.8, behavior: "smooth" });
+}

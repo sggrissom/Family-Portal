@@ -35,6 +35,7 @@ import {
 } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
 import "./explore-styles";
+import { PageHeader } from "../../components/PageHeader";
 
 const FEATURES: { key: Destination; href: string; icon: LucideIcon }[] = [
   { key: "photos", href: "/photos", icon: Images },
@@ -156,8 +157,7 @@ export function view(route: string, prefix: string, data: ExploreData): preact.C
     <div>
       <Header isHome={false} />
       <main id="app" className="explore-page">
-        <h1>{copy.explore.title}</h1>
-        <p className="explore-lede">{copy.explore.lede}</p>
+        <PageHeader title={copy.explore.title} lede={copy.explore.lede} />
         <FeatureDirectory />
         {hasPreviews && (
           <div className="explore-previews">

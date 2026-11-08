@@ -670,12 +670,6 @@ block(`
 `);
 
 block(`
-.books-lede {
-  color: var(--muted);
-}
-`);
-
-block(`
 .books-list {
   list-style: none;
   margin: 0;

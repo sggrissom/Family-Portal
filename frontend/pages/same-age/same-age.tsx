@@ -24,6 +24,7 @@ import {
   type SameAgeNavigation,
 } from "../../lib/sameAgeNavigation";
 import "./same-age-styles";
+import { PageHeader } from "../../components/PageHeader";
 
 function routeParams(route: string) {
   return new URLSearchParams(route.split("?")[1] ?? "");
@@ -114,7 +115,7 @@ export const SameAgePage = ({ data: initial, view }: SameAgePageProps) => {
 
   return (
     <div className="same-age-page">
-      <h1>{ageHeading(headingAge)}</h1>
+      <PageHeader title={ageHeading(headingAge)} />
 
       <div className="same-age-views" role="group" aria-label={copy.sameAge.views}>
         {(["portraits", "details"] as SameAgeView[]).map(v => (

@@ -1,6 +1,7 @@
 import * as vlens from "vlens";
 import { getRoute, replaceRoute, setErrorView, type RouteHandler } from "vlens/core";
 import { navigate } from "./lib/navigate";
+import { guardHandledLinkClicks } from "./lib/linkGuard";
 import * as rpc from "vlens/rpc";
 import * as preact from "preact";
 import * as server from "./server";
@@ -71,6 +72,7 @@ async function main() {
     history.replaceState(null, "", legacyTarget);
   }
 
+  guardHandledLinkClicks();
   vlens.initRoutes([
     ...LEGACY_PREFIXES.map(redirect),
     guarded("/profile/", () => import("@app/pages/profile/profile")),

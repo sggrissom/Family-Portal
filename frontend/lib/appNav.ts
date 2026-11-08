@@ -80,6 +80,18 @@ export function contextPersonId(path: string): number | null {
   return match ? parseInt(match[1]) : null;
 }
 
+let pagePerson: { path: string; personId: number } | null = null;
+
+// setPagePerson records who the page being shown is about, for pages whose
+// route names a record rather than a person.
+export function setPagePerson(path: string, personId: number | null) {
+  pagePerson = personId ? { path, personId } : null;
+}
+
+export function pagePersonId(path: string): number | null {
+  return contextPersonId(path) ?? (pagePerson?.path === path ? pagePerson.personId : null);
+}
+
 export function addPath(
   form: "/add-photo" | "/add-growth" | "/add-milestone",
   personId: number | null

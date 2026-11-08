@@ -1,6 +1,7 @@
 import * as preact from "preact";
 import * as rpc from "vlens/rpc";
 import * as vlens from "vlens";
+import * as core from "vlens/core";
 import * as auth from "../../lib/authCache";
 import * as server from "../../server";
 import { Header, Footer } from "../../layout";
@@ -25,7 +26,9 @@ import {
   yearsToReach,
 } from "../../lib/photoPages";
 import "./history-styles";
+import { browseKey, recallBrowse, rememberBrowse, rememberScroll } from "../../lib/browseState";
 import { recordDateLabel } from "../../lib/recordTime";
+import { PageHeader } from "../../components/PageHeader";
 
 const FIRST_LOAD_ENTRIES = 50;
 
@@ -109,6 +112,14 @@ type HistoryState = {
   results: server.Milestone[] | null;
   resultInterviews: Map<number, server.Interview>;
   searching: boolean;
+  browseKey: string;
+};
+
+type HistoryBrowse = {
+  personIds: number[];
+  types: HistoryType[];
+  tagIds: number[];
+  loaded: number[];
 };
 
 const useHistoryState = vlens.declareHook(
@@ -125,8 +136,56 @@ const useHistoryState = vlens.declareHook(
     results: null,
     resultInterviews: new Map(),
     searching: false,
+    browseKey: "",
   })
 );
+
+function remember(state: HistoryState) {
+  if (!state.browseKey) return;
+  rememberBrowse(state.browseKey, {
+    personIds: state.personIds,
+    types: state.types,
+    tagIds: state.tagIds,
+    loaded: state.loaded,
+  } satisfies HistoryBrowse);
+}
+
+let detachScrollWatch: (() => void) | null = null;
+core.registerCleanupFunction(() => {
+  detachScrollWatch?.();
+  detachScrollWatch = null;
+});
+
+function watchScroll(key: string) {
+  detachScrollWatch?.();
+  let pending = false;
+  const onScroll = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      rememberScroll(key, window.scrollY);
+    });
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  detachScrollWatch = () => window.removeEventListener("scroll", onScroll);
+}
+
+async function restoreBrowse(state: HistoryState) {
+  state.browseKey = browseKey("/history");
+  const saved = recallBrowse<HistoryBrowse>(state.browseKey);
+  remember(state);
+  watchScroll(state.browseKey);
+  if (!saved) return;
+  state.personIds = saved.value.personIds ?? [];
+  state.types = saved.value.types ?? [...HISTORY_TYPES];
+  state.tagIds = saved.value.tagIds ?? [];
+  remember(state);
+  rememberScroll(state.browseKey, saved.y);
+  const missing = (saved.value.loaded ?? []).filter(year => !state.loaded.includes(year));
+  if (missing.length > 0) await loadYears(state, missing);
+  requestAnimationFrame(() => window.scrollTo(0, saved.y));
+}
 
 async function loadYears(state: HistoryState, years: number[]): Promise<boolean> {
   if (state.loading || years.length === 0) return false;
@@ -143,6 +202,7 @@ async function loadYears(state: HistoryState, years: number[]): Promise<boolean>
       if (year >= from && year <= to && !state.loaded.includes(year)) state.loaded.push(year);
     }
     state.error = "";
+    remember(state);
   } else {
     state.error = err || "Failed to load history";
   }
@@ -167,20 +227,24 @@ function toggle<T>(list: T[], value: T) {
 
 function togglePerson(state: HistoryState, personId: number) {
   toggle(state.personIds, personId);
+  remember(state);
 }
 
 function toggleType(state: HistoryState, type: HistoryType) {
   toggle(state.types, type);
+  remember(state);
 }
 
 function toggleTag(state: HistoryState, tagId: number) {
   toggle(state.tagIds, tagId);
+  remember(state);
 }
 
 function resetFilters(state: HistoryState) {
   state.personIds = [];
   state.types = [...HISTORY_TYPES];
   state.tagIds = [];
+  remember(state);
   vlens.scheduleRedraw();
 }
 
@@ -210,6 +274,7 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
     state.timeline = data.timeline;
     state.loaded = [...data.loaded];
     state.error = "";
+    restoreBrowse(state);
   }
   const tagCache = useTagCache();
   tagCache.loadTags();
@@ -248,7 +313,7 @@ const HistoryPage = ({ data }: { data: HistoryData }) => {
 
   return (
     <div className="history-page">
-      <h1>{copy.nav.history}</h1>
+      <PageHeader title={copy.nav.history} />
 
       <div className="history-filters">
         <PersonChips

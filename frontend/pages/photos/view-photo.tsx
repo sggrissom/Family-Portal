@@ -33,6 +33,7 @@ import {
   SequencePosition,
 } from "../../lib/photoSequence";
 import { isExactRecord, recordDateLabel } from "../../lib/recordTime";
+import { setPagePerson } from "../../lib/appNav";
 
 type ViewPhotoData = {
   image: server.Image | null;
@@ -123,6 +124,9 @@ export function view(route: string, prefix: string, data: ViewPhotoData): preact
     navigate("/login");
     return;
   }
+
+  const pictured = data.people ?? [];
+  setPagePerson(window.location.pathname, pictured.length === 1 ? pictured[0].id : null);
 
   if (!data.image) {
     return (

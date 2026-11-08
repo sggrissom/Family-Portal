@@ -19,6 +19,7 @@ import { copy } from "../../lib/copy";
 import { interviewTitle } from "../../lib/interviews";
 import "./view-milestone-styles";
 import { recordDateLabel, recordMonthsOld } from "../../lib/recordTime";
+import { setPagePerson } from "../../lib/appNav";
 
 type ViewMilestoneData = {
   milestone: server.Milestone | null;
@@ -66,6 +67,7 @@ export function view(
   data: ViewMilestoneData
 ): preact.ComponentChild {
   if (!requireAuthInView()) return;
+  setPagePerson(window.location.pathname, data.milestone?.personId ?? null);
 
   if (!data.milestone) {
     return (

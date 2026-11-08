@@ -8,7 +8,7 @@ import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
-import { Section, activeSection, addPath, contextPersonId } from "../lib/appNav";
+import { Section, activeSection, addPath, pagePersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/dateUtils";
@@ -285,7 +285,7 @@ const AccountMenu = ({ user, state }: { user: auth.AuthCache; state: NavState })
 );
 
 function defaultPerson(people: server.Person[]): number | null {
-  const id = contextPersonId(window.location.pathname);
+  const id = pagePersonId(window.location.pathname);
   return people.some(p => p.id === id) ? id : null;
 }
 
