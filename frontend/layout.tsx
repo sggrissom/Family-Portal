@@ -5,7 +5,7 @@ import * as vlens from "vlens";
 import * as auth from "./lib/authCache";
 import { applyPageMetadata } from "./lib/pageMetadata";
 import { VerifyEmailBanner } from "./components/VerifyEmailBanner";
-import { AddSheet, BottomNav, MoreSheet, TopNav } from "./components/AppNav";
+import { AddSheet, BottomNav, TopNav } from "./components/AppNav";
 import { Ref } from "vlens/refs";
 
 type HeaderData = {
@@ -66,7 +66,6 @@ export const Header = ({ isHome }: { isHome: boolean }) => {
         </header>
         <BottomNav />
         <AddSheet />
-        <MoreSheet />
       </>
     );
   }

@@ -1,14 +1,14 @@
 export const copy = {
   nav: {
     home: "Home",
+    explore: "Explore",
     photos: "Photos",
     growth: "Growth",
-    history: "History",
+    history: "Timeline",
     books: "Books",
     sameAge: "Same age",
     activities: "Activities",
     chat: "Chat",
-    more: "More",
     add: "Add",
     account: "Account",
     interviews: "Interviews",
@@ -23,15 +23,18 @@ export const copy = {
     admin: "Admin",
     logOut: "Log out",
   },
-  moreSheet: {
-    title: "More",
+  explore: {
+    title: "Explore",
+    lede: "Everything your family has kept, in one place.",
     blurbs: {
+      photos: "Every photo and video",
       history: "Everything, day by day",
-      books: "Turn memories into a story",
-      sameAge: "Compare everyone at the same age",
+      growth: "Height and weight by age",
       activities: "Seasons, meets and results",
+      interviews: "Same questions each year",
+      books: "Turn memories into a story",
+      sameAge: "Everyone at one age",
       chat: "Family messages",
-      interviews: "Same questions, every year",
     } as Record<string, string>,
   },
   addSheet: {
