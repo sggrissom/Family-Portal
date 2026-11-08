@@ -295,7 +295,7 @@ func sharesPerson(a, b []int) bool {
 
 // pickMemories orders candidates by a weighted draw fixed by seed, then takes
 // them greedily so neighbours differ in kind, person and year and no image
-// shows twice. Constraints relax only when nothing else is left, and seen
+// or text shows twice. Constraints relax only when nothing else is left, and seen
 // memories come only after every unseen one.
 func pickMemories(candidates []memoryCandidate, seed int, seen []string, limit int) []Memory {
 	seenKeys := map[string]bool{}
@@ -318,11 +318,17 @@ func pickMemories(candidates []memoryCandidate, seed int, seen []string, limit i
 	taken := make([]bool, len(pool))
 	usedPhotos := map[int]bool{}
 
+	usedTexts := map[string]bool{}
+	textOf := func(m Memory) string { return strings.ToLower(strings.TrimSpace(m.Text)) }
+
 	fits := func(m Memory, strictness int) bool {
 		for _, id := range m.PhotoIds {
 			if usedPhotos[id] {
 				return false
 			}
+		}
+		if text := textOf(m); text != "" && usedTexts[text] {
+			return false
 		}
 		if strictness == 0 || len(picked) == 0 {
 			return true
@@ -365,6 +371,7 @@ func pickMemories(candidates []memoryCandidate, seed int, seen []string, limit i
 		for _, id := range m.PhotoIds {
 			usedPhotos[id] = true
 		}
+		usedTexts[textOf(m)] = true
 		picked = append(picked, m)
 	}
 	return picked

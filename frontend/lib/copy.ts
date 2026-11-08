@@ -26,6 +26,11 @@ export const copy = {
   explore: {
     title: "Explore",
     lede: "Everything your family has kept, in one place.",
+    previews: "Something to look through",
+    said: "Things they said",
+    throughTheYears: (name: string) => `${name} through the years`,
+    compare: "Compare",
+    seeStory: "See their story",
     blurbs: {
       photos: "Every photo and video",
       history: "Everything, day by day",

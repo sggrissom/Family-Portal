@@ -3,6 +3,7 @@ import type { SameAgeRow } from "../server";
 import {
   ageStep,
   ageTitle,
+  invitingAge,
   hasSameAgeRecords,
   nearbyRecordedAge,
   monthsOld,
@@ -175,5 +176,17 @@ describe("portrait comparisons", () => {
       row(2, "2018-03-03"),
     ]);
     expect(ordered.map(r => r.person.id)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("invitingAge", () => {
+  it("keeps childhood ages on a friendly grid", () => {
+    expect(invitingAge(6)).toBe(true);
+    expect(invitingAge(18)).toBe(true);
+    expect(invitingAge(24)).toBe(true);
+    expect(invitingAge(30)).toBe(false);
+    expect(invitingAge(0)).toBe(false);
+    expect(invitingAge(17 * 12)).toBe(true);
+    expect(invitingAge(66 * 12 + 6)).toBe(false);
   });
 });
