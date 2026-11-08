@@ -21,20 +21,43 @@ import { activityKindIcon } from "../activities/labels";
 import { groupInterviewAnswers, interviewsById } from "../../lib/interviews";
 import { localDateString } from "../../lib/dateUtils";
 import { copy } from "../../lib/copy";
+import { FeaturedMemory, MemoryTiles } from "../../components/MemoryCard";
+import { currentVisit, markSeen, saveVisit } from "../../lib/memories";
 import "./dashboard-styles";
 
-export async function fetch(route: string, prefix: string) {
+type HomeData = {
+  dashboard: server.GetDashboardResponse;
+  memories: server.GetMemoriesResponse;
+};
+
+const FEATURED_MEMORIES = 12;
+
+export async function fetch(route: string, prefix: string): Promise<rpc.Response<HomeData | null>> {
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<server.GetDashboardResponse | null>(null);
+    return rpc.ok<HomeData | null>(null);
   }
-  return server.GetDashboard({ today: localDateString(new Date()) });
+  const today = localDateString(new Date());
+  const visit = currentVisit();
+  const [[dashboard, err], [memories]] = await Promise.all([
+    server.GetDashboard({ today }),
+    server.GetMemories({
+      today,
+      seed: visit.seed,
+      seen: visit.seen,
+      limit: FEATURED_MEMORIES,
+      kinds: [],
+      personId: 0,
+      recentlyAdded: true,
+    }),
+  ]);
+  if (!dashboard) return [null, err];
+  return rpc.ok<HomeData | null>({
+    dashboard,
+    memories: memories ?? { memories: [], recentlyAdded: [] },
+  });
 }
 
-export function view(
-  route: string,
-  prefix: string,
-  data: server.GetDashboardResponse | null
-): preact.ComponentChild {
+export function view(route: string, prefix: string, data: HomeData | null): preact.ComponentChild {
   const currentAuth = requireAuthInView();
   if (!currentAuth || !data) {
     return;
@@ -44,7 +67,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="home-container">
-        <HomePage user={currentAuth} data={data} />
+        <HomePage user={currentAuth} data={data.dashboard} memories={data.memories} />
       </main>
       <Footer />
     </div>
@@ -87,14 +110,86 @@ function nudgeAction(nudge: server.DashboardNudge): string {
   }
 }
 
-const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashboardResponse }) => {
+const TIMELY_NUDGES = ["birthday"];
+
+function anotherMemory(count: number) {
+  const visit = currentVisit();
+  saveVisit({ ...visit, index: (visit.index + 1) % count });
+  vlens.scheduleRedraw();
+}
+
+function featuredMemory(memories: server.Memory[]): server.Memory | null {
+  return memories.length > 0 ? memories[currentVisit().index % memories.length] : null;
+}
+
+const Featured = ({
+  memory,
+  count,
+  people,
+}: {
+  memory: server.Memory | null;
+  count: number;
+  people: Map<number, server.Person>;
+}) => {
+  if (!memory) return null;
+  markSeen(memory.key);
+  return (
+    <section className="home-section" aria-label={copy.memory.featured}>
+      <FeaturedMemory
+        memory={memory}
+        people={people}
+        onAnother={count > 1 ? vlens.cachePartial(anotherMemory, count) : undefined}
+      />
+    </section>
+  );
+};
+
+const Nudge = ({ nudge }: { nudge: server.DashboardNudge }) => (
+  <div className="home-nudge">
+    <a href={nudgeAction(nudge)}>
+      {nudge.kind === "birthday" ? (
+        <>
+          <Icon symbol={Cake} /> {nudge.text.replace(/^🎂\s*/, "")}
+        </>
+      ) : nudge.kind === "interview" ? (
+        <>
+          <Icon symbol={Mic} /> {nudge.text.replace(/^🎤\s*/, "")}
+        </>
+      ) : (
+        nudge.text
+      )}
+    </a>
+    <button
+      type="button"
+      className="home-nudge-dismiss"
+      aria-label={copy.home.dismiss}
+      onClick={vlens.cachePartial(dismissNudge, nudge.key)}
+    >
+      ×
+    </button>
+  </div>
+);
+
+const HomePage = ({
+  user,
+  data,
+  memories,
+}: {
+  user: auth.AuthCache;
+  data: server.GetDashboardResponse;
+  memories: server.GetMemoriesResponse;
+}) => {
   const people = data.people || [];
   const familyId = user.familyId;
   const strip = chipOrder(people, data.relations || [], familyId, { includeUnborn: true });
   const names = chipLabels(people);
   const peopleById = new Map(people.map(p => [p.id, p]));
   const dismissed = readDismissed();
-  const nudges = (data.nudges || []).filter(n => !dismissed.includes(n.key)).slice(0, MAX_NUDGES);
+  const nudges = (data.nudges || []).filter(n => !dismissed.includes(n.key));
+  const timely = nudges.filter(n => TIMELY_NUDGES.includes(n.kind));
+  const featured = featuredMemory(memories.memories || []);
+  const added = (memories.recentlyAdded || []).filter(m => m.key !== featured?.key);
+  const chores = nudges.filter(n => !TIMELY_NUDGES.includes(n.kind)).slice(0, MAX_NUDGES);
   const recent = summarizeDays(
     {
       photos: data.recent.photos || [],
@@ -113,32 +208,10 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
 
       <FamilyStrip people={strip} names={names} families={data.families ?? []} />
 
-      {nudges.length > 0 && (
+      {timely.length > 0 && (
         <div className="home-nudges">
-          {nudges.map(nudge => (
-            <div key={nudge.key} className="home-nudge">
-              <a href={nudgeAction(nudge)}>
-                {nudge.kind === "birthday" ? (
-                  <>
-                    <Icon symbol={Cake} /> {nudge.text.replace(/^🎂\s*/, "")}
-                  </>
-                ) : nudge.kind === "interview" ? (
-                  <>
-                    <Icon symbol={Mic} /> {nudge.text.replace(/^🎤\s*/, "")}
-                  </>
-                ) : (
-                  nudge.text
-                )}
-              </a>
-              <button
-                type="button"
-                className="home-nudge-dismiss"
-                aria-label={copy.home.dismiss}
-                onClick={vlens.cachePartial(dismissNudge, nudge.key)}
-              >
-                ×
-              </button>
-            </div>
+          {timely.map(nudge => (
+            <Nudge key={nudge.key} nudge={nudge} />
           ))}
         </div>
       )}
@@ -185,6 +258,8 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
         </section>
       )}
 
+      <Featured memory={featured} count={(memories.memories || []).length} people={peopleById} />
+
       {(data.onThisDay || []).length > 0 && (
         <section className="home-section">
           <h2>{copy.home.onThisDay}</h2>
@@ -227,9 +302,7 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
           <h2>{copy.home.recent}</h2>
           <a href="/history">{copy.home.seeAll}</a>
         </div>
-        {recent.length === 0 ? (
-          <p className="home-empty">{copy.home.nothingRecent}</p>
-        ) : (
+        {recent.length > 0 && (
           <DaySummaryList
             days={recent}
             people={people}
@@ -237,7 +310,27 @@ const HomePage = ({ user, data }: { user: auth.AuthCache; data: server.GetDashbo
             interviews={interviewsById(data.recent.interviews)}
           />
         )}
+        {recent.length === 0 && added.length === 0 && (
+          <p className="home-empty">{copy.home.nothingRecent}</p>
+        )}
+        {added.length > 0 && (
+          <div className="home-added">
+            <h3>{copy.memory.addedFromEarlier}</h3>
+            <MemoryTiles memories={added} people={peopleById} />
+          </div>
+        )}
       </section>
+
+      {chores.length > 0 && (
+        <section className="home-section home-chores">
+          <h2>{copy.home.whenYouHaveAMinute}</h2>
+          <div className="home-nudges">
+            {chores.map(nudge => (
+              <Nudge key={nudge.key} nudge={nudge} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

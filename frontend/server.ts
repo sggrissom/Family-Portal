@@ -1382,6 +1382,21 @@ export interface ListOpenEventsResponse {
     events: OpenEvent[]
 }
 
+export interface GetMemoriesRequest {
+    today: string
+    seed: number
+    seen: string[]
+    limit: number
+    kinds: string[]
+    personId: number
+    recentlyAdded: boolean
+}
+
+export interface GetMemoriesResponse {
+    memories: Memory[]
+    recentlyAdded: Memory[]
+}
+
 export interface GetSameAgeRequest {
     includeAvailableAges: boolean
     details: boolean
@@ -2510,6 +2525,23 @@ export interface DashboardRecent {
 export interface OpenEvent {
     event: EventSummary
     activityName: string
+}
+
+export interface Memory {
+    key: string
+    kind: string
+    personIds: number[]
+    photoIds: number[]
+    text: string
+    context: string
+    category: string
+    date: string
+    recordTime: RecordTime
+    createdAt: string
+    milestoneId: number
+    interviewId: number
+    photoId: number
+    eventId: number
 }
 
 export interface SameAgeOption {
@@ -3686,6 +3718,10 @@ export async function GetDashboard(data: GetDashboardRequest): Promise<rpc.Respo
 
 export async function ListOpenEvents(data: ListOpenEventsRequest): Promise<rpc.Response<ListOpenEventsResponse>> {
     return await rpc.call<ListOpenEventsResponse>('ListOpenEvents', JSON.stringify(data));
+}
+
+export async function GetMemories(data: GetMemoriesRequest): Promise<rpc.Response<GetMemoriesResponse>> {
+    return await rpc.call<GetMemoriesResponse>('GetMemories', JSON.stringify(data));
 }
 
 export async function GetSameAge(data: GetSameAgeRequest): Promise<rpc.Response<GetSameAgeResponse>> {
