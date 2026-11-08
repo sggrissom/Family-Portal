@@ -4,28 +4,11 @@ block(`
 .activities-container {
   max-width: 780px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 24px 16px 40px;
 }
 `);
 
 block(`
-.activities-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-`);
-
-block(`
-.activities-title h1 {
-  margin: 0;
-}
-`);
-
-block(`
-.activities-title > .btn,
 .activities-section-head > .btn {
   flex: 0 0 auto;
   width: auto;

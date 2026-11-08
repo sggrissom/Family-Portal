@@ -4,7 +4,7 @@ block(`
 .history-container {
   max-width: 760px;
   margin: 0 auto;
-  padding: 20px 16px 40px;
+  padding: 24px 16px 40px;
 }
 `);
 
@@ -12,13 +12,6 @@ block(`
 .history-page {
   display: grid;
   gap: 16px;
-}
-`);
-
-block(`
-.history-page h1 {
-  margin: 0;
-  font-size: 1.4rem;
 }
 `);
 

@@ -5,6 +5,8 @@ import {
   addPath,
   contextPersonId,
   legacyRedirect,
+  pagePersonId,
+  setPagePerson,
 } from "./appNav";
 
 describe("activeDestination", () => {
@@ -80,6 +82,17 @@ describe("contextPersonId", () => {
   it("is null elsewhere", () => {
     expect(contextPersonId("/dashboard")).toBeNull();
     expect(contextPersonId("/view-photo/7")).toBeNull();
+  });
+});
+
+describe("pagePersonId", () => {
+  it("prefers the route, then what the page recorded for that path", () => {
+    setPagePerson("/milestone/4", 9);
+    expect(pagePersonId("/milestone/4")).toBe(9);
+    expect(pagePersonId("/profile/2")).toBe(2);
+    expect(pagePersonId("/milestone/5")).toBeNull();
+    setPagePerson("/milestone/4", null);
+    expect(pagePersonId("/milestone/4")).toBeNull();
   });
 });
 

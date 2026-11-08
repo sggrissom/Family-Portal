@@ -9,19 +9,6 @@ block(`
 `);
 
 block(`
-.explore-page h1 {
-  margin: 0;
-}
-`);
-
-block(`
-.explore-lede {
-  margin: 4px 0 20px;
-  color: var(--muted);
-}
-`);
-
-block(`
 .explore-directory {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

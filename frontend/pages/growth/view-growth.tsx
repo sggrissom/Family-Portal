@@ -27,6 +27,7 @@ import {
 import { sameAgePath } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
 import "./view-growth-styles";
+import { setPagePerson } from "../../lib/appNav";
 
 type ViewGrowthData = {
   measurements: server.GrowthData[];
@@ -80,6 +81,7 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
   }
 
   const person = data.targetPerson;
+  setPagePerson(window.location.pathname, person?.id ?? null);
   if (data.measurements.length === 0 || !person) {
     return (
       <ErrorPage

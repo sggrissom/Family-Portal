@@ -5,7 +5,7 @@ import "./photos-styles";
 
 block(`
 .family-photos-container {
-  padding: 28px 16px 72px;
+  padding: 24px 16px 72px;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -14,23 +14,6 @@ block(`
 block(`
 .family-photos-page {
   min-height: 70vh;
-}
-`);
-
-block(`
-.family-photos-container .header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
-}
-`);
-
-block(`
-.family-photos-container .photos-count {
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 500;
 }
 `);
 
@@ -181,36 +164,6 @@ block(`
   text-align: center;
   color: var(--muted);
   font-style: italic;
-}
-`);
-
-block(`
-.people-badges {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  z-index: 1;
-}
-`);
-
-block(`
-.person-badge {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 0;
-  max-width: 100%;
 }
 `);
 
@@ -414,27 +367,6 @@ block(`
 `);
 
 block(`
-.family-photos-container .page-header {
-  margin-bottom: 20px;
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-`);
-
-block(`
-.family-photos-container .header-content {
-  align-items: center;
-}
-`);
-
-block(`
-.family-photos-container .page-header h1 {
-  margin-bottom: 4px;
-  font-size: clamp(1.5rem, 4vw, 2rem);
-}
-`);
-
-block(`
 .family-photos-container .btn {
   width: auto;
   flex: 0 0 auto;
@@ -585,19 +517,6 @@ block(`
 `);
 
 block(`
-.family-photos-container .photo-description {
-  margin-top: 6px;
-}
-`);
-
-block(`
-.family-photos-container .person-badge {
-  background: rgba(0, 0, 0, 0.65);
-  box-shadow: none;
-}
-`);
-
-block(`
 @media (max-width: 768px) {
   .family-photos-container {
     padding: 20px 16px 88px;
@@ -632,5 +551,13 @@ block(`
     padding: 10px 12px;
     font-size: 0.875rem;
   }
+}
+`);
+
+block(`
+.family-photos-container .photo-date {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 `);

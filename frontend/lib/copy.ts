@@ -439,6 +439,8 @@ export const copy = {
     nothingRecent: "Nothing added in the last two weeks.",
     dismiss: "Dismiss",
     whenYouHaveAMinute: "When you have a minute",
+    scrollFamilyBack: "Show earlier family members",
+    scrollFamilyOn: "Show more family members",
     checkup: "measured",
     checkupTitle: "Measured",
     addPhotos: "Add photos",

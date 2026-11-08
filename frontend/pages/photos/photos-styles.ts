@@ -96,19 +96,6 @@ block(`
 `);
 
 block(`
-.photo-card .photo-description {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 0;
-  line-height: 1.4;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-`);
-
-block(`
 .photos-count {
   font-size: 14px;
   color: var(--muted);
@@ -151,8 +138,7 @@ block(`
     font-size: 13px;
   }
 
-  .photo-date,
-  .photo-description {
+  .photo-date {
     font-size: 11px;
   }
 }
