@@ -4,7 +4,7 @@ block(`
 .same-age-container {
   max-width: 960px;
   margin: 0 auto;
-  padding: 20px 16px 40px;
+  padding: 24px 16px 40px;
 }
 `);
 
@@ -12,13 +12,6 @@ block(`
 .same-age-page {
   display: grid;
   gap: 14px;
-}
-`);
-
-block(`
-.same-age-page h1 {
-  margin: 0;
-  font-size: 1.4rem;
 }
 `);
 

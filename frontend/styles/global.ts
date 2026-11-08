@@ -647,22 +647,6 @@ block(`
 `);
 
 block(`
-.profile-photo-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: var(--primary-accent);
-  color: var(--button-text);
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-}
-`);
-
-block(`
 .percentile-badge {
   display: inline-block;
   padding: 2px 7px;

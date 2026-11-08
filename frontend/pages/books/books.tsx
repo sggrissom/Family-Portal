@@ -8,6 +8,8 @@ import { bookDates, joinNames } from "../../lib/book";
 import { SAMPLES } from "../../lib/bookFixtures";
 import { PRESET_CHOICES } from "./new-book";
 import "./book-styles";
+import { PageHeader } from "../../components/PageHeader";
+import { copy } from "../../lib/copy";
 
 export async function fetch(
   route: string,
@@ -27,8 +29,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="books-index">
-        <h1>Books</h1>
-        <p className="books-lede">Turn your family's memories into a story.</p>
+        <PageHeader title={copy.nav.books} lede="Turn your family's memories into a story." />
 
         {books.length > 0 && (
           <ul className="books-shelf">

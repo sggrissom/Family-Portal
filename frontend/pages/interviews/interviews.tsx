@@ -9,6 +9,7 @@ import { ageYearsAt } from "../../lib/interviews";
 import { ProfileImage } from "../../components/ResponsiveImage";
 import { initial } from "../../components/PersonChips";
 import "./interview-styles";
+import { PageHeader } from "../../components/PageHeader";
 
 const t = copy.interview.family;
 
@@ -30,11 +31,7 @@ export function view(
     <div>
       <Header isHome={false} />
       <main id="app" className="iv-page">
-        <div className="iv-family-head">
-          <div>
-            <h1>{t.title}</h1>
-            <p className="iv-hint">{t.intro}</p>
-          </div>
+        <PageHeader title={t.title} lede={t.intro}>
           {canContributeAnywhere() && (
             <div className="iv-family-links">
               <a className="iv-link" href="/interview/compare">
@@ -48,7 +45,7 @@ export function view(
               </a>
             </div>
           )}
-        </div>
+        </PageHeader>
 
         {people.length === 0 && <p className="iv-hint">{t.empty}</p>}
 

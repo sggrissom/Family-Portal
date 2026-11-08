@@ -116,8 +116,8 @@ const LandingPage = ({ providers }: { providers: AuthProviders }) => (
       />
       <Shot
         src="/images/screenshots/history.png"
-        alt="The family history"
-        caption="History lists moments, measurements, photos, and results in date order, filtered by person, year, or search."
+        alt="The family timeline"
+        caption="The timeline lists moments, measurements, photos, and results in date order, filtered by person, year, or search."
       />
     </section>
 

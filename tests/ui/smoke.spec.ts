@@ -183,8 +183,8 @@ test("a new family signs up, adds a person, and records a measurement", async ({
     await expect(page.locator(".day-checkup").first()).toContainText(measurement.shown);
   });
 
-  await test.step("and in the family history", async () => {
-    await page.getByRole("link", { name: "History", exact: true }).first().click();
+  await test.step("and in the family timeline", async () => {
+    await explore(page, "Timeline");
     await expect(page).toHaveURL(/\/history$/);
     await expect(page.locator(".day-checkup").first()).toContainText(measurement.shown);
   });
@@ -221,7 +221,7 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
   await expect(page).toHaveURL(/\/view-growth\/\d+$/);
   await expect(page.locator(".growth-detail-value")).toContainText("7 lb 8 oz");
 
-  await page.getByRole("link", { name: "Growth" }).first().click();
+  await explore(page, "Growth");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("dialog").getByRole("link", { name: "Measurement" }).click();
   await expect(page.locator(".entry-subject")).toContainText(baby.name);
@@ -305,7 +305,7 @@ test("photos upload as soon as they are picked and take a caption after", async 
   await page.getByRole("button", { name: "Done" }).click();
 
   await expect(page).toHaveURL(/\/dashboard$/);
-  await page.getByRole("link", { name: "Photos" }).first().click();
+  await explore(page, "Photos");
   await expect(page).toHaveURL(/\/photos$/);
   await expect(page.locator(".photo-card").filter({ hasText: caption })).toHaveCount(2);
 });
@@ -429,6 +429,15 @@ test("artwork is photographed from the moment form and hangs on its own tab", as
   await expect(piece).toContainText("Drew the whole family as dinosaurs");
   await expect(piece.locator("img")).toHaveCount(1);
 });
+
+async function explore(page: Page, feature: string) {
+  await page.getByRole("link", { name: "Explore", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/explore$/);
+  await page
+    .getByRole("navigation", { name: "Explore" })
+    .getByRole("link", { name: feature })
+    .click();
+}
 
 async function addFor(page: Page, personName: string, kind: "Photos" | "Measurement" | "Moment") {
   await page.getByRole("button", { name: "Add", exact: true }).click();

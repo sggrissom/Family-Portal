@@ -25,7 +25,8 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { initial } from "../../components/PersonChips";
 import { PersonActivities } from "../activities/person";
 import { InterviewsTab, hasInterviewTab } from "../interviews/person-tab";
-import { interviewsById } from "../../lib/interviews";
+import { interviewsById, shortQuestion } from "../../lib/interviews";
+import { currentVisit } from "../../lib/memories";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
@@ -35,7 +36,7 @@ import { chapterTitle, storyChapters } from "../../lib/story";
 import { Metric, chartPoints, percentileBand } from "../../lib/ageChart";
 import { latestOf, timeAgo } from "../../lib/checkup";
 import { dueSummary } from "../../lib/familyStrip";
-import { ageTitle, monthsOld } from "../../lib/sameAge";
+import { ageTitle, monthsOld, sameAgePath } from "../../lib/sameAge";
 import {
   ageInMonths,
   computePercentileLabel,
@@ -205,6 +206,7 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
           <StoryTab
             data={data}
             today={today}
+            onShowTab={tab => chooseTab(state, person.id, tab)}
             onShowTimeline={() => {
               chooseTab(state, person.id, "photos");
               requestAnimationFrame(() => {
@@ -432,14 +434,21 @@ const Snapshot = ({
 const StoryTab = ({
   data,
   today,
+  onShowTab,
   onShowTimeline,
 }: {
   data: ProfileData;
   today: string;
+  onShowTab: (tab: Tab) => void;
   onShowTimeline: () => void;
 }) => {
   const person = data.person.person;
-  const hasPreview = data.insights.growingUp.length > 1;
+  const comparable = data.family.some(
+    item =>
+      item.person.id !== person.id &&
+      !item.person.isPregnancy &&
+      isValidBirthday(item.person.birthday)
+  );
   const days = summarizeDays(
     {
       photos: (data.person.photos ?? []).map(image => ({
@@ -477,40 +486,120 @@ const StoryTab = ({
 
   return (
     <div className="story">
-      {chapters.map((chapter, index) => (
+      <ProfileHighlights data={data} onShowTab={onShowTab} onShowTimeline={onShowTimeline} />
+      {chapters.map(chapter => (
         <section key={String(chapter.age)} className="story-chapter">
           <div className="story-chapter-head">
             <h2>{chapterTitle(chapter.age)}</h2>
             {chapter.grew && <span className="story-grew">{chapter.grew}</span>}
+            {comparable && chapter.age !== null && (
+              <a
+                className="story-same-age"
+                href={sameAgePath(Math.max(chapter.age * 12, 6), person.id, "details")}
+              >
+                {copy.person.othersAtAge(chapter.age)}
+              </a>
+            )}
           </div>
           <DaySummaryList
-            days={index === 0 && hasPreview ? chapter.days.slice(0, 3) : chapter.days}
+            days={chapter.days}
             people={[person]}
             today={today}
             subjectId={person.id}
             interviews={interviews}
           />
-          {index === 0 && hasPreview && (
-            <>
-              <GrowingUpPreview
-                personId={person.id}
-                portraits={data.insights.growingUp}
-                onShowTimeline={onShowTimeline}
-              />
-              {chapter.days.length > 3 && (
-                <DaySummaryList
-                  days={chapter.days.slice(3)}
-                  people={[person]}
-                  today={today}
-                  subjectId={person.id}
-                  interviews={interviews}
-                />
-              )}
-            </>
-          )}
         </section>
       ))}
     </div>
+  );
+};
+
+function visitPick<T>(list: T[], personId: number): T | undefined {
+  return list.length > 0 ? list[(currentVisit().seed + personId) % list.length] : undefined;
+}
+
+const ProfileHighlights = ({
+  data,
+  onShowTab,
+  onShowTimeline,
+}: {
+  data: ProfileData;
+  onShowTab: (tab: Tab) => void;
+  onShowTimeline: () => void;
+}) => {
+  const person = data.person.person;
+  const name = firstName(person.name);
+  const milestones = data.person.milestones ?? [];
+  const quotes = milestones.filter(isQuote);
+  const quote = visitPick(quotes, person.id);
+  const artwork = milestones.filter(m => m.category === "artwork" && (m.photoIds ?? []).length);
+  const answers = milestones.filter(m => m.interviewId > 0 && m.description.trim());
+  const latest = answers.reduce((max, m) => (m.milestoneDate > max ? m.milestoneDate : max), "");
+  const answer = visitPick(
+    answers.filter(m => m.milestoneDate === latest),
+    person.id
+  );
+  const growingUp = data.insights.growingUp.length > 1;
+
+  if (!growingUp && !quote && !answer && artwork.length === 0) return null;
+
+  const showTab = (tab: Tab) => (e: MouseEvent) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    onShowTab(tab);
+    window.scrollTo({ top: 0 });
+  };
+
+  return (
+    <section className="profile-highlights" aria-label={copy.person.highlights}>
+      {growingUp && (
+        <GrowingUpPreview
+          personId={person.id}
+          portraits={data.insights.growingUp}
+          onShowTimeline={onShowTimeline}
+        />
+      )}
+      {quote && (
+        <div className="highlight-card">
+          <h3>{copy.person.theySaid(name)}</h3>
+          <a href={`/milestone/${quote.id}`} className="highlight-quote">
+            <MilestoneText milestone={quote} />
+          </a>
+          <small>{recordDateLabel(quote.recordTime, quote.milestoneDate, formatDate)}</small>
+          <a href={`/profile/${person.id}?tab=quotes`} onClick={showTab("quotes")}>
+            {copy.person.allQuotes(quotes.length)}
+          </a>
+        </div>
+      )}
+      {answer && (
+        <div className="highlight-card">
+          <h3>{copy.person.fromInterview}</h3>
+          <span className="highlight-question">{shortQuestion(answer.context)}</span>
+          <a href={`/interview/${answer.interviewId}`} className="highlight-answer">
+            {answer.description}
+          </a>
+          <small>{recordDateLabel(answer.recordTime, answer.milestoneDate, formatDate)}</small>
+          <a href={`/profile/${person.id}?tab=interviews`} onClick={showTab("interviews")}>
+            {copy.person.allInterviews}
+          </a>
+        </div>
+      )}
+      {artwork.length > 0 && (
+        <div className="highlight-card">
+          <h3>{copy.person.tabs.artwork}</h3>
+          <div className="highlight-artwork">
+            {artwork.slice(0, 3).map(piece => (
+              <a key={piece.id} href={`/milestone/${piece.id}`}>
+                <ThumbnailImage photoId={piece.photoIds![0]} alt={piece.description} />
+              </a>
+            ))}
+          </div>
+          <a href={`/profile/${person.id}?tab=artwork`} onClick={showTab("artwork")}>
+            {copy.person.artworkCount(artwork.length)}
+          </a>
+        </div>
+      )}
+    </section>
   );
 };
 
@@ -611,7 +700,7 @@ const GrowingUpPreview = ({
     (_, i) => portraits[Math.round((i * (portraits.length - 1)) / (count - 1))]
   );
   return (
-    <section className="growing-up-preview" aria-label={copy.person.growingUp}>
+    <section className="growing-up-preview highlight-card" aria-label={copy.person.growingUp}>
       <h3>{copy.person.growingUp}</h3>
       <a
         className="growing-up-preview-link"

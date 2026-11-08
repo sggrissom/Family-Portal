@@ -1,4 +1,4 @@
-import { Camera, MapPin, Search, UserRound } from "lucide-preact";
+import { Camera, MapPin, Search } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import { formatDate as formatPhotoDate } from "../../lib/dateUtils";
 import * as preact from "preact";
@@ -27,6 +27,9 @@ import { PHOTO_PAGE_SIZE, photosRequest } from "../../lib/photoPages";
 import { matchStartMs, saveSequence, viewPhotoRoute } from "../../lib/photoSequence";
 import "./family-photos-styles";
 import { recordDateLabel } from "../../lib/recordTime";
+import { PageHeader } from "../../components/PageHeader";
+import { firstName } from "../../lib/interviews";
+import { copy } from "../../lib/copy";
 
 type FamilyPhotosData = {
   first: server.ListFamilyPhotosResponse;
@@ -146,27 +149,23 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
 
   return (
     <div className="family-photos-page">
-      <div className="page-header">
-        <div className="header-content">
-          <div>
-            <h1>Family Photos</h1>
-            {hasPhotos && (
-              <div className="photos-count">
-                {searching
-                  ? `${countLabel} result${countLabel !== "1" ? "s" : ""}`
-                  : photoFilter.hasActiveFilters()
-                    ? `${countLabel} matching photo${countLabel !== "1" ? "s" : ""}`
-                    : `${countLabel} photo${countLabel !== "1" ? "s" : ""}`}
-              </div>
-            )}
-          </div>
-          {auth.canContributeAnywhere() && (
-            <a href="/add-photo" className="btn btn-primary photo-add">
-              + Add photos
-            </a>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={copy.nav.photos}
+        lede={
+          hasPhotos &&
+          (searching
+            ? `${countLabel} result${countLabel !== "1" ? "s" : ""}`
+            : photoFilter.hasActiveFilters()
+              ? `${countLabel} matching photo${countLabel !== "1" ? "s" : ""}`
+              : `${countLabel} photo${countLabel !== "1" ? "s" : ""}`)
+        }
+      >
+        {auth.canContributeAnywhere() && (
+          <a href="/add-photo" className="btn btn-primary photo-add">
+            + Add photos
+          </a>
+        )}
+      </PageHeader>
 
       {hasPhotos && (
         <div className="photo-toolbar">
@@ -397,26 +396,6 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                           frameMs={matchStartMs(photoWithPeople)}
                         />
                         <VideoBadge image={photoWithPeople.image} />
-                        {photoWithPeople.people.some(
-                          person => person.profilePhotoId === photoWithPeople.image.id
-                        ) && (
-                          <div className="profile-photo-badge">
-                            <Icon symbol={UserRound} /> Profile
-                          </div>
-                        )}
-                        {photoWithPeople.people.length > 0 ? (
-                          <div className="people-badges">
-                            {photoWithPeople.people.map(person => (
-                              <div key={person.id} className="person-badge">
-                                {person.name}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="people-badges">
-                            <div className="person-badge family-badge">Family Photo</div>
-                          </div>
-                        )}
                       </div>
                       {photoWithPeople.image.tagIds && photoWithPeople.image.tagIds.length > 0 && (
                         <div className="tag-badges">
@@ -438,17 +417,14 @@ const FamilyPhotosPage = ({ user, data }: FamilyPhotosPageProps) => {
                           photoWithPeople.image.title
                         ) && <h3 className="photo-title">{photoWithPeople.image.title}</h3>}
                         <div className="photo-date">
+                          {photoWithPeople.people.length > 0 &&
+                            `${photoWithPeople.people.map(p => firstName(p.name)).join(", ")} · `}
                           {recordDateLabel(
                             photoWithPeople.image.recordTime,
                             photoWithPeople.image.photoDate,
                             formatPhotoDate
                           )}
                         </div>
-                        {photoWithPeople.image.description && (
-                          <div className="photo-description">
-                            {photoWithPeople.image.description}
-                          </div>
-                        )}
                       </div>
                     </a>
                     {(photoWithPeople.similar?.length ?? 0) > 0 && (

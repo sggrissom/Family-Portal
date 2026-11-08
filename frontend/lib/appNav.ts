@@ -1,5 +1,6 @@
 export type Destination =
   | "home"
+  | "explore"
   | "photos"
   | "growth"
   | "history"
@@ -13,6 +14,7 @@ export type Destination =
 const DESTINATION_PREFIXES: [string, Destination][] = [
   ["/dashboard", "home"],
   ["/profile", "home"],
+  ["/explore", "explore"],
   ["/photos", "photos"],
   ["/view-photo", "photos"],
   ["/edit-photo", "photos"],
@@ -45,6 +47,15 @@ export function activeDestination(path: string): Destination | null {
   return match ? match[1] : null;
 }
 
+export type Section = "home" | "explore" | "search";
+
+export function activeSection(path: string): Section | null {
+  const destination = activeDestination(path);
+  if (destination === null) return null;
+  if (destination === "home" || destination === "search") return destination;
+  return "explore";
+}
+
 export const LEGACY_ROUTES: Record<string, string> = {
   "/family-timeline": "/history",
   "/family-chart": "/growth",
@@ -67,6 +78,18 @@ export function legacyRedirect(route: string): string | null {
 export function contextPersonId(path: string): number | null {
   const match = /^\/(?:profile|edit-person)\/(\d+)/.exec(path);
   return match ? parseInt(match[1]) : null;
+}
+
+let pagePerson: { path: string; personId: number } | null = null;
+
+// setPagePerson records who the page being shown is about, for pages whose
+// route names a record rather than a person.
+export function setPagePerson(path: string, personId: number | null) {
+  pagePerson = personId ? { path, personId } : null;
+}
+
+export function pagePersonId(path: string): number | null {
+  return contextPersonId(path) ?? (pagePerson?.path === path ? pagePerson.personId : null);
 }
 
 export function addPath(

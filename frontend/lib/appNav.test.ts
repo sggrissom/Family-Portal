@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { activeDestination, addPath, contextPersonId, legacyRedirect } from "./appNav";
+import {
+  activeDestination,
+  activeSection,
+  addPath,
+  contextPersonId,
+  legacyRedirect,
+  pagePersonId,
+  setPagePerson,
+} from "./appNav";
 
 describe("activeDestination", () => {
   it("maps each destination and its detail pages", () => {
@@ -33,6 +41,23 @@ describe("activeDestination", () => {
   });
 });
 
+describe("activeSection", () => {
+  it("files every feature under Explore", () => {
+    expect(activeSection("/explore")).toBe("explore");
+    expect(activeSection("/photos")).toBe("explore");
+    expect(activeSection("/history")).toBe("explore");
+    expect(activeSection("/competition/3")).toBe("explore");
+    expect(activeSection("/chat")).toBe("explore");
+  });
+
+  it("keeps Home and Search their own", () => {
+    expect(activeSection("/dashboard")).toBe("home");
+    expect(activeSection("/profile/4")).toBe("home");
+    expect(activeSection("/search?q=walk")).toBe("search");
+    expect(activeSection("/settings")).toBeNull();
+  });
+});
+
 describe("legacyRedirect", () => {
   it("sends old URLs to their new names, keeping the rest of the route", () => {
     expect(legacyRedirect("/family-timeline")).toBe("/history");
@@ -57,6 +82,17 @@ describe("contextPersonId", () => {
   it("is null elsewhere", () => {
     expect(contextPersonId("/dashboard")).toBeNull();
     expect(contextPersonId("/view-photo/7")).toBeNull();
+  });
+});
+
+describe("pagePersonId", () => {
+  it("prefers the route, then what the page recorded for that path", () => {
+    setPagePerson("/milestone/4", 9);
+    expect(pagePersonId("/milestone/4")).toBe(9);
+    expect(pagePersonId("/profile/2")).toBe(2);
+    expect(pagePersonId("/milestone/5")).toBeNull();
+    setPagePerson("/milestone/4", null);
+    expect(pagePersonId("/milestone/4")).toBeNull();
   });
 });
 

@@ -295,6 +295,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterMilestoneAnalysisMethods(app)
 	backend.RegisterPersonPhotoInsightMethods(app)
 	backend.RegisterDashboardMethods(app)
+	backend.RegisterMemoryMethods(app)
 	backend.RegisterSameAgeMethods(app)
 	backend.RegisterBookMethods(app)
 	backend.RegisterImportMethods(app)

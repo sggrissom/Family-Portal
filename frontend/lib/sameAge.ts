@@ -88,6 +88,14 @@ export function photoAge(birthday: string, at: string): string {
   return months === 0 ? d : `${ageTitle(months)}, ${d}`;
 }
 
+const CHILDHOOD_MONTHS = 18 * 12;
+
+// invitingAge is an age worth suggesting a comparison at: a childhood month
+// under two, a birthday after.
+export function invitingAge(months: number): boolean {
+  return months > 0 && months <= CHILDHOOD_MONTHS && (months < 24 || months % 12 === 0);
+}
+
 export function ageHeading(ageMonths: number): string {
   return ageMonths <= 0 ? "Everyone as newborns" : `Everyone at ${ageTitle(ageMonths)}`;
 }
