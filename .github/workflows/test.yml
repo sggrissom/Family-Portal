@@ -32,6 +32,7 @@ jobs:
     # Keep this check name stable for existing branch protection rules.
     name: Build, Typecheck, and Test
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # New commits supersede validation, but must not interrupt a running deploy.
     # github.ref separates main, release, and each pull request's merge ref.
     concurrency:
@@ -70,11 +71,6 @@ jobs:
 
       - name: TypeScript check
         run: make typecheck
-
-      # The video worker tests run real ffmpeg and skip without it.
-      - name: Install ffmpeg
-        if: env.FULL_CI == 'true'
-        run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
 
       - name: Unit tests
         if: env.FULL_CI == 'true'
