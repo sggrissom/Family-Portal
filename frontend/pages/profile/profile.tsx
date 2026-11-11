@@ -23,9 +23,16 @@ import {
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { initial } from "../../components/PersonChips";
 import { PersonActivities } from "../activities/person";
-import { InterviewsTab, hasInterviewTab } from "../interviews/person-tab";
+import { InterviewsTab } from "../interviews/person-tab";
 import { interviewsById, shortQuestion } from "../../lib/interviews";
 import { currentVisit } from "../../lib/memories";
+import {
+  ProfileTab as Tab,
+  PROFILE_TABS,
+  invitesInterview,
+  profileTabs,
+  shownTab,
+} from "../../lib/profileTabs";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
@@ -100,9 +107,6 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
   });
 }
 
-type Tab = "story" | "quotes" | "artwork" | "interviews" | "photos" | "growth" | "activities";
-const TABS: Tab[] = ["story", "quotes", "artwork", "interviews", "photos", "growth", "activities"];
-
 type ProfileState = {
   tab: Tab;
   metric: Metric;
@@ -111,9 +115,9 @@ type ProfileState = {
 };
 
 const useProfileState = vlens.declareHook((personId: number): ProfileState => {
-  const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+  const requested = new URLSearchParams(window.location.search).get("tab");
   return {
-    tab: requested && TABS.includes(requested) ? requested : "story",
+    tab: shownTab(requested, PROFILE_TABS),
     metric: "height",
     showSiblings: true,
     zoom: newChartZoom(),
@@ -158,13 +162,15 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
   const hasBirthday = isValidBirthday(person.birthday) && !person.isPregnancy;
   const quotes = (data.person.milestones ?? []).filter(isQuote);
   const artwork = (data.person.milestones ?? []).filter(m => m.category === "artwork");
-  const tabs = TABS.filter(
-    t =>
-      (t !== "quotes" || quotes.length > 0) &&
-      (t !== "artwork" || artwork.length > 0) &&
-      (t !== "interviews" || hasInterviewTab(data.interviews, person.familyId)) &&
-      (!person.isPregnancy || t === "story" || t === "photos")
-  );
+  const tabs = profileTabs({
+    isPregnancy: person.isPregnancy,
+    hasBirthday,
+    quotes: quotes.length,
+    artwork: artwork.length,
+    interviews: data.interviews?.interviews.length ?? 0,
+    seasons: (data.activities.seasons ?? []).length,
+  });
+  const tab = shownTab(state.tab, tabs);
 
   return (
     <div className="profile-page">
@@ -182,22 +188,22 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
       )}
 
       <div className="profile-tabs" role="tablist" aria-label={person.name}>
-        {tabs.map(tab => (
+        {tabs.map(t => (
           <button
-            key={tab}
+            key={t}
             type="button"
             role="tab"
-            aria-selected={state.tab === tab ? "true" : "false"}
-            className={state.tab === tab ? "profile-tab active" : "profile-tab"}
-            onClick={() => chooseTab(state, person.id, tab)}
+            aria-selected={t === tab ? "true" : "false"}
+            className={t === tab ? "profile-tab active" : "profile-tab"}
+            onClick={() => chooseTab(state, person.id, t)}
           >
-            {copy.person.tabs[tab]}
+            {copy.person.tabs[t]}
           </button>
         ))}
       </div>
 
       <div className="profile-tab-panel" role="tabpanel">
-        {state.tab === "story" && (
+        {tab === "story" && (
           <StoryTab
             data={data}
             today={today}
@@ -212,16 +218,14 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
             }}
           />
         )}
-        {state.tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
-        {state.tab === "artwork" && <ArtworkTab person={person} artwork={artwork} />}
-        {state.tab === "interviews" && data.interviews && (
-          <InterviewsTab bundle={data.interviews} />
-        )}
-        {state.tab === "photos" && (
+        {tab === "quotes" && <QuotesTab person={person} quotes={quotes} />}
+        {tab === "artwork" && <ArtworkTab person={person} artwork={artwork} />}
+        {tab === "interviews" && data.interviews && <InterviewsTab bundle={data.interviews} />}
+        {tab === "photos" && (
           <PhotosTab person={person} photos={data.person.photos ?? []} insights={data.insights} />
         )}
-        {state.tab === "growth" && hasBirthday && <GrowthTab data={data} state={state} />}
-        {state.tab === "activities" && (
+        {tab === "growth" && <GrowthTab data={data} state={state} />}
+        {tab === "activities" && (
           <PersonActivities
             data={{ season: data.activities, people: data.family.map(item => item.person) }}
           />
@@ -471,7 +475,12 @@ const StoryTab = ({
   );
 
   if (days.length === 0) {
-    return <p className="profile-empty">{copy.person.nothingYet(person.name.split(" ")[0])}</p>;
+    return (
+      <div className="story">
+        <ProfileHighlights data={data} onShowTab={onShowTab} onShowTimeline={onShowTimeline} />
+        <p className="profile-empty">{copy.person.nothingYet(person.name.split(" ")[0])}</p>
+      </div>
+    );
   }
 
   const interviews = interviewsById(data.person.interviews);
@@ -539,8 +548,17 @@ const ProfileHighlights = ({
   const others = (sameAge?.rows ?? []).filter(
     r => r.person.id !== person.id && hasSameAgeRecords(r)
   );
+  const invite =
+    !!data.interviews &&
+    invitesInterview(
+      person,
+      data.interviews.interviews.length,
+      canContribute(person.familyId),
+      localDateString(new Date())
+    );
 
-  if (!growingUp && !quote && !answer && artwork.length === 0 && others.length === 0) return null;
+  if (!growingUp && !quote && !answer && !invite && artwork.length === 0 && others.length === 0)
+    return null;
 
   const showTab = (tab: Tab) => (e: MouseEvent) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -581,6 +599,16 @@ const ProfileHighlights = ({
           <a href={`/profile/${person.id}?tab=interviews`} onClick={showTab("interviews")}>
             {copy.person.allInterviews}
           </a>
+        </div>
+      )}
+      {invite && (
+        <div className="highlight-card">
+          <h3>{copy.person.tabs.interviews}</h3>
+          <p className="highlight-invite">{copy.person.interviewInvite(name)}</p>
+          <a href={`/interview/past/${person.id}`} className="highlight-secondary">
+            {copy.interview.tab.typeIn}
+          </a>
+          <a href={`/interview/new/${person.id}`}>{copy.person.startInterview}</a>
         </div>
       )}
       {artwork.length > 0 && (
