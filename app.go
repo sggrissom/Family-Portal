@@ -174,7 +174,7 @@ func OpenDB(dbpath string) *vbolt.DB {
 	})
 
 	// Migration: every moment and photo gets an exact-day RecordTime with
-	// legacy provenance (docs/plans/approximate-dates-contract.md).
+	// legacy provenance.
 	vbolt.ApplyDBProcess(dbConnection, "2026-1102-backfill-record-times", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
 			milestones, images := backend.BackfillRecordTimes(tx)
