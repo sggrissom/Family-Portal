@@ -529,6 +529,9 @@ export const copy = {
     fromInterview: "From the interview",
     allInterviews: "All interviews →",
     artworkCount: (n: number) => (n === 1 ? "1 piece →" : `All ${n} pieces →`),
+    photoCount: (n: number) => (n === 1 ? "1 photo" : `${n} photos`),
+    momentCount: (n: number) => (n === 1 ? "1 moment" : `${n} moments`),
+    measuredThen: "Measured",
     othersAtAge: (age: number) =>
       age === 0 ? "Everyone in their first year" : `Everyone at ${age}`,
     oftenWith: "Often photographed with",
