@@ -13,7 +13,6 @@ import { VideoBadge } from "../../components/VideoBadge";
 import { FaceCrop } from "../../components/FaceCrop";
 import { DaySummaryList } from "../../components/DaySummaryList";
 import { MilestoneText, isQuote } from "../../components/MilestoneText";
-import { SameAgeStrip } from "../../components/SameAgeRows";
 import {
   AgeChart,
   AgeSeries,
@@ -36,7 +35,7 @@ import { chapterTitle, storyChapters } from "../../lib/story";
 import { Metric, chartPoints, percentileBand } from "../../lib/ageChart";
 import { latestOf, timeAgo } from "../../lib/checkup";
 import { dueSummary } from "../../lib/familyStrip";
-import { ageTitle, monthsOld, sameAgePath } from "../../lib/sameAge";
+import { ageTitle, hasSameAgeRecords, monthsOld, sameAgePath } from "../../lib/sameAge";
 import {
   ageInMonths,
   computePercentileLabel,
@@ -180,10 +179,6 @@ const ProfilePage = ({ data }: { data: ProfileData }) => {
           today={today}
           onShowActivities={() => chooseTab(state, person.id, "activities")}
         />
-      )}
-
-      {hasBirthday && (
-        <SameAgeStrip data={data.sameAge} today={today} exceptPersonId={person.id} hideWhenEmpty />
       )}
 
       <div className="profile-tabs" role="tablist" aria-label={person.name}>
@@ -540,8 +535,12 @@ const ProfileHighlights = ({
     person.id
   );
   const growingUp = data.insights.growingUp.length > 1;
+  const sameAge = data.sameAge;
+  const others = (sameAge?.rows ?? []).filter(
+    r => r.person.id !== person.id && hasSameAgeRecords(r)
+  );
 
-  if (!growingUp && !quote && !answer && artwork.length === 0) return null;
+  if (!growingUp && !quote && !answer && artwork.length === 0 && others.length === 0) return null;
 
   const showTab = (tab: Tab) => (e: MouseEvent) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -599,9 +598,67 @@ const ProfileHighlights = ({
           </a>
         </div>
       )}
+      {sameAge && others.length > 0 && (
+        <SameAgeCard personId={person.id} ageMonths={sameAge.ageMonths} rows={others} />
+      )}
     </section>
   );
 };
+
+function sameAgeSummary(row: server.SameAgeRow): string {
+  const photos = (row.photoIds ?? []).length;
+  const moments = (row.milestones ?? []).length;
+  const parts = [
+    photos > 0 && copy.person.photoCount(photos),
+    moments > 0 && copy.person.momentCount(moments),
+  ].filter((p): p is string => !!p);
+  if (parts.length === 0 && (row.height || row.weight)) parts.push(copy.person.measuredThen);
+  return parts.join(" · ");
+}
+
+const SameAgeCard = ({
+  personId,
+  ageMonths,
+  rows,
+}: {
+  personId: number;
+  ageMonths: number;
+  rows: server.SameAgeRow[];
+}) => (
+  <div className="highlight-card same-age-card">
+    <h3>{copy.sameAge.atThisAge(ageTitle(ageMonths))}</h3>
+    <ul className="same-age-card-people">
+      {rows.slice(0, 4).map(row => {
+        const portrait = row.portraits?.[0];
+        const photoId = row.photoIds?.[0];
+        return (
+          <li key={row.person.id}>
+            {portrait ? (
+              <FaceCrop
+                photoId={portrait.photoId}
+                box={portrait.box}
+                size={36}
+                alt=""
+                className="same-age-card-thumb"
+              />
+            ) : photoId ? (
+              <ThumbnailImage photoId={photoId} alt="" className="same-age-card-thumb" />
+            ) : (
+              <span className="same-age-card-thumb same-age-card-initial">
+                {initial(row.person.name)}
+              </span>
+            )}
+            <span>
+              <strong>{firstName(row.person.name)}</strong>
+              <small>{sameAgeSummary(row)}</small>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+    <a href={sameAgePath(ageMonths, personId, "details")}>{copy.sameAge.seeAll}</a>
+  </div>
+);
 
 const QuotesTab = ({ person, quotes }: { person: server.Person; quotes: server.Milestone[] }) => {
   if (quotes.length === 0) {

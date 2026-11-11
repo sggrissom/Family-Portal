@@ -625,6 +625,52 @@ block(`
 `);
 
 block(`
+.same-age-card-people {
+  display: grid;
+  gap: 8px;
+  margin: 2px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+`);
+
+block(`
+.same-age-card-people li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+`);
+
+block(`
+.same-age-card-thumb {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+`);
+
+block(`
+.same-age-card-initial {
+  display: inline-grid;
+  place-items: center;
+  background: var(--border);
+  color: var(--muted);
+  font-weight: 700;
+}
+`);
+
+block(`
+.same-age-card-people li > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+`);
+
+block(`
 .story-same-age {
   margin-left: auto;
   color: var(--accent);

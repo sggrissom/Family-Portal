@@ -49,3 +49,6 @@ CLAUDE.md
 
 # Compiled e2e test binary (build with: go build -o e2e ./cmd/e2e)
 /e2e
+
+# make local output
+out.txt
