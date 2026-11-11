@@ -572,20 +572,6 @@ block(`
 `);
 
 block(`
-.highlight-invite {
-  margin: 0;
-  font-size: 0.95rem;
-}
-`);
-
-block(`
-.highlight-secondary {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-`);
-
-block(`
 .highlight-card small {
   color: var(--muted);
 }

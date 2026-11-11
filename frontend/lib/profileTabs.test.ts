@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProfileContent, invitesInterview, profileTabs, shownTab } from "./profileTabs";
+import { ProfileContent, profileTabs, shownTab } from "./profileTabs";
 
 const empty: ProfileContent = {
   isPregnancy: false,
@@ -41,24 +41,5 @@ describe("profile tabs", () => {
     expect(shownTab("interviews", tabs)).toBe("story");
     expect(shownTab("nonsense", tabs)).toBe("story");
     expect(shownTab(null, tabs)).toBe("story");
-  });
-});
-
-describe("interview invitation", () => {
-  const child = { birthday: "2022-06-15T00:00:00Z", isPregnancy: false };
-
-  it("invites editors once the person is three and has no interviews", () => {
-    expect(invitesInterview(child, 0, true, "2025-06-15")).toBe(true);
-  });
-
-  it("waits until the third birthday", () => {
-    expect(invitesInterview(child, 0, true, "2025-06-14")).toBe(false);
-  });
-
-  it("stays away once there is an interview, for viewers, and for pregnancies", () => {
-    expect(invitesInterview(child, 1, true, "2026-01-01")).toBe(false);
-    expect(invitesInterview(child, 0, false, "2026-01-01")).toBe(false);
-    expect(invitesInterview({ ...child, isPregnancy: true }, 0, true, "2026-01-01")).toBe(false);
-    expect(invitesInterview({ ...child, birthday: "" }, 0, true, "2026-01-01")).toBe(false);
   });
 });
