@@ -237,6 +237,8 @@ export const copy = {
       inProgress: "in progress",
       backTo: (name: string) => `← ${name}`,
       continue: "Continue the interview",
+      notePlaceholder: "Add a note, like how it was said",
+      noteFor: (question: string) => `Note for ${question}`,
       skipped: "skipped",
       notAsked: "not asked",
       delete: "Delete interview",

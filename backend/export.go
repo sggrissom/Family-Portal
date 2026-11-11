@@ -248,6 +248,7 @@ type ExportMilestone struct {
 	TagNames      []string    `json:"tagNames,omitempty"`
 	InterviewId   int         `json:"interviewId,omitempty"`
 	QuestionId    int         `json:"questionId,omitempty"`
+	Note          string      `json:"note,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -415,6 +416,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			TagNames:      tagNames,
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
+			Note:          milestone.Note,
 		}
 	}
 

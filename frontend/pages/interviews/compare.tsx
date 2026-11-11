@@ -116,6 +116,7 @@ export function view(
                           <li key={a.milestoneId}>
                             <strong>{firstName(a.person.name)}</strong>{" "}
                             <a href={`/milestone/${a.milestoneId}`}>{a.text}</a>
+                            {a.note && <span className="iv-answer-note"> ({a.note})</span>}
                             <small className="iv-hint">
                               {" "}
                               · {new Date(a.date).getUTCFullYear()}

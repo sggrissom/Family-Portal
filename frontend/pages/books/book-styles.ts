@@ -943,3 +943,12 @@ block(`
   font-style: italic;
 }
 `);
+
+block(`
+.book-interview-note {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+`);

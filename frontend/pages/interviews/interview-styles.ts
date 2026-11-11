@@ -1302,3 +1302,27 @@ block(`
   color: var(--text);
 }
 `);
+
+block(`
+.iv-answer-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  font-weight: 400;
+}
+`);
+
+block(`
+.iv-compare .iv-answer-note {
+  display: inline;
+}
+`);
+
+block(`
+.iv-note-input {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+`);

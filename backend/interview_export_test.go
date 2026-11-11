@@ -20,6 +20,11 @@ func TestInterviewsSurviveExportAndImport(t *testing.T) {
 	first := fx.startInterview(t, fx.alice, "2020-03-05", "fav-food", "best-age")
 	fx.answer(t, first.Interview.Id, first.Questions[0].Id, "pizza", false)
 	fx.answer(t, first.Interview.Id, first.Questions[1].Id, "staying up late", false)
+	if _, err := callAs(t, fx, SetInterviewAnswerNote, SetInterviewAnswerNoteRequest{
+		InterviewId: first.Interview.Id, QuestionId: first.Questions[1].Id, Note: "said while giggling",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	fx.finish(t, first.Interview)
 	fx.addMilestoneOn(t, fx.alice, "Lost a tooth", "first", first.Interview.Date)
 	if _, err := callAs(t, fx, ImportInterviews, ImportInterviewsRequest{PersonId: fx.alice.Id, Interviews: []HistoricalInterview{{
@@ -85,14 +90,19 @@ func TestInterviewsSurviveExportAndImport(t *testing.T) {
 		t.Fatalf("imported bundle = %d interviews, %d answers", len(bundle.Interviews), len(bundle.Answers))
 	}
 	texts := map[string]string{}
+	notes := map[string]string{}
 	for _, a := range bundle.Answers {
 		texts[a.Context] = a.Description
+		notes[a.Description] = a.Note
 		if a.FamilyId != other.FamilyId || a.Category != CategoryInterview || a.QuestionId == 0 {
 			t.Errorf("imported answer %+v", a)
 		}
 	}
 	if texts["What's the best thing about being 6?"] != "staying up late" || texts["Favorite dinosaur"] != "T. rex" {
 		t.Errorf("imported answers = %v", texts)
+	}
+	if notes["staying up late"] != "said while giggling" || notes["pizza"] != "" {
+		t.Errorf("imported notes = %v", notes)
 	}
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		food := 0

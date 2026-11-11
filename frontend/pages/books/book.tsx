@@ -491,7 +491,10 @@ const InterviewSpreadView = ({ spread }: { spread: InterviewSpread }) => (
               {section.rows.map((row, i) => (
                 <div key={i}>
                   <dt>{row.question}</dt>
-                  <dd>{row.answer}</dd>
+                  <dd>
+                    {row.answer}
+                    {row.note && <span className="book-interview-note">{row.note}</span>}
+                  </dd>
                 </div>
               ))}
             </dl>
