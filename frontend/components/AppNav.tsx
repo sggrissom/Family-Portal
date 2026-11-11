@@ -1,4 +1,4 @@
-import { Camera, Compass, House, Plus, Ruler, Search, Star, Trophy, X } from "lucide-preact";
+import { Camera, Compass, House, Mic, Plus, Ruler, Search, Star, Trophy, X } from "lucide-preact";
 import type { LucideIcon } from "lucide-preact";
 import { Icon } from "./Icon";
 import * as preact from "preact";
@@ -8,7 +8,7 @@ import { navigate } from "../lib/navigate";
 import * as server from "../server";
 import * as auth from "../lib/authCache";
 import { copy } from "../lib/copy";
-import { Section, activeSection, addPath, pagePersonId } from "../lib/appNav";
+import { Section, activeSection, addPath, interviewPath, pagePersonId } from "../lib/appNav";
 import { chipOrder } from "../lib/familyGroups";
 import { dayKey, dayLabel } from "../lib/daySummary";
 import { localDateString } from "../lib/dateUtils";
@@ -161,6 +161,7 @@ export const AddSheet = () => {
 
   const people = familyPeople ?? [];
   const personId = state.selectedPersonId;
+  const pregnancy = !!people.find(p => p.id === personId)?.isPregnancy;
 
   return (
     <div className="add-sheet-backdrop" onClick={vlens.cachePartial(backdropClicked, state)}>
@@ -207,7 +208,7 @@ export const AddSheet = () => {
             hidden
             onChange={vlens.cachePartial(photosPicked, state)}
           />
-          {!people.find(p => p.id === personId)?.isPregnancy && (
+          {!pregnancy && (
             <a
               href={addPath("/add-growth", personId)}
               onClick={vlens.cachePartial(formChosen, state)}
@@ -227,6 +228,14 @@ export const AddSheet = () => {
             </span>
             {copy.addSheet.milestone}
           </a>
+          {!pregnancy && (
+            <a href={interviewPath(personId)} onClick={vlens.cachePartial(formChosen, state)}>
+              <span className="add-sheet-icon" aria-hidden="true">
+                <Icon symbol={Mic} />
+              </span>
+              {copy.addSheet.interview}
+            </a>
+          )}
           {openEvents.slice(0, 2).map(open => (
             <a
               key={open.event.id}

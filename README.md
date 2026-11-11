@@ -205,8 +205,9 @@ and a video under `build/playwright-report`, which CI uploads as an artifact.
 PRs into `main` run a release build, CSS validation, formatting/`go vet`,
 TypeScript checks, and a guard against modifying tracked files. Release PRs and
 pushes to either branch also run backend/frontend tests, the race detector,
-coverage, `make e2e`, `make test-ui`, and dependency/secret scans. After merge,
-a failed full run reports the error and blocks deployment. See
+coverage, `make e2e`, `make test-ui`, and dependency/secret scans. Staging
+deploys once the build passes, with the full run alongside it; production
+deploys only after the full run passes. A failed full run reports the error. See
 [merge checks and notifications](docs/deployment.md#merge-checks-and-post-merge-validation)
 for the required branch protection and GitHub notification settings.
 

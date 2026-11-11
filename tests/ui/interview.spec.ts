@@ -46,8 +46,17 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
   const answer = page.locator(".iv-answer");
   const progress = page.locator(".iv-progress");
 
+  await test.step("with no interviews yet, one starts from the Add sheet", async () => {
+    await page.goto(`/profile/${personId}?tab=interviews`);
+    const tabs = page.getByRole("tablist", { name: "Ivy" });
+    await expect(tabs.getByRole("tab", { name: "Story", selected: true })).toBeVisible();
+    await expect(tabs.getByRole("tab", { name: "Interviews" })).toHaveCount(0);
+    await expect(tabs.getByRole("tab", { name: "Activities" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.getByRole("dialog").getByRole("link", { name: "Interview" }).click();
+  });
+
   await test.step("set up and start", async () => {
-    await page.goto(`/interview/new/${personId}`);
     await expect(page.getByRole("heading", { name: "Interview Ivy" })).toBeVisible();
     await page.getByRole("button", { name: /^Start · \d+ questions$/ }).click();
     await expect(page).toHaveURL(/\/interview\/\d+\/ask$/);
@@ -95,5 +104,12 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
     await expect(qa.filter({ hasText: "favorite food" })).toContainText("spaghetti");
     await expect(qa.filter({ hasText: "favorite snack" })).toContainText("skipped");
     await expect(qa.filter({ hasText: "dessert" })).toContainText("chocolate cake");
+  });
+
+  await test.step("the profile now has an Interviews tab", async () => {
+    await page.goto(`/profile/${personId}?tab=interviews`);
+    const tabs = page.getByRole("tablist", { name: "Ivy" });
+    await expect(tabs.getByRole("tab", { name: "Interviews", selected: true })).toBeVisible();
+    await expect(page.locator(".iv-interview-list li")).toHaveCount(1);
   });
 });

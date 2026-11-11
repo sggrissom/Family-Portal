@@ -49,6 +49,7 @@ export const copy = {
     photosAndVideos: "Photos & videos",
     measurement: "Measurement",
     milestone: "Moment",
+    interview: "Interview",
     close: "Close",
   },
   when: {
@@ -263,8 +264,6 @@ export const copy = {
       reopen: "Reopen to keep asking",
     },
     tab: {
-      empty: (name: string) => `${name} hasn't had an interview yet.`,
-      startFirst: "Start the first interview",
       start: "New interview",
       typeIn: "Type in a past one",
       pasteIn: "Paste in past interviews",

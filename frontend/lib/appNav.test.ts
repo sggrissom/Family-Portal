@@ -3,6 +3,7 @@ import {
   activeDestination,
   activeSection,
   addPath,
+  interviewPath,
   contextPersonId,
   legacyRedirect,
   pagePersonId,
@@ -100,5 +101,12 @@ describe("addPath", () => {
   it("carries the person into the form", () => {
     expect(addPath("/add-growth", 5)).toBe("/add-growth/5");
     expect(addPath("/add-photo", null)).toBe("/add-photo");
+  });
+});
+
+describe("interviewPath", () => {
+  it("starts the person's interview, or picks someone on the Interviews page", () => {
+    expect(interviewPath(5)).toBe("/interview/new/5");
+    expect(interviewPath(null)).toBe("/interviews");
   });
 });

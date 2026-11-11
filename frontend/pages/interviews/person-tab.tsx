@@ -10,7 +10,6 @@ import {
   TimelineSort,
   columnLabel,
   filterTimelines,
-  firstName,
   interviewGrid,
   interviewTitle,
   normalizeAnswer,
@@ -30,43 +29,11 @@ const useTabState = vlens.declareHook(
   (_personId: number): TabState => ({ view: "years", sort: "list", query: "" })
 );
 
-export function hasInterviewTab(
-  bundle: server.GetPersonInterviewsResponse | null,
-  familyId: number
-) {
-  if (!bundle) return false;
-  return bundle.interviews.length > 0 || canContribute(familyId);
-}
-
 export const InterviewsTab = ({ bundle }: { bundle: server.GetPersonInterviewsResponse }) => {
   const person = bundle.person;
   const state = useTabState(person.id);
   const editable = canContribute(person.familyId);
   const inProgress = bundle.interviews.find(i => i.status === "in-progress");
-  const name = firstName(person.name);
-
-  if (bundle.interviews.length === 0) {
-    return (
-      <div className="iv-empty">
-        <p>{t.empty(name)}</p>
-        {editable && (
-          <>
-            <a className="btn btn-primary" href={`/interview/new/${person.id}`}>
-              {t.startFirst}
-            </a>
-            <p className="iv-tab-links">
-              <a className="iv-link" href={`/interview/past/${person.id}`}>
-                {t.typeIn}
-              </a>
-              <a className="iv-link" href={`/interview/import?person=${person.id}`}>
-                {t.pasteIn}
-              </a>
-            </p>
-          </>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="iv-tab">

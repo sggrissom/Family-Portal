@@ -98,3 +98,7 @@ export function addPath(
 ) {
   return personId ? `${form}/${personId}` : form;
 }
+
+export function interviewPath(personId: number | null) {
+  return personId ? `/interview/new/${personId}` : "/interviews";
+}

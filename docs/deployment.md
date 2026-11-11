@@ -123,8 +123,9 @@ moment you most want logs is right after a deploy that broke something.
 
 CI deploys after the full check gate passes (`.github/workflows/test.yml`):
 `main` goes to staging (`staging.familyrecord.app`) and `release` goes to
-production (`familyrecord.app`). Both the build/test job and security scan must
-pass before either deployment. To ship, open a PR from `main` to `release`
+production (`familyrecord.app`). Staging deploys as soon as the build/lint/type
+job passes; production waits for that job, the full test suite, and the security
+scan. To ship, open a PR from `main` to `release`
 after that commit has passed full validation and run on staging.
 
 ### Merge checks and post-merge validation
@@ -133,15 +134,18 @@ after that commit has passed full validation and run on staging.
 | --- | --- | --- |
 | PR into `main` | Release build (including CSS validation), lint/formatting, TypeScript, tracked-file cleanliness | None |
 | PR into `release` | All of the above, backend and frontend tests, coverage, race detector, end-to-end and browser flows, dependency and secret scans | None |
-| Push to `main` | Full suite | Staging, only after validation passes |
-| Push to `release` | Full suite | Production, only after validation passes |
+| Push to `main` | Full suite | Staging, once the build/lint/type checks pass; the rest runs alongside the deploy |
+| Push to `release` | Full suite | Production, only after the full suite passes |
 
 The `Build, Typecheck, and Test` check keeps its existing name so current branch
 protection continues working. On PRs into `main`, `Dependency and secret scan`
 is skipped; GitHub treats a skipped job as successful even if it is required.
-Full validation runs on every merged commit. Failures mark the Actions run red,
-add a run summary with a link to the failure, and block deployment. They do not
-hold up the next PR into `main`.
+The backend/frontend tests, coverage, race detector, and end-to-end and browser
+flows run in a separate `Full test suite` job, so staging never waits on them.
+Full validation runs on every merged commit. Failures mark the Actions run red
+and add a run summary with a link to the failure. On `release` they block the
+deploy; on `main` staging may already be running the failing commit. They do
+not hold up the next PR into `main`.
 
 Configure branch protection in GitHub **Settings → Branches**:
 
