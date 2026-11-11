@@ -13,8 +13,6 @@ proposals are kept in [Not planned](not-planned.md).
 
 | Plan | Purpose |
 | --- | --- |
-| [Approximate dates and ages](plans/approximate-dates.md) | Preserve uncertain dates and age-period descriptions such as “at age 4” without inventing birthday events. Covers moments/media, sitewide date and age behavior, migration and correction, mobile, and exports. Manual support first; optional AI estimation later. |
-| [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. Built on web and iOS; calibration on real clips remains. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
 
 ## Follow-ups to shipped features
@@ -26,6 +24,10 @@ backend are built; video is opt-in per family.
   iOS/Safari and Linux/Chrome: playback starts, HDR looks right.
 - Resumable S3 multipart uploads above ~100 MB, if single PUTs prove fragile.
 - Open question: whether photos follow video into the bucket.
+- Analysis ideas: sound-event tags (laughing, singing, applause, crying) from
+  an audio model; chapters and a scrub strip from scene-change frames;
+  suggested titles from the transcript, as part of the LLM pass; an annual
+  interview recorded on video offering its transcript as draft answers.
 
 **Search.** Global search is built on web.
 

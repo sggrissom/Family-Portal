@@ -138,7 +138,7 @@ func TestOneFrameOfAPersonOnlySuggests(t *testing.T) {
 	})
 }
 
-func TestVideoFacesAreNotReferences(t *testing.T) {
+func TestConfirmedVideoFacesAreReferences(t *testing.T) {
 	fx := setupResultsFixture(t)
 	video := fx.addVideoAt(t, "clip.mov", featuresEpoch)
 	fx.recordVideoFaces(t, video,
@@ -150,16 +150,20 @@ func TestVideoFacesAreNotReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		found := false
 		for _, ref := range familyFaceReferences(tx, fx.familyId) {
-			if ref.PersonId == fx.bob.Id {
-				t.Errorf("a confirmed video face became a reference for bob: %d descriptors", len(ref.Descriptors))
+			if ref.PersonId == fx.bob.Id && len(ref.Descriptors) == 1 {
+				found = true
 			}
+		}
+		if !found {
+			t.Error("the confirmed video face is not a reference for bob")
 		}
 	})
 
 	photo := fx.addPhoto(t, fx.familyId, "bob.jpg")
-	if tagged := fx.recordFaces(t, photo, DetectedFace{Descriptor: faceVec(30, 0.02)}); tagged != 0 {
-		t.Errorf("a photo was tagged from a video face, tagged = %d", tagged)
+	if tagged := fx.recordFaces(t, photo, DetectedFace{Descriptor: faceVec(30, 0.02)}); tagged != 1 {
+		t.Errorf("tagged = %d, want the photo tagged from the video face", tagged)
 	}
 }
 

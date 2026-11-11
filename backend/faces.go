@@ -186,7 +186,7 @@ func familyFaceReferences(tx *vbolt.Tx, familyId int) []faceReference {
 			if len(ref.Descriptors) >= faceRefsPerPerson {
 				break
 			}
-			if face.Status == FaceConfirmed && len(face.Descriptor) == 128 && !face.fromVideo() {
+			if face.Status == FaceConfirmed && len(face.Descriptor) == 128 {
 				ref.Descriptors = append(ref.Descriptors, face.Descriptor)
 			}
 		}
