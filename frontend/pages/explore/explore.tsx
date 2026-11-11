@@ -16,8 +16,7 @@ import * as auth from "../../lib/authCache";
 import { Header, Footer } from "../../layout";
 import { Icon } from "../../components/Icon";
 import { FaceCrop } from "../../components/FaceCrop";
-import { ProfileImage, ThumbnailImage } from "../../components/ResponsiveImage";
-import { initial } from "../../components/PersonChips";
+import { ThumbnailImage } from "../../components/ResponsiveImage";
 import { MemoryTiles } from "../../components/MemoryCard";
 import { ensureAuthInFetch, requireAuthInView } from "../../lib/authHelpers";
 import type { Destination } from "../../lib/appNav";
@@ -26,13 +25,7 @@ import { localDateString } from "../../lib/dateUtils";
 import { firstName } from "../../lib/interviews";
 import { currentVisit, memoryHref } from "../../lib/memories";
 import { isExactRecord, recordTimeLabel } from "../../lib/recordTime";
-import {
-  ageHeading,
-  hasSameAgeRecords,
-  invitingAge,
-  portraitOrder,
-  sameAgePath,
-} from "../../lib/sameAge";
+import { ageHeading, invitingAge, portraitOrder, sameAgePath } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
 import "./explore-styles";
 import { PageHeader } from "../../components/PageHeader";
@@ -81,6 +74,9 @@ const yearLabel = (memory: server.Memory) =>
     ? String(new Date(memory.date).getUTCFullYear())
     : recordTimeLabel(memory.recordTime);
 
+const pictured = (sameAge: server.GetSameAgeResponse) =>
+  (sameAge.rows ?? []).filter(row => (row.portraits ?? []).length > 0);
+
 const pick = <T,>(list: T[], seed: number): T | undefined =>
   list.length > 0 ? list[seed % list.length] : undefined;
 
@@ -110,8 +106,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 
   const shared = (options: server.SameAgeOption[] | null | undefined) =>
     (options ?? []).filter(a => a.peopleCount >= 2 && invitingAge(a.ageMonths));
-  const pictured = shared(ages?.portraitAges);
-  const age = pick(pictured.length > 0 ? pictured : shared(ages?.availableAges), seed);
+  const age = pick(shared(ages?.portraitAges), seed);
   const person = pick(people, seed);
 
   const [[sameAge], [years]] = await Promise.all([
@@ -142,7 +137,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 
   return rpc.ok({
     people: roster?.people ?? [],
-    sameAge: sameAge && (sameAge.rows ?? []).filter(hasSameAgeRecords).length >= 2 ? sameAge : null,
+    sameAge: sameAge && pictured(sameAge).length >= 2 ? sameAge : null,
     said: said?.memories ?? [],
     years: person && throughYears.length >= 2 ? { person, memories: throughYears } : null,
   });
@@ -197,7 +192,7 @@ const FeatureDirectory = () => (
 );
 
 const SameAgePreview = ({ sameAge }: { sameAge: server.GetSameAgeResponse }) => {
-  const rows = portraitOrder((sameAge.rows ?? []).filter(hasSameAgeRecords));
+  const rows = portraitOrder(pictured(sameAge));
   const names = chipLabels(rows.map(r => r.person));
   const href = sameAgePath(sameAge.ageMonths, 0);
   return (
@@ -209,33 +204,17 @@ const SameAgePreview = ({ sameAge }: { sameAge: server.GetSameAgeResponse }) => 
       <a href={href} className="explore-faces">
         {rows.map(row => (
           <span key={row.person.id} className="explore-face">
-            <SameAgeFace row={row} />
+            <FaceCrop
+              photoId={row.portraits[0].photoId}
+              box={row.portraits[0].box}
+              size={84}
+              alt=""
+            />
             <span>{names.get(row.person.id) ?? firstName(row.person.name)}</span>
           </span>
         ))}
       </a>
     </section>
-  );
-};
-
-const SameAgeFace = ({ row }: { row: server.SameAgeRow }) => {
-  const portrait = row.portraits?.[0];
-  if (portrait) return <FaceCrop photoId={portrait.photoId} box={portrait.box} size={84} alt="" />;
-  const person = row.person;
-  return (
-    <span className="explore-face-avatar" aria-hidden="true">
-      {person.profilePhotoId ? (
-        <ProfileImage
-          photoId={person.profilePhotoId}
-          alt=""
-          cropX={person.profileCropX}
-          cropY={person.profileCropY}
-          cropScale={person.profileCropScale}
-        />
-      ) : (
-        initial(person.name)
-      )}
-    </span>
   );
 };
 

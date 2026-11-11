@@ -201,26 +201,3 @@ block(`
   font-weight: 700;
 }
 `);
-
-block(`
-.explore-face-avatar {
-  display: grid;
-  place-items: center;
-  width: 84px;
-  height: 84px;
-  overflow: hidden;
-  border: 2px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  font-size: 1.6rem;
-  font-weight: 700;
-}
-`);
-
-block(`
-.explore-face-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-`);
