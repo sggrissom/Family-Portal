@@ -31,33 +31,24 @@ func sortInterviewsByDate(interviews []Interview) {
 	})
 }
 
-// interviewDue is true around a child's birthday when they haven't had an
-// interview in the last ten months.
-func interviewDue(person Person, interviews []Interview, today time.Time) bool {
+// interviewDue reports the occasion a child's interview is due for: near a
+// date in the family's cadence, with no interview in the last ten months.
+func interviewDue(person Person, interviews []Interview, today time.Time, cadence InterviewCadence) (time.Time, bool) {
 	if person.IsPregnancy || person.Birthday.IsZero() {
-		return false
+		return time.Time{}, false
 	}
 	today = dayStart(today)
-	birthday := person.Birthday.UTC()
-	near := time.Time{}
-	for _, year := range []int{today.Year() - 1, today.Year(), today.Year() + 1} {
-		candidate := time.Date(year, birthday.Month(), birthday.Day(), 0, 0, 0, 0, time.UTC)
-		days := int(candidate.Sub(today).Hours() / 24)
-		if days <= interviewDueBeforeDays && days >= -interviewDueAfterDays {
-			near = candidate
-			break
-		}
-	}
-	if near.IsZero() || ageYearsAt(birthday, near) < interviewMinAgeYears {
-		return false
+	near, ok := interviewOccasion(person, cadence, today)
+	if !ok || ageYearsAt(person.Birthday.UTC(), near) < interviewMinAgeYears {
+		return time.Time{}, false
 	}
 	recent := today.AddDate(0, -interviewRecentMonths, 0)
 	for _, interview := range interviews {
 		if interview.Date.After(recent) {
-			return false
+			return time.Time{}, false
 		}
 	}
-	return true
+	return near, true
 }
 
 type GetPersonInterviewsRequest struct {
@@ -142,9 +133,10 @@ type GetFamilyInterviewsResponse struct {
 func familyInterviewRow(tx *vbolt.Tx, person Person, today time.Time) FamilyInterviewRow {
 	interviews := personInterviews(tx, person.Id)
 	sortInterviewsByDate(interviews)
+	_, due := interviewDue(person, interviews, today, familyInterviewCadence(tx, person.FamilyId))
 	row := FamilyInterviewRow{
 		Person: person,
-		Due:    interviewDue(person, interviews, today),
+		Due:    due,
 		Child:  !person.IsPregnancy && !person.Birthday.IsZero() && ageYearsAt(person.Birthday, today) < adultAgeYears,
 	}
 	for _, interview := range interviews {

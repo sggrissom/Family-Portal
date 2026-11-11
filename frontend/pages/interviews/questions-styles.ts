@@ -321,3 +321,34 @@ block(`
   }
 }
 `);
+
+block(`
+.iq-cadence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+`);
+
+block(`
+.iq-cadence label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+`);
+
+block(`
+.iq-cadence .iq-intro {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.9rem;
+}
+`);

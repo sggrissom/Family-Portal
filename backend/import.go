@@ -59,6 +59,7 @@ type ImportDataStructure struct {
 
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -209,6 +210,7 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 			resp.Warnings = append(resp.Warnings, interviews.warnings...)
 			importedMilestoneIds = append(importedMilestoneIds, interviews.answerIds...)
 		}
+		importInterviewCadence(ctx.Tx, familyId, importData.InterviewCadence)
 
 		if req.ImportActivities && len(importData.Activities) > 0 {
 			counts, activityWarnings := importActivities(ctx.Tx, importData.Activities, familyId, personIdMapping, nil)

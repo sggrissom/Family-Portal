@@ -18,6 +18,7 @@ func RegisterInterviewQuestionMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetInterviewQuestions)
 	vbeam.RegisterProc(app, SaveInterviewQuestions)
 	vbeam.RegisterProc(app, MergeInterviewQuestions)
+	vbeam.RegisterProc(app, SetInterviewCadence)
 }
 
 const (
@@ -63,19 +64,26 @@ func PackInterviewQuestion(self *InterviewQuestion, buf *vpack.Buffer) {
 // InterviewQuestionList holds the per-family state of the list itself.
 // Seeded is set once the defaults have been copied into rows, and
 // DismissedKeys are built-ins the family deleted, which are never offered again.
+// Cadence says when an interview is suggested; empty means around birthdays.
 type InterviewQuestionList struct {
 	FamilyId      int
 	Revision      int
 	Seeded        bool
 	DismissedKeys []string
+	Cadence       string
+	CadenceMonth  int
 }
 
 func PackInterviewQuestionList(self *InterviewQuestionList, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.Revision, buf)
 	vpack.Bool(&self.Seeded, buf)
 	vpack.Slice(&self.DismissedKeys, vpack.String, buf)
+	if version >= 2 {
+		vpack.String(&self.Cadence, buf)
+		vpack.Int(&self.CadenceMonth, buf)
+	}
 }
 
 var InterviewQuestionBkt = vbolt.Bucket(&cfg.Info, "interview_questions", vpack.FInt, PackInterviewQuestion)
@@ -197,6 +205,7 @@ type GetInterviewQuestionsRequest struct {
 type InterviewQuestionsResponse struct {
 	FamilyId  int                   `json:"familyId"`
 	Revision  int                   `json:"revision"`
+	Cadence   InterviewCadence      `json:"cadence"`
 	Questions []InterviewQuestion   `json:"questions"`
 	Suggested []InterviewQuestion   `json:"suggested"`
 	Defaults  []InterviewQuestion   `json:"defaults"`
@@ -208,6 +217,7 @@ func interviewQuestionsResponse(tx *vbolt.Tx, familyId int) InterviewQuestionsRe
 	resp := InterviewQuestionsResponse{
 		FamilyId:  familyId,
 		Revision:  list.Revision,
+		Cadence:   list.cadence(),
 		Questions: []InterviewQuestion{},
 		Suggested: []InterviewQuestion{},
 		Defaults:  []InterviewQuestion{},

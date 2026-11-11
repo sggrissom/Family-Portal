@@ -32,6 +32,7 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.InterviewQuestionsResponse>({
       familyId: 0,
       revision: 0,
+      cadence: { kind: "birthday", month: 0 },
       questions: [],
       suggested: [],
       defaults: [],
@@ -52,6 +53,7 @@ type EditorState = {
   newSection: string;
   dragKey: number;
   showSuggested: boolean;
+  savingCadence: boolean;
 };
 
 const useEditor = vlens.declareHook(
@@ -66,6 +68,7 @@ const useEditor = vlens.declareHook(
     newSection: "",
     dragKey: 0,
     showSuggested: false,
+    savingCadence: false,
   })
 );
 
@@ -110,6 +113,8 @@ export function view(
           onChange={vlens.cachePartial(switchFamily, state)}
           disabled={state.saving}
         />
+
+        <Cadence state={state} />
 
         {state.error && (
           <div className="error-message" role="alert">
@@ -507,6 +512,76 @@ function onReset(state: EditorState) {
   if (!confirm(t.confirmReset)) return;
   resetToDefaults(state.draft, state.loaded?.defaults ?? []);
   changed(state);
+}
+
+const CADENCES = ["birthday", "school-start", "new-year", "off"];
+const MONTHS = Array.from({ length: 12 }, (_, i) =>
+  new Date(Date.UTC(2000, i, 1)).toLocaleString(undefined, { month: "long", timeZone: "UTC" })
+);
+const DEFAULT_SCHOOL_MONTH = 8;
+
+const Cadence = ({ state }: { state: EditorState }) => {
+  const cadence = state.loaded!.cadence;
+  return (
+    <div className="iq-cadence">
+      <label>
+        <span>{t.cadence}</span>
+        <select
+          value={cadence.kind}
+          disabled={state.savingCadence}
+          onChange={e =>
+            setCadence(state, {
+              kind: e.currentTarget.value,
+              month: e.currentTarget.value === "school-start" ? DEFAULT_SCHOOL_MONTH : 0,
+            })
+          }
+        >
+          {CADENCES.map(kind => (
+            <option key={kind} value={kind}>
+              {t.cadenceOptions[kind]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {cadence.kind === "school-start" && (
+        <label>
+          <span>{t.schoolMonth}</span>
+          <select
+            value={cadence.month}
+            disabled={state.savingCadence}
+            onChange={e =>
+              setCadence(state, { kind: "school-start", month: Number(e.currentTarget.value) })
+            }
+          >
+            {MONTHS.map((name, i) => (
+              <option key={i} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {cadence.kind !== "off" && <p className="iq-intro">{t.cadenceHint}</p>}
+    </div>
+  );
+};
+
+async function setCadence(state: EditorState, cadence: server.InterviewCadence) {
+  const loaded = state.loaded!;
+  const previous = loaded.cadence;
+  loaded.cadence = cadence;
+  state.savingCadence = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+  const [resp, err] = await server.SetInterviewCadence({ familyId: loaded.familyId, cadence });
+  state.savingCadence = false;
+  if (resp) {
+    loaded.cadence = resp.cadence;
+  } else {
+    loaded.cadence = previous;
+    state.error = err || "That setting could not be saved.";
+  }
+  vlens.scheduleRedraw();
 }
 
 async function switchFamily(state: EditorState, familyId: number) {
