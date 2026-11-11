@@ -263,8 +263,6 @@ export const copy = {
       reopen: "Reopen to keep asking",
     },
     tab: {
-      empty: (name: string) => `${name} hasn't had an interview yet.`,
-      startFirst: "Start the first interview",
       start: "New interview",
       typeIn: "Type in a past one",
       pasteIn: "Paste in past interviews",
@@ -528,6 +526,9 @@ export const copy = {
     allQuotes: (n: number) => (n === 1 ? "The quote →" : `All ${n} quotes →`),
     fromInterview: "From the interview",
     allInterviews: "All interviews →",
+    interviewInvite: (name: string) =>
+      `Ask ${name} the same questions each birthday and see how the answers change.`,
+    startInterview: "Start an interview →",
     artworkCount: (n: number) => (n === 1 ? "1 piece →" : `All ${n} pieces →`),
     photoCount: (n: number) => (n === 1 ? "1 photo" : `${n} photos`),
     momentCount: (n: number) => (n === 1 ? "1 moment" : `${n} moments`),

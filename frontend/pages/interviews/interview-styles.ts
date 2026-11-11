@@ -627,14 +627,6 @@ block(`
 `);
 
 block(`
-.iv-empty {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: var(--muted);
-}
-`);
-
-block(`
 .iv-tab {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
