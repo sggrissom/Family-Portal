@@ -19,30 +19,16 @@ proposals are kept in [Not planned](not-planned.md).
 
 Worth doing if they stay simple.
 
-**iOS catch-up.** iOS copies the web design; these haven't been ported yet.
-
-- Matchups: the appearance round/opponent/outcome/score fields and their display
-  (shared logic is in `frontend/lib/matchups.ts`).
-- Face review: `FaceReviewView` should apply answers in place like the web
-  `/faces` page instead of reloading after every change, and the nav badge
-  should get its count without calling the full `GetFaceReview`.
-- Claim the `/interview/` universal link.
-
 **Video.**
 
 - Resumable S3 multipart uploads above ~100 MB, if it's simple.
 - Use the transcript: suggest a title, tags or people mentioned, for the family
   to accept or edit.
 
-**Books.**
+**Annual interview.**
 
-- A browser print stylesheet, so Save as PDF gives a usable book.
-
-**Annual interview.** Keep it simple.
-
-- A per-family cadence setting (birthday, school start, New Year, off).
-  Birthday is the only option today.
-- A note field on single answers ("said while giggling").
+- A note field on the conduct screen too; notes can only be added afterwards,
+  from Edit answers.
 
 **Same age.** Undecided whether it's worth doing.
 
