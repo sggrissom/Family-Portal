@@ -46,13 +46,14 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
   const answer = page.locator(".iv-answer");
   const progress = page.locator(".iv-progress");
 
-  await test.step("the profile invites a first interview instead of an empty tab", async () => {
+  await test.step("with no interviews yet, one starts from the Add sheet", async () => {
     await page.goto(`/profile/${personId}?tab=interviews`);
     const tabs = page.getByRole("tablist", { name: "Ivy" });
     await expect(tabs.getByRole("tab", { name: "Story", selected: true })).toBeVisible();
     await expect(tabs.getByRole("tab", { name: "Interviews" })).toHaveCount(0);
     await expect(tabs.getByRole("tab", { name: "Activities" })).toHaveCount(0);
-    await page.getByRole("link", { name: "Start an interview →" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.getByRole("dialog").getByRole("link", { name: "Interview" }).click();
   });
 
   await test.step("set up and start", async () => {
@@ -105,12 +106,10 @@ test("a parent runs an interview, resumes it after a reload, and finishes", asyn
     await expect(qa.filter({ hasText: "dessert" })).toContainText("chocolate cake");
   });
 
-  await test.step("the profile now has an Interviews tab and no invitation", async () => {
+  await test.step("the profile now has an Interviews tab", async () => {
     await page.goto(`/profile/${personId}?tab=interviews`);
     const tabs = page.getByRole("tablist", { name: "Ivy" });
     await expect(tabs.getByRole("tab", { name: "Interviews", selected: true })).toBeVisible();
     await expect(page.locator(".iv-interview-list li")).toHaveCount(1);
-    await page.getByRole("tab", { name: "Story" }).click();
-    await expect(page.getByRole("link", { name: "Start an interview →" })).toHaveCount(0);
   });
 });

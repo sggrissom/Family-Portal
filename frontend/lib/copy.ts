@@ -49,6 +49,7 @@ export const copy = {
     photosAndVideos: "Photos & videos",
     measurement: "Measurement",
     milestone: "Moment",
+    interview: "Interview",
     close: "Close",
   },
   when: {
@@ -526,9 +527,6 @@ export const copy = {
     allQuotes: (n: number) => (n === 1 ? "The quote →" : `All ${n} quotes →`),
     fromInterview: "From the interview",
     allInterviews: "All interviews →",
-    interviewInvite: (name: string) =>
-      `Ask ${name} the same questions each birthday and see how the answers change.`,
-    startInterview: "Start an interview →",
     artworkCount: (n: number) => (n === 1 ? "1 piece →" : `All ${n} pieces →`),
     photoCount: (n: number) => (n === 1 ? "1 photo" : `${n} photos`),
     momentCount: (n: number) => (n === 1 ? "1 moment" : `${n} moments`),

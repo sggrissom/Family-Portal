@@ -1,5 +1,3 @@
-import { ageYearsAt } from "./interviews";
-
 export type ProfileTab =
   | "story"
   | "quotes"
@@ -18,8 +16,6 @@ export const PROFILE_TABS: ProfileTab[] = [
   "growth",
   "activities",
 ];
-
-export const INTERVIEW_MIN_AGE_YEARS = 3;
 
 export type ProfileContent = {
   isPregnancy: boolean;
@@ -52,19 +48,4 @@ export function profileTabs(content: ProfileContent): ProfileTab[] {
 
 export function shownTab(requested: string | null, tabs: ProfileTab[]): ProfileTab {
   return tabs.find(tab => tab === requested) ?? "story";
-}
-
-export function invitesInterview(
-  person: { birthday: string; isPregnancy: boolean },
-  interviews: number,
-  editable: boolean,
-  today: string
-): boolean {
-  return (
-    editable &&
-    interviews === 0 &&
-    !person.isPregnancy &&
-    !!person.birthday &&
-    ageYearsAt(person.birthday, today) >= INTERVIEW_MIN_AGE_YEARS
-  );
 }

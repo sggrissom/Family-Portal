@@ -26,13 +26,7 @@ import { PersonActivities } from "../activities/person";
 import { InterviewsTab } from "../interviews/person-tab";
 import { interviewsById, shortQuestion } from "../../lib/interviews";
 import { currentVisit } from "../../lib/memories";
-import {
-  ProfileTab as Tab,
-  PROFILE_TABS,
-  invitesInterview,
-  profileTabs,
-  shownTab,
-} from "../../lib/profileTabs";
+import { ProfileTab as Tab, PROFILE_TABS, profileTabs, shownTab } from "../../lib/profileTabs";
 import { usePhotoStatus } from "../../hooks/usePhotoStatus";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { timelineRequest } from "../../lib/photoPages";
@@ -475,12 +469,7 @@ const StoryTab = ({
   );
 
   if (days.length === 0) {
-    return (
-      <div className="story">
-        <ProfileHighlights data={data} onShowTab={onShowTab} onShowTimeline={onShowTimeline} />
-        <p className="profile-empty">{copy.person.nothingYet(person.name.split(" ")[0])}</p>
-      </div>
-    );
+    return <p className="profile-empty">{copy.person.nothingYet(person.name.split(" ")[0])}</p>;
   }
 
   const interviews = interviewsById(data.person.interviews);
@@ -548,17 +537,8 @@ const ProfileHighlights = ({
   const others = (sameAge?.rows ?? []).filter(
     r => r.person.id !== person.id && hasSameAgeRecords(r)
   );
-  const invite =
-    !!data.interviews &&
-    invitesInterview(
-      person,
-      data.interviews.interviews.length,
-      canContribute(person.familyId),
-      localDateString(new Date())
-    );
 
-  if (!growingUp && !quote && !answer && !invite && artwork.length === 0 && others.length === 0)
-    return null;
+  if (!growingUp && !quote && !answer && artwork.length === 0 && others.length === 0) return null;
 
   const showTab = (tab: Tab) => (e: MouseEvent) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -599,16 +579,6 @@ const ProfileHighlights = ({
           <a href={`/profile/${person.id}?tab=interviews`} onClick={showTab("interviews")}>
             {copy.person.allInterviews}
           </a>
-        </div>
-      )}
-      {invite && (
-        <div className="highlight-card">
-          <h3>{copy.person.tabs.interviews}</h3>
-          <p className="highlight-invite">{copy.person.interviewInvite(name)}</p>
-          <a href={`/interview/past/${person.id}`} className="highlight-secondary">
-            {copy.interview.tab.typeIn}
-          </a>
-          <a href={`/interview/new/${person.id}`}>{copy.person.startInterview}</a>
         </div>
       )}
       {artwork.length > 0 && (
