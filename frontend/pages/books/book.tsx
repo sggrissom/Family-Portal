@@ -94,11 +94,16 @@ export function view(route: string, prefix: string, data: BookData): preact.Comp
       ) : (
         <nav className="book-reader-bar" aria-label="Book">
           <a href="/books">← Books</a>
-          {data.canEdit && (
-            <a className="book-reader-edit" href={`/edit-book/${data.bookId}`}>
-              Edit book
-            </a>
-          )}
+          <span className="book-reader-actions">
+            <button type="button" className="book-reader-print" onClick={printBook}>
+              Print or save PDF
+            </button>
+            {data.canEdit && (
+              <a className="book-reader-edit" href={`/edit-book/${data.bookId}`}>
+                Edit book
+              </a>
+            )}
+          </span>
         </nav>
       )}
       <main id="app">
@@ -154,6 +159,23 @@ export const EditorNotes = ({ book }: { book: Book }) => {
     </details>
   );
 };
+
+async function printBook() {
+  const images = Array.from(document.querySelectorAll<HTMLImageElement>(".book img"));
+  for (const img of images) img.loading = "eager";
+  const loaded = Promise.all(
+    images.map(img =>
+      img.complete
+        ? null
+        : new Promise(resolve => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          })
+    )
+  );
+  await Promise.race([loaded, new Promise(resolve => setTimeout(resolve, 15000))]);
+  window.print();
+}
 
 function scrollToChapter(id: string) {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
