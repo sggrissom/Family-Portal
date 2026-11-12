@@ -443,6 +443,7 @@ func SetInterviewAnswerNote(ctx *vbeam.Context, req SetInterviewAnswerNoteReques
 		err = ErrAuthFailure
 		return
 	}
+	vbeam.UseWriteTx(ctx)
 	interview, _, err := interviewFor(ctx.Tx, user, req.InterviewId, AccessContribute)
 	if err != nil {
 		return
@@ -457,7 +458,6 @@ func SetInterviewAnswerNote(ctx *vbeam.Context, req SetInterviewAnswerNoteReques
 		return
 	}
 
-	vbeam.UseWriteTx(ctx)
 	answer.Note = cleanAnswerNote(req.Note)
 	writeMilestone(ctx.Tx, &answer)
 	answer.PhotoIds = GetMilestonePhotoIds(ctx.Tx, answer.Id)

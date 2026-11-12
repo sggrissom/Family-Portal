@@ -356,3 +356,27 @@ func TestAnswerNotes(t *testing.T) {
 		t.Errorf("clearing the note = %+v, %v", cleared.Answer, err)
 	}
 }
+
+func TestAnswerNoteUsesCurrentAnswer(t *testing.T) {
+	for _, text := range []string{"tacos", ""} {
+		t.Run("answer="+text, func(t *testing.T) {
+			fx := setupResultsFixture(t)
+			interview := fx.startInterview(t, fx.alice, "2021-03-05", "fav-food")
+			questionId := interview.Questions[0].Id
+			fx.answer(t, interview.Interview.Id, questionId, "pizza", false)
+			ctx := vbeam.Context{Tx: vbolt.ReadTx(fx.db), Token: testAuthToken(t, fx.owner)}
+			defer func() { vbolt.TxClose(ctx.Tx) }()
+			fx.answer(t, interview.Interview.Id, questionId, text, false)
+			response, err := SetInterviewAnswerNote(&ctx, SetInterviewAnswerNoteRequest{
+				InterviewId: interview.Interview.Id, QuestionId: questionId, Note: "giggling",
+			})
+			if text == "" {
+				if err != ErrAnswerNotFound {
+					t.Fatalf("note on deleted answer: error = %v, want ErrAnswerNotFound", err)
+				}
+			} else if err != nil || response.Answer.Description != text || response.Answer.Note != "giggling" {
+				t.Fatalf("note save = %+v, %v; want current answer %q with note", response.Answer, err, text)
+			}
+		})
+	}
+}
