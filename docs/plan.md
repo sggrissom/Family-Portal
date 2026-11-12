@@ -13,122 +13,44 @@ proposals are kept in [Not planned](not-planned.md).
 
 | Plan | Purpose |
 | --- | --- |
-| [Approximate dates and ages](plans/approximate-dates.md) | Preserve uncertain dates and age-period descriptions such as “at age 4” without inventing birthday events. Covers moments/media, sitewide date and age behavior, migration and correction, mobile, and exports. Manual support first; optional AI estimation later. |
-| [Video analysis](plans/video-analysis.md) | Local frame, face, and speech analysis of videos: tag and people suggestions, transcripts, and search over what's said. Built on web and iOS; calibration on real clips remains. |
 | [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
 
-## Follow-ups to shipped features
+## Smaller follow-ups
 
-**Video.** Upload, processing, playback, export and the S3-compatible (R2/B2)
-backend are built; video is opt-in per family.
+Worth doing if they stay simple.
 
-- Real-device checks of iPhone H.264, HEVC, HDR and portrait clips on
-  iOS/Safari and Linux/Chrome: playback starts, HDR looks right.
-- Resumable S3 multipart uploads above ~100 MB, if single PUTs prove fragile.
-- Open question: whether photos follow video into the bucket.
+**Video.**
 
-**Search.** Global search is built on web.
+- Resumable S3 multipart uploads above ~100 MB, if it's simple.
+- Use the transcript: suggest a title, tags or people mentioned, for the family
+  to accept or edit.
 
-- Chat message search, with jump-to-message.
-- Typo tolerance (edit distance 1 on words of 5+ characters) if prefix
-  matching proves not to be enough.
-- Searching book text and unanswered interview questions.
+**Annual interview.**
 
-**Books.** First-year, personal year, family year and custom books are built.
+- A note field on the conduct screen too; notes can only be added afterwards,
+  from Edit answers.
 
-- Browser print stylesheet / Save as PDF (small to medium). A server-generated
-  PDF, an offline HTML package, or a professionally printed book come later,
-  if demand justifies them.
-- Revocable share links with frozen snapshots (medium to large). Build edition
-  snapshots, preview, restricted media and revocation together; this overlaps
-  with [Sharing](plans/sharing.md).
-- More presets as people ask for them: traditions (every Halloween),
-  whole-history books, same-age comparisons. AI may suggest choices or draft
-  text for review, but must never invent events, dates or feelings.
+**Same age.** Undecided whether it's worth doing.
 
-**Same age.** Portraits and Details are built, with a newborn window of birth
-through day 27.
-
-- Recurring-occasion comparisons (first day of school, Halloween) alongside
-  age comparisons: tags or semantic search within year windows, clearly
-  labelled as event comparisons rather than age comparisons.
-- Saved portrait choices. "Another photo" only lasts for the page today.
-- A children-by-ages matrix, and montage export.
-
-**Annual interview.** Web and iOS are built. Open questions:
-
-- A per-family cadence setting (birthday, school start, New Year, off).
-  Birthday is the only option today.
-- A note field on single answers ("said while giggling").
-- Recording who asked (ties into "who recorded it" below).
-- Group mode: interviewing siblings together.
-
-**Redesign.** Open product questions:
-
-- Whether Family as a destination works, compared with keeping every stable
-  entrance on Home.
-- What Recently added should show, and how it pages.
-- Whether measurement reminders are on by default, and their dismiss/snooze
-  behavior.
-
-Correctness bugs and rough edges in existing features go here as they're found.
+- Comparisons by recurring occasion (first day of school, Halloween) alongside
+  age comparisons, clearly labelled as such.
 
 ## Ideas
 
-Candidates that fit the record but aren't scoped. They're options to argue
-over, not a checklist. "New entity" means the checklist in
+Not scoped. "New entity" means the checklist in
 [Adding a new domain entity](#adding-a-new-domain-entity).
 
-### Getting more out of what's recorded
-
-- **Suggested event collections** (medium). Propose groupings of a birthday, a
-  competition or a trip from photos close together in time, with shared people,
-  places and semantic similarity as supporting evidence. Date gaps are the
-  primary boundary; similar scenes alone must not merge separate occasions, and
-  missing GPS, faces or embeddings lower confidence rather than block a
-  date-only proposal. Compute in the background per family with a versioned
-  backfill. The family accepts, renames, edits membership, splits, merges or
-  dismisses a proposal; nothing becomes a record automatically, and dismissals
-  and manual corrections survive reruns. Link to an existing activity event
-  where it fits rather than inventing a calendar. Linked viewers see only photos
-  they can access, and place evidence stays owner-only.
-- **Search everything.** Photos and moments have local semantic search. Extend
-  unified search to activity notes, entries and events.
-- **An LLM pass.** Captions, or a monthly "this month in the family" summary.
-  A local vision-language model keeps everything on the host at a CPU cost; an
-  API model would be better but must be opt-in per family and send text only,
-  never photos.
-
-### Richer records of people
-
+- **Suggested event collections.** Propose groupings of a birthday, a trip or a
+  competition from photos close together in time, with shared people and places
+  as supporting evidence. The family accepts, edits or dismisses; nothing
+  becomes a record automatically.
 - **Birth details.** Birth time, weight, length, place. Weight and length seed
-  the growth chart at day zero, currently a hole at the most interesting end
-  of the curve.
-- **Head circumference.** WHO has charts for ages 0–2 and pediatricians
-  measure it at every early visit. `MeasurementType` is only height and weight.
-- **Nicknames and a short bio.** What they go by, what they're into right now.
-  They'd also feed the public summary page in [Sharing](plans/sharing.md).
-- **In memoriam.** Relations already reach grandparents. Mark someone as passed
-  without deleting them, and stop listing them as current on the dashboard.
+  the growth chart at day zero.
+- **In memoriam.** Mark someone as passed without deleting them.
 - **Family tree view.** Relations are already a graph with derived labels;
   drawing it is mostly frontend work.
-- **School years.** School, grade, teacher and a class photo per year. Try it
-  as an activity kind before reaching for a new entity.
-
-### New kinds of entries
-
-- **Documents.** Report cards and certificates go under achievement with a
-  photo. Give them a category, like artwork, if that proves too loose.
 - **Pregnancy record.** `IsPregnancy` exists with nothing to record against it.
-  Ultrasound photos and a weekly bump series, carried into the child's record
-  at birth.
-
-### Family members contributing
-
 - **Who recorded it.** Moments and growth don't store who added them.
-  Contributors (nanny, grandparents) are a real role.
-- **Reactions and comments** on a moment or photo, by family and linked
-  households. Internal only, no feed.
 
 ## Adding a new domain entity
 

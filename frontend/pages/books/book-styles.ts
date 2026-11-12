@@ -943,3 +943,150 @@ block(`
   font-style: italic;
 }
 `);
+
+block(`
+.book-interview-note {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+`);
+
+block(`
+.book-reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+`);
+
+block(`
+.book-reader-print {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+`);
+
+block(`
+@media print {
+  @page {
+    margin: 0.6in;
+  }
+
+  .site-header,
+  .app-bottombar,
+  .site-footer,
+  .book-reader-bar,
+  .book-proto-bar,
+  .book-editor-notes {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  .book-page,
+  [data-theme="dark"] .book-page {
+    --paper: #ffffff;
+    --ink: #1f1b16;
+    --ink-soft: #5f564b;
+    --rule: #d8cfc0;
+    --mat: #ffffff;
+    background: #ffffff;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .book {
+    max-width: none;
+    padding: 0;
+    font-size: 11.5pt;
+  }
+
+  .book-cover {
+    min-height: 0;
+    padding: 0.6in 0 0;
+    break-after: page;
+  }
+
+  .book-cover-photo {
+    max-height: 6in;
+    box-shadow: none;
+  }
+
+  .book-contents {
+    border: 0;
+  }
+
+  .book-contents button {
+    cursor: default;
+  }
+
+  .book-chapter {
+    padding-top: 0;
+  }
+
+  .book-chapter:has(.book-chapter-head) {
+    break-before: page;
+  }
+
+  .book .book-chapter > * + * {
+    margin-top: 24px;
+  }
+
+  .book-chapter-head {
+    break-after: avoid;
+  }
+
+  .book-hero {
+    width: 100%;
+    margin-left: 0;
+    transform: none;
+  }
+
+  .book-image,
+  .book-hero .book-image,
+  .book-photos .book-image {
+    max-height: 7.5in;
+  }
+
+  .book-photos .book-image {
+    max-height: 4.5in;
+  }
+
+  .book-figure,
+  .book-photos,
+  .book-moment,
+  .book-quote,
+  .book-artwork,
+  .book-notes li,
+  .book-letter,
+  .book-growth-chart,
+  .book-interview-section dl > div,
+  .book-interview-changes li {
+    break-inside: avoid;
+  }
+
+  .book-interview {
+    break-inside: auto;
+  }
+
+  .book-artwork-mat {
+    box-shadow: none;
+    border: 1px solid var(--rule);
+  }
+
+  .book-end {
+    margin-top: 36px;
+    break-inside: avoid;
+  }
+}
+`);

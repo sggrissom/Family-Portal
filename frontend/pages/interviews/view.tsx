@@ -24,6 +24,7 @@ type ViewState = {
   answers: Map<number, server.Milestone>;
   editingAnswers: boolean;
   drafts: Record<number, string>;
+  noteDrafts: Record<number, string>;
   savingAnswer: number;
   editingDetails: boolean;
   details: { title: string; date: string; notes: string };
@@ -38,6 +39,7 @@ const useViewState = vlens.declareHook(
     answers: new Map(),
     editingAnswers: false,
     drafts: {},
+    noteDrafts: {},
     savingAnswer: 0,
     editingDetails: false,
     details: { title: "", date: "", notes: "" },
@@ -116,6 +118,7 @@ export function InterviewPage({
             onClick={() => {
               state.editingAnswers = !state.editingAnswers;
               state.drafts = {};
+              state.noteDrafts = {};
               vlens.scheduleRedraw();
             }}
           >
@@ -225,6 +228,23 @@ const QA = ({ state, q }: { state: ViewState; q: server.InterviewQuestion }) => 
               if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
+          {a && (
+            <input
+              type="text"
+              className="iv-note-input"
+              aria-label={t.noteFor(label)}
+              placeholder={t.notePlaceholder}
+              value={state.noteDrafts[q.id] ?? a.note ?? ""}
+              disabled={state.savingAnswer === q.id}
+              onInput={e => {
+                state.noteDrafts[q.id] = e.currentTarget.value;
+              }}
+              onBlur={vlens.cachePartial(saveNote, state, q.id)}
+              onKeyDown={e => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+          )}
         </dd>
       </div>
     );
@@ -234,7 +254,10 @@ const QA = ({ state, q }: { state: ViewState; q: server.InterviewQuestion }) => 
       <dt>{label}</dt>
       <dd>
         {a ? (
-          <a href={`/milestone/${a.id}`}>{a.description}</a>
+          <>
+            <a href={`/milestone/${a.id}`}>{a.description}</a>
+            {a.note && <span className="iv-answer-note">{a.note}</span>}
+          </>
         ) : (
           <span className="iv-hint">{t.skipped}</span>
         )}
@@ -410,6 +433,27 @@ async function saveAnswer(state: ViewState, questionId: number) {
     if (resp.answer.id) state.answers.set(questionId, resp.answer);
     else state.answers.delete(questionId);
     delete state.drafts[questionId];
+  }
+  vlens.scheduleRedraw();
+}
+
+async function saveNote(state: ViewState, questionId: number) {
+  const draft = state.noteDrafts[questionId];
+  const current = state.answers.get(questionId)?.note ?? "";
+  if (draft === undefined || draft.trim() === current) return;
+  state.savingAnswer = questionId;
+  vlens.scheduleRedraw();
+  const [resp, err] = await server.SetInterviewAnswerNote({
+    interviewId: state.interview.id,
+    questionId,
+    note: draft,
+  });
+  state.savingAnswer = 0;
+  if (!resp) {
+    state.error = err || t.saveFailed;
+  } else {
+    state.answers.set(questionId, resp.answer);
+    delete state.noteDrafts[questionId];
   }
   vlens.scheduleRedraw();
 }

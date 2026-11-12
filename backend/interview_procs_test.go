@@ -2,6 +2,7 @@ package backend
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -293,6 +294,20 @@ func TestInterviewAccessThroughLinksIsReadOnly(t *testing.T) {
 		}
 	})
 	call(fx.userB, func(ctx *vbeam.Context) {
+		if _, err := SetInterviewAnswerNote(ctx, SetInterviewAnswerNoteRequest{
+			InterviewId: interview.Id, QuestionId: interview.QuestionIds[0], Note: "x",
+		}); err == nil {
+			t.Error("linked grandparent added a note")
+		}
+	})
+	call(fx.userC, func(ctx *vbeam.Context) {
+		if _, err := SetInterviewAnswerNote(ctx, SetInterviewAnswerNoteRequest{
+			InterviewId: interview.Id, QuestionId: interview.QuestionIds[0], Note: "x",
+		}); err != ErrInterviewNotFound {
+			t.Errorf("an unlinked family's note: error = %v, want ErrInterviewNotFound", err)
+		}
+	})
+	call(fx.userB, func(ctx *vbeam.Context) {
 		if _, err := StartInterview(ctx, StartInterviewRequest{PersonId: fx.alice.Id, DefaultKeys: []string{"fav-food"}}); err == nil {
 			t.Error("linked grandparent started an interview")
 		}
@@ -307,4 +322,61 @@ func TestInterviewAccessThroughLinksIsReadOnly(t *testing.T) {
 			t.Error("an unlinked family read the interview")
 		}
 	})
+}
+
+func TestAnswerNotes(t *testing.T) {
+	fx := setupResultsFixture(t)
+	got := fx.startInterview(t, fx.alice, "2021-03-05", "fav-food", "fav-color")
+	interviewId, food := got.Interview.Id, got.Questions[0].Id
+
+	if _, err := callAs(t, fx, SetInterviewAnswerNote, SetInterviewAnswerNoteRequest{InterviewId: interviewId, QuestionId: food, Note: "giggling"}); err != ErrAnswerNotFound {
+		t.Errorf("note before an answer: error = %v, want ErrAnswerNotFound", err)
+	}
+
+	fx.answer(t, interviewId, food, "pizza", false)
+	resp, err := callAs(t, fx, SetInterviewAnswerNote, SetInterviewAnswerNoteRequest{InterviewId: interviewId, QuestionId: food, Note: "  said while\n giggling "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Answer.Note != "said while giggling" || resp.Answer.Description != "pizza" {
+		t.Errorf("answer = %+v", resp.Answer)
+	}
+
+	edited := fx.answer(t, interviewId, food, "pizza with olives", false)
+	if edited.Answer.Note != "said while giggling" {
+		t.Errorf("editing the answer dropped the note: %+v", edited.Answer)
+	}
+
+	if _, err := callAs(t, fx, SetInterviewAnswerNote, SetInterviewAnswerNoteRequest{InterviewId: interviewId, QuestionId: food, Note: strings.Repeat("a", maxAnswerNote+1)}); err == nil {
+		t.Error("an overlong note was accepted")
+	}
+
+	cleared, err := callAs(t, fx, SetInterviewAnswerNote, SetInterviewAnswerNoteRequest{InterviewId: interviewId, QuestionId: food, Note: ""})
+	if err != nil || cleared.Answer.Note != "" {
+		t.Errorf("clearing the note = %+v, %v", cleared.Answer, err)
+	}
+}
+
+func TestAnswerNoteUsesCurrentAnswer(t *testing.T) {
+	for _, text := range []string{"tacos", ""} {
+		t.Run("answer="+text, func(t *testing.T) {
+			fx := setupResultsFixture(t)
+			interview := fx.startInterview(t, fx.alice, "2021-03-05", "fav-food")
+			questionId := interview.Questions[0].Id
+			fx.answer(t, interview.Interview.Id, questionId, "pizza", false)
+			ctx := vbeam.Context{Tx: vbolt.ReadTx(fx.db), Token: testAuthToken(t, fx.owner)}
+			defer func() { vbolt.TxClose(ctx.Tx) }()
+			fx.answer(t, interview.Interview.Id, questionId, text, false)
+			response, err := SetInterviewAnswerNote(&ctx, SetInterviewAnswerNoteRequest{
+				InterviewId: interview.Interview.Id, QuestionId: questionId, Note: "giggling",
+			})
+			if text == "" {
+				if err != ErrAnswerNotFound {
+					t.Fatalf("note on deleted answer: error = %v, want ErrAnswerNotFound", err)
+				}
+			} else if err != nil || response.Answer.Description != text || response.Answer.Note != "giggling" {
+				t.Fatalf("note save = %+v, %v; want current answer %q with note", response.Answer, err, text)
+			}
+		})
+	}
 }

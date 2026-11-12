@@ -261,6 +261,29 @@ func TestDismissedFacesLeaveTheReview(t *testing.T) {
 	}
 }
 
+func TestFaceReviewCountMatchesTheReview(t *testing.T) {
+	fx := setupResultsFixture(t)
+	fx.setProfileDescriptor(t, fx.alice, faceVec(7))
+	fx.recordFaces(t, fx.addPhoto(t, fx.familyId, "a.jpg"), DetectedFace{Descriptor: faceVec(7)}, DetectedFace{Descriptor: faceVec(40)})
+	fx.recordFaces(t, fx.addPhoto(t, fx.familyId, "b.jpg"), DetectedFace{Descriptor: faceVec(41)})
+	fx.recordFaces(t, fx.addPhoto(t, fx.familyId+999, "theirs.jpg"), DetectedFace{Descriptor: faceVec(42)})
+
+	review, err := callAs(t, fx, GetFaceReview, GetFaceReviewRequest{})
+	if err != nil {
+		t.Fatalf("GetFaceReview() error = %v", err)
+	}
+	count, err := callAs(t, fx, GetFaceReviewCount, GetFaceReviewCountRequest{})
+	if err != nil {
+		t.Fatalf("GetFaceReviewCount() error = %v", err)
+	}
+	if count.UnknownCount != review.UnknownCount || count.AutoCount != review.AutoCount || count.Enabled != review.Enabled {
+		t.Errorf("count = %+v, review has unknown %d auto %d enabled %v", count, review.UnknownCount, review.AutoCount, review.Enabled)
+	}
+	if count.UnknownCount != 2 || count.AutoCount != 1 {
+		t.Errorf("count = %+v, want 2 unknown and 1 auto from this family only", count)
+	}
+}
+
 func TestFaceReviewGroupsLookalikesAndSuggests(t *testing.T) {
 	fx := setupResultsFixture(t)
 	fx.setProfileDescriptor(t, fx.bob, faceVec(20, 0, 0, 0, 0.55))

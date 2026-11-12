@@ -80,6 +80,7 @@ function milestones(list: M[], personId = 1, firstId = 1): server.Milestone[] {
     interviewId: 0,
     questionId: 0,
     recordTime: exactRecordTime(day(offset)),
+    note: "",
   }));
 }
 

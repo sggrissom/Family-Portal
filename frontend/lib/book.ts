@@ -76,7 +76,7 @@ export interface InterviewSpread {
   day: string;
   detail: string;
   photo: BookPhoto | null;
-  sections: { name: string; rows: { question: string; answer: string }[] }[];
+  sections: { name: string; rows: { question: string; answer: string; note: string }[] }[];
   changes: { question: string; before: string; after: string }[];
 }
 
@@ -692,7 +692,7 @@ function interviewSpread(i: server.BookInterview, r: Resolved): InterviewSpread 
       section = { name: q.section, rows: [] };
       sections.push(section);
     }
-    section.rows.push({ question: a.context || q.text, answer: a.description });
+    section.rows.push({ question: a.context || q.text, answer: a.description, note: a.note ?? "" });
   }
   const label = (id: number) =>
     answers.get(id)?.context || (i.questions ?? []).find(q => q.id === id)?.text || "";
