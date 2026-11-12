@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
@@ -115,6 +116,70 @@ func TestInterviewNudges(t *testing.T) {
 	if cont.Kind != "interview-continue" || cont.InterviewId != got.Interview.Id || !strings.Contains(cont.Text, "1 of 2") {
 		t.Errorf("continue nudge = %+v", cont)
 	}
+}
+
+func TestInterviewCadenceSetting(t *testing.T) {
+	fx := setupResultsFixture(t)
+	day := func(s string) time.Time { d, _ := time.Parse("2006-01-02", s); return d }
+
+	questions, err := callAs(t, fx, GetInterviewQuestions, GetInterviewQuestionsRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if questions.Cadence != (InterviewCadence{Kind: CadenceBirthday}) {
+		t.Errorf("default cadence = %+v, want birthday", questions.Cadence)
+	}
+
+	for _, bad := range []InterviewCadence{{Kind: "weekly"}, {Kind: CadenceSchoolStart}, {Kind: CadenceSchoolStart, Month: 13}} {
+		if _, err := callAs(t, fx, SetInterviewCadence, SetInterviewCadenceRequest{Cadence: bad}); err != ErrInvalidCadence {
+			t.Errorf("SetInterviewCadence(%+v) error = %v, want ErrInvalidCadence", bad, err)
+		}
+	}
+	set, err := callAs(t, fx, SetInterviewCadence, SetInterviewCadenceRequest{Cadence: InterviewCadence{Kind: CadenceSchoolStart, Month: 9}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.Cadence != (InterviewCadence{Kind: CadenceSchoolStart, Month: 9}) {
+		t.Errorf("set cadence = %+v", set.Cadence)
+	}
+	questions, _ = callAs(t, fx, GetInterviewQuestions, GetInterviewQuestionsRequest{})
+	if questions.Cadence != set.Cadence || len(questions.Questions) == 0 {
+		t.Errorf("questions after setting cadence = %+v with %d questions", questions.Cadence, len(questions.Questions))
+	}
+
+	var birthday, school rankedNudge
+	var birthdayOk, schoolOk bool
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		birthday, birthdayOk = interviewNudge(tx, fx.alice, nil, day("2025-02-20"))
+		school, schoolOk = interviewNudge(tx, fx.alice, nil, day("2025-09-10"))
+	})
+	if birthdayOk {
+		t.Errorf("still nudged at the birthday: %+v", birthday)
+	}
+	if !schoolOk || school.Key != fmt.Sprintf("interview:%d:2025", fx.alice.Id) {
+		t.Errorf("school nudge = %+v, %v", school, schoolOk)
+	}
+
+	exported, err := callAs(t, fx, ExportData, ExportDataRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var other User
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		other = AddUserTx(tx, CreateAccountRequest{Name: "Other", Email: "other-cadence@example.com"}, nil)
+		vbolt.TxCommit(tx)
+	})
+	fx.asUser(t, other, func(ctx *vbeam.Context) {
+		_, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true, MergeStrategy: "merge_people"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		if got := familyInterviewCadence(tx, other.FamilyId); got != set.Cadence {
+			t.Errorf("imported cadence = %+v, want %+v", got, set.Cadence)
+		}
+	})
 }
 
 func TestInterviewAnswersEmbedWithTheirQuestion(t *testing.T) {

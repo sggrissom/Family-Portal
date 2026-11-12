@@ -88,6 +88,7 @@ export const ErrVideoUploadNotFound = "That upload could not be found.";
 export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrDateRequired = "Choose when this happened";
+export const ErrInvalidCadence = "Choose when interviews should be suggested";
 export const ErrAnswerNotFound = "Answer the question before adding a note";
 
 export interface CreateAccountRequest {
@@ -561,6 +562,7 @@ export interface GetInterviewQuestionsRequest {
 export interface InterviewQuestionsResponse {
     familyId: number
     revision: number
+    cadence: InterviewCadence
     questions: InterviewQuestion[]
     suggested: InterviewQuestion[]
     defaults: InterviewQuestion[]
@@ -578,6 +580,15 @@ export interface MergeInterviewQuestionsRequest {
     fromId: number
     intoId: number
     revision: number
+}
+
+export interface SetInterviewCadenceRequest {
+    familyId: number
+    cadence: InterviewCadence
+}
+
+export interface SetInterviewCadenceResponse {
+    cadence: InterviewCadence
 }
 
 export interface GetInterviewSetupRequest {
@@ -1233,6 +1244,15 @@ export interface GetFaceReviewResponse {
     groups: FaceGroup[]
     autoTagged: PhotoFace[]
     families: FaceReviewFamily[]
+    unknownCount: number
+    autoCount: number
+}
+
+export interface GetFaceReviewCountRequest {
+}
+
+export interface GetFaceReviewCountResponse {
+    enabled: boolean
     unknownCount: number
     autoCount: number
 }
@@ -2176,6 +2196,11 @@ export interface RecordTime {
     end: string
     resolved: boolean
     resolverVersion: number
+}
+
+export interface InterviewCadence {
+    kind: string
+    month: number
 }
 
 export interface InterviewQuestion {
@@ -3389,6 +3414,10 @@ export async function MergeInterviewQuestions(data: MergeInterviewQuestionsReque
     return await rpc.call<InterviewQuestionsResponse>('MergeInterviewQuestions', JSON.stringify(data));
 }
 
+export async function SetInterviewCadence(data: SetInterviewCadenceRequest): Promise<rpc.Response<SetInterviewCadenceResponse>> {
+    return await rpc.call<SetInterviewCadenceResponse>('SetInterviewCadence', JSON.stringify(data));
+}
+
 export async function GetInterviewSetup(data: GetInterviewSetupRequest): Promise<rpc.Response<GetInterviewSetupResponse>> {
     return await rpc.call<GetInterviewSetupResponse>('GetInterviewSetup', JSON.stringify(data));
 }
@@ -3663,6 +3692,10 @@ export async function RemoveVideoTranscript(data: GetVideoTranscriptRequest): Pr
 
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {
     return await rpc.call<GetFaceReviewResponse>('GetFaceReview', JSON.stringify(data));
+}
+
+export async function GetFaceReviewCount(data: GetFaceReviewCountRequest): Promise<rpc.Response<GetFaceReviewCountResponse>> {
+    return await rpc.call<GetFaceReviewCountResponse>('GetFaceReviewCount', JSON.stringify(data));
 }
 
 export async function GetPhotoFaces(data: GetPhotoFacesRequest): Promise<rpc.Response<GetPhotoFacesResponse>> {

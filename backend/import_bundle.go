@@ -178,6 +178,7 @@ func importBundleHandler(w http.ResponseWriter, r *http.Request) {
 			resp.Warnings = append(resp.Warnings, interviews.warnings...)
 			importedMilestoneIds = append(importedMilestoneIds, interviews.answerIds...)
 		}
+		importInterviewCadence(tx, familyId, importData.InterviewCadence)
 
 		if len(importData.Activities) > 0 {
 			counts, activityWarnings := importActivities(tx, importData.Activities, familyId, personIdMapping, photoIdMapping)
