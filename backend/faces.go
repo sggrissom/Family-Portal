@@ -594,6 +594,7 @@ func clusterCentroid(c faceCluster) []float32 {
 
 func RegisterFaceMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetFaceReview)
+	vbeam.RegisterProc(app, GetFaceReviewCount)
 	vbeam.RegisterProc(app, GetPhotoFaces)
 	vbeam.RegisterProc(app, AssignFaces)
 	vbeam.RegisterProc(app, RejectFaces)
@@ -687,6 +688,38 @@ func GetFaceReview(ctx *vbeam.Context, req GetFaceReviewRequest) (resp GetFaceRe
 	})
 	if len(resp.AutoTagged) > faceReviewAutoLimit {
 		resp.AutoTagged = resp.AutoTagged[:faceReviewAutoLimit]
+	}
+	return
+}
+
+type GetFaceReviewCountRequest struct{}
+
+type GetFaceReviewCountResponse struct {
+	Enabled      bool `json:"enabled"`
+	UnknownCount int  `json:"unknownCount"`
+	AutoCount    int  `json:"autoCount"`
+}
+
+func GetFaceReviewCount(ctx *vbeam.Context, req GetFaceReviewCountRequest) (resp GetFaceReviewCountResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	resp.Enabled = cfg.EnableFaceTagging
+	for _, familyId := range familiesVisibleTo(ctx.Tx, user) {
+		if !CanAccessFamily(ctx.Tx, user, familyId, AccessContribute) {
+			continue
+		}
+		for _, face := range GetFamilyFaces(ctx.Tx, familyId) {
+			switch face.Status {
+			case FaceUnknown:
+				resp.UnknownCount++
+			case FaceAuto:
+				resp.AutoCount++
+			}
+		}
 	}
 	return
 }

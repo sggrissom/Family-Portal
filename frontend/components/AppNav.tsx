@@ -438,7 +438,7 @@ function toggleAccount(state: NavState) {
 
 async function loadFaceCount(state: NavState) {
   state.faceCount = 0;
-  const [resp] = await server.GetFaceReview({});
+  const [resp] = await server.GetFaceReviewCount({});
   if (!resp || !resp.enabled) return;
   state.facesEnabled = true;
   state.faceCount = resp.unknownCount + resp.autoCount;
