@@ -1237,6 +1237,15 @@ export interface GetFaceReviewResponse {
     autoCount: number
 }
 
+export interface GetFaceReviewCountRequest {
+}
+
+export interface GetFaceReviewCountResponse {
+    enabled: boolean
+    unknownCount: number
+    autoCount: number
+}
+
 export interface GetPhotoFacesRequest {
     photoId: number
 }
@@ -3666,6 +3675,10 @@ export async function RemoveVideoTranscript(data: GetVideoTranscriptRequest): Pr
 
 export async function GetFaceReview(data: GetFaceReviewRequest): Promise<rpc.Response<GetFaceReviewResponse>> {
     return await rpc.call<GetFaceReviewResponse>('GetFaceReview', JSON.stringify(data));
+}
+
+export async function GetFaceReviewCount(data: GetFaceReviewCountRequest): Promise<rpc.Response<GetFaceReviewCountResponse>> {
+    return await rpc.call<GetFaceReviewCountResponse>('GetFaceReviewCount', JSON.stringify(data));
 }
 
 export async function GetPhotoFaces(data: GetPhotoFacesRequest): Promise<rpc.Response<GetPhotoFacesResponse>> {
