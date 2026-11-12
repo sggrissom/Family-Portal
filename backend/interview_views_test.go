@@ -29,8 +29,38 @@ func TestInterviewDueAroundBirthdays(t *testing.T) {
 		"new year wrap":         {Person{Birthday: day("2019-01-05")}, nil, "2025-12-28", true},
 		"no birthday":           {Person{}, nil, "2025-06-10", false},
 	} {
-		if got := interviewDue(tc.person, tc.interviews, day(tc.today)); got != tc.want {
+		if _, got := interviewDue(tc.person, tc.interviews, day(tc.today), InterviewCadence{Kind: CadenceBirthday}); got != tc.want {
 			t.Errorf("%s: due = %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestInterviewDueFollowsTheFamilyCadence(t *testing.T) {
+	day := func(s string) time.Time { d, _ := time.Parse("2006-01-02", s); return d }
+	child := Person{Birthday: day("2019-06-15")}
+	school := InterviewCadence{Kind: CadenceSchoolStart, Month: 9}
+	newYear := InterviewCadence{Kind: CadenceNewYear}
+
+	for name, tc := range map[string]struct {
+		cadence  InterviewCadence
+		today    string
+		want     bool
+		occasion string
+	}{
+		"school starting":      {school, "2025-08-25", true, "2025-09-01"},
+		"school a month in":    {school, "2025-09-25", true, "2025-09-01"},
+		"school not near":      {school, "2025-06-15", false, ""},
+		"before new year":      {newYear, "2025-12-20", true, "2026-01-01"},
+		"after new year":       {newYear, "2026-01-20", true, "2026-01-01"},
+		"new year on birthday": {newYear, "2025-06-15", false, ""},
+		"off":                  {InterviewCadence{Kind: CadenceOff}, "2025-06-15", false, ""},
+	} {
+		occasion, got := interviewDue(child, nil, day(tc.today), tc.cadence)
+		if got != tc.want {
+			t.Errorf("%s: due = %v, want %v", name, got, tc.want)
+		}
+		if tc.want && !occasion.Equal(day(tc.occasion)) {
+			t.Errorf("%s: occasion = %v, want %s", name, occasion, tc.occasion)
 		}
 	}
 }

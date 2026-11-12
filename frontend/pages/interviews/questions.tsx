@@ -32,6 +32,7 @@ export async function fetch(route: string, prefix: string) {
     return rpc.ok<server.InterviewQuestionsResponse>({
       familyId: 0,
       revision: 0,
+      cadence: { kind: "birthday", month: 0 },
       questions: [],
       suggested: [],
       defaults: [],
@@ -52,6 +53,7 @@ type EditorState = {
   newSection: string;
   dragKey: number;
   showSuggested: boolean;
+  savingCadence: boolean;
 };
 
 const useEditor = vlens.declareHook(
@@ -66,6 +68,7 @@ const useEditor = vlens.declareHook(
     newSection: "",
     dragKey: 0,
     showSuggested: false,
+    savingCadence: false,
   })
 );
 
@@ -108,8 +111,10 @@ export function view(
           id="questionFamily"
           value={loaded.familyId}
           onChange={vlens.cachePartial(switchFamily, state)}
-          disabled={state.saving}
+          disabled={state.saving || state.savingCadence}
         />
+
+        <Cadence state={state} />
 
         {state.error && (
           <div className="error-message" role="alert">
@@ -158,7 +163,7 @@ export function view(
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!state.dirty || state.saving}
+            disabled={!state.dirty || state.saving || state.savingCadence}
             onClick={vlens.cachePartial(onSave, state)}
           >
             {state.saving ? t.saving : t.save}
@@ -509,8 +514,83 @@ function onReset(state: EditorState) {
   changed(state);
 }
 
+const CADENCES = ["birthday", "school-start", "new-year", "off"];
+const MONTHS = Array.from({ length: 12 }, (_, i) =>
+  new Date(Date.UTC(2000, i, 1)).toLocaleString(undefined, { month: "long", timeZone: "UTC" })
+);
+const DEFAULT_SCHOOL_MONTH = 8;
+
+const Cadence = ({ state }: { state: EditorState }) => {
+  const cadence = state.loaded!.cadence;
+  return (
+    <div className="iq-cadence">
+      <label>
+        <span>{t.cadence}</span>
+        <select
+          value={cadence.kind}
+          disabled={state.saving || state.savingCadence}
+          onChange={e =>
+            setCadence(state, {
+              kind: e.currentTarget.value,
+              month: e.currentTarget.value === "school-start" ? DEFAULT_SCHOOL_MONTH : 0,
+            })
+          }
+        >
+          {CADENCES.map(kind => (
+            <option key={kind} value={kind}>
+              {t.cadenceOptions[kind]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {cadence.kind === "school-start" && (
+        <label>
+          <span>{t.schoolMonth}</span>
+          <select
+            value={cadence.month}
+            disabled={state.saving || state.savingCadence}
+            onChange={e =>
+              setCadence(state, { kind: "school-start", month: Number(e.currentTarget.value) })
+            }
+          >
+            {MONTHS.map((name, i) => (
+              <option key={i} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {cadence.kind !== "off" && <p className="iq-intro">{t.cadenceHint}</p>}
+    </div>
+  );
+};
+
+async function setCadence(state: EditorState, cadence: server.InterviewCadence) {
+  if (state.saving || state.savingCadence) return;
+  const loaded = state.loaded!;
+  const previous = loaded.cadence;
+  loaded.cadence = cadence;
+  state.savingCadence = true;
+  state.error = "";
+  vlens.scheduleRedraw();
+  const [resp, err] = await server.SetInterviewCadence({ familyId: loaded.familyId, cadence });
+  state.savingCadence = false;
+  if (resp) {
+    loaded.cadence = resp.cadence;
+  } else {
+    loaded.cadence = previous;
+    state.error = err || "That setting could not be saved.";
+  }
+  vlens.scheduleRedraw();
+}
+
 async function switchFamily(state: EditorState, familyId: number) {
+  if (state.saving || state.savingCadence) return;
+  state.saving = true;
+  vlens.scheduleRedraw();
   const [resp, err] = await server.GetInterviewQuestions({ familyId });
+  state.saving = false;
   if (!resp) {
     state.error = err || "That list could not be loaded.";
   } else {
@@ -520,6 +600,7 @@ async function switchFamily(state: EditorState, familyId: number) {
 }
 
 async function onSave(state: EditorState) {
+  if (state.saving || state.savingCadence) return;
   const loaded = state.loaded!;
   state.saving = true;
   state.error = "";
@@ -540,6 +621,7 @@ async function onSave(state: EditorState) {
 }
 
 async function onMerge(state: EditorState, from: QuestionRow, intoId: number) {
+  if (state.saving || state.savingCadence) return;
   const into = state.draft.rows.find(r => r.id === intoId);
   if (!into || !confirm(t.confirmMerge(from.text, into.text))) {
     vlens.scheduleRedraw();

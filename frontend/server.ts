@@ -88,6 +88,7 @@ export const ErrVideoUploadNotFound = "That upload could not be found.";
 export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrDateRequired = "Choose when this happened";
+export const ErrInvalidCadence = "Choose when interviews should be suggested";
 
 export interface CreateAccountRequest {
     name: string
@@ -560,6 +561,7 @@ export interface GetInterviewQuestionsRequest {
 export interface InterviewQuestionsResponse {
     familyId: number
     revision: number
+    cadence: InterviewCadence
     questions: InterviewQuestion[]
     suggested: InterviewQuestion[]
     defaults: InterviewQuestion[]
@@ -577,6 +579,15 @@ export interface MergeInterviewQuestionsRequest {
     fromId: number
     intoId: number
     revision: number
+}
+
+export interface SetInterviewCadenceRequest {
+    familyId: number
+    cadence: InterviewCadence
+}
+
+export interface SetInterviewCadenceResponse {
+    cadence: InterviewCadence
 }
 
 export interface GetInterviewSetupRequest {
@@ -2175,6 +2186,11 @@ export interface RecordTime {
     resolverVersion: number
 }
 
+export interface InterviewCadence {
+    kind: string
+    month: number
+}
+
 export interface InterviewQuestion {
     id: number
     familyId: number
@@ -3383,6 +3399,10 @@ export async function SaveInterviewQuestions(data: SaveInterviewQuestionsRequest
 
 export async function MergeInterviewQuestions(data: MergeInterviewQuestionsRequest): Promise<rpc.Response<InterviewQuestionsResponse>> {
     return await rpc.call<InterviewQuestionsResponse>('MergeInterviewQuestions', JSON.stringify(data));
+}
+
+export async function SetInterviewCadence(data: SetInterviewCadenceRequest): Promise<rpc.Response<SetInterviewCadenceResponse>> {
+    return await rpc.call<SetInterviewCadenceResponse>('SetInterviewCadence', JSON.stringify(data));
 }
 
 export async function GetInterviewSetup(data: GetInterviewSetupRequest): Promise<rpc.Response<GetInterviewSetupResponse>> {
