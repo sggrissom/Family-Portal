@@ -6,6 +6,7 @@ import { Header } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { ResponsiveImage } from "../../components/ResponsiveImage";
+import { printBook } from "../../lib/printBook";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import {
   Block,
@@ -159,23 +160,6 @@ export const EditorNotes = ({ book }: { book: Book }) => {
     </details>
   );
 };
-
-async function printBook() {
-  const images = Array.from(document.querySelectorAll<HTMLImageElement>(".book img"));
-  for (const img of images) img.loading = "eager";
-  const loaded = Promise.all(
-    images.map(img =>
-      img.complete
-        ? null
-        : new Promise(resolve => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          })
-    )
-  );
-  await Promise.race([loaded, new Promise(resolve => setTimeout(resolve, 15000))]);
-  window.print();
-}
 
 function scrollToChapter(id: string) {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
