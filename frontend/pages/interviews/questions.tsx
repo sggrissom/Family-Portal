@@ -111,7 +111,7 @@ export function view(
           id="questionFamily"
           value={loaded.familyId}
           onChange={vlens.cachePartial(switchFamily, state)}
-          disabled={state.saving}
+          disabled={state.saving || state.savingCadence}
         />
 
         <Cadence state={state} />
@@ -163,7 +163,7 @@ export function view(
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!state.dirty || state.saving}
+            disabled={!state.dirty || state.saving || state.savingCadence}
             onClick={vlens.cachePartial(onSave, state)}
           >
             {state.saving ? t.saving : t.save}
@@ -528,7 +528,7 @@ const Cadence = ({ state }: { state: EditorState }) => {
         <span>{t.cadence}</span>
         <select
           value={cadence.kind}
-          disabled={state.savingCadence}
+          disabled={state.saving || state.savingCadence}
           onChange={e =>
             setCadence(state, {
               kind: e.currentTarget.value,
@@ -548,7 +548,7 @@ const Cadence = ({ state }: { state: EditorState }) => {
           <span>{t.schoolMonth}</span>
           <select
             value={cadence.month}
-            disabled={state.savingCadence}
+            disabled={state.saving || state.savingCadence}
             onChange={e =>
               setCadence(state, { kind: "school-start", month: Number(e.currentTarget.value) })
             }
@@ -567,6 +567,7 @@ const Cadence = ({ state }: { state: EditorState }) => {
 };
 
 async function setCadence(state: EditorState, cadence: server.InterviewCadence) {
+  if (state.saving || state.savingCadence) return;
   const loaded = state.loaded!;
   const previous = loaded.cadence;
   loaded.cadence = cadence;
@@ -585,7 +586,11 @@ async function setCadence(state: EditorState, cadence: server.InterviewCadence) 
 }
 
 async function switchFamily(state: EditorState, familyId: number) {
+  if (state.saving || state.savingCadence) return;
+  state.saving = true;
+  vlens.scheduleRedraw();
   const [resp, err] = await server.GetInterviewQuestions({ familyId });
+  state.saving = false;
   if (!resp) {
     state.error = err || "That list could not be loaded.";
   } else {
@@ -595,6 +600,7 @@ async function switchFamily(state: EditorState, familyId: number) {
 }
 
 async function onSave(state: EditorState) {
+  if (state.saving || state.savingCadence) return;
   const loaded = state.loaded!;
   state.saving = true;
   state.error = "";
@@ -615,6 +621,7 @@ async function onSave(state: EditorState) {
 }
 
 async function onMerge(state: EditorState, from: QuestionRow, intoId: number) {
+  if (state.saving || state.savingCadence) return;
   const into = state.draft.rows.find(r => r.id === intoId);
   if (!into || !confirm(t.confirmMerge(from.text, into.text))) {
     vlens.scheduleRedraw();
