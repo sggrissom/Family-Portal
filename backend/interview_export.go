@@ -220,6 +220,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 				Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: personId, FamilyId: person.FamilyId,
 				Description: text, Category: CategoryInterview, Context: em.Context, MilestoneDate: date,
 				CreatedAt: time.Now(), InterviewId: interview.Id, QuestionId: q,
+				Note: cleanAnswerNote(em.Note),
 			}
 			if m.Context == "" {
 				m.Context = renderQuestion(GetInterviewQuestionById(tx, q).Text, person, date)

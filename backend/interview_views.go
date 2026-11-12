@@ -270,7 +270,7 @@ func CompareInterviewAnswers(ctx *vbeam.Context, req CompareInterviewAnswersRequ
 		}
 		row.Answers = append(row.Answers, PreviousAnswer{
 			InterviewId: m.InterviewId, MilestoneId: m.Id, Date: m.MilestoneDate,
-			AgeYears: ageYearsAt(person.Birthday, m.MilestoneDate), Text: m.Description,
+			AgeYears: ageYearsAt(person.Birthday, m.MilestoneDate), Text: m.Description, Note: m.Note,
 		})
 	}
 	resp.Rows = []CompareRow{}

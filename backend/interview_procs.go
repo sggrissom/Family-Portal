@@ -2,6 +2,7 @@ package backend
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strconv"
@@ -17,6 +18,7 @@ func RegisterInterviewMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, StartInterview)
 	vbeam.RegisterProc(app, GetInterview)
 	vbeam.RegisterProc(app, SaveInterviewAnswer)
+	vbeam.RegisterProc(app, SetInterviewAnswerNote)
 	vbeam.RegisterProc(app, AddInterviewQuestion)
 	vbeam.RegisterProc(app, UpdateInterview)
 	vbeam.RegisterProc(app, DeleteInterview)
@@ -261,6 +263,7 @@ type PreviousAnswer struct {
 	Date        time.Time `json:"date"`
 	AgeYears    int       `json:"ageYears"`
 	Text        string    `json:"text"`
+	Note        string    `json:"note,omitempty"`
 }
 
 type GetInterviewResponse struct {
@@ -293,7 +296,7 @@ func previousAnswers(tx *vbolt.Tx, interview Interview, person Person) map[int][
 			}
 			previous[id] = append(previous[id], PreviousAnswer{
 				InterviewId: m.InterviewId, MilestoneId: m.Id, Date: m.MilestoneDate,
-				AgeYears: ageYearsAt(person.Birthday, m.MilestoneDate), Text: m.Description,
+				AgeYears: ageYearsAt(person.Birthday, m.MilestoneDate), Text: m.Description, Note: m.Note,
 			})
 		}
 		sort.Slice(previous[id], func(i, j int) bool { return previous[id][i].Date.After(previous[id][j].Date) })
@@ -407,6 +410,60 @@ func SaveInterviewAnswer(ctx *vbeam.Context, req SaveInterviewAnswerRequest) (re
 	if resp.Answer.Id > 0 {
 		QueueMilestoneEmbedding(resp.Answer.Id)
 	}
+	return
+}
+
+type SetInterviewAnswerNoteRequest struct {
+	InterviewId int    `json:"interviewId"`
+	QuestionId  int    `json:"questionId"`
+	Note        string `json:"note"`
+}
+
+type SetInterviewAnswerNoteResponse struct {
+	Answer Milestone `json:"answer"`
+}
+
+const maxAnswerNote = 300
+
+var ErrAnswerNotFound = errors.New("Answer the question before adding a note")
+
+func cleanAnswerNote(note string) string {
+	note = strings.Join(strings.Fields(note), " ")
+	if runes := []rune(note); len(runes) > maxAnswerNote {
+		note = string(runes[:maxAnswerNote])
+	}
+	return note
+}
+
+// SetInterviewAnswerNote keeps a note beside one answer, like how it was
+// said. Saving the answer's text leaves the note alone.
+func SetInterviewAnswerNote(ctx *vbeam.Context, req SetInterviewAnswerNoteRequest) (resp SetInterviewAnswerNoteResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+	vbeam.UseWriteTx(ctx)
+	interview, _, err := interviewFor(ctx.Tx, user, req.InterviewId, AccessContribute)
+	if err != nil {
+		return
+	}
+	if len([]rune(strings.TrimSpace(req.Note))) > maxAnswerNote {
+		err = fmt.Errorf("Notes must be %d characters or fewer", maxAnswerNote)
+		return
+	}
+	answer := answerFor(ctx.Tx, interview.Id, req.QuestionId)
+	if answer.Id == 0 {
+		err = ErrAnswerNotFound
+		return
+	}
+
+	answer.Note = cleanAnswerNote(req.Note)
+	writeMilestone(ctx.Tx, &answer)
+	answer.PhotoIds = GetMilestonePhotoIds(ctx.Tx, answer.Id)
+	answer.TagIds = GetMilestoneTagIds(ctx.Tx, answer.Id)
+	resp.Answer = answer
+	vbolt.TxCommit(ctx.Tx)
 	return
 }
 

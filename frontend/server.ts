@@ -89,6 +89,7 @@ export const ErrVideoUploadExpired = "This upload expired before it finished. Pl
 export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrDateRequired = "Choose when this happened";
 export const ErrInvalidCadence = "Choose when interviews should be suggested";
+export const ErrAnswerNotFound = "Answer the question before adding a note";
 
 export interface CreateAccountRequest {
     name: string
@@ -635,6 +636,16 @@ export interface SaveInterviewAnswerRequest {
 
 export interface SaveInterviewAnswerResponse {
     interview: Interview
+    answer: Milestone
+}
+
+export interface SetInterviewAnswerNoteRequest {
+    interviewId: number
+    questionId: number
+    note: string
+}
+
+export interface SetInterviewAnswerNoteResponse {
     answer: Milestone
 }
 
@@ -2075,6 +2086,7 @@ export interface Milestone {
     interviewId: number
     questionId: number
     recordTime: RecordTime
+    note: string
 }
 
 export interface Image {
@@ -2226,6 +2238,7 @@ export interface PreviousAnswer {
     date: string
     ageYears: number
     text: string
+    note: string
 }
 
 export interface FamilyInterviewRow {
@@ -3419,6 +3432,10 @@ export async function GetInterview(data: GetInterviewRequest): Promise<rpc.Respo
 
 export async function SaveInterviewAnswer(data: SaveInterviewAnswerRequest): Promise<rpc.Response<SaveInterviewAnswerResponse>> {
     return await rpc.call<SaveInterviewAnswerResponse>('SaveInterviewAnswer', JSON.stringify(data));
+}
+
+export async function SetInterviewAnswerNote(data: SetInterviewAnswerNoteRequest): Promise<rpc.Response<SetInterviewAnswerNoteResponse>> {
+    return await rpc.call<SetInterviewAnswerNoteResponse>('SetInterviewAnswerNote', JSON.stringify(data));
 }
 
 export async function AddInterviewQuestion(data: AddInterviewQuestionRequest): Promise<rpc.Response<AddInterviewQuestionResponse>> {
