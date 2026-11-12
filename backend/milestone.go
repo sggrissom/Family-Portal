@@ -101,6 +101,7 @@ type Milestone struct {
 	InterviewId   int        `json:"interviewId,omitempty"`
 	QuestionId    int        `json:"questionId,omitempty"`
 	RecordTime    RecordTime `json:"recordTime"`
+	Note          string     `json:"note,omitempty"`
 }
 
 type MilestonePhoto struct {
@@ -129,7 +130,7 @@ func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
 }
 
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
-	version := vpack.Version(4, buf)
+	version := vpack.Version(5, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -146,6 +147,9 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	}
 	if version >= 4 {
 		PackRecordTime(&self.RecordTime, buf)
+	}
+	if version >= 5 {
+		vpack.String(&self.Note, buf)
 	}
 	if !buf.Writing && self.RecordTime.Version == 0 {
 		self.RecordTime = legacyRecordTime(self.MilestoneDate)

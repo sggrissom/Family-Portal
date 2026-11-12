@@ -212,6 +212,7 @@ type ExportDataStructure struct {
 
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
+	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -248,6 +249,7 @@ type ExportMilestone struct {
 	TagNames      []string    `json:"tagNames,omitempty"`
 	InterviewId   int         `json:"interviewId,omitempty"`
 	QuestionId    int         `json:"questionId,omitempty"`
+	Note          string      `json:"note,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -415,6 +417,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			TagNames:      tagNames,
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
+			Note:          milestone.Note,
 		}
 	}
 
@@ -437,6 +440,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
 	exportData.TotalInterviews = len(exportData.Interviews)
+	exportData.InterviewCadence = exportInterviewCadence(tx, familyId)
 
 	exportData.Heights = heights
 	exportData.Weights = weights

@@ -348,7 +348,13 @@ describe("interviews in a book", () => {
       { id: 3, section: "People", text: "Who is your best friend?" },
     ] as server.InterviewQuestion[],
     answers: [
-      { id: 7, questionId: 1, context: "What's your favorite food?", description: "tacos" },
+      {
+        id: 7,
+        questionId: 1,
+        context: "What's your favorite food?",
+        description: "tacos",
+        note: "said while giggling",
+      },
       { id: 8, questionId: 3, context: "Who is your best friend?", description: "Lily" },
     ] as server.Milestone[],
     changes: [{ questionId: 1, before: "pizza", after: "tacos" }],
@@ -394,8 +400,20 @@ describe("interviews in a book", () => {
       detail: "7 years",
       photo: null,
       sections: [
-        { name: "Favorites", rows: [{ question: "What's your favorite food?", answer: "tacos" }] },
-        { name: "People", rows: [{ question: "Who is your best friend?", answer: "Lily" }] },
+        {
+          name: "Favorites",
+          rows: [
+            {
+              question: "What's your favorite food?",
+              answer: "tacos",
+              note: "said while giggling",
+            },
+          ],
+        },
+        {
+          name: "People",
+          rows: [{ question: "Who is your best friend?", answer: "Lily", note: "" }],
+        },
       ],
       changes: [{ question: "What's your favorite food?", before: "pizza", after: "tacos" }],
     });

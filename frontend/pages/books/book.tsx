@@ -6,6 +6,7 @@ import { Header } from "../../layout";
 import { requireAuthInView } from "../../lib/authHelpers";
 import { getIdFromRoute } from "../../lib/routeHelpers";
 import { ResponsiveImage } from "../../components/ResponsiveImage";
+import { printBook } from "../../lib/printBook";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import {
   Block,
@@ -94,11 +95,16 @@ export function view(route: string, prefix: string, data: BookData): preact.Comp
       ) : (
         <nav className="book-reader-bar" aria-label="Book">
           <a href="/books">← Books</a>
-          {data.canEdit && (
-            <a className="book-reader-edit" href={`/edit-book/${data.bookId}`}>
-              Edit book
-            </a>
-          )}
+          <span className="book-reader-actions">
+            <button type="button" className="book-reader-print" onClick={printBook}>
+              Print or save PDF
+            </button>
+            {data.canEdit && (
+              <a className="book-reader-edit" href={`/edit-book/${data.bookId}`}>
+                Edit book
+              </a>
+            )}
+          </span>
         </nav>
       )}
       <main id="app">
@@ -491,7 +497,10 @@ const InterviewSpreadView = ({ spread }: { spread: InterviewSpread }) => (
               {section.rows.map((row, i) => (
                 <div key={i}>
                   <dt>{row.question}</dt>
-                  <dd>{row.answer}</dd>
+                  <dd>
+                    {row.answer}
+                    {row.note && <span className="book-interview-note">{row.note}</span>}
+                  </dd>
                 </div>
               ))}
             </dl>

@@ -422,7 +422,13 @@ export function interviewsById(interviews: server.Interview[] | null | undefined
 
 export type AgeGroup = {
   age: number;
-  answers: { person: server.Person; text: string; date: string; milestoneId: number }[];
+  answers: {
+    person: server.Person;
+    text: string;
+    note: string;
+    date: string;
+    milestoneId: number;
+  }[];
 };
 
 export function compareByAge(rows: server.CompareRow[]): AgeGroup[] {
@@ -437,6 +443,7 @@ export function compareByAge(rows: server.CompareRow[]): AgeGroup[] {
       group.answers.push({
         person: row.person,
         text: a.text,
+        note: a.note ?? "",
         date: a.date,
         milestoneId: a.milestoneId,
       });

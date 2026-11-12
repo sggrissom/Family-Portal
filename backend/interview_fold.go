@@ -73,19 +73,13 @@ func interviewNudge(tx *vbolt.Tx, person Person, interviews []Interview, today t
 			InterviewId: interview.Id,
 		}, 2}, true
 	}
-	if !interviewDue(person, interviews, today) {
+	occasion, due := interviewDue(person, interviews, today, familyInterviewCadence(tx, person.FamilyId))
+	if !due {
 		return rankedNudge{}, false
-	}
-	birthday := person.Birthday.UTC()
-	year := today.Year()
-	if today.Month() == time.January && birthday.Month() == time.December {
-		year--
-	} else if today.Month() == time.December && birthday.Month() == time.January {
-		year++
 	}
 	return rankedNudge{DashboardNudge{
 		Kind:     "interview",
-		Key:      fmt.Sprintf("interview:%d:%d", person.Id, year),
+		Key:      fmt.Sprintf("interview:%d:%d", person.Id, occasion.Year()),
 		Text:     fmt.Sprintf("🎤 Time for %s's annual interview", name),
 		PersonId: person.Id,
 	}, 4}, true

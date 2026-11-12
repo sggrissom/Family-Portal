@@ -153,6 +153,7 @@ const ViewMilestonePage = ({
         <h1>
           <MilestoneText milestone={milestone} />
         </h1>
+        {isAnswer && milestone.note && <p className="milestone-detail-context">{milestone.note}</p>}
         {!isAnswer && milestone.context && (
           <p className="milestone-detail-context">{milestone.context}</p>
         )}

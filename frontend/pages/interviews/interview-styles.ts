@@ -1302,3 +1302,32 @@ block(`
   color: var(--text);
 }
 `);
+
+block(`
+.iv-answer-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  font-weight: 400;
+}
+`);
+
+block(`
+.iv-compare .iv-answer-note {
+  display: inline;
+}
+`);
+
+block(`
+.iv-page .iv-qa input.iv-note-input {
+  margin-top: 4px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  border-style: dashed;
+  font-size: 0.85rem;
+  font-style: italic;
+  font-weight: 400;
+}
+`);
