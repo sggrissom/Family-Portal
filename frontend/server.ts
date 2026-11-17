@@ -90,6 +90,8 @@ export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrDateRequired = "Choose when this happened";
 export const ErrInvalidCadence = "Choose when interviews should be suggested";
 export const ErrAnswerNotFound = "Answer the question before adding a note";
+export const ErrInvalidActivityDate = "Dates must be in YYYY-MM-DD format";
+export const ErrPhotoNotFoundOrDenied = "Photo not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -899,6 +901,34 @@ export interface SaveAppearanceRequest {
     matchup: MatchupInput | null
     results: ResultInput[]
     photoIds: number[]
+}
+
+export interface GetActivitySyncSupportRequest {
+}
+
+export interface GetActivitySyncSupportResponse {
+    mutationVersion: number
+}
+
+export interface SyncSaveAppearanceRequest {
+    mutationId: string
+    expectedRevision: number | null
+    appearance: SaveAppearanceRequest
+}
+
+export interface AppearanceMutationResponse {
+    status: string
+    appearanceId: number
+    revision: number
+    appearance: AppearanceView | null
+    code: string
+    message: string
+}
+
+export interface SyncDeleteAppearanceRequest {
+    mutationId: string
+    id: number
+    expectedRevision: number | null
 }
 
 export interface GetSeasonOverviewRequest {
@@ -3031,6 +3061,7 @@ export interface Appearance {
     outcome: string
     scoreFor: number | null
     scoreAgainst: number | null
+    revision: number
 }
 
 export interface Result {
@@ -3552,6 +3583,18 @@ export async function SetAppearanceResults(data: SetAppearanceResultsRequest): P
 
 export async function SaveAppearance(data: SaveAppearanceRequest): Promise<rpc.Response<AppearanceResponse>> {
     return await rpc.call<AppearanceResponse>('SaveAppearance', JSON.stringify(data));
+}
+
+export async function GetActivitySyncSupport(data: GetActivitySyncSupportRequest): Promise<rpc.Response<GetActivitySyncSupportResponse>> {
+    return await rpc.call<GetActivitySyncSupportResponse>('GetActivitySyncSupport', JSON.stringify(data));
+}
+
+export async function SyncSaveAppearance(data: SyncSaveAppearanceRequest): Promise<rpc.Response<AppearanceMutationResponse>> {
+    return await rpc.call<AppearanceMutationResponse>('SyncSaveAppearance', JSON.stringify(data));
+}
+
+export async function SyncDeleteAppearance(data: SyncDeleteAppearanceRequest): Promise<rpc.Response<AppearanceMutationResponse>> {
+    return await rpc.call<AppearanceMutationResponse>('SyncDeleteAppearance', JSON.stringify(data));
 }
 
 export async function GetSeasonOverview(data: GetSeasonOverviewRequest): Promise<rpc.Response<GetSeasonOverviewResponse>> {

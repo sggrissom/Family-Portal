@@ -142,6 +142,7 @@ func deleteAccountTx(tx *vbolt.Tx, user User) (orphanedPhotos []Image, destroyed
 	}
 
 	deleteUserChatMessagesTx(tx, user.Id)
+	deleteUserAppearanceMutationsTx(tx, user.Id)
 	deleteUserPushDeviceTokensTx(tx, user.Id)
 	deleteNotificationPreferencesTx(tx, user.Id)
 	DeleteUserRefreshTokens(tx, user.Id)
