@@ -54,6 +54,8 @@ func trimField(value string, max int) string {
 	return value
 }
 
+var ErrInvalidActivityDate = errors.New("Dates must be in YYYY-MM-DD format")
+
 func parseActivityDate(value *string) (time.Time, error) {
 	if value == nil {
 		return time.Time{}, nil
@@ -64,7 +66,7 @@ func parseActivityDate(value *string) (time.Time, error) {
 	}
 	parsed, err := time.Parse("2006-01-02", trimmed)
 	if err != nil {
-		return time.Time{}, errors.New("Dates must be in YYYY-MM-DD format")
+		return time.Time{}, ErrInvalidActivityDate
 	}
 	return parsed, nil
 }

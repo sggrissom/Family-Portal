@@ -280,6 +280,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterInterviewImportMethods(app)
 	backend.RegisterActivityMethods(app)
 	backend.RegisterActivityResultMethods(app)
+	backend.RegisterActivityMutationMethods(app)
 	backend.RegisterActivityViewMethods(app)
 	backend.RegisterActivityPhotoMethods(app)
 	backend.RegisterTagMethods(app)

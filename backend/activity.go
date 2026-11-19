@@ -81,6 +81,25 @@ type Appearance struct {
 	Outcome      string `json:"outcome"`
 	ScoreFor     *int   `json:"scoreFor,omitempty"`
 	ScoreAgainst *int   `json:"scoreAgainst,omitempty"`
+
+	// Revision counts every change to the performance as a whole — the record,
+	// its results, and its photo associations — so an offline edit can say which
+	// version it was made against (SyncSaveAppearance). writeAppearanceTx is the
+	// only place it advances; a write that touches only results or photos goes
+	// through touchAppearanceTx. Records from before revisions read as 0.
+	Revision int `json:"revision"`
+}
+
+// AppearanceTombstone remembers a deleted performance, so a sync request for it
+// can be told "already deleted" rather than "not found", and so a deletion has a
+// revision of its own.
+type AppearanceTombstone struct {
+	Id        int
+	FamilyId  int
+	EventId   int
+	EntryId   int
+	Revision  int
+	DeletedAt time.Time
 }
 
 const (
@@ -229,7 +248,7 @@ func PackEntryMember(self *EntryMember, buf *vpack.Buffer) {
 }
 
 func PackAppearance(self *Appearance, buf *vpack.Buffer) {
-	version := vpack.Version(2, buf)
+	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.EventId, buf)
 	vpack.Int(&self.EntryId, buf)
@@ -244,6 +263,19 @@ func PackAppearance(self *Appearance, buf *vpack.Buffer) {
 		packOptionalInt(&self.ScoreFor, buf)
 		packOptionalInt(&self.ScoreAgainst, buf)
 	}
+	if version >= 3 {
+		vpack.Int(&self.Revision, buf)
+	}
+}
+
+func PackAppearanceTombstone(self *AppearanceTombstone, buf *vpack.Buffer) {
+	vpack.Version(1, buf)
+	vpack.Int(&self.Id, buf)
+	vpack.Int(&self.FamilyId, buf)
+	vpack.Int(&self.EventId, buf)
+	vpack.Int(&self.EntryId, buf)
+	vpack.Int(&self.Revision, buf)
+	vpack.Time(&self.DeletedAt, buf)
 }
 
 func PackResult(self *Result, buf *vpack.Buffer) {
@@ -290,6 +322,9 @@ var AppearanceBkt = vbolt.Bucket(&cfg.Info, "appearances", vpack.FInt, PackAppea
 var ResultBkt = vbolt.Bucket(&cfg.Info, "activity_results", vpack.FInt, PackResult)
 var AppearancePhotoBkt = vbolt.Bucket(&cfg.Info, "appearance_photos", vpack.FInt, PackAppearancePhoto)
 var EventPhotoBkt = vbolt.Bucket(&cfg.Info, "activity_event_photos", vpack.FInt, PackEventPhoto)
+var AppearanceTombstoneBkt = vbolt.Bucket(&cfg.Info, "appearance_tombstones", vpack.FInt, PackAppearanceTombstone)
+
+var AppearanceTombstoneByFamilyIndex = vbolt.Index(&cfg.Info, "appearance_tombstone_by_family", vpack.FInt, vpack.FInt)
 
 var ActivityByFamilyIndex = vbolt.Index(&cfg.Info, "activity_by_family", vpack.FInt, vpack.FInt)
 
@@ -485,7 +520,18 @@ func writeEntryMemberTx(tx *vbolt.Tx, member *EntryMember) {
 	vbolt.SetTargetSingleTerm(tx, EntryMemberByFamilyIndex, member.Id, member.FamilyId)
 }
 
+// writeAppearanceTx advances the revision: every caller is changing the
+// performance, and a caller that only changed its results or photos still
+// writes it (touchAppearanceTx) so the change is counted.
+//
+// The revision follows the stored record rather than the caller's copy, which
+// may have been read before another write landed: two saves never share one.
 func writeAppearanceTx(tx *vbolt.Tx, appearance *Appearance) {
+	var stored Appearance
+	if vbolt.Read(tx, AppearanceBkt, appearance.Id, &stored) && stored.Revision > appearance.Revision {
+		appearance.Revision = stored.Revision
+	}
+	appearance.Revision++
 	vbolt.Write(tx, AppearanceBkt, appearance.Id, appearance)
 	vbolt.SetTargetSingleTerm(tx, AppearanceByEventIndex, appearance.Id, appearance.EventId)
 	vbolt.SetTargetSingleTerm(tx, AppearanceByEntryIndex, appearance.Id, appearance.EntryId)
@@ -575,7 +621,40 @@ func deleteEventPhotoRowTx(tx *vbolt.Tx, id int) {
 	vbolt.SetTargetSingleTerm(tx, EventPhotoByFamilyIndex, id, -1)
 }
 
+// touchAppearanceTx counts a change made to a performance's results or photos
+// without rewriting the record itself. Each id is written once however many of
+// its rows changed.
+func touchAppearanceTx(tx *vbolt.Tx, appearanceIds ...int) {
+	seen := make(map[int]bool, len(appearanceIds))
+	for _, id := range appearanceIds {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if appearance := GetAppearanceById(tx, id); appearance.Id != 0 {
+			writeAppearanceTx(tx, &appearance)
+		}
+	}
+}
+
+func GetAppearanceTombstone(tx *vbolt.Tx, appearanceId int) (tombstone AppearanceTombstone) {
+	vbolt.Read(tx, AppearanceTombstoneBkt, appearanceId, &tombstone)
+	return
+}
+
 func deleteAppearanceTx(tx *vbolt.Tx, appearanceId int) {
+	if appearance := GetAppearanceById(tx, appearanceId); appearance.Id != 0 {
+		tombstone := AppearanceTombstone{
+			Id:        appearance.Id,
+			FamilyId:  appearance.FamilyId,
+			EventId:   appearance.EventId,
+			EntryId:   appearance.EntryId,
+			Revision:  appearance.Revision + 1,
+			DeletedAt: time.Now(),
+		}
+		vbolt.Write(tx, AppearanceTombstoneBkt, tombstone.Id, &tombstone)
+		vbolt.SetTargetSingleTerm(tx, AppearanceTombstoneByFamilyIndex, tombstone.Id, tombstone.FamilyId)
+	}
 	for _, result := range GetAppearanceResults(tx, appearanceId) {
 		deleteResultRowTx(tx, result.Id)
 	}
@@ -626,10 +705,13 @@ func removePersonFromActivitiesTx(tx *vbolt.Tx, personId int) {
 	for _, member := range GetPersonEntryMembers(tx, personId) {
 		deleteEntryMemberRowTx(tx, member.Id)
 	}
+	var changed []int
 	for _, result := range GetPersonResults(tx, personId) {
 		result.PersonId = nil
 		writeResultTx(tx, &result)
+		changed = append(changed, result.AppearanceId)
 	}
+	touchAppearanceTx(tx, changed...)
 }
 
 func movePersonActivitiesTx(tx *vbolt.Tx, fromPersonId int, toPersonId int) (entries int, results int) {
@@ -649,11 +731,14 @@ func movePersonActivitiesTx(tx *vbolt.Tx, fromPersonId int, toPersonId int) (ent
 		writeEntryMemberTx(tx, &member)
 		entries++
 	}
+	var changed []int
 	for _, result := range GetPersonResults(tx, fromPersonId) {
 		result.PersonId = &toPersonId
 		writeResultTx(tx, &result)
+		changed = append(changed, result.AppearanceId)
 		results++
 	}
+	touchAppearanceTx(tx, changed...)
 	return
 }
 
@@ -670,6 +755,14 @@ func deleteFamilyActivitiesTx(tx *vbolt.Tx, familyId int) {
 	for _, appearance := range GetFamilyAppearances(tx, familyId) {
 		deleteAppearanceRowTx(tx, appearance.Id)
 	}
+	// The family is going, so nothing is left to tell "already deleted" to.
+	var tombstoneIds []int
+	vbolt.ReadTermTargets(tx, AppearanceTombstoneByFamilyIndex, familyId, &tombstoneIds, vbolt.Window{})
+	for _, id := range tombstoneIds {
+		vbolt.Delete(tx, AppearanceTombstoneBkt, id)
+		vbolt.SetTargetSingleTerm(tx, AppearanceTombstoneByFamilyIndex, id, -1)
+	}
+	deleteFamilyAppearanceMutationsTx(tx, familyId)
 	for _, member := range GetFamilyEntryMembers(tx, familyId) {
 		deleteEntryMemberRowTx(tx, member.Id)
 	}
