@@ -97,6 +97,32 @@ block(`
 `);
 
 block(`
+.logs-latency-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+`);
+
+block(`
+.logs-latency-table :is(th, td) {
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+`);
+
+block(`
+.logs-latency-table th:first-child {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+`);
+
+block(`
 .logs-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

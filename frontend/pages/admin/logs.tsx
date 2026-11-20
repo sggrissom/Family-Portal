@@ -333,86 +333,80 @@ function getCategoryBadgeClass(category: string): string {
 }
 
 function PerformanceStatsPanel({ stats }: { stats: server.PerformanceStats | undefined }) {
-  if (!stats || stats.totalRequests === 0) {
-    return preact.h("div", { className: "performance-panel" }, [
-      preact.h("h3", {}, "Performance Statistics"),
-      preact.h("p", { className: "no-data" }, "No performance data available"),
-    ]);
-  }
+  const latency = stats?.requestLatency;
+  const groups = latency
+    ? [
+        { label: "App/API requests", timing: latency.app },
+        { label: "Uploads and imports", timing: latency.uploads },
+        { label: "Downloads and exports", timing: latency.downloads },
+        { label: "Cache checks (304)", timing: latency.cacheChecks },
+      ]
+    : [];
+  const slowest = latency?.slowestAppEndpoints.slice(0, 5) ?? [];
 
-  return preact.h("div", { className: "performance-panel" }, [
-    preact.h("h3", {}, "Performance Statistics"),
-
-    preact.h("div", { className: "perf-overview" }, [
-      preact.h("div", { className: "perf-stat" }, [
-        preact.h("span", { className: "perf-label" }, "Total Requests:"),
-        preact.h("span", { className: "perf-value" }, stats.totalRequests.toLocaleString()),
-      ]),
-      preact.h("div", { className: "perf-stat" }, [
-        preact.h("span", { className: "perf-label" }, "Average Response:"),
-        preact.h("span", { className: "perf-value" }, formatDuration(stats.averageResponse)),
-      ]),
-      preact.h("div", { className: "perf-stat" }, [
-        preact.h("span", { className: "perf-label" }, "Median Response:"),
-        preact.h("span", { className: "perf-value" }, formatDuration(stats.medianResponse)),
-      ]),
-    ]),
-
-    preact.h("div", { className: "perf-percentiles" }, [
-      preact.h("h4", {}, "Response Time Percentiles"),
-      preact.h("div", { className: "percentile-grid" }, [
-        preact.h("div", { className: "percentile-item" }, [
-          preact.h("span", { className: "percentile-label" }, "P90:"),
-          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p90Response)),
-        ]),
-        preact.h("div", { className: "percentile-item" }, [
-          preact.h("span", { className: "percentile-label" }, "P95:"),
-          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p95Response)),
-        ]),
-        preact.h("div", { className: "percentile-item" }, [
-          preact.h("span", { className: "percentile-label" }, "P99:"),
-          preact.h("span", { className: "percentile-value" }, formatDuration(stats.p99Response)),
-        ]),
-      ]),
-    ]),
-
-    stats.slowestEndpoints.length > 0
-      ? preact.h("div", { className: "slowest-endpoints" }, [
-          preact.h("h4", {}, "Slowest Endpoints"),
-          preact.h("div", { className: "endpoints-table" }, [
-            preact.h("div", { className: "endpoints-header" }, [
-              preact.h("div", { className: "col-endpoint" }, "Endpoint"),
-              preact.h("div", { className: "col-requests" }, "Requests"),
-              preact.h("div", { className: "col-avg" }, "Avg Response"),
-              preact.h("div", { className: "col-max" }, "Max Response"),
-              preact.h("div", { className: "col-error" }, "Error Rate"),
-            ]),
-            ...stats.slowestEndpoints
-              .slice(0, 5)
-              .map((endpoint, index) =>
-                preact.h("div", { key: index, className: "endpoints-row" }, [
-                  preact.h("div", { className: "col-endpoint" }, [
-                    preact.h(
-                      "span",
-                      { className: `method-badge method-${endpoint.method.toLowerCase()}` },
-                      endpoint.method
-                    ),
-                    preact.h("span", { className: "endpoint-path" }, endpoint.path),
-                  ]),
-                  preact.h("div", { className: "col-requests" }, endpoint.count.toLocaleString()),
-                  preact.h(
-                    "div",
-                    { className: "col-avg" },
-                    formatDuration(endpoint.averageResponse)
-                  ),
-                  preact.h("div", { className: "col-max" }, formatDuration(endpoint.maxResponse)),
-                  preact.h("div", { className: "col-error" }, `${endpoint.errorRate.toFixed(1)}%`),
-                ])
-              ),
-          ]),
-        ])
-      : null,
-  ]);
+  return (
+    <section className="logs-controls">
+      <h3>Server Request Latency</h3>
+      {groups.some(({ timing }) => timing.count > 0) ? (
+        <>
+          <p>
+            Server timings across all retained logs. App/API timings cover successful actions such
+            as loading and saving records. P95 is the time within which about 95% of requests in
+            each row finished.
+          </p>
+          <table className="logs-latency-table" aria-label="Server latency by request type">
+            <thead>
+              <tr>
+                <th scope="col">Request type</th>
+                <th scope="col">Requests</th>
+                <th scope="col">Median</th>
+                <th scope="col">P95</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(({ label, timing }) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td>{timing.count.toLocaleString()}</td>
+                  <td>{formatDuration(timing.medianResponse)}</td>
+                  <td>{formatDuration(timing.p95Response)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {slowest.length > 0 && (
+            <>
+              <h4>Slowest App/API Endpoints by Average</h4>
+              <table className="logs-latency-table" aria-label="Slowest app and API endpoints">
+                <thead>
+                  <tr>
+                    <th scope="col">Endpoint</th>
+                    <th scope="col">Requests</th>
+                    <th scope="col">Average</th>
+                    <th scope="col">Max</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slowest.map(endpoint => (
+                    <tr key={endpoint.method + " " + endpoint.path}>
+                      <th scope="row">
+                        {endpoint.method} {endpoint.path}
+                      </th>
+                      <td>{endpoint.count.toLocaleString()}</td>
+                      <td>{formatDuration(endpoint.averageResponse)}</td>
+                      <td>{formatDuration(endpoint.maxResponse)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </>
+      ) : (
+        <p className="no-data">No timed requests in these groups</p>
+      )}
+    </section>
+  );
 }
 
 function logEntryRow(entry: server.PublicLogEntry, key: string | number, extraClass?: string) {

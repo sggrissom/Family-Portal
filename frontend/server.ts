@@ -3162,6 +3162,15 @@ export interface PerformanceStats {
     p99Response: number
     slowestEndpoints: EndpointStats[]
     endpointStats: Record<string, EndpointStats>
+    requestLatency: RequestLatencyStats
+}
+
+export interface RequestLatencyStats {
+    app: ResponseTimingStats
+    uploads: ResponseTimingStats
+    downloads: ResponseTimingStats
+    cacheChecks: ResponseTimingStats
+    slowestAppEndpoints: EndpointStats[]
 }
 
 export interface PushAttempt {
@@ -3174,6 +3183,12 @@ export interface PushAttempt {
     statusCode: number
     reason: string
     apnsId: string
+}
+
+export interface ResponseTimingStats {
+    count: number
+    medianResponse: number
+    p95Response: number
 }
 
 export interface FailedPhoto {
