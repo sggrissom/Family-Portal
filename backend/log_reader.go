@@ -164,7 +164,7 @@ func parseLogTimestamp(line string) (time.Time, string) {
 	matches := timestampRegex.FindStringSubmatch(line)
 
 	if len(matches) == 3 {
-		if timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1]); err == nil {
+		if timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", matches[1], time.Local); err == nil {
 			return timestamp, matches[2]
 		}
 	}
@@ -241,7 +241,7 @@ func parseTimingLogLine(line string) (*logEntry, bool) {
 		return nil, false
 	}
 
-	timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1])
+	timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", matches[1], time.Local)
 	if err != nil {
 		return nil, false
 	}
@@ -307,9 +307,11 @@ type logFilter struct {
 	search      string
 	since       time.Time
 	minDuration *int
+	minStatus   int
+	maxStatus   int
 }
 
-func newLogFilter(req GetLogContentRequest) logFilter {
+func newLogFilter(req GetLogContentRequest) (logFilter, error) {
 	filter := logFilter{
 		level:       req.Level,
 		category:    req.Category,
@@ -319,7 +321,23 @@ func newLogFilter(req GetLogContentRequest) logFilter {
 	if req.SinceHours > 0 {
 		filter.since = time.Now().Add(-time.Duration(req.SinceHours) * time.Hour)
 	}
-	return filter
+
+	switch status := strings.ToLower(strings.TrimSpace(req.HTTPStatus)); status {
+	case "":
+	case "4xx/5xx":
+		filter.minStatus, filter.maxStatus = 400, 599
+	case "4xx":
+		filter.minStatus, filter.maxStatus = 400, 499
+	case "5xx":
+		filter.minStatus, filter.maxStatus = 500, 599
+	default:
+		code, err := strconv.Atoi(status)
+		if err != nil || len(status) != 3 || code < 100 || code > 599 {
+			return logFilter{}, NewAppError(ErrCodeBadRequest, "Invalid HTTP status filter")
+		}
+		filter.minStatus, filter.maxStatus = code, code
+	}
+	return filter, nil
 }
 
 func (f logFilter) keep(entry logEntry) bool {
@@ -327,6 +345,9 @@ func (f logFilter) keep(entry logEntry) bool {
 		return false
 	}
 	if f.category != "" && string(entry.Category) != f.category {
+		return false
+	}
+	if f.minStatus != 0 && (entry.HTTPStatus == nil || *entry.HTTPStatus < f.minStatus || *entry.HTTPStatus > f.maxStatus) {
 		return false
 	}
 	if !f.since.IsZero() && entry.Timestamp.Before(f.since) {

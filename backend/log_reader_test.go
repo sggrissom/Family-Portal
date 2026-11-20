@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -484,4 +485,57 @@ func TestGetLogContentSinceHours(t *testing.T) {
 			t.Errorf("kept %q", resp.Entries[0].Message)
 		}
 	})
+}
+
+func TestGetLogContentFiltersHTTPStatus(t *testing.T) {
+	now := time.Now()
+	old := now.Add(-25 * time.Hour).Format("2006/01/02 15:04:05")
+	recent := now.Add(-23 * time.Hour).Format("2006/01/02 15:04:05")
+	newer := now.Add(-time.Hour).Format("2006/01/02 15:04:05")
+	withLogDir(t, map[string]string{
+		"statustest-rotated.log": old + " 502 GET /statustest/old ⎯⎯⎯ 9000µs\n" +
+			recent + " 400 GET /statustest/request ⎯⎯⎯ 9000µs\n",
+		"statustest.log": newer + " 404 GET /statustest/missing ⎯⎯⎯ 9000µs\n" +
+			newer + " 500 POST /statustest/request ⎯⎯⎯ 9000µs\n" +
+			newer + " 200 GET /statustest/500 ⎯⎯⎯ 9000µs\n" +
+			newer + " Statustest worker failed with error 500\n",
+	})
+	token := adminContext(t, logTestDB(t, "test_log_status.db"))
+
+	for _, tc := range []struct {
+		name     string
+		req      GetLogContentRequest
+		statuses []int
+		total    int
+		more     bool
+	}{
+		{"recent failures across files", GetLogContentRequest{HTTPStatus: "4xx/5xx", SinceHours: 24}, []int{404, 500, 400}, 3, false},
+		{"client errors", GetLogContentRequest{HTTPStatus: "4xx", Limit: 1}, []int{404}, 2, true},
+		{"next page", GetLogContentRequest{HTTPStatus: "4xx", Limit: 1, Offset: 1}, []int{400}, 2, false},
+		{"server errors", GetLogContentRequest{HTTPStatus: "5xx", Level: "INFO"}, []int{500, 502}, 2, false},
+		{"exact 400", GetLogContentRequest{HTTPStatus: "400"}, []int{400}, 1, false},
+		{"exact 500", GetLogContentRequest{HTTPStatus: "500"}, []int{500}, 1, false},
+		{"selected file", GetLogContentRequest{HTTPStatus: "4xx", Filename: "statustest-rotated.log"}, []int{400}, 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.req.Search = "statustest"
+			vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
+				resp, err := GetLogContent(&vbeam.Context{Tx: tx, Token: token}, tc.req)
+				if err != nil {
+					t.Fatalf("GetLogContent() error = %v", err)
+				}
+				var statuses []int
+				for _, entry := range resp.Entries {
+					if entry.HTTPStatus == nil {
+						t.Fatalf("matched entry without an HTTP status: %q", entry.Message)
+					}
+					statuses = append(statuses, *entry.HTTPStatus)
+				}
+				if !slices.Equal(statuses, tc.statuses) || resp.TotalLines != tc.total || resp.HasMore != tc.more {
+					t.Errorf("statuses, total, has more = %v, %d, %t; want %v, %d, %t",
+						statuses, resp.TotalLines, resp.HasMore, tc.statuses, tc.total, tc.more)
+				}
+			})
+		})
+	}
 }

@@ -1694,6 +1694,7 @@ export interface GetLogContentRequest {
     filename: string
     level: string
     category: string
+    httpStatus: string
     search: string
     sinceHours: number
     limit: number
