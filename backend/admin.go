@@ -114,6 +114,7 @@ type GetLogContentRequest struct {
 	Filename    string `json:"filename"`
 	Level       string `json:"level,omitempty"`
 	Category    string `json:"category,omitempty"`
+	HTTPStatus  string `json:"httpStatus,omitempty"`
 	Search      string `json:"search,omitempty"`
 	SinceHours  int    `json:"sinceHours,omitempty"`
 	Limit       int    `json:"limit,omitempty"`
@@ -220,6 +221,11 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 		return
 	}
 
+	filter, err := newLogFilter(req)
+	if err != nil {
+		return resp, err
+	}
+
 	paths, names, pathErr := resolveLogTargets(req.Filename)
 	if pathErr != nil {
 		err = pathErr
@@ -229,8 +235,6 @@ func GetLogContent(ctx *vbeam.Context, req GetLogContentRequest) (resp GetLogCon
 	if req.Limit <= 0 {
 		req.Limit = 1000
 	}
-
-	filter := newLogFilter(req)
 
 	var matched []logEntry
 	for _, path := range paths {

@@ -17,6 +17,7 @@ interface LogsPageData {
   files: server.LogFileInfo[];
   stats: server.LogStats | null;
   initialEntries: server.PublicLogEntry[];
+  initialTotalLines: number;
   initialFile: string;
   error: string;
 }
@@ -27,6 +28,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       files: [],
       stats: null,
       initialEntries: [],
+      initialTotalLines: 0,
       initialFile: "",
       error: "",
     });
@@ -51,7 +53,9 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
     const files = filesResult && !fileErr ? filesResult.files || [] : [];
     const stats = statsResult && !statsErr ? statsResult.stats || null : null;
     let initialEntries: server.PublicLogEntry[] = [];
+    let initialTotalLines = 0;
     let initialFile = "";
+    let error = fileErr || "";
 
     if (files.length > 0) {
       initialFile = files[0].name;
@@ -61,6 +65,7 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
           filename: initialFile,
           level: "",
           category: "",
+          httpStatus: "",
           search: "",
           sinceHours: 0,
           limit: entriesPerPage,
@@ -71,10 +76,13 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
         });
         if (!contentErr && contentResult) {
           initialEntries = contentResult.entries || [];
+          initialTotalLines = contentResult.totalLines;
         } else {
+          error = contentErr || "Failed to load log content";
           logWarn("admin", "Failed to load initial log content", contentErr);
         }
       } catch (contentErr) {
+        error = String(contentErr);
         logWarn("admin", "Failed to load initial log content", contentErr);
       }
     }
@@ -83,14 +91,16 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       files,
       stats,
       initialEntries,
+      initialTotalLines,
       initialFile,
-      error: "",
+      error,
     });
   } catch (err) {
     return rpc.ok({
       files: [],
       stats: null,
       initialEntries: [],
+      initialTotalLines: 0,
       initialFile: "",
       error: String(err),
     });
@@ -98,15 +108,17 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
 }
 
 interface LogsPageState {
+  initialized: boolean;
   currentFile: string;
   logEntries: server.PublicLogEntry[];
   loading: boolean;
+  loadId: number;
   error: string;
   levelFilter: string;
   categoryFilter: string;
+  httpStatusFilter: string;
   currentPage: number;
   totalLines: number;
-  hasMore: boolean;
   minDurationFilter: string;
   sortBy: string;
   sortDesc: boolean;
@@ -121,15 +133,17 @@ interface LogsPageState {
 
 const logsPageHook = vlens.declareHook(
   (): LogsPageState => ({
+    initialized: false,
     currentFile: "",
     logEntries: [],
     loading: false,
+    loadId: 0,
     error: "",
     levelFilter: "",
     categoryFilter: "",
+    httpStatusFilter: "",
     currentPage: 1,
     totalLines: 0,
-    hasMore: false,
     minDurationFilter: "",
     sortBy: "time",
     sortDesc: true,
@@ -145,8 +159,10 @@ const logsPageHook = vlens.declareHook(
 
 async function loadLogContent() {
   const state = logsPageHook();
+  const loadId = ++state.loadId;
 
   state.loading = true;
+  state.error = "";
   vlens.scheduleRedraw();
 
   try {
@@ -158,6 +174,7 @@ async function loadLogContent() {
       filename: state.searchText.trim() ? "" : state.currentFile,
       level: state.levelFilter || "",
       category: state.categoryFilter || "",
+      httpStatus: state.httpStatusFilter,
       search: state.searchText.trim(),
       sinceHours: state.sinceHours,
       limit: entriesPerPage,
@@ -167,22 +184,26 @@ async function loadLogContent() {
       sortDesc: state.sortDesc,
     });
 
+    if (loadId !== state.loadId) return;
+
     if (!err && result) {
       state.logEntries = result.entries || [];
       state.totalLines = result.totalLines || 0;
-      state.hasMore = result.hasMore || false;
       state.filesSearched = result.filesSearched || [];
-      state.error = "";
     } else {
       state.logEntries = [];
       state.error = err || "Failed to load log content";
     }
   } catch (err) {
-    state.logEntries = [];
-    state.error = String(err);
+    if (loadId === state.loadId) {
+      state.logEntries = [];
+      state.error = String(err);
+    }
   } finally {
-    state.loading = false;
-    vlens.scheduleRedraw();
+    if (loadId === state.loadId) {
+      state.loading = false;
+      vlens.scheduleRedraw();
+    }
   }
 }
 
@@ -223,10 +244,11 @@ function clearReference() {
   vlens.scheduleRedraw();
 }
 
-function showRecentErrors() {
+function showRecentErrors(httpStatus = "") {
   const state = logsPageHook();
-  state.levelFilter = "ERROR";
+  state.levelFilter = httpStatus ? "" : "ERROR";
   state.categoryFilter = "";
+  state.httpStatusFilter = httpStatus;
   state.minDurationFilter = "";
   state.searchText = "";
   state.sinceHours = 24;
@@ -239,7 +261,6 @@ function showRecentErrors() {
 function handleFileChange(filename: string) {
   const state = logsPageHook();
   state.currentFile = filename;
-  state.logEntries = [];
   handleFilterChange();
 }
 
@@ -247,9 +268,7 @@ function handleFilterChange() {
   const state = logsPageHook();
   state.currentPage = 1;
   state.totalLines = 0;
-  state.hasMore = false;
   loadLogContent();
-  vlens.scheduleRedraw();
 }
 
 function handlePageChange(newPage: number) {
@@ -550,16 +569,16 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
       }
     }
 
-    if (state.currentFile === "" && data.initialFile) {
+    if (!state.initialized) {
+      state.initialized = true;
       state.currentFile = data.initialFile;
       state.logEntries = data.initialEntries;
-      if (data.initialEntries.length > 0) {
-        setTimeout(loadLogContent, 0);
-      }
+      state.totalLines = data.initialTotalLines;
+      state.error = data.error;
     }
 
     const fileSelectOptions = [
-      preact.h("option", { value: "" }, "Select a log file..."),
+      preact.h("option", { value: "" }, "All log files"),
       ...data.files.map(file =>
         preact.h(
           "option",
@@ -573,6 +592,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
     ];
 
     const logRows = state.logEntries.map((entry, index) => logEntryRow(entry, index));
+    const totalPages = Math.ceil(state.totalLines / entriesPerPage);
 
     return preact.h("div", {}, [
       preact.h(Header, { isHome: false }),
@@ -587,14 +607,14 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             ),
           ]),
 
-          state.error || data.error
+          state.error
             ? preact.h("div", { className: "logs-error-message" }, [
                 preact.h(
                   "span",
                   { className: "error-icon" },
                   preact.h(Icon, { symbol: TriangleAlert })
                 ),
-                preact.h("span", {}, state.error || data.error),
+                preact.h("span", {}, state.error),
               ])
             : null,
 
@@ -642,6 +662,18 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
             : null,
 
           preact.h("div", { className: "logs-controls" }, [
+            preact.h("div", { className: "logs-presets" }, [
+              preact.h(
+                "button",
+                { className: "pagination-btn", onClick: () => showRecentErrors("4xx/5xx") },
+                "HTTP failures in the last 24h"
+              ),
+              preact.h(
+                "button",
+                { className: "pagination-btn", onClick: () => showRecentErrors() },
+                "Errors in the last 24h"
+              ),
+            ]),
             preact.h("div", { className: "logs-filters" }, [
               preact.h("div", { className: "logs-filter-group" }, [
                 preact.h("label", { htmlFor: "file-select" }, "Log File:"),
@@ -649,10 +681,33 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
                   "select",
                   {
                     id: "file-select",
-                    value: state.currentFile,
+                    value: state.searchText.trim() ? "" : state.currentFile,
+                    disabled: !!state.searchText.trim(),
                     onChange: (e: any) => handleFileChange(e.currentTarget.value),
                   },
                   fileSelectOptions
+                ),
+              ]),
+              preact.h("div", { className: "logs-filter-group" }, [
+                preact.h("label", { htmlFor: "http-status-filter" }, "HTTP status"),
+                preact.h(
+                  "select",
+                  {
+                    id: "http-status-filter",
+                    value: state.httpStatusFilter,
+                    onChange: (e: preact.JSX.TargetedEvent<HTMLSelectElement>) => {
+                      state.httpStatusFilter = e.currentTarget.value;
+                      handleFilterChange();
+                    },
+                  },
+                  [
+                    preact.h("option", { value: "" }, "Any status"),
+                    preact.h("option", { value: "4xx/5xx" }, "4xx and 5xx"),
+                    preact.h("option", { value: "4xx" }, "4xx · Client errors"),
+                    preact.h("option", { value: "5xx" }, "5xx · Server errors"),
+                    preact.h("option", { value: "400" }, "400 · Bad Request"),
+                    preact.h("option", { value: "500" }, "500 · Internal Server Error"),
+                  ]
                 ),
               ]),
               preact.h("div", { className: "logs-filter-group logs-filter-group-search" }, [
@@ -787,61 +842,45 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               ]),
             ]),
 
-            preact.h("div", { className: "logs-presets" }, [
-              preact.h(
-                "button",
-                { className: "pagination-btn", onClick: showRecentErrors },
-                "Errors in the last 24h"
-              ),
-              state.searchText.trim() && state.filesSearched.length > 0
-                ? preact.h(
+            !state.loading &&
+            !state.error &&
+            (!state.currentFile || state.searchText.trim()) &&
+            state.filesSearched.length > 0
+              ? preact.h(
+                  "p",
+                  { className: "pagination-info" },
+                  `Searched ${state.filesSearched.length} file${state.filesSearched.length === 1 ? "" : "s"}`
+                )
+              : null,
+
+            !state.loading && !state.error && totalPages > 1
+              ? preact.h("div", { className: "logs-pagination" }, [
+                  preact.h(
                     "span",
                     { className: "pagination-info" },
-                    `Searched ${state.filesSearched.length} file${state.filesSearched.length === 1 ? "" : "s"}`
-                  )
-                : null,
-            ]),
-
-            state.currentFile || state.searchText.trim()
-              ? (() => {
-                  const totalPages =
-                    state.totalLines > 0 ? Math.ceil(state.totalLines / entriesPerPage) : 0;
-                  const showPagination = totalPages > 1 || state.totalLines > entriesPerPage;
-
-                  return showPagination
-                    ? preact.h("div", { className: "logs-pagination" }, [
-                        preact.h(
-                          "span",
-                          { className: "pagination-info" },
-                          totalPages > 0
-                            ? `Page ${state.currentPage} of ${totalPages} (${state.totalLines} total entries)`
-                            : `${state.totalLines} total entries`
-                        ),
-                        totalPages > 1
-                          ? preact.h("div", { className: "pagination-controls" }, [
-                              preact.h(
-                                "button",
-                                {
-                                  onClick: () => handlePageChange(state.currentPage - 1),
-                                  disabled: state.currentPage <= 1,
-                                  className: "pagination-btn",
-                                },
-                                "Previous"
-                              ),
-                              preact.h(
-                                "button",
-                                {
-                                  onClick: () => handlePageChange(state.currentPage + 1),
-                                  disabled: state.currentPage >= totalPages,
-                                  className: "pagination-btn",
-                                },
-                                "Next"
-                              ),
-                            ])
-                          : null,
-                      ])
-                    : null;
-                })()
+                    `Page ${state.currentPage} of ${totalPages} (${state.totalLines} total entries)`
+                  ),
+                  preact.h("div", { className: "pagination-controls" }, [
+                    preact.h(
+                      "button",
+                      {
+                        onClick: () => handlePageChange(state.currentPage - 1),
+                        disabled: state.currentPage <= 1,
+                        className: "pagination-btn",
+                      },
+                      "Previous"
+                    ),
+                    preact.h(
+                      "button",
+                      {
+                        onClick: () => handlePageChange(state.currentPage + 1),
+                        disabled: state.currentPage >= totalPages,
+                        className: "pagination-btn",
+                      },
+                      "Next"
+                    ),
+                  ]),
+                ])
               : null,
           ]),
 
@@ -856,7 +895,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               ])
             : null,
 
-          state.logEntries.length > 0
+          !state.loading && state.logEntries.length > 0
             ? preact.h(
                 "div",
                 { className: "logs-content" },
@@ -864,7 +903,7 @@ export function view(route: string, prefix: string, data: LogsPageData): preact.
               )
             : null,
 
-          state.currentFile && state.logEntries.length === 0 && !state.loading
+          state.logEntries.length === 0 && !state.loading && !state.error
             ? preact.h(
                 "div",
                 { className: "empty-logs" },
