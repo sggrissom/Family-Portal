@@ -185,6 +185,21 @@ type PerformanceStats struct {
 	P99Response      int                      `json:"p99Response"`
 	SlowestEndpoints []EndpointStats          `json:"slowestEndpoints"`
 	EndpointStats    map[string]EndpointStats `json:"endpointStats"`
+	RequestLatency   RequestLatencyStats      `json:"requestLatency"`
+}
+
+type RequestLatencyStats struct {
+	App                 ResponseTimingStats `json:"app"`
+	Uploads             ResponseTimingStats `json:"uploads"`
+	Downloads           ResponseTimingStats `json:"downloads"`
+	CacheChecks         ResponseTimingStats `json:"cacheChecks"`
+	SlowestAppEndpoints []EndpointStats     `json:"slowestAppEndpoints"`
+}
+
+type ResponseTimingStats struct {
+	Count          int `json:"count"`
+	MedianResponse int `json:"medianResponse"`
+	P95Response    int `json:"p95Response"`
 }
 
 type EndpointStats struct {
