@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"family/cfg"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.hasen.dev/vbeam"
 )
 
 func scanLogFile(path string, visit func(logEntry) bool) error {
@@ -161,7 +164,7 @@ func parseLogTimestamp(line string) (time.Time, string) {
 	matches := timestampRegex.FindStringSubmatch(line)
 
 	if len(matches) == 3 {
-		if timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1]); err == nil {
+		if timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", matches[1], time.Local); err == nil {
 			return timestamp, matches[2]
 		}
 	}
@@ -238,7 +241,7 @@ func parseTimingLogLine(line string) (*logEntry, bool) {
 		return nil, false
 	}
 
-	timestamp, err := time.Parse("2006/01/02 15:04:05", matches[1])
+	timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", matches[1], time.Local)
 	if err != nil {
 		return nil, false
 	}
@@ -304,9 +307,11 @@ type logFilter struct {
 	search      string
 	since       time.Time
 	minDuration *int
+	minStatus   int
+	maxStatus   int
 }
 
-func newLogFilter(req GetLogContentRequest) logFilter {
+func newLogFilter(req GetLogContentRequest) (logFilter, error) {
 	filter := logFilter{
 		level:       req.Level,
 		category:    req.Category,
@@ -316,7 +321,23 @@ func newLogFilter(req GetLogContentRequest) logFilter {
 	if req.SinceHours > 0 {
 		filter.since = time.Now().Add(-time.Duration(req.SinceHours) * time.Hour)
 	}
-	return filter
+
+	switch status := strings.ToLower(strings.TrimSpace(req.HTTPStatus)); status {
+	case "":
+	case "4xx/5xx":
+		filter.minStatus, filter.maxStatus = 400, 599
+	case "4xx":
+		filter.minStatus, filter.maxStatus = 400, 499
+	case "5xx":
+		filter.minStatus, filter.maxStatus = 500, 599
+	default:
+		code, err := strconv.Atoi(status)
+		if err != nil || len(status) != 3 || code < 100 || code > 599 {
+			return logFilter{}, NewAppError(ErrCodeBadRequest, "Invalid HTTP status filter")
+		}
+		filter.minStatus, filter.maxStatus = code, code
+	}
+	return filter, nil
 }
 
 func (f logFilter) keep(entry logEntry) bool {
@@ -324,6 +345,9 @@ func (f logFilter) keep(entry logEntry) bool {
 		return false
 	}
 	if f.category != "" && string(entry.Category) != f.category {
+		return false
+	}
+	if f.minStatus != 0 && (entry.HTTPStatus == nil || *entry.HTTPStatus < f.minStatus || *entry.HTTPStatus > f.maxStatus) {
 		return false
 	}
 	if !f.since.IsZero() && entry.Timestamp.Before(f.since) {
@@ -403,8 +427,13 @@ func (r *entryRing) newestFirst() []logEntry {
 }
 
 type perfAccumulator struct {
-	durations []int
-	endpoints map[string]*endpointAccumulator
+	durations         []int
+	endpoints         map[string]*endpointAccumulator
+	appDurations      []int
+	uploadDurations   []int
+	downloadDurations []int
+	cacheDurations    []int
+	appEndpoints      map[string]*endpointAccumulator
 }
 
 type endpointAccumulator struct {
@@ -416,7 +445,10 @@ type endpointAccumulator struct {
 }
 
 func newPerfAccumulator() *perfAccumulator {
-	return &perfAccumulator{endpoints: make(map[string]*endpointAccumulator)}
+	return &perfAccumulator{
+		endpoints:    make(map[string]*endpointAccumulator),
+		appEndpoints: make(map[string]*endpointAccumulator),
+	}
 }
 
 func (p *perfAccumulator) add(entry logEntry) {
@@ -429,11 +461,40 @@ func (p *perfAccumulator) add(entry logEntry) {
 	if entry.HTTPMethod == "" || entry.HTTPPath == "" {
 		return
 	}
-	key := entry.HTTPMethod + " " + entry.HTTPPath
-	acc := p.endpoints[key]
+	status := 0
+	if entry.HTTPStatus != nil {
+		status = *entry.HTTPStatus
+	}
+	recordEndpoint(p.endpoints, entry.HTTPMethod+" "+entry.HTTPPath, duration, status)
+
+	if status == http.StatusNotModified {
+		p.cacheDurations = append(p.cacheDurations, duration)
+		return
+	}
+	if status < 200 || status >= 300 || entry.HTTPMethod == http.MethodHead || entry.HTTPMethod == http.MethodOptions {
+		return
+	}
+
+	// Timing logs contain the request URI, including query parameters.
+	path, _, _ := strings.Cut(entry.HTTPPath, "?")
+	switch {
+	case path == "/api/upload-photo", path == "/api/import-bundle", path == vbeam.PREFIX_RPC+"ImportData",
+		strings.HasPrefix(path, localMediaUploadPrefix):
+		p.uploadDurations = append(p.uploadDurations, duration)
+	case path == "/api/export-bundle", path == SnapshotPath, path == vbeam.PREFIX_RPC+"ExportData",
+		strings.HasPrefix(path, "/api/photo/"), strings.HasPrefix(path, localMediaObjectPrefix):
+		p.downloadDurations = append(p.downloadDurations, duration)
+	case strings.HasPrefix(path, vbeam.PREFIX_RPC), strings.HasPrefix(path, "/api/"):
+		p.appDurations = append(p.appDurations, duration)
+		recordEndpoint(p.appEndpoints, entry.HTTPMethod+" "+path, duration, status)
+	}
+}
+
+func recordEndpoint(endpoints map[string]*endpointAccumulator, key string, duration int, status int) {
+	acc := endpoints[key]
 	if acc == nil {
 		acc = &endpointAccumulator{min: duration, max: duration}
-		p.endpoints[key] = acc
+		endpoints[key] = acc
 	}
 	acc.count++
 	acc.sum += duration
@@ -443,19 +504,25 @@ func (p *perfAccumulator) add(entry logEntry) {
 	if duration > acc.max {
 		acc.max = duration
 	}
-	if entry.HTTPStatus != nil && *entry.HTTPStatus >= 400 {
+	if status >= 400 {
 		acc.errors++
 	}
 }
 
 func (p *perfAccumulator) result() PerformanceStats {
+	endpoints, slowest := summarizeEndpoints(p.endpoints)
+	_, slowestApp := summarizeEndpoints(p.appEndpoints)
 	stats := PerformanceStats{
 		TotalRequests:    len(p.durations),
-		EndpointStats:    make(map[string]EndpointStats, len(p.endpoints)),
-		SlowestEndpoints: []EndpointStats{},
-	}
-	if len(p.durations) == 0 {
-		return stats
+		EndpointStats:    endpoints,
+		SlowestEndpoints: slowest,
+		RequestLatency: RequestLatencyStats{
+			App:                 summarizeResponseTimes(p.appDurations),
+			Uploads:             summarizeResponseTimes(p.uploadDurations),
+			Downloads:           summarizeResponseTimes(p.downloadDurations),
+			CacheChecks:         summarizeResponseTimes(p.cacheDurations),
+			SlowestAppEndpoints: slowestApp,
+		},
 	}
 
 	sort.Ints(p.durations)
@@ -464,9 +531,22 @@ func (p *perfAccumulator) result() PerformanceStats {
 	stats.P90Response = calculatePercentile(p.durations, 90)
 	stats.P95Response = calculatePercentile(p.durations, 95)
 	stats.P99Response = calculatePercentile(p.durations, 99)
+	return stats
+}
 
-	var slowest []EndpointStats
-	for endpoint, acc := range p.endpoints {
+func summarizeResponseTimes(durations []int) ResponseTimingStats {
+	sort.Ints(durations)
+	return ResponseTimingStats{
+		Count:          len(durations),
+		MedianResponse: calculatePercentile(durations, 50),
+		P95Response:    calculatePercentile(durations, 95),
+	}
+}
+
+func summarizeEndpoints(accumulators map[string]*endpointAccumulator) (map[string]EndpointStats, []EndpointStats) {
+	endpoints := make(map[string]EndpointStats, len(accumulators))
+	slowest := make([]EndpointStats, 0, len(accumulators))
+	for endpoint, acc := range accumulators {
 		method, path, _ := strings.Cut(endpoint, " ")
 		entry := EndpointStats{
 			Path:            path,
@@ -477,7 +557,7 @@ func (p *perfAccumulator) result() PerformanceStats {
 			MaxResponse:     acc.max,
 			ErrorRate:       float64(acc.errors) / float64(acc.count) * 100,
 		}
-		stats.EndpointStats[endpoint] = entry
+		endpoints[endpoint] = entry
 		slowest = append(slowest, entry)
 	}
 
@@ -487,8 +567,7 @@ func (p *perfAccumulator) result() PerformanceStats {
 	if len(slowest) > 10 {
 		slowest = slowest[:10]
 	}
-	stats.SlowestEndpoints = slowest
-	return stats
+	return endpoints, slowest
 }
 
 func calculateAverage(values []int) int {

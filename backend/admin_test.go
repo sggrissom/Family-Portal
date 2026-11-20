@@ -304,7 +304,7 @@ func TestParseLogTimestamp(t *testing.T) {
 		}
 
 		if tc.hasValidTime {
-			expectedTime, _ := time.Parse("2006-01-02 15:04:05", tc.expectedTime)
+			expectedTime, _ := time.ParseInLocation("2006-01-02 15:04:05", tc.expectedTime, time.Local)
 			if !timestamp.Equal(expectedTime) {
 				t.Errorf("For input '%s', expected time %v, got %v", tc.input, expectedTime, timestamp)
 			}
