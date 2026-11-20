@@ -133,6 +133,10 @@ func SetAppearancePhotos(ctx *vbeam.Context, req SetAppearancePhotosRequest) (re
 	if err = setAppearancePhotosTx(ctx.Tx, appearance, req.PhotoIds); err != nil {
 		return
 	}
+	// Reloaded inside the write: the copy above came from the read that
+	// preceded it, and writing it back could undo a change made in between.
+	touchAppearanceTx(ctx.Tx, appearance.Id)
+	appearance = GetAppearanceById(ctx.Tx, appearance.Id)
 	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	vbolt.TxCommit(ctx.Tx)
 	return
@@ -164,9 +168,15 @@ func removePhotoFromActivities(tx *vbolt.Tx, photoId int) {
 	var joinIds []int
 
 	vbolt.ReadTermTargets(tx, AppearancePhotoByPhotoIndex, photoId, &joinIds, vbolt.Window{})
+	var changed []int
 	for _, joinId := range joinIds {
+		var join AppearancePhoto
+		if vbolt.Read(tx, AppearancePhotoBkt, joinId, &join) {
+			changed = append(changed, join.AppearanceId)
+		}
 		deleteAppearancePhotoRowTx(tx, joinId)
 	}
+	touchAppearanceTx(tx, changed...)
 
 	joinIds = joinIds[:0]
 	vbolt.ReadTermTargets(tx, EventPhotoByPhotoIndex, photoId, &joinIds, vbolt.Window{})

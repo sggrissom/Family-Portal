@@ -289,10 +289,12 @@ func normalizePhotoIds(photoIds []int) []int {
 	return normalized
 }
 
+var ErrPhotoNotFoundOrDenied = errors.New("Photo not found or access denied")
+
 func validatePhotoAccess(tx *vbolt.Tx, photoId int, familyId int) error {
 	photo := GetImageById(tx, photoId)
 	if photo.Id == 0 || !CanFamilyAccess(tx, familyId, photo.FamilyId, AccessContribute) {
-		return errors.New("Photo not found or access denied")
+		return ErrPhotoNotFoundOrDenied
 	}
 	return nil
 }

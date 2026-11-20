@@ -740,6 +740,40 @@ any part is rejected nothing is written, so a results screen can save with one
 call instead of chaining `CreateAppearance`, `SetAppearanceResults` and
 `SetAppearancePhotos`.
 
+**Queued, offline-safe performance writes.** `SyncSaveAppearance` and
+`SyncDeleteAppearance` are for writes a phone saves locally and sends later,
+possibly more than once. Check `GetActivitySyncSupport` first: send queued
+writes only when it reports the `mutationVersion` the app was built for (1).
+An older server has no such proc; keep the queue and never fall back to
+`SaveAppearance`.
+
+- Every request carries a `mutationId` (letters, digits and dashes, at most
+  64). It is scoped to the signed-in account and bound to the request: a retry
+  must resend exactly the same payload under the same id, and a changed payload
+  under an old id is refused with an error. A retry after a lost response
+  answers `replayed` with the original `appearanceId` and `revision` instead of
+  writing again, so a create never happens twice. Receipts are not expired.
+- `Appearance.revision` advances on every change to a performance: its fields,
+  results, photo associations, website edits, and people being removed or
+  merged. Records from before revisions read as 0. An edit
+  (`appearance.id` set) or a delete must send `expectedRevision`, the revision
+  it was made against. The check is atomic with the write.
+- The response is always a 200 with a `status`. `applied` and `replayed` return
+  the resulting `revision`. `conflict` (the performance changed since
+  `expectedRevision`) and `forbidden` (visible but view-only) return the server's
+  current copy in `appearance`. `deleted` means it is gone, and so does any
+  performance deleted along with its competition or routine. `notFound` means
+  it isn't visible to this account. `invalid` returns a `code` (`date`,
+  `parentMissing`, `entryNotInSeason`, `result`, `personNotOnEntry`, `matchup`,
+  `photo`) and a `message`. Nothing is written for any status other than
+  `applied`, and a refused request leaves no receipt, so a corrected retry can
+  reuse its id.
+- Errors (plain-text 400s) mean either a malformed request (`mutationId`,
+  missing `expectedRevision`, a reused id) or `AuthFailure`. Anything else is
+  transient: keep the write and retry later.
+- A replay's `appearance` is the current copy, which may be newer than the
+  replayed `revision` if something changed it since.
+
 `AddCheckup` saves an optional `height` and `weight` (`{value, unit}`) against one
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.

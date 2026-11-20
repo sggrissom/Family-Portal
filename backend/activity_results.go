@@ -393,6 +393,10 @@ func SetAppearanceResults(ctx *vbeam.Context, req SetAppearanceResultsRequest) (
 
 	vbeam.UseWriteTx(ctx)
 	replaceResultsTx(ctx.Tx, appearance.Id, prepared)
+	// Reloaded inside the write: the copy above came from the read that
+	// preceded it, and writing it back could undo a change made in between.
+	touchAppearanceTx(ctx.Tx, appearance.Id)
+	appearance = GetAppearanceById(ctx.Tx, appearance.Id)
 	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
 	vbolt.TxCommit(ctx.Tx)
 	return
@@ -418,6 +422,30 @@ func SaveAppearance(ctx *vbeam.Context, req SaveAppearanceRequest) (resp Appeara
 		return
 	}
 
+	save, err := prepareAppearanceSave(ctx.Tx, user, req)
+	if err != nil {
+		return
+	}
+
+	vbeam.UseWriteTx(ctx)
+	if err = commitAppearanceSaveTx(ctx.Tx, &save); err != nil {
+		return
+	}
+	resp.Appearance = appearanceView(ctx.Tx, user, save.appearance)
+	vbolt.TxCommit(ctx.Tx)
+	return
+}
+
+// appearanceSave is a validated SaveAppearance, ready to write.
+type appearanceSave struct {
+	appearance Appearance
+	results    []Result
+	photoIds   []int
+}
+
+// prepareAppearanceSave checks everything a save could be refused for, writing
+// nothing, so a refusal leaves no part of the performance behind.
+func prepareAppearanceSave(tx *vbolt.Tx, user User, req SaveAppearanceRequest) (save appearanceSave, err error) {
 	occurredAt, err := parseActivityDate(req.OccurredAt)
 	if err != nil {
 		return
@@ -425,16 +453,16 @@ func SaveAppearance(ctx *vbeam.Context, req SaveAppearanceRequest) (resp Appeara
 
 	var appearance Appearance
 	if req.Id != 0 {
-		if appearance, err = getAppearanceForUser(ctx.Tx, req.Id, user, AccessContribute); err != nil {
+		if appearance, err = getAppearanceForUser(tx, req.Id, user, AccessContribute); err != nil {
 			return
 		}
 	} else {
 		var event Event
 		var entry Entry
-		if event, err = getEventForUser(ctx.Tx, req.EventId, user, AccessContribute); err != nil {
+		if event, err = getEventForUser(tx, req.EventId, user, AccessContribute); err != nil {
 			return
 		}
-		if entry, err = getEntryForUser(ctx.Tx, req.EntryId, user, AccessContribute); err != nil {
+		if entry, err = getEntryForUser(tx, req.EntryId, user, AccessContribute); err != nil {
 			return
 		}
 		if entry.SeasonId != event.SeasonId {
@@ -455,25 +483,26 @@ func SaveAppearance(ctx *vbeam.Context, req SaveAppearanceRequest) (resp Appeara
 		return
 	}
 
-	roster := GetEntryPersonIds(ctx.Tx, appearance.EntryId)
+	roster := GetEntryPersonIds(tx, appearance.EntryId)
 	prepared, err := prepareResults(req.Results, appearance.FamilyId, roster)
 	if err != nil {
 		return
 	}
-	if _, err = resolveActivityPhotoIds(ctx.Tx, req.PhotoIds, appearance.FamilyId); err != nil {
+	if _, err = resolveActivityPhotoIds(tx, req.PhotoIds, appearance.FamilyId); err != nil {
 		return
 	}
 
-	vbeam.UseWriteTx(ctx)
-	if appearance.Id == 0 {
-		appearance.Id = vbolt.NextIntId(ctx.Tx, AppearanceBkt)
-	}
-	writeAppearanceTx(ctx.Tx, &appearance)
-	replaceResultsTx(ctx.Tx, appearance.Id, prepared)
-	if err = setAppearancePhotosTx(ctx.Tx, appearance, req.PhotoIds); err != nil {
-		return
-	}
-	resp.Appearance = appearanceView(ctx.Tx, user, appearance)
-	vbolt.TxCommit(ctx.Tx)
+	save = appearanceSave{appearance: appearance, results: prepared, photoIds: req.PhotoIds}
 	return
+}
+
+// commitAppearanceSaveTx writes a prepared save. The caller commits, or closes
+// the transaction without committing when this fails.
+func commitAppearanceSaveTx(tx *vbolt.Tx, save *appearanceSave) error {
+	if save.appearance.Id == 0 {
+		save.appearance.Id = vbolt.NextIntId(tx, AppearanceBkt)
+	}
+	writeAppearanceTx(tx, &save.appearance)
+	replaceResultsTx(tx, save.appearance.Id, save.results)
+	return setAppearancePhotosTx(tx, save.appearance, save.photoIds)
 }
