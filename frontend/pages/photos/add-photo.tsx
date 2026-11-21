@@ -30,7 +30,7 @@ import { RecordWhenControl } from "../../components/RecordWhenControl";
 
 type UploadItem = QueuedPhoto & {
   image: server.Image | null;
-  taggedAtUpload: number[];
+  savedPersonIds: number[];
   isVideo: boolean;
   progress: number;
 };
@@ -41,6 +41,7 @@ type AddPhotoForm = {
   tagIds: number[];
   items: UploadItem[];
   pumping: boolean;
+  validating: number;
   editingDate: boolean;
   newWhen: RecordWhen;
   finishing: boolean;
@@ -57,6 +58,7 @@ const useAddPhotoForm = vlens.declareHook((personId: number | null): AddPhotoFor
     tagIds: [],
     items: [],
     pumping: false,
+    validating: 0,
     editingDate: false,
     newWhen: newRecordWhen(),
     finishing: false,
@@ -136,23 +138,32 @@ async function addFiles(
   video: server.GetVideoSupportResponse,
   files: File[]
 ) {
+  if (form.finishing) return;
+  form.validating++;
+  vlens.scheduleRedraw();
   const problems: string[] = [];
-  for (const file of files) {
-    const problem = await mediaFileProblem(file, video);
-    if (problem) {
-      problems.push(problem);
-      continue;
+  try {
+    for (const file of files) {
+      const problem = await mediaFileProblem(file, video);
+      if (problem) {
+        problems.push(problem);
+        continue;
+      }
+      form.items.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        state: "queued",
+        error: "",
+        image: null,
+        savedPersonIds: [],
+        isVideo: isVideoFile(file),
+        progress: 0,
+      });
     }
-    form.items.push({
-      file,
-      previewUrl: URL.createObjectURL(file),
-      state: "queued",
-      error: "",
-      image: null,
-      taggedAtUpload: [],
-      isVideo: isVideoFile(file),
-      progress: 0,
-    });
+  } catch {
+    problems.push("Couldn't check the selected files.");
+  } finally {
+    form.validating--;
   }
   form.error = problems.length > 0 ? `Skipped: ${problems.join("; ")}` : "";
   vlens.scheduleRedraw();
@@ -167,12 +178,12 @@ async function pump(form: AddPhotoForm, people: server.Person[]) {
   while ((next = form.items.find(item => item.state === "queued"))) {
     const item = next;
     item.state = "uploading";
-    item.taggedAtUpload = [...form.personIds];
+    item.savedPersonIds = [...form.personIds];
     vlens.scheduleRedraw();
 
-    const familyId = people.find(p => item.taggedAtUpload.includes(p.id))?.familyId;
+    const familyId = people.find(p => item.savedPersonIds.includes(p.id))?.familyId;
     try {
-      item.image = await uploadMedia(item.file, item.taggedAtUpload, familyId, fraction => {
+      item.image = await uploadMedia(item.file, item.savedPersonIds, familyId, fraction => {
         item.progress = fraction;
         vlens.scheduleRedraw();
       });
@@ -262,12 +273,7 @@ function editDate(form: AddPhotoForm) {
 
 function onDone(form: AddPhotoForm, event: Event) {
   event.preventDefault();
-  if (form.finishing) return;
-  if (form.items.length > 0 && form.items.every(item => item.state === "failed")) {
-    form.error = "None of these uploaded. Retry or remove them.";
-    vlens.scheduleRedraw();
-    return;
-  }
+  if (form.finishing || form.validating > 0 || form.items.length === 0) return;
   const problem = form.editingDate
     ? recordWhenProblem(form.newWhen, false, undefined, new Date())
     : "";
@@ -276,7 +282,6 @@ function onDone(form: AddPhotoForm, event: Event) {
     vlens.scheduleRedraw();
     return;
   }
-  for (const item of form.items.filter(item => item.state === "failed")) remove(form, item);
   form.finishing = true;
   form.error = "";
   vlens.scheduleRedraw();
@@ -284,39 +289,51 @@ function onDone(form: AddPhotoForm, event: Event) {
 }
 
 async function finish(form: AddPhotoForm) {
+  if (!form.items.some(item => item.image)) {
+    form.finishing = false;
+    form.error = "None of these uploaded. Retry or remove them.";
+    vlens.scheduleRedraw();
+    return;
+  }
   const caption = form.caption.trim();
   const problems: string[] = [];
 
-  for (const item of form.items) {
-    const image = item.image;
-    if (!image) continue;
+  try {
+    for (const item of form.items) {
+      const image = item.image;
+      if (!image) continue;
 
-    const { add, remove } = peopleChanges(item.taggedAtUpload, form.personIds);
-    if (add.length > 0) {
-      const [, err] = await server.AddPeopleToPhoto({ photoId: image.id, personIds: add });
-      if (err) problems.push(err);
-    }
-    for (const personId of remove) {
-      const [, err] = await server.RemovePersonFromPhotoProc({ photoId: image.id, personId });
-      if (err) problems.push(err);
-    }
-    item.taggedAtUpload = [...form.personIds];
+      // Keep successful edits so a retry only submits the remaining people changes.
+      const { add, remove } = peopleChanges(item.savedPersonIds, form.personIds);
+      if (add.length > 0) {
+        const [resp, err] = await server.AddPeopleToPhoto({ photoId: image.id, personIds: add });
+        if (resp?.success) item.savedPersonIds.push(...add);
+        else problems.push(err || "Couldn't add people to the photo.");
+      }
+      for (const personId of remove) {
+        const [resp, err] = await server.RemovePersonFromPhotoProc({ photoId: image.id, personId });
+        if (resp?.success) item.savedPersonIds = item.savedPersonIds.filter(id => id !== personId);
+        else problems.push(err || "Couldn't remove a person from the photo.");
+      }
 
-    if (caption || form.editingDate) {
-      const [resp, err] = await server.UpdatePhoto({
-        id: image.id,
-        title: caption || (form.editingDate ? "" : image.title),
-        description: image.description,
-        recordTime: form.editingDate ? recordWhenTime(form.newWhen, new Date(), false) : null,
-      });
-      if (resp) item.image = resp.image;
-      else problems.push(err);
-    }
+      if (caption || form.editingDate) {
+        const [resp, err] = await server.UpdatePhoto({
+          id: image.id,
+          title: caption || (form.editingDate ? "" : image.title),
+          description: image.description,
+          recordTime: form.editingDate ? recordWhenTime(form.newWhen, new Date(), false) : null,
+        });
+        if (resp) item.image = resp.image;
+        else problems.push(err || "Couldn't save the photo details.");
+      }
 
-    if (form.tagIds.length > 0) {
-      const [, err] = await server.UpdatePhotoTags({ photoId: image.id, tagIds: form.tagIds });
-      if (err) problems.push(err);
+      if (form.tagIds.length > 0) {
+        const [, err] = await server.UpdatePhotoTags({ photoId: image.id, tagIds: form.tagIds });
+        if (err) problems.push(err);
+      }
     }
+  } catch {
+    problems.push("Couldn't finish saving the photos. Please try again.");
   }
 
   if (problems.length > 0) {
@@ -402,10 +419,18 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
                 <span className="upload-tile-status">{statusLabel(item)}</span>
                 {item.state === "failed" && (
                   <span className="upload-tile-actions">
-                    <button type="button" onClick={() => retry(form, people, item)}>
+                    <button
+                      type="button"
+                      disabled={form.finishing}
+                      onClick={() => retry(form, people, item)}
+                    >
                       Retry
                     </button>
-                    <button type="button" onClick={() => remove(form, item)}>
+                    <button
+                      type="button"
+                      disabled={form.finishing}
+                      onClick={() => remove(form, item)}
+                    >
                       Remove
                     </button>
                   </span>
@@ -494,7 +519,11 @@ const AddPhotoPage = ({ form, people, tags, video }: AddPhotoPageProps) => {
               {copy.measurement.cancel}
             </a>
           )}
-          <button type="submit" className="btn btn-primary" disabled={!hasItems || form.finishing}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!hasItems || form.finishing || form.validating > 0}
+          >
             {form.finishing
               ? busy
                 ? `${copy.photos.uploading}…`

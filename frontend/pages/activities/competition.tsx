@@ -233,6 +233,7 @@ export function view(
   if (!state.initialized || state.eventId !== event.id) {
     state.initialized = true;
     state.eventId = event.id;
+    state.saving = false;
     state.appearances = [...(data.detail.appearances ?? [])];
     state.draft = null;
     state.resultRows = [];
@@ -583,7 +584,7 @@ const PerformanceEditor = ({
       <div className="form-actions perf-editor-actions">
         <button
           className="btn btn-primary"
-          onClick={vlens.cachePartial(onSavePerformance, state, data)}
+          onClick={vlens.cachePartial(onSavePerformance, state, data.detail.event, entry.entry)}
           disabled={busy || resultRowsBlocked(state)}
         >
           Save
@@ -976,9 +977,13 @@ function onRemoveDraftPhoto(draft: PerformanceDraft, photoId: number) {
   vlens.scheduleRedraw();
 }
 
-async function onSavePerformance(state: CompetitionState, data: CompetitionPageData) {
+async function onSavePerformance(
+  state: CompetitionState,
+  event: server.Event,
+  entry: server.Entry
+) {
   const draft = state.draft;
-  if (!draft || resultRowsBlocked(state)) return;
+  if (!draft || state.saving || resultRowsBlocked(state)) return;
   if (draft.showMatchup) {
     state.error = draftError(draft.matchup);
     if (state.error) {
@@ -991,24 +996,36 @@ async function onSavePerformance(state: CompetitionState, data: CompetitionPageD
   state.error = "";
   vlens.scheduleRedraw();
 
-  const [resp, err] = await server.SaveAppearance({
-    id: draft.appearanceId,
-    eventId: data.detail.event.id,
-    entryId: draft.entryId,
-    occurredAt: dateOrNull(draft.occurredAt),
-    notes: draft.notes.trim(),
-    matchup: draft.showMatchup ? draftToMatchup(draft.matchup) : null,
-    results: state.resultRows.map(rowToInput),
-    photoIds: draft.photoIds,
-  });
+  const [resp, err] = await server
+    .SaveAppearance({
+      id: draft.appearanceId,
+      eventId: event.id,
+      entryId: draft.entryId,
+      occurredAt: dateOrNull(draft.occurredAt),
+      notes: draft.notes.trim(),
+      matchup: draft.showMatchup ? draftToMatchup(draft.matchup) : null,
+      results: state.resultRows.map(rowToInput),
+      photoIds: draft.photoIds,
+    })
+    .catch(() => rpc.err<server.AppearanceResponse>("Failed to save"));
+  if (state.draft !== draft) return;
   state.saving = false;
   if (err || !resp) {
     state.error = err || "Failed to save";
     vlens.scheduleRedraw();
     return;
   }
+  const saved = { ...resp.appearance, entry, event };
+  state.appearances = state.appearances.filter(row => row.appearance.id !== saved.appearance.id);
+  state.appearances.push(saved);
+  const eventDay = toDateInputValue(event.startDate);
+  const day = (row: server.AppearanceDetail) =>
+    toDateInputValue(row.appearance.occurredAt) || eventDay;
+  state.appearances.sort(
+    (a, b) => day(a).localeCompare(day(b)) || a.appearance.id - b.appearance.id
+  );
   closeEditors(state);
-  await reload(state);
+  vlens.scheduleRedraw();
 }
 
 async function onDeleteAppearance(
@@ -1080,15 +1097,5 @@ async function onSaveEventPhotos(state: CompetitionState) {
     closeEditors(state);
   }
   state.saving = false;
-  vlens.scheduleRedraw();
-}
-
-async function reload(state: CompetitionState) {
-  const [resp, err] = await server.GetEventDetail({ eventId: state.eventId });
-  if (err || !resp) {
-    state.error = err || "Failed to reload";
-  } else {
-    state.appearances = [...(resp.appearances ?? [])];
-  }
   vlens.scheduleRedraw();
 }
