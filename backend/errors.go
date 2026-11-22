@@ -64,7 +64,7 @@ func NewAppError(code ErrorCode, message string, details ...string) *AppError {
 
 func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, statusCode int) {
 	if r != nil {
-		err.RequestPath = r.URL.Path
+		err.RequestPath = redactRecapPath(r.URL.Path)
 		err.RequestId = RequestID(r)
 	}
 
@@ -88,7 +88,7 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, err *AppError, sta
 
 	if r != nil {
 		data["method"] = r.Method
-		data["path"] = r.URL.Path
+		data["path"] = redactRecapPath(r.URL.Path)
 	}
 	// A rejected request (for example, an expired session) is not a server failure.
 	level := logLevelError
