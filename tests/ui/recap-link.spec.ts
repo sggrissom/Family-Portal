@@ -98,10 +98,19 @@ test("a recap link opens signed out, keeps its snapshot, and stops once turned o
     const response = await phone.goto(recapPath);
     expect(response?.status()).toBe(200);
     expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
-    await expect(phone).toHaveTitle("Competition results");
     await expect(phone.getByRole("heading", { name: "Recap Classic", level: 1 })).toBeVisible();
     await expect(phone.getByRole("heading", { name: "Crew Battle" })).toBeVisible();
     await expect(phone.getByText("Final · vs Crew Z · Won")).toBeVisible();
+    expect(await phone.title()).not.toContain("Recap Classic");
+  });
+
+  await test.step("a path below a live token cannot show the recap", async () => {
+    const asset = await phone.request.get(`${recapPath}/recap.css`);
+    expect(asset.status()).toBe(404);
+    await phone.goto(`${recapPath}/extra`);
+    await expect(phone.getByRole("heading", { name: "This link isn't available" })).toBeVisible();
+    await expect(phone.getByRole("heading", { name: "Crew Battle" })).toHaveCount(0);
+    await phone.goto(recapPath);
   });
 
   await test.step("an edit to the event leaves the published recap as it was", async () => {
@@ -117,17 +126,15 @@ test("a recap link opens signed out, keeps its snapshot, and stops once turned o
     await expect(phone.getByText("Crew Q")).toHaveCount(0);
   });
 
-  await test.step("turning it off ends access to the page and anything under it", async () => {
+  await test.step("turning it off ends access to the recap", async () => {
     await page.getByRole("button", { name: "Share" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.locator(".recap-link-item").getByRole("button", { name: "Turn off" }).click();
     await expect(dialog.locator(".recap-link-item")).toHaveCount(0);
 
-    for (const path of [recapPath, `${recapPath}/recap.css`]) {
-      const response = await phone.goto(path);
-      expect(response?.status(), path).toBe(404);
-      await expect(phone.getByText("Crew Battle")).toHaveCount(0);
-    }
+    await phone.goto(recapPath);
+    await expect(phone.getByRole("heading", { name: "This link isn't available" })).toBeVisible();
+    await expect(phone.getByRole("heading", { name: "Crew Battle" })).toHaveCount(0);
   });
 
   await outsider.close();

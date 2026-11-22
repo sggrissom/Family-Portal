@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -72,19 +74,20 @@ func (fx resultsFixture) publishRecap(t *testing.T, req CreateRecapLinkRequest) 
 	return resp
 }
 
-func (fx resultsFixture) getRecap(path string) *httptest.ResponseRecorder {
-	rec := httptest.NewRecorder()
-	recapPageHandler(fx.db)(rec, httptest.NewRequest(http.MethodGet, path, nil))
-	return rec
+func (fx resultsFixture) readRecap(token string) (resp GetRecapResponse, err error) {
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		resp, err = GetRecap(&vbeam.Context{Tx: tx}, GetRecapRequest{Token: token})
+	})
+	return
 }
 
-func recapPath(t *testing.T, url string) string {
+func recapTokenFromURL(t *testing.T, url string) string {
 	t.Helper()
-	index := strings.Index(url, RecapPathPrefix)
-	if index < 0 {
-		t.Fatalf("recap URL %q has no %s path", url, RecapPathPrefix)
+	_, token, found := strings.Cut(url, RecapPathPrefix)
+	if !found || token == "" {
+		t.Fatal("published URL is missing a recap token")
 	}
-	return url[index:]
+	return token
 }
 
 func setupRecapFixture(t *testing.T) (resultsFixture, Appearance) {
@@ -104,25 +107,28 @@ func TestRecapLinkServesTheApprovedSnapshotWithoutSigningIn(t *testing.T) {
 	fx, appearance := setupRecapFixture(t)
 
 	resp := fx.publishRecap(t, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)})
-	path := recapPath(t, resp.URL)
+	snapshot, err := fx.readRecap(recapTokenFromURL(t, resp.URL))
+	if err != nil {
+		t.Fatalf("GetRecap() without a session: %v", err)
+	}
+	body, err := json.Marshal(snapshot.Recap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"eventName":"Nuvo Nashville","subtitle":"2025-26 · Feb 7, 2026","place":"Nuvo","snapshotLabel":"","routines":[{"name":"Rise Up","descriptors":"","roster":"","summary":"","performances":[{"when":"","matchup":"","results":[{"kind":"placement","text":"1st of 12","detail":""},{"kind":"award","text":"Judges' Choice","detail":"Individual"}]}]}]}`
+	if string(body) != want {
+		t.Errorf("public recap = %s, want %s", body, want)
+	}
+}
 
-	rec := fx.getRecap(path)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET recap = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"Nuvo Nashville", "Rise Up", "1st of 12", "Judges&#39; Choice", "(Individual)"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("recap page missing %q", want)
-		}
-	}
-	if !strings.Contains(body, "<title>Competition results</title>") {
-		t.Error("recap page title should stay generic for link previews")
-	}
-	if strings.Contains(body, "Alice") {
-		t.Error("recap page names a dancer the sender left anonymous")
-	}
-
+func TestRecapPageHeaders(t *testing.T) {
+	app := vbeam.NewApplication("Recap header test", nil)
+	path := RecapPathPrefix + "test-token"
+	app.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	NewSecurityWrapper(app).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	headers := rec.Header()
 	if got := headers.Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", got)
@@ -139,6 +145,11 @@ func TestRecapLinkStaysAsApprovedAfterTheEventChanges(t *testing.T) {
 	fx, appearance := setupRecapFixture(t)
 
 	resp := fx.publishRecap(t, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)})
+	token := recapTokenFromURL(t, resp.URL)
+	before, err := fx.readRecap(token)
+	if err != nil {
+		t.Fatalf("GetRecap() before editing: %v", err)
+	}
 
 	rank := 3
 	fx.setResults(t, appearance.Id, []ResultInput{{Kind: ResultKindPlacement, Rank: &rank}})
@@ -148,12 +159,12 @@ func TestRecapLinkStaysAsApprovedAfterTheEventChanges(t *testing.T) {
 		}
 	})
 
-	body := fx.getRecap(recapPath(t, resp.URL)).Body.String()
-	if !strings.Contains(body, "1st of 12") || !strings.Contains(body, "Rise Up") {
-		t.Error("recap page changed after the event was edited")
+	after, err := fx.readRecap(token)
+	if err != nil {
+		t.Fatalf("GetRecap() after editing: %v", err)
 	}
-	if strings.Contains(body, "Renamed") || strings.Contains(body, "3rd") {
-		t.Error("recap page shows an edit made after publishing")
+	if !reflect.DeepEqual(after, before) {
+		t.Error("published recap changed after the event was edited")
 	}
 }
 
@@ -163,8 +174,8 @@ func TestRecapLinkFailsOnceRevokedOrExpired(t *testing.T) {
 	revoked := fx.publishRecap(t, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)})
 	expiring := fx.publishRecap(t, CreateRecapLinkRequest{EventId: fx.event.Id, ExpiresInDays: 7, Recap: fx.recapInput(t, appearance)})
 
-	if rec := fx.getRecap(recapPath(t, expiring.URL)); rec.Code != http.StatusOK {
-		t.Fatalf("GET expiring recap before expiry = %d, want 200", rec.Code)
+	if _, err := fx.readRecap(recapTokenFromURL(t, expiring.URL)); err != nil {
+		t.Fatalf("GetRecap() before expiry: %v", err)
 	}
 
 	fx.as(t, func(ctx *vbeam.Context) {
@@ -179,30 +190,15 @@ func TestRecapLinkFailsOnceRevokedOrExpired(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	for name, url := range map[string]string{"revoked": revoked.URL, "expired": expiring.URL} {
-		path := recapPath(t, url)
-		for _, request := range []string{path, path + "/recap.css", path + "/"} {
-			rec := fx.getRecap(request)
-			if rec.Code != http.StatusNotFound {
-				t.Errorf("%s: GET %s = %d, want 404", name, redactRecapPath(request), rec.Code)
-			}
-			if strings.Contains(rec.Body.String(), "Rise Up") {
-				t.Errorf("%s: GET %s still shows the recap", name, redactRecapPath(request))
-			}
+	for name, token := range map[string]string{
+		"revoked": recapTokenFromURL(t, revoked.URL),
+		"expired": recapTokenFromURL(t, expiring.URL),
+		"unknown": "not-a-token",
+		"empty":   "",
+	} {
+		if _, err := fx.readRecap(token); err != ErrRecapUnavailable {
+			t.Errorf("%s: GetRecap() error = %v, want %v", name, err, ErrRecapUnavailable)
 		}
-	}
-
-	if rec := fx.getRecap(RecapPathPrefix + "not-a-token"); rec.Code != http.StatusNotFound {
-		t.Errorf("GET unknown token = %d, want 404", rec.Code)
-	}
-}
-
-func TestRecapLinkAssetPathsNeverServeTheRecap(t *testing.T) {
-	fx, appearance := setupRecapFixture(t)
-
-	path := recapPath(t, fx.publishRecap(t, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)}).URL)
-	if rec := fx.getRecap(path + "/anything"); rec.Code != http.StatusNotFound {
-		t.Errorf("GET unknown asset under a live token = %d, want 404", rec.Code)
 	}
 }
 
@@ -264,9 +260,10 @@ func TestRecapLinkPermissions(t *testing.T) {
 	viewer := fx.addMember(t, "viewer@example.com", AccessView)
 	contributor := fx.addMember(t, "contributor@example.com", AccessContribute)
 	otherContributor := fx.addMember(t, "other@example.com", AccessContribute)
+	req := CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)}
 
 	fx.asUser(t, viewer, func(ctx *vbeam.Context) {
-		if _, err := CreateRecapLink(ctx, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)}); err != ErrEventNotFound {
+		if _, err := CreateRecapLink(ctx, req); err != ErrEventNotFound {
 			t.Errorf("viewer CreateRecapLink() error = %v, want %v", err, ErrEventNotFound)
 		}
 	})
@@ -274,7 +271,7 @@ func TestRecapLinkPermissions(t *testing.T) {
 	var contributorLink CreateRecapLinkResponse
 	fx.asUser(t, contributor, func(ctx *vbeam.Context) {
 		var err error
-		contributorLink, err = CreateRecapLink(ctx, CreateRecapLinkRequest{EventId: fx.event.Id, Recap: fx.recapInput(t, appearance)})
+		contributorLink, err = CreateRecapLink(ctx, req)
 		if err != nil {
 			t.Fatalf("contributor CreateRecapLink() error = %v", err)
 		}
@@ -317,8 +314,8 @@ func TestDeletingAnEventRemovesItsRecapLinks(t *testing.T) {
 		}
 	})
 
-	if rec := fx.getRecap(recapPath(t, resp.URL)); rec.Code != http.StatusNotFound {
-		t.Errorf("GET recap after its event was deleted = %d, want 404", rec.Code)
+	if _, err := fx.readRecap(recapTokenFromURL(t, resp.URL)); err != ErrRecapUnavailable {
+		t.Errorf("GetRecap() after deleting event = %v, want %v", err, ErrRecapUnavailable)
 	}
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if link := GetRecapLinkById(tx, resp.Link.Id); link.Id != 0 {
