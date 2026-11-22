@@ -65,6 +65,7 @@ import {
   openShareDialog,
   syncShareRender,
 } from "../../components/ShareDialog";
+import { RecapLinks, RecapLinksState, newRecapLinks, openRecapLinks } from "./RecapLinks";
 import { copy } from "../../lib/copy";
 import "./activities-styles";
 import "./season-styles";
@@ -274,7 +275,13 @@ export function view(
             </button>
           </div>
         )}
-        <CompetitionShareDialog share={share} data={data} state={state} labels={labels} />
+        <CompetitionShareDialog
+          share={share}
+          data={data}
+          state={state}
+          labels={labels}
+          editable={editable}
+        />
 
         {state.error && (
           <div className="error-message" role="alert">
@@ -332,6 +339,7 @@ type CompetitionShareState = {
   omitted: Set<number>;
   showsNames: boolean;
   isSnapshot: boolean;
+  links: RecapLinksState;
 };
 
 const useCompetitionShare = vlens.declareHook(
@@ -340,6 +348,7 @@ const useCompetitionShare = vlens.declareHook(
     omitted: new Set(),
     showsNames: false,
     isSnapshot: false,
+    links: newRecapLinks(),
   })
 );
 
@@ -363,6 +372,9 @@ function onOpenShare(
   share.showsNames = false;
   share.isSnapshot = looksUnfinished(data.detail.event, state.appearances, today);
   openShareDialog(share.dialog);
+  if (auth.canContribute(data.detail.event.familyId)) {
+    void openRecapLinks(share.links, data.detail.event.id);
+  }
 }
 
 function onToggleRoutine(share: CompetitionShareState, entryId: number) {
@@ -381,11 +393,13 @@ const CompetitionShareDialog = ({
   data,
   state,
   labels,
+  editable,
 }: {
   share: CompetitionShareState;
   data: CompetitionPageData;
   state: CompetitionState;
   labels: ActivityLabels;
+  editable: boolean;
 }) => {
   if (!share.dialog.open) return null;
   const input = shareInput(data, state);
@@ -400,7 +414,21 @@ const CompetitionShareDialog = ({
   }
 
   return (
-    <ShareDialog state={share.dialog} text={competitionShareText(recap)} enabled={enabled}>
+    <ShareDialog
+      state={share.dialog}
+      text={competitionShareText(recap)}
+      enabled={enabled}
+      footer={
+        editable && (
+          <RecapLinks
+            state={share.links}
+            recap={recap}
+            appearances={state.appearances}
+            labels={labels}
+          />
+        )
+      }
+    >
       <h3>{labels.entryPlural}</h3>
       {recapCards(input).map(card => (
         <ShareToggle

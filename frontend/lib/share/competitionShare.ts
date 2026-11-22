@@ -203,3 +203,35 @@ export function competitionShareText(share: CompetitionShare): string {
   }
   return lines.join("\n");
 }
+
+/** The recap as a hosted link stores it. Ids and revisions let the server check each result is this event's and current; it keeps neither. */
+export function recapLinkInput(
+  share: CompetitionShare,
+  appearances: server.AppearanceDetail[]
+): server.RecapInput {
+  const revisions = new Map(appearances.map(d => [d.appearance.id, d.appearance.revision]));
+  return {
+    eventName: share.eventName,
+    subtitle: share.subtitle ?? "",
+    place: share.place ?? "",
+    snapshotLabel: share.snapshotLabel ?? "",
+    routines: share.routines.map(routine => ({
+      entryId: routine.id,
+      name: routine.name,
+      descriptors: routine.descriptors ?? "",
+      roster: routine.roster ?? "",
+      summary: routine.summary ?? "",
+      performances: routine.performances.map(performance => ({
+        appearanceId: performance.id,
+        revision: revisions.get(performance.id) ?? 0,
+        when: performance.when ?? "",
+        matchup: performance.matchup ?? "",
+        results: performance.results.map(result => ({
+          kind: result.kind,
+          text: result.text,
+          detail: result.detail ?? "",
+        })),
+      })),
+    })),
+  };
+}
