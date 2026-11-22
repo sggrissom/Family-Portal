@@ -24,6 +24,9 @@ type ImportPerson struct {
 	Birthday time.Time `json:"Birthday"`
 	Age      string    `json:"Age"`
 	ImageId  int       `json:"ImageId"`
+
+	BirthTime  string `json:"BirthTime,omitempty"`
+	BirthPlace string `json:"BirthPlace,omitempty"`
 }
 
 type ImportHeight struct {
@@ -414,6 +417,7 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 				warnings = append(warnings, "Skipped duplicate person: "+importPerson.Name)
 				continue
 			} else if mergeStrategy == "merge_people" {
+				fillBirthDetails(tx, *existingPerson, importPerson)
 				personIdMapping[importPerson.Id] = existingPerson.Id
 				mergedCount++
 				warnings = append(warnings, "Merged with existing person: "+importPerson.Name)
@@ -428,6 +432,7 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 		person.Gender = GenderType(importPerson.Gender)
 		person.Birthday = dayStart(importPerson.Birthday)
 		person.Age = calculateAge(person.Birthday)
+		person.BirthTime, person.BirthPlace = importedBirthDetails(importPerson)
 
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		updatePersonIndex(tx, person)

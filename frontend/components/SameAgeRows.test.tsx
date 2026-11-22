@@ -19,6 +19,8 @@ const emptyRow = (id: number, name: string): SameAgeRow =>
       profileCropY: 0,
       profileCropScale: 1,
       isPregnancy: false,
+      birthTime: "",
+      birthPlace: "",
       relationship: "",
     },
     date: "2024-01-15T00:00:00Z",

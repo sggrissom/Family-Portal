@@ -863,6 +863,23 @@ the checkbox only when the record is already flagged or the date is in the
 future, which is the rule a client should mirror rather than showing it against
 every adult.
 
+### Birth details
+
+`AddPersonRequest` and `UpdatePersonRequest` take optional `birthTime`
+(`"HH:MM"`, 24-hour, wall clock where the baby was born), `birthPlace` (free
+text, at most 200 characters), `birthWeight` and `birthLength` (`{value,
+unit}`, the same units as `AddCheckup`). Unlike `isPregnancy`, **absence leaves
+the stored value alone**, so a build that predates them never clears one. `""`
+clears a time or place, and `{value: 0}` removes a measurement.
+
+`Person` returns `birthTime` and `birthPlace`. The weight and length are not on
+`Person`: they are ordinary growth records dated on the birthday, so they come
+back in `growthData` and appear on every growth chart at day zero. Editing or
+deleting one of those records from a growth screen edits the birth measurement.
+Correcting the birthday moves every growth record on the old birthday to the
+new one. Someone still flagged `isPregnancy` gets no birth details; the fields
+are ignored.
+
 ---
 
 ## 12. Overviews: Home, Same age, open events

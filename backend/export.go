@@ -311,6 +311,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			Birthday: person.Birthday,
 			Age:      person.Age,
 			ImageId:  person.ProfilePhotoId,
+
+			BirthTime:  person.BirthTime,
+			BirthPlace: person.BirthPlace,
 		}
 	}
 

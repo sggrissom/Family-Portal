@@ -210,11 +210,14 @@ func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 		return err
 	}
 
+	deleteGrowthRecord(tx, growthData)
+	return nil
+}
+
+func deleteGrowthRecord(tx *vbolt.Tx, growthData GrowthData) {
 	vbolt.DeleteTargetTerms(tx, GrowthDataByPersonIndex, growthData.Id)
 	vbolt.DeleteTargetTerms(tx, GrowthDataByFamilyIndex, growthData.Id)
 	vbolt.Delete(tx, GrowthDataBkt, growthData.Id)
-
-	return nil
 }
 
 func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (GrowthData, error) {

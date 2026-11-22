@@ -59,6 +59,8 @@ function person(name: string, profilePhotoId = 0, id = 1, birthday = BIRTHDAY): 
     profileCropY: 50,
     profileCropScale: 1,
     isPregnancy: false,
+    birthTime: "",
+    birthPlace: "",
     relationship: "",
   };
 }

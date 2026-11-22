@@ -22,13 +22,14 @@ interface FieldProps {
   entry: CheckupEntry;
   disabled: boolean;
   note?: string;
+  label?: string;
 }
 
-export const HeightField = ({ entry, disabled, note }: FieldProps) => (
+export const HeightField = ({ entry, disabled, note, label }: FieldProps) => (
   <div className="checkup-field">
     <div className="checkup-field-head">
       <label htmlFor={entry.heightUnit === "ft-in" ? "feet" : "height"}>
-        {copy.measurement.height}
+        {label ?? copy.measurement.height}
       </label>
       <SegmentedControl
         label={copy.measurement.heightUnit}
@@ -69,11 +70,11 @@ export const HeightField = ({ entry, disabled, note }: FieldProps) => (
   </div>
 );
 
-export const WeightField = ({ entry, disabled, note }: FieldProps) => (
+export const WeightField = ({ entry, disabled, note, label }: FieldProps) => (
   <div className="checkup-field">
     <div className="checkup-field-head">
       <label htmlFor={entry.weightUnit === "lb-oz" ? "pounds" : "weight"}>
-        {copy.measurement.weight}
+        {label ?? copy.measurement.weight}
       </label>
       <SegmentedControl
         label={copy.measurement.weightUnit}
