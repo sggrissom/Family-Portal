@@ -343,7 +343,7 @@ type SaveInterviewAnswerResponse struct {
 	Answer    Milestone `json:"answer"`
 }
 
-func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req SaveInterviewAnswerRequest) (Interview, Milestone, error) {
+func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, userId int, req SaveInterviewAnswerRequest) (Interview, Milestone, error) {
 	if !slices.Contains(interview.QuestionIds, req.QuestionId) {
 		return interview, Milestone{}, ErrInterviewQuestionNotFound
 	}
@@ -378,6 +378,7 @@ func saveInterviewAnswerTx(tx *vbolt.Tx, interview Interview, person Person, req
 			Context:       renderQuestion(q.Text, person, interview.Date),
 			MilestoneDate: interview.Date,
 			CreatedAt:     time.Now(),
+			CreatedBy:     userId,
 			InterviewId:   interview.Id,
 			QuestionId:    q.Id,
 		}
@@ -398,7 +399,7 @@ func SaveInterviewAnswer(ctx *vbeam.Context, req SaveInterviewAnswerRequest) (re
 	if err != nil {
 		return
 	}
-	resp.Interview, resp.Answer, err = saveInterviewAnswerTx(ctx.Tx, interview, person, req)
+	resp.Interview, resp.Answer, err = saveInterviewAnswerTx(ctx.Tx, interview, person, user.Id, req)
 	if err != nil {
 		return
 	}

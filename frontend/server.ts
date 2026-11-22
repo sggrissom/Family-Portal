@@ -290,6 +290,10 @@ export interface AddPersonRequest {
     birthdate: string
     isPregnancy: boolean
     familyId: number
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
     stated: StatedRelation
     anchorId: number
     additionalAnchorIds: number[]
@@ -320,6 +324,10 @@ export interface UpdatePersonRequest {
     gender: number
     birthdate: string
     isPregnancy: boolean
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
 }
 
 export interface SetProfilePhotoRequest {
@@ -2077,6 +2085,13 @@ export interface ShareTargetRef {
     kind: string
 }
 
+export interface BirthDetails {
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -2089,6 +2104,8 @@ export interface Person {
     profileCropY: number
     profileCropScale: number
     isPregnancy: boolean
+    birthTime: string
+    birthPlace: string
     relationship: string
 }
 
@@ -2101,6 +2118,8 @@ export interface GrowthData {
     unit: string
     measurementDate: string
     createdAt: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Milestone {
@@ -2118,6 +2137,8 @@ export interface Milestone {
     questionId: number
     recordTime: RecordTime
     note: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Image {

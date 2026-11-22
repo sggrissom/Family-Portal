@@ -512,6 +512,16 @@ export const copy = {
     notFound: "That moment could not be found.",
     atAge: (age: string) => `at ${age}`,
   },
+  recordedBy: (name: string) => `Added by ${name}`,
+  birth: {
+    section: "Birth details",
+    optional: "Optional. Length and weight start the growth chart at birth.",
+    time: "Time of birth",
+    place: "Place of birth",
+    placeHint: "Hospital, town, or wherever it happened",
+    length: "Length",
+    weight: "Weight",
+  },
   person: {
     tabs: {
       story: "Story",
@@ -522,7 +532,8 @@ export const copy = {
       growth: "Growth",
       activities: "Activities",
     },
-    born: (date: string) => `born ${date}`,
+    born: (date: string, time = "", place = "") =>
+      `born ${date}${time ? ` at ${time}` : ""}${place ? ` in ${place}` : ""}`,
     measured: (ago: string) => `Measured ${ago}`,
     siblingThen: (name: string, value: string) => `${name} was ${value} at this age`,
     entries: (n: number) => (n === 1 ? "1 entry" : `${n} entries`),

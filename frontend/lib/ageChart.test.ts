@@ -26,6 +26,8 @@ const growth = (
   unit,
   measurementDate: date,
   createdAt: date,
+  createdBy: 0,
+  recordedBy: "",
 });
 
 describe("chartPoints", () => {

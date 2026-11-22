@@ -644,7 +644,7 @@ func (r *questionResolver) resolve(a ImportAnswer) (InterviewQuestion, error) {
 	return q, nil
 }
 
-func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in HistoricalInterview) (Interview, []int, error) {
+func saveHistoricalTx(tx *vbolt.Tx, person Person, userId int, r *questionResolver, in HistoricalInterview) (Interview, []int, error) {
 	inputType := in.InputType
 	if inputType == "" {
 		inputType = "date"
@@ -686,7 +686,7 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 		m := Milestone{
 			Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: person.Id, FamilyId: person.FamilyId,
 			Description: text, Category: CategoryInterview, Context: renderQuestion(q.Text, person, interview.Date),
-			MilestoneDate: interview.Date, CreatedAt: time.Now(), InterviewId: interview.Id, QuestionId: q.Id,
+			MilestoneDate: interview.Date, CreatedAt: time.Now(), CreatedBy: userId, InterviewId: interview.Id, QuestionId: q.Id,
 		}
 		writeMilestone(tx, &m)
 		answerIds = append(answerIds, m.Id)
@@ -698,7 +698,7 @@ func saveHistoricalTx(tx *vbolt.Tx, person Person, r *questionResolver, in Histo
 	return interview, answerIds, nil
 }
 
-func importInterviewsTx(tx *vbolt.Tx, person Person, interviews []HistoricalInterview) ([]Interview, []int, error) {
+func importInterviewsTx(tx *vbolt.Tx, person Person, userId int, interviews []HistoricalInterview) ([]Interview, []int, error) {
 	if len(interviews) == 0 {
 		return nil, nil, errors.New("Nothing to import")
 	}
@@ -709,7 +709,7 @@ func importInterviewsTx(tx *vbolt.Tx, person Person, interviews []HistoricalInte
 	var saved []Interview
 	var answerIds []int
 	for i, in := range interviews {
-		interview, ids, err := saveHistoricalTx(tx, person, resolver, in)
+		interview, ids, err := saveHistoricalTx(tx, person, userId, resolver, in)
 		if err != nil {
 			if len(interviews) > 1 {
 				err = fmt.Errorf("Interview %d: %w", i+1, err)
@@ -739,7 +739,7 @@ func ImportInterviews(ctx *vbeam.Context, req ImportInterviewsRequest) (resp Imp
 	}
 	vbeam.UseWriteTx(ctx)
 	var answerIds []int
-	resp.Interviews, answerIds, err = importInterviewsTx(ctx.Tx, GetPersonById(ctx.Tx, req.PersonId), req.Interviews)
+	resp.Interviews, answerIds, err = importInterviewsTx(ctx.Tx, GetPersonById(ctx.Tx, req.PersonId), user.Id, req.Interviews)
 	if err != nil {
 		return
 	}

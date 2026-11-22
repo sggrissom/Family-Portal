@@ -34,6 +34,7 @@ type AddGrowthDataRequest struct {
 	MeasurementDate *string `json:"measurementDate,omitempty"`
 	AgeYears        *int    `json:"ageYears,omitempty"`
 	AgeMonths       *int    `json:"ageMonths,omitempty"`
+	UserId          int     `json:"-"`
 }
 
 type AddGrowthDataResponse struct {
@@ -53,6 +54,7 @@ type AddCheckupRequest struct {
 	AgeMonths       *int          `json:"ageMonths,omitempty"`
 	Height          *CheckupValue `json:"height,omitempty"`
 	Weight          *CheckupValue `json:"weight,omitempty"`
+	UserId          int           `json:"-"`
 }
 
 type AddCheckupResponse struct {
@@ -99,10 +101,12 @@ type GrowthData struct {
 	Unit            string          `json:"unit"`
 	MeasurementDate time.Time       `json:"measurementDate"`
 	CreatedAt       time.Time       `json:"createdAt"`
+	CreatedBy       int             `json:"createdBy"`
+	RecordedBy      string          `json:"recordedBy,omitempty"`
 }
 
 func PackGrowthData(self *GrowthData, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -111,6 +115,9 @@ func PackGrowthData(self *GrowthData, buf *vpack.Buffer) {
 	vpack.String(&self.Unit, buf)
 	vpack.Time(&self.MeasurementDate, buf)
 	vpack.Time(&self.CreatedAt, buf)
+	if version >= 2 {
+		vpack.Int(&self.CreatedBy, buf)
+	}
 }
 
 var GrowthDataBkt = vbolt.Bucket(&cfg.Info, "growth_data", vpack.FInt, PackGrowthData)
@@ -203,11 +210,14 @@ func DeleteGrowthDataTx(tx *vbolt.Tx, growthDataId int, familyId int) error {
 		return err
 	}
 
+	deleteGrowthRecord(tx, growthData)
+	return nil
+}
+
+func deleteGrowthRecord(tx *vbolt.Tx, growthData GrowthData) {
 	vbolt.DeleteTargetTerms(tx, GrowthDataByPersonIndex, growthData.Id)
 	vbolt.DeleteTargetTerms(tx, GrowthDataByFamilyIndex, growthData.Id)
 	vbolt.Delete(tx, GrowthDataBkt, growthData.Id)
-
-	return nil
 }
 
 func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (GrowthData, error) {
@@ -219,7 +229,7 @@ func AddGrowthDataTx(tx *vbolt.Tx, req AddGrowthDataRequest, familyId int) (Grow
 	if err != nil {
 		return GrowthData{}, err
 	}
-	return addGrowthRecord(tx, req.PersonId, familyId, measurementType, CheckupValue{req.Value, req.Unit}, date), nil
+	return addGrowthRecord(tx, req.PersonId, familyId, req.UserId, measurementType, CheckupValue{req.Value, req.Unit}, date), nil
 }
 
 func AddCheckupTx(tx *vbolt.Tx, req AddCheckupRequest, familyId int) ([]GrowthData, error) {
@@ -229,10 +239,10 @@ func AddCheckupTx(tx *vbolt.Tx, req AddCheckupRequest, familyId int) ([]GrowthDa
 	}
 	var records []GrowthData
 	if req.Height != nil {
-		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Height, *req.Height, date))
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, req.UserId, Height, *req.Height, date))
 	}
 	if req.Weight != nil {
-		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, Weight, *req.Weight, date))
+		records = append(records, addGrowthRecord(tx, req.PersonId, familyId, req.UserId, Weight, *req.Weight, date))
 	}
 	return records, nil
 }
@@ -245,7 +255,7 @@ func resolveGrowthDate(tx *vbolt.Tx, personId int, familyId int, inputType strin
 	return resolveEntryDate("Measurement", inputType, date, ageYears, ageMonths, person.Birthday)
 }
 
-func addGrowthRecord(tx *vbolt.Tx, personId int, familyId int, measurementType MeasurementType, value CheckupValue, date time.Time) GrowthData {
+func addGrowthRecord(tx *vbolt.Tx, personId int, familyId int, userId int, measurementType MeasurementType, value CheckupValue, date time.Time) GrowthData {
 	growthData := GrowthData{
 		Id:              vbolt.NextIntId(tx, GrowthDataBkt),
 		PersonId:        personId,
@@ -255,6 +265,7 @@ func addGrowthRecord(tx *vbolt.Tx, personId int, familyId int, measurementType M
 		Unit:            value.Unit,
 		MeasurementDate: date,
 		CreatedAt:       time.Now(),
+		CreatedBy:       userId,
 	}
 	writeGrowthData(tx, growthData)
 	return growthData
@@ -286,6 +297,7 @@ func AddGrowthData(ctx *vbeam.Context, req AddGrowthDataRequest) (resp AddGrowth
 		return
 	}
 
+	req.UserId = user.Id
 	vbeam.UseWriteTx(ctx)
 	growthData, err := AddGrowthDataTx(ctx.Tx, req, familyId)
 	if err != nil {
@@ -329,6 +341,7 @@ func AddCheckup(ctx *vbeam.Context, req AddCheckupRequest) (resp AddCheckupRespo
 		return
 	}
 
+	req.UserId = user.Id
 	vbeam.UseWriteTx(ctx)
 	resp.GrowthData, err = AddCheckupTx(ctx.Tx, req, familyId)
 	if err != nil {
@@ -356,6 +369,7 @@ func GetGrowthData(ctx *vbeam.Context, req GetGrowthDataRequest) (resp GetGrowth
 		return
 	}
 
+	growthData.RecordedBy = recorderName(ctx.Tx, user, growthData.FamilyId, growthData.CreatedBy)
 	resp.GrowthData = growthData
 	return
 }

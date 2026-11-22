@@ -41,6 +41,8 @@ type AddPersonRequest struct {
 	Birthdate   string `json:"birthdate"`
 	IsPregnancy bool   `json:"isPregnancy"`
 	FamilyId    int    `json:"familyId,omitempty"`
+	BirthDetails
+	UserId int `json:"-"`
 
 	Stated   StatedRelation `json:"stated,omitempty"`
 	AnchorId int            `json:"anchorId,omitempty"`
@@ -58,6 +60,7 @@ type UpdatePersonRequest struct {
 	Gender      int    `json:"gender"`
 	Birthdate   string `json:"birthdate"`
 	IsPregnancy bool   `json:"isPregnancy"`
+	BirthDetails
 }
 
 type GetPersonRequest struct {
@@ -175,6 +178,8 @@ type Person struct {
 	ProfileCropScale float64    `json:"profileCropScale"`
 	FaceDescriptor   []float32  `json:"-"`
 	IsPregnancy      bool       `json:"isPregnancy"`
+	BirthTime        string     `json:"birthTime"`
+	BirthPlace       string     `json:"birthPlace"`
 	Relationship     string     `json:"relationship,omitempty"`
 }
 
@@ -198,7 +203,7 @@ func packFloat32Slice(data *[]float32, buf *vpack.Buffer) {
 }
 
 func PackPerson(self *Person, buf *vpack.Buffer) {
-	version := vpack.Version(5, buf)
+	version := vpack.Version(6, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.String(&self.Name, buf)
@@ -220,6 +225,10 @@ func PackPerson(self *Person, buf *vpack.Buffer) {
 	}
 	if version >= 5 {
 		vpack.Bool(&self.IsPregnancy, buf)
+	}
+	if version >= 6 {
+		vpack.String(&self.BirthTime, buf)
+		vpack.String(&self.BirthPlace, buf)
 	}
 }
 
@@ -283,6 +292,7 @@ func AddPersonTx(tx *vbolt.Tx, req AddPersonRequest, familyId int) (Person, erro
 	person.IsPregnancy = req.IsPregnancy
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
 	person.ProfilePhotoId = 0
+	applyBirthDetails(tx, &person, req.UserId, req.BirthDetails)
 
 	vbolt.Write(tx, PeopleBkt, person.Id, &person)
 
@@ -385,12 +395,16 @@ func AddPerson(ctx *vbeam.Context, req AddPersonRequest) (resp GetPersonResponse
 	if err = validateAddPersonRequest(req); err != nil {
 		return
 	}
+	if err = validateBirthDetails(req.BirthDetails); err != nil {
+		return
+	}
 
 	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessContribute)
 	if err != nil {
 		return
 	}
 
+	req.UserId = user.Id
 	vbeam.UseWriteTx(ctx)
 	person, err := AddPersonTx(ctx.Tx, req, familyId)
 	if err != nil {
@@ -437,6 +451,9 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 	}); err != nil {
 		return
 	}
+	if err = validateBirthDetails(req.BirthDetails); err != nil {
+		return
+	}
 
 	vbeam.UseWriteTx(ctx)
 
@@ -452,11 +469,15 @@ func UpdatePerson(ctx *vbeam.Context, req UpdatePersonRequest) (resp GetPersonRe
 		return
 	}
 
+	if !req.IsPregnancy {
+		moveBirthRecords(ctx.Tx, person.Id, person.Birthday, parsedTime)
+	}
 	person.Name = req.Name
 	person.Gender = GenderType(req.Gender)
 	person.Birthday = parsedTime
 	person.IsPregnancy = req.IsPregnancy
 	person.Age = calculatePersonAge(parsedTime, person.IsPregnancy)
+	applyBirthDetails(ctx.Tx, &person, user.Id, req.BirthDetails)
 
 	vbolt.Write(ctx.Tx, PeopleBkt, person.Id, &person)
 	ReresolveAnchoredRecords(ctx.Tx, person.Id)
@@ -701,8 +722,20 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	resp.MergedPhotos = mergedPhotoCount
 
 	moveFacesToPersonTx(ctx.Tx, req.SourcePersonId, req.TargetPersonId)
+	filled := false
 	if len(targetPerson.FaceDescriptor) != 128 && len(sourcePerson.FaceDescriptor) == 128 {
 		targetPerson.FaceDescriptor = sourcePerson.FaceDescriptor
+		filled = true
+	}
+	if targetPerson.BirthTime == "" && sourcePerson.BirthTime != "" {
+		targetPerson.BirthTime = sourcePerson.BirthTime
+		filled = true
+	}
+	if targetPerson.BirthPlace == "" && sourcePerson.BirthPlace != "" {
+		targetPerson.BirthPlace = sourcePerson.BirthPlace
+		filled = true
+	}
+	if filled {
 		vbolt.Write(ctx.Tx, PeopleBkt, targetPerson.Id, &targetPerson)
 	}
 

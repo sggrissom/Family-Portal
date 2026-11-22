@@ -165,6 +165,9 @@ const ViewMilestonePage = ({
             ` · ${copy.milestoneDetail.atAge(formatAgeAtMeasurement(age))}`}
           {` · ${recordDateLabel(milestone.recordTime, milestone.milestoneDate, formatDate)}`}
         </p>
+        {milestone.recordedBy && (
+          <p className="milestone-detail-meta">{copy.recordedBy(milestone.recordedBy)}</p>
+        )}
         <PhotoStrip photoIds={milestone.photoIds} />
         {canContribute(milestone.familyId) && (
           <div className="milestone-detail-actions">

@@ -778,6 +778,15 @@ An older server has no such proc; keep the queue and never fall back to
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.
 
+`Milestone` and `GrowthData` carry `createdBy`, the user id of the account that
+added the record, taken from the session and never from the request. It is 0
+for records from before it was kept, for imports whose recorder isn't a member
+of the importing family, and for seeded data; show nothing for those rather
+than guessing. Editing a record doesn't change it. `GetMilestone` and
+`GetGrowthData` also return `recordedBy`, the account's name, but only to
+members of the record's own family, and omit it when the account is gone. List
+responses carry `createdBy` alone; resolve it against `ListFamilyMembers`.
+
 ---
 
 ## 11. Relationships
@@ -853,6 +862,23 @@ day old — so the flag is not something to derive from the date. The web offers
 the checkbox only when the record is already flagged or the date is in the
 future, which is the rule a client should mirror rather than showing it against
 every adult.
+
+### Birth details
+
+`AddPersonRequest` and `UpdatePersonRequest` take optional `birthTime`
+(`"HH:MM"`, 24-hour, wall clock where the baby was born), `birthPlace` (free
+text, at most 200 characters), `birthWeight` and `birthLength` (`{value,
+unit}`, the same units as `AddCheckup`). Unlike `isPregnancy`, **absence leaves
+the stored value alone**, so a build that predates them never clears one. `""`
+clears a time or place, and `{value: 0}` removes a measurement.
+
+`Person` returns `birthTime` and `birthPlace`. The weight and length are not on
+`Person`: they are ordinary growth records dated on the birthday, so they come
+back in `growthData` and appear on every growth chart at day zero. Editing or
+deleting one of those records from a growth screen edits the birth measurement.
+Correcting the birthday moves every growth record on the old birthday to the
+new one. Someone still flagged `isPregnancy` gets no birth details; the fields
+are ignored.
 
 ---
 
