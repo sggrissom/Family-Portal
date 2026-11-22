@@ -3344,6 +3344,36 @@ export interface PublishedResult {
     detail: string
 }
 
+export interface GetRecapRequest {
+    token: string
+}
+
+export interface GetRecapResponse {
+    recap: PublishedRecap
+}
+
+export interface PublishedRecap {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: PublishedRoutine[]
+}
+
+export interface PublishedRoutine {
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: PublishedPerformance[]
+}
+
+export interface PublishedPerformance {
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
 export interface RecapLinkView {
     id: number
     createdAt: string
@@ -4133,5 +4163,9 @@ export async function ListRecapLinks(data: ListRecapLinksRequest): Promise<rpc.R
 
 export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc.Response<DeleteResponse>> {
     return await rpc.call<DeleteResponse>('RevokeRecapLink', JSON.stringify(data));
+}
+
+export async function GetRecap(data: GetRecapRequest): Promise<rpc.Response<GetRecapResponse>> {
+    return await rpc.call<GetRecapResponse>('GetRecap', JSON.stringify(data));
 }
 

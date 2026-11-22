@@ -123,6 +123,8 @@ var (
 	ErrRecapLinkLimit      = errors.New("This event already has as many recap links as it can hold. Turn one off first.")
 	ErrRecapLinkNotFound   = errors.New("Recap link not found")
 	ErrRecapLinkNotAllowed = errors.New("Only the person who created this link or a family admin can turn it off")
+	// One answer for unknown, expired and revoked tokens, so the reply says nothing about which.
+	ErrRecapUnavailable = errors.New("This link isn't available")
 )
 
 func hashRecapToken(token string) string {
@@ -238,4 +240,14 @@ type ListRecapLinksResponse struct {
 
 type RevokeRecapLinkRequest struct {
 	Id int `json:"id"`
+}
+
+// GetRecapRequest is the public read behind /recap/<token>. The token travels
+// in the body, never in the request path, so it stays out of URL logs.
+type GetRecapRequest struct {
+	Token string `json:"token"`
+}
+
+type GetRecapResponse struct {
+	Recap PublishedRecap `json:"recap"`
 }
