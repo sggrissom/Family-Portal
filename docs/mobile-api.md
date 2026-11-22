@@ -54,6 +54,8 @@ Two things answer before authentication, and only two:
   (`backend/universal_links.go`).
 
 `/healthz` and `/readyz` are for the deploy, not for the app. Do not poll them.
+`/recap/<token>` pages are for people without an account (§12, Recap links);
+they are not universal links and the app never fetches them.
 
 ---
 
@@ -1026,6 +1028,27 @@ every keystroke: an empty query returns empty groups, not an error.
   fixed order (People, Moments, Photos, Tags, Places, Activities, Books) and
   hide empty ones.
 
+### Recap links
+
+A recap link is an account-free page at `/recap/<token>` showing one
+competition recap. It serves a snapshot, so later edits to the event never
+reach it.
+
+- `CreateRecapLink { eventId, expiresInDays, recap }` needs contribute access to
+  the event's family. `recap` is the share preview as built for the attachment
+  and copy text, with nulls sent as `""`. Each routine carries its `entryId` and
+  each performance its `appearanceId` and current `revision`. The server
+  refuses an id from another event or season and a repeated routine or
+  performance. It also refuses a revision that has moved on ("These results
+  changed since you opened them…"), so publish only from synced results.
+  `expiresInDays` is 0 (until turned off) to 365; 20 links per event.
+- The response's `url` holds the only copy of the token. The server stores a
+  hash, so neither `ListRecapLinks` nor anything else can return the URL again.
+- `ListRecapLinks { eventId }` returns the event's links, newest first, expired
+  ones included with `expired: true`. `RevokeRecapLink { id }` deletes one. It
+  is allowed for the link's creator or a family admin, as `canRevoke` says.
+  Deleting the event deletes its links.
+
 ---
 
 ## 13. Retries and idempotency
@@ -1073,6 +1096,7 @@ header; there is no faster path.
 | upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
 | photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |
+| recap-read | 60 | 5 min | `/recap/*` (public recap pages) |
 | **default** | **300** | **1 min** | everything else under `/api/` and `/rpc/` |
 
 Buckets are per client and in-process; a restart resets them.

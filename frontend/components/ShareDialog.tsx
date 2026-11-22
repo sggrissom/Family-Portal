@@ -140,10 +140,19 @@ export interface ShareDialogProps {
   enabled: boolean;
   link?: string | null;
   notes?: preact.ComponentChild;
+  footer?: preact.ComponentChild;
   children?: preact.ComponentChildren;
 }
 
-export const ShareDialog = ({ state, text, enabled, link, notes, children }: ShareDialogProps) => {
+export const ShareDialog = ({
+  state,
+  text,
+  enabled,
+  link,
+  notes,
+  footer,
+  children,
+}: ShareDialogProps) => {
   if (!state.open) return null;
   const rendered = enabled ? state.rendered : null;
   const isPdf = rendered?.kind === "pdf";
@@ -228,6 +237,7 @@ export const ShareDialog = ({ state, text, enabled, link, notes, children }: Sha
           )}
         </div>
         {link && <p className="share-dialog-note">{copy.share.linkNote}</p>}
+        {footer}
       </div>
     </div>
   );

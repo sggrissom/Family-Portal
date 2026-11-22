@@ -659,5 +659,38 @@ export const copy = {
     linkNote: "The link opens only for people who can already see this family.",
     close: "Close",
     pages: (n: number) => (n === 1 ? "1 page" : `${n} pages`),
+    recapLink: {
+      title: "Recap link",
+      explain:
+        "A page anyone with the link can open, no account needed. It shows what's in this preview, and later edits won't change it.",
+      lasts: "Link works for",
+      expiryOptions: [
+        { days: 7, label: "7 days" },
+        { days: 30, label: "30 days" },
+        { days: 90, label: "90 days" },
+        { days: 0, label: "Until turned off" },
+      ],
+      create: "Create recap link",
+      confirm: (included: string, showsNames: boolean, lasts: string) =>
+        `Publish ${included} ${showsNames ? "with names" : "without names"}, working ${lasts}?`,
+      untilTurnedOff: "until you turn it off",
+      forDays: (days: number) => `for ${days} days`,
+      publish: "Publish link",
+      publishing: "Publishing…",
+      cancel: "Cancel",
+      created: "Copy this link now. For privacy it isn't stored, so it can't be shown again.",
+      copy: "Copy link",
+      turnOffNote:
+        "Turning a link off ends access through it. Copies people saved, and previews kept by messaging apps, stay with them.",
+      existing: "Links for this event",
+      createdBy: (day: string, name: string) =>
+        name ? `Created ${day} by ${name}` : `Created ${day}`,
+      expires: (day: string) => `Expires ${day}`,
+      noExpiry: "No expiry",
+      expired: "Expired",
+      turnOff: "Turn off",
+      remove: "Remove",
+      loadFailed: "Couldn't load this event's recap links.",
+    },
   },
 };
