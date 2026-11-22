@@ -59,6 +59,8 @@ function person(name: string, profilePhotoId = 0, id = 1, birthday = BIRTHDAY): 
     profileCropY: 50,
     profileCropScale: 1,
     isPregnancy: false,
+    birthTime: "",
+    birthPlace: "",
     relationship: "",
   };
 }
@@ -81,6 +83,8 @@ function milestones(list: M[], personId = 1, firstId = 1): server.Milestone[] {
     questionId: 0,
     recordTime: exactRecordTime(day(offset)),
     note: "",
+    createdBy: 0,
+    recordedBy: "",
   }));
 }
 
@@ -127,6 +131,8 @@ function growth(
     unit: kind === "h" ? "in" : "lbs",
     measurementDate: day(offset),
     createdAt: day(offset),
+    createdBy: 0,
+    recordedBy: "",
   }));
 }
 

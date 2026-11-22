@@ -16,6 +16,8 @@ import {
 } from "../../lib/relations";
 import { CoAnchorPicker } from "../../components/CoAnchorPicker";
 import { FormError } from "../../components/FormError";
+import { BirthDetailsFields } from "../../components/BirthDetailsFields";
+import { BirthForm, birthDetailsRequest, newBirthForm } from "../../lib/birthDetails";
 import "./add-person-styles";
 
 type Data = {
@@ -32,6 +34,7 @@ type AddPersonForm = {
   gender: number;
   birthdate: string;
   isPregnancy: boolean;
+  birth: BirthForm;
   familyId: number;
   coAnchors: CoAnchorState;
   partnerChildren: CoAnchorState;
@@ -48,6 +51,7 @@ const useAddPersonForm = vlens.declareHook(
     gender: 2,
     birthdate: "",
     isPregnancy: false,
+    birth: newBirthForm(),
     familyId: 0,
     coAnchors: { key: "", ids: [] },
     partnerChildren: { key: "", ids: [] },
@@ -141,6 +145,12 @@ function anchorGroups(people: server.Person[], familyId: number) {
 
 async function onAddPersonClicked(form: AddPersonForm, event: Event) {
   event.preventDefault();
+  const birth = birthDetailsRequest(form.birth);
+  if (!form.isPregnancy && birth.error) {
+    form.error = birth.error;
+    vlens.scheduleRedraw();
+    return;
+  }
   form.loading = true;
   form.error = "";
   form.success = false;
@@ -157,6 +167,9 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       anchorId: relation ? form.anchorId : 0,
       additionalAnchorIds: relation ? form.coAnchors.ids : [],
       childIds: relation?.value === server.StatedPartner ? form.partnerChildren.ids : [],
+      ...(form.isPregnancy
+        ? { birthTime: null, birthPlace: null, birthWeight: null, birthLength: null }
+        : birth.details),
     });
 
     form.loading = false;
@@ -170,6 +183,7 @@ async function onAddPersonClicked(form: AddPersonForm, event: Event) {
       form.gender = 2;
       form.birthdate = "";
       form.isPregnancy = false;
+      form.birth = newBirthForm();
       form.familyId = 0;
 
       navigate("/dashboard");
@@ -371,6 +385,8 @@ const AddPersonPage = ({
               : "Use the pregnancy option for an expected baby."}
           </small>
         </div>
+
+        {!form.isPregnancy && <BirthDetailsFields form={form.birth} disabled={form.loading} />}
 
         <div className="form-actions">
           <button

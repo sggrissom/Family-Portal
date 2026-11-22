@@ -24,6 +24,9 @@ type ImportPerson struct {
 	Birthday time.Time `json:"Birthday"`
 	Age      string    `json:"Age"`
 	ImageId  int       `json:"ImageId"`
+
+	BirthTime  string `json:"BirthTime,omitempty"`
+	BirthPlace string `json:"BirthPlace,omitempty"`
 }
 
 type ImportHeight struct {
@@ -34,6 +37,7 @@ type ImportHeight struct {
 	DateString string    `json:"DateString"`
 	Age        float64   `json:"Age"`
 	PersonName string    `json:"PersonName"`
+	RecordedBy string    `json:"RecordedBy,omitempty"`
 }
 
 type ImportWeight struct {
@@ -44,6 +48,7 @@ type ImportWeight struct {
 	DateString string    `json:"DateString"`
 	Age        float64   `json:"Age"`
 	PersonName string    `json:"PersonName"`
+	RecordedBy string    `json:"RecordedBy,omitempty"`
 }
 
 type ImportDataStructure struct {
@@ -412,6 +417,7 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 				warnings = append(warnings, "Skipped duplicate person: "+importPerson.Name)
 				continue
 			} else if mergeStrategy == "merge_people" {
+				fillBirthDetails(tx, *existingPerson, importPerson)
 				personIdMapping[importPerson.Id] = existingPerson.Id
 				mergedCount++
 				warnings = append(warnings, "Merged with existing person: "+importPerson.Name)
@@ -426,6 +432,7 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, merge
 		person.Gender = GenderType(importPerson.Gender)
 		person.Birthday = dayStart(importPerson.Birthday)
 		person.Age = calculateAge(person.Birthday)
+		person.BirthTime, person.BirthPlace = importedBirthDetails(importPerson)
 
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		updatePersonIndex(tx, person)
@@ -445,14 +452,16 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 		value    float64
 		unit     string
 		date     time.Time
+		recorder string
 	}
 	var measurements []measurement
 	for _, height := range importHeights {
-		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", dayStart(height.Date)})
+		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", dayStart(height.Date), height.RecordedBy})
 	}
 	for _, weight := range importWeights {
-		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", dayStart(weight.Date)})
+		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", dayStart(weight.Date), weight.RecordedBy})
 	}
+	recorderOf := importRecorders(tx, familyId)
 
 	var errors []string
 	importedCount := 0
@@ -476,6 +485,7 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 			Unit:            m.unit,
 			MeasurementDate: m.date,
 			CreatedAt:       time.Now(),
+			CreatedBy:       recorderOf(m.recorder),
 		})
 		importedCount++
 	}
@@ -681,6 +691,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 	var errors []string
 	importedCount := 0
 	skippedCount := 0
+	recorderOf := importRecorders(tx, familyId)
 
 	for _, milestone := range importMilestones {
 		if milestone.InterviewId > 0 || milestone.Category == CategoryInterview {
@@ -720,6 +731,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, personId
 			MilestoneDate: milestone.MilestoneDate,
 			RecordTime:    recordTime,
 			CreatedAt:     time.Now(),
+			CreatedBy:     recorderOf(milestone.RecordedBy),
 		}
 		writeMilestone(tx, &newMilestone)
 

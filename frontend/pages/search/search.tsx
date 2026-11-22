@@ -47,16 +47,17 @@ type SearchData = {
   query: string;
   people: server.Person[];
   result: server.SearchResponse | null;
+  error: string;
 };
 
 export async function fetch(route: string, prefix: string): Promise<rpc.Response<SearchData>> {
   const query = queryOfRoute(route);
   if (!(await ensureAuthInFetch())) {
-    return rpc.ok<SearchData>({ query, people: [], result: null });
+    return rpc.ok<SearchData>({ query, people: [], result: null, error: "" });
   }
-  const [[people], [result]] = await Promise.all([
+  const [[people], [result, error]] = await Promise.all([
     server.ListPeople({}),
-    query ? server.Search({ query, ignore: [], limit: 0 }) : Promise.resolve([null, ""] as const),
+    query ? search({ query, ignore: [], limit: 0 }) : rpc.asResponse(null),
   ]);
   return rpc.ok<SearchData>({
     query,
@@ -65,7 +66,8 @@ export async function fetch(route: string, prefix: string): Promise<rpc.Response
       people?.relations ?? [],
       auth.getAuth()?.familyId ?? 0
     ),
-    result: result ?? null,
+    result,
+    error: query && !result ? error || copy.search.failed : "",
   });
 }
 
@@ -112,6 +114,10 @@ const useSearchState = vlens.declareHook(
   })
 );
 
+function search(request: server.SearchRequest): Promise<rpc.Response<server.SearchResponse>> {
+  return server.Search(request).catch(() => rpc.err(copy.search.failed));
+}
+
 async function runSearch(state: SearchState) {
   window.clearTimeout(state.timer);
   const seq = ++state.seq;
@@ -124,8 +130,9 @@ async function runSearch(state: SearchState) {
     return;
   }
   state.loading = true;
+  state.error = "";
   vlens.scheduleRedraw();
-  const [result, err] = await server.Search({ query, ignore: state.ignore, limit: state.limit });
+  const [result, err] = await search({ query, ignore: state.ignore, limit: state.limit });
   if (seq !== state.seq) return;
   state.loading = false;
   state.error = result ? "" : err || copy.search.failed;
@@ -134,7 +141,11 @@ async function runSearch(state: SearchState) {
 }
 
 function setQuery(state: SearchState, query: string) {
+  state.seq++;
   state.query = query;
+  state.result = null;
+  state.error = "";
+  state.loading = !!query.trim();
   state.ignore = [];
   state.limit = 0;
   window.history.replaceState(window.history.state, "", searchRoute(query));
@@ -239,8 +250,9 @@ const SearchPage = ({ data }: { data: SearchData }) => {
     state.ignore = [];
     state.limit = 0;
     state.result = data.result;
-    state.error = "";
+    state.error = data.error;
     state.loading = false;
+    window.clearTimeout(state.timer);
     state.seq++;
     state.focusInput = !data.query;
   }

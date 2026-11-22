@@ -239,6 +239,44 @@ test("an infant's weight is entered and shown in pounds and ounces", async ({ pa
   await expect(page.locator(".growth-detail-value").last()).toContainText("9 lb 2 oz");
 });
 
+test("birth details are shown on the profile and loaded back for editing", async ({ page }) => {
+  const baby = { name: "UI Newborn", birthdate: monthsAgo(1) };
+
+  await page.goto("/create-account");
+  await page.getByLabel("Full Name").fill(account.name);
+  await page.getByLabel("Email Address").fill(freshEmail());
+  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  await page.getByLabel("Confirm Password").fill(account.password);
+  await page.getByLabel("Birthday").fill(account.birthdate);
+  await page.getByRole("button", { name: "Create Account" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.getByRole("link", { name: "Add family member" }).click();
+  await page.locator("#name").fill(baby.name);
+  await page.locator("#gender").selectOption("1");
+  await page.locator("#birthdate").fill(baby.birthdate);
+  await page.getByText("Birth details", { exact: true }).click();
+  await page.locator("#birth-time").fill("04:12");
+  await page.locator("#birth-place").fill("Home");
+  await page.locator("#height").fill("20");
+  await page.locator("#pounds").fill("7");
+  await page.locator("#ounces").fill("4");
+  await page.getByRole("button", { name: "Add Family Member" }).click();
+  await expect(personCard(page, baby.name)).toBeVisible();
+
+  await personCard(page, baby.name).click();
+  await expect(page.getByRole("heading", { name: baby.name, level: 1 })).toBeVisible();
+  await expect(page.locator(".profile-age")).toContainText("at 4:12 AM in Home");
+
+  await page.locator(".profile-actions").getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/edit-person\/\d+$/);
+  await expect(page.locator("#birth-place")).toHaveValue("Home");
+  await expect(page.locator("#birth-time")).toHaveValue("04:12");
+  await expect(page.locator("#height")).toHaveValue("20");
+  await expect(page.locator("#pounds")).toHaveValue("7");
+  await expect(page.locator("#ounces")).toHaveValue("4");
+});
+
 test("a person is deleted from their edit page after seeing what goes with them", async ({
   page,
 }) => {

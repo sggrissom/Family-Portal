@@ -1,6 +1,7 @@
-import { CalendarDays, Pencil, Ruler, Scale, Target, Trash2 } from "lucide-preact";
+import { CalendarDays, Pencil, Ruler, Scale, Share2, Target, Trash2 } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
+import * as vlens from "vlens";
 import * as core from "vlens/core";
 import * as rpc from "vlens/rpc";
 import * as server from "../../server";
@@ -26,6 +27,22 @@ import {
 } from "../../lib/growthComparison";
 import { sameAgePath } from "../../lib/sameAge";
 import { copy } from "../../lib/copy";
+import {
+  ShareDialog,
+  ShareDialogState,
+  ShareToggle,
+  newShareDialog,
+  openShareDialog,
+  syncShareRender,
+} from "../../components/ShareDialog";
+import {
+  MeasurementShare,
+  buildMeasurementShare,
+  measurementShareText,
+  omitRows,
+  shareRowIds,
+} from "../../lib/share/measurementShare";
+import { renderMeasurementShare } from "../../lib/share/render";
 import "./view-growth-styles";
 import { setPagePerson } from "../../lib/appNav";
 
@@ -92,15 +109,38 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
     );
   }
 
+  const share = useMeasurementShare();
+  if (share.route !== route) {
+    share.route = route;
+    share.omitted = new Set();
+  }
+  const full = buildMeasurementShare({
+    measurements: data.measurements,
+    person,
+    familyMembers: data.familyMembers.map(item => ({
+      person: item.person,
+      growthData: item.growthData,
+    })),
+    relationGroups: data.relationGroups,
+  });
+
   return (
     <div>
       <Header isHome={false} />
+      {full && <MeasurementShareDialog share={share} full={full} route={route} />}
       <main id="app" className="view-growth-container">
         <div className="view-growth-page">
           <div className="view-growth-header">
             <a href={`/profile/${person.id}`} className="back-link">
               ← Back to {person.name}'s Profile
             </a>
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              onClick={vlens.cachePartial(openShareDialog, share.dialog)}
+            >
+              <Icon symbol={Share2} /> {copy.share.action}
+            </button>
           </div>
           {data.measurements
             .filter(growthData => growthData.personId === person.id)
@@ -120,6 +160,65 @@ export function view(route: string, prefix: string, data: ViewGrowthData): preac
     </div>
   );
 }
+
+type MeasurementShareState = { dialog: ShareDialogState; omitted: Set<string>; route: string };
+
+const useMeasurementShare = vlens.declareHook(
+  (): MeasurementShareState => ({ dialog: newShareDialog(), omitted: new Set(), route: "" })
+);
+
+function toggleRow(state: MeasurementShareState, id: string) {
+  if (state.omitted.has(id)) state.omitted.delete(id);
+  else state.omitted.add(id);
+  vlens.scheduleRedraw();
+}
+
+function toggleAllRows(state: MeasurementShareState, ids: string[]) {
+  state.omitted = ids.every(id => !state.omitted.has(id)) ? new Set(ids) : new Set();
+  vlens.scheduleRedraw();
+}
+
+const MeasurementShareDialog = ({
+  share,
+  full,
+  route,
+}: {
+  share: MeasurementShareState;
+  full: MeasurementShare;
+  route: string;
+}) => {
+  const shown = omitRows(full, share.omitted);
+  const ids = shareRowIds(full);
+  syncShareRender(share.dialog, JSON.stringify(shown), () => renderMeasurementShare(shown));
+  const link = `${window.location.origin}${route.split("?")[0]}`;
+
+  return (
+    <ShareDialog state={share.dialog} text={measurementShareText(shown)} enabled link={link}>
+      <h3>{copy.share.comparisons}</h3>
+      {ids.length === 0 ? (
+        <p className="share-dialog-note">{copy.share.noComparisons}</p>
+      ) : (
+        <>
+          <ShareToggle
+            label={copy.share.allComparisons}
+            checked={ids.every(id => !share.omitted.has(id))}
+            onToggle={vlens.cachePartial(toggleAllRows, share, ids)}
+          />
+          {full.sections.flatMap(section =>
+            section.rows.map(row => (
+              <ShareToggle
+                key={row.id}
+                label={full.sections.length > 1 ? `${section.label}: ${row.heading}` : row.heading}
+                checked={!share.omitted.has(row.id)}
+                onToggle={vlens.cachePartial(toggleRow, share, row.id)}
+              />
+            ))
+          )}
+        </>
+      )}
+    </ShareDialog>
+  );
+};
 
 interface ViewGrowthPageProps {
   growthData: server.GrowthData;

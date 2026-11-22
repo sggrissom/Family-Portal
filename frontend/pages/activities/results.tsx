@@ -7,6 +7,7 @@ import {
   ResultKindPlacement,
   ResultKindScore,
   resultText,
+  sortResults,
 } from "../../lib/activityResults";
 import "./results-styles";
 
@@ -49,8 +50,6 @@ function podiumClass(result: server.Result): string {
   return ` result-badge-podium result-badge-p${result.rank}`;
 }
 
-const badgeOrder = [ResultKindPlacement, ResultKindAdjudication, ResultKindAward, ResultKindScore];
-
 export const ResultBadges = ({
   results,
   people,
@@ -58,9 +57,7 @@ export const ResultBadges = ({
   results: server.Result[] | null;
   people: server.Person[];
 }): preact.ComponentChild => {
-  const rows = [...(results ?? [])].sort(
-    (a, b) => badgeOrder.indexOf(a.kind) - badgeOrder.indexOf(b.kind)
-  );
+  const rows = sortResults(results);
   if (rows.length === 0) return null;
 
   return (

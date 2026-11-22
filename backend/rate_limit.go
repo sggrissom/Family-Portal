@@ -38,6 +38,7 @@ var (
 	rateRulePhotoRead     = RateLimitRule{Name: "photo-read", Burst: 600, Window: 5 * time.Minute}
 	rateRuleSnapshot      = RateLimitRule{Name: "snapshot", Burst: 10, Window: time.Hour}
 	rateRuleClientError   = RateLimitRule{Name: "client-error", Burst: 20, Window: 5 * time.Minute}
+	rateRuleRecapRead     = RateLimitRule{Name: "recap-read", Burst: 60, Window: 5 * time.Minute}
 	rateRuleDefault       = RateLimitRule{Name: "default", Burst: 300, Window: time.Minute}
 )
 
@@ -68,6 +69,7 @@ var exactPathRules = map[string]RateLimitRule{
 	"/rpc/JoinFamily":                 rateRuleInviteCode,
 	"/rpc/AcceptFamilyLink":           rateRuleInviteCode,
 	"/rpc/ImportData":                 rateRuleImport,
+	"/rpc/GetRecap":                   rateRuleRecapRead,
 }
 
 var prefixPathRules = []struct {
@@ -77,6 +79,7 @@ var prefixPathRules = []struct {
 	{prefix: "/api/photo/", rule: rateRulePhotoRead},
 	{prefix: localMediaObjectPrefix, rule: rateRulePhotoRead},
 	{prefix: localMediaUploadPrefix, rule: rateRuleUpload},
+	{prefix: RecapPathPrefix, rule: rateRuleRecapRead},
 }
 
 func ruleForPath(path string) (RateLimitRule, bool) {
@@ -218,7 +221,7 @@ func (rw *RateLimitWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	LogWarnWithRequest(r, LogCategorySystem, "Rate limit exceeded", map[string]interface{}{
 		"rule":       rule.Name,
-		"path":       r.URL.Path,
+		"path":       redactRecapPath(r.URL.Path),
 		"retryAfter": retryAfter.Seconds(),
 	})
 	respondRateLimited(w, r, retryAfter)

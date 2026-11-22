@@ -44,13 +44,10 @@ Not scoped. "New entity" means the checklist in
   competition from photos close together in time, with shared people and places
   as supporting evidence. The family accepts, edits or dismisses; nothing
   becomes a record automatically.
-- **Birth details.** Birth time, weight, length, place. Weight and length seed
-  the growth chart at day zero.
 - **In memoriam.** Mark someone as passed without deleting them.
 - **Family tree view.** Relations are already a graph with derived labels;
   drawing it is mostly frontend work.
 - **Pregnancy record.** `IsPregnancy` exists with nothing to record against it.
-- **Who recorded it.** Moments and growth don't store who added them.
 
 ## Adding a new domain entity
 

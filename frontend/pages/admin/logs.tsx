@@ -209,6 +209,7 @@ async function loadLogContent() {
 
 async function lookUpReference() {
   const state = logsPageHook();
+  if (state.referenceLoading) return;
   if (!state.referenceInput.trim()) {
     state.referenceResult = null;
     state.referenceError = "";
@@ -220,10 +221,12 @@ async function lookUpReference() {
   state.referenceError = "";
   vlens.scheduleRedraw();
 
-  const [result, err] = await server.LookupLogReference({
-    reference: state.referenceInput,
-    context: 10,
-  });
+  const [result, err] = await server
+    .LookupLogReference({
+      reference: state.referenceInput,
+      context: 10,
+    })
+    .catch(() => rpc.err<server.LookupLogReferenceResponse>("Couldn't look up the reference."));
 
   state.referenceLoading = false;
   if (err) {
@@ -238,6 +241,11 @@ async function lookUpReference() {
 
 function clearReference() {
   const state = logsPageHook();
+  const url = new URL(window.location.href);
+  if (url.searchParams.has("ref")) {
+    url.searchParams.delete("ref");
+    window.history.replaceState(window.history.state, "", url);
+  }
   state.referenceInput = "";
   state.referenceResult = null;
   state.referenceError = "";
@@ -512,7 +520,15 @@ function ReferenceLookupPanel({ state }: { state: LogsPageState }) {
         state.referenceLoading ? "Looking…" : "Look up"
       ),
       result || state.referenceError
-        ? preact.h("button", { className: "pagination-btn", onClick: clearReference }, "Clear")
+        ? preact.h(
+            "button",
+            {
+              className: "pagination-btn",
+              onClick: clearReference,
+              disabled: state.referenceLoading,
+            },
+            "Clear"
+          )
         : null,
     ]),
 

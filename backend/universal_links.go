@@ -28,9 +28,11 @@ var universalLinkPaths = []string{
 	"/compare",
 	"/profile/*",
 	"/person-activities/*",
-	// A record's own page; the iOS widgets open these, and a push can too.
+	// A record's own page; the iOS widgets open these, a push can too, and
+	// a shared measurement's family link is one.
 	"/view-photo/*",
 	"/milestone/*",
+	"/view-growth/*",
 	// The annual interview: an interview's page and conduct screen, setup,
 	// typing in a past one and comparing (all under /interview/), the
 	// family's Interviews page and the question list.

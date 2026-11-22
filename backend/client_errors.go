@@ -37,7 +37,7 @@ func clientErrorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	report.Message = truncate(strings.TrimSpace(report.Message), maxClientErrorField)
-	report.Route = truncate(strings.TrimSpace(report.Route), maxClientErrorField)
+	report.Route = truncate(redactRecapPath(strings.TrimSpace(report.Route)), maxClientErrorField)
 	report.Source = truncate(strings.TrimSpace(report.Source), maxClientErrorField)
 	report.Stack = truncate(strings.TrimSpace(report.Stack), maxClientErrorStack)
 

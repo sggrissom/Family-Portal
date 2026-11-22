@@ -575,6 +575,7 @@ func deleteSeasonRowTx(tx *vbolt.Tx, id int) {
 }
 
 func deleteEventRowTx(tx *vbolt.Tx, id int) {
+	deleteEventRecapLinksTx(tx, id)
 	vbolt.Delete(tx, EventBkt, id)
 	vbolt.SetTargetSingleTerm(tx, EventBySeasonIndex, id, -1)
 	vbolt.SetTargetSingleTerm(tx, EventByFamilyIndex, id, -1)

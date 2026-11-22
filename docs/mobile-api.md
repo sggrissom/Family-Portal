@@ -54,6 +54,8 @@ Two things answer before authentication, and only two:
   (`backend/universal_links.go`).
 
 `/healthz` and `/readyz` are for the deploy, not for the app. Do not poll them.
+`/recap/<token>` pages are for people without an account (§12, Recap links);
+they are not universal links and the app never fetches them.
 
 ---
 
@@ -778,6 +780,15 @@ An older server has no such proc; keep the queue and never fall back to
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.
 
+`Milestone` and `GrowthData` carry `createdBy`, the user id of the account that
+added the record, taken from the session and never from the request. It is 0
+for records from before it was kept, for imports whose recorder isn't a member
+of the importing family, and for seeded data; show nothing for those rather
+than guessing. Editing a record doesn't change it. `GetMilestone` and
+`GetGrowthData` also return `recordedBy`, the account's name, but only to
+members of the record's own family, and omit it when the account is gone. List
+responses carry `createdBy` alone; resolve it against `ListFamilyMembers`.
+
 ---
 
 ## 11. Relationships
@@ -853,6 +864,23 @@ day old — so the flag is not something to derive from the date. The web offers
 the checkbox only when the record is already flagged or the date is in the
 future, which is the rule a client should mirror rather than showing it against
 every adult.
+
+### Birth details
+
+`AddPersonRequest` and `UpdatePersonRequest` take optional `birthTime`
+(`"HH:MM"`, 24-hour, wall clock where the baby was born), `birthPlace` (free
+text, at most 200 characters), `birthWeight` and `birthLength` (`{value,
+unit}`, the same units as `AddCheckup`). Unlike `isPregnancy`, **absence leaves
+the stored value alone**, so a build that predates them never clears one. `""`
+clears a time or place, and `{value: 0}` removes a measurement.
+
+`Person` returns `birthTime` and `birthPlace`. The weight and length are not on
+`Person`: they are ordinary growth records dated on the birthday, so they come
+back in `growthData` and appear on every growth chart at day zero. Editing or
+deleting one of those records from a growth screen edits the birth measurement.
+Correcting the birthday moves every growth record on the old birthday to the
+new one. Someone still flagged `isPregnancy` gets no birth details; the fields
+are ignored.
 
 ---
 
@@ -1000,6 +1028,30 @@ every keystroke: an empty query returns empty groups, not an error.
   fixed order (People, Moments, Photos, Tags, Places, Activities, Books) and
   hide empty ones.
 
+### Recap links
+
+A recap link is an account-free page at `/recap/<token>` showing one
+competition recap. It serves a snapshot, so later edits to the event never
+reach it.
+
+- `CreateRecapLink { eventId, expiresInDays, recap }` needs contribute access to
+  the event's family. `recap` is the share preview as built for the attachment
+  and copy text, with nulls sent as `""`. Each routine carries its `entryId` and
+  each performance its `appearanceId` and current `revision`. The server
+  refuses an id from another event or season and a repeated routine or
+  performance. It also refuses a revision that has moved on ("These results
+  changed since you opened them…"), so publish only from synced results.
+  `expiresInDays` is 0 (until turned off) to 365; 20 links per event.
+- The response's `url` holds the only copy of the token. The server stores a
+  hash, so neither `ListRecapLinks` nor anything else can return the URL again.
+- `GetRecap { token }` answers without signing in. It is what the `/recap/`
+  web page calls, and the app has no use for it. Unknown, expired and revoked
+  tokens all get the same "This link isn't available".
+- `ListRecapLinks { eventId }` returns the event's links, newest first, expired
+  ones included with `expired: true`. `RevokeRecapLink { id }` deletes one. It
+  is allowed for the link's creator or a family admin, as `canRevoke` says.
+  Deleting the event deletes its links.
+
 ---
 
 ## 13. Retries and idempotency
@@ -1047,6 +1099,7 @@ header; there is no faster path.
 | upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
 | photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |
+| recap-read | 60 | 5 min | `/recap/*` pages and `GetRecap` |
 | **default** | **300** | **1 min** | everything else under `/api/` and `/rpc/` |
 
 Buckets are per client and in-process; a restart resets them.

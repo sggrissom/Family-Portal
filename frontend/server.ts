@@ -290,6 +290,10 @@ export interface AddPersonRequest {
     birthdate: string
     isPregnancy: boolean
     familyId: number
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
     stated: StatedRelation
     anchorId: number
     additionalAnchorIds: number[]
@@ -320,6 +324,10 @@ export interface UpdatePersonRequest {
     gender: number
     birthdate: string
     isPregnancy: boolean
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
 }
 
 export interface SetProfilePhotoRequest {
@@ -2077,6 +2085,13 @@ export interface ShareTargetRef {
     kind: string
 }
 
+export interface BirthDetails {
+    birthTime: string | null
+    birthPlace: string | null
+    birthWeight: CheckupValue | null
+    birthLength: CheckupValue | null
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -2089,6 +2104,8 @@ export interface Person {
     profileCropY: number
     profileCropScale: number
     isPregnancy: boolean
+    birthTime: string
+    birthPlace: string
     relationship: string
 }
 
@@ -2101,6 +2118,8 @@ export interface GrowthData {
     unit: string
     measurementDate: string
     createdAt: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Milestone {
@@ -2118,6 +2137,8 @@ export interface Milestone {
     questionId: number
     recordTime: RecordTime
     note: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Image {
@@ -3269,6 +3290,101 @@ export interface EndpointStats {
     errorRate: number
 }
 
+export interface CreateRecapLinkRequest {
+    eventId: number
+    expiresInDays: number
+    recap: RecapInput
+}
+
+export interface CreateRecapLinkResponse {
+    link: RecapLinkView
+    url: string
+}
+
+export interface ListRecapLinksRequest {
+    eventId: number
+}
+
+export interface ListRecapLinksResponse {
+    links: RecapLinkView[]
+}
+
+export interface RevokeRecapLinkRequest {
+    id: number
+}
+
+export interface RecapInput {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: RecapRoutineInput[]
+}
+
+export interface RecapRoutineInput {
+    entryId: number
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: RecapPerformanceInput[]
+}
+
+export interface RecapPerformanceInput {
+    appearanceId: number
+    revision: number
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
+export interface PublishedResult {
+    kind: string
+    text: string
+    detail: string
+}
+
+export interface GetRecapRequest {
+    token: string
+}
+
+export interface GetRecapResponse {
+    recap: PublishedRecap
+}
+
+export interface PublishedRecap {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: PublishedRoutine[]
+}
+
+export interface PublishedRoutine {
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: PublishedPerformance[]
+}
+
+export interface PublishedPerformance {
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
+export interface RecapLinkView {
+    id: number
+    createdAt: string
+    expiresAt: string | null
+    expired: boolean
+    createdByName: string
+    canRevoke: boolean
+    routineCount: number
+    snapshotLabel: string
+}
+
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
     return await rpc.call<CreateAccountResponse>('CreateAccount', JSON.stringify(data));
 }
@@ -4035,5 +4151,21 @@ export async function AdminGetMobileVersions(data: Empty): Promise<rpc.Response<
 
 export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {
     return await rpc.call<AdminSetMobileVersionResponse>('AdminSetMobileVersion', JSON.stringify(data));
+}
+
+export async function CreateRecapLink(data: CreateRecapLinkRequest): Promise<rpc.Response<CreateRecapLinkResponse>> {
+    return await rpc.call<CreateRecapLinkResponse>('CreateRecapLink', JSON.stringify(data));
+}
+
+export async function ListRecapLinks(data: ListRecapLinksRequest): Promise<rpc.Response<ListRecapLinksResponse>> {
+    return await rpc.call<ListRecapLinksResponse>('ListRecapLinks', JSON.stringify(data));
+}
+
+export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('RevokeRecapLink', JSON.stringify(data));
+}
+
+export async function GetRecap(data: GetRecapRequest): Promise<rpc.Response<GetRecapResponse>> {
+    return await rpc.call<GetRecapResponse>('GetRecap', JSON.stringify(data));
 }
 

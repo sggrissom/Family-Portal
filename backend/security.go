@@ -91,6 +91,7 @@ func (sw *SecurityWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addSecurityHeaders(w)
 	addCacheDefaults(w, r)
 	addIndexingPolicy(w)
+	addRecapPageHeaders(w, r)
 	sw.app.ServeHTTP(w, r)
 }
 

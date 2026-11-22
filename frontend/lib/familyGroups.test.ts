@@ -28,6 +28,8 @@ const person = (id: number, name: string, birthday: string): server.Person => ({
   profileCropY: 0,
   profileCropScale: 1,
   isPregnancy: false,
+  birthTime: "",
+  birthPlace: "",
   relationship: "",
 });
 

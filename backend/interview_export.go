@@ -147,6 +147,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 		return result
 	}
 	questionIds := in.mapQuestions(tx, questions)
+	recorderOf := importRecorders(tx, in.familyId)
 	answersOf := map[int][]ExportMilestone{}
 	for _, m := range milestones {
 		if m.InterviewId > 0 {
@@ -219,7 +220,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			m := Milestone{
 				Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: personId, FamilyId: person.FamilyId,
 				Description: text, Category: CategoryInterview, Context: em.Context, MilestoneDate: date,
-				CreatedAt: time.Now(), InterviewId: interview.Id, QuestionId: q,
+				CreatedAt: time.Now(), CreatedBy: recorderOf(em.RecordedBy), InterviewId: interview.Id, QuestionId: q,
 				Note: cleanAnswerNote(em.Note),
 			}
 			if m.Context == "" {

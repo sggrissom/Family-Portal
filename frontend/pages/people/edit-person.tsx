@@ -13,6 +13,8 @@ import { PersonSharingSection } from "../../components/PersonSharing";
 import { PersonRelationsSection } from "../../components/PersonRelations";
 import { PersonDeletionSection } from "../../components/PersonDeletion";
 import { FormError } from "../../components/FormError";
+import { BirthDetailsFields } from "../../components/BirthDetailsFields";
+import { BirthForm, birthDetailsRequest, birthFormFor, newBirthForm } from "../../lib/birthDetails";
 import "./add-person-styles";
 
 type EditPersonForm = {
@@ -20,6 +22,7 @@ type EditPersonForm = {
   gender: number;
   birthdate: string;
   isPregnancy: boolean;
+  birth: BirthForm;
   error: string;
   loading: boolean;
 };
@@ -30,6 +33,7 @@ const useEditPersonForm = vlens.declareHook(
     gender: 0,
     birthdate: "",
     isPregnancy: false,
+    birth: newBirthForm(),
     error: "",
     loading: false,
   })
@@ -79,6 +83,7 @@ export function view(
     form.gender = data.person.gender;
     form.isPregnancy = data.person.isPregnancy;
     form.birthdate = toDateInputValue(data.person.birthday);
+    form.birth = birthFormFor(data.person, data.growthData ?? []);
   }
 
   return (
@@ -94,6 +99,12 @@ export function view(
 
 async function onUpdatePersonClicked(form: EditPersonForm, personId: number, event: Event) {
   event.preventDefault();
+  const birth = birthDetailsRequest(form.birth);
+  if (!form.isPregnancy && birth.error) {
+    form.error = birth.error;
+    vlens.scheduleRedraw();
+    return;
+  }
   form.loading = true;
   form.error = "";
 
@@ -104,6 +115,9 @@ async function onUpdatePersonClicked(form: EditPersonForm, personId: number, eve
       gender: form.gender,
       birthdate: form.birthdate,
       isPregnancy: form.isPregnancy,
+      ...(form.isPregnancy
+        ? { birthTime: null, birthPlace: null, birthWeight: null, birthLength: null }
+        : birth.details),
     });
 
     form.loading = false;
@@ -222,6 +236,8 @@ const EditPersonPage = ({ form, personId, personName }: EditPersonPageProps) => 
             disabled={form.loading}
           />
         </div>
+
+        {!form.isPregnancy && <BirthDetailsFields form={form.birth} disabled={form.loading} />}
 
         <div className="form-actions">
           <button

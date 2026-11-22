@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-preact";
+import { ChevronLeft, ChevronRight, Share2, X } from "lucide-preact";
 import { Icon } from "../../components/Icon";
 import * as preact from "preact";
 import * as vlens from "vlens";
@@ -46,6 +46,27 @@ import {
   resultToRow,
   rowToInput,
 } from "./results-editor";
+import {
+  EntryCard,
+  buildCompetitionShare,
+  competitionShareText,
+  entryCards,
+  looksUnfinished,
+  namesOf,
+  recapCards,
+  showPerformanceDate,
+} from "../../lib/share/competitionShare";
+import { renderCompetitionShare } from "../../lib/share/render";
+import {
+  ShareDialog,
+  ShareDialogState,
+  ShareToggle,
+  newShareDialog,
+  openShareDialog,
+  syncShareRender,
+} from "../../components/ShareDialog";
+import { RecapLinks, RecapLinksState, newRecapLinks, openRecapLinks } from "./RecapLinks";
+import { copy } from "../../lib/copy";
 import "./activities-styles";
 import "./season-styles";
 import "./competition-styles";
@@ -178,48 +199,6 @@ const useCompetitionState = vlens.declareHook(
   })
 );
 
-type EntryCard = {
-  entry: server.Entry;
-  personIds: number[];
-  appearances: server.AppearanceDetail[];
-};
-
-function entryCards(
-  entries: server.EntryView[],
-  appearances: server.AppearanceDetail[]
-): EntryCard[] {
-  const cards = new Map<number, EntryCard>();
-  for (const detail of appearances) {
-    const card = cards.get(detail.entry.id);
-    if (card) {
-      card.appearances.push(detail);
-      continue;
-    }
-    const view = entries.find(row => row.entry.id === detail.entry.id);
-    cards.set(detail.entry.id, {
-      entry: detail.entry,
-      personIds: view?.personIds ?? [],
-      appearances: [detail],
-    });
-  }
-  for (const view of entries) {
-    if (!cards.has(view.entry.id)) {
-      cards.set(view.entry.id, {
-        entry: view.entry,
-        personIds: view.personIds ?? [],
-        appearances: [],
-      });
-    }
-  }
-  return [...cards.values()];
-}
-
-function namesOf(people: server.Person[], personIds: number[]): string[] {
-  return personIds
-    .map(id => people.find(person => person.id === id)?.name)
-    .filter((name): name is string => !!name);
-}
-
 export function view(
   route: string,
   prefix: string,
@@ -233,6 +212,7 @@ export function view(
   if (!state.initialized || state.eventId !== event.id) {
     state.initialized = true;
     state.eventId = event.id;
+    state.saving = false;
     state.appearances = [...(data.detail.appearances ?? [])];
     state.draft = null;
     state.resultRows = [];
@@ -257,6 +237,7 @@ export function view(
     card => editable || card.appearances.length > 0
   );
   const recorded = cards.filter(card => card.appearances.length > 0).length;
+  const share = useCompetitionShare();
 
   return (
     <div>
@@ -282,6 +263,25 @@ export function view(
           {where && <p className="comp-where">{where}</p>}
           {event.notes && <p className="season-notes">{event.notes}</p>}
         </div>
+
+        {recorded > 0 && (
+          <div className="comp-share">
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              onClick={vlens.cachePartial(onOpenShare, share, data, state, today)}
+            >
+              <Icon symbol={Share2} /> {copy.share.action}
+            </button>
+          </div>
+        )}
+        <CompetitionShareDialog
+          share={share}
+          data={data}
+          state={state}
+          labels={labels}
+          editable={editable}
+        />
 
         {state.error && (
           <div className="error-message" role="alert">
@@ -333,6 +333,125 @@ export function view(
     </div>
   );
 }
+
+type CompetitionShareState = {
+  dialog: ShareDialogState;
+  omitted: Set<number>;
+  showsNames: boolean;
+  isSnapshot: boolean;
+  links: RecapLinksState;
+};
+
+const useCompetitionShare = vlens.declareHook(
+  (): CompetitionShareState => ({
+    dialog: newShareDialog(),
+    omitted: new Set(),
+    showsNames: false,
+    isSnapshot: false,
+    links: newRecapLinks(),
+  })
+);
+
+function shareInput(data: CompetitionPageData, state: CompetitionState) {
+  return {
+    event: data.detail.event,
+    seasonName: data.detail.season.name,
+    entries: data.entries,
+    appearances: state.appearances,
+    people: data.people,
+  };
+}
+
+function onOpenShare(
+  share: CompetitionShareState,
+  data: CompetitionPageData,
+  state: CompetitionState,
+  today: string
+) {
+  share.omitted = new Set();
+  share.showsNames = false;
+  share.isSnapshot = looksUnfinished(data.detail.event, state.appearances, today);
+  openShareDialog(share.dialog);
+  if (auth.canContribute(data.detail.event.familyId)) {
+    void openRecapLinks(share.links, data.detail.event.id);
+  }
+}
+
+function onToggleRoutine(share: CompetitionShareState, entryId: number) {
+  if (share.omitted.has(entryId)) share.omitted.delete(entryId);
+  else share.omitted.add(entryId);
+  vlens.scheduleRedraw();
+}
+
+function onToggleShareOption(share: CompetitionShareState, option: "showsNames" | "isSnapshot") {
+  share[option] = !share[option];
+  vlens.scheduleRedraw();
+}
+
+const CompetitionShareDialog = ({
+  share,
+  data,
+  state,
+  labels,
+  editable,
+}: {
+  share: CompetitionShareState;
+  data: CompetitionPageData;
+  state: CompetitionState;
+  labels: ActivityLabels;
+  editable: boolean;
+}) => {
+  if (!share.dialog.open) return null;
+  const input = shareInput(data, state);
+  const recap = buildCompetitionShare(
+    input,
+    { omitted: share.omitted, showsNames: share.showsNames, isSnapshot: share.isSnapshot },
+    formatDate(`${localDateString(new Date())}T00:00:00Z`)
+  );
+  const enabled = recap.routines.length > 0;
+  if (enabled) {
+    syncShareRender(share.dialog, JSON.stringify(recap), () => renderCompetitionShare(recap));
+  }
+
+  return (
+    <ShareDialog
+      state={share.dialog}
+      text={competitionShareText(recap)}
+      enabled={enabled}
+      footer={
+        editable && (
+          <RecapLinks
+            state={share.links}
+            recap={recap}
+            appearances={state.appearances}
+            labels={labels}
+          />
+        )
+      }
+    >
+      <h3>{labels.entryPlural}</h3>
+      {recapCards(input).map(card => (
+        <ShareToggle
+          key={card.entry.id}
+          label={card.entry.name}
+          checked={!share.omitted.has(card.entry.id)}
+          onToggle={vlens.cachePartial(onToggleRoutine, share, card.entry.id)}
+        />
+      ))}
+      <h3>{copy.share.include}</h3>
+      <ShareToggle
+        label={copy.share.showNames}
+        checked={share.showsNames}
+        onToggle={vlens.cachePartial(onToggleShareOption, share, "showsNames")}
+      />
+      <ShareToggle
+        label={copy.share.resultsSoFar}
+        checked={share.isSnapshot}
+        onToggle={vlens.cachePartial(onToggleShareOption, share, "isSnapshot")}
+      />
+    </ShareDialog>
+  );
+};
 
 const EntryCardView = ({
   state,
@@ -423,16 +542,6 @@ const EntryCardView = ({
   );
 };
 
-function showDate(detail: server.AppearanceDetail, event: server.Event): boolean {
-  if (!isRealDate(detail.appearance.occurredAt)) return false;
-  const multiDay =
-    isRealDate(event.endDate) &&
-    toDateInputValue(event.endDate) !== toDateInputValue(event.startDate);
-  return (
-    multiDay || toDateInputValue(detail.appearance.occurredAt) !== toDateInputValue(event.startDate)
-  );
-}
-
 const PerformanceView = ({
   state,
   data,
@@ -453,7 +562,7 @@ const PerformanceView = ({
       <div className="perf-top">
         <div className="perf-top-main">
           <MatchupLine appearance={detail.appearance} />
-          {showDate(detail, data.detail.event) && (
+          {showPerformanceDate(detail, data.detail.event) && (
             <span className="perf-date">{formatDate(detail.appearance.occurredAt)}</span>
           )}
           {blank && <span className="perf-date">Nothing recorded yet</span>}
@@ -583,7 +692,7 @@ const PerformanceEditor = ({
       <div className="form-actions perf-editor-actions">
         <button
           className="btn btn-primary"
-          onClick={vlens.cachePartial(onSavePerformance, state, data)}
+          onClick={vlens.cachePartial(onSavePerformance, state, data.detail.event, entry.entry)}
           disabled={busy || resultRowsBlocked(state)}
         >
           Save
@@ -976,9 +1085,13 @@ function onRemoveDraftPhoto(draft: PerformanceDraft, photoId: number) {
   vlens.scheduleRedraw();
 }
 
-async function onSavePerformance(state: CompetitionState, data: CompetitionPageData) {
+async function onSavePerformance(
+  state: CompetitionState,
+  event: server.Event,
+  entry: server.Entry
+) {
   const draft = state.draft;
-  if (!draft || resultRowsBlocked(state)) return;
+  if (!draft || state.saving || resultRowsBlocked(state)) return;
   if (draft.showMatchup) {
     state.error = draftError(draft.matchup);
     if (state.error) {
@@ -991,24 +1104,36 @@ async function onSavePerformance(state: CompetitionState, data: CompetitionPageD
   state.error = "";
   vlens.scheduleRedraw();
 
-  const [resp, err] = await server.SaveAppearance({
-    id: draft.appearanceId,
-    eventId: data.detail.event.id,
-    entryId: draft.entryId,
-    occurredAt: dateOrNull(draft.occurredAt),
-    notes: draft.notes.trim(),
-    matchup: draft.showMatchup ? draftToMatchup(draft.matchup) : null,
-    results: state.resultRows.map(rowToInput),
-    photoIds: draft.photoIds,
-  });
+  const [resp, err] = await server
+    .SaveAppearance({
+      id: draft.appearanceId,
+      eventId: event.id,
+      entryId: draft.entryId,
+      occurredAt: dateOrNull(draft.occurredAt),
+      notes: draft.notes.trim(),
+      matchup: draft.showMatchup ? draftToMatchup(draft.matchup) : null,
+      results: state.resultRows.map(rowToInput),
+      photoIds: draft.photoIds,
+    })
+    .catch(() => rpc.err<server.AppearanceResponse>("Failed to save"));
+  if (state.draft !== draft) return;
   state.saving = false;
   if (err || !resp) {
     state.error = err || "Failed to save";
     vlens.scheduleRedraw();
     return;
   }
+  const saved = { ...resp.appearance, entry, event };
+  state.appearances = state.appearances.filter(row => row.appearance.id !== saved.appearance.id);
+  state.appearances.push(saved);
+  const eventDay = toDateInputValue(event.startDate);
+  const day = (row: server.AppearanceDetail) =>
+    toDateInputValue(row.appearance.occurredAt) || eventDay;
+  state.appearances.sort(
+    (a, b) => day(a).localeCompare(day(b)) || a.appearance.id - b.appearance.id
+  );
   closeEditors(state);
-  await reload(state);
+  vlens.scheduleRedraw();
 }
 
 async function onDeleteAppearance(
@@ -1080,15 +1205,5 @@ async function onSaveEventPhotos(state: CompetitionState) {
     closeEditors(state);
   }
   state.saving = false;
-  vlens.scheduleRedraw();
-}
-
-async function reload(state: CompetitionState) {
-  const [resp, err] = await server.GetEventDetail({ eventId: state.eventId });
-  if (err || !resp) {
-    state.error = err || "Failed to reload";
-  } else {
-    state.appearances = [...(resp.appearances ?? [])];
-  }
   vlens.scheduleRedraw();
 }

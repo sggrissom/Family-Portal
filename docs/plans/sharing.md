@@ -1,8 +1,105 @@
-# Sharing outside the family
+# Family Portal sharing plan
 
-Two ways to hand part of the record to people who aren't in the app. Both are
-new read paths with no session behind them, and they share the public photo
-derivative path, so they're planned together.
+Family Portal should let someone share the useful part of a screen while the
+moment is fresh. Start with sending a new measurement and its comparisons to a
+spouse, and sending a full competition recap to relatives who may have no
+Family Portal account. Keep the public family summary and newsletter ideas as
+separate publishing flows.
+
+## Share from an existing screen
+
+Put a **Share** action on the measurement detail or post-save view and on the
+competition results page. Open a preview already filled in from the current
+record. The sender can review what will go out, change what's included, and
+share it through the system share sheet on iOS. On the web, use native file
+sharing where supported and offer download, copy text, or copy link as
+appropriate. Opening the preview creates no hosted page.
+
+| From | Default format | Other options |
+| --- | --- | --- |
+| Measurement | One image card that fits in a message | Copy text with the same values and comparisons. If both people already have access, copy a private app link once the measurement has synced. |
+| Competition results | One complete recap attachment. Use an image for a short recap and a paginated PDF for a longer one. | Copy the full results as text, or create a read-only recap link for recipients who want to open it in a browser. |
+
+### Measurement card
+
+- Show the person's display name, measurement, units, and age or measurement
+  date as available. Preserve the source precision and any approximate age or
+  date label.
+- Carry over the comparisons shown for that measurement, in the same order,
+  with enough context to make sense on their own. For example, show who or
+  what each comparison is against, the comparison age and value when
+  available, and any percentile label already shown in the app. Reuse the
+  existing comparison calculations and formatting.
+- Give the sender a way to omit individual comparison rows or all comparisons.
+  Leave out birth dates, notes, and the rest of the growth history. If the
+  screen has no comparison data, share the measurement on its own.
+- The image and text use the data already available on the device. Show the
+  preview immediately after a local save on iOS, even while sync is pending.
+  A private app link should open the specific measurement under existing
+  family access rules. Keep measurement cards out of account-free hosted
+  sharing in this first release.
+
+### Competition recap
+
+- Share the whole competition results view as one item. Include the event name
+  and date, then keep the page's routine order and result groupings. Include
+  placements, adjudications, and judges' awards where recorded. Preserve
+  whether a result applies to a routine or a particular dancer when the page
+  shows that distinction.
+- Start with all routines in the results view. Let the sender omit individual
+  routines and optionally show participant names in an outside share. Leave
+  out private notes and unrelated family records. If results are still being
+  entered, allow sharing the current recap and label it as a snapshot so a
+  later correction can be sent as a new recap.
+- Size the image for legibility in a phone message. If it would take an
+  oversized image or smaller type, use a single PDF with page breaks between
+  routines when possible. Keep all included results in the attachment.
+- Offer **Create recap link** as an explicit action for an account-free,
+  mobile-friendly results page. Show the exact included results before
+  publishing. Let the sender revoke the link or set an expiry. Edits to the
+  underlying event leave the published recap as approved. The sender can
+  publish a fresh recap after a correction.
+- Render attachments from available local results on iOS, including pending
+  edits. Hosted links require a connection and the approved results to be
+  synced. While offline or waiting for sync, keep the attachment and copy-text
+  actions available for a locally complete recap. If some results are
+  unavailable, tell the sender in the preview and offer to share the
+  available results explicitly.
+
+### Rendering and recipient access
+
+- Build each preview from the existing screen's data and ordering. Use the
+  same selected fields for its supported formats so the text, file, and
+  hosted recap match the preview. A lightweight share payload per screen is
+  enough for these two uses.
+- A private app link is a pointer to a record and uses existing authorization.
+  An account-free recap link serves only an approved snapshot. Creating one
+  requires permission to publish every included record. Family owners can
+  revoke existing recap links, including ones created by another family
+  member if publication is delegated later.
+- Use a dedicated public read handler for hosted recaps. Redact tokens from
+  logs, omit private record identifiers from responses, and apply noindex,
+  no-referrer, and rate limits. Check revocation and expiry on every public
+  page and asset request. Keep messaging previews generic by default.
+- Explain in the preview that sent files, copied text, and recipients' saved
+  copies can be forwarded. Revocation ends access through the hosted link.
+
+### Implementation order and acceptance checks
+
+1. Add the measurement card and competition recap attachments on iOS, with
+   copy text for both. Confirm that a newly saved measurement and its visible
+   comparisons go out in a single item while sync is pending. Share a short
+   event as one readable image and a long event as one PDF, including its
+   final routine and judges' awards.
+2. Add the same share entry points and attachment/download behavior on the
+   web. Add private deep linking to synced measurements using the existing
+   family access checks. On both platforms, verify that omissions in the
+   preview carry through to the shared output.
+3. Add hosted competition recaps and link management. Verify that a recipient
+   can open the complete approved recap from a phone browser without signing
+   in, a source edit leaves the snapshot intact, and expired or revoked links
+   fail on both page and asset requests. Reuse the public publishing
+   infrastructure as the summary page and newsletters are implemented.
 
 ## Public family summary page
 
@@ -27,15 +124,14 @@ Scope:
   the private app.
 
 Technical notes:
-- This is the first read path in the app with no session behind it. It gets its
-  own handler and its own slug-to-page resolver rather than relaxing auth on any
-  existing proc.
+- Use a dedicated public handler and slug-to-page resolver. Existing
+  procedures keep their authorization checks.
 - Serve a published snapshot, not live data. Editing a person in the app should
   not silently change what strangers see, and unpublishing should be one delete.
-- Photos need a public derivative path with unguessable filenames, separate from
-  the authenticated photo endpoints. The Christmas-card updates below need the
-  same thing, so build it once.
-- Rate limit and cache by slug. It is the one URL in the app anyone can hammer.
+- Serve approved photo derivatives through the public publishing path shared
+  with Christmas-card updates. Require an active publication on every asset
+  request.
+- Rate limit by slug and only cache in ways that honor unpublishing.
 - `robots.txt` currently disallows everything but the marketing pages. Default
   published pages to noindex and make indexing an explicit opt-in.
 
@@ -72,16 +168,14 @@ Scope:
   the actual use case.
 
 Technical notes:
-- The share token is the entire authorization story, so it goes in the path
-  rather than a query string that leaks through referrers, and the page sets
-  `Referrer-Policy: no-referrer` and noindex.
+- The share token grants access to the update. Use the same public link,
+  revocation, and referrer controls as hosted competition recaps.
 - Anything with a share link should be assumed cached by whatever it was sent
   through — link previews work by the platform fetching and storing the page and
-  its cover image. That is inherent to the feature and the first time this app
-  hands content to a third party at all, so say it plainly in the UI when a
-  share link is created.
-- Reactions and comments are the first writes from unauthenticated visitors:
-  hard rate limits, length caps, no HTML, and family-side moderation.
+  its cover image. Show the preview content to the sender and explain that
+  messaging services may retain it after the link is revoked.
+- Apply hard rate limits, length caps, plain text, and family-side moderation
+  to reactions and comments.
 
 Open question: whether the summary page and updates share one audience concept
 or stay separate. Separate is simpler — a summary page is one public thing, an

@@ -250,6 +250,7 @@ type ExportMilestone struct {
 	InterviewId   int         `json:"interviewId,omitempty"`
 	QuestionId    int         `json:"questionId,omitempty"`
 	Note          string      `json:"note,omitempty"`
+	RecordedBy    string      `json:"recordedBy,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -298,6 +299,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	}
 
 	people := GetFamilyOwnPeople(tx, familyId)
+	recorderOf := exportRecorders(tx)
 
 	exportData.People = make([]ImportPerson, len(people))
 	for i, person := range people {
@@ -309,6 +311,9 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			Birthday: person.Birthday,
 			Age:      person.Age,
 			ImageId:  person.ProfilePhotoId,
+
+			BirthTime:  person.BirthTime,
+			BirthPlace: person.BirthPlace,
 		}
 	}
 
@@ -357,6 +362,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 				DateString: dateString,
 				Age:        age,
 				PersonName: personName,
+				RecordedBy: recorderOf(gd.CreatedBy),
 			})
 		} else if gd.MeasurementType == Weight {
 			pounds := gd.Value
@@ -372,6 +378,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 				DateString: dateString,
 				Age:        age,
 				PersonName: personName,
+				RecordedBy: recorderOf(gd.CreatedBy),
 			})
 		}
 	}
@@ -418,6 +425,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
 			Note:          milestone.Note,
+			RecordedBy:    recorderOf(milestone.CreatedBy),
 		}
 	}
 
