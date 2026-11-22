@@ -3290,6 +3290,71 @@ export interface EndpointStats {
     errorRate: number
 }
 
+export interface CreateRecapLinkRequest {
+    eventId: number
+    expiresInDays: number
+    recap: RecapInput
+}
+
+export interface CreateRecapLinkResponse {
+    link: RecapLinkView
+    url: string
+}
+
+export interface ListRecapLinksRequest {
+    eventId: number
+}
+
+export interface ListRecapLinksResponse {
+    links: RecapLinkView[]
+}
+
+export interface RevokeRecapLinkRequest {
+    id: number
+}
+
+export interface RecapInput {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: RecapRoutineInput[]
+}
+
+export interface RecapRoutineInput {
+    entryId: number
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: RecapPerformanceInput[]
+}
+
+export interface RecapPerformanceInput {
+    appearanceId: number
+    revision: number
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
+export interface PublishedResult {
+    kind: string
+    text: string
+    detail: string
+}
+
+export interface RecapLinkView {
+    id: number
+    createdAt: string
+    expiresAt: string | null
+    expired: boolean
+    createdByName: string
+    canRevoke: boolean
+    routineCount: number
+    snapshotLabel: string
+}
+
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
     return await rpc.call<CreateAccountResponse>('CreateAccount', JSON.stringify(data));
 }
@@ -4056,5 +4121,17 @@ export async function AdminGetMobileVersions(data: Empty): Promise<rpc.Response<
 
 export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {
     return await rpc.call<AdminSetMobileVersionResponse>('AdminSetMobileVersion', JSON.stringify(data));
+}
+
+export async function CreateRecapLink(data: CreateRecapLinkRequest): Promise<rpc.Response<CreateRecapLinkResponse>> {
+    return await rpc.call<CreateRecapLinkResponse>('CreateRecapLink', JSON.stringify(data));
+}
+
+export async function ListRecapLinks(data: ListRecapLinksRequest): Promise<rpc.Response<ListRecapLinksResponse>> {
+    return await rpc.call<ListRecapLinksResponse>('ListRecapLinks', JSON.stringify(data));
+}
+
+export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('RevokeRecapLink', JSON.stringify(data));
 }
 
