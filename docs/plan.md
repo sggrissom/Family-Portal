@@ -50,7 +50,6 @@ Not scoped. "New entity" means the checklist in
 - **Family tree view.** Relations are already a graph with derived labels;
   drawing it is mostly frontend work.
 - **Pregnancy record.** `IsPregnancy` exists with nothing to record against it.
-- **Who recorded it.** Moments and growth don't store who added them.
 
 ## Adding a new domain entity
 

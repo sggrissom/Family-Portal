@@ -52,7 +52,7 @@ func (s *seeder) interviews(person Person) {
 	if len(batch) == 0 {
 		return
 	}
-	saved, _, err := importInterviewsTx(s.tx, person, batch)
+	saved, _, err := importInterviewsTx(s.tx, person, 0, batch)
 	if err != nil {
 		s.fail(fmt.Errorf("interviews for %s: %w", person.Name, err))
 		return

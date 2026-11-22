@@ -206,3 +206,9 @@ block(`
   color: var(--muted);
 }
 `);
+
+block(`
+.entry-recorded {
+  margin: -8px 0 14px;
+}
+`);

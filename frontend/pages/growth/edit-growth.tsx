@@ -141,6 +141,9 @@ const EditGrowthPage = ({ form, record }: { form: EditGrowthForm; record: server
   return (
     <div className="entry-card">
       <h1 className="entry-title">Edit measurement</h1>
+      {record.recordedBy && (
+        <p className="entry-hint entry-recorded">{copy.recordedBy(record.recordedBy)}</p>
+      )}
 
       <form className="entry-form" onSubmit={vlens.cachePartial(save, form, record)} noValidate>
         <div className="entry-subject">
