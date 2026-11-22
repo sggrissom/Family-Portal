@@ -20,6 +20,8 @@ const person = (
   profileCropY: 0,
   profileCropScale: 1,
   isPregnancy,
+  birthTime: "",
+  birthPlace: "",
   relationship: "",
 });
 

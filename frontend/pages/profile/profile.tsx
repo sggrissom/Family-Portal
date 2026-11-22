@@ -45,6 +45,7 @@ import {
 } from "../../lib/growthPercentiles";
 import { formatMeasurement } from "../../lib/weightFormat";
 import { formatDate, formatLongDate, localDateString } from "../../lib/dateUtils";
+import { formatBirthTime } from "../../lib/birthDetails";
 import { copy } from "../../lib/copy";
 import "./profile-styles";
 import { recordDateLabel, recordMonthsOld } from "../../lib/recordTime";
@@ -234,7 +235,12 @@ function ageLine(person: server.Person): string {
   if (!isValidBirthday(person.birthday)) return "";
   const months = monthsOld(person.birthday, localDateString(new Date()));
   const age = ageTitle(months >= 216 ? months - (months % 12) : months);
-  return `${age} · ${copy.person.born(formatLongDate(person.birthday))}`;
+  const born = copy.person.born(
+    formatLongDate(person.birthday),
+    formatBirthTime(person.birthTime),
+    person.birthPlace
+  );
+  return `${age} · ${born}`;
 }
 
 const ProfileHeader = ({
