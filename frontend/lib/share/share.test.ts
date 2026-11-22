@@ -11,6 +11,7 @@ import {
   competitionShareText,
   looksUnfinished,
   recapCards,
+  recapLinkInput,
 } from "./competitionShare";
 import { paginate } from "./pagination";
 import { layoutBlock, wrap } from "./cardLayout";
@@ -271,6 +272,33 @@ describe("competition share", () => {
       .join("\n");
     expect(text).toContain("• Judges' Choice");
     expect(text).toContain("• 1st of 14");
+  });
+
+  it("sends a recap link exactly what the preview holds, with each performance's revision", () => {
+    const details = appearances();
+    details[1].appearance.revision = 4;
+    const share = buildCompetitionShare(
+      input(details),
+      { ...options, omitted: new Set([2]) },
+      "Nov 21, 2026"
+    );
+    const sent = recapLinkInput(share, details);
+    expect(sent.routines.map(r => r.entryId)).toEqual([1]);
+    expect(sent.routines[0].roster).toBe("");
+    expect(sent.snapshotLabel).toBe("");
+    expect(sent.routines[0].performances).toEqual([
+      {
+        appearanceId: 10,
+        revision: 4,
+        when: "",
+        matchup: "",
+        results: [
+          { kind: "adjudication", text: "High Gold", detail: "" },
+          { kind: "award", text: "Judges' Choice", detail: `Technique · ${copy.share.individual}` },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain("Clara");
   });
 });
 
