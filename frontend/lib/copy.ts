@@ -692,5 +692,11 @@ export const copy = {
       remove: "Remove",
       loadFailed: "Couldn't load this event's recap links.",
     },
+    recapPage: {
+      unavailableTitle: "This link isn't available",
+      unavailable: "It may have expired or been turned off. Ask whoever sent it for a new one.",
+      noResults: "No results recorded",
+      sharedFrom: "Shared from Family Record",
+    },
   },
 };

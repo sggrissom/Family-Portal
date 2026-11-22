@@ -1044,6 +1044,9 @@ reach it.
   `expiresInDays` is 0 (until turned off) to 365; 20 links per event.
 - The response's `url` holds the only copy of the token. The server stores a
   hash, so neither `ListRecapLinks` nor anything else can return the URL again.
+- `GetRecap { token }` answers without signing in. It is what the `/recap/`
+  web page calls, and the app has no use for it. Unknown, expired and revoked
+  tokens all get the same "This link isn't available".
 - `ListRecapLinks { eventId }` returns the event's links, newest first, expired
   ones included with `expired: true`. `RevokeRecapLink { id }` deletes one. It
   is allowed for the link's creator or a family admin, as `canRevoke` says.
@@ -1096,7 +1099,7 @@ header; there is no faster path.
 | upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
 | photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |
-| recap-read | 60 | 5 min | `/recap/*` (public recap pages) |
+| recap-read | 60 | 5 min | `/recap/*` pages and `GetRecap` |
 | **default** | **300** | **1 min** | everything else under `/api/` and `/rpc/` |
 
 Buckets are per client and in-process; a restart resets them.
