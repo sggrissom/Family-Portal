@@ -512,6 +512,7 @@ export const copy = {
     notFound: "That moment could not be found.",
     atAge: (age: string) => `at ${age}`,
   },
+  recordedBy: (name: string) => `Added by ${name}`,
   person: {
     tabs: {
       story: "Story",

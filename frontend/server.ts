@@ -2101,6 +2101,8 @@ export interface GrowthData {
     unit: string
     measurementDate: string
     createdAt: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Milestone {
@@ -2118,6 +2120,8 @@ export interface Milestone {
     questionId: number
     recordTime: RecordTime
     note: string
+    createdBy: number
+    recordedBy: string
 }
 
 export interface Image {

@@ -18,6 +18,8 @@ const growth = (
   unit,
   measurementDate: date,
   createdAt: date,
+  createdBy: 0,
+  recordedBy: "",
 });
 
 const birthday = "2023-05-02T00:00:00Z";

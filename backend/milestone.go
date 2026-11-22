@@ -102,6 +102,8 @@ type Milestone struct {
 	QuestionId    int        `json:"questionId,omitempty"`
 	RecordTime    RecordTime `json:"recordTime"`
 	Note          string     `json:"note,omitempty"`
+	CreatedBy     int        `json:"createdBy"`
+	RecordedBy    string     `json:"recordedBy,omitempty"`
 }
 
 type MilestonePhoto struct {
@@ -130,7 +132,7 @@ func PackMilestoneTag(self *MilestoneTag, buf *vpack.Buffer) {
 }
 
 func PackMilestone(self *Milestone, buf *vpack.Buffer) {
-	version := vpack.Version(5, buf)
+	version := vpack.Version(6, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.PersonId, buf)
 	vpack.Int(&self.FamilyId, buf)
@@ -150,6 +152,9 @@ func PackMilestone(self *Milestone, buf *vpack.Buffer) {
 	}
 	if version >= 5 {
 		vpack.String(&self.Note, buf)
+	}
+	if version >= 6 {
+		vpack.Int(&self.CreatedBy, buf)
 	}
 	if !buf.Writing && self.RecordTime.Version == 0 {
 		self.RecordTime = legacyRecordTime(self.MilestoneDate)
@@ -429,6 +434,7 @@ func AddMilestoneTx(tx *vbolt.Tx, req AddMilestoneRequest, familyId int) (Milest
 	milestone.FamilyId = familyId
 	setMilestoneText(&milestone, req.Description, req.Category, req.Context)
 	milestone.CreatedAt = time.Now()
+	milestone.CreatedBy = req.UserId
 
 	writeMilestone(tx, &milestone)
 
@@ -686,6 +692,7 @@ func GetMilestone(ctx *vbeam.Context, req GetMilestoneRequest) (resp GetMileston
 	resp.Milestone = milestone
 	resp.Milestone.PhotoIds = GetMilestonePhotoIds(ctx.Tx, milestone.Id)
 	resp.Milestone.TagIds = GetMilestoneTagIds(ctx.Tx, milestone.Id)
+	resp.Milestone.RecordedBy = recorderName(ctx.Tx, user, milestone.FamilyId, milestone.CreatedBy)
 	return
 }
 

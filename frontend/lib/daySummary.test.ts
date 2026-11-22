@@ -38,6 +38,8 @@ const growth = (
   unit: type === server.Height ? "in" : "lbs",
   measurementDate: date,
   createdAt: date,
+  createdBy: 0,
+  recordedBy: "",
 });
 
 const photo = (id: number, date: string, people: server.Person[]): server.PhotoWithPeople => ({

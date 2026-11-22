@@ -778,6 +778,15 @@ An older server has no such proc; keep the queue and never fall back to
 date in one transaction: both are stored or neither is. `AddGrowthData` still
 saves a single measurement.
 
+`Milestone` and `GrowthData` carry `createdBy`, the user id of the account that
+added the record, taken from the session and never from the request. It is 0
+for records from before it was kept, for imports whose recorder isn't a member
+of the importing family, and for seeded data; show nothing for those rather
+than guessing. Editing a record doesn't change it. `GetMilestone` and
+`GetGrowthData` also return `recordedBy`, the account's name, but only to
+members of the record's own family, and omit it when the account is gone. List
+responses carry `createdBy` alone; resolve it against `ListFamilyMembers`.
+
 ---
 
 ## 11. Relationships
