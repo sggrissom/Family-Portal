@@ -32,6 +32,8 @@ function person(id: number, name: string, birthday: string, gender = 1): server.
     profileCropScale: 0,
     isPregnancy: false,
     relationship: "",
+    birthTime: "",
+    birthPlace: "",
   };
 }
 
@@ -45,6 +47,8 @@ function growth(id: number, personId: number, value: number, date: string): serv
     unit: "in",
     measurementDate: `${date}T00:00:00Z`,
     createdAt: "",
+    createdBy: 0,
+    recordedBy: "",
   };
 }
 
