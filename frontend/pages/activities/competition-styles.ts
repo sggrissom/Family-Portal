@@ -355,3 +355,11 @@ block(`
   flex: 1;
 }
 `);
+
+block(`
+.comp-share {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 8px;
+}
+`);

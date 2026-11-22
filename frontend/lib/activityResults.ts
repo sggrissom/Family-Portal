@@ -45,6 +45,19 @@ export function resultText(result: ResultLike): string {
   }
 }
 
+const resultKindOrder = [
+  ResultKindPlacement,
+  ResultKindAdjudication,
+  ResultKindAward,
+  ResultKindScore,
+];
+
+export function sortResults<T extends { kind: string }>(results: T[] | null): T[] {
+  return [...(results ?? [])].sort(
+    (a, b) => resultKindOrder.indexOf(a.kind) - resultKindOrder.indexOf(b.kind)
+  );
+}
+
 export type EventStatus = "upcoming" | "now" | "done";
 
 export function eventStatus(startDay: string, endDay: string, today: string): EventStatus {

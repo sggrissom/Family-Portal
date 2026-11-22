@@ -116,11 +116,13 @@ function formatDurationMonths(absMonths: number): string {
 
 export function describeValueComparison(
   point: ComparisonPoint,
-  measurementType: server.MeasurementType
+  measurementType: server.MeasurementType,
+  subject = "you"
 ): string {
+  const was = subject === "you" ? "you were" : `${subject} was`;
   const noun = measurementType === server.Height ? "height" : "weight";
   if (roundTo1Decimal(Math.abs(point.valueDiff)) === 0) {
-    return `you were about the same ${noun} at this age`;
+    return `${was} about the same ${noun} at this age`;
   }
   const magnitude = formatValueDiff(point);
   const comparative =
@@ -131,13 +133,13 @@ export function describeValueComparison(
       : point.valueDiff > 0
         ? "heavier"
         : "lighter";
-  return `you were ${magnitude} ${comparative} at this age`;
+  return `${was} ${magnitude} ${comparative} at this age`;
 }
 
-export function describeAgeComparison(point: ComparisonPoint): string {
-  if (Math.round(Math.abs(point.ageDiffMonths)) < 1) return "at about the same age as you";
+export function describeAgeComparison(point: ComparisonPoint, subject = "you"): string {
+  if (Math.round(Math.abs(point.ageDiffMonths)) < 1) return `at about the same age as ${subject}`;
   const duration = formatDurationMonths(Math.abs(point.ageDiffMonths));
-  return point.ageDiffMonths > 0 ? `${duration} after you` : `${duration} before you`;
+  return point.ageDiffMonths > 0 ? `${duration} after ${subject}` : `${duration} before ${subject}`;
 }
 
 export function computeFamilyComparisons(
