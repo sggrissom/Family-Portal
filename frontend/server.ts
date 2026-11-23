@@ -48,31 +48,35 @@ export const BookItemPhoto: BookItemKind = 1;
 export const BookItemInterview: BookItemKind = 2;
 
 // Errors
-export const ErrBookNotFound = "Book not found or not in your family";
-export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
-export const ErrInvalidAge = "Age must be between 0 and 100 years";
+export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
+export const ErrNoFamily = "User is not part of a family";
 export const ErrInterviewNotFound = "Interview not found or not in your family";
 export const ErrInterviewInProgress = "There's already an interview in progress for this person";
+export const ErrAnswerNotFound = "Answer the question before adding a note";
 export const ErrInterviewChanged = "Someone else changed this interview after you opened it. Reload to see their changes.";
-export const ErrLinkNotFound = "Family link not found";
-export const ErrLinkToSelf = "A family cannot be linked to itself";
-export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrPersonNotFound = "Person not found or not in your family";
+export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrMediaNotFound = "media object not found";
+export const ErrInvalidActivityDate = "Dates must be in YYYY-MM-DD format";
+export const ErrLoginFailure = "LoginFailure";
+export const ErrAuthFailure = "AuthFailure";
+export const ErrInvalidCadence = "Choose when interviews should be suggested";
+export const ErrBookNotFound = "Book not found or not in your family";
+export const ErrBookChanged = "Someone else saved this book after you opened it. Reload to see their changes.";
+export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
+export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
+export const ErrVideoUploadNotFound = "That upload could not be found.";
+export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
+export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
 export const ErrInterviewCategory = "Interview answers can only be changed from the interview";
 export const ErrInterviewQuestionsChanged = "Someone else saved the question list after you opened it. Reload to see their changes.";
 export const ErrInterviewQuestionNotFound = "Question not found or not in your family";
-export const ErrPersonNotFound = "Person not found or not in your family";
-export const ErrTooManyPhotos = "That is more photos than one record can hold";
-export const ErrFaceNotFound = "Face not found or access denied";
-export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrDateRequired = "Choose when this happened";
+export const ErrPhotoNotFoundOrDenied = "Photo not found or access denied";
 export const ErrTranscriptNotFound = "Transcript not found or access denied";
-export const ErrLoginFailure = "LoginFailure";
-export const ErrAuthFailure = "AuthFailure";
-export const ErrFamilyAccessDenied = "Access denied: record belongs to another family";
-export const ErrNoFamily = "User is not part of a family";
-export const ErrMailNotConfigured = "email delivery is not configured";
+export const ErrTooManyPhotos = "That is more photos than one record can hold";
 export const ErrVideoNotFound = "Video not found or access denied";
-export const ErrMediaNotFound = "media object not found";
-export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrInvalidAge = "Age must be between 0 and 100 years";
 export const ErrFaceAnalysisUnavailable = "Face analysis is not available on this server";
 export const ErrPhotoWorkerUnavailable = "Photo processing is not running on this server";
 export const ErrAdminRequired = "Unauthorized: Admin access required";
@@ -82,16 +86,12 @@ export const ErrSeedDomainInvalid = "Email domain must look like example.test";
 export const ErrSeedEmailsExist = "Accounts already exist at that email domain";
 export const ErrSeedRunNotFound = "No such seed run";
 export const ErrSeedConfirmationMismatch = "Type the email domain exactly to confirm";
-export const ErrVideoDisabled = "Video uploads are not turned on for this family.";
-export const ErrVideoUnavailable = "Video uploads are not available on this server right now.";
-export const ErrVideoUploadNotFound = "That upload could not be found.";
-export const ErrVideoUploadExpired = "This upload expired before it finished. Please try again.";
-export const ErrVideoUploadMissing = "The video hasn't finished uploading yet.";
-export const ErrDateRequired = "Choose when this happened";
-export const ErrInvalidCadence = "Choose when interviews should be suggested";
-export const ErrAnswerNotFound = "Answer the question before adding a note";
-export const ErrInvalidActivityDate = "Dates must be in YYYY-MM-DD format";
-export const ErrPhotoNotFoundOrDenied = "Photo not found or access denied";
+export const ErrLinkNotFound = "Family link not found";
+export const ErrLinkToSelf = "A family cannot be linked to itself";
+export const ErrLinkExists = "These families are already linked in that direction";
+export const ErrRelationToSelf = "A person cannot be related to themselves";
+export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
+export const ErrFaceNotFound = "Face not found or access denied";
 
 export interface CreateAccountRequest {
     name: string
@@ -1024,6 +1024,69 @@ export interface SetEventPhotosRequest {
 export interface SetEventPhotosResponse {
     eventId: number
     photoIds: number[]
+}
+
+export interface CreateRecapLinkRequest {
+    eventId: number
+    expiresInDays: number
+    recap: RecapInput
+}
+
+export interface CreateRecapLinkResponse {
+    link: RecapLinkView
+    url: string
+}
+
+export interface ListRecapLinksRequest {
+    eventId: number
+}
+
+export interface ListRecapLinksResponse {
+    links: RecapLinkView[]
+}
+
+export interface RevokeRecapLinkRequest {
+    id: number
+}
+
+export interface GetRecapRequest {
+    token: string
+}
+
+export interface GetRecapResponse {
+    recap: PublishedRecap
+}
+
+export interface GetFamilyPageSettingsRequest {
+    familyId: number
+}
+
+export interface FamilyPageSettingsResponse {
+    familyId: number
+    canEdit: boolean
+    published: boolean
+    url: string
+    publishedAt: string | null
+    publishedByName: string
+    settings: FamilyPageSettings
+    people: FamilyPagePerson[]
+}
+
+export interface PublishFamilyPageRequest {
+    familyId: number
+    settings: FamilyPageSettings
+}
+
+export interface UnpublishFamilyPageRequest {
+    familyId: number
+}
+
+export interface GetPublicFamilyPageRequest {
+    slug: string
+}
+
+export interface GetPublicFamilyPageResponse {
+    page: PublicFamilyPage
 }
 
 export interface CreateTagRequest {
@@ -2092,6 +2155,11 @@ export interface BirthDetails {
     birthLength: CheckupValue | null
 }
 
+export interface CheckupValue {
+    value: number
+    unit: string
+}
+
 export interface Person {
     id: number
     familyId: number
@@ -2220,11 +2288,6 @@ export interface RelationLabelEntry {
     personId: number
     label: string
     group: string
-}
-
-export interface CheckupValue {
-    value: number
-    unit: string
 }
 
 export interface RecordTime {
@@ -2407,6 +2470,59 @@ export interface HomeSeason {
     season: Season
     events: HomeEvent[]
     entries: EntryView[]
+}
+
+export interface RecapInput {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: RecapRoutineInput[]
+}
+
+export interface RecapLinkView {
+    id: number
+    createdAt: string
+    expiresAt: string | null
+    expired: boolean
+    createdByName: string
+    canRevoke: boolean
+    routineCount: number
+    snapshotLabel: string
+}
+
+export interface PublishedRecap {
+    eventName: string
+    subtitle: string
+    place: string
+    snapshotLabel: string
+    routines: PublishedRoutine[]
+}
+
+export interface FamilyPageSettings {
+    slug: string
+    indexable: boolean
+    title: string
+    intro: string
+    members: FamilyPageMemberSettings[]
+    photoIds: number[]
+}
+
+export interface FamilyPagePerson {
+    id: number
+    name: string
+    ageYears: number | null
+    profilePhotoId: number
+    profileCropX: number
+    profileCropY: number
+    profileCropScale: number
+}
+
+export interface PublicFamilyPage {
+    title: string
+    intro: string
+    members: PublicFamilyPageMember[]
+    photoUrls: string[]
 }
 
 export interface Tag {
@@ -2721,6 +2837,8 @@ export interface ImportPerson {
     Birthday: string
     Age: string
     ImageId: number
+    BirthTime: string
+    BirthPlace: string
 }
 
 export interface PersonMatch {
@@ -3116,6 +3234,41 @@ export interface HomeEvent {
     appearances: number
 }
 
+export interface RecapRoutineInput {
+    entryId: number
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: RecapPerformanceInput[]
+}
+
+export interface PublishedRoutine {
+    name: string
+    descriptors: string
+    roster: string
+    summary: string
+    performances: PublishedPerformance[]
+}
+
+export interface FamilyPageMemberSettings {
+    personId: number
+    name: string
+    line: string
+    showAge: boolean
+    showPhoto: boolean
+}
+
+export interface PublicFamilyPageMember {
+    name: string
+    line: string
+    ageYears: number | null
+    photoUrl: string
+    cropX: number
+    cropY: number
+    cropScale: number
+}
+
 export interface MediaMatch {
     source: string
     offsetMs: number
@@ -3186,14 +3339,6 @@ export interface PerformanceStats {
     requestLatency: RequestLatencyStats
 }
 
-export interface RequestLatencyStats {
-    app: ResponseTimingStats
-    uploads: ResponseTimingStats
-    downloads: ResponseTimingStats
-    cacheChecks: ResponseTimingStats
-    slowestAppEndpoints: EndpointStats[]
-}
-
 export interface PushAttempt {
     time: string
     userId: number
@@ -3204,12 +3349,6 @@ export interface PushAttempt {
     statusCode: number
     reason: string
     apnsId: string
-}
-
-export interface ResponseTimingStats {
-    count: number
-    medianResponse: number
-    p95Response: number
 }
 
 export interface FailedPhoto {
@@ -3268,6 +3407,20 @@ export interface HostRelease {
     current: boolean
 }
 
+export interface RecapPerformanceInput {
+    appearanceId: number
+    revision: number
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
+export interface PublishedPerformance {
+    when: string
+    matchup: string
+    results: PublishedResult[]
+}
+
 export interface BookInterviewChange {
     questionId: number
     before: string
@@ -3290,52 +3443,12 @@ export interface EndpointStats {
     errorRate: number
 }
 
-export interface CreateRecapLinkRequest {
-    eventId: number
-    expiresInDays: number
-    recap: RecapInput
-}
-
-export interface CreateRecapLinkResponse {
-    link: RecapLinkView
-    url: string
-}
-
-export interface ListRecapLinksRequest {
-    eventId: number
-}
-
-export interface ListRecapLinksResponse {
-    links: RecapLinkView[]
-}
-
-export interface RevokeRecapLinkRequest {
-    id: number
-}
-
-export interface RecapInput {
-    eventName: string
-    subtitle: string
-    place: string
-    snapshotLabel: string
-    routines: RecapRoutineInput[]
-}
-
-export interface RecapRoutineInput {
-    entryId: number
-    name: string
-    descriptors: string
-    roster: string
-    summary: string
-    performances: RecapPerformanceInput[]
-}
-
-export interface RecapPerformanceInput {
-    appearanceId: number
-    revision: number
-    when: string
-    matchup: string
-    results: PublishedResult[]
+export interface RequestLatencyStats {
+    app: ResponseTimingStats
+    uploads: ResponseTimingStats
+    downloads: ResponseTimingStats
+    cacheChecks: ResponseTimingStats
+    slowestAppEndpoints: EndpointStats[]
 }
 
 export interface PublishedResult {
@@ -3344,121 +3457,10 @@ export interface PublishedResult {
     detail: string
 }
 
-export interface GetRecapRequest {
-    token: string
-}
-
-export interface GetFamilyPageSettingsRequest {
-    familyId: number
-}
-
-export interface FamilyPageSettingsResponse {
-    familyId: number
-    canEdit: boolean
-    published: boolean
-    url: string
-    publishedAt: string | null
-    publishedByName: string
-    settings: FamilyPageSettings
-    people: FamilyPagePerson[]
-}
-
-export interface PublishFamilyPageRequest {
-    familyId: number
-    settings: FamilyPageSettings
-}
-
-export interface UnpublishFamilyPageRequest {
-    familyId: number
-}
-
-export interface GetPublicFamilyPageRequest {
-    slug: string
-}
-
-export interface GetPublicFamilyPageResponse {
-    page: PublicFamilyPage
-}
-
-export interface FamilyPageSettings {
-    slug: string
-    indexable: boolean
-    title: string
-    intro: string
-    members: FamilyPageMemberSettings[]
-    photoIds: number[]
-}
-
-export interface FamilyPagePerson {
-    id: number
-    name: string
-    ageYears: number | null
-    profilePhotoId: number
-    profileCropX: number
-    profileCropY: number
-    profileCropScale: number
-}
-
-export interface PublicFamilyPage {
-    title: string
-    intro: string
-    members: PublicFamilyPageMember[]
-    photoUrls: string[]
-}
-
-export interface FamilyPageMemberSettings {
-    personId: number
-    name: string
-    line: string
-    showAge: boolean
-    showPhoto: boolean
-}
-
-export interface PublicFamilyPageMember {
-    name: string
-    line: string
-    ageYears: number | null
-    photoUrl: string
-    cropX: number
-    cropY: number
-    cropScale: number
-}
-
-export interface GetRecapResponse {
-    recap: PublishedRecap
-}
-
-export interface PublishedRecap {
-    eventName: string
-    subtitle: string
-    place: string
-    snapshotLabel: string
-    routines: PublishedRoutine[]
-}
-
-export interface PublishedRoutine {
-    name: string
-    descriptors: string
-    roster: string
-    summary: string
-    performances: PublishedPerformance[]
-}
-
-export interface PublishedPerformance {
-    when: string
-    matchup: string
-    results: PublishedResult[]
-}
-
-export interface RecapLinkView {
-    id: number
-    createdAt: string
-    expiresAt: string | null
-    expired: boolean
-    createdByName: string
-    canRevoke: boolean
-    routineCount: number
-    snapshotLabel: string
+export interface ResponseTimingStats {
+    count: number
+    medianResponse: number
+    p95Response: number
 }
 
 export async function CreateAccount(data: CreateAccountRequest): Promise<rpc.Response<CreateAccountResponse>> {
@@ -3835,6 +3837,38 @@ export async function SetAppearancePhotos(data: SetAppearancePhotosRequest): Pro
 
 export async function SetEventPhotos(data: SetEventPhotosRequest): Promise<rpc.Response<SetEventPhotosResponse>> {
     return await rpc.call<SetEventPhotosResponse>('SetEventPhotos', JSON.stringify(data));
+}
+
+export async function CreateRecapLink(data: CreateRecapLinkRequest): Promise<rpc.Response<CreateRecapLinkResponse>> {
+    return await rpc.call<CreateRecapLinkResponse>('CreateRecapLink', JSON.stringify(data));
+}
+
+export async function ListRecapLinks(data: ListRecapLinksRequest): Promise<rpc.Response<ListRecapLinksResponse>> {
+    return await rpc.call<ListRecapLinksResponse>('ListRecapLinks', JSON.stringify(data));
+}
+
+export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc.Response<DeleteResponse>> {
+    return await rpc.call<DeleteResponse>('RevokeRecapLink', JSON.stringify(data));
+}
+
+export async function GetRecap(data: GetRecapRequest): Promise<rpc.Response<GetRecapResponse>> {
+    return await rpc.call<GetRecapResponse>('GetRecap', JSON.stringify(data));
+}
+
+export async function GetFamilyPageSettings(data: GetFamilyPageSettingsRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('GetFamilyPageSettings', JSON.stringify(data));
+}
+
+export async function PublishFamilyPage(data: PublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('PublishFamilyPage', JSON.stringify(data));
+}
+
+export async function UnpublishFamilyPage(data: UnpublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('UnpublishFamilyPage', JSON.stringify(data));
+}
+
+export async function GetPublicFamilyPage(data: GetPublicFamilyPageRequest): Promise<rpc.Response<GetPublicFamilyPageResponse>> {
+    return await rpc.call<GetPublicFamilyPageResponse>('GetPublicFamilyPage', JSON.stringify(data));
 }
 
 export async function CreateTag(data: CreateTagRequest): Promise<rpc.Response<CreateTagResponse>> {
@@ -4227,37 +4261,5 @@ export async function AdminGetMobileVersions(data: Empty): Promise<rpc.Response<
 
 export async function AdminSetMobileVersion(data: AdminSetMobileVersionRequest): Promise<rpc.Response<AdminSetMobileVersionResponse>> {
     return await rpc.call<AdminSetMobileVersionResponse>('AdminSetMobileVersion', JSON.stringify(data));
-}
-
-export async function CreateRecapLink(data: CreateRecapLinkRequest): Promise<rpc.Response<CreateRecapLinkResponse>> {
-    return await rpc.call<CreateRecapLinkResponse>('CreateRecapLink', JSON.stringify(data));
-}
-
-export async function ListRecapLinks(data: ListRecapLinksRequest): Promise<rpc.Response<ListRecapLinksResponse>> {
-    return await rpc.call<ListRecapLinksResponse>('ListRecapLinks', JSON.stringify(data));
-}
-
-export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc.Response<DeleteResponse>> {
-    return await rpc.call<DeleteResponse>('RevokeRecapLink', JSON.stringify(data));
-}
-
-export async function GetRecap(data: GetRecapRequest): Promise<rpc.Response<GetRecapResponse>> {
-    return await rpc.call<GetRecapResponse>('GetRecap', JSON.stringify(data));
-}
-
-export async function GetFamilyPageSettings(data: GetFamilyPageSettingsRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
-    return await rpc.call<FamilyPageSettingsResponse>('GetFamilyPageSettings', JSON.stringify(data));
-}
-
-export async function PublishFamilyPage(data: PublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
-    return await rpc.call<FamilyPageSettingsResponse>('PublishFamilyPage', JSON.stringify(data));
-}
-
-export async function UnpublishFamilyPage(data: UnpublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
-    return await rpc.call<FamilyPageSettingsResponse>('UnpublishFamilyPage', JSON.stringify(data));
-}
-
-export async function GetPublicFamilyPage(data: GetPublicFamilyPageRequest): Promise<rpc.Response<GetPublicFamilyPageResponse>> {
-    return await rpc.call<GetPublicFamilyPageResponse>('GetPublicFamilyPage', JSON.stringify(data));
 }
 

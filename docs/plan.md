@@ -9,37 +9,30 @@ Nothing here is a release commitment. Household management (calendars, chores
 and allowance, meals, location tracking) is deliberately out of scope; those
 proposals are kept in [Not planned](not-planned.md).
 
-## Planned, with their own plans
+## Planned
 
-| Plan | Purpose |
-| --- | --- |
-| [Sharing outside the family](plans/sharing.md) | Explicitly published family summaries and Christmas-card updates shared by link. |
+Video follow-ups, worth doing if they stay simple:
 
-## Smaller follow-ups
-
-Worth doing if they stay simple.
-
-**Video.**
-
-- Resumable S3 multipart uploads above ~100 MB, if it's simple.
+- Resumable S3 multipart uploads above ~100 MB.
 - Use the transcript: suggest a title, tags or people mentioned, for the family
   to accept or edit.
 
-**Annual interview.**
-
-- A note field on the conduct screen too; notes can only be added afterwards,
-  from Edit answers.
-
-**Same age.** Undecided whether it's worth doing.
-
-- Comparisons by recurring occasion (first day of school, Halloween) alongside
-  age comparisons, clearly labelled as such.
-
 ## Ideas
 
-Not scoped. "New entity" means the checklist in
+Not scoped and not planned for now; kept in case we return to them. "New
+entity" means the checklist in
 [Adding a new domain entity](#adding-a-new-domain-entity).
 
+- **Christmas-card updates.** Periodic "here's what we've been up to" posts
+  (text, photos, the people involved) shared with specific people by a
+  revocable link, built for link previews, with bounded reactions and comments
+  and an optional email to outside recipients. The full scope was in
+  `docs/plans/sharing.md`, removed after the family summary page shipped (see
+  `git show f61f468:docs/plans/sharing.md`).
+- **Interview notes while conducting.** A note field on the conduct screen;
+  notes can only be added afterwards, from Edit answers.
+- **Same-age by occasion.** Comparisons by recurring occasion (first day of
+  school, Halloween) alongside age comparisons, clearly labelled as such.
 - **Suggested event collections.** Propose groupings of a birthday, a trip or a
   competition from photos close together in time, with shared people and places
   as supporting evidence. The family accepts, edits or dismisses; nothing
