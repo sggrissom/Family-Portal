@@ -135,9 +135,10 @@ Technical notes:
 - `robots.txt` currently disallows everything but the marketing pages. Default
   published pages to noindex and make indexing an explicit opt-in.
 
-Open question: a chosen slug is memorable but guessable and enumerable, while a
-random token is neither guessable nor speakable. Slug plus noindex is probably
-the right trade for a page whose whole purpose is being handed to a person.
+Decided (2026-11-22): the page lives at `/f/<slug>`, so app routes never
+collide with a slug and the reserved list only blocks impersonation words. Each
+person's profile photo is opt-in. Rate limits are per client, like recaps; a
+per-slug limit would let one visitor lock a family's page for everyone.
 
 ## Christmas-card updates
 

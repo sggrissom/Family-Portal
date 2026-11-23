@@ -54,8 +54,9 @@ Two things answer before authentication, and only two:
   (`backend/universal_links.go`).
 
 `/healthz` and `/readyz` are for the deploy, not for the app. Do not poll them.
-`/recap/<token>` pages are for people without an account (§12, Recap links);
-they are not universal links and the app never fetches them.
+`/recap/<token>` and `/f/<slug>` pages are for people without an account (§12,
+Recap links and Family page); they are not universal links and the app never
+fetches them.
 
 ---
 
@@ -1051,6 +1052,33 @@ reach it.
   ones included with `expired: true`. `RevokeRecapLink { id }` deletes one. It
   is allowed for the link's creator or a family admin, as `canRevoke` says.
   Deleting the event deletes its links.
+
+### Family page
+
+A family can publish one public page at `/f/<slug>`: a title, an intro, chosen
+people and up to 6 photos. Like a recap it is a snapshot; editing a person
+changes nothing until the page is published again. Taking someone off the
+roster or deleting a photo drops them from it right away.
+
+- `GetFamilyPageSettings { familyId }` needs contribute access (0 means the
+  primary family). It returns what is published, or defaults if nothing is,
+  plus `people`: the roster with each person's `ageYears` (null for
+  pregnancies and missing birthdays) and usable profile photo. `canEdit` is
+  true for admins.
+- `PublishFamilyPage { familyId, settings }` and `UnpublishFamilyPage
+  { familyId }` need admin access, and both return the same view. The slug is 3
+  to 40 lowercase letters, digits and single hyphens, is unique across the
+  install, and can't be a reserved word. Members are roster people at most
+  once (20 at most). A blank shown name becomes the person's first name.
+  `showAge` publishes a whole-years age and never the birth date. Photos must be
+  finished, non-video images owned by this family. Publishing again replaces
+  the snapshot, and a new slug frees the old one at once. Unpublishing deletes
+  the page.
+- `GetPublicFamilyPage { slug }` answers without signing in, and unknown slugs
+  get "This page isn't available". Images come from
+  `/api/family-page/<slug>/{photo,person}/<n>` as resized variants only, checked
+  against the live publication on every request and sent `no-store`. Pages are
+  `noindex` unless `indexable` is set.
 
 ---
 
