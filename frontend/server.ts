@@ -3348,6 +3348,82 @@ export interface GetRecapRequest {
     token: string
 }
 
+export interface GetFamilyPageSettingsRequest {
+    familyId: number
+}
+
+export interface FamilyPageSettingsResponse {
+    familyId: number
+    canEdit: boolean
+    published: boolean
+    url: string
+    publishedAt: string | null
+    publishedByName: string
+    settings: FamilyPageSettings
+    people: FamilyPagePerson[]
+}
+
+export interface PublishFamilyPageRequest {
+    familyId: number
+    settings: FamilyPageSettings
+}
+
+export interface UnpublishFamilyPageRequest {
+    familyId: number
+}
+
+export interface GetPublicFamilyPageRequest {
+    slug: string
+}
+
+export interface GetPublicFamilyPageResponse {
+    page: PublicFamilyPage
+}
+
+export interface FamilyPageSettings {
+    slug: string
+    indexable: boolean
+    title: string
+    intro: string
+    members: FamilyPageMemberSettings[]
+    photoIds: number[]
+}
+
+export interface FamilyPagePerson {
+    id: number
+    name: string
+    ageYears: number | null
+    profilePhotoId: number
+    profileCropX: number
+    profileCropY: number
+    profileCropScale: number
+}
+
+export interface PublicFamilyPage {
+    title: string
+    intro: string
+    members: PublicFamilyPageMember[]
+    photoUrls: string[]
+}
+
+export interface FamilyPageMemberSettings {
+    personId: number
+    name: string
+    line: string
+    showAge: boolean
+    showPhoto: boolean
+}
+
+export interface PublicFamilyPageMember {
+    name: string
+    line: string
+    ageYears: number | null
+    photoUrl: string
+    cropX: number
+    cropY: number
+    cropScale: number
+}
+
 export interface GetRecapResponse {
     recap: PublishedRecap
 }
@@ -4167,5 +4243,21 @@ export async function RevokeRecapLink(data: RevokeRecapLinkRequest): Promise<rpc
 
 export async function GetRecap(data: GetRecapRequest): Promise<rpc.Response<GetRecapResponse>> {
     return await rpc.call<GetRecapResponse>('GetRecap', JSON.stringify(data));
+}
+
+export async function GetFamilyPageSettings(data: GetFamilyPageSettingsRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('GetFamilyPageSettings', JSON.stringify(data));
+}
+
+export async function PublishFamilyPage(data: PublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('PublishFamilyPage', JSON.stringify(data));
+}
+
+export async function UnpublishFamilyPage(data: UnpublishFamilyPageRequest): Promise<rpc.Response<FamilyPageSettingsResponse>> {
+    return await rpc.call<FamilyPageSettingsResponse>('UnpublishFamilyPage', JSON.stringify(data));
+}
+
+export async function GetPublicFamilyPage(data: GetPublicFamilyPageRequest): Promise<rpc.Response<GetPublicFamilyPageResponse>> {
+    return await rpc.call<GetPublicFamilyPageResponse>('GetPublicFamilyPage', JSON.stringify(data));
 }
 
