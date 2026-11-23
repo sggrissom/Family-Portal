@@ -12,6 +12,7 @@ import { FamilySelect } from "../../components/FamilySelect";
 import { FamilyLinksSection } from "../../components/FamilyLinks";
 import { FamilyMembersSection } from "../../components/FamilyMembers";
 import { FamilyPlacesSection } from "../../components/FamilyPlaces";
+import { copy } from "../../lib/copy";
 import { formatLongDate } from "../../lib/dateUtils";
 import { isValidBirthday } from "../../lib/growthPercentiles";
 import "./settings-styles";
@@ -838,6 +839,18 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         {families.length > 0 && <FamilyLinksSection initialLinks={data.links} />}
 
         {families.length > 0 && <FamilyPlacesSection />}
+
+        {families.length > 0 && (
+          <div className="settings-section">
+            <h2>{copy.familyPage.settingsTitle}</h2>
+            <div className="settings-card">
+              <p className="section-description">{copy.familyPage.settingsExplain}</p>
+              <a className="btn btn-secondary" href="/family-page">
+                {copy.familyPage.edit}
+              </a>
+            </div>
+          </div>
+        )}
 
         {data.familyInfo.id > 0 && (
           <div className="settings-section">
