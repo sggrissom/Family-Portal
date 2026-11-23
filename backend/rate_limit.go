@@ -39,6 +39,7 @@ var (
 	rateRuleSnapshot      = RateLimitRule{Name: "snapshot", Burst: 10, Window: time.Hour}
 	rateRuleClientError   = RateLimitRule{Name: "client-error", Burst: 20, Window: 5 * time.Minute}
 	rateRuleRecapRead     = RateLimitRule{Name: "recap-read", Burst: 60, Window: 5 * time.Minute}
+	rateRuleFamilyPage    = RateLimitRule{Name: "family-page-read", Burst: 300, Window: 5 * time.Minute}
 	rateRuleDefault       = RateLimitRule{Name: "default", Burst: 300, Window: time.Minute}
 )
 
@@ -70,6 +71,7 @@ var exactPathRules = map[string]RateLimitRule{
 	"/rpc/AcceptFamilyLink":           rateRuleInviteCode,
 	"/rpc/ImportData":                 rateRuleImport,
 	"/rpc/GetRecap":                   rateRuleRecapRead,
+	"/rpc/GetPublicFamilyPage":        rateRuleFamilyPage,
 }
 
 var prefixPathRules = []struct {
@@ -80,6 +82,8 @@ var prefixPathRules = []struct {
 	{prefix: localMediaObjectPrefix, rule: rateRulePhotoRead},
 	{prefix: localMediaUploadPrefix, rule: rateRuleUpload},
 	{prefix: RecapPathPrefix, rule: rateRuleRecapRead},
+	{prefix: FamilyPagePathPrefix, rule: rateRuleFamilyPage},
+	{prefix: FamilyPagePhotoPathPrefix, rule: rateRuleFamilyPage},
 }
 
 func ruleForPath(path string) (RateLimitRule, bool) {

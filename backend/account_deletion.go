@@ -208,6 +208,7 @@ func deleteFamilyContentTx(tx *vbolt.Tx, familyId int) (photos []Image) {
 	}
 
 	deleteFamilyActivitiesTx(tx, familyId)
+	deleteFamilyPageTx(tx, familyId)
 
 	for _, book := range GetFamilyBooks(tx, familyId) {
 		deleteBookTx(tx, book.Id)
