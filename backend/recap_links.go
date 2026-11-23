@@ -25,11 +25,7 @@ var recapResultKinds = map[string]bool{
 }
 
 func recapText(value string) string {
-	value = strings.TrimSpace(value)
-	if runes := []rune(value); len(runes) > maxRecapTextLength {
-		value = strings.TrimSpace(string(runes[:maxRecapTextLength]))
-	}
-	return value
+	return capText(value, maxRecapTextLength)
 }
 
 func buildPublishedRecap(tx *vbolt.Tx, event Event, in RecapInput) (PublishedRecap, error) {

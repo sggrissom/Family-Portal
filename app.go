@@ -284,6 +284,7 @@ func MakeApplication() *vbeam.Application {
 	backend.RegisterActivityViewMethods(app)
 	backend.RegisterActivityPhotoMethods(app)
 	backend.RegisterRecapLinkMethods(app)
+	backend.RegisterFamilyPageMethods(app)
 	backend.RegisterTagMethods(app)
 	backend.RegisterChatMethods(app)
 	backend.RegisterPhotoMethods(app)

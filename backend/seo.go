@@ -61,6 +61,9 @@ Allow: /terms
 Allow: /support
 Allow: /images/
 Allow: /manifest.json
+Allow: /f/
+Allow: /rpc/GetPublicFamilyPage
+Allow: /api/family-page/
 
 Sitemap: ` + cfg.SiteURL + `/sitemap.xml
 
