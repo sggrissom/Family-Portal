@@ -28,19 +28,26 @@ func importPhotos(
 	quotaReached := false
 	quotaSkipped := 0
 
+	var scoped []ExportPhoto
 	var incoming int64
-	for _, zf := range zipFiles {
-		incoming += int64(zf.UncompressedSize64)
+	for _, photo := range photos {
+		if !inScope(photo.PersonIds, l) {
+			continue
+		}
+		scoped = append(scoped, photo)
+		if zf, ok := zipFiles[photo.ZipPath]; ok {
+			incoming += int64(zf.UncompressedSize64)
+		}
 	}
 	if diskErr := CheckDiskHeadroom(cfg.StaticDir, incoming, cfg.MinFreeDiskBytes); diskErr != nil && !dryRun {
-		return 0, len(photos), nil, []string{
+		return 0, len(scoped), nil, []string{
 			"The server is low on storage, so no photos were imported. Everything else in the bundle was.",
 		}
 	}
 
-	for _, photo := range photos {
+	for _, photo := range scoped {
 		zf, exists := zipFiles[photo.ZipPath]
-		if !exists || !photoInScope(photo, l) {
+		if !exists {
 			skipped++
 			continue
 		}

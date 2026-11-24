@@ -429,7 +429,7 @@ func findExistingPerson(tx *vbolt.Tx, importPerson ImportPerson, familyId int) *
 
 	for _, existing := range familyPeople {
 		if existing.Name == importPerson.Name &&
-			existing.Birthday.Equal(importPerson.Birthday) &&
+			existing.Birthday.Equal(dayStart(importPerson.Birthday)) &&
 			existing.Gender == GenderType(importPerson.Gender) {
 			return &existing
 		}

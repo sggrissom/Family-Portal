@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.hasen.dev/vbeam"
 )
@@ -256,5 +257,74 @@ func TestBooksFindMomentsAlreadyInTheFamily(t *testing.T) {
 	want := source[0]["Items.0.SourceId"]
 	if len(restored) != 1 || want == "" || restored[0]["Items.0.SourceId"] != want {
 		t.Errorf("restored books %v; want their first item to be the moment %s", restored, want)
+	}
+}
+
+func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	data := bundleRecords(t, bundle)
+	var records ImportDataStructure
+	if err := json.Unmarshal(data, &records); err != nil {
+		t.Fatal(err)
+	}
+	chosen := records.People[0]
+	wantPhotos, wantVideos := 0, 0
+	for _, photo := range records.Photos {
+		if len(photo.PersonIds) == 0 || slices.Contains(photo.PersonIds, chosen.Id) {
+			wantPhotos++
+		}
+	}
+	for _, video := range records.Videos {
+		if len(video.PersonIds) == 0 || slices.Contains(video.PersonIds, chosen.Id) {
+			wantVideos++
+		}
+	}
+	if wantPhotos == len(records.Photos) && wantVideos == len(records.Videos) {
+		t.Fatalf("the filter on %s leaves out no media", chosen.Name)
+	}
+	req := ImportDataRequest{FilterPersonIds: []int{chosen.Id}}
+
+	fromZip := fx.importBundle(t, fx.newUser(t, "zip"), bundle, req)
+	if fromZip.SkippedPhotos != 0 || fromZip.SkippedVideos != wantVideos {
+		t.Errorf("zip skipped %d photos and %d videos; want 0 and %d", fromZip.SkippedPhotos, fromZip.SkippedVideos, wantVideos)
+	}
+
+	req.JsonData = string(data)
+	fromRecords, err := fx.importRecords(t, fx.newUser(t, "records"), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromRecords.SkippedPhotos != wantPhotos || fromRecords.SkippedVideos != wantVideos {
+		t.Errorf("records skipped %d photos and %d videos; want %d and %d",
+			fromRecords.SkippedPhotos, fromRecords.SkippedVideos, wantPhotos, wantVideos)
+	}
+}
+
+func TestReimportMatchesPeopleWhoseBirthdayIsNotAtMidnight(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	var records ImportDataStructure
+	if err := json.Unmarshal([]byte(fx.exportRecords(t, fx.owner)), &records); err != nil {
+		t.Fatal(err)
+	}
+	for i := range records.People {
+		records.People[i].Birthday = records.People[i].Birthday.Add(15 * time.Hour)
+	}
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restorer := fx.newUser(t, "restorer")
+	req := ImportDataRequest{JsonData: string(data)}
+	first, err := fx.importRecords(t, restorer, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := fx.importRecords(t, restorer, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ImportedPeople != 0 || again.MergedPeople != first.ImportedPeople {
+		t.Errorf("second import added %d and merged %d people; want 0 and %d", again.ImportedPeople, again.MergedPeople, first.ImportedPeople)
 	}
 }

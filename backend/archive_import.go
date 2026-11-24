@@ -174,7 +174,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	} else {
 		resp.SkippedPhotos = missingPhotoFiles(archive, l)
 	}
-	resp.SkippedVideos = len(archive.Videos)
+	resp.SkippedVideos = videosInScope(archive.Videos, l)
 	if photos := missingPhotoFiles(archive, l); photos+resp.SkippedVideos > 0 {
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf(
 			"%d photo(s) and %d video(s) were not imported because their files aren't in this file.",
@@ -204,19 +204,28 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	return
 }
 
-// photoInScope leaves out photos of only people the import filtered out.
-func photoInScope(photo ExportPhoto, l *archiveLedger) bool {
-	for _, id := range photo.PersonIds {
+// inScope leaves out media of only people the import filtered out.
+func inScope(personIds []int, l *archiveLedger) bool {
+	for _, id := range personIds {
 		if _, ok := l.people[id]; ok {
 			return true
 		}
 	}
-	return len(photo.PersonIds) == 0
+	return len(personIds) == 0
+}
+
+func videosInScope(videos []ExportVideo, l *archiveLedger) (n int) {
+	for _, video := range videos {
+		if inScope(video.PersonIds, l) {
+			n++
+		}
+	}
+	return
 }
 
 func missingPhotoFiles(archive familyArchive, l *archiveLedger) (missing int) {
 	for _, photo := range archive.Photos {
-		if photoInScope(photo, l) && archive.media[photo.ZipPath] == nil {
+		if inScope(photo.PersonIds, l) && archive.media[photo.ZipPath] == nil {
 			missing++
 		}
 	}

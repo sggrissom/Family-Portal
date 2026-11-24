@@ -77,6 +77,13 @@ interface ImportPageProps {
   form: ImportForm;
 }
 
+const clearPreview = (form: ImportForm) => {
+  form.previewData = null;
+  form.showFilters = false;
+  form.selectedFamilyIds = [];
+  form.selectedPersonIds = [];
+};
+
 const ImportPage = ({ form }: ImportPageProps) => {
   const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement;
@@ -85,8 +92,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
     if (file) {
       form.file = file;
       form.error = "";
-      form.previewData = null;
-      form.showFilters = false;
+      clearPreview(form);
       form.isZip = file.name.endsWith(".zip");
 
       if (form.isZip) {
@@ -136,6 +142,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.jsonData = target.value;
     form.file = null;
     form.error = "";
+    clearPreview(form);
     vlens.scheduleRedraw();
   };
 
@@ -149,6 +156,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
           form.jsonData = target.value;
           form.file = null;
           form.error = "";
+          clearPreview(form);
           vlens.scheduleRedraw();
         }, 0);
       }
