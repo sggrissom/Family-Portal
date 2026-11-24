@@ -3,12 +3,9 @@ package backend
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"go.hasen.dev/vbolt"
@@ -43,23 +40,7 @@ func TestMilestoneImportsQueueCommittedRecords(t *testing.T) {
 				if err = zw.Close(); err != nil {
 					t.Fatal(err)
 				}
-				var body bytes.Buffer
-				form := multipart.NewWriter(&body)
-				part, err := form.CreateFormFile("file", "family.zip")
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err = part.Write(archive.Bytes()); err != nil {
-					t.Fatal(err)
-				}
-				if err = form.Close(); err != nil {
-					t.Fatal(err)
-				}
-				req := httptest.NewRequest(http.MethodPost, "/api/import-bundle", &body)
-				req.Header.Set("Content-Type", form.FormDataContentType())
-				req = req.WithContext(context.WithValue(req.Context(), UserContextKey, fx.owner))
-				recorder := httptest.NewRecorder()
-				importBundleHandler(recorder, req)
+				recorder := postImportBundle(t, fx.owner, archive.Bytes(), ImportDataRequest{ImportMilestones: true})
 				if recorder.Code != http.StatusOK {
 					t.Fatalf("import failed: %d %s", recorder.Code, recorder.Body.String())
 				}
@@ -90,7 +71,7 @@ func TestMilestoneImportsQueueCommittedRecords(t *testing.T) {
 			})
 			assertMilestoneSearchable(t, fx, id, "steps")
 			// Re-importing the same record should not queue duplicates.
-			if _, err := callAs(t, fx, ImportData, ImportDataRequest{JsonData: string(encoded), ImportMilestones: true, MergeStrategy: "merge_people"}); err != nil {
+			if _, err := callAs(t, fx, ImportData, ImportDataRequest{JsonData: string(encoded), ImportMilestones: true}); err != nil {
 				t.Fatal(err)
 			}
 			if globalMilestoneWorker.length() != 0 {

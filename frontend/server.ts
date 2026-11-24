@@ -1610,7 +1610,6 @@ export interface ImportDataRequest {
     filterFamilyIds: number[]
     filterPersonIds: number[]
     previewOnly: boolean
-    mergeStrategy: string
     importMilestones: boolean
     importActivities: boolean
     dryRun: boolean
@@ -1631,6 +1630,7 @@ export interface ImportDataResponse {
     skippedTags: number
     importedPhotos: number
     skippedPhotos: number
+    skippedVideos: number
     importedActivities: ActivityImportCounts
     importedBooks: number
     skippedBooks: number

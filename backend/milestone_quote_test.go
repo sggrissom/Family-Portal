@@ -111,7 +111,9 @@ func TestQuoteContextSurvivesExportAndImport(t *testing.T) {
 	}
 
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		imported, _, errs, ids := importMilestones(tx, []ExportMilestone{row}, map[int]int{row.PersonId: fx.bob.Id}, fx.familyId, nil)
+		ledger := newArchiveLedger()
+		ledger.people[row.PersonId] = fx.bob.Id
+		imported, _, errs, ids := importMilestones(tx, []ExportMilestone{row}, fx.familyId, ledger)
 		if imported != 1 || len(errs) > 0 {
 			t.Fatalf("imported %d, errors %v", imported, errs)
 		}

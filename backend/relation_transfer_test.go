@@ -8,9 +8,25 @@ import (
 	"testing"
 	"time"
 
+	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func importRecordsInto(t *testing.T, db *vbolt.DB, user User, req ImportDataRequest) (resp ImportDataResponse) {
+	t.Helper()
+	jwtKey = []byte("relation-transfer-test-secret-key-32b")
+	token := testAuthToken(t, user)
+	var err error
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		resp, err = ImportData(&vbeam.Context{Tx: tx, Token: token}, req)
+		vbolt.TxCommit(tx)
+	})
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	return resp
+}
 
 func openTransferTestDb(t *testing.T, name string) *vbolt.DB {
 	t.Helper()
@@ -141,41 +157,23 @@ func TestImportRestoresRelations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to marshal export: %v", err)
 	}
-	var importData ImportDataStructure
-	if err := json.Unmarshal(jsonBytes, &importData); err != nil {
-		t.Fatalf("Failed to unmarshal export as import data: %v", err)
-	}
-	if err := validateImportData(importData); err != nil {
-		t.Fatalf("Exported data failed import validation: %v", err)
-	}
-	if len(importData.Relations) != 4 {
-		t.Fatalf("Expected 4 relations in the round-tripped file, got %d", len(importData.Relations))
+	if len(exportData.Relations) != 4 {
+		t.Fatalf("Expected 4 relations in the export, got %d", len(exportData.Relations))
 	}
 
 	var target User
-	var mapping map[int]int
-	var imported, skipped int
-
 	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
 		target = addTransferTestUser(t, tx, "Target", "target@example.com")
-
-		var errs []string
-		mapping, _, _, errs, _ = importPeople(tx, importData.People, target.FamilyId, "create_all")
-		if len(errs) > 0 {
-			t.Fatalf("Unexpected people import errors: %v", errs)
-		}
-
-		imported, skipped, errs = importRelations(tx, importData.Relations, mapping)
-		if len(errs) > 0 {
-			t.Fatalf("Unexpected relation import errors: %v", errs)
-		}
-
 		vbolt.TxCommit(tx)
 	})
-
-	if imported != 4 {
-		t.Errorf("Expected 4 imported relations, got %d (skipped %d)", imported, skipped)
+	resp := importRecordsInto(t, db, target, ImportDataRequest{JsonData: string(jsonBytes)})
+	if len(resp.Errors) > 0 {
+		t.Fatalf("Unexpected import errors: %v", resp.Errors)
 	}
+	if resp.ImportedRelations != 4 {
+		t.Errorf("Expected 4 imported relations, got %d (skipped %d)", resp.ImportedRelations, resp.SkippedRelations)
+	}
+	mapping := resp.PersonIdMapping
 
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		newKid := mapping[kid.Id]
@@ -223,15 +221,15 @@ func TestImportRelationsIsIdempotent(t *testing.T) {
 		}
 	})
 
-	var imported, skipped int
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		mapping, _, merged, _, _ := importPeople(tx, exportData.People, user.FamilyId, "merge_people")
-		if merged != 2 {
-			t.Fatalf("Expected both people to merge onto themselves, got %d", merged)
-		}
-		imported, skipped, _ = importRelations(tx, exportData.Relations, mapping)
-		vbolt.TxCommit(tx)
-	})
+	jsonBytes, err := json.Marshal(exportData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := importRecordsInto(t, db, user, ImportDataRequest{JsonData: string(jsonBytes)})
+	if resp.MergedPeople != 2 {
+		t.Fatalf("Expected both people to merge onto themselves, got %d", resp.MergedPeople)
+	}
+	imported, skipped := resp.ImportedRelations, resp.SkippedRelations
 
 	if imported != 0 {
 		t.Errorf("Re-importing an export into its own family should add no relations, added %d", imported)
@@ -260,20 +258,24 @@ func TestImportRelationsSkipsUnmappedAndCollapsedPeople(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 
-	relations := []ExportRelation{
-		{FromId: 101, ToId: 102, Kind: "parent"},
-		{FromId: 101, ToId: 103, Kind: "sibling"},
-	}
-	// 102 is absent from the mapping; 101 and 103 both land on the same person,
-	// which is what happens when two import rows merge onto one existing record.
-	mapping := map[int]int{101: kept.Id, 103: kept.Id}
-
-	var imported, skipped int
-	var errs []string
-	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
-		imported, skipped, errs = importRelations(tx, relations, mapping)
-		vbolt.TxCommit(tx)
+	// 102 is filtered out; 101 and 103 both match the same person, as when two
+	// rows of one file merge onto one existing record.
+	records, err := json.Marshal(ImportDataStructure{
+		People: []ImportPerson{
+			{Id: 101, Name: kept.Name, Birthday: kept.Birthday, Gender: int(kept.Gender)},
+			{Id: 102, Name: "Elsewhere", Birthday: kept.Birthday},
+			{Id: 103, Name: kept.Name, Birthday: kept.Birthday, Gender: int(kept.Gender)},
+		},
+		Relations: []ExportRelation{
+			{FromId: 101, ToId: 102, Kind: "parent"},
+			{FromId: 101, ToId: 103, Kind: "sibling"},
+		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := importRecordsInto(t, db, user, ImportDataRequest{JsonData: string(records), FilterPersonIds: []int{101, 103}})
+	imported, skipped, errs := resp.ImportedRelations, resp.SkippedRelations, resp.Errors
 
 	if imported != 0 {
 		t.Errorf("Expected no relations imported, got %d", imported)

@@ -1,11 +1,8 @@
 package backend
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,16 +39,7 @@ func TestBundleImportedPhotosAreProcessed(t *testing.T) {
 	globalPhotoWorker = &PhotoWorker{db: fx.db, jobQueue: make(chan PhotoProcessingJob, 10)}
 	t.Cleanup(func() { globalPhotoWorker = previous })
 
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, _ := form.CreateFormFile("file", "family.zip")
-	io.Copy(part, bytes.NewReader(bundle))
-	form.Close()
-	req = httptest.NewRequest(http.MethodPost, "/api/import-bundle", &body)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, fx.owner))
-	rec = httptest.NewRecorder()
-	importBundleHandler(rec, req)
+	rec = postImportBundle(t, fx.owner, bundle, ImportDataRequest{})
 	var resp ImportDataResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if rec.Code != http.StatusOK || resp.ImportedPhotos != 1 {

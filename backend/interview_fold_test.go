@@ -170,7 +170,7 @@ func TestInterviewCadenceSetting(t *testing.T) {
 		vbolt.TxCommit(tx)
 	})
 	fx.asUser(t, other, func(ctx *vbeam.Context) {
-		_, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true, MergeStrategy: "merge_people"})
+		_, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true})
 	})
 	if err != nil {
 		t.Fatal(err)

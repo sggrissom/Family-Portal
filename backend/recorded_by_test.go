@@ -109,7 +109,7 @@ func TestRecorderSurvivesExportAndImportByName(t *testing.T) {
 	})
 	var resp ImportDataResponse
 	fx.asUser(t, other, func(ctx *vbeam.Context) {
-		resp, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true, MergeStrategy: "merge_people"})
+		resp, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true})
 	})
 	if err != nil {
 		t.Fatal(err)

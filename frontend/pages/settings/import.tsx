@@ -24,7 +24,6 @@ type ImportForm = {
   showFilters: boolean;
   selectedFamilyIds: number[];
   selectedPersonIds: number[];
-  mergeStrategy: string;
   importMilestones: boolean;
   importActivities: boolean;
   dryRun: boolean;
@@ -44,7 +43,6 @@ const useImportForm = vlens.declareHook(
     showFilters: false,
     selectedFamilyIds: [],
     selectedPersonIds: [],
-    mergeStrategy: "create_all",
     importMilestones: true,
     importActivities: true,
     dryRun: false,
@@ -87,6 +85,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
     if (file) {
       form.file = file;
       form.error = "";
+      form.previewData = null;
+      form.showFilters = false;
       form.isZip = file.name.endsWith(".zip");
 
       if (form.isZip) {
@@ -108,42 +108,28 @@ const ImportPage = ({ form }: ImportPageProps) => {
     }
   };
 
-  const handleBundleImport = async () => {
-    if (!form.file) return;
-
-    form.loading = true;
-    form.error = "";
-    form.success = false;
-    vlens.scheduleRedraw();
-
-    try {
-      const formData = new FormData();
-      formData.append("file", form.file);
-      if (form.targetFamilyId) {
-        formData.append("familyId", String(form.targetFamilyId));
-      }
-      const resp = await window.fetch("/api/import-bundle", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      form.loading = false;
-
-      if (resp.ok) {
-        const result = (await resp.json()) as server.ImportDataResponse;
-        form.result = result;
-        form.success = true;
-      } else {
-        const errBody = await resp.text();
-        form.error = "Import failed: " + errBody;
-      }
-    } catch (error) {
-      form.error = error instanceof Error ? error.message : "An error occurred during import";
-      form.loading = false;
+  const runImport = async (
+    options: Omit<server.ImportDataRequest, "jsonData">
+  ): Promise<[server.ImportDataResponse | null, string]> => {
+    if (!form.isZip) {
+      const [resp, err] = await server.ImportData({ ...options, jsonData: form.jsonData });
+      return [resp, err];
     }
-    vlens.scheduleRedraw();
+    const formData = new FormData();
+    formData.append("file", form.file!);
+    formData.append("options", JSON.stringify(options));
+    const resp = await window.fetch("/api/import-bundle", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (!resp.ok) {
+      return [null, "Import failed: " + (await resp.text())];
+    }
+    return [(await resp.json()) as server.ImportDataResponse, ""];
   };
+
+  const hasInput = () => (form.isZip ? form.file !== null : form.jsonData.trim() !== "");
 
   const handleTextareaChange = (event: Event) => {
     const target = event.target as HTMLTextAreaElement;
@@ -170,18 +156,20 @@ const ImportPage = ({ form }: ImportPageProps) => {
   };
 
   const handlePreview = async () => {
-    if (!form.jsonData.trim()) {
-      form.error = "Please provide JSON data to preview.";
+    if (!hasInput()) {
+      form.error = "Please choose a file or paste JSON data to preview.";
       vlens.scheduleRedraw();
       return;
     }
 
-    try {
-      JSON.parse(form.jsonData);
-    } catch (e) {
-      form.error = "Invalid JSON format. Please check your data.";
-      vlens.scheduleRedraw();
-      return;
+    if (!form.isZip) {
+      try {
+        JSON.parse(form.jsonData);
+      } catch (e) {
+        form.error = "Invalid JSON format. Please check your data.";
+        vlens.scheduleRedraw();
+        return;
+      }
     }
 
     form.loading = true;
@@ -189,12 +177,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
     vlens.scheduleRedraw();
 
     try {
-      let [resp, err] = await server.ImportData({
-        jsonData: form.jsonData,
+      let [resp, err] = await runImport({
         filterFamilyIds: [],
         filterPersonIds: [],
         previewOnly: true,
-        mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
         importActivities: form.importActivities,
         dryRun: false,
@@ -221,7 +207,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
 
-    if (!form.jsonData.trim()) {
+    if (!hasInput()) {
       form.error = "Please provide JSON data either by uploading a file or pasting it directly.";
       vlens.scheduleRedraw();
       return;
@@ -233,12 +219,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
     vlens.scheduleRedraw();
 
     try {
-      let [resp, err] = await server.ImportData({
-        jsonData: form.jsonData,
+      let [resp, err] = await runImport({
         filterFamilyIds: form.selectedFamilyIds,
         filterPersonIds: form.selectedPersonIds,
         previewOnly: false,
-        mergeStrategy: form.mergeStrategy,
         importMilestones: form.importMilestones,
         importActivities: form.importActivities,
         dryRun: form.dryRun,
@@ -275,7 +259,6 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.showFilters = false;
     form.selectedFamilyIds = [];
     form.selectedPersonIds = [];
-    form.mergeStrategy = "create_all";
     form.importMilestones = true;
     form.importActivities = true;
     form.dryRun = false;
@@ -373,6 +356,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 <span className="stat-label">Photos Skipped</span>
               </div>
             )}
+            {form.result.skippedVideos > 0 && (
+              <div className="stat">
+                <span className="stat-number">{form.result.skippedVideos}</span>
+                <span className="stat-label">Videos Skipped</span>
+              </div>
+            )}
           </div>
 
           {form.result.warnings && form.result.warnings.length > 0 && (
@@ -430,34 +419,11 @@ const ImportPage = ({ form }: ImportPageProps) => {
             </div>
 
             {form.isZip && form.file ? (
-              <div className="zip-import-section">
-                <div className="zip-bundle-card">
-                  <p>
-                    <strong>ZIP bundle selected:</strong> {form.file.name}
-                  </p>
-                  <p>
-                    This bundle contains family data and photos. Click the button below to import
-                    everything.
-                  </p>
-                </div>
-                {form.error && (
-                  <div className="error-message" role="alert">
-                    {form.error}
-                  </div>
-                )}
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    onClick={handleBundleImport}
-                    disabled={form.loading}
-                    className="btn btn-primary"
-                  >
-                    {form.loading ? "Importing..." : "Import Bundle"}
-                  </button>
-                  <button type="button" onClick={clearForm} className="btn btn-secondary">
-                    Clear
-                  </button>
-                </div>
+              <div className="zip-bundle-card">
+                <p>
+                  <strong>ZIP bundle selected:</strong> {form.file.name}
+                </p>
+                <p>This bundle contains family data and photos.</p>
               </div>
             ) : (
               <>
@@ -477,150 +443,96 @@ const ImportPage = ({ form }: ImportPageProps) => {
                     rows={10}
                   />
                 </div>
-
-                {form.error && (
-                  <div className="error-message" role="alert">
-                    {form.error}
-                  </div>
-                )}
-
-                <div className="form-section">
-                  <h3>Import Options</h3>
-
-                  <div className="import-options">
-                    <FamilySelect
-                      id="importFamilyId"
-                      label="Import into family"
-                      value={form.targetFamilyId}
-                      onChange={familyId => {
-                        form.targetFamilyId = familyId;
-                      }}
-                      disabled={form.loading}
-                    />
-
-                    <div className="option-group">
-                      <label className="option-label">
-                        <strong>Merge Strategy</strong>
-                      </label>
-                      <div className="radio-group">
-                        <label className="radio-option">
-                          <input
-                            type="radio"
-                            name="mergeStrategy"
-                            value="create_all"
-                            checked={form.mergeStrategy === "create_all"}
-                            onChange={e => {
-                              form.mergeStrategy = (e.target as HTMLInputElement).value;
-                              vlens.scheduleRedraw();
-                            }}
-                          />
-                          <span>Create All</span>
-                          <small>Create new records for everyone (may create duplicates)</small>
-                        </label>
-                        <label className="radio-option">
-                          <input
-                            type="radio"
-                            name="mergeStrategy"
-                            value="merge_people"
-                            checked={form.mergeStrategy === "merge_people"}
-                            onChange={e => {
-                              form.mergeStrategy = (e.target as HTMLInputElement).value;
-                              vlens.scheduleRedraw();
-                            }}
-                          />
-                          <span>Merge People</span>
-                          <small>Merge with existing people when name & birthday match</small>
-                        </label>
-                        <label className="radio-option">
-                          <input
-                            type="radio"
-                            name="mergeStrategy"
-                            value="skip_duplicates"
-                            checked={form.mergeStrategy === "skip_duplicates"}
-                            onChange={e => {
-                              form.mergeStrategy = (e.target as HTMLInputElement).value;
-                              vlens.scheduleRedraw();
-                            }}
-                          />
-                          <span>Skip Duplicates</span>
-                          <small>Skip people who already exist (name & birthday match)</small>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="option-group">
-                      <label className="checkbox-option">
-                        <input
-                          type="checkbox"
-                          checked={form.importMilestones}
-                          onChange={e => {
-                            form.importMilestones = (e.target as HTMLInputElement).checked;
-                            vlens.scheduleRedraw();
-                          }}
-                        />
-                        <span>Import Moments</span>
-                        <small>Include moments in the import</small>
-                      </label>
-                    </div>
-
-                    <div className="option-group">
-                      <label className="checkbox-option">
-                        <input
-                          type="checkbox"
-                          checked={form.importActivities}
-                          onChange={e => {
-                            form.importActivities = (e.target as HTMLInputElement).checked;
-                            vlens.scheduleRedraw();
-                          }}
-                        />
-                        <span>Import Activities</span>
-                        <small>Include seasons, competitions, routines, and results</small>
-                      </label>
-                    </div>
-
-                    <div className="option-group">
-                      <label className="checkbox-option">
-                        <input
-                          type="checkbox"
-                          checked={form.dryRun}
-                          onChange={e => {
-                            form.dryRun = (e.target as HTMLInputElement).checked;
-                            vlens.scheduleRedraw();
-                          }}
-                        />
-                        <span>Dry Run</span>
-                        <small>Preview changes without saving to database</small>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    onClick={handlePreview}
-                    disabled={form.loading || !form.jsonData.trim()}
-                    className="btn btn-secondary"
-                  >
-                    {form.loading ? "Loading..." : "Preview Data"}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      form.loading ||
-                      !form.jsonData.trim() ||
-                      (!form.showFilters && !form.previewData)
-                    }
-                    className="btn btn-primary"
-                  >
-                    {form.loading ? "Importing..." : "Import Data"}
-                  </button>
-                  <button type="button" onClick={clearForm} className="btn btn-secondary">
-                    Clear
-                  </button>
-                </div>
               </>
             )}
+
+            {form.error && (
+              <div className="error-message" role="alert">
+                {form.error}
+              </div>
+            )}
+
+            <div className="form-section">
+              <h3>Import Options</h3>
+
+              <div className="import-options">
+                <FamilySelect
+                  id="importFamilyId"
+                  label="Import into family"
+                  value={form.targetFamilyId}
+                  onChange={familyId => {
+                    form.targetFamilyId = familyId;
+                  }}
+                  disabled={form.loading}
+                />
+
+                <div className="option-group">
+                  <label className="checkbox-option">
+                    <input
+                      type="checkbox"
+                      checked={form.importMilestones}
+                      onChange={e => {
+                        form.importMilestones = (e.target as HTMLInputElement).checked;
+                        vlens.scheduleRedraw();
+                      }}
+                    />
+                    <span>Import Moments</span>
+                    <small>Include moments in the import</small>
+                  </label>
+                </div>
+
+                <div className="option-group">
+                  <label className="checkbox-option">
+                    <input
+                      type="checkbox"
+                      checked={form.importActivities}
+                      onChange={e => {
+                        form.importActivities = (e.target as HTMLInputElement).checked;
+                        vlens.scheduleRedraw();
+                      }}
+                    />
+                    <span>Import Activities</span>
+                    <small>Include seasons, competitions, routines, and results</small>
+                  </label>
+                </div>
+
+                <div className="option-group">
+                  <label className="checkbox-option">
+                    <input
+                      type="checkbox"
+                      checked={form.dryRun}
+                      onChange={e => {
+                        form.dryRun = (e.target as HTMLInputElement).checked;
+                        vlens.scheduleRedraw();
+                      }}
+                    />
+                    <span>Dry Run</span>
+                    <small>Preview changes without saving to database</small>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={form.loading || !hasInput()}
+                className="btn btn-secondary"
+              >
+                {form.loading ? "Loading..." : "Preview Data"}
+              </button>
+              <button
+                type="submit"
+                disabled={form.loading || !hasInput() || (!form.showFilters && !form.previewData)}
+                className="btn btn-primary"
+              >
+                {form.loading ? "Importing..." : "Import Data"}
+              </button>
+              <button type="button" onClick={clearForm} className="btn btn-secondary">
+                Clear
+              </button>
+            </div>
           </form>
 
           {form.showFilters && form.previewData && <FilteringInterface form={form} />}
@@ -630,10 +542,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
               <Icon symbol={ClipboardList} /> Import Instructions
             </h3>
             <ul>
-              <li>Upload a JSON file exported from a previous version</li>
+              <li>Upload a JSON or ZIP file exported from Family Record</li>
               <li>Or paste the JSON data directly into the text area</li>
-              <li>The import will create new entries in your family portal</li>
-              <li>Existing data will not be affected</li>
+              <li>
+                People already in the family are matched and have missing details filled in rather
+                than added again
+              </li>
               <li>People and their measurements will be imported together</li>
               <li>
                 Relationships are restored between imported people; a relationship to someone left
