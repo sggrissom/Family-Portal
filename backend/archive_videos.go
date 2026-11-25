@@ -3,11 +3,27 @@ package backend
 import (
 	"family/cfg"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
 	"go.hasen.dev/vbolt"
 )
+
+// videoExportFileName is unique within a family, sorts by date, and keeps the
+// camera's own name recognisable.
+func videoExportFileName(image Image) string {
+	name := strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r < 32 {
+			return '_'
+		}
+		return r
+	}, image.OriginalFilename)
+	if name == "" {
+		name = "video" + path.Ext(image.OriginalKey)
+	}
+	return fmt.Sprintf("%s_%d_%s", recordFileDate(image.RecordTime), image.Id, name)
+}
 
 type ExportVideo struct {
 	Id               int                 `json:"id"`
@@ -226,32 +242,26 @@ func importTranscript(tx *vbolt.Tx, imageId, familyId, userId int, exported *Exp
 	writeVideoTranscriptTx(tx, &t)
 }
 
+// ExportFamily carries the family's name. The video setting is account state
+// that only an admin turns on, so an archive neither carries nor sets it.
 type ExportFamily struct {
-	Name         string `json:"name"`
-	VideoEnabled bool   `json:"videoEnabled,omitempty"`
+	Name string `json:"name"`
 }
 
 func exportFamilySettings(tx *vbolt.Tx, familyId int) *ExportFamily {
-	family := GetFamily(tx, familyId)
-	return &ExportFamily{Name: family.Name, VideoEnabled: family.VideoEnabled}
+	return &ExportFamily{Name: GetFamily(tx, familyId).Name}
 }
 
-// importFamilySettings fills in what the family hasn't set: a name still the
-// default its creator was given, and video when the archive's family had it.
+// importFamilySettings names the family when it still has the default name
+// its creator was given.
 func importFamilySettings(tx *vbolt.Tx, familyId int, settings *ExportFamily) {
 	if settings == nil {
 		return
 	}
 	family := GetFamily(tx, familyId)
-	changed := false
 	name := strings.TrimSpace(settings.Name)
 	if name != "" && family.Name != name && family.Name == GetUser(tx, family.CreatedBy).Name+"'s Family" {
-		family.Name, changed = name, true
-	}
-	if settings.VideoEnabled && !family.VideoEnabled {
-		family.VideoEnabled, changed = true, true
-	}
-	if changed {
+		family.Name = name
 		vbolt.Write(tx, FamiliesBkt, family.Id, &family)
 	}
 }

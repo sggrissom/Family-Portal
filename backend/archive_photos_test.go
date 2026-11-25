@@ -16,7 +16,7 @@ func TestImportedFacesSurviveTheAnalysisThatFollows(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	source := readArchiveContents(t, fx.db, fx.familyId)
 
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	if rec := postImportBundle(t, restorer, bundle, importEverything); rec.Code != http.StatusOK {
 		t.Fatalf("import = %d %s", rec.Code, rec.Body.String())

@@ -1698,26 +1698,6 @@ export interface GetArchiveExportSizesResponse {
     videos: number
 }
 
-export interface ListVideoOriginalsRequest {
-    familyId: number
-}
-
-export interface ListVideoOriginalsResponse {
-    videos: VideoOriginal[]
-    totalBytes: number
-    expiresAt: string
-}
-
-export interface GetVideoOriginalLinkRequest {
-    id: number
-}
-
-export interface GetVideoOriginalLinkResponse {
-    downloadUrl: string
-    fileName: string
-    expiresAt: string
-}
-
 export interface ListAllUsersResponse {
     users: AdminUserInfo[]
 }
@@ -2898,11 +2878,6 @@ export interface PersonMatch {
     confidence: number
 }
 
-export interface VideoOriginal {
-    video: ExportVideo
-    downloadUrl: string
-}
-
 export interface AdminUserInfo {
     id: number
     name: string
@@ -3359,27 +3334,6 @@ export interface BookItem {
     pinned: boolean
 }
 
-export interface ExportVideo {
-    id: number
-    title: string
-    description: string
-    photo_date: string
-    record_time: RecordTime | null
-    date_label: string
-    original_filename: string
-    file_name: string
-    mime_type: string
-    file_size: number
-    duration_ms: number
-    person_ids: number[]
-    tag_ids: number[]
-    people: ExportPhotoPerson[]
-    tags: ExportPhotoTag[]
-    available: boolean
-    created_at: string
-    transcript: ExportTranscript | null
-}
-
 export interface PerformanceStats {
     totalRequests: number
     averageResponse: number
@@ -3478,28 +3432,6 @@ export interface BookInterviewChange {
     questionId: number
     before: string
     after: string
-}
-
-export interface ExportPhotoPerson {
-    person_id: number
-    auto_tagged: boolean
-    created_at: string
-}
-
-export interface ExportPhotoTag {
-    tag_id: number
-    created_at: string
-}
-
-export interface ExportTranscript {
-    automatic: boolean
-    removed: boolean
-    language: string
-    segments: TranscriptSegment[]
-    model: string
-    version: number
-    edited_at: string
-    created_at: string
 }
 
 export interface EndpointStats {
@@ -4178,14 +4110,6 @@ export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<
 
 export async function GetArchiveExportSizes(data: GetArchiveExportSizesRequest): Promise<rpc.Response<GetArchiveExportSizesResponse>> {
     return await rpc.call<GetArchiveExportSizesResponse>('GetArchiveExportSizes', JSON.stringify(data));
-}
-
-export async function ListVideoOriginals(data: ListVideoOriginalsRequest): Promise<rpc.Response<ListVideoOriginalsResponse>> {
-    return await rpc.call<ListVideoOriginalsResponse>('ListVideoOriginals', JSON.stringify(data));
-}
-
-export async function GetVideoOriginalLink(data: GetVideoOriginalLinkRequest): Promise<rpc.Response<GetVideoOriginalLinkResponse>> {
-    return await rpc.call<GetVideoOriginalLinkResponse>('GetVideoOriginalLink', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

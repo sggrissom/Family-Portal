@@ -38,6 +38,8 @@ type ExportEntry struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	PersonIds   []int     `json:"personIds,omitempty"`
 	PersonNames []string  `json:"personNames,omitempty"`
+	// MembersAddedAt is when each person, by PersonIds id, joined the roster.
+	MembersAddedAt map[int]time.Time `json:"membersAddedAt,omitempty"`
 }
 
 type ExportEvent struct {
@@ -51,22 +53,25 @@ type ExportEvent struct {
 	CreatedAt   time.Time          `json:"createdAt"`
 	PhotoIds    []int              `json:"photoIds,omitempty"`
 	Appearances []ExportAppearance `json:"appearances,omitempty"`
+	// PhotosAddedAt is when each photo, by PhotoIds id, was attached.
+	PhotosAddedAt map[int]time.Time `json:"photosAddedAt,omitempty"`
 }
 
 type ExportAppearance struct {
-	Id           int            `json:"id"`
-	EntryId      int            `json:"entryId"`
-	EntryName    string         `json:"entryName,omitempty"`
-	OccurredAt   time.Time      `json:"occurredAt"`
-	Notes        string         `json:"notes,omitempty"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	Round        string         `json:"round,omitempty"`
-	Opponent     string         `json:"opponent,omitempty"`
-	Outcome      string         `json:"outcome,omitempty"`
-	ScoreFor     *int           `json:"scoreFor,omitempty"`
-	ScoreAgainst *int           `json:"scoreAgainst,omitempty"`
-	PhotoIds     []int          `json:"photoIds,omitempty"`
-	Results      []ExportResult `json:"results,omitempty"`
+	Id            int               `json:"id"`
+	EntryId       int               `json:"entryId"`
+	EntryName     string            `json:"entryName,omitempty"`
+	OccurredAt    time.Time         `json:"occurredAt"`
+	Notes         string            `json:"notes,omitempty"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	Round         string            `json:"round,omitempty"`
+	Opponent      string            `json:"opponent,omitempty"`
+	Outcome       string            `json:"outcome,omitempty"`
+	ScoreFor      *int              `json:"scoreFor,omitempty"`
+	ScoreAgainst  *int              `json:"scoreAgainst,omitempty"`
+	PhotoIds      []int             `json:"photoIds,omitempty"`
+	PhotosAddedAt map[int]time.Time `json:"photosAddedAt,omitempty"`
+	Results       []ExportResult    `json:"results,omitempty"`
 }
 
 type ExportResult struct {
@@ -108,18 +113,25 @@ func exportSeasons(tx *vbolt.Tx, activityId int, personNames map[int]string) []E
 		exportedEntries := make([]ExportEntry, 0, len(entries))
 		for _, entry := range entries {
 			entryNames[entry.Id] = entry.Name
-			personIds := GetEntryPersonIds(tx, entry.Id)
+			members := GetEntryMembers(tx, entry.Id)
+			personIds := make([]int, 0, len(members))
+			addedAt := map[int]time.Time{}
+			for _, member := range members {
+				personIds = append(personIds, member.PersonId)
+				addedAt[member.PersonId] = member.CreatedAt
+			}
 			exportedEntries = append(exportedEntries, ExportEntry{
-				Id:          entry.Id,
-				Name:        entry.Name,
-				Format:      entry.Format,
-				Style:       entry.Style,
-				Division:    entry.Division,
-				Level:       entry.Level,
-				Notes:       entry.Notes,
-				CreatedAt:   entry.CreatedAt,
-				PersonIds:   personIds,
-				PersonNames: namesFor(personIds, personNames),
+				Id:             entry.Id,
+				Name:           entry.Name,
+				Format:         entry.Format,
+				Style:          entry.Style,
+				Division:       entry.Division,
+				Level:          entry.Level,
+				Notes:          entry.Notes,
+				CreatedAt:      entry.CreatedAt,
+				PersonIds:      personIds,
+				PersonNames:    namesFor(personIds, personNames),
+				MembersAddedAt: addedAt,
 			})
 		}
 
@@ -146,17 +158,19 @@ func exportEvents(
 	events := GetSeasonEvents(tx, seasonId)
 	exported := make([]ExportEvent, 0, len(events))
 	for _, event := range events {
+		photoIds, addedAt := eventPhotoLinks(GetEventPhotoJoins(tx, event.Id))
 		exported = append(exported, ExportEvent{
-			Id:          event.Id,
-			Name:        event.Name,
-			Host:        event.Host,
-			Location:    event.Location,
-			StartDate:   event.StartDate,
-			EndDate:     event.EndDate,
-			Notes:       event.Notes,
-			CreatedAt:   event.CreatedAt,
-			PhotoIds:    GetEventPhotoIds(tx, event.Id),
-			Appearances: exportAppearances(tx, event.Id, entryNames, personNames),
+			Id:            event.Id,
+			Name:          event.Name,
+			Host:          event.Host,
+			Location:      event.Location,
+			StartDate:     event.StartDate,
+			EndDate:       event.EndDate,
+			Notes:         event.Notes,
+			CreatedAt:     event.CreatedAt,
+			PhotoIds:      photoIds,
+			PhotosAddedAt: addedAt,
+			Appearances:   exportAppearances(tx, event.Id, entryNames, personNames),
 		})
 	}
 	return exported
@@ -171,20 +185,22 @@ func exportAppearances(
 	appearances := GetEventAppearances(tx, eventId)
 	exported := make([]ExportAppearance, 0, len(appearances))
 	for _, appearance := range appearances {
+		photoIds, addedAt := appearancePhotoLinks(GetAppearancePhotoJoins(tx, appearance.Id))
 		exported = append(exported, ExportAppearance{
-			Id:           appearance.Id,
-			EntryId:      appearance.EntryId,
-			EntryName:    entryNames[appearance.EntryId],
-			OccurredAt:   appearance.OccurredAt,
-			Notes:        appearance.Notes,
-			CreatedAt:    appearance.CreatedAt,
-			Round:        appearance.Round,
-			Opponent:     appearance.Opponent,
-			Outcome:      appearance.Outcome,
-			ScoreFor:     appearance.ScoreFor,
-			ScoreAgainst: appearance.ScoreAgainst,
-			PhotoIds:     GetAppearancePhotoIds(tx, appearance.Id),
-			Results:      exportResults(tx, appearance.Id, personNames),
+			Id:            appearance.Id,
+			EntryId:       appearance.EntryId,
+			EntryName:     entryNames[appearance.EntryId],
+			OccurredAt:    appearance.OccurredAt,
+			Notes:         appearance.Notes,
+			CreatedAt:     appearance.CreatedAt,
+			Round:         appearance.Round,
+			Opponent:      appearance.Opponent,
+			Outcome:       appearance.Outcome,
+			ScoreFor:      appearance.ScoreFor,
+			ScoreAgainst:  appearance.ScoreAgainst,
+			PhotoIds:      photoIds,
+			PhotosAddedAt: addedAt,
+			Results:       exportResults(tx, appearance.Id, personNames),
 		})
 	}
 	return exported
@@ -214,6 +230,24 @@ func exportResults(tx *vbolt.Tx, appearanceId int, personNames map[int]string) [
 		})
 	}
 	return exported
+}
+
+func eventPhotoLinks(joins []EventPhoto) (photoIds []int, addedAt map[int]time.Time) {
+	addedAt = map[int]time.Time{}
+	for _, join := range joins {
+		photoIds = append(photoIds, join.PhotoId)
+		addedAt[join.PhotoId] = join.CreatedAt
+	}
+	return
+}
+
+func appearancePhotoLinks(joins []AppearancePhoto) (photoIds []int, addedAt map[int]time.Time) {
+	addedAt = map[int]time.Time{}
+	for _, join := range joins {
+		photoIds = append(photoIds, join.PhotoId)
+		addedAt[join.PhotoId] = join.CreatedAt
+	}
+	return
 }
 
 func namesFor(personIds []int, personNames map[int]string) []string {
@@ -268,7 +302,6 @@ func importActivities(
 ) (ActivityImportCounts, []string) {
 	var counts ActivityImportCounts
 	var warnings []string
-	now := time.Now()
 
 	for _, source := range activities {
 		name := trimField(source.Name, maxNameLength)
@@ -278,7 +311,7 @@ func importActivities(
 			continue
 		}
 
-		activity, reused := findOrCreateActivity(tx, familyId, name, source.Kind, now)
+		activity, reused := findOrCreateActivity(tx, familyId, name, source.Kind, archiveCreatedAt(source.CreatedAt))
 		if reused {
 			counts.Reused++
 		} else {
@@ -292,7 +325,6 @@ func importActivities(
 				activityId: activity.Id,
 				familyId:   familyId,
 				ledger:     l,
-				now:        now,
 			}, &counts, &warnings)
 		}
 	}
@@ -305,7 +337,7 @@ func findOrCreateActivity(
 	familyId int,
 	name string,
 	kind string,
-	now time.Time,
+	createdAt time.Time,
 ) (Activity, bool) {
 	for _, existing := range GetFamilyActivities(tx, familyId) {
 		if strings.EqualFold(existing.Name, name) {
@@ -317,7 +349,7 @@ func findOrCreateActivity(
 		FamilyId:  familyId,
 		Name:      name,
 		Kind:      normalizeActivityKind(kind),
-		CreatedAt: now,
+		CreatedAt: createdAt,
 	}
 	writeActivityTx(tx, &activity)
 	return activity, false
@@ -328,7 +360,6 @@ type importSeasonArgs struct {
 	activityId int
 	familyId   int
 	ledger     *archiveLedger
-	now        time.Time
 }
 
 func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCounts, warnings *[]string) {
@@ -356,14 +387,14 @@ func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCou
 			continue
 		}
 
-		entry, entryReused := findOrCreateEntry(tx, season.Id, args.familyId, entryName, sourceEntry, args.now)
+		entry, entryReused := findOrCreateEntry(tx, season.Id, args.familyId, entryName, sourceEntry)
 		if entryReused {
 			counts.Reused++
 		} else {
 			counts.Entries++
 		}
 		args.ledger.entries[sourceEntry.Id] = entry.Id
-		entryRosters[entry.Id] = importRoster(tx, entry, sourceEntry, args.ledger.people, entryReused, args.now, warnings)
+		entryRosters[entry.Id] = importRoster(tx, entry, sourceEntry, args.ledger.people, entryReused, warnings)
 	}
 
 	for _, sourceEvent := range args.season.Events {
@@ -373,7 +404,6 @@ func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCou
 			familyId:     args.familyId,
 			entryRosters: entryRosters,
 			ledger:       args.ledger,
-			now:          args.now,
 		}, counts, warnings)
 	}
 }
@@ -392,7 +422,7 @@ func findOrCreateSeason(tx *vbolt.Tx, args importSeasonArgs, name string) (Seaso
 		StartDate:  args.season.StartDate,
 		EndDate:    args.season.EndDate,
 		Notes:      trimField(args.season.Notes, maxNotesLength),
-		CreatedAt:  args.now,
+		CreatedAt:  archiveCreatedAt(args.season.CreatedAt),
 	}
 	writeSeasonTx(tx, &season)
 	return season, false
@@ -404,7 +434,6 @@ func findOrCreateEntry(
 	familyId int,
 	name string,
 	source ExportEntry,
-	now time.Time,
 ) (Entry, bool) {
 	for _, existing := range GetSeasonEntries(tx, seasonId) {
 		if strings.EqualFold(existing.Name, name) {
@@ -421,7 +450,7 @@ func findOrCreateEntry(
 		Division:  trimField(source.Division, maxLabelLength),
 		Level:     trimField(source.Level, maxLabelLength),
 		Notes:     trimField(source.Notes, maxNotesLength),
-		CreatedAt: now,
+		CreatedAt: archiveCreatedAt(source.CreatedAt),
 	}
 	writeEntryTx(tx, &entry)
 	return entry, false
@@ -433,7 +462,6 @@ func importRoster(
 	source ExportEntry,
 	personIdMapping map[int]int,
 	reused bool,
-	now time.Time,
 	warnings *[]string,
 ) map[int]bool {
 	if reused {
@@ -461,7 +489,7 @@ func importRoster(
 			EntryId:   entry.Id,
 			PersonId:  newPersonId,
 			FamilyId:  entry.FamilyId,
-			CreatedAt: now,
+			CreatedAt: archiveCreatedAt(source.MembersAddedAt[oldPersonId]),
 		}
 		writeEntryMemberTx(tx, &member)
 	}
@@ -480,7 +508,6 @@ type importEventArgs struct {
 	familyId     int
 	entryRosters map[int]map[int]bool
 	ledger       *archiveLedger
-	now          time.Time
 }
 
 func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCounts, warnings *[]string) {
@@ -497,13 +524,13 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 		counts.Reused++
 	} else {
 		counts.Events++
-		attachPhotos(args.ledger.photos, args.event.PhotoIds, func(photoId int) {
+		attachPhotos(args.ledger.photos, args.event.PhotoIds, func(oldPhotoId, photoId int) {
 			join := EventPhoto{
 				Id:        vbolt.NextIntId(tx, EventPhotoBkt),
 				EventId:   event.Id,
 				PhotoId:   photoId,
 				FamilyId:  args.familyId,
-				CreatedAt: args.now,
+				CreatedAt: archiveCreatedAt(args.event.PhotosAddedAt[oldPhotoId]),
 			}
 			writeEventPhotoTx(tx, &join)
 		})
@@ -524,7 +551,7 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 			FamilyId:   args.familyId,
 			OccurredAt: sourceAppearance.OccurredAt,
 			Notes:      trimField(sourceAppearance.Notes, maxNotesLength),
-			CreatedAt:  args.now,
+			CreatedAt:  archiveCreatedAt(sourceAppearance.CreatedAt),
 		}
 		matchup := MatchupInput{
 			Round:        sourceAppearance.Round,
@@ -549,19 +576,19 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 		writeAppearanceTx(tx, &appearance)
 		counts.Appearances++
 
-		attachPhotos(args.ledger.photos, sourceAppearance.PhotoIds, func(photoId int) {
+		attachPhotos(args.ledger.photos, sourceAppearance.PhotoIds, func(oldPhotoId, photoId int) {
 			join := AppearancePhoto{
 				Id:           vbolt.NextIntId(tx, AppearancePhotoBkt),
 				AppearanceId: appearance.Id,
 				PhotoId:      photoId,
 				FamilyId:     args.familyId,
-				CreatedAt:    args.now,
+				CreatedAt:    archiveCreatedAt(sourceAppearance.PhotosAddedAt[oldPhotoId]),
 			}
 			writeAppearancePhotoTx(tx, &join)
 		})
 
 		importResults(tx, appearance, sourceAppearance.Results,
-			args.ledger.people, args.entryRosters[entryId], args.now, counts, warnings)
+			args.ledger.people, args.entryRosters[entryId], counts, warnings)
 	}
 }
 
@@ -581,7 +608,7 @@ func findOrCreateEvent(tx *vbolt.Tx, args importEventArgs, name string) (Event, 
 		StartDate: args.event.StartDate,
 		EndDate:   args.event.EndDate,
 		Notes:     trimField(args.event.Notes, maxNotesLength),
-		CreatedAt: args.now,
+		CreatedAt: archiveCreatedAt(args.event.CreatedAt),
 	}
 	writeEventTx(tx, &event)
 	return event, false
@@ -605,7 +632,6 @@ func importResults(
 	sources []ExportResult,
 	personIdMapping map[int]int,
 	roster map[int]bool,
-	now time.Time,
 	counts *ActivityImportCounts,
 	warnings *[]string,
 ) {
@@ -649,20 +675,20 @@ func importResults(
 			PersonId:     personId,
 			Notes:        trimField(source.Notes, maxNotesLength),
 			SortOrder:    i,
-			CreatedAt:    now,
+			CreatedAt:    archiveCreatedAt(source.CreatedAt),
 		}
 		writeResultTx(tx, &result)
 		counts.Results++
 	}
 }
 
-func attachPhotos(photoIdMapping map[int]int, photoIds []int, write func(int)) {
+func attachPhotos(photoIdMapping map[int]int, photoIds []int, write func(oldPhotoId, photoId int)) {
 	if len(photoIdMapping) == 0 {
 		return
 	}
 	for _, oldPhotoId := range photoIds {
 		if newPhotoId, ok := photoIdMapping[oldPhotoId]; ok {
-			write(newPhotoId)
+			write(oldPhotoId, newPhotoId)
 		}
 	}
 }

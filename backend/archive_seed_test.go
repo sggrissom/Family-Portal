@@ -92,7 +92,9 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 	birthTime, birthPlace := "07:15", "St. Elsewhere"
 	ada, err := AddPersonTx(tx, AddPersonRequest{
 		Name: "Ada", Gender: int(Female), Birthdate: "2020-03-04",
-		BirthDetails: BirthDetails{BirthTime: &birthTime, BirthPlace: &birthPlace},
+		BirthDetails: BirthDetails{
+			BirthTime: &birthTime, BirthPlace: &birthPlace, BirthWeight: &CheckupValue{Value: 7.25, Unit: "lbs"},
+		},
 	}, familyId)
 	must(err)
 	ben := s.person(familyId, "Ben", Male, "2018-06-01")

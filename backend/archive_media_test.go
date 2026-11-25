@@ -47,7 +47,7 @@ func familyPhotoCount(contents archiveContents) (n int) {
 
 func TestImportLinksPhotosTheFamilyAlreadyUploaded(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	photos := familyPhotoCount(readArchiveContents(t, fx.db, fx.familyId))
 
 	restorer := fx.newUser(t, "restorer")
@@ -64,7 +64,7 @@ func TestImportLinksPhotosTheFamilyAlreadyUploaded(t *testing.T) {
 
 func TestImportRecognisesMediaStoredBeforeImagesHadAHash(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	before := readArchiveContents(t, fx.db, fx.familyId)
 
 	if hashed := BackfillMediaContentHashes(fx.db); hashed != len(before["images"]) {

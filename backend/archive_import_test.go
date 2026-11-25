@@ -51,18 +51,14 @@ func bundleRecords(t *testing.T, bundle []byte) []byte {
 	return nil
 }
 
-// Each import stamps its own family name and creation times.
-var perImportFields = []archiveDrop{
-	{"families", "", nil, "each restorer has its own family"},
-	{"*", "CreatedAt", nil, "stamped at import"},
-	{"books", "UpdatedAt", nil, "stamped at import"},
-	{"books", "ReviewedAt", nil, "stamped at import"},
+var perImportFields = []archiveMask{
+	{"families", "", "each restorer has its own family"},
 }
 
 func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	records := fx.exportRecords(t, fx.owner)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 
 	fromRecords := fx.newUser(t, "records")
 	if _, err := fx.importRecords(t, fromRecords, ImportDataRequest{JsonData: records, ImportMilestones: true, ImportActivities: true}); err != nil {
@@ -83,7 +79,7 @@ func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 
 func TestZipImportHonoursTheImportOptions(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	var records ImportDataStructure
 	if err := json.Unmarshal(bundleRecords(t, bundle), &records); err != nil {
 		t.Fatal(err)
@@ -113,7 +109,7 @@ func TestZipImportHonoursTheImportOptions(t *testing.T) {
 
 func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	before := readArchiveContents(t, fx.db, restorer.FamilyId)
 	photoDir := filepath.Dir(photoOriginalPath("photos/x.jpg"))
@@ -145,7 +141,7 @@ func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 
 func TestRecordsImportReportsTheMediaItLeftOut(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "with_photos"))
+	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "everything"))
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {
 		t.Fatal(err)
@@ -216,9 +212,53 @@ func TestImportRejectsFilesItCannotRead(t *testing.T) {
 	}
 }
 
+func TestImportRejectsRecordsThatDontHoldTogether(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	born := time.Date(2015, 7, 11, 0, 0, 0, 0, time.UTC)
+	ruth := ImportPerson{Id: 1, Name: "Ruth", Birthday: time.Date(1985, 3, 2, 0, 0, 0, 0, time.UTC)}
+	nora := ImportPerson{Id: 2, Name: "Nora", Birthday: born}
+	cases := []struct {
+		name    string
+		records ImportDataStructure
+		want    string
+	}{
+		{"no people", ImportDataStructure{}, "No people found"},
+		{"a person with no name", ImportDataStructure{People: []ImportPerson{{Id: 1, Birthday: born}}}, "has no name"},
+		{"a person with no birthday", ImportDataStructure{People: []ImportPerson{{Id: 1, Name: "Nora"}}}, "invalid birthday"},
+		{"a relation to someone not in the file", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 99, Kind: "parent"}},
+		}, "unknown person"},
+		{"a person related to themselves", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 1, Kind: "sibling"}},
+		}, "themselves"},
+		{"a relation of unknown kind", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "godparent"}},
+		}, "unknown kind"},
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	for _, c := range cases {
+		data, _ := json.Marshal(c.records)
+		_, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(data)})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: import error = %v; want one mentioning %q", c.name, err, c.want)
+		}
+	}
+	if n := len(readArchiveContents(t, fx.db, restorer.FamilyId)["people"]); n != 0 {
+		t.Errorf("rejected files left %d people", n)
+	}
+
+	valid, _ := json.Marshal(ImportDataStructure{
+		People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "parent"}},
+	})
+	if resp, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(valid)}); err != nil || resp.ImportedRelations != 1 {
+		t.Errorf("a valid file: imported %d relations, error %v; want 1 and none", resp.ImportedRelations, err)
+	}
+}
+
 func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 	outsider := fx.newUser(t, "outsider")
 	before := readArchiveContents(t, fx.db, fx.familyId)
 
@@ -272,7 +312,7 @@ func TestBooksFindMomentsAndInterviewsAlreadyInTheFamily(t *testing.T) {
 
 func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	data := bundleRecords(t, bundle)
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {

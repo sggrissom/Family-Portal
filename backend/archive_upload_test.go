@@ -30,7 +30,7 @@ func (fx *archiveFixture) uploadArchive(t *testing.T, user User, bundle []byte) 
 
 func TestEverythingArchiveImportsInTheBackground(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	importId := fx.uploadArchive(t, restorer, bundle)
 
@@ -59,7 +59,7 @@ func TestEverythingArchiveImportsInTheBackground(t *testing.T) {
 func TestArchiveImportCompletesOnlyAfterTheUploadArrives(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	useArchiveUploadStore(t)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 	restorer := fx.newUser(t, "restorer")
 	begun, err := callProc(t, restorer, BeginArchiveImport, BeginArchiveImportRequest{Filename: "family.zip", Size: len(bundle)})
 	if err != nil {
@@ -78,7 +78,7 @@ func TestArchiveImportCompletesOnlyAfterTheUploadArrives(t *testing.T) {
 
 func TestArchiveImportPreviewAndDryRunWriteNothing(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	importId := fx.uploadArchive(t, restorer, bundle)
 	before := readArchiveContents(t, fx.db, restorer.FamilyId)
@@ -173,7 +173,7 @@ func (fx *archiveFixture) uploadStored(t *testing.T, importId int) bool {
 
 func TestArchiveImportDeletesItsUploadWhenItEnds(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	importId := fx.uploadArchive(t, restorer, bundle)
 
@@ -249,7 +249,7 @@ func stagedFiles(t *testing.T, dir string) (n int) {
 
 func TestOtherWritesGoThroughWhileAnImportStagesMedia(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	importId := fx.uploadArchive(t, restorer, bundle)
 	paused, release, _ := pauseArchiveStaging(t, nil)
@@ -314,7 +314,7 @@ func TestOtherWritesGoThroughWhileAnImportStagesMedia(t *testing.T) {
 
 func TestArchiveImportThatFailsWhileStagingLeavesNothingBehind(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	importId := fx.uploadArchive(t, restorer, bundle)
 	before := readArchiveContents(t, fx.db, restorer.FamilyId)
@@ -350,7 +350,7 @@ func TestArchiveImportThatFailsWhileStagingLeavesNothingBehind(t *testing.T) {
 
 func TestMediaJanitorExpiresAbandonedArchiveUploads(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 	restorer := fx.newUser(t, "restorer")
 	previewed := fx.uploadArchive(t, restorer, bundle)
 	if _, err := runArchiveImport(t, restorer, previewed, ImportDataRequest{PreviewOnly: true}); err != nil {
