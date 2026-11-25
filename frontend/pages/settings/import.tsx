@@ -116,6 +116,8 @@ const runArchiveJob = async (
     form.archiveFamilyId = form.targetFamilyId;
   }
 
+  form.job = { state: "queued" } as server.ArchiveImportStatus;
+  vlens.scheduleRedraw();
   let [status, err] = await server.CompleteArchiveImport({
     importId: form.archiveImportId,
     options,
@@ -389,7 +391,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
       {form.success && form.result ? (
         <div className="import-success">
           <h2>
-            <Icon symbol={CircleCheck} /> Import Successful!
+            <Icon symbol={CircleCheck} />{" "}
+            {form.dryRun ? "Dry Run Finished: Nothing Was Saved" : "Import Successful!"}
           </h2>
           <div className="import-stats">
             <div className="stat">
@@ -466,6 +469,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 <span className="stat-label">Photos Skipped</span>
               </div>
             )}
+            {form.result.importedVideos > 0 && (
+              <div className="stat">
+                <span className="stat-number">{form.result.importedVideos}</span>
+                <span className="stat-label">Videos Imported</span>
+              </div>
+            )}
             {form.result.skippedVideos > 0 && (
               <div className="stat">
                 <span className="stat-number">{form.result.skippedVideos}</span>
@@ -531,9 +540,9 @@ const ImportPage = ({ form }: ImportPageProps) => {
             {form.isZip && form.file ? (
               <div className="zip-bundle-card">
                 <p>
-                  <strong>ZIP bundle selected:</strong> {form.file.name}
+                  <strong>Everything archive selected:</strong> {form.file.name}
                 </p>
-                <p>This bundle contains family data and photos.</p>
+                <p>Your records plus their photo and video files.</p>
               </div>
             ) : (
               <>
@@ -654,7 +663,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
               <Icon symbol={ClipboardList} /> Import Instructions
             </h3>
             <ul>
-              <li>Upload a JSON or ZIP file exported from Family Record</li>
+              <li>
+                Upload a Records file (JSON) or an Everything archive (ZIP) exported from Family
+                Record
+              </li>
               <li>Or paste the JSON data directly into the text area</li>
               <li>
                 People already in the family are matched and have missing details filled in rather
