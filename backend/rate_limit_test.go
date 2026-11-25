@@ -40,7 +40,7 @@ func TestRuleForPath(t *testing.T) {
 		{path: "/rpc/JoinFamily", wantRule: rateRuleInviteCode.Name, wantFound: true},
 		{path: "/rpc/AcceptFamilyLink", wantRule: rateRuleInviteCode.Name, wantFound: true},
 		{path: "/rpc/ImportData", wantRule: rateRuleImport.Name, wantFound: true},
-		{path: "/api/import-bundle", wantRule: rateRuleImport.Name, wantFound: true},
+		{path: "/rpc/BeginArchiveImport", wantRule: rateRuleImport.Name, wantFound: true},
 		{path: "/api/upload-photo", wantRule: rateRuleUpload.Name, wantFound: true},
 		{path: "/ws/chat", wantRule: rateRuleWebSocket.Name, wantFound: true},
 		{path: "/api/photo/42/full", wantRule: rateRulePhotoRead.Name, wantFound: true},
@@ -73,7 +73,7 @@ func TestEveryProtectedEndpointHasARule(t *testing.T) {
 		"/api/refresh",
 		"/api/login/google/token",
 		"/rpc/ImportData",
-		"/api/import-bundle",
+		"/rpc/BeginArchiveImport",
 		"/api/upload-photo",
 		"/ws/chat",
 	}

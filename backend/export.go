@@ -162,67 +162,6 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
-	images := GetFamilyImages(tx, familyId)
-	result := make([]ExportPhoto, 0, len(images))
-	for _, img := range images {
-		if img.Status != PhotoReady || img.IsVideo() {
-			continue
-		}
-		zipPath := "photos/" + originalFileName(img.FilePath)
-
-		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
-		personIds := make([]int, 0, len(photoPersons))
-		for _, pp := range photoPersons {
-			personIds = append(personIds, pp.PersonId)
-		}
-
-		result = append(result, ExportPhoto{
-			Id:          img.Id,
-			Title:       img.Title,
-			Description: img.Description,
-			PhotoDate:   img.PhotoDate,
-			RecordTime:  &img.RecordTime,
-			DateLabel:   img.RecordTime.Label(),
-			ZipPath:     zipPath,
-			PersonIds:   personIds,
-			TagIds:      GetPhotoTagIds(tx, img.Id),
-		})
-	}
-	return result
-}
-
-type ExportTag struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-}
-
-// ExportRelation is one stored relationship edge. Kind is spelled out rather
-// than numbered so the file does not depend on the enum's ordering. For a
-// "parent" edge From is the parent of To; "sibling" and "partner" are
-// symmetric and stored once, in the direction they were entered.
-type ExportRelation struct {
-	Id       int    `json:"id"`
-	FromId   int    `json:"fromId"`
-	ToId     int    `json:"toId"`
-	Kind     string `json:"kind"`
-	FromName string `json:"fromName,omitempty"`
-	ToName   string `json:"toName,omitempty"`
-}
-
-type ExportPhoto struct {
-	Id          int         `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	PhotoDate   time.Time   `json:"photo_date"`
-	RecordTime  *RecordTime `json:"record_time,omitempty"`
-	DateLabel   string      `json:"date_label,omitempty"`
-	ZipPath     string      `json:"zip_path"`
-	PersonIds   []int       `json:"person_ids"`
-	TagIds      []int       `json:"tag_ids"`
-}
-
 type ExportDataStructure struct {
 	FormatVersion int `json:"formatVersion"`
 
@@ -233,6 +172,7 @@ type ExportDataStructure struct {
 	Milestones []ExportMilestone `json:"milestones"`
 	Tags       []ExportTag       `json:"tags"`
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
 	Family     *ExportFamily     `json:"family,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
@@ -241,6 +181,7 @@ type ExportDataStructure struct {
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
 	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
+	InterviewDismissed []string                  `json:"interviewDismissedKeys,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -260,25 +201,6 @@ type ExportDataStructure struct {
 	TotalResults     int `json:"total_results,omitempty"`
 	TotalBooks       int `json:"total_books,omitempty"`
 	TotalInterviews  int `json:"total_interviews,omitempty"`
-}
-
-type ExportMilestone struct {
-	Id            int         `json:"id"`
-	PersonId      int         `json:"personId"`
-	FamilyId      int         `json:"familyId"`
-	Description   string      `json:"description"`
-	Category      string      `json:"category"`
-	Context       string      `json:"context,omitempty"`
-	MilestoneDate time.Time   `json:"milestoneDate"`
-	RecordTime    *RecordTime `json:"recordTime,omitempty"`
-	DateLabel     string      `json:"dateLabel,omitempty"`
-	CreatedAt     time.Time   `json:"createdAt"`
-	PersonName    string      `json:"personName"`
-	TagNames      []string    `json:"tagNames,omitempty"`
-	InterviewId   int         `json:"interviewId,omitempty"`
-	QuestionId    int         `json:"questionId,omitempty"`
-	Note          string      `json:"note,omitempty"`
-	RecordedBy    string      `json:"recordedBy,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -320,142 +242,17 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	tags := getTagsByFamily(tx, familyId)
 	tagIdToName := make(map[int]string, len(tags))
-	exportTags := make([]ExportTag, len(tags))
-	for i, tag := range tags {
+	for _, tag := range tags {
 		tagIdToName[tag.Id] = tag.Name
-		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
 	}
+	exportTags := exportTagRecords(tags)
 
 	people := GetFamilyOwnPeople(tx, familyId)
 	recorderOf := exportRecorders(tx)
+	exportData.People = exportPeople(people)
+	heights, weights := exportMeasurements(tx, familyId, people, recorderOf)
 
-	exportData.People = make([]ImportPerson, len(people))
-	for i, person := range people {
-		exportData.People[i] = ImportPerson{
-			Id:       person.Id,
-			FamilyId: person.FamilyId,
-			Gender:   int(person.Gender),
-			Name:     person.Name,
-			Birthday: person.Birthday,
-			Age:      person.Age,
-			ImageId:  person.ProfilePhotoId,
-
-			BirthTime:  person.BirthTime,
-			BirthPlace: person.BirthPlace,
-		}
-	}
-
-	var growthDataIds []int
-	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &growthDataIds, vbolt.Window{})
-
-	var growthData []GrowthData
-	if len(growthDataIds) > 0 {
-		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
-	}
-
-	var heights []ImportHeight
-	var weights []ImportWeight
-
-	for _, gd := range growthData {
-		var personName string
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		var personBirthday time.Time
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personBirthday = person.Birthday
-				break
-			}
-		}
-
-		age := calculateAgeAtDate(personBirthday, gd.MeasurementDate)
-		dateString := gd.MeasurementDate.Format("2006-01-02")
-
-		if gd.MeasurementType == Height {
-			inches := gd.Value
-			if gd.Unit == "cm" {
-				inches = gd.Value / 2.54
-			}
-
-			heights = append(heights, ImportHeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Inches:     inches,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		} else if gd.MeasurementType == Weight {
-			pounds := gd.Value
-			if gd.Unit == "kg" {
-				pounds = gd.Value * 2.20462
-			}
-
-			weights = append(weights, ImportWeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Pounds:     pounds,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		}
-	}
-
-	var milestoneIds []int
-	vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, familyId, &milestoneIds, vbolt.Window{})
-
-	var milestones []Milestone
-	if len(milestoneIds) > 0 {
-		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
-	}
-
-	exportMilestones := make([]ExportMilestone, len(milestones))
-	for i, milestone := range milestones {
-		var personName string
-		for _, person := range people {
-			if person.Id == milestone.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		tagIds := GetMilestoneTagIds(tx, milestone.Id)
-		var tagNames []string
-		for _, tagId := range tagIds {
-			if name, ok := tagIdToName[tagId]; ok {
-				tagNames = append(tagNames, name)
-			}
-		}
-
-		exportMilestones[i] = ExportMilestone{
-			Id:            milestone.Id,
-			PersonId:      milestone.PersonId,
-			FamilyId:      milestone.FamilyId,
-			Description:   milestone.Description,
-			Category:      milestone.Category,
-			Context:       milestone.Context,
-			MilestoneDate: milestone.MilestoneDate,
-			RecordTime:    &milestone.RecordTime,
-			DateLabel:     milestone.RecordTime.Label(),
-			CreatedAt:     milestone.CreatedAt,
-			PersonName:    personName,
-			TagNames:      tagNames,
-			InterviewId:   milestone.InterviewId,
-			QuestionId:    milestone.QuestionId,
-			Note:          milestone.Note,
-			RecordedBy:    recorderOf(milestone.CreatedBy),
-		}
-	}
+	exportMilestones := buildMilestoneExport(tx, familyId, people, tagIdToName, recorderOf)
 
 	personNames := make(map[int]string, len(people))
 	for _, person := range people {
@@ -478,6 +275,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
 	exportData.TotalInterviews = len(exportData.Interviews)
 	exportData.InterviewCadence = exportInterviewCadence(tx, familyId)
+	exportData.Places = buildPlaceExport(tx, familyId)
+	exportData.InterviewDismissed = familyQuestionList(tx, familyId).DismissedKeys
 
 	exportData.Heights = heights
 	exportData.Weights = weights
@@ -488,7 +287,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalWeights = len(weights)
 	exportData.TotalPeople = len(people)
 	exportData.TotalRelations = len(exportData.Relations)
-	exportData.TotalMilestones = len(milestones)
+	exportData.TotalMilestones = len(exportMilestones)
 	exportData.TotalTags = len(tags)
 	exportData.TotalActivities = len(exportData.Activities)
 	exportData.TotalSeasons = seasonCount
@@ -498,43 +297,4 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalResults = resultCount
 
 	return exportData, nil
-}
-
-// buildRelationExport lists the edges whose endpoints are both people in this
-// export. An edge to someone in another family is left out, since the import
-// side has no record to reattach it to.
-func buildRelationExport(tx *vbolt.Tx, people []Person, personNames map[int]string) []ExportRelation {
-	rows := relationsAmong(tx, people)
-	result := make([]ExportRelation, 0, len(rows))
-	for _, row := range rows {
-		kind := row.Kind.exportName()
-		if kind == "" {
-			continue
-		}
-		result = append(result, ExportRelation{
-			Id:       row.Id,
-			FromId:   row.FromId,
-			ToId:     row.ToId,
-			Kind:     kind,
-			FromName: personNames[row.FromId],
-			ToName:   personNames[row.ToId],
-		})
-	}
-	return result
-}
-
-func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
-	years := targetDate.Year() - birthday.Year()
-	months := int(targetDate.Month()) - int(birthday.Month())
-	days := targetDate.Day() - birthday.Day()
-
-	if days < 0 {
-		months--
-	}
-	if months < 0 {
-		years--
-		months += 12
-	}
-
-	return float64(years) + float64(months)/12.0
 }

@@ -12,22 +12,24 @@ import (
 )
 
 type ExportVideo struct {
-	Id               int               `json:"id"`
-	Title            string            `json:"title"`
-	Description      string            `json:"description"`
-	PhotoDate        time.Time         `json:"photo_date"`
-	RecordTime       *RecordTime       `json:"record_time,omitempty"`
-	DateLabel        string            `json:"date_label,omitempty"`
-	OriginalFilename string            `json:"original_filename"`
-	FileName         string            `json:"file_name"`
-	MimeType         string            `json:"mime_type"`
-	FileSize         int               `json:"file_size"`
-	DurationMs       int               `json:"duration_ms"`
-	PersonIds        []int             `json:"person_ids"`
-	TagIds           []int             `json:"tag_ids"`
-	Available        bool              `json:"available"`
-	CreatedAt        time.Time         `json:"created_at,omitzero"`
-	Transcript       *ExportTranscript `json:"transcript,omitempty"`
+	Id               int                 `json:"id"`
+	Title            string              `json:"title"`
+	Description      string              `json:"description"`
+	PhotoDate        time.Time           `json:"photo_date"`
+	RecordTime       *RecordTime         `json:"record_time,omitempty"`
+	DateLabel        string              `json:"date_label,omitempty"`
+	OriginalFilename string              `json:"original_filename"`
+	FileName         string              `json:"file_name"`
+	MimeType         string              `json:"mime_type"`
+	FileSize         int                 `json:"file_size"`
+	DurationMs       int                 `json:"duration_ms"`
+	PersonIds        []int               `json:"person_ids"`
+	TagIds           []int               `json:"tag_ids"`
+	People           []ExportPhotoPerson `json:"people,omitempty"`
+	Tags             []ExportPhotoTag    `json:"tags,omitempty"`
+	Available        bool                `json:"available"`
+	CreatedAt        time.Time           `json:"created_at,omitzero"`
+	Transcript       *ExportTranscript   `json:"transcript,omitempty"`
 }
 
 type ExportTranscript struct {
@@ -58,11 +60,7 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 		if !image.IsVideo() || image.OriginalKey == "" || image.Status == PhotoProcessing {
 			continue
 		}
-		personIds := []int{}
-		for _, pp := range GetPhotoPersonsByPhoto(tx, image.Id) {
-			personIds = append(personIds, pp.PersonId)
-		}
-		result = append(result, ExportVideo{
+		video := ExportVideo{
 			Id:               image.Id,
 			Title:            image.Title,
 			Description:      image.Description,
@@ -74,12 +72,21 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 			MimeType:         image.MimeType,
 			FileSize:         image.FileSize,
 			DurationMs:       image.DurationMs,
-			PersonIds:        personIds,
-			TagIds:           GetPhotoTagIds(tx, image.Id),
+			PersonIds:        []int{},
+			TagIds:           []int{},
 			Available:        image.Status == PhotoReady,
 			CreatedAt:        image.CreatedAt,
 			Transcript:       exportTranscript(tx, image.Id),
-		})
+		}
+		for _, pp := range GetPhotoPersonsByPhoto(tx, image.Id) {
+			video.PersonIds = append(video.PersonIds, pp.PersonId)
+			video.People = append(video.People, ExportPhotoPerson{PersonId: pp.PersonId, AutoTagged: pp.AutoTagged, CreatedAt: pp.CreatedAt})
+		}
+		for _, pt := range getPhotoTagRows(tx, image.Id) {
+			video.TagIds = append(video.TagIds, pt.TagId)
+			video.Tags = append(video.Tags, ExportPhotoTag{TagId: pt.TagId, CreatedAt: pt.CreatedAt})
+		}
+		result = append(result, video)
 	}
 	return result
 }
@@ -169,14 +176,11 @@ func importVideos(
 			Title:            video.Title,
 			Description:      video.Description,
 			DurationMs:       video.DurationMs,
-			CreatedAt:        video.CreatedAt,
+			CreatedAt:        orNow(video.CreatedAt),
 			Status:           PhotoProcessing,
 			MediaKind:        MediaVideo,
 			OriginalKey:      key,
 			DerivedBytes:     int(size) + videoPosterAllowance,
-		}
-		if image.CreatedAt.IsZero() {
-			image.CreatedAt = time.Now()
 		}
 		recordTime, photoDate, err := importRecordTime(video.RecordTime, wallClockUTC(video.PhotoDate), l.people, false)
 		if err != nil {
@@ -189,16 +193,9 @@ func importVideos(
 		ReindexPhotoDates(tx, image.Id)
 		l.photos[video.Id] = image.Id
 
-		for _, oldTagId := range video.TagIds {
-			if tagId, ok := l.tags[oldTagId]; ok {
-				addTagToPhoto(tx, image.Id, tagId, familyId)
-			}
-		}
-		for _, oldPersonId := range video.PersonIds {
-			if personId, ok := l.people[oldPersonId]; ok {
-				AddPersonToPhoto(tx, image.Id, personId, familyId)
-			}
-		}
+		importPhotoLinks(tx, image, ExportPhoto{
+			PersonIds: video.PersonIds, TagIds: video.TagIds, People: video.People, Tags: video.Tags,
+		}, l)
 		importTranscript(tx, image.Id, familyId, ownerUserId, video.Transcript)
 		videoIds = append(videoIds, image.Id)
 		imported++
@@ -237,16 +234,13 @@ func importTranscript(tx *vbolt.Tx, imageId, familyId, userId int, exported *Exp
 	t := VideoTranscript{
 		ImageId: imageId, FamilyId: familyId, Model: exported.Model, Version: exported.Version,
 		Language: exported.Language, Status: TranscriptDone, Segments: exported.Segments,
-		EditedAt: exported.EditedAt, CreatedAt: exported.CreatedAt,
+		EditedAt: exported.EditedAt, CreatedAt: orNow(exported.CreatedAt),
 	}
 	if exported.Removed {
 		t.Status, t.Segments = TranscriptRemoved, nil
 	}
 	if !exported.Automatic {
 		t.EditedBy = userId
-	}
-	if t.CreatedAt.IsZero() {
-		t.CreatedAt = time.Now()
 	}
 	writeVideoTranscriptTx(tx, &t)
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -194,14 +193,18 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 			photos, videos))
 	}
 
+	importInterviewListSettings(tx, familyId, archive.InterviewCadence, archive.InterviewDismissed)
 	if req.ImportMilestones {
 		interviews := interviewImport{familyId: familyId, ledger: l}.run(tx, archive.InterviewQuestions, archive.Interviews, archive.Milestones)
 		resp.ImportedInterviews = interviews.imported
 		resp.SkippedInterviews = interviews.skipped
 		resp.Warnings = append(resp.Warnings, interviews.warnings...)
 		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
+		linkMomentPhotos(tx, archive.Milestones, familyId, l)
+	} else {
+		mapExistingInterviews(tx, archive.Interviews, l)
 	}
-	importInterviewCadence(tx, familyId, archive.InterviewCadence)
+	importPlaces(tx, archive.Places, familyId)
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
 		var warnings []string
@@ -245,18 +248,6 @@ func missingPhotoFiles(archive familyArchive, l *archiveLedger) (missing int) {
 	return
 }
 
-// mapExistingMoments links the moments a family already has, so books can
-// point at them when the import leaves moments out.
-func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLedger) {
-	for _, m := range milestones {
-		if personId, ok := l.people[m.PersonId]; ok {
-			if id := existingMilestoneId(tx, personId, m.MilestoneDate, m.Description); id != 0 {
-				l.moments[m.Id] = id
-			}
-		}
-	}
-}
-
 func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLedger) {
 	for _, importPerson := range people {
 		personId, ok := l.people[importPerson.Id]
@@ -270,9 +261,12 @@ func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLed
 			continue
 		}
 		person.ProfilePhotoId = photoId
-		person.ProfileCropX = 50
-		person.ProfileCropY = 50
-		person.ProfileCropScale = 1.0
+		person.ProfileCropX, person.ProfileCropY, person.ProfileCropScale = 50, 50, 1.0
+		if importPerson.ProfileCropScale > 0 {
+			person.ProfileCropX = importPerson.ProfileCropX
+			person.ProfileCropY = importPerson.ProfileCropY
+			person.ProfileCropScale = importPerson.ProfileCropScale
+		}
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 	}
 }
@@ -310,66 +304,4 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	vbolt.TxCommit(ctx.Tx)
 	done.queue()
 	return
-}
-
-// importBundleHandler imports a zip. Its "options" field carries the same
-// choices as ImportDataRequest, without jsonData.
-func importBundleHandler(w http.ResponseWriter, r *http.Request) {
-	user, ok := GetUserFromContext(r)
-	if !ok {
-		RespondAuthError(w, r, "Authentication required")
-		return
-	}
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		RespondValidationError(w, r, "Failed to parse multipart form", err.Error())
-		return
-	}
-	var req ImportDataRequest
-	if err := json.Unmarshal([]byte(r.FormValue("options")), &req); err != nil {
-		RespondValidationError(w, r, "The import options are missing. Reload the page and try again.", err.Error())
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		RespondValidationError(w, r, "No file provided", err.Error())
-		return
-	}
-	defer file.Close()
-	zipReader, err := zip.NewReader(file, header.Size)
-	if err != nil {
-		RespondValidationError(w, r, "Invalid ZIP file", err.Error())
-		return
-	}
-	archive, err := readArchiveZip(zipReader)
-	if err != nil {
-		RespondValidationError(w, r, err.Error())
-		return
-	}
-
-	var resp ImportDataResponse
-	var done archiveImported
-	withTx := vbolt.WithWriteTx
-	if req.PreviewOnly {
-		withTx = vbolt.WithReadTx
-	}
-	withTx(appDb, func(tx *vbolt.Tx) {
-		var familyId int
-		if familyId, err = ResolveActingFamily(tx, user, req.FamilyId, AccessContribute); err != nil {
-			return
-		}
-		resp, done, err = importFamilyArchive(tx, user, familyId, archive, req)
-		if err == nil && !req.PreviewOnly && !req.DryRun {
-			vbolt.TxCommit(tx)
-		}
-	})
-	if err != nil {
-		RespondValidationError(w, r, "Failed to import bundle", err.Error())
-		return
-	}
-	if !req.PreviewOnly && !req.DryRun {
-		done.queue()
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
 }

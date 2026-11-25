@@ -1,18 +1,19 @@
 package backend
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"family/cfg"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 func TestEveryBucketIsClassifiedForTheArchive(t *testing.T) {
@@ -48,27 +49,19 @@ func TestArchiveSeedFillsEveryArchivedBucket(t *testing.T) {
 
 func isVideoRow(row archiveRow) bool { return strings.HasPrefix(row["Media"], "video:") }
 
-func pointsAtVideo(row archiveRow) bool { return strings.HasPrefix(row["PhotoId"], "video:") }
-
 // Each later family archive ticket deletes the entries it fixes.
 var knownArchiveDrops = []archiveDrop{
-	{"milestone_photos", "", nil, "moment-photo links are not exported"},
-	{"photo_faces", "", nil, "faces are not exported"},
-	{"images", "AnalysisVersion", nil, "faces are not exported"},
-	{"family_places", "", nil, "places are not exported"},
-	{"interview_question_lists", "DismissedKeys", nil, "interview list settings are not exported"},
-	{"*", "CreatedAt", nil, "createdAt is reset"},
-	{"books", "UpdatedAt", nil, "book timestamps are reset"},
-	{"books", "ReviewedAt", nil, "book timestamps are reset"},
-	{"people", "ProfileCropX", nil, "crop is reset"},
-	{"people", "ProfileCropY", nil, "crop is reset"},
-	{"people", "ProfileCropScale", nil, "crop is reset"},
-	{"people", "IsPregnancy", nil, "pregnancy is not exported"},
-	{"milestones", "Note", nil, "the moment note is not imported"},
-	{"images", "OriginalFilename", nil, "the original filename is not exported"},
-	{"photo_person", "AutoTagged", nil, "the auto-tagged flag is not exported"},
-	{"growth_data", "Unit", nil, "the entered unit is converted to inches and pounds"},
-	{"growth_data", "Value", nil, "the entered unit is converted to inches and pounds"},
+	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
+	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
+	{"activities", "CreatedAt", nil, "createdAt is reset"},
+	{"seasons", "CreatedAt", nil, "createdAt is reset"},
+	{"activity_events", "CreatedAt", nil, "createdAt is reset"},
+	{"activity_entries", "CreatedAt", nil, "createdAt is reset"},
+	{"entry_members", "CreatedAt", nil, "createdAt is reset"},
+	{"appearances", "CreatedAt", nil, "createdAt is reset"},
+	{"appearance_photos", "CreatedAt", nil, "createdAt is reset"},
+	{"activity_results", "CreatedAt", nil, "createdAt is reset"},
+	{"activity_event_photos", "CreatedAt", nil, "createdAt is reset"},
 }
 
 var knownReimportDrops = []archiveDrop{}
@@ -169,31 +162,75 @@ func (fx *archiveFixture) importBundle(t *testing.T, user User, bundle []byte, o
 	return resp
 }
 
+// postImportBundle imports a zip the way the import page does: begin, PUT to
+// the signed URL, complete, then wait for the job. It answers like an HTTP
+// endpoint so callers can check the outcome by status code.
 func postImportBundle(t *testing.T, user User, bundle []byte, options ImportDataRequest) *httptest.ResponseRecorder {
 	t.Helper()
-	encoded, err := json.Marshal(options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, err := form.CreateFormFile("file", "family.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(bundle); err != nil {
-		t.Fatal(err)
-	}
-	if err := form.WriteField("options", string(encoded)); err != nil {
-		t.Fatal(err)
-	}
-	form.Close()
-	req := httptest.NewRequest(http.MethodPost, "/api/import-bundle", &body)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
+	useArchiveUploadStore(t)
 	rec := httptest.NewRecorder()
-	importBundleHandler(rec, req)
+	fail := func(err error) *httptest.ResponseRecorder {
+		rec.WriteHeader(http.StatusBadRequest)
+		rec.WriteString(err.Error())
+		return rec
+	}
+	begun, err := callProc(t, user, BeginArchiveImport, BeginArchiveImportRequest{
+		FamilyId: options.FamilyId, Filename: "family.zip", Size: len(bundle),
+	})
+	if err != nil {
+		return fail(err)
+	}
+	if put := sendUpload(activeMediaStore().(*localMediaStore), begun.Upload, bundle); put.Code != http.StatusOK {
+		return put
+	}
+	status, err := runArchiveImport(t, user, begun.ImportId, options)
+	if err != nil {
+		return fail(err)
+	}
+	if status.State != "done" {
+		return fail(errors.New(status.Error))
+	}
+	rec.WriteHeader(http.StatusOK)
+	json.NewEncoder(rec).Encode(status.Result)
 	return rec
+}
+
+// runArchiveImport completes an uploaded archive and waits for its job.
+func runArchiveImport(t *testing.T, user User, importId int, options ImportDataRequest) (ArchiveImportStatus, error) {
+	t.Helper()
+	if _, err := callProc(t, user, CompleteArchiveImport, CompleteArchiveImportRequest{ImportId: importId, Options: options}); err != nil {
+		return ArchiveImportStatus{}, err
+	}
+	waitForArchiveImports()
+	return callProc(t, user, GetArchiveImportStatus, GetArchiveImportStatusRequest{ImportId: importId})
+}
+
+// useArchiveUploadStore gives a test without a media store a local one whose
+// uploads are gated the way the server gates them.
+func useArchiveUploadStore(t *testing.T) {
+	t.Helper()
+	store, ok := activeMediaStore().(*localMediaStore)
+	if !ok {
+		var err error
+		if store, err = newLocalMediaStore(filepath.Join(t.TempDir(), "media"), []byte("archive-upload-test-key")); err != nil {
+			t.Fatal(err)
+		}
+		previousStore, previousFree := mediaStore, freeDiskBytes
+		mediaStore = store
+		freeDiskBytes = func(string) (int64, error) { return 1 << 50, nil }
+		t.Cleanup(func() { mediaStore, freeDiskBytes = previousStore, previousFree })
+	}
+	store.gate = mediaUploadGate(appDb)
+}
+
+func callProc[Req any, Resp any](t *testing.T, user User, proc func(*vbeam.Context, Req) (Resp, error), req Req) (resp Resp, err error) {
+	t.Helper()
+	token := testAuthToken(t, user)
+	vbolt.WithWriteTx(appDb, func(tx *vbolt.Tx) {
+		resp, err = proc(&vbeam.Context{Tx: tx, Token: token}, req)
+		vbolt.TxCommit(tx)
+	})
+	return
 }
 
 func drainPhotoJobs() (jobs []PhotoProcessingJob) {

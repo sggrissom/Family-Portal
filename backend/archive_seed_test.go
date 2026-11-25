@@ -159,6 +159,16 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 	list.CadenceMonth = 9
 	list.DismissedKeys = append(list.DismissedKeys, "best-age")
 	writeQuestionList(tx, list)
+	position := 0
+	for _, q := range familyQuestions(tx, familyId) {
+		if q.DefaultKey == "best-age" {
+			deleteInterviewQuestion(tx, q.Id)
+		} else if !q.OneOff {
+			q.Position = position
+			position++
+			writeInterviewQuestion(tx, q)
+		}
+	}
 	interviews := personInterviews(tx, ada.Id)
 	if s.err != nil || len(interviews) == 0 {
 		t.Fatalf("seed: %v, %d interviews", s.err, len(interviews))

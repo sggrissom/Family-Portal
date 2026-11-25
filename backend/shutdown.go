@@ -32,6 +32,7 @@ var workerShutdownOrder = []struct {
 	{"Video analysis worker did not stop before the deadline", StopVideoAnalysisWorker, nil},
 	{"Video worker did not stop before the deadline", StopVideoWorker, nil},
 	{"Media janitor did not stop before the deadline", StopMediaJanitor, nil},
+	{"An archive import was still running at shutdown", StopArchiveImports, nil},
 	{"Photo features worker did not stop before the deadline", StopFeaturesWorker, nil},
 }
 
