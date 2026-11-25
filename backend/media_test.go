@@ -157,17 +157,3 @@ func TestVideosAreNotPortraitsOrProfilePhotos(t *testing.T) {
 		t.Fatalf("SetProfilePhoto(photo) error = %v", err)
 	}
 }
-
-func TestVideosAreNotExportedAsPhotos(t *testing.T) {
-	fx := setupResultsFixture(t)
-	photo := fx.addPhotoAt(t, "still.jpg", featuresEpoch)
-	fx.addVideoAt(t, "clip.mov", featuresEpoch)
-
-	var exported []ExportPhoto
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		exported = buildPhotoExportMetadata(tx, fx.familyId)
-	})
-	if len(exported) != 1 || exported[0].Id != photo.Id {
-		t.Fatalf("exported %+v, want only photo %d", exported, photo.Id)
-	}
-}

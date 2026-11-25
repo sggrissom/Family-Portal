@@ -212,6 +212,50 @@ func TestImportRejectsFilesItCannotRead(t *testing.T) {
 	}
 }
 
+func TestImportRejectsRecordsThatDontHoldTogether(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	born := time.Date(2015, 7, 11, 0, 0, 0, 0, time.UTC)
+	ruth := ImportPerson{Id: 1, Name: "Ruth", Birthday: time.Date(1985, 3, 2, 0, 0, 0, 0, time.UTC)}
+	nora := ImportPerson{Id: 2, Name: "Nora", Birthday: born}
+	cases := []struct {
+		name    string
+		records ImportDataStructure
+		want    string
+	}{
+		{"no people", ImportDataStructure{}, "No people found"},
+		{"a person with no name", ImportDataStructure{People: []ImportPerson{{Id: 1, Birthday: born}}}, "has no name"},
+		{"a person with no birthday", ImportDataStructure{People: []ImportPerson{{Id: 1, Name: "Nora"}}}, "invalid birthday"},
+		{"a relation to someone not in the file", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 99, Kind: "parent"}},
+		}, "unknown person"},
+		{"a person related to themselves", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 1, Kind: "sibling"}},
+		}, "themselves"},
+		{"a relation of unknown kind", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "godparent"}},
+		}, "unknown kind"},
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	for _, c := range cases {
+		data, _ := json.Marshal(c.records)
+		_, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(data)})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: import error = %v; want one mentioning %q", c.name, err, c.want)
+		}
+	}
+	if n := len(readArchiveContents(t, fx.db, restorer.FamilyId)["people"]); n != 0 {
+		t.Errorf("rejected files left %d people", n)
+	}
+
+	valid, _ := json.Marshal(ImportDataStructure{
+		People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "parent"}},
+	})
+	if resp, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(valid)}); err != nil || resp.ImportedRelations != 1 {
+		t.Errorf("a valid file: imported %d relations, error %v; want 1 and none", resp.ImportedRelations, err)
+	}
+}
+
 func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	bundle := fx.exportBundle(t, fx.owner, "records")
