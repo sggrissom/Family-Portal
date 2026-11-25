@@ -3,6 +3,7 @@ package backend
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"encoding/json"
 	"errors"
 	"family/cfg"
@@ -20,6 +21,7 @@ import (
 
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
+	vbeam.RegisterProc(app, GetArchiveExportSizes)
 	vbeam.RegisterProc(app, ListVideoOriginals)
 	vbeam.RegisterProc(app, GetVideoOriginalLink)
 	app.HandleFunc("GET /api/export-bundle", AuthMiddleware(exportBundleHandler))
@@ -33,11 +35,13 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mode := r.URL.Query().Get("mode")
-	if mode == "" {
+	switch mode {
+	case "", "data_only", "records":
 		mode = "data_only"
-	}
-	if mode != "data_only" && mode != "with_photos" {
-		RespondValidationError(w, r, "Choose either a data-only export or one with photos.", mode)
+	case "with_photos", "everything":
+		mode = "with_photos"
+	default:
+		RespondValidationError(w, r, "Choose either the Records file or the Everything archive.", mode)
 		return
 	}
 
@@ -235,6 +239,68 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 
 	resp.JsonData = string(jsonBytes)
 	return
+}
+
+type GetArchiveExportSizesRequest struct {
+	FamilyId int `json:"familyId,omitempty"`
+}
+
+type GetArchiveExportSizesResponse struct {
+	RecordsBytes    int `json:"recordsBytes"`
+	EverythingBytes int `json:"everythingBytes"`
+	Photos          int `json:"photos"`
+	Videos          int `json:"videos"`
+}
+
+func GetArchiveExportSizes(ctx *vbeam.Context, req GetArchiveExportSizesRequest) (resp GetArchiveExportSizesResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
+	if err != nil {
+		return
+	}
+
+	exportData, err := buildExportData(ctx.Tx, familyId)
+	if err != nil {
+		return
+	}
+	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
+	if err != nil {
+		return
+	}
+
+	var compressed countingWriter
+	fw, _ := flate.NewWriter(&compressed, flate.DefaultCompression)
+	fw.Write(jsonBytes)
+	fw.Close()
+
+	resp.RecordsBytes = len(jsonBytes)
+	resp.EverythingBytes = compressed.n + zipEntryOverhead
+	for _, img := range GetFamilyImages(ctx.Tx, familyId) {
+		if img.Status != PhotoReady {
+			continue
+		}
+		if img.IsVideo() {
+			resp.Videos++
+		} else {
+			resp.Photos++
+		}
+		resp.EverythingBytes += img.FileSize + zipEntryOverhead
+	}
+	return
+}
+
+const zipEntryOverhead = 150
+
+type countingWriter struct{ n int }
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	c.n += len(p)
+	return len(p), nil
 }
 
 func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
