@@ -3,11 +3,27 @@ package backend
 import (
 	"family/cfg"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
 	"go.hasen.dev/vbolt"
 )
+
+// videoExportFileName is unique within a family, sorts by date, and keeps the
+// camera's own name recognisable.
+func videoExportFileName(image Image) string {
+	name := strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r < 32 {
+			return '_'
+		}
+		return r
+	}, image.OriginalFilename)
+	if name == "" {
+		name = "video" + path.Ext(image.OriginalKey)
+	}
+	return fmt.Sprintf("%s_%d_%s", recordFileDate(image.RecordTime), image.Id, name)
+}
 
 type ExportVideo struct {
 	Id               int                 `json:"id"`

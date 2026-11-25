@@ -22,8 +22,6 @@ import (
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
 	vbeam.RegisterProc(app, GetArchiveExportSizes)
-	vbeam.RegisterProc(app, ListVideoOriginals)
-	vbeam.RegisterProc(app, GetVideoOriginalLink)
 	app.HandleFunc("GET /api/export-bundle", AuthMiddleware(exportBundleHandler))
 }
 
