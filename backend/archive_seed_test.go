@@ -96,7 +96,7 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 	}, familyId)
 	must(err)
 	ben := s.person(familyId, "Ben", Male, "2018-06-01")
-	s.pregnancy(familyId, "Bump", "2025-12-25")
+	s.pregnancy(familyId, "Bump", time.Now().AddDate(0, 3, 0).Format("2006-01-02"))
 	s.relate(ben, ada, RelationSibling)
 
 	beach := s.tag(familyId, "beach", "#3366ff")
@@ -159,6 +159,16 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 	list.CadenceMonth = 9
 	list.DismissedKeys = append(list.DismissedKeys, "best-age")
 	writeQuestionList(tx, list)
+	position := 0
+	for _, q := range familyQuestions(tx, familyId) {
+		if q.DefaultKey == "best-age" {
+			deleteInterviewQuestion(tx, q.Id)
+		} else if !q.OneOff {
+			q.Position = position
+			position++
+			writeInterviewQuestion(tx, q)
+		}
+	}
 	interviews := personInterviews(tx, ada.Id)
 	if s.err != nil || len(interviews) == 0 {
 		t.Fatalf("seed: %v, %d interviews", s.err, len(interviews))

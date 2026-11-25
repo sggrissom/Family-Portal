@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -20,10 +21,12 @@ var errUnreadableArchive = errors.New("That file is not a valid Family Record ex
 // familyArchive is one archive in the current shape, whichever file it came
 // from. media holds the files a zip carries; a Records file has none. staged
 // holds the photos unpacked for this import, by their id in the archive.
+// warnings are what reading it changed, for the import to report.
 type familyArchive struct {
 	ImportDataStructure
-	media  map[string]*zip.File
-	staged map[int]stagedMedia
+	media    map[string]*zip.File
+	staged   map[int]stagedMedia
+	warnings []string
 }
 
 // archiveLedger maps the archive's ids to the target family's. Each step of
@@ -90,6 +93,9 @@ func readArchiveRecords(data []byte) (archive familyArchive, err error) {
 	switch {
 	case header.FormatVersion <= 1:
 		archive.ImportDataStructure, err = readArchiveV1(data)
+		if err == nil && header.FormatVersion == 0 {
+			archive.warnings = markLegacyPregnancies(archive.People)
+		}
 	default:
 		return archive, errors.New("That file was exported by a newer version of Family Record, so it can't be imported here yet.")
 	}
@@ -107,6 +113,20 @@ func readArchiveV1(data []byte) (records ImportDataStructure, err error) {
 	}
 	records.FormatVersion = archiveFormatVersion
 	return records, nil
+}
+
+// markLegacyPregnancies treats a future birthday in an unversioned file as a
+// due date: those files don't carry the pregnancy flag, and only a pregnancy
+// can have a birthday in the future.
+func markLegacyPregnancies(people []ImportPerson) (warnings []string) {
+	now := time.Now()
+	for i := range people {
+		if people[i].Birthday.After(now) && !people[i].IsPregnancy {
+			people[i].IsPregnancy = true
+			warnings = append(warnings, people[i].Name+"'s birthday is in the future, so they were imported as a pregnancy.")
+		}
+	}
+	return
 }
 
 func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
@@ -163,6 +183,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	l := newArchiveLedger()
 	resp.ImportedPeople, resp.MergedPeople, resp.Warnings = importPeople(tx, people, familyId, l)
+	resp.Warnings = append(archive.warnings, resp.Warnings...)
 	resp.SkippedPeople = len(people) - resp.ImportedPeople - resp.MergedPeople
 	resp.PersonIdMapping = l.people
 	resp.ImportedTags, resp.SkippedTags = importTags(tx, archive.Tags, familyId, l)
@@ -198,14 +219,17 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 			photos, resp.SkippedVideos))
 	}
 
+	importInterviewListSettings(tx, familyId, archive.InterviewCadence, archive.InterviewDismissed)
 	if req.ImportMilestones {
 		interviews := interviewImport{familyId: familyId, ledger: l}.run(tx, archive.InterviewQuestions, archive.Interviews, archive.Milestones)
 		resp.ImportedInterviews = interviews.imported
 		resp.SkippedInterviews = interviews.skipped
 		resp.Warnings = append(resp.Warnings, interviews.warnings...)
 		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
+		linkMomentPhotos(tx, archive.Milestones, familyId, l)
+	} else {
+		mapExistingInterviews(tx, archive.Interviews, l)
 	}
-	importInterviewCadence(tx, familyId, archive.InterviewCadence)
 	importPlaces(tx, archive.Places, familyId)
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
@@ -248,18 +272,6 @@ func missingPhotoFiles(archive familyArchive, l *archiveLedger) (missing int) {
 		}
 	}
 	return
-}
-
-// mapExistingMoments links the moments a family already has, so books can
-// point at them when the import leaves moments out.
-func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLedger) {
-	for _, m := range milestones {
-		if personId, ok := l.people[m.PersonId]; ok {
-			if id := existingMilestoneId(tx, personId, m.MilestoneDate, m.Description); id != 0 {
-				l.moments[m.Id] = id
-			}
-		}
-	}
 }
 
 func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLedger) {

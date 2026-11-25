@@ -42,31 +42,6 @@ func familyInterviewCadence(tx *vbolt.Tx, familyId int) InterviewCadence {
 	return familyQuestionList(tx, familyId).cadence()
 }
 
-func exportInterviewCadence(tx *vbolt.Tx, familyId int) *InterviewCadence {
-	list := familyQuestionList(tx, familyId)
-	if list.Cadence == "" {
-		return nil
-	}
-	cadence := list.cadence()
-	return &cadence
-}
-
-// importInterviewCadence takes the exported cadence only when the family
-// hasn't chosen one of its own.
-func importInterviewCadence(tx *vbolt.Tx, familyId int, exported *InterviewCadence) {
-	if exported == nil {
-		return
-	}
-	cadence, err := validCadence(*exported)
-	list := familyQuestionList(tx, familyId)
-	if err != nil || list.Cadence != "" {
-		return
-	}
-	list.Cadence = cadence.Kind
-	list.CadenceMonth = cadence.Month
-	writeQuestionList(tx, list)
-}
-
 var ErrInvalidCadence = errors.New("Choose when interviews should be suggested")
 
 func validCadence(c InterviewCadence) (InterviewCadence, error) {
