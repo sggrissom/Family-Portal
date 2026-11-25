@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -20,9 +21,11 @@ var errUnreadableArchive = errors.New("That file is not a valid Family Record ex
 
 // familyArchive is one archive in the current shape, whichever file it came
 // from. media holds the files a zip carries; a Records file has none.
+// warnings are what reading it changed, for the import to report.
 type familyArchive struct {
 	ImportDataStructure
-	media map[string]*zip.File
+	media    map[string]*zip.File
+	warnings []string
 }
 
 // archiveLedger maps the archive's ids to the target family's. Each step of
@@ -78,6 +81,9 @@ func readArchiveRecords(data []byte) (archive familyArchive, err error) {
 	switch {
 	case header.FormatVersion <= 1:
 		archive.ImportDataStructure, err = readArchiveV1(data)
+		if err == nil && header.FormatVersion == 0 {
+			archive.warnings = markLegacyPregnancies(archive.People)
+		}
 	default:
 		return archive, errors.New("That file was exported by a newer version of Family Record, so it can't be imported here yet.")
 	}
@@ -95,6 +101,20 @@ func readArchiveV1(data []byte) (records ImportDataStructure, err error) {
 	}
 	records.FormatVersion = archiveFormatVersion
 	return records, nil
+}
+
+// markLegacyPregnancies treats a future birthday in an unversioned file as a
+// due date: those files don't carry the pregnancy flag, and only a pregnancy
+// can have a birthday in the future.
+func markLegacyPregnancies(people []ImportPerson) (warnings []string) {
+	now := time.Now()
+	for i := range people {
+		if people[i].Birthday.After(now) && !people[i].IsPregnancy {
+			people[i].IsPregnancy = true
+			warnings = append(warnings, people[i].Name+"'s birthday is in the future, so they were imported as a pregnancy.")
+		}
+	}
+	return
 }
 
 func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
@@ -151,6 +171,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	l := newArchiveLedger()
 	resp.ImportedPeople, resp.MergedPeople, resp.Warnings = importPeople(tx, people, familyId, l)
+	resp.Warnings = append(archive.warnings, resp.Warnings...)
 	resp.SkippedPeople = len(people) - resp.ImportedPeople - resp.MergedPeople
 	resp.PersonIdMapping = l.people
 	resp.ImportedTags, resp.SkippedTags = importTags(tx, archive.Tags, familyId, l)

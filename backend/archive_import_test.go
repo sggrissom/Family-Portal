@@ -328,3 +328,88 @@ func TestReimportMatchesPeopleWhoseBirthdayIsNotAtMidnight(t *testing.T) {
 		t.Errorf("second import added %d and merged %d people; want 0 and %d", again.ImportedPeople, again.MergedPeople, first.ImportedPeople)
 	}
 }
+
+func (fx *archiveFixture) listPeople(t *testing.T, user User) map[string]Person {
+	t.Helper()
+	var resp ListPeopleResponse
+	var err error
+	fx.call(t, user, func(ctx *vbeam.Context) { resp, err = ListPeople(ctx, Empty{}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	people := map[string]Person{}
+	for _, p := range resp.People {
+		people[p.Name] = p
+	}
+	return people
+}
+
+// withFutureBirthday moves one person's birthday a few months ahead and
+// returns the file with formatVersion set to version (0 leaves it out).
+func withFutureBirthday(t *testing.T, data []byte, name string, version int) string {
+	t.Helper()
+	var file map[string]any
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	due := time.Now().AddDate(0, 4, 0).UTC().Truncate(24 * time.Hour)
+	found := false
+	for _, p := range file["people"].([]any) {
+		person := p.(map[string]any)
+		if person["Name"] == name {
+			person["Birthday"] = due.Format(time.RFC3339)
+			delete(person, "IsPregnancy")
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no person %q in the file", name)
+	}
+	delete(file, "formatVersion")
+	if version > 0 {
+		file["formatVersion"] = version
+	}
+	out, err := json.Marshal(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func TestLegacyFileWithAFutureBirthdayImportsItAsAPregnancy(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	data, err := os.ReadFile("testdata/archive_v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restorer := fx.newUser(t, "restorer")
+	resp, err := fx.importRecords(t, restorer, ImportDataRequest{
+		JsonData: withFutureBirthday(t, data, "Bump", 0), ImportMilestones: true, ImportActivities: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ImportedPeople != 3 || resp.ImportedMeasurements != 2 {
+		t.Errorf("imported %d people and %d measurements; want 3 and 2", resp.ImportedPeople, resp.ImportedMeasurements)
+	}
+	if bump, ok := fx.listPeople(t, restorer)["Bump"]; !ok || !bump.IsPregnancy {
+		t.Errorf("Bump = %+v; want a pregnancy", bump)
+	}
+	if !slices.ContainsFunc(resp.Warnings, func(w string) bool { return strings.Contains(w, "Bump") && strings.Contains(w, "pregnancy") }) {
+		t.Errorf("warnings %q don't say Bump was imported as a pregnancy", resp.Warnings)
+	}
+}
+
+func TestFutureBirthdayOnSomeoneNotExpectedIsRejected(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	restorer := fx.newUser(t, "restorer")
+	_, err := fx.importRecords(t, restorer, ImportDataRequest{
+		JsonData: withFutureBirthday(t, []byte(fx.exportRecords(t, fx.owner)), "Ben", archiveFormatVersion),
+	})
+	if err == nil || !strings.Contains(err.Error(), "Ben") {
+		t.Errorf("import err = %v; want Ben's future birthday rejected", err)
+	}
+	if people := fx.listPeople(t, restorer); len(people) != 0 {
+		t.Errorf("rejected import still added %d people", len(people))
+	}
+}

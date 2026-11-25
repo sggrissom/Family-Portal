@@ -96,7 +96,7 @@ func validateImportPerson(person ImportPerson, index int) error {
 	}
 
 	now := time.Now()
-	if person.Birthday.After(now) {
+	if person.Birthday.After(now) && !person.IsPregnancy {
 		return errors.New("Person '" + person.Name + "' has birthday in the future")
 	}
 
