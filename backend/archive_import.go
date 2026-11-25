@@ -189,6 +189,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
 	}
 	importInterviewCadence(tx, familyId, archive.InterviewCadence)
+	importPlaces(tx, archive.Places, familyId)
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
 		var warnings []string

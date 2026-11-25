@@ -60,6 +60,7 @@ type ImportDataStructure struct {
 	Milestones []ExportMilestone `json:"milestones"`
 	Tags       []ExportTag       `json:"tags"`
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`

@@ -166,6 +166,7 @@ type ExportDataStructure struct {
 	Milestones []ExportMilestone `json:"milestones"`
 	Tags       []ExportTag       `json:"tags"`
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
@@ -409,6 +410,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
 	exportData.TotalInterviews = len(exportData.Interviews)
 	exportData.InterviewCadence = exportInterviewCadence(tx, familyId)
+	exportData.Places = buildPlaceExport(tx, familyId)
 
 	exportData.Heights = heights
 	exportData.Weights = weights
