@@ -53,6 +53,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 	var exportData ExportDataStructure
 	var buildErr error
+	videoKeys := map[int]string{}
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessView)
 		if resolveErr != nil {
@@ -67,6 +68,9 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 			photos := buildPhotoExportMetadata(tx, familyId)
 			exportData.Photos = photos
 			exportData.TotalPhotos = len(photos)
+			for _, video := range exportData.Videos {
+				videoKeys[video.Id] = GetImageById(tx, video.Id).OriginalKey
+			}
 		}
 	})
 	if buildErr != nil {
@@ -135,6 +139,27 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Close()
 	}
+
+	store := activeMediaStore()
+	for _, video := range exportData.Videos {
+		if store == nil {
+			break
+		}
+		rc, err := store.Open(r.Context(), videoKeys[video.Id])
+		if err != nil {
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a video whose original is unreadable", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
+			continue
+		}
+		entry, err := zw.CreateHeader(&zip.FileHeader{Name: video.zipPath(), Method: zip.Store})
+		if err == nil {
+			_, err = io.Copy(entry, rc)
+		}
+		rc.Close()
+		if err != nil {
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a video", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
+			return
+		}
+	}
 }
 
 type ExportDataStructure struct {
@@ -149,6 +174,7 @@ type ExportDataStructure struct {
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
 	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
+	Family     *ExportFamily     `json:"family,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
@@ -237,6 +263,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	exportData.Videos = buildVideoExport(tx, familyId)
 	exportData.TotalVideos = len(exportData.Videos)
+	exportData.Family = exportFamilySettings(tx, familyId)
 
 	exportData.Activities = buildActivityExport(tx, familyId, personNames)
 	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=

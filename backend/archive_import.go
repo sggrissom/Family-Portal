@@ -54,6 +54,7 @@ func newArchiveLedger() *archiveLedger {
 type archiveImported struct {
 	milestoneIds []int
 	photoJobs    []PhotoProcessingJob
+	videoIds     []int
 }
 
 func (done archiveImported) queue() {
@@ -67,6 +68,9 @@ func (done archiveImported) queue() {
 				"error":   err.Error(),
 			})
 		}
+	}
+	for _, id := range done.videoIds {
+		QueueVideoProcessing(id)
 	}
 }
 
@@ -169,6 +173,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	}
 
 	l := newArchiveLedger()
+	importFamilySettings(tx, familyId, archive.Family)
 	resp.ImportedPeople, resp.MergedPeople, resp.Warnings = importPeople(tx, people, familyId, l)
 	resp.Warnings = append(archive.warnings, resp.Warnings...)
 	resp.SkippedPeople = len(people) - resp.ImportedPeople - resp.MergedPeople
@@ -196,14 +201,17 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.media, req.DryRun)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
+		resp.ImportedVideos, resp.SkippedVideos, done.videoIds, warnings =
+			importVideos(tx, familyId, user.Id, archive.Videos, l, archive.media, req.DryRun)
+		resp.Warnings = append(resp.Warnings, warnings...)
 	} else {
 		resp.SkippedPhotos = missingPhotoFiles(archive, l)
+		resp.SkippedVideos = missingVideoFiles(archive, l)
 	}
-	resp.SkippedVideos = videosInScope(archive.Videos, l)
-	if photos := missingPhotoFiles(archive, l); photos+resp.SkippedVideos > 0 {
+	if photos, videos := missingPhotoFiles(archive, l), missingVideoFiles(archive, l); photos+videos > 0 {
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf(
 			"%d photo(s) and %d video(s) were not imported because their files aren't in this file.",
-			photos, resp.SkippedVideos))
+			photos, videos))
 	}
 
 	importInterviewListSettings(tx, familyId, archive.InterviewCadence, archive.InterviewDismissed)
@@ -243,10 +251,10 @@ func inScope(personIds []int, l *archiveLedger) bool {
 	return len(personIds) == 0
 }
 
-func videosInScope(videos []ExportVideo, l *archiveLedger) (n int) {
-	for _, video := range videos {
-		if inScope(video.PersonIds, l) {
-			n++
+func missingVideoFiles(archive familyArchive, l *archiveLedger) (missing int) {
+	for _, video := range archive.Videos {
+		if inScope(video.PersonIds, l) && archive.media[video.zipPath()] == nil {
+			missing++
 		}
 	}
 	return

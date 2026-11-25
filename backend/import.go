@@ -26,6 +26,7 @@ type ImportDataStructure struct {
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
 	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
+	Family     *ExportFamily     `json:"family,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
@@ -66,6 +67,7 @@ type ImportDataResponse struct {
 	SkippedTags          int                  `json:"skippedTags"`
 	ImportedPhotos       int                  `json:"importedPhotos"`
 	SkippedPhotos        int                  `json:"skippedPhotos"`
+	ImportedVideos       int                  `json:"importedVideos"`
 	SkippedVideos        int                  `json:"skippedVideos"`
 	ImportedActivities   ActivityImportCounts `json:"importedActivities"`
 	ImportedBooks        int                  `json:"importedBooks"`
