@@ -86,12 +86,7 @@ var knownArchiveDrops = []archiveDrop{
 	{"growth_data", "Value", nil, "the entered unit is converted to inches and pounds"},
 }
 
-var knownReimportDrops = []archiveDrop{
-	{"images", "", nil, "duplicate photos on re-import"},
-	{"photo_person", "", nil, "duplicate photos on re-import"},
-	{"photo_tags", "", nil, "duplicate photos on re-import"},
-	{"photo_faces", "", nil, "duplicate photos on re-import"},
-}
+var knownReimportDrops = []archiveDrop{}
 
 func TestFamilyArchiveRoundTrip(t *testing.T) {
 	fx := setupArchiveFixture(t)
