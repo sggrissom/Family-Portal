@@ -319,17 +319,17 @@ func (v *contentView) flattenRef(t *testing.T, path, bucket, field string, val r
 	}
 }
 
-// archiveDrop is a known loss, masked on both sides before comparing. An
-// empty Field drops the matching rows; otherwise that field and its
-// sub-fields are removed. Bucket "*" applies to every bucket.
-type archiveDrop struct {
+// archiveMask is a difference that's expected between two imports, masked on
+// both sides before comparing. An empty Field masks the bucket's rows;
+// otherwise that field and its sub-fields are removed. Bucket "*" applies to
+// every bucket.
+type archiveMask struct {
 	Bucket string
 	Field  string
-	Where  func(archiveRow) bool
 	Reason string
 }
 
-func (c archiveContents) without(drops []archiveDrop) archiveContents {
+func (c archiveContents) without(masks []archiveMask) archiveContents {
 	out := archiveContents{}
 	for bucket, rows := range c {
 		for _, row := range rows {
@@ -338,8 +338,8 @@ func (c archiveContents) without(drops []archiveDrop) archiveContents {
 				keep[k] = val
 			}
 			dropped := false
-			for _, d := range drops {
-				if (d.Bucket != "*" && d.Bucket != bucket) || (d.Where != nil && !d.Where(row)) {
+			for _, d := range masks {
+				if d.Bucket != "*" && d.Bucket != bucket {
 					continue
 				}
 				if d.Field == "" {
@@ -391,17 +391,9 @@ func diffArchiveContents(want, got archiveContents) []string {
 	return diffs
 }
 
-// assertArchiveMatches fails on any difference the drops don't explain, and
-// on any drop that no longer explains a difference.
-func assertArchiveMatches(t *testing.T, want, got archiveContents, drops []archiveDrop) {
+func assertArchiveMatches(t *testing.T, want, got archiveContents) {
 	t.Helper()
-	for _, d := range diffArchiveContents(want.without(drops), got.without(drops)) {
+	for _, d := range diffArchiveContents(want, got) {
 		t.Errorf("unexpected difference: %s", d)
-	}
-	for i, d := range drops {
-		others := append(append([]archiveDrop{}, drops[:i]...), drops[i+1:]...)
-		if len(diffArchiveContents(want.without(others), got.without(others))) == 0 {
-			t.Errorf("known drop %s %s (%s) no longer happens; remove it from the list", d.Bucket, d.Field, d.Reason)
-		}
 	}
 }

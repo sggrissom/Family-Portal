@@ -23,10 +23,14 @@ type ExportMilestone struct {
 	PersonName    string      `json:"personName"`
 	TagNames      []string    `json:"tagNames,omitempty"`
 	PhotoIds      []int       `json:"photoIds,omitempty"`
-	InterviewId   int         `json:"interviewId,omitempty"`
-	QuestionId    int         `json:"questionId,omitempty"`
-	Note          string      `json:"note,omitempty"`
-	RecordedBy    string      `json:"recordedBy,omitempty"`
+	// TagsAddedAt and PhotosAddedAt are when each tag, by lowercased name,
+	// and each photo, by PhotoIds id, was attached.
+	TagsAddedAt   map[string]time.Time `json:"tagsAddedAt,omitempty"`
+	PhotosAddedAt map[int]time.Time    `json:"photosAddedAt,omitempty"`
+	InterviewId   int                  `json:"interviewId,omitempty"`
+	QuestionId    int                  `json:"questionId,omitempty"`
+	Note          string               `json:"note,omitempty"`
+	RecordedBy    string               `json:"recordedBy,omitempty"`
 }
 
 func buildMilestoneExport(tx *vbolt.Tx, familyId int, people []Person, tagIdToName map[int]string, recorderOf func(userId int) string) []ExportMilestone {
@@ -48,12 +52,19 @@ func buildMilestoneExport(tx *vbolt.Tx, familyId int, people []Person, tagIdToNa
 			}
 		}
 
-		tagIds := GetMilestoneTagIds(tx, milestone.Id)
 		var tagNames []string
-		for _, tagId := range tagIds {
-			if name, ok := tagIdToName[tagId]; ok {
+		tagsAddedAt := map[string]time.Time{}
+		for _, link := range milestoneTagLinks(tx, MilestoneTagByMilestoneIndex, milestone.Id) {
+			if name, ok := tagIdToName[link.TagId]; ok {
 				tagNames = append(tagNames, name)
+				tagsAddedAt[strings.ToLower(name)] = link.CreatedAt
 			}
+		}
+		var photoIds []int
+		photosAddedAt := map[int]time.Time{}
+		for _, link := range milestonePhotoLinks(tx, MilestonePhotoByMilestoneIndex, milestone.Id) {
+			photoIds = append(photoIds, link.PhotoId)
+			photosAddedAt[link.PhotoId] = link.CreatedAt
 		}
 
 		exportMilestones[i] = ExportMilestone{
@@ -69,7 +80,9 @@ func buildMilestoneExport(tx *vbolt.Tx, familyId int, people []Person, tagIdToNa
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,
 			TagNames:      tagNames,
-			PhotoIds:      GetMilestonePhotoIds(tx, milestone.Id),
+			PhotoIds:      photoIds,
+			TagsAddedAt:   tagsAddedAt,
+			PhotosAddedAt: photosAddedAt,
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
 			Note:          milestone.Note,
@@ -154,7 +167,7 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, familyId
 
 		for _, tagName := range milestone.TagNames {
 			if tagId, ok := l.tagByName[strings.ToLower(tagName)]; ok {
-				addTagToMilestone(tx, newMilestone.Id, tagId, familyId)
+				linkTagToMilestone(tx, newMilestone.Id, tagId, familyId, archiveCreatedAt(milestone.TagsAddedAt[strings.ToLower(tagName)]))
 			}
 		}
 
@@ -184,7 +197,7 @@ func linkMomentPhotos(tx *vbolt.Tx, milestones []ExportMilestone, familyId int, 
 		}
 		for _, photoId := range m.PhotoIds {
 			if id, ok := l.photos[photoId]; ok {
-				addPhotoToMilestone(tx, momentId, id, familyId)
+				linkPhotoToMilestone(tx, momentId, id, familyId, archiveCreatedAt(m.PhotosAddedAt[photoId]))
 			}
 		}
 	}

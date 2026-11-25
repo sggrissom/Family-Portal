@@ -49,36 +49,19 @@ func TestArchiveSeedFillsEveryArchivedBucket(t *testing.T) {
 
 func isVideoRow(row archiveRow) bool { return strings.HasPrefix(row["Media"], "video:") }
 
-// Each later family archive ticket deletes the entries it fixes.
-var knownArchiveDrops = []archiveDrop{
-	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
-	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
-	{"activities", "CreatedAt", nil, "createdAt is reset"},
-	{"seasons", "CreatedAt", nil, "createdAt is reset"},
-	{"activity_events", "CreatedAt", nil, "createdAt is reset"},
-	{"activity_entries", "CreatedAt", nil, "createdAt is reset"},
-	{"entry_members", "CreatedAt", nil, "createdAt is reset"},
-	{"appearances", "CreatedAt", nil, "createdAt is reset"},
-	{"appearance_photos", "CreatedAt", nil, "createdAt is reset"},
-	{"activity_results", "CreatedAt", nil, "createdAt is reset"},
-	{"activity_event_photos", "CreatedAt", nil, "createdAt is reset"},
-}
-
-var knownReimportDrops = []archiveDrop{}
-
 func TestFamilyArchiveRoundTrip(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	source := readArchiveContents(t, fx.db, fx.familyId)
 
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	fx.importBundle(t, restorer, bundle, importEverything)
 	restored := readArchiveContents(t, fx.db, restorer.FamilyId)
-	assertArchiveMatches(t, source, restored, knownArchiveDrops)
+	assertArchiveMatches(t, source, restored)
 
 	fx.importBundle(t, restorer, bundle, importEverything)
 	reimported := readArchiveContents(t, fx.db, restorer.FamilyId)
-	assertArchiveMatches(t, restored, reimported, knownReimportDrops)
+	assertArchiveMatches(t, restored, reimported)
 }
 
 func TestFormatV1ArchiveImports(t *testing.T) {

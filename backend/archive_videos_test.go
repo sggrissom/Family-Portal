@@ -65,7 +65,7 @@ func TestVideoWorkerKeepsImportedTranscripts(t *testing.T) {
 	if err := fx.store.Put(context.Background(), seeded.OriginalKey, bytes.NewReader(clip), int64(len(clip)), seeded.MimeType); err != nil {
 		t.Fatal(err)
 	}
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 
 	restorer := fx.newUser(t, "restorer")
 	stopWorkers := fx.startArchiveVideoWorkers(t, tools)

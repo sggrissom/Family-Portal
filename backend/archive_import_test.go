@@ -51,18 +51,14 @@ func bundleRecords(t *testing.T, bundle []byte) []byte {
 	return nil
 }
 
-// Each import stamps its own family name and creation times.
-var perImportFields = []archiveDrop{
-	{"families", "", nil, "each restorer has its own family"},
-	{"*", "CreatedAt", nil, "stamped at import"},
-	{"books", "UpdatedAt", nil, "stamped at import"},
-	{"books", "ReviewedAt", nil, "stamped at import"},
+var perImportFields = []archiveMask{
+	{"families", "", "each restorer has its own family"},
 }
 
 func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	records := fx.exportRecords(t, fx.owner)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 
 	fromRecords := fx.newUser(t, "records")
 	if _, err := fx.importRecords(t, fromRecords, ImportDataRequest{JsonData: records, ImportMilestones: true, ImportActivities: true}); err != nil {
@@ -83,7 +79,7 @@ func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 
 func TestZipImportHonoursTheImportOptions(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	var records ImportDataStructure
 	if err := json.Unmarshal(bundleRecords(t, bundle), &records); err != nil {
 		t.Fatal(err)
@@ -113,7 +109,7 @@ func TestZipImportHonoursTheImportOptions(t *testing.T) {
 
 func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	before := readArchiveContents(t, fx.db, restorer.FamilyId)
 	photoDir := filepath.Dir(photoOriginalPath("photos/x.jpg"))
@@ -145,7 +141,7 @@ func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 
 func TestRecordsImportReportsTheMediaItLeftOut(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "with_photos"))
+	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "everything"))
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {
 		t.Fatal(err)
@@ -218,7 +214,7 @@ func TestImportRejectsFilesItCannotRead(t *testing.T) {
 
 func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 	outsider := fx.newUser(t, "outsider")
 	before := readArchiveContents(t, fx.db, fx.familyId)
 
@@ -272,7 +268,7 @@ func TestBooksFindMomentsAndInterviewsAlreadyInTheFamily(t *testing.T) {
 
 func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	data := bundleRecords(t, bundle)
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {
