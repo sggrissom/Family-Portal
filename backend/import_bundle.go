@@ -45,9 +45,21 @@ func importPhotos(
 		}
 	}
 
+	existing := familyMediaByHash(tx, familyId)
 	for _, photo := range scoped {
 		zf, exists := zipFiles[photo.ZipPath]
 		if !exists {
+			skipped++
+			continue
+		}
+
+		hash, err := zipEntryContentHash(zf)
+		if err != nil {
+			skipped++
+			continue
+		}
+		if id, ok := takeMediaByHash(existing, hash); ok {
+			l.photos[photo.Id] = id
 			skipped++
 			continue
 		}
@@ -100,6 +112,7 @@ func importPhotos(
 		image.FilePath = filePath
 		image.MimeType = mimeType
 		image.FileSize = int(size)
+		image.ContentHash = hash
 		image.Title = photo.Title
 		image.Description = photo.Description
 		recordTime, photoDate, err := importRecordTime(photo.RecordTime, wallClockUTC(photo.PhotoDate), l.people, false)
@@ -163,6 +176,15 @@ func writeZipEntryToDisk(zf *zip.File, diskPath string) error {
 
 	_, err = io.Copy(out, rc)
 	return err
+}
+
+func zipEntryContentHash(zf *zip.File) (string, error) {
+	rc, err := zf.Open()
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	return mediaContentHash(rc)
 }
 
 func zipExtToMime(ext string) string {

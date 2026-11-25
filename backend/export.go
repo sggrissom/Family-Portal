@@ -167,25 +167,6 @@ func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
 	return result
 }
 
-type ExportTag struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-}
-
-// ExportRelation is one stored relationship edge. Kind is spelled out rather
-// than numbered so the file does not depend on the enum's ordering. For a
-// "parent" edge From is the parent of To; "sibling" and "partner" are
-// symmetric and stored once, in the direction they were entered.
-type ExportRelation struct {
-	Id       int    `json:"id"`
-	FromId   int    `json:"fromId"`
-	ToId     int    `json:"toId"`
-	Kind     string `json:"kind"`
-	FromName string `json:"fromName,omitempty"`
-	ToName   string `json:"toName,omitempty"`
-}
-
 type ExportPhoto struct {
 	Id          int         `json:"id"`
 	Title       string      `json:"title"`
@@ -276,96 +257,15 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	tags := getTagsByFamily(tx, familyId)
 	tagIdToName := make(map[int]string, len(tags))
-	exportTags := make([]ExportTag, len(tags))
-	for i, tag := range tags {
+	for _, tag := range tags {
 		tagIdToName[tag.Id] = tag.Name
-		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
 	}
+	exportTags := exportTagRecords(tags)
 
 	people := GetFamilyOwnPeople(tx, familyId)
 	recorderOf := exportRecorders(tx)
-
-	exportData.People = make([]ImportPerson, len(people))
-	for i, person := range people {
-		exportData.People[i] = ImportPerson{
-			Id:       person.Id,
-			FamilyId: person.FamilyId,
-			Gender:   int(person.Gender),
-			Name:     person.Name,
-			Birthday: person.Birthday,
-			Age:      person.Age,
-			ImageId:  person.ProfilePhotoId,
-
-			BirthTime:  person.BirthTime,
-			BirthPlace: person.BirthPlace,
-		}
-	}
-
-	var growthDataIds []int
-	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &growthDataIds, vbolt.Window{})
-
-	var growthData []GrowthData
-	if len(growthDataIds) > 0 {
-		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
-	}
-
-	var heights []ImportHeight
-	var weights []ImportWeight
-
-	for _, gd := range growthData {
-		var personName string
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		var personBirthday time.Time
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personBirthday = person.Birthday
-				break
-			}
-		}
-
-		age := calculateAgeAtDate(personBirthday, gd.MeasurementDate)
-		dateString := gd.MeasurementDate.Format("2006-01-02")
-
-		if gd.MeasurementType == Height {
-			inches := gd.Value
-			if gd.Unit == "cm" {
-				inches = gd.Value / 2.54
-			}
-
-			heights = append(heights, ImportHeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Inches:     inches,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		} else if gd.MeasurementType == Weight {
-			pounds := gd.Value
-			if gd.Unit == "kg" {
-				pounds = gd.Value * 2.20462
-			}
-
-			weights = append(weights, ImportWeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Pounds:     pounds,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		}
-	}
+	exportData.People = exportPeople(people)
+	heights, weights := exportMeasurements(tx, familyId, people, recorderOf)
 
 	exportMilestones := buildMilestoneExport(tx, familyId, people, tagIdToName, recorderOf)
 
@@ -410,43 +310,4 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalResults = resultCount
 
 	return exportData, nil
-}
-
-// buildRelationExport lists the edges whose endpoints are both people in this
-// export. An edge to someone in another family is left out, since the import
-// side has no record to reattach it to.
-func buildRelationExport(tx *vbolt.Tx, people []Person, personNames map[int]string) []ExportRelation {
-	rows := relationsAmong(tx, people)
-	result := make([]ExportRelation, 0, len(rows))
-	for _, row := range rows {
-		kind := row.Kind.exportName()
-		if kind == "" {
-			continue
-		}
-		result = append(result, ExportRelation{
-			Id:       row.Id,
-			FromId:   row.FromId,
-			ToId:     row.ToId,
-			Kind:     kind,
-			FromName: personNames[row.FromId],
-			ToName:   personNames[row.ToId],
-		})
-	}
-	return result
-}
-
-func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
-	years := targetDate.Year() - birthday.Year()
-	months := int(targetDate.Month()) - int(birthday.Month())
-	days := targetDate.Day() - birthday.Day()
-
-	if days < 0 {
-		months--
-	}
-	if months < 0 {
-		years--
-		months += 12
-	}
-
-	return float64(years) + float64(months)/12.0
 }

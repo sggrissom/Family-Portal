@@ -61,8 +61,8 @@ var knownArchiveDrops = []archiveDrop{
 	{"family_places", "", nil, "places are not exported"},
 	{"families", "Name", nil, "family settings are not exported"},
 	{"families", "VideoEnabled", nil, "family settings are not exported"},
-	{"tags", "CreatedAt", nil, "createdAt is reset"},
-	{"growth_data", "CreatedAt", nil, "createdAt is reset"},
+	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
+	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
 	{"images", "CreatedAt", nil, "createdAt is reset"},
 	{"photo_person", "CreatedAt", nil, "createdAt is reset"},
 	{"photo_tags", "CreatedAt", nil, "createdAt is reset"},
@@ -75,24 +75,11 @@ var knownArchiveDrops = []archiveDrop{
 	{"appearance_photos", "CreatedAt", nil, "createdAt is reset"},
 	{"activity_results", "CreatedAt", nil, "createdAt is reset"},
 	{"activity_event_photos", "CreatedAt", nil, "createdAt is reset"},
-	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
-	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
-	{"people", "ProfileCropX", nil, "crop is reset"},
-	{"people", "ProfileCropY", nil, "crop is reset"},
-	{"people", "ProfileCropScale", nil, "crop is reset"},
-	{"people", "IsPregnancy", nil, "pregnancy is not exported"},
 	{"images", "OriginalFilename", nil, "the original filename is not exported"},
 	{"photo_person", "AutoTagged", nil, "the auto-tagged flag is not exported"},
-	{"growth_data", "Unit", nil, "the entered unit is converted to inches and pounds"},
-	{"growth_data", "Value", nil, "the entered unit is converted to inches and pounds"},
 }
 
-var knownReimportDrops = []archiveDrop{
-	{"images", "", nil, "duplicate photos on re-import"},
-	{"photo_person", "", nil, "duplicate photos on re-import"},
-	{"photo_tags", "", nil, "duplicate photos on re-import"},
-	{"milestone_photos", "", nil, "duplicate photos on re-import"},
-}
+var knownReimportDrops = []archiveDrop{}
 
 func TestFamilyArchiveRoundTrip(t *testing.T) {
 	fx := setupArchiveFixture(t)
