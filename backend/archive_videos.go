@@ -1,8 +1,6 @@
 package backend
 
 import (
-	"archive/zip"
-	"context"
 	"family/cfg"
 	"fmt"
 	"strings"
@@ -102,9 +100,9 @@ func importVideos(
 	ownerUserId int,
 	videos []ExportVideo,
 	l *archiveLedger,
-	zipFiles map[string]*zip.File,
+	staged map[int]stagedMedia,
 	dryRun bool,
-) (imported, skipped int, videoIds []int, warnings []string) {
+) (imported, skipped int, queued []importedVideo, warnings []string) {
 	store := activeMediaStore()
 	_, localStore := store.(*localMediaStore)
 	used := FamilyStorageUsage(tx, familyId)
@@ -115,16 +113,12 @@ func importVideos(
 		if !inScope(video.PersonIds, l) {
 			continue
 		}
-		zf := zipFiles[video.zipPath()]
-		if zf == nil {
+		file, ok := staged[video.Id]
+		if !ok {
 			skipped++
 			continue
 		}
-		hash, err := zipEntryContentHash(zf)
-		if err != nil {
-			skipped++
-			continue
-		}
+		hash := file.hash
 		if id, ok := takeMediaByHash(existing, hash); ok {
 			l.photos[video.Id] = id
 			importTranscript(tx, id, familyId, ownerUserId, video.Transcript)
@@ -138,7 +132,7 @@ func importVideos(
 			skipped++
 			continue
 		}
-		size := int64(zf.UncompressedSize64)
+		size := file.size
 		reservation := int64(videoReservationBytes(int(size)))
 		if cfg.FamilyStorageQuotaBytes > 0 && used+reservation > cfg.FamilyStorageQuotaBytes {
 			overQuota++
@@ -156,13 +150,6 @@ func importVideos(
 			continue
 		}
 		key := "videos/" + mediaId + "/original" + ext
-		if !dryRun {
-			if err := putZipEntry(store, zf, key, video.MimeType); err != nil {
-				LogWarn(LogCategoryPhoto, "Import could not store a video", map[string]interface{}{"path": video.zipPath(), "error": err.Error()})
-				skipped++
-				continue
-			}
-		}
 		used += reservation
 
 		image := Image{
@@ -197,7 +184,10 @@ func importVideos(
 			PersonIds: video.PersonIds, TagIds: video.TagIds, People: video.People, Tags: video.Tags,
 		}, l)
 		importTranscript(tx, image.Id, familyId, ownerUserId, video.Transcript)
-		videoIds = append(videoIds, image.Id)
+		queued = append(queued, importedVideo{
+			id:   image.Id,
+			file: stagedUpload{store: store, from: file.path, key: key, size: size, contentType: video.MimeType},
+		})
 		imported++
 	}
 
@@ -208,15 +198,6 @@ func importVideos(
 		warnings = append(warnings, fmt.Sprintf("Storage is full: %d video(s) were not imported. Everything else was.", overQuota))
 	}
 	return
-}
-
-func putZipEntry(store MediaStore, zf *zip.File, key, contentType string) error {
-	rc, err := zf.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-	return store.Put(context.Background(), key, rc, int64(zf.UncompressedSize64), contentType)
 }
 
 // importTranscript carries a transcript as a person left it. One the family

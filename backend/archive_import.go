@@ -19,11 +19,13 @@ const archiveFormatVersion = 1
 var errUnreadableArchive = errors.New("That file is not a valid Family Record export. Check that you picked the right file.")
 
 // familyArchive is one archive in the current shape, whichever file it came
-// from. media holds the files a zip carries; a Records file has none.
+// from. media holds the files a zip carries; a Records file has none. staged
+// holds the photos unpacked for this import, by their id in the archive.
 // warnings are what reading it changed, for the import to report.
 type familyArchive struct {
 	ImportDataStructure
 	media    map[string]*zip.File
+	staged   map[int]stagedMedia
 	warnings []string
 }
 
@@ -53,8 +55,20 @@ func newArchiveLedger() *archiveLedger {
 // archiveImported is the work left for after the import commits.
 type archiveImported struct {
 	milestoneIds []int
-	photoJobs    []PhotoProcessingJob
-	videoIds     []int
+	photoJobs    []importedPhoto
+	videos       []importedVideo
+}
+
+// importedPhoto and importedVideo are committed media whose staged files
+// still have to be put in place before they are processed.
+type importedPhoto struct {
+	PhotoProcessingJob
+	file stagedMove
+}
+
+type importedVideo struct {
+	id   int
+	file stagedUpload
 }
 
 func (done archiveImported) queue() {
@@ -62,15 +76,26 @@ func (done archiveImported) queue() {
 		QueueMilestoneEmbedding(id)
 	}
 	for _, job := range done.photoJobs {
-		if err := QueuePhotoProcessing(job); err != nil {
+		err := job.file.run()
+		if err == nil {
+			err = QueuePhotoProcessing(job.PhotoProcessingJob)
+		}
+		if err != nil {
 			LogWarn(LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
 				"photoId": job.ImageId,
 				"error":   err.Error(),
 			})
 		}
 	}
-	for _, id := range done.videoIds {
-		QueueVideoProcessing(id)
+	for _, video := range done.videos {
+		if err := video.file.run(); err != nil {
+			LogWarn(LogCategoryPhoto, "Imported video left for stuck-video recovery", map[string]interface{}{
+				"videoId": video.id,
+				"error":   err.Error(),
+			})
+			continue
+		}
+		QueueVideoProcessing(video.id)
 	}
 }
 
@@ -198,11 +223,11 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	if archive.media != nil {
 		var warnings []string
 		resp.ImportedPhotos, resp.SkippedPhotos, done.photoJobs, warnings =
-			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.media, req.DryRun)
+			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged, req.DryRun)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
-		resp.ImportedVideos, resp.SkippedVideos, done.videoIds, warnings =
-			importVideos(tx, familyId, user.Id, archive.Videos, l, archive.media, req.DryRun)
+		resp.ImportedVideos, resp.SkippedVideos, done.videos, warnings =
+			importVideos(tx, familyId, user.Id, archive.Videos, l, archive.staged, req.DryRun)
 		resp.Warnings = append(resp.Warnings, warnings...)
 	} else {
 		resp.SkippedPhotos = missingPhotoFiles(archive, l)
