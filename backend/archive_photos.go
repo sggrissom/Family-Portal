@@ -13,6 +13,48 @@ import (
 	"go.hasen.dev/vbolt"
 )
 
+type ExportPhoto struct {
+	Id          int         `json:"id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	PhotoDate   time.Time   `json:"photo_date"`
+	RecordTime  *RecordTime `json:"record_time,omitempty"`
+	DateLabel   string      `json:"date_label,omitempty"`
+	ZipPath     string      `json:"zip_path"`
+	PersonIds   []int       `json:"person_ids"`
+	TagIds      []int       `json:"tag_ids"`
+}
+
+func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
+	images := GetFamilyImages(tx, familyId)
+	result := make([]ExportPhoto, 0, len(images))
+	for _, img := range images {
+		if img.Status != PhotoReady || img.IsVideo() {
+			continue
+		}
+		zipPath := "photos/" + originalFileName(img.FilePath)
+
+		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
+		personIds := make([]int, 0, len(photoPersons))
+		for _, pp := range photoPersons {
+			personIds = append(personIds, pp.PersonId)
+		}
+
+		result = append(result, ExportPhoto{
+			Id:          img.Id,
+			Title:       img.Title,
+			Description: img.Description,
+			PhotoDate:   img.PhotoDate,
+			RecordTime:  &img.RecordTime,
+			DateLabel:   img.RecordTime.Label(),
+			ZipPath:     zipPath,
+			PersonIds:   personIds,
+			TagIds:      GetPhotoTagIds(tx, img.Id),
+		})
+	}
+	return result
+}
+
 func importPhotos(
 	tx *vbolt.Tx,
 	familyId int,
