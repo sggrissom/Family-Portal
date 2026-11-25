@@ -96,7 +96,7 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 	}, familyId)
 	must(err)
 	ben := s.person(familyId, "Ben", Male, "2018-06-01")
-	s.pregnancy(familyId, "Bump", "2025-12-25")
+	s.pregnancy(familyId, "Bump", time.Now().AddDate(0, 3, 0).Format("2006-01-02"))
 	s.relate(ben, ada, RelationSibling)
 
 	beach := s.tag(familyId, "beach", "#3366ff")
