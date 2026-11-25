@@ -41,7 +41,7 @@ written.
 | question | answer |
 | --- | --- |
 | Does the proxy cap request bodies? | No. A 2.7 MB `POST /rpc/GetAuthContext` came back `413` carrying `X-Request-Id` — the **app's** header, so the body reached the app and the app rejected it. The limits in `backend/security.go` are the only ones. |
-| Does the proxy impose timeouts shorter than the app's? | No. The server object has no `read_timeout`, `write_timeout`, or `idle_timeout` key at all, so nothing upstream can cut short the 30-minute import read or the 30-minute download write in `backend/request_timeouts.go`. Caddy's default idle timeout applies between requests on a keep-alive connection, not during a streaming body. |
+| Does the proxy impose timeouts shorter than the app's? | No. The server object has no `read_timeout`, `write_timeout`, or `idle_timeout` key at all, so nothing upstream can cut short the 12-hour read of a signed media upload (a video or an Everything archive) or the 30-minute download write in `backend/request_timeouts.go`. An archive import itself runs in the background, outside any request. Caddy's default idle timeout applies between requests on a keep-alive connection, not during a streaming body. |
 | Does WebSocket proxying work? | Yes, and it is checked every deploy rather than once: `cmd/smokecheck` dials `/ws/chat` with a real session, sends a heartbeat, and waits for the reply. Caddy 2 passes upgrades through `reverse_proxy` without configuration. |
 | Is TLS renewing? | Yes. Let's Encrypt, issued 28 July 2026, expiring 26 October 2026, HTTP/2 negotiated. There is no `tls` automation block, so Caddy's defaults apply and it renews at roughly two-thirds of the lifetime — about 27 September. |
 
@@ -105,6 +105,7 @@ cannot write.
 | `/srv/apps/family/shared/data/db.bolt` | the database (`cfg.DBPath`) |
 | `/srv/apps/family/shared/static/` | uploads and derived variants (`cfg.StaticDir`) |
 | `/srv/apps/family/shared/media/` | video originals and playback files on local storage (`cfg.MediaDir`), created at startup; `.scratch/` inside it is the video worker's and is wiped on start |
+| `/srv/apps/family/shared/import-staging/` | media unpacked by a running archive import, beside `static/` so photos move into place with a rename; created on first use, emptied as each import ends, not backed up |
 | `/srv/apps/family/shared/logs/` | the rotating application log (`cfg.LogDir`) |
 | `/srv/apps/family-face/shared/` | the face daemon's own env and models |
 | `/run/family-face/face.sock` | app → daemon socket (`cfg.FaceAnalysisSocket`) |
@@ -446,9 +447,20 @@ Derived variants roughly triple what actually lands on disk, so the quota is
 deliberately set well under the disk rather than close to it — raising it means
 checking the real `shared/static/` size first, not just the free space.
 
-Both the upload handler and the bundle importer check. Going over on an import
-stops the photo loop and returns a warning rather than failing the whole
-import: the people and measurements in that transaction are worth keeping.
+The upload handler, `BeginArchiveImport` and the archive import all check. An
+archive upload (at most 40 GiB) holds its declared size against the quota
+while it uploads, and `BeginArchiveImport` refuses one that wouldn't fit, or
+that would break the disk floor on local storage. Going over during the import
+itself stops the photo and video loops and returns a warning rather than
+failing the whole import: the people and measurements in that transaction are
+worth keeping.
+
+An archive import unpacks its media into `shared/import-staging/import-*/`
+(`.serve/import-staging/` locally) before its write transaction, so allow
+room there for the largest archive's media on top of the uploaded zip, which
+sits in the media store (`shared/media/imports/` on local storage). Each import removes its directory when it ends. One
+left by a crash is safe to delete while no import is running. See
+`docs/family-archive.md`.
 
 A family over quota gets a message naming its usage and `cfg.SupportEmail`. A
 breach of the disk floor is a 503 — the uploader is not the one who can fix it,
