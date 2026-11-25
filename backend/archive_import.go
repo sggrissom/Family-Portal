@@ -257,9 +257,12 @@ func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLed
 			continue
 		}
 		person.ProfilePhotoId = photoId
-		person.ProfileCropX = 50
-		person.ProfileCropY = 50
-		person.ProfileCropScale = 1.0
+		person.ProfileCropX, person.ProfileCropY, person.ProfileCropScale = 50, 50, 1.0
+		if importPerson.ProfileCropScale > 0 {
+			person.ProfileCropX = importPerson.ProfileCropX
+			person.ProfileCropY = importPerson.ProfileCropY
+			person.ProfileCropScale = importPerson.ProfileCropScale
+		}
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 	}
 }

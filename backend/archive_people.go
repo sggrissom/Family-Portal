@@ -20,34 +20,46 @@ type ImportPerson struct {
 
 	BirthTime  string `json:"BirthTime,omitempty"`
 	BirthPlace string `json:"BirthPlace,omitempty"`
+
+	ProfileCropX     float64 `json:"ProfileCropX,omitempty"`
+	ProfileCropY     float64 `json:"ProfileCropY,omitempty"`
+	ProfileCropScale float64 `json:"ProfileCropScale,omitempty"`
+	IsPregnancy      bool    `json:"IsPregnancy,omitempty"`
 }
 
 type ImportHeight struct {
 	Id         int       `json:"Id"`
 	PersonId   int       `json:"PersonId"`
 	Inches     float64   `json:"Inches"`
+	Value      float64   `json:"Value,omitempty"`
+	Unit       string    `json:"Unit,omitempty"`
 	Date       time.Time `json:"Date"`
 	DateString string    `json:"DateString"`
 	Age        float64   `json:"Age"`
 	PersonName string    `json:"PersonName"`
 	RecordedBy string    `json:"RecordedBy,omitempty"`
+	CreatedAt  time.Time `json:"CreatedAt,omitzero"`
 }
 
 type ImportWeight struct {
 	Id         int       `json:"Id"`
 	PersonId   int       `json:"PersonId"`
 	Pounds     float64   `json:"Pounds"`
+	Value      float64   `json:"Value,omitempty"`
+	Unit       string    `json:"Unit,omitempty"`
 	Date       time.Time `json:"Date"`
 	DateString string    `json:"DateString"`
 	Age        float64   `json:"Age"`
 	PersonName string    `json:"PersonName"`
 	RecordedBy string    `json:"RecordedBy,omitempty"`
+	CreatedAt  time.Time `json:"CreatedAt,omitzero"`
 }
 
 type ExportTag struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Id        int       `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"createdAt,omitzero"`
 }
 
 // ExportRelation is one stored relationship edge. Kind is spelled out rather
@@ -230,6 +242,7 @@ func importPeople(tx *vbolt.Tx, importPeople []ImportPerson, familyId int, l *ar
 		person.Birthday = dayStart(importPerson.Birthday)
 		person.Age = calculateAge(person.Birthday)
 		person.BirthTime, person.BirthPlace = importedBirthDetails(importPerson)
+		person.IsPregnancy = importPerson.IsPregnancy
 
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 		updatePersonIndex(tx, person)
@@ -320,20 +333,23 @@ func calculateMatchConfidence(importPerson ImportPerson, existing Person) float6
 
 func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeights []ImportWeight, personIdMapping map[int]int, familyId int) (int, int, []string) {
 	type measurement struct {
-		label    string
-		personId int
-		kind     MeasurementType
-		value    float64
-		unit     string
-		date     time.Time
-		recorder string
+		label     string
+		personId  int
+		kind      MeasurementType
+		value     float64
+		unit      string
+		date      time.Time
+		recorder  string
+		createdAt time.Time
 	}
 	var measurements []measurement
 	for _, height := range importHeights {
-		measurements = append(measurements, measurement{"Height", height.PersonId, Height, height.Inches, "in", dayStart(height.Date), height.RecordedBy})
+		value, unit := enteredMeasurement(height.Value, height.Unit, height.Inches, "in")
+		measurements = append(measurements, measurement{"Height", height.PersonId, Height, value, unit, dayStart(height.Date), height.RecordedBy, height.CreatedAt})
 	}
 	for _, weight := range importWeights {
-		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, weight.Pounds, "lbs", dayStart(weight.Date), weight.RecordedBy})
+		value, unit := enteredMeasurement(weight.Value, weight.Unit, weight.Pounds, "lbs")
+		measurements = append(measurements, measurement{"Weight", weight.PersonId, Weight, value, unit, dayStart(weight.Date), weight.RecordedBy, weight.CreatedAt})
 	}
 	recorderOf := importRecorders(tx, familyId)
 
@@ -346,9 +362,12 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 			errors = append(errors, fmt.Sprintf("%s measurement for unknown person ID: %d", m.label, m.personId))
 			continue
 		}
-		if m.date.Year() == 1 || isDuplicateMeasurement(tx, newPersonId, m.date, m.kind, m.value) {
+		if m.date.Year() == 1 || isDuplicateMeasurement(tx, newPersonId, m.date, m.kind, m.value, m.unit) {
 			skippedCount++
 			continue
+		}
+		if m.createdAt.IsZero() {
+			m.createdAt = time.Now()
 		}
 		writeGrowthData(tx, GrowthData{
 			Id:              vbolt.NextIntId(tx, GrowthDataBkt),
@@ -358,7 +377,7 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 			Value:           m.value,
 			Unit:            m.unit,
 			MeasurementDate: m.date,
-			CreatedAt:       time.Now(),
+			CreatedAt:       m.createdAt,
 			CreatedBy:       recorderOf(m.recorder),
 		})
 		importedCount++
@@ -367,13 +386,34 @@ func importMeasurements(tx *vbolt.Tx, importHeights []ImportHeight, importWeight
 	return importedCount, skippedCount, errors
 }
 
-func isDuplicateMeasurement(tx *vbolt.Tx, personId int, date time.Time, measurementType MeasurementType, value float64) bool {
+// enteredMeasurement is the value and unit a measurement was entered in.
+// Files from before the unit was carried hold only inches or pounds.
+func enteredMeasurement(value float64, unit string, imperial float64, imperialUnit string) (float64, string) {
+	if unit == "" || value <= 0 {
+		return imperial, imperialUnit
+	}
+	return value, unit
+}
+
+// inImperial converts a measurement to inches or pounds, so two entered in
+// different units can be compared.
+func inImperial(value float64, unit string) float64 {
+	switch unit {
+	case "cm":
+		return value / 2.54
+	case "kg":
+		return value * 2.20462
+	}
+	return value
+}
+
+func isDuplicateMeasurement(tx *vbolt.Tx, personId int, date time.Time, measurementType MeasurementType, value float64, unit string) bool {
 	growthData := GetPersonGrowthDataTx(tx, personId)
 
 	for _, measurement := range growthData {
 		if measurement.MeasurementType == measurementType &&
 			measurement.MeasurementDate.Equal(date) &&
-			abs(measurement.Value-value) < 0.01 {
+			abs(inImperial(measurement.Value, measurement.Unit)-inImperial(value, unit)) < 0.01 {
 			return true
 		}
 	}
@@ -386,6 +426,74 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+func exportPeople(people []Person) []ImportPerson {
+	out := make([]ImportPerson, len(people))
+	for i, person := range people {
+		out[i] = ImportPerson{
+			Id:       person.Id,
+			FamilyId: person.FamilyId,
+			Gender:   int(person.Gender),
+			Name:     person.Name,
+			Birthday: person.Birthday,
+			Age:      person.Age,
+			ImageId:  person.ProfilePhotoId,
+
+			BirthTime:  person.BirthTime,
+			BirthPlace: person.BirthPlace,
+
+			ProfileCropX:     person.ProfileCropX,
+			ProfileCropY:     person.ProfileCropY,
+			ProfileCropScale: person.ProfileCropScale,
+			IsPregnancy:      person.IsPregnancy,
+		}
+	}
+	return out
+}
+
+// exportMeasurements keeps each measurement's entered value and unit, and
+// also writes it in inches or pounds for readers of older files.
+func exportMeasurements(tx *vbolt.Tx, familyId int, people []Person, recorderOf func(int) string) (heights []ImportHeight, weights []ImportWeight) {
+	var ids []int
+	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &ids, vbolt.Window{})
+	var growthData []GrowthData
+	vbolt.ReadSlice(tx, GrowthDataBkt, ids, &growthData)
+
+	byId := make(map[int]Person, len(people))
+	for _, person := range people {
+		byId[person.Id] = person
+	}
+	for _, gd := range growthData {
+		person := byId[gd.PersonId]
+		age := calculateAgeAtDate(person.Birthday, gd.MeasurementDate)
+		dateString := gd.MeasurementDate.Format("2006-01-02")
+		switch gd.MeasurementType {
+		case Height:
+			heights = append(heights, ImportHeight{
+				Id: gd.Id, PersonId: gd.PersonId, Inches: inImperial(gd.Value, gd.Unit),
+				Value: gd.Value, Unit: gd.Unit,
+				Date: gd.MeasurementDate, DateString: dateString, Age: age, PersonName: person.Name,
+				RecordedBy: recorderOf(gd.CreatedBy), CreatedAt: gd.CreatedAt,
+			})
+		case Weight:
+			weights = append(weights, ImportWeight{
+				Id: gd.Id, PersonId: gd.PersonId, Pounds: inImperial(gd.Value, gd.Unit),
+				Value: gd.Value, Unit: gd.Unit,
+				Date: gd.MeasurementDate, DateString: dateString, Age: age, PersonName: person.Name,
+				RecordedBy: recorderOf(gd.CreatedBy), CreatedAt: gd.CreatedAt,
+			})
+		}
+	}
+	return
+}
+
+func exportTagRecords(tags []Tag) []ExportTag {
+	out := make([]ExportTag, len(tags))
+	for i, tag := range tags {
+		out[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color, CreatedAt: tag.CreatedAt}
+	}
+	return out
 }
 
 func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
@@ -484,7 +592,10 @@ func importTags(tx *vbolt.Tx, exportedTags []ExportTag, familyId int, l *archive
 				FamilyId:  familyId,
 				Name:      exportTag.Name,
 				Color:     exportTag.Color,
-				CreatedAt: time.Now(),
+				CreatedAt: exportTag.CreatedAt,
+			}
+			if tag.CreatedAt.IsZero() {
+				tag.CreatedAt = time.Now()
 			}
 			vbolt.Write(tx, TagBkt, tag.Id, &tag)
 			vbolt.SetTargetSingleTerm(tx, TagByFamilyIndex, tag.Id, tag.FamilyId)
