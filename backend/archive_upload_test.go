@@ -289,8 +289,8 @@ func TestOtherWritesGoThroughWhileAnImportStagesMedia(t *testing.T) {
 	if status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
 		t.Fatalf("import finished as %+v", status)
 	}
-	if status.StagedMedia != status.Result.ImportedPhotos {
-		t.Errorf("staged %d files for %d imported photos", status.StagedMedia, status.Result.ImportedPhotos)
+	if r := status.Result; r.ImportedVideos == 0 || status.StagedMedia != r.ImportedPhotos+r.ImportedVideos {
+		t.Errorf("staged %d files for %d photos and %d videos", status.StagedMedia, r.ImportedPhotos, r.ImportedVideos)
 	}
 	if len(jobs) != status.Result.ImportedPhotos {
 		t.Errorf("%d photos queued for processing, %d imported", len(jobs), status.Result.ImportedPhotos)
@@ -298,6 +298,16 @@ func TestOtherWritesGoThroughWhileAnImportStagesMedia(t *testing.T) {
 	for _, job := range jobs {
 		if _, err := os.Stat(photoOriginalPath(job.FilePath)); err != nil {
 			t.Errorf("photo %d is queued without its file: %v", job.ImageId, err)
+		}
+	}
+	var images []Image
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { images = GetFamilyImages(tx, restorer.FamilyId) })
+	for _, image := range images {
+		if !image.IsVideo() {
+			continue
+		}
+		if _, err := activeMediaStore().Stat(context.Background(), image.OriginalKey); err != nil {
+			t.Errorf("video %d was imported without its file: %v", image.Id, err)
 		}
 	}
 }

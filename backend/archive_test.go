@@ -49,16 +49,8 @@ func TestArchiveSeedFillsEveryArchivedBucket(t *testing.T) {
 
 func isVideoRow(row archiveRow) bool { return strings.HasPrefix(row["Media"], "video:") }
 
-func pointsAtVideo(row archiveRow) bool { return strings.HasPrefix(row["PhotoId"], "video:") }
-
 // Each later family archive ticket deletes the entries it fixes.
 var knownArchiveDrops = []archiveDrop{
-	{"images", "", isVideoRow, "videos and their files are not imported"},
-	{"photo_person", "", pointsAtVideo, "videos and their files are not imported"},
-	{"photo_tags", "", pointsAtVideo, "videos and their files are not imported"},
-	{"video_transcripts", "", nil, "transcripts are not imported"},
-	{"families", "Name", nil, "family settings are not exported"},
-	{"families", "VideoEnabled", nil, "family settings are not exported"},
 	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
 	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
 	{"activities", "CreatedAt", nil, "createdAt is reset"},

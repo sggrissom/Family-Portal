@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"archive/zip"
+	"context"
 	"errors"
 	"family/cfg"
 	"fmt"
@@ -11,7 +13,7 @@ import (
 
 // An Everything import unpacks and hashes its media here before its write
 // transaction opens, so the transaction itself only writes records. The root
-// sits beside the static directory so a staged file moves into place with a
+// sits beside the static directory so a staged photo moves into place with a
 // rename.
 var archiveStagingRoot = filepath.Join(filepath.Dir(filepath.Clean(cfg.StaticDir)), "import-staging")
 
@@ -23,17 +25,20 @@ type stagedMedia struct {
 	size int64
 }
 
+// archiveStaging holds an import's staged photos and videos, by their id in
+// the archive.
 type archiveStaging struct {
-	dir   string
-	files map[int]stagedMedia
+	dir      string
+	files    map[int]stagedMedia
+	scope    map[int]bool
+	progress func(staged int) error
 }
 
-// stageArchiveMedia unpacks the photos the import will consider, keyed by
-// their id in the archive. A file that can't be read is left out, and the
-// import skips its photo. progress runs after each file; an error from it
-// stops the staging.
+// stageArchiveMedia unpacks the photos and videos the import will consider.
+// A file that can't be read is left out, and the import skips its media.
+// progress runs after each file; an error from it stops the staging.
 func stageArchiveMedia(archive familyArchive, req ImportDataRequest, keep bool, progress func(staged int) error) (staging *archiveStaging, err error) {
-	staging = &archiveStaging{files: map[int]stagedMedia{}}
+	staging = &archiveStaging{files: map[int]stagedMedia{}, scope: map[int]bool{}, progress: progress}
 	if keep {
 		if err = os.MkdirAll(archiveStagingRoot, 0755); err != nil {
 			return staging, err
@@ -42,39 +47,50 @@ func stageArchiveMedia(archive familyArchive, req ImportDataRequest, keep bool, 
 			return staging, err
 		}
 	}
-	scope := map[int]bool{}
 	for _, p := range filterPeople(archive.People, req.FilterFamilyIds, req.FilterPersonIds) {
-		scope[p.Id] = true
+		staging.scope[p.Id] = true
 	}
 	for _, photo := range archive.Photos {
-		zf := archive.media[photo.ZipPath]
-		if zf == nil || !photoInFilter(photo.PersonIds, scope) {
-			continue
+		if err = staging.stage(archive.media[photo.ZipPath], photo.Id, photo.PersonIds); err != nil {
+			return staging, err
 		}
-		if _, done := staging.files[photo.Id]; done {
-			continue
-		}
-		staged := stagedMedia{size: int64(zf.UncompressedSize64)}
-		if keep {
-			staged.path = filepath.Join(staging.dir, fmt.Sprintf("%d%s", photo.Id, filepath.Ext(photo.ZipPath)))
-		}
-		if staged.hash, err = unpackZipEntry(zf.Open, staged.path); err != nil {
-			LogWarn(LogCategoryPhoto, "Import could not read a photo", map[string]interface{}{"path": photo.ZipPath, "error": err.Error()})
-			err = nil
-			continue
-		}
-		staging.files[photo.Id] = staged
-		if err = progress(len(staging.files)); err != nil {
-			staging.cleanup()
+	}
+	for _, video := range archive.Videos {
+		if err = staging.stage(archive.media[video.zipPath()], video.Id, video.PersonIds); err != nil {
 			return staging, err
 		}
 	}
 	return staging, nil
 }
 
-func photoInFilter(personIds []int, scope map[int]bool) bool {
+func (s *archiveStaging) stage(zf *zip.File, id int, personIds []int) error {
+	if zf == nil || !s.inFilter(personIds) {
+		return nil
+	}
+	if _, done := s.files[id]; done {
+		return nil
+	}
+	staged := stagedMedia{size: int64(zf.UncompressedSize64)}
+	if s.dir != "" {
+		staged.path = filepath.Join(s.dir, fmt.Sprintf("%d%s", id, filepath.Ext(zf.Name)))
+	}
+	hash, err := unpackZipEntry(zf.Open, staged.path)
+	if err != nil {
+		LogWarn(LogCategoryPhoto, "Import could not read a media file", map[string]interface{}{"path": zf.Name, "error": err.Error()})
+		return nil
+	}
+	staged.hash = hash
+	s.files[id] = staged
+	if err := s.progress(len(s.files)); err != nil {
+		s.cleanup()
+		return err
+	}
+	return nil
+}
+
+func (s *archiveStaging) inFilter(personIds []int) bool {
 	for _, id := range personIds {
-		if scope[id] {
+		if s.scope[id] {
 			return true
 		}
 	}
@@ -108,8 +124,7 @@ func (s *archiveStaging) cleanup() {
 	}
 }
 
-// stagedMove puts one staged file at its photo's path once the import has
-// committed.
+// stagedMove puts a staged photo at its path once the import has committed.
 type stagedMove struct {
 	from, to string
 }
@@ -139,4 +154,22 @@ func (m stagedMove) run() error {
 		return errors.Join(errors.New("could not move a staged photo"), err)
 	}
 	return nil
+}
+
+// stagedUpload puts a staged video in the media store once the import has
+// committed.
+type stagedUpload struct {
+	store       MediaStore
+	from, key   string
+	size        int64
+	contentType string
+}
+
+func (u stagedUpload) run() error {
+	in, err := os.Open(u.from)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	return u.store.Put(context.Background(), u.key, in, u.size, u.contentType)
 }
