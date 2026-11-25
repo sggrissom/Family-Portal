@@ -131,7 +131,7 @@ var archiveIgnored = map[string]bool{
 	"families.InviteCode": true, "families.Creation": true,
 	"images.FilePath": true, "images.OriginalKey": true, "images.PlaybackKey": true,
 	"images.Status": true, "images.AnalysisStatus": true, "images.Width": true, "images.Height": true,
-	"images.DerivedBytes": true, "images.ProcessingError": true, "images.VideoCodec": true, "images.AudioCodec": true,
+	"images.DerivedBytes": true, "images.ContentHash": true, "images.ProcessingError": true, "images.VideoCodec": true, "images.AudioCodec": true,
 	"people.Age": true, "people.FaceDescriptor": true, "photo_faces.Descriptor": true,
 }
 
