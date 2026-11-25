@@ -1669,6 +1669,7 @@ export interface ArchiveImportStatus {
     dryRun: boolean
     records: number
     media: number
+    stagedMedia: number
     result: ImportDataResponse | null
     error: string
 }

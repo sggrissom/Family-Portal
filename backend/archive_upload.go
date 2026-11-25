@@ -56,6 +56,8 @@ type ArchiveImport struct {
 	State         ArchiveImportState
 	// Imported is set once a real import commits; the upload is then used up.
 	Imported bool
+	// Discarded is set once the uploaded zip is deleted.
+	Discarded bool
 
 	PreviewOnly      bool
 	DryRun           bool
@@ -66,6 +68,7 @@ type ArchiveImport struct {
 
 	Records    int
 	Media      int
+	Staged     int
 	ResultJson string
 	Error      string
 
@@ -75,7 +78,7 @@ type ArchiveImport struct {
 }
 
 func PackArchiveImport(self *ArchiveImport, buf *vpack.Buffer) {
-	vpack.Version(1, buf)
+	version := vpack.Version(2, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.UserId, buf)
@@ -97,6 +100,10 @@ func PackArchiveImport(self *ArchiveImport, buf *vpack.Buffer) {
 	vpack.Time(&self.CreatedAt, buf)
 	vpack.Time(&self.ExpiresAt, buf)
 	vpack.Time(&self.UpdatedAt, buf)
+	if version >= 2 {
+		vpack.Bool(&self.Discarded, buf)
+		vpack.Int(&self.Staged, buf)
+	}
 }
 
 var ArchiveImportBkt = vbolt.Bucket(&cfg.Info, "archive_imports", vpack.FInt, PackArchiveImport)
@@ -266,6 +273,9 @@ func CompleteArchiveImport(ctx *vbeam.Context, req CompleteArchiveImportRequest)
 	case job.Imported:
 		err = errors.New("This archive has already been imported.")
 		return
+	case job.Discarded:
+		err = errors.New("This upload has been cleared away. Please upload the archive again.")
+		return
 	case job.State == ArchiveImportUploading && time.Now().After(job.ExpiresAt.Add(videoCompletionGrace)):
 		err = errors.New("This upload expired before it finished. Please try again.")
 		return
@@ -294,7 +304,7 @@ func CompleteArchiveImport(ctx *vbeam.Context, req CompleteArchiveImportRequest)
 	vbeam.UseWriteTx(ctx)
 	db := ctx.Tx.DB()
 	job = getArchiveImport(ctx.Tx, req.ImportId)
-	if job.State.running() || job.Imported {
+	if job.State.running() || job.Imported || job.Discarded {
 		return archiveImportStatus(job), nil
 	}
 	o := req.Options
@@ -322,6 +332,7 @@ type ArchiveImportStatus struct {
 	DryRun      bool                `json:"dryRun"`
 	Records     int                 `json:"records"`
 	Media       int                 `json:"media"`
+	StagedMedia int                 `json:"stagedMedia"`
 	Result      *ImportDataResponse `json:"result"`
 	Error       string              `json:"error"`
 }
@@ -334,6 +345,7 @@ func archiveImportStatus(job ArchiveImport) ArchiveImportStatus {
 		DryRun:      job.DryRun,
 		Records:     job.Records,
 		Media:       job.Media,
+		StagedMedia: job.Staged,
 		Error:       job.Error,
 	}
 	if job.ResultJson != "" {
@@ -434,17 +446,24 @@ func failArchiveImport(db *vbolt.DB, id int, err error) {
 }
 
 func runArchiveImportJob(db *vbolt.DB, id int) {
-	defer func() {
-		if r := recover(); r != nil {
-			failArchiveImport(db, id, fmt.Errorf("The import stopped unexpectedly: %v", r))
-		}
-	}()
-
 	var job ArchiveImport
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
 	if job.State != ArchiveImportQueued {
 		return
 	}
+	req := job.options()
+	writes := !req.PreviewOnly && !req.DryRun
+	var staging *archiveStaging
+	defer func() {
+		if r := recover(); r != nil {
+			failArchiveImport(db, id, fmt.Errorf("The import stopped unexpectedly: %v", r))
+		}
+		staging.cleanup()
+		// A preview or dry run keeps the upload for the import that follows it.
+		if writes {
+			discardArchiveUpload(db, id)
+		}
+	}()
 	job = setArchiveImportState(db, id, ArchiveImportStaging, nil)
 
 	archive, closeArchive, err := openUploadedArchive(activeMediaStore(), job.Key, int64(job.DeclaredBytes))
@@ -453,13 +472,25 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		return
 	}
 	defer closeArchive()
-	job = setArchiveImportState(db, id, ArchiveImportImporting, func(job *ArchiveImport) {
+	setArchiveImportState(db, id, ArchiveImportStaging, func(job *ArchiveImport) {
 		job.Records = archiveRecordCount(archive.ImportDataStructure)
 		job.Media = len(archive.media)
 	})
 
-	req := job.options()
-	writes := !req.PreviewOnly && !req.DryRun
+	if !req.PreviewOnly {
+		staging, err = stageArchiveMedia(archive, req, writes, archiveStagingProgress(db, id))
+		if err != nil {
+			failArchiveImport(db, id, err)
+			return
+		}
+		archive.staged = staging.files
+	}
+	job = setArchiveImportState(db, id, ArchiveImportImporting, func(job *ArchiveImport) {
+		if staging != nil {
+			job.Staged = len(staging.files)
+		}
+	})
+
 	var resp ImportDataResponse
 	var done archiveImported
 	withTx := vbolt.WithWriteTx
@@ -487,6 +518,88 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		return
 	}
 	done.queue()
+}
+
+// archiveStagingProgress records how many files are staged, at most about
+// once a second so the progress writes stay out of other writers' way.
+func archiveStagingProgress(db *vbolt.DB, id int) func(staged int) error {
+	var last time.Time
+	return func(staged int) error {
+		if time.Since(last) >= time.Second {
+			last = time.Now()
+			setArchiveImportState(db, id, ArchiveImportStaging, func(job *ArchiveImport) { job.Staged = staged })
+		}
+		if archiveStagedHook != nil {
+			return archiveStagedHook(staged)
+		}
+		return nil
+	}
+}
+
+// archiveStagedHook, when a test sets it, runs after each staged file.
+var archiveStagedHook func(staged int) error
+
+// discardArchiveUpload deletes the uploaded zip. A delete that fails is left
+// to the media janitor to retry.
+func discardArchiveUpload(db *vbolt.DB, id int) {
+	var job ArchiveImport
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
+	if job.Id == 0 || job.Discarded {
+		return
+	}
+	var deleteErr error
+	if store := activeMediaStore(); store != nil {
+		deleteErr = store.Delete(context.Background(), job.Key)
+	}
+	vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+		job = getArchiveImport(tx, id)
+		job.Discarded = true
+		if deleteErr != nil && !errors.Is(deleteErr, ErrMediaNotFound) {
+			queueMediaDeletionTx(tx, job.Key)
+		}
+		writeArchiveImport(tx, &job)
+		vbolt.TxCommit(tx)
+	})
+}
+
+// An upload left unused this long, after it began or after its last
+// preview, is deleted by the media janitor.
+const abandonedArchiveUploadAge = 24 * time.Hour
+
+// expireArchiveUploads marks abandoned uploads discarded and queues their
+// zips for deletion. An upload that never finished also frees its space.
+func expireArchiveUploads(db *vbolt.DB, now time.Time) (expired int) {
+	cutoff := now.Add(-abandonedArchiveUploadAge)
+	abandoned := func(job ArchiveImport) bool {
+		return job.Id != 0 && !job.Discarded && !job.State.running() && job.UpdatedAt.Before(cutoff)
+	}
+	var ids []int
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		vbolt.IterateAll(tx, ArchiveImportBkt, func(id int, job ArchiveImport) bool {
+			if abandoned(job) {
+				ids = append(ids, id)
+			}
+			return true
+		})
+	})
+	for _, id := range ids {
+		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {
+			job := getArchiveImport(tx, id)
+			if !abandoned(job) {
+				return
+			}
+			if job.State == ArchiveImportUploading {
+				job.State = ArchiveImportFailed
+				job.Error = "This upload expired before it finished. Please try again."
+			}
+			job.Discarded = true
+			queueMediaDeletionTx(tx, job.Key)
+			writeArchiveImport(tx, &job)
+			vbolt.TxCommit(tx)
+			expired++
+		})
+	}
+	return
 }
 
 // markArchiveImportDone records the result, inside the import's own

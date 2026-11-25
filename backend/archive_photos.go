@@ -1,11 +1,8 @@
 package backend
 
 import (
-	"archive/zip"
 	"family/cfg"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -216,9 +213,9 @@ func importPhotos(
 	ownerUserId int,
 	photos []ExportPhoto,
 	l *archiveLedger,
-	zipFiles map[string]*zip.File,
+	staged map[int]stagedMedia,
 	dryRun bool,
-) (imported, skipped int, jobs []PhotoProcessingJob, warnings []string) {
+) (imported, skipped int, jobs []importedPhoto, warnings []string) {
 	// Going over stops the photo loop rather than failing the import: the people
 	// and measurements already written in this transaction are worth keeping.
 	used := FamilyStorageUsage(tx, familyId)
@@ -232,9 +229,7 @@ func importPhotos(
 			continue
 		}
 		scoped = append(scoped, photo)
-		if zf, ok := zipFiles[photo.ZipPath]; ok {
-			incoming += int64(zf.UncompressedSize64)
-		}
+		incoming += staged[photo.Id].size
 	}
 	if diskErr := CheckDiskHeadroom(cfg.StaticDir, incoming, cfg.MinFreeDiskBytes); diskErr != nil && !dryRun {
 		return 0, len(scoped), nil, []string{
@@ -244,17 +239,12 @@ func importPhotos(
 
 	existing := familyMediaByHash(tx, familyId)
 	for _, photo := range scoped {
-		zf, exists := zipFiles[photo.ZipPath]
+		file, exists := staged[photo.Id]
 		if !exists {
 			skipped++
 			continue
 		}
-
-		hash, err := zipEntryContentHash(zf)
-		if err != nil {
-			skipped++
-			continue
-		}
+		hash := file.hash
 		if id, ok := takeMediaByHash(existing, hash); ok {
 			l.photos[photo.Id] = id
 			skipped++
@@ -268,7 +258,7 @@ func importPhotos(
 		}
 
 		// Tracked locally; re-reading usage per photo would be quadratic.
-		size := int64(zf.UncompressedSize64)
+		size := file.size
 		if cfg.FamilyStorageQuotaBytes > 0 && used+size > cfg.FamilyStorageQuotaBytes {
 			quotaReached = true
 			skipped++
@@ -286,14 +276,6 @@ func importPhotos(
 		}
 		filePath := "photos/" + uniqueFilename
 		mimeType := zipExtToMime(filepath.Ext(filePath))
-
-		if !dryRun {
-			if err := writeZipEntryToDisk(zf, photoOriginalPath(filePath)); err != nil {
-				LogWarn(LogCategoryPhoto, "Import could not write a photo", map[string]interface{}{"path": photo.ZipPath, "error": err.Error()})
-				skipped++
-				continue
-			}
-		}
 
 		var image Image
 		image.Id = vbolt.NextIntId(tx, ImagesBkt)
@@ -324,11 +306,14 @@ func importPhotos(
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
 		ReindexPhotoDates(tx, image.Id)
 		l.photos[photo.Id] = image.Id
-		jobs = append(jobs, PhotoProcessingJob{
-			ImageId:  image.Id,
-			FamilyId: familyId,
-			FilePath: filePath,
-			MimeType: mimeType,
+		jobs = append(jobs, importedPhoto{
+			PhotoProcessingJob: PhotoProcessingJob{
+				ImageId:  image.Id,
+				FamilyId: familyId,
+				FilePath: filePath,
+				MimeType: mimeType,
+			},
+			file: stagedMove{from: file.path, to: photoOriginalPath(filePath)},
 		})
 
 		importPhotoLinks(tx, image, photo, l)
@@ -343,35 +328,6 @@ func importPhotos(
 		))
 	}
 	return
-}
-
-func writeZipEntryToDisk(zf *zip.File, diskPath string) error {
-	if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil {
-		return err
-	}
-	rc, err := zf.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-
-	out, err := os.Create(diskPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, rc)
-	return err
-}
-
-func zipEntryContentHash(zf *zip.File) (string, error) {
-	rc, err := zf.Open()
-	if err != nil {
-		return "", err
-	}
-	defer rc.Close()
-	return mediaContentHash(rc)
 }
 
 func zipExtToMime(ext string) string {

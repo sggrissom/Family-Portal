@@ -18,10 +18,12 @@ const archiveFormatVersion = 1
 var errUnreadableArchive = errors.New("That file is not a valid Family Record export. Check that you picked the right file.")
 
 // familyArchive is one archive in the current shape, whichever file it came
-// from. media holds the files a zip carries; a Records file has none.
+// from. media holds the files a zip carries; a Records file has none. staged
+// holds the photos unpacked for this import, by their id in the archive.
 type familyArchive struct {
 	ImportDataStructure
-	media map[string]*zip.File
+	media  map[string]*zip.File
+	staged map[int]stagedMedia
 }
 
 // archiveLedger maps the archive's ids to the target family's. Each step of
@@ -50,7 +52,14 @@ func newArchiveLedger() *archiveLedger {
 // archiveImported is the work left for after the import commits.
 type archiveImported struct {
 	milestoneIds []int
-	photoJobs    []PhotoProcessingJob
+	photoJobs    []importedPhoto
+}
+
+// importedPhoto is a committed photo whose staged file still has to be moved
+// into place before it is processed.
+type importedPhoto struct {
+	PhotoProcessingJob
+	file stagedMove
 }
 
 func (done archiveImported) queue() {
@@ -58,7 +67,11 @@ func (done archiveImported) queue() {
 		QueueMilestoneEmbedding(id)
 	}
 	for _, job := range done.photoJobs {
-		if err := QueuePhotoProcessing(job); err != nil {
+		err := job.file.run()
+		if err == nil {
+			err = QueuePhotoProcessing(job.PhotoProcessingJob)
+		}
+		if err != nil {
 			LogWarn(LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
 				"photoId": job.ImageId,
 				"error":   err.Error(),
@@ -172,7 +185,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	if archive.media != nil {
 		var warnings []string
 		resp.ImportedPhotos, resp.SkippedPhotos, done.photoJobs, warnings =
-			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.media, req.DryRun)
+			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged, req.DryRun)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
 	} else {

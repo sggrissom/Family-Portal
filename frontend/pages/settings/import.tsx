@@ -152,6 +152,9 @@ const JobProgress = ({ form }: { form: ImportForm }) => {
           {job.records} records and {job.media} photo and video files in this archive.
         </p>
       )}
+      {job.state === "staging" && job.stagedMedia > 0 && (
+        <p>{job.stagedMedia} files unpacked so far.</p>
+      )}
       <p>You can leave this page; the import keeps running.</p>
     </div>
   );
