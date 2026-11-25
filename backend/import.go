@@ -67,6 +67,7 @@ type ImportDataStructure struct {
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
 	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
+	InterviewDismissed []string                  `json:"interviewDismissedKeys,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`

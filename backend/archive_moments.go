@@ -22,6 +22,7 @@ type ExportMilestone struct {
 	CreatedAt     time.Time   `json:"createdAt"`
 	PersonName    string      `json:"personName"`
 	TagNames      []string    `json:"tagNames,omitempty"`
+	PhotoIds      []int       `json:"photoIds,omitempty"`
 	InterviewId   int         `json:"interviewId,omitempty"`
 	QuestionId    int         `json:"questionId,omitempty"`
 	Note          string      `json:"note,omitempty"`
@@ -68,6 +69,7 @@ func buildMilestoneExport(tx *vbolt.Tx, familyId int, people []Person, tagIdToNa
 			CreatedAt:     milestone.CreatedAt,
 			PersonName:    personName,
 			TagNames:      tagNames,
+			PhotoIds:      GetMilestonePhotoIds(tx, milestone.Id),
 			InterviewId:   milestone.InterviewId,
 			QuestionId:    milestone.QuestionId,
 			Note:          milestone.Note,
@@ -143,8 +145,9 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, familyId
 			Context:       milestone.Context,
 			MilestoneDate: milestone.MilestoneDate,
 			RecordTime:    recordTime,
-			CreatedAt:     time.Now(),
+			CreatedAt:     archiveCreatedAt(milestone.CreatedAt),
 			CreatedBy:     recorderOf(milestone.RecordedBy),
+			Note:          cleanAnswerNote(milestone.Note),
 		}
 		writeMilestone(tx, &newMilestone)
 		l.moments[milestone.Id] = newMilestone.Id
@@ -162,6 +165,48 @@ func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, familyId
 	return importedCount, skippedCount, errors, ids
 }
 
+// archiveCreatedAt keeps when a record was added, or stamps it now when the
+// archive predates carrying it.
+func archiveCreatedAt(at time.Time) time.Time {
+	if at.IsZero() {
+		return time.Now()
+	}
+	return at
+}
+
+// linkMomentPhotos reattaches each moment's photos once both are imported.
+// A link to a photo the archive didn't carry is left out.
+func linkMomentPhotos(tx *vbolt.Tx, milestones []ExportMilestone, familyId int, l *archiveLedger) {
+	for _, m := range milestones {
+		momentId, ok := l.moments[m.Id]
+		if !ok {
+			continue
+		}
+		for _, photoId := range m.PhotoIds {
+			if id, ok := l.photos[photoId]; ok {
+				addPhotoToMilestone(tx, momentId, id, familyId)
+			}
+		}
+	}
+}
+
+// mapExistingInterviews links the interviews a family already has, so books
+// can point at them when the import leaves moments out.
+func mapExistingInterviews(tx *vbolt.Tx, interviews []ExportInterview, l *archiveLedger) {
+	for _, ei := range interviews {
+		personId, ok := l.people[ei.PersonId]
+		if !ok {
+			continue
+		}
+		for _, existing := range personInterviews(tx, personId) {
+			if existing.Date.Equal(dayStart(ei.Date)) {
+				l.interviews[ei.Id] = existing.Id
+				break
+			}
+		}
+	}
+}
+
 // mapExistingMoments links the moments a family already has, so books can
 // point at them when the import leaves moments out.
 func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLedger) {
@@ -175,15 +220,16 @@ func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLe
 }
 
 type ExportInterviewQuestion struct {
-	Id          int    `json:"id"`
-	Text        string `json:"text"`
-	Section     string `json:"section"`
-	Position    int    `json:"position"`
-	MinAgeYears int    `json:"minAgeYears,omitempty"`
-	MaxAgeYears int    `json:"maxAgeYears,omitempty"`
-	DefaultKey  string `json:"defaultKey,omitempty"`
-	Archived    bool   `json:"archived,omitempty"`
-	OneOff      bool   `json:"oneOff,omitempty"`
+	Id          int       `json:"id"`
+	Text        string    `json:"text"`
+	Section     string    `json:"section"`
+	Position    int       `json:"position"`
+	MinAgeYears int       `json:"minAgeYears,omitempty"`
+	MaxAgeYears int       `json:"maxAgeYears,omitempty"`
+	DefaultKey  string    `json:"defaultKey,omitempty"`
+	Archived    bool      `json:"archived,omitempty"`
+	OneOff      bool      `json:"oneOff,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type ExportInterview struct {
@@ -207,7 +253,7 @@ func buildInterviewExport(tx *vbolt.Tx, familyId int) ([]ExportInterviewQuestion
 		questions = append(questions, ExportInterviewQuestion{
 			Id: q.Id, Text: q.Text, Section: q.Section, Position: q.Position,
 			MinAgeYears: q.MinAgeYears, MaxAgeYears: q.MaxAgeYears, DefaultKey: q.DefaultKey,
-			Archived: q.Archived, OneOff: q.OneOff,
+			Archived: q.Archived, OneOff: q.OneOff, CreatedAt: q.CreatedAt,
 		})
 	}
 	interviews := []ExportInterview{}
@@ -239,11 +285,14 @@ type interviewImportResult struct {
 // mapQuestions finds or creates a family question for each exported one:
 // built-ins by key, family questions by their text, one-offs always anew.
 func (in interviewImport) mapQuestions(tx *vbolt.Tx, exported []ExportInterviewQuestion) map[int]int {
+	seededHere := !familyQuestionList(tx, in.familyId).Seeded
 	ensureFamilyQuestions(tx, in.familyId)
 	byKey := map[string]int{}
 	byText := map[string]int{}
+	rows := map[int]InterviewQuestion{}
 	position := 0
 	for _, q := range familyQuestions(tx, in.familyId) {
+		rows[q.Id] = q
 		if q.DefaultKey != "" {
 			byKey[q.DefaultKey] = q.Id
 		}
@@ -257,6 +306,10 @@ func (in interviewImport) mapQuestions(tx *vbolt.Tx, exported []ExportInterviewQ
 	for _, eq := range exported {
 		if id, ok := byKey[eq.DefaultKey]; ok && eq.DefaultKey != "" {
 			mapping[eq.Id] = id
+			if q := rows[id]; seededHere && !eq.CreatedAt.IsZero() && !q.CreatedAt.Equal(eq.CreatedAt) {
+				q.CreatedAt = eq.CreatedAt
+				writeInterviewQuestion(tx, q)
+			}
 			continue
 		}
 		if id, ok := byText[strings.ToLower(eq.Text)]; ok && !eq.OneOff {
@@ -287,6 +340,10 @@ func (in interviewImport) mapQuestions(tx *vbolt.Tx, exported []ExportInterviewQ
 			created = true
 		}
 		q = createInterviewQuestion(tx, q)
+		if !eq.CreatedAt.IsZero() {
+			q.CreatedAt = eq.CreatedAt
+			writeInterviewQuestion(tx, q)
+		}
 		if !q.OneOff {
 			byText[strings.ToLower(text)] = q.Id
 		}
@@ -384,7 +441,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			m := Milestone{
 				Id: vbolt.NextIntId(tx, MilestoneBkt), PersonId: personId, FamilyId: person.FamilyId,
 				Description: text, Category: CategoryInterview, Context: em.Context, MilestoneDate: date,
-				CreatedAt: time.Now(), CreatedBy: recorderOf(em.RecordedBy), InterviewId: interview.Id, QuestionId: q,
+				CreatedAt: archiveCreatedAt(em.CreatedAt), CreatedBy: recorderOf(em.RecordedBy), InterviewId: interview.Id, QuestionId: q,
 				Note: cleanAnswerNote(em.Note),
 			}
 			if m.Context == "" {
@@ -445,6 +502,9 @@ type ExportBook struct {
 	ShowGrowth   bool             `json:"showGrowth"`
 	Items        []ExportBookItem `json:"items"`
 	Excluded     []ExportBookItem `json:"excluded,omitempty"`
+	CreatedAt    time.Time        `json:"createdAt"`
+	UpdatedAt    time.Time        `json:"updatedAt"`
+	ReviewedAt   time.Time        `json:"reviewedAt"`
 }
 
 var bookItemKindNames = map[BookItemKind]string{
@@ -488,6 +548,9 @@ func buildBookExport(tx *vbolt.Tx, familyId int) []ExportBook {
 			ShowGrowth:   book.ShowGrowth,
 			Items:        exportBookItems(book.Items),
 			Excluded:     exportBookItems(book.Excluded),
+			CreatedAt:    book.CreatedAt,
+			UpdatedAt:    book.UpdatedAt,
+			ReviewedAt:   book.ReviewedAt,
 		})
 	}
 	return books
@@ -577,6 +640,9 @@ func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, ski
 			UpdatedAt:    now,
 			ReviewedAt:   now,
 		}
+		if !source.CreatedAt.IsZero() {
+			book.CreatedAt, book.UpdatedAt, book.ReviewedAt = source.CreatedAt, source.UpdatedAt, source.ReviewedAt
+		}
 		if book.Preset == "" {
 			book.Preset = BookPresetFirstYear
 		}
@@ -621,18 +687,30 @@ func exportInterviewCadence(tx *vbolt.Tx, familyId int) *InterviewCadence {
 	return &cadence
 }
 
-// importInterviewCadence takes the exported cadence only when the family
-// hasn't chosen one of its own.
-func importInterviewCadence(tx *vbolt.Tx, familyId int, exported *InterviewCadence) {
-	if exported == nil {
-		return
-	}
-	cadence, err := validCadence(*exported)
+// importInterviewListSettings takes the exported cadence only when the family
+// hasn't chosen one of its own, and dismisses the built-ins the archive
+// dismissed unless the family still has them.
+func importInterviewListSettings(tx *vbolt.Tx, familyId int, exported *InterviewCadence, dismissed []string) {
 	list := familyQuestionList(tx, familyId)
-	if err != nil || list.Cadence != "" {
-		return
+	changed := false
+	if exported != nil {
+		if cadence, err := validCadence(*exported); err == nil && list.Cadence == "" {
+			list.Cadence = cadence.Kind
+			list.CadenceMonth = cadence.Month
+			changed = true
+		}
 	}
-	list.Cadence = cadence.Kind
-	list.CadenceMonth = cadence.Month
-	writeQuestionList(tx, list)
+	have := map[string]bool{}
+	for _, q := range familyQuestions(tx, familyId) {
+		have[q.DefaultKey] = true
+	}
+	for _, key := range dismissed {
+		if _, known := defaultInterviewQuestionByKey(key); known && !have[key] && !slices.Contains(list.DismissedKeys, key) {
+			list.DismissedKeys = append(list.DismissedKeys, key)
+			changed = true
+		}
+	}
+	if changed {
+		writeQuestionList(tx, list)
+	}
 }

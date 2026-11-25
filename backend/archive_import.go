@@ -181,14 +181,17 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 			photos, resp.SkippedVideos))
 	}
 
+	importInterviewListSettings(tx, familyId, archive.InterviewCadence, archive.InterviewDismissed)
 	if req.ImportMilestones {
 		interviews := interviewImport{familyId: familyId, ledger: l}.run(tx, archive.InterviewQuestions, archive.Interviews, archive.Milestones)
 		resp.ImportedInterviews = interviews.imported
 		resp.SkippedInterviews = interviews.skipped
 		resp.Warnings = append(resp.Warnings, interviews.warnings...)
 		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
+		linkMomentPhotos(tx, archive.Milestones, familyId, l)
+	} else {
+		mapExistingInterviews(tx, archive.Interviews, l)
 	}
-	importInterviewCadence(tx, familyId, archive.InterviewCadence)
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
 		var warnings []string
