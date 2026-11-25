@@ -87,13 +87,13 @@ func TestFamilyArchiveRoundTrip(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	source := readArchiveContents(t, fx.db, fx.familyId)
 
-	bundle := fx.exportBundle(t, fx.owner)
+	bundle := fx.exportBundle(t, fx.owner, "with_photos")
 	restorer := fx.newUser(t, "restorer")
-	fx.importBundle(t, restorer, bundle)
+	fx.importBundle(t, restorer, bundle, importEverything)
 	restored := readArchiveContents(t, fx.db, restorer.FamilyId)
 	assertArchiveMatches(t, source, restored, knownArchiveDrops)
 
-	fx.importBundle(t, restorer, bundle)
+	fx.importBundle(t, restorer, bundle, importEverything)
 	reimported := readArchiveContents(t, fx.db, restorer.FamilyId)
 	assertArchiveMatches(t, restored, reimported, knownReimportDrops)
 }
@@ -120,7 +120,7 @@ func TestFormatV1ArchiveImports(t *testing.T) {
 	var resp ImportDataResponse
 	fx.call(t, restorer, func(ctx *vbeam.Context) {
 		resp, err = ImportData(ctx, ImportDataRequest{
-			JsonData: string(data), MergeStrategy: "merge_people", ImportMilestones: true, ImportActivities: true,
+			JsonData: string(data), ImportMilestones: true, ImportActivities: true,
 		})
 	})
 	if err != nil {
@@ -149,9 +149,9 @@ func TestFormatV1ArchiveImports(t *testing.T) {
 	}
 }
 
-func (fx *archiveFixture) exportBundle(t *testing.T, user User) []byte {
+func (fx *archiveFixture) exportBundle(t *testing.T, user User, mode string) []byte {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/api/export-bundle?mode=with_photos", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/export-bundle?mode="+mode, nil)
 	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
 	rec := httptest.NewRecorder()
 	exportBundleHandler(rec, req)
@@ -161,23 +161,11 @@ func (fx *archiveFixture) exportBundle(t *testing.T, user User) []byte {
 	return rec.Body.Bytes()
 }
 
-func (fx *archiveFixture) importBundle(t *testing.T, user User, bundle []byte) ImportDataResponse {
+var importEverything = ImportDataRequest{ImportMilestones: true, ImportActivities: true}
+
+func (fx *archiveFixture) importBundle(t *testing.T, user User, bundle []byte, options ImportDataRequest) ImportDataResponse {
 	t.Helper()
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, err := form.CreateFormFile("file", "family.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(bundle); err != nil {
-		t.Fatal(err)
-	}
-	form.Close()
-	req := httptest.NewRequest(http.MethodPost, "/api/import-bundle", &body)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
-	rec := httptest.NewRecorder()
-	importBundleHandler(rec, req)
+	rec := postImportBundle(t, user, bundle, options)
 	var resp ImportDataResponse
 	if rec.Code != http.StatusOK {
 		t.Fatalf("import = %d %s", rec.Code, rec.Body.String())
@@ -189,6 +177,33 @@ func (fx *archiveFixture) importBundle(t *testing.T, user User, bundle []byte) I
 		t.Cleanup(func() { deletePhotoFiles(Image{FilePath: job.FilePath}) })
 	}
 	return resp
+}
+
+func postImportBundle(t *testing.T, user User, bundle []byte, options ImportDataRequest) *httptest.ResponseRecorder {
+	t.Helper()
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile("file", "family.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(bundle); err != nil {
+		t.Fatal(err)
+	}
+	if err := form.WriteField("options", string(encoded)); err != nil {
+		t.Fatal(err)
+	}
+	form.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/import-bundle", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
+	rec := httptest.NewRecorder()
+	importBundleHandler(rec, req)
+	return rec
 }
 
 func drainPhotoJobs() (jobs []PhotoProcessingJob) {

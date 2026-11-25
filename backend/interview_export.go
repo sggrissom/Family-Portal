@@ -59,19 +59,16 @@ func buildInterviewExport(tx *vbolt.Tx, familyId int) ([]ExportInterviewQuestion
 }
 
 type interviewImport struct {
-	familyId        int
-	personIdMapping map[int]int
-	tagNameToId     map[string]int
-	photoIds        map[int]int
+	familyId int
+	ledger   *archiveLedger
 }
 
 type interviewImportResult struct {
-	imported     int
-	skipped      int
-	answers      int
-	warnings     []string
-	interviewIds map[int]int
-	answerIds    []int
+	imported  int
+	skipped   int
+	answers   int
+	warnings  []string
+	answerIds []int
 }
 
 // mapQuestions finds or creates a family question for each exported one:
@@ -142,7 +139,7 @@ func (in interviewImport) mapQuestions(tx *vbolt.Tx, exported []ExportInterviewQ
 // interview on a day the person already has one adds only the answers that
 // interview doesn't have, so importing the same file twice changes nothing.
 func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion, interviews []ExportInterview, milestones []ExportMilestone) interviewImportResult {
-	result := interviewImportResult{interviewIds: map[int]int{}}
+	var result interviewImportResult
 	if len(interviews) == 0 {
 		return result
 	}
@@ -156,7 +153,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 	}
 
 	for _, ei := range interviews {
-		personId, ok := in.personIdMapping[ei.PersonId]
+		personId, ok := in.ledger.people[ei.PersonId]
 		if !ok {
 			continue
 		}
@@ -187,7 +184,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			interview = Interview{
 				Id: vbolt.NextIntId(tx, InterviewBkt), FamilyId: person.FamilyId, PersonId: personId, Date: date,
 				Title: ei.Title, Source: source, Status: status, QuestionIds: []int{}, SkippedIds: []int{},
-				PhotoId: in.photoIds[ei.PhotoId], Notes: ei.Notes, CreatedAt: ei.CreatedAt,
+				PhotoId: in.ledger.photos[ei.PhotoId], Notes: ei.Notes, CreatedAt: ei.CreatedAt,
 				CompletedAt: ei.CompletedAt, Version: 1,
 			}
 			for _, id := range ei.QuestionIds {
@@ -202,18 +199,20 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			}
 		}
 
-		answered := map[int]bool{}
+		answered := map[int]int{}
 		for _, m := range interviewAnswers(tx, interview.Id) {
-			answered[m.QuestionId] = true
+			answered[m.QuestionId] = m.Id
 		}
 		added := 0
 		for _, em := range answersOf[ei.Id] {
 			q := questionIds[em.QuestionId]
 			text := strings.TrimSpace(em.Description)
-			if q == 0 || answered[q] || text == "" {
+			if id := answered[q]; id != 0 {
+				in.ledger.moments[em.Id] = id
+			}
+			if q == 0 || answered[q] != 0 || text == "" {
 				continue
 			}
-			answered[q] = true
 			if !slices.Contains(interview.QuestionIds, q) {
 				interview.QuestionIds = append(interview.QuestionIds, q)
 			}
@@ -227,8 +226,10 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 				m.Context = renderQuestion(GetInterviewQuestionById(tx, q).Text, person, date)
 			}
 			writeMilestone(tx, &m)
+			answered[q] = m.Id
+			in.ledger.moments[em.Id] = m.Id
 			for _, tagName := range em.TagNames {
-				if tagId, ok := in.tagNameToId[strings.ToLower(tagName)]; ok {
+				if tagId, ok := in.ledger.tagByName[strings.ToLower(tagName)]; ok {
 					addTagToMilestone(tx, m.Id, tagId, person.FamilyId)
 				}
 			}
@@ -246,7 +247,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			result.skipped++
 		}
 		if interview.Id > 0 && (!isNew || added > 0 || len(interview.QuestionIds) > 0) {
-			result.interviewIds[ei.Id] = interview.Id
+			in.ledger.interviews[ei.Id] = interview.Id
 		}
 		result.answers += added
 	}

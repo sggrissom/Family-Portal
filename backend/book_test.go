@@ -355,7 +355,7 @@ func TestBookExportImportRemapsReferences(t *testing.T) {
 		}
 	})
 
-	again, _ := bookCall(t, fx, fx.outsider, ImportData, ImportDataRequest{JsonData: string(data), ImportMilestones: true, MergeStrategy: "merge_people"})
+	again, _ := bookCall(t, fx, fx.outsider, ImportData, ImportDataRequest{JsonData: string(data), ImportMilestones: true})
 	if again.ImportedBooks != 0 || again.SkippedBooks != 1 {
 		t.Errorf("re-import imported %d, skipped %d", again.ImportedBooks, again.SkippedBooks)
 	}
@@ -369,12 +369,11 @@ func TestBookImportMapsPhotos(t *testing.T) {
 		bundle, _ = buildExportData(tx, fx.owner.FamilyId)
 	})
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		imported, _, warnings := importBooks(tx, bundle.Books, bookImport{
-			familyId:        fx.owner.FamilyId,
-			personIdMapping: map[int]int{fx.baby.Id: fx.sibling.Id},
-			milestoneIds:    map[int]int{fx.smile.Id: fx.smile.Id},
-			photoIds:        map[int]int{fx.early.Id: fx.early.Id, fx.attached.Id: fx.attached.Id},
-		})
+		ledger := newArchiveLedger()
+		ledger.people = map[int]int{fx.baby.Id: fx.sibling.Id}
+		ledger.moments = map[int]int{fx.smile.Id: fx.smile.Id}
+		ledger.photos = map[int]int{fx.early.Id: fx.early.Id, fx.attached.Id: fx.attached.Id}
+		imported, _, warnings := importBooks(tx, bundle.Books, bookImport{familyId: fx.owner.FamilyId, ledger: ledger})
 		if imported != 1 || len(warnings) != 1 {
 			t.Errorf("imported = %d, warnings = %v (the birthday milestone was not mapped)", imported, warnings)
 		}

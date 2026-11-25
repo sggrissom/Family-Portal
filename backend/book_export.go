@@ -81,36 +81,10 @@ func buildBookExport(tx *vbolt.Tx, familyId int) []ExportBook {
 	return books
 }
 
-// matchImportedMilestones matches each exported milestone to the record it became,
-// whether the import created it or found it already there.
-func matchImportedMilestones(tx *vbolt.Tx, milestones []ExportMilestone, personIdMapping map[int]int) map[int]int {
-	mapping := map[int]int{}
-	byPerson := map[int][]Milestone{}
-	for _, source := range milestones {
-		personId, ok := personIdMapping[source.PersonId]
-		if !ok {
-			continue
-		}
-		if _, loaded := byPerson[personId]; !loaded {
-			byPerson[personId] = GetPersonMilestonesTx(tx, personId)
-		}
-		for _, existing := range byPerson[personId] {
-			if existing.MilestoneDate.Equal(source.MilestoneDate) && existing.Description == source.Description {
-				mapping[source.Id] = existing.Id
-				break
-			}
-		}
-	}
-	return mapping
-}
-
 type bookImport struct {
-	familyId        int
-	userId          int
-	personIdMapping map[int]int
-	milestoneIds    map[int]int
-	photoIds        map[int]int
-	interviewIds    map[int]int
+	familyId int
+	userId   int
+	ledger   *archiveLedger
 }
 
 func (in bookImport) mapItem(item ExportBookItem) (BookItem, bool) {
@@ -119,16 +93,16 @@ func (in bookImport) mapItem(item ExportBookItem) (BookItem, bool) {
 	switch item.Kind {
 	case "milestone":
 		out.Kind = BookItemMilestone
-		out.SourceId, ok = in.milestoneIds[item.SourceId]
+		out.SourceId, ok = in.ledger.moments[item.SourceId]
 		if item.PhotoId != 0 {
-			out.PhotoId = in.photoIds[item.PhotoId]
+			out.PhotoId = in.ledger.photos[item.PhotoId]
 		}
 	case "photo":
 		out.Kind = BookItemPhoto
-		out.SourceId, ok = in.photoIds[item.SourceId]
+		out.SourceId, ok = in.ledger.photos[item.SourceId]
 	case "interview":
 		out.Kind = BookItemInterview
-		out.SourceId, ok = in.interviewIds[item.SourceId]
+		out.SourceId, ok = in.ledger.interviews[item.SourceId]
 	}
 	return out, ok && out.SourceId != 0
 }
@@ -141,7 +115,7 @@ func (in bookImport) mapPeople(source ExportBook) []int {
 	mapped := []int{}
 	seen := map[int]bool{}
 	for _, id := range ids {
-		if newId, ok := in.personIdMapping[id]; ok && !seen[newId] {
+		if newId, ok := in.ledger.people[id]; ok && !seen[newId] {
 			seen[newId] = true
 			mapped = append(mapped, newId)
 		}
@@ -175,7 +149,7 @@ func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, ski
 			Title:        source.Title,
 			StartDate:    source.StartDate,
 			EndDate:      source.EndDate,
-			CoverPhotoId: in.photoIds[source.CoverPhotoId],
+			CoverPhotoId: in.ledger.photos[source.CoverPhotoId],
 			Density:      cleanDensity(source.Density),
 			Categories:   cleanCategories(source.Categories),
 			Match:        cleanMatch(source.Match),

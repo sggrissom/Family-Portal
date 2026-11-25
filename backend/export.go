@@ -199,6 +199,8 @@ type ExportPhoto struct {
 }
 
 type ExportDataStructure struct {
+	FormatVersion int `json:"formatVersion"`
+
 	People     []ImportPerson    `json:"people"`
 	Relations  []ExportRelation  `json:"relations"`
 	Heights    []ImportHeight    `json:"heights"`
@@ -288,7 +290,7 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 }
 
 func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
-	var exportData ExportDataStructure
+	exportData := ExportDataStructure{FormatVersion: archiveFormatVersion}
 
 	tags := getTagsByFamily(tx, familyId)
 	tagIdToName := make(map[int]string, len(tags))
