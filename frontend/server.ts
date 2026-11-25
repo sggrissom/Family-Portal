@@ -1632,6 +1632,7 @@ export interface ImportDataResponse {
     skippedTags: number
     importedPhotos: number
     skippedPhotos: number
+    importedVideos: number
     skippedVideos: number
     importedActivities: ActivityImportCounts
     importedBooks: number
@@ -1684,6 +1685,17 @@ export interface ExportDataRequest {
 
 export interface ExportDataResponse {
     jsonData: string
+}
+
+export interface GetArchiveExportSizesRequest {
+    familyId: number
+}
+
+export interface GetArchiveExportSizesResponse {
+    recordsBytes: number
+    everythingBytes: number
+    photos: number
+    videos: number
 }
 
 export interface ListVideoOriginalsRequest {
@@ -2873,6 +2885,10 @@ export interface ImportPerson {
     ImageId: number
     BirthTime: string
     BirthPlace: string
+    ProfileCropX: number
+    ProfileCropY: number
+    ProfileCropScale: number
+    IsPregnancy: boolean
 }
 
 export interface PersonMatch {
@@ -3357,7 +3373,10 @@ export interface ExportVideo {
     duration_ms: number
     person_ids: number[]
     tag_ids: number[]
+    people: ExportPhotoPerson[]
+    tags: ExportPhotoTag[]
     available: boolean
+    created_at: string
     transcript: ExportTranscript | null
 }
 
@@ -3461,10 +3480,26 @@ export interface BookInterviewChange {
     after: string
 }
 
+export interface ExportPhotoPerson {
+    person_id: number
+    auto_tagged: boolean
+    created_at: string
+}
+
+export interface ExportPhotoTag {
+    tag_id: number
+    created_at: string
+}
+
 export interface ExportTranscript {
     automatic: boolean
+    removed: boolean
     language: string
     segments: TranscriptSegment[]
+    model: string
+    version: number
+    edited_at: string
+    created_at: string
 }
 
 export interface EndpointStats {
@@ -4139,6 +4174,10 @@ export async function GetArchiveImportStatus(data: GetArchiveImportStatusRequest
 
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
+}
+
+export async function GetArchiveExportSizes(data: GetArchiveExportSizesRequest): Promise<rpc.Response<GetArchiveExportSizesResponse>> {
+    return await rpc.call<GetArchiveExportSizesResponse>('GetArchiveExportSizes', JSON.stringify(data));
 }
 
 export async function ListVideoOriginals(data: ListVideoOriginalsRequest): Promise<rpc.Response<ListVideoOriginalsResponse>> {
