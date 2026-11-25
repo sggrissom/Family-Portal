@@ -231,7 +231,7 @@ func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	}
 }
 
-func TestBooksFindMomentsAlreadyInTheFamily(t *testing.T) {
+func TestBooksFindMomentsAndInterviewsAlreadyInTheFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	records := fx.exportRecords(t, fx.owner)
 	var withoutBooks map[string]any
@@ -254,9 +254,19 @@ func TestBooksFindMomentsAlreadyInTheFamily(t *testing.T) {
 	}
 	source := readArchiveContents(t, fx.db, fx.familyId)["books"]
 	restored := readArchiveContents(t, fx.db, restorer.FamilyId)["books"]
-	want := source[0]["Items.0.SourceId"]
-	if len(restored) != 1 || want == "" || restored[0]["Items.0.SourceId"] != want {
-		t.Errorf("restored books %v; want their first item to be the moment %s", restored, want)
+	if len(restored) != 1 {
+		t.Fatalf("restored %d books, want 1", len(restored))
+	}
+	kept := map[string]bool{}
+	for k, v := range restored[0] {
+		if strings.HasPrefix(k, "Items.") && strings.HasSuffix(k, ".SourceId") {
+			kept[v] = true
+		}
+	}
+	for _, item := range []string{"Items.0", "Items.2"} {
+		if want := source[0][item+".SourceId"]; want == "" || !kept[want] {
+			t.Errorf("restored book %v lost the item %q", restored[0], want)
+		}
 	}
 }
 

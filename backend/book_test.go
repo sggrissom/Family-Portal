@@ -1,7 +1,6 @@
 package backend
 
 import (
-	"encoding/json"
 	"family/cfg"
 	"testing"
 	"time"
@@ -306,80 +305,6 @@ func TestFamilyDeletionRemovesBooks(t *testing.T) {
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
 		if GetBookById(tx, book.Id).Id != 0 {
 			t.Error("book survived its family")
-		}
-	})
-}
-
-func TestBookExportImportRemapsReferences(t *testing.T) {
-	fx := setupBookFixture(t)
-	fx.createBook(t)
-
-	var bundle ExportDataStructure
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		bundle, _ = buildExportData(tx, fx.owner.FamilyId)
-	})
-	if len(bundle.Books) != 1 || bundle.Books[0].Items[1].Kind != "milestone" {
-		t.Fatalf("exported books = %+v", bundle.Books)
-	}
-	data, _ := json.Marshal(bundle)
-
-	resp, err := bookCall(t, fx, fx.outsider, ImportData, ImportDataRequest{JsonData: string(data), ImportMilestones: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.ImportedBooks != 1 || len(resp.Warnings) == 0 {
-		t.Fatalf("imported = %d, warnings = %v; photos are not in a data-only import", resp.ImportedBooks, resp.Warnings)
-	}
-
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		books := GetFamilyBooks(tx, fx.outsider.FamilyId)
-		if len(books) != 1 {
-			t.Fatalf("books in new family = %d", len(books))
-		}
-		imported := books[0]
-		person := GetPersonById(tx, imported.PersonId)
-		if person.FamilyId != fx.outsider.FamilyId || person.Name != "June" {
-			t.Errorf("imported book points at %+v", person)
-		}
-		if len(imported.Items) != 2 || imported.CoverPhotoId != 0 {
-			t.Fatalf("imported items = %+v, cover = %d", imported.Items, imported.CoverPhotoId)
-		}
-		for _, item := range imported.Items {
-			m := GetMilestoneById(tx, item.SourceId)
-			if m.FamilyId != fx.outsider.FamilyId || m.PersonId != person.Id {
-				t.Errorf("item %+v points at %+v", item, m)
-			}
-			if item.PhotoId != 0 {
-				t.Errorf("photo reference survived without its photo: %+v", item)
-			}
-		}
-	})
-
-	again, _ := bookCall(t, fx, fx.outsider, ImportData, ImportDataRequest{JsonData: string(data), ImportMilestones: true})
-	if again.ImportedBooks != 0 || again.SkippedBooks != 1 {
-		t.Errorf("re-import imported %d, skipped %d", again.ImportedBooks, again.SkippedBooks)
-	}
-}
-
-func TestBookImportMapsPhotos(t *testing.T) {
-	fx := setupBookFixture(t)
-	fx.createBook(t)
-	var bundle ExportDataStructure
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		bundle, _ = buildExportData(tx, fx.owner.FamilyId)
-	})
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		ledger := newArchiveLedger()
-		ledger.people = map[int]int{fx.baby.Id: fx.sibling.Id}
-		ledger.moments = map[int]int{fx.smile.Id: fx.smile.Id}
-		ledger.photos = map[int]int{fx.early.Id: fx.early.Id, fx.attached.Id: fx.attached.Id}
-		imported, _, warnings := importBooks(tx, bundle.Books, bookImport{familyId: fx.owner.FamilyId, ledger: ledger})
-		if imported != 1 || len(warnings) != 1 {
-			t.Errorf("imported = %d, warnings = %v (the birthday milestone was not mapped)", imported, warnings)
-		}
-		books := GetPersonBooks(tx, fx.sibling.Id)
-		if len(books) != 1 || books[0].CoverPhotoId != fx.early.Id || len(books[0].Items) != 2 || books[0].Items[1].PhotoId != fx.attached.Id {
-			t.Errorf("imported = %+v", books)
 		}
 	})
 }

@@ -380,3 +380,119 @@ func TestAnswerNoteUsesCurrentAnswer(t *testing.T) {
 		})
 	}
 }
+
+func (fx resultsFixture) asUser(t *testing.T, user User, fn func(ctx *vbeam.Context)) {
+	t.Helper()
+	token := testAuthToken(t, user)
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) { fn(&vbeam.Context{Tx: tx, Token: token}) })
+}
+
+func TestBooksCarryInterviews(t *testing.T) {
+	fx := setupResultsFixture(t)
+	first := fx.startInterview(t, fx.alice, "2020-03-05", "fav-food", "fav-color")
+	fx.answer(t, first.Interview.Id, first.Questions[0].Id, "pizza", false)
+	fx.answer(t, first.Interview.Id, first.Questions[1].Id, "blue", false)
+	fx.finish(t, first.Interview)
+	second := fx.startInterview(t, fx.alice, "2021-03-05", "fav-food", "fav-color")
+	fx.answer(t, second.Interview.Id, second.Questions[0].Id, "Pizza!", false)
+	fx.answer(t, second.Interview.Id, second.Questions[1].Id, "green", false)
+	fx.finish(t, second.Interview)
+	open := fx.startInterview(t, fx.alice, "2021-06-01", "fav-food")
+	fx.answer(t, open.Interview.Id, open.Questions[0].Id, "tacos", false)
+
+	sources, err := callAs(t, fx, GetBookSources, GetBookSourcesRequest{
+		PersonIds: []int{fx.alice.Id}, Preset: BookPresetYear, StartDate: "2021-01-01", EndDate: "2022-01-01",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources.Sources.Interviews) != 1 {
+		t.Fatalf("sources hold %d interviews, want only the finished one in range", len(sources.Sources.Interviews))
+	}
+	bi := sources.Sources.Interviews[0]
+	if bi.Interview.Id != second.Interview.Id || len(bi.Answers) != 2 {
+		t.Errorf("book interview = %+v", bi)
+	}
+	if len(bi.Changes) != 1 || bi.Changes[0].Before != "blue" || bi.Changes[0].After != "green" {
+		t.Errorf("changes = %+v, want only the color (pizza → Pizza! is the same answer)", bi.Changes)
+	}
+	for _, m := range sources.Sources.Milestones {
+		if m.InterviewId > 0 {
+			t.Errorf("answer %d appears in the plain moment stream", m.Id)
+		}
+	}
+
+	created, err := callAs(t, fx, CreateBook, CreateBookRequest{
+		PersonIds: []int{fx.alice.Id}, Preset: BookPresetYear, StartDate: "2021-01-01", EndDate: "2022-01-01",
+		Content: BookContent{Categories: []string{"interviews"}, Items: []BookItem{{Kind: BookItemInterview, SourceId: second.Interview.Id}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Book.Items) != 1 || created.Book.Items[0].Kind != BookItemInterview || created.Book.Categories[0] != "interviews" {
+		t.Errorf("book = %+v", created.Book)
+	}
+	if _, err := callAs(t, fx, CreateBook, CreateBookRequest{
+		PersonIds: []int{fx.bob.Id}, Preset: BookPresetYear, StartDate: "2021-01-01", EndDate: "2022-01-01",
+		Content: BookContent{Items: []BookItem{{Kind: BookItemInterview, SourceId: second.Interview.Id}}},
+	}); err == nil {
+		t.Error("a book about Bob took Alice's interview")
+	}
+}
+
+func TestCompareAnswersAcrossSiblings(t *testing.T) {
+	fx := setupResultsFixture(t)
+	for _, tc := range []struct {
+		person Person
+		date   string
+		food   string
+	}{
+		{fx.alice, "2020-03-05", "pizza"},
+		{fx.alice, "2021-03-05", "tacos"},
+		{fx.bob, "2020-03-05", "sushi"},
+	} {
+		got := fx.startInterview(t, tc.person, tc.date, "fav-food")
+		fx.answer(t, got.Interview.Id, got.Questions[0].Id, tc.food, false)
+		fx.finish(t, got.Interview)
+	}
+	var food InterviewQuestion
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, q := range familyQuestions(tx, fx.familyId) {
+			if q.DefaultKey == "fav-food" {
+				food = q
+			}
+		}
+	})
+
+	resp, err := callAs(t, fx, CompareInterviewAnswers, CompareInterviewAnswersRequest{QuestionId: food.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Question.Id != food.Id || len(resp.Questions) != 1 || len(resp.Rows) != 2 {
+		t.Fatalf("compare = %+v", resp)
+	}
+	for _, row := range resp.Rows {
+		if row.Person.Id == fx.alice.Id && (len(row.Answers) != 2 || row.Answers[0].Text != "pizza" || row.Answers[0].AgeYears != 6) {
+			t.Errorf("alice's answers = %+v", row.Answers)
+		}
+	}
+	only, _ := callAs(t, fx, CompareInterviewAnswers, CompareInterviewAnswersRequest{QuestionId: food.Id, PersonIds: []int{fx.bob.Id}})
+	if len(only.Rows) != 1 || only.Rows[0].Person.Id != fx.bob.Id {
+		t.Errorf("filtered compare = %+v", only.Rows)
+	}
+	first, _ := callAs(t, fx, CompareInterviewAnswers, CompareInterviewAnswersRequest{})
+	if first.Question.Id != food.Id {
+		t.Errorf("default question = %+v", first.Question)
+	}
+
+	var outsider User
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		outsider = AddUserTx(tx, CreateAccountRequest{Name: "Outsider", Email: "outsider-compare@example.com"}, nil)
+		vbolt.TxCommit(tx)
+	})
+	fx.asUser(t, outsider, func(ctx *vbeam.Context) {
+		if _, err := CompareInterviewAnswers(ctx, CompareInterviewAnswersRequest{QuestionId: food.Id}); err == nil {
+			t.Error("an outsider compared another family's answers")
+		}
+	})
+}
