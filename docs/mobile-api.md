@@ -1123,7 +1123,7 @@ header; there is no faster path.
 | password-reset | 5 | 15 min | request, validate, reset |
 | invite-code | 10 | 15 min | `JoinFamily`, `AcceptFamilyLink` |
 | refresh | 30 | 5 min | `/api/refresh` |
-| import | 5 | 1 hour | `ImportData`, `/api/import-bundle` |
+| import | 5 | 1 hour | `ImportData`, `BeginArchiveImport` |
 | upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
 | photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |

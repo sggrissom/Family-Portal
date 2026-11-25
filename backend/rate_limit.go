@@ -56,7 +56,6 @@ var exactPathRules = map[string]RateLimitRule{
 	"/api/change-password":    rateRuleLogin,
 	"/api/delete-account":     rateRuleLogin,
 	"/api/upload-photo":       rateRuleUpload,
-	"/api/import-bundle":      rateRuleImport,
 	"/ws/chat":                rateRuleWebSocket,
 	SnapshotPath:              rateRuleSnapshot,
 	ClientErrorPath:           rateRuleClientError,
@@ -70,6 +69,7 @@ var exactPathRules = map[string]RateLimitRule{
 	"/rpc/JoinFamily":                 rateRuleInviteCode,
 	"/rpc/AcceptFamilyLink":           rateRuleInviteCode,
 	"/rpc/ImportData":                 rateRuleImport,
+	"/rpc/BeginArchiveImport":         rateRuleImport,
 	"/rpc/GetRecap":                   rateRuleRecapRead,
 	"/rpc/GetPublicFamilyPage":        rateRuleFamilyPage,
 }

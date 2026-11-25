@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -297,66 +296,4 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	vbolt.TxCommit(ctx.Tx)
 	done.queue()
 	return
-}
-
-// importBundleHandler imports a zip. Its "options" field carries the same
-// choices as ImportDataRequest, without jsonData.
-func importBundleHandler(w http.ResponseWriter, r *http.Request) {
-	user, ok := GetUserFromContext(r)
-	if !ok {
-		RespondAuthError(w, r, "Authentication required")
-		return
-	}
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		RespondValidationError(w, r, "Failed to parse multipart form", err.Error())
-		return
-	}
-	var req ImportDataRequest
-	if err := json.Unmarshal([]byte(r.FormValue("options")), &req); err != nil {
-		RespondValidationError(w, r, "The import options are missing. Reload the page and try again.", err.Error())
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		RespondValidationError(w, r, "No file provided", err.Error())
-		return
-	}
-	defer file.Close()
-	zipReader, err := zip.NewReader(file, header.Size)
-	if err != nil {
-		RespondValidationError(w, r, "Invalid ZIP file", err.Error())
-		return
-	}
-	archive, err := readArchiveZip(zipReader)
-	if err != nil {
-		RespondValidationError(w, r, err.Error())
-		return
-	}
-
-	var resp ImportDataResponse
-	var done archiveImported
-	withTx := vbolt.WithWriteTx
-	if req.PreviewOnly {
-		withTx = vbolt.WithReadTx
-	}
-	withTx(appDb, func(tx *vbolt.Tx) {
-		var familyId int
-		if familyId, err = ResolveActingFamily(tx, user, req.FamilyId, AccessContribute); err != nil {
-			return
-		}
-		resp, done, err = importFamilyArchive(tx, user, familyId, archive, req)
-		if err == nil && !req.PreviewOnly && !req.DryRun {
-			vbolt.TxCommit(tx)
-		}
-	})
-	if err != nil {
-		RespondValidationError(w, r, "Failed to import bundle", err.Error())
-		return
-	}
-	if !req.PreviewOnly && !req.DryRun {
-		done.queue()
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
 }
