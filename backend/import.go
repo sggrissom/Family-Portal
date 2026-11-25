@@ -12,7 +12,7 @@ import (
 
 func RegisterImportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ImportData)
-	app.HandleFunc("POST /api/import-bundle", AuthMiddleware(importBundleHandler))
+	RegisterArchiveImportMethods(app)
 }
 
 type ImportDataStructure struct {

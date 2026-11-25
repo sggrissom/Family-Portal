@@ -9,9 +9,8 @@ import (
 )
 
 const (
-	maxJSONRequestBytes   int64 = 1 << 20
-	maxPhotoRequestBytes  int64 = 52 << 20
-	maxImportRequestBytes int64 = 2 << 30
+	maxJSONRequestBytes  int64 = 1 << 20
+	maxPhotoRequestBytes int64 = 52 << 20
 )
 
 type RequestSizeLimitWrapper struct {
@@ -26,11 +25,9 @@ func requestBodyLimit(r *http.Request) int64 {
 	switch r.URL.Path {
 	case "/api/upload-photo":
 		return maxPhotoRequestBytes
-	case "/api/import-bundle":
-		return maxImportRequestBytes
 	}
 	if strings.HasPrefix(r.URL.Path, localMediaUploadPrefix) {
-		return maxVideoBytes
+		return max(maxVideoBytes, maxArchiveImportBytes)
 	}
 
 	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {

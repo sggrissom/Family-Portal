@@ -96,6 +96,7 @@ var archiveBuckets = map[string]archiveBucket{
 	"appearance_mutations":        excluded("appearance sync bookkeeping for offline clients"),
 	"appearance_tombstones":       excluded("appearance sync bookkeeping for offline clients"),
 	"video_uploads":               excluded("in-flight uploads, not finished media"),
+	"archive_imports":             excluded("in-flight imports, not family data"),
 	"media_deletions":             excluded(reasonSite),
 	"log_review":                  excluded(reasonSite),
 	"mobile_version":              excluded(reasonSite),

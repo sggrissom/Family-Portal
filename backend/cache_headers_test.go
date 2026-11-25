@@ -10,7 +10,6 @@ import (
 func TestPrivateEndpointsAreNotCached(t *testing.T) {
 	paths := []string{
 		"/api/export-bundle",
-		"/api/import-bundle",
 		"/api/delete-account",
 		"/api/change-password",
 		"/rpc/GetDashboard",

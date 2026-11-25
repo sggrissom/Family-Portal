@@ -24,6 +24,7 @@ func FamilyStorageUsage(tx *vbolt.Tx, familyId int) int64 {
 	for _, upload := range familyVideoUploads(tx, familyId) {
 		total += upload.reservedBytes()
 	}
+	total += archiveImportReservedBytes(tx, familyId)
 	return total
 }
 
