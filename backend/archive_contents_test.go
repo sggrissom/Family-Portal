@@ -261,7 +261,8 @@ func (v *contentView) flatten(t *testing.T, bucket, path string, val reflect.Val
 		typ := val.Type()
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
-			if !f.IsExported() || archiveIgnored[f.Name] || archiveIgnored[bucket+"."+f.Name] {
+			_, excludedField := archiveExcludedFields[bucket+"."+f.Name]
+			if !f.IsExported() || excludedField || archiveIgnored[f.Name] || archiveIgnored[bucket+"."+f.Name] {
 				continue
 			}
 			sub := f.Name

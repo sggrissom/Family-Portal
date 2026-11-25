@@ -3,6 +3,8 @@ package backend
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,5 +98,32 @@ func TestVideoWorkerKeepsImportedTranscripts(t *testing.T) {
 	}
 	if got.Status != TranscriptDone || got.Automatic || len(got.Segments) != 1 || got.Segments[0].Text != "Look at the waves" {
 		t.Errorf("after the video worker ran, the transcript is %+v; want the imported edit", got)
+	}
+}
+
+func TestArchiveLeavesTheVideoSettingBehind(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	records := fx.exportRecords(t, fx.owner)
+	if strings.Contains(records, "videoEnabled") {
+		t.Error("the records file carries the family's video setting")
+	}
+	var archive map[string]any
+	if err := json.Unmarshal([]byte(records), &archive); err != nil {
+		t.Fatal(err)
+	}
+	archive["family"] = map[string]any{"name": "The Archivists", "videoEnabled": true}
+	older, _ := json.Marshal(archive)
+
+	restorer := fx.newUser(t, "restorer")
+	if _, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(older)}); err != nil {
+		t.Fatal(err)
+	}
+	var family Family
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { family = GetFamily(tx, restorer.FamilyId) })
+	if family.VideoEnabled {
+		t.Error("an import turned video on; only an admin may")
+	}
+	if family.Name != "The Archivists" {
+		t.Errorf("the family is named %q; want the archive's name", family.Name)
 	}
 }

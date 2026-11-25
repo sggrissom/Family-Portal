@@ -102,3 +102,9 @@ var archiveBuckets = map[string]archiveBucket{
 	"mobile_version":              excluded(reasonSite),
 	"seed_runs":                   excluded(reasonSite),
 }
+
+// archiveExcludedFields are fields of archived buckets that the archive
+// leaves out, keyed bucket.Field, with the reason.
+var archiveExcludedFields = map[string]string{
+	"families.VideoEnabled": reasonAccount + ": only an admin turns video on",
+}
