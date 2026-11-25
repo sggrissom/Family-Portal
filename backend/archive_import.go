@@ -33,12 +33,17 @@ type archiveLedger struct {
 	moments    map[int]int
 	photos     map[int]int
 	interviews map[int]int
+	activities map[int]int
+	seasons    map[int]int
+	entries    map[int]int
+	events     map[int]int
 }
 
 func newArchiveLedger() *archiveLedger {
 	return &archiveLedger{
 		people: map[int]int{}, tags: map[int]int{}, tagByName: map[string]int{},
 		moments: map[int]int{}, photos: map[int]int{}, interviews: map[int]int{},
+		activities: map[int]int{}, seasons: map[int]int{}, entries: map[int]int{}, events: map[int]int{},
 	}
 }
 
@@ -191,7 +196,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
 		var warnings []string
-		resp.ImportedActivities, warnings = importActivities(tx, archive.Activities, familyId, l.people, l.photos)
+		resp.ImportedActivities, warnings = importActivities(tx, archive.Activities, familyId, l)
 		resp.Warnings = append(resp.Warnings, warnings...)
 	}
 
@@ -256,9 +261,12 @@ func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLed
 			continue
 		}
 		person.ProfilePhotoId = photoId
-		person.ProfileCropX = 50
-		person.ProfileCropY = 50
-		person.ProfileCropScale = 1.0
+		person.ProfileCropX, person.ProfileCropY, person.ProfileCropScale = 50, 50, 1.0
+		if importPerson.ProfileCropScale > 0 {
+			person.ProfileCropX = importPerson.ProfileCropX
+			person.ProfileCropY = importPerson.ProfileCropY
+			person.ProfileCropScale = importPerson.ProfileCropScale
+		}
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 	}
 }
