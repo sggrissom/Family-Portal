@@ -248,7 +248,14 @@ func (pw *PhotoWorker) processPhotoJob(job PhotoProcessingJob) {
 		return
 	}
 
-	QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: job.ImageId, FamilyId: job.FamilyId})
+	// An imported photo arrives with its faces already analysed and decided.
+	analyse := job.Reprocess
+	if !analyse {
+		vbolt.WithReadTx(pw.db, func(tx *vbolt.Tx) { analyse = imageNeedsAnalysis(GetImageById(tx, job.ImageId)) })
+	}
+	if analyse {
+		QueuePhotoAnalysis(PhotoAnalysisJob{ImageId: job.ImageId, FamilyId: job.FamilyId})
+	}
 	QueuePhotoFeatures(job.ImageId)
 	QueuePhotoEmbedding(job.ImageId)
 
