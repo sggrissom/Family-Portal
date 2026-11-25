@@ -56,12 +56,10 @@ var knownArchiveDrops = []archiveDrop{
 	{"photo_person", "", pointsAtVideo, "videos and their files are not imported"},
 	{"photo_tags", "", pointsAtVideo, "videos and their files are not imported"},
 	{"video_transcripts", "", nil, "transcripts are not imported"},
-	{"milestone_photos", "", nil, "moment-photo links are not exported"},
 	{"families", "Name", nil, "family settings are not exported"},
 	{"families", "VideoEnabled", nil, "family settings are not exported"},
-	{"interview_question_lists", "DismissedKeys", nil, "interview list settings are not exported"},
-	{"milestones", "CreatedAt", nil, "createdAt is reset"},
-	{"milestone_tags", "CreatedAt", nil, "createdAt is reset"},
+	{"milestone_tags", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
+	{"milestone_photos", "CreatedAt", nil, "link timestamps are reset; nothing reads them"},
 	{"activities", "CreatedAt", nil, "createdAt is reset"},
 	{"seasons", "CreatedAt", nil, "createdAt is reset"},
 	{"activity_events", "CreatedAt", nil, "createdAt is reset"},
@@ -71,11 +69,6 @@ var knownArchiveDrops = []archiveDrop{
 	{"appearance_photos", "CreatedAt", nil, "createdAt is reset"},
 	{"activity_results", "CreatedAt", nil, "createdAt is reset"},
 	{"activity_event_photos", "CreatedAt", nil, "createdAt is reset"},
-	{"interview_questions", "CreatedAt", nil, "createdAt is reset"},
-	{"books", "CreatedAt", nil, "createdAt is reset"},
-	{"books", "UpdatedAt", nil, "book timestamps are reset"},
-	{"books", "ReviewedAt", nil, "book timestamps are reset"},
-	{"milestones", "Note", nil, "the moment note is not imported"},
 }
 
 var knownReimportDrops = []archiveDrop{}

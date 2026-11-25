@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
@@ -159,27 +158,6 @@ func TestInterviewCadenceSetting(t *testing.T) {
 	if !schoolOk || school.Key != fmt.Sprintf("interview:%d:2025", fx.alice.Id) {
 		t.Errorf("school nudge = %+v, %v", school, schoolOk)
 	}
-
-	exported, err := callAs(t, fx, ExportData, ExportDataRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var other User
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		other = AddUserTx(tx, CreateAccountRequest{Name: "Other", Email: "other-cadence@example.com"}, nil)
-		vbolt.TxCommit(tx)
-	})
-	fx.asUser(t, other, func(ctx *vbeam.Context) {
-		_, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, ImportMilestones: true})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		if got := familyInterviewCadence(tx, other.FamilyId); got != set.Cadence {
-			t.Errorf("imported cadence = %+v, want %+v", got, set.Cadence)
-		}
-	})
 }
 
 func TestInterviewAnswersEmbedWithTheirQuestion(t *testing.T) {

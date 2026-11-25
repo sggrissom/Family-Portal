@@ -155,6 +155,7 @@ type ExportDataStructure struct {
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
 	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
+	InterviewDismissed []string                  `json:"interviewDismissedKeys,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -174,25 +175,6 @@ type ExportDataStructure struct {
 	TotalResults     int `json:"total_results,omitempty"`
 	TotalBooks       int `json:"total_books,omitempty"`
 	TotalInterviews  int `json:"total_interviews,omitempty"`
-}
-
-type ExportMilestone struct {
-	Id            int         `json:"id"`
-	PersonId      int         `json:"personId"`
-	FamilyId      int         `json:"familyId"`
-	Description   string      `json:"description"`
-	Category      string      `json:"category"`
-	Context       string      `json:"context,omitempty"`
-	MilestoneDate time.Time   `json:"milestoneDate"`
-	RecordTime    *RecordTime `json:"recordTime,omitempty"`
-	DateLabel     string      `json:"dateLabel,omitempty"`
-	CreatedAt     time.Time   `json:"createdAt"`
-	PersonName    string      `json:"personName"`
-	TagNames      []string    `json:"tagNames,omitempty"`
-	InterviewId   int         `json:"interviewId,omitempty"`
-	QuestionId    int         `json:"questionId,omitempty"`
-	Note          string      `json:"note,omitempty"`
-	RecordedBy    string      `json:"recordedBy,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -244,51 +226,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.People = exportPeople(people)
 	heights, weights := exportMeasurements(tx, familyId, people, recorderOf)
 
-	var milestoneIds []int
-	vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, familyId, &milestoneIds, vbolt.Window{})
-
-	var milestones []Milestone
-	if len(milestoneIds) > 0 {
-		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
-	}
-
-	exportMilestones := make([]ExportMilestone, len(milestones))
-	for i, milestone := range milestones {
-		var personName string
-		for _, person := range people {
-			if person.Id == milestone.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		tagIds := GetMilestoneTagIds(tx, milestone.Id)
-		var tagNames []string
-		for _, tagId := range tagIds {
-			if name, ok := tagIdToName[tagId]; ok {
-				tagNames = append(tagNames, name)
-			}
-		}
-
-		exportMilestones[i] = ExportMilestone{
-			Id:            milestone.Id,
-			PersonId:      milestone.PersonId,
-			FamilyId:      milestone.FamilyId,
-			Description:   milestone.Description,
-			Category:      milestone.Category,
-			Context:       milestone.Context,
-			MilestoneDate: milestone.MilestoneDate,
-			RecordTime:    &milestone.RecordTime,
-			DateLabel:     milestone.RecordTime.Label(),
-			CreatedAt:     milestone.CreatedAt,
-			PersonName:    personName,
-			TagNames:      tagNames,
-			InterviewId:   milestone.InterviewId,
-			QuestionId:    milestone.QuestionId,
-			Note:          milestone.Note,
-			RecordedBy:    recorderOf(milestone.CreatedBy),
-		}
-	}
+	exportMilestones := buildMilestoneExport(tx, familyId, people, tagIdToName, recorderOf)
 
 	personNames := make(map[int]string, len(people))
 	for _, person := range people {
@@ -311,6 +249,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalInterviews = len(exportData.Interviews)
 	exportData.InterviewCadence = exportInterviewCadence(tx, familyId)
 	exportData.Places = buildPlaceExport(tx, familyId)
+	exportData.InterviewDismissed = familyQuestionList(tx, familyId).DismissedKeys
 
 	exportData.Heights = heights
 	exportData.Weights = weights
@@ -321,7 +260,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalWeights = len(weights)
 	exportData.TotalPeople = len(people)
 	exportData.TotalRelations = len(exportData.Relations)
-	exportData.TotalMilestones = len(milestones)
+	exportData.TotalMilestones = len(exportMilestones)
 	exportData.TotalTags = len(tags)
 	exportData.TotalActivities = len(exportData.Activities)
 	exportData.TotalSeasons = seasonCount
