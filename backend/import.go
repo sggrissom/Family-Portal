@@ -405,18 +405,6 @@ func filterMeasurements(heights []ImportHeight, weights []ImportWeight, personId
 	return filteredHeights, filteredWeights
 }
 
-func filterMilestones(milestones []ExportMilestone, personIdMapping map[int]int) []ExportMilestone {
-	var filteredMilestones []ExportMilestone
-
-	for _, milestone := range milestones {
-		if _, exists := personIdMapping[milestone.PersonId]; exists {
-			filteredMilestones = append(filteredMilestones, milestone)
-		}
-	}
-
-	return filteredMilestones
-}
-
 type PersonMatch struct {
 	ImportPerson   ImportPerson `json:"importPerson"`
 	ExistingPerson *Person      `json:"existingPerson,omitempty"`
@@ -521,79 +509,6 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
-}
-
-func existingMilestoneId(tx *vbolt.Tx, personId int, date time.Time, description string) int {
-	for _, milestone := range GetPersonMilestonesTx(tx, personId) {
-		if milestone.MilestoneDate.Equal(date) && milestone.Description == description {
-			return milestone.Id
-		}
-	}
-	return 0
-}
-
-func importMilestones(tx *vbolt.Tx, importMilestones []ExportMilestone, familyId int, l *archiveLedger) (int, int, []string, []int) {
-	var ids []int
-	var errors []string
-	importedCount := 0
-	skippedCount := 0
-	recorderOf := importRecorders(tx, familyId)
-
-	for _, milestone := range importMilestones {
-		if milestone.InterviewId > 0 || milestone.Category == CategoryInterview {
-			continue
-		}
-		newPersonId, exists := l.people[milestone.PersonId]
-		if !exists {
-			errors = append(errors, fmt.Sprintf("Moment for unknown person ID: %d", milestone.PersonId))
-			continue
-		}
-
-		if milestone.RecordTime == nil {
-			if milestone.MilestoneDate.Year() == 1 {
-				continue
-			}
-			milestone.MilestoneDate = dayStart(milestone.MilestoneDate)
-		}
-		recordTime, date, err := importRecordTime(milestone.RecordTime, milestone.MilestoneDate, l.people, true)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Moment %q: %s", milestone.Description, err.Error()))
-			continue
-		}
-		milestone.MilestoneDate = date
-
-		if id := existingMilestoneId(tx, newPersonId, milestone.MilestoneDate, milestone.Description); id != 0 {
-			l.moments[milestone.Id] = id
-			skippedCount++
-			continue
-		}
-
-		newMilestone := Milestone{
-			Id:            vbolt.NextIntId(tx, MilestoneBkt),
-			PersonId:      newPersonId,
-			FamilyId:      familyId,
-			Description:   milestone.Description,
-			Category:      milestone.Category,
-			Context:       milestone.Context,
-			MilestoneDate: milestone.MilestoneDate,
-			RecordTime:    recordTime,
-			CreatedAt:     time.Now(),
-			CreatedBy:     recorderOf(milestone.RecordedBy),
-		}
-		writeMilestone(tx, &newMilestone)
-		l.moments[milestone.Id] = newMilestone.Id
-
-		for _, tagName := range milestone.TagNames {
-			if tagId, ok := l.tagByName[strings.ToLower(tagName)]; ok {
-				addTagToMilestone(tx, newMilestone.Id, tagId, familyId)
-			}
-		}
-
-		ids = append(ids, newMilestone.Id)
-		importedCount++
-	}
-
-	return importedCount, skippedCount, errors, ids
 }
 
 // importRelations rewrites each edge onto the people this import actually

@@ -232,18 +232,6 @@ func missingPhotoFiles(archive familyArchive, l *archiveLedger) (missing int) {
 	return
 }
 
-// mapExistingMoments links the moments a family already has, so books can
-// point at them when the import leaves moments out.
-func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLedger) {
-	for _, m := range milestones {
-		if personId, ok := l.people[m.PersonId]; ok {
-			if id := existingMilestoneId(tx, personId, m.MilestoneDate, m.Description); id != 0 {
-				l.moments[m.Id] = id
-			}
-		}
-	}
-}
-
 func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLedger) {
 	for _, importPerson := range people {
 		personId, ok := l.people[importPerson.Id]
