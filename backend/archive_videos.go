@@ -1,6 +1,11 @@
 package backend
 
 import (
+	"archive/zip"
+	"context"
+	"family/cfg"
+	"fmt"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbolt"
@@ -21,21 +26,30 @@ type ExportVideo struct {
 	PersonIds        []int             `json:"person_ids"`
 	TagIds           []int             `json:"tag_ids"`
 	Available        bool              `json:"available"`
+	CreatedAt        time.Time         `json:"created_at,omitzero"`
 	Transcript       *ExportTranscript `json:"transcript,omitempty"`
 }
 
 type ExportTranscript struct {
 	Automatic bool                `json:"automatic"`
+	Removed   bool                `json:"removed,omitempty"`
 	Language  string              `json:"language"`
 	Segments  []TranscriptSegment `json:"segments"`
+	Model     string              `json:"model,omitempty"`
+	Version   int                 `json:"version,omitempty"`
+	EditedAt  time.Time           `json:"edited_at,omitzero"`
+	CreatedAt time.Time           `json:"created_at,omitzero"`
 }
 
 func exportTranscript(tx *vbolt.Tx, imageId int) *ExportTranscript {
 	t, ok := GetVideoTranscriptRecord(tx, imageId)
-	if !ok || t.Status != TranscriptDone {
+	if !ok || (t.Status != TranscriptDone && t.Status != TranscriptRemoved) {
 		return nil
 	}
-	return &ExportTranscript{Automatic: t.EditedBy == 0, Language: t.Language, Segments: t.Segments}
+	return &ExportTranscript{
+		Automatic: t.EditedBy == 0, Removed: t.Status == TranscriptRemoved, Language: t.Language, Segments: t.Segments,
+		Model: t.Model, Version: t.Version, EditedAt: t.EditedAt, CreatedAt: t.CreatedAt,
+	}
 }
 
 func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
@@ -63,8 +77,206 @@ func buildVideoExport(tx *vbolt.Tx, familyId int) []ExportVideo {
 			PersonIds:        personIds,
 			TagIds:           GetPhotoTagIds(tx, image.Id),
 			Available:        image.Status == PhotoReady,
+			CreatedAt:        image.CreatedAt,
 			Transcript:       exportTranscript(tx, image.Id),
 		})
 	}
 	return result
+}
+
+func (v ExportVideo) zipPath() string { return "videos/" + v.FileName }
+
+// importVideos adds the archive's videos whose files the zip carries. A video
+// the family already has, by content hash, is linked instead. New videos are
+// left processing, for the video worker once the import commits.
+func importVideos(
+	tx *vbolt.Tx,
+	familyId int,
+	ownerUserId int,
+	videos []ExportVideo,
+	l *archiveLedger,
+	zipFiles map[string]*zip.File,
+	dryRun bool,
+) (imported, skipped int, videoIds []int, warnings []string) {
+	store := activeMediaStore()
+	_, localStore := store.(*localMediaStore)
+	used := FamilyStorageUsage(tx, familyId)
+	existing := familyMediaByHash(tx, familyId)
+	var unavailable, overQuota int
+
+	for _, video := range videos {
+		if !inScope(video.PersonIds, l) {
+			continue
+		}
+		zf := zipFiles[video.zipPath()]
+		if zf == nil {
+			skipped++
+			continue
+		}
+		hash, err := zipEntryContentHash(zf)
+		if err != nil {
+			skipped++
+			continue
+		}
+		if id, ok := takeMediaByHash(existing, hash); ok {
+			l.photos[video.Id] = id
+			importTranscript(tx, id, familyId, ownerUserId, video.Transcript)
+			skipped++
+			continue
+		}
+
+		ext, supported := videoExtensions[video.MimeType]
+		if store == nil || !supported {
+			unavailable++
+			skipped++
+			continue
+		}
+		size := int64(zf.UncompressedSize64)
+		reservation := int64(videoReservationBytes(int(size)))
+		if cfg.FamilyStorageQuotaBytes > 0 && used+reservation > cfg.FamilyStorageQuotaBytes {
+			overQuota++
+			skipped++
+			continue
+		}
+		if localStore && !dryRun && CheckDiskHeadroom(cfg.MediaDir, reservation, cfg.MinFreeDiskBytes) != nil {
+			overQuota++
+			skipped++
+			continue
+		}
+		mediaId, err := newMediaId()
+		if err != nil {
+			skipped++
+			continue
+		}
+		key := "videos/" + mediaId + "/original" + ext
+		if !dryRun {
+			if err := putZipEntry(store, zf, key, video.MimeType); err != nil {
+				LogWarn(LogCategoryPhoto, "Import could not store a video", map[string]interface{}{"path": video.zipPath(), "error": err.Error()})
+				skipped++
+				continue
+			}
+		}
+		used += reservation
+
+		image := Image{
+			Id:               vbolt.NextIntId(tx, ImagesBkt),
+			FamilyId:         familyId,
+			OwnerUserId:      ownerUserId,
+			OriginalFilename: video.OriginalFilename,
+			MimeType:         video.MimeType,
+			FileSize:         int(size),
+			ContentHash:      hash,
+			Title:            video.Title,
+			Description:      video.Description,
+			DurationMs:       video.DurationMs,
+			CreatedAt:        video.CreatedAt,
+			Status:           PhotoProcessing,
+			MediaKind:        MediaVideo,
+			OriginalKey:      key,
+			DerivedBytes:     int(size) + videoPosterAllowance,
+		}
+		if image.CreatedAt.IsZero() {
+			image.CreatedAt = time.Now()
+		}
+		recordTime, photoDate, err := importRecordTime(video.RecordTime, wallClockUTC(video.PhotoDate), l.people, false)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("Video %q was imported without its date: %s", video.Title, err.Error()))
+			recordTime, photoDate = unknownRecordTime(SourceLegacy), time.Time{}
+		}
+		image.RecordTime, image.PhotoDate = recordTime, photoDate
+		writeImage(tx, &image)
+		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
+		ReindexPhotoDates(tx, image.Id)
+		l.photos[video.Id] = image.Id
+
+		for _, oldTagId := range video.TagIds {
+			if tagId, ok := l.tags[oldTagId]; ok {
+				addTagToPhoto(tx, image.Id, tagId, familyId)
+			}
+		}
+		for _, oldPersonId := range video.PersonIds {
+			if personId, ok := l.people[oldPersonId]; ok {
+				AddPersonToPhoto(tx, image.Id, personId, familyId)
+			}
+		}
+		importTranscript(tx, image.Id, familyId, ownerUserId, video.Transcript)
+		videoIds = append(videoIds, image.Id)
+		imported++
+	}
+
+	if unavailable > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d video(s) were not imported because this site can't store them.", unavailable))
+	}
+	if overQuota > 0 {
+		warnings = append(warnings, fmt.Sprintf("Storage is full: %d video(s) were not imported. Everything else was.", overQuota))
+	}
+	return
+}
+
+func putZipEntry(store MediaStore, zf *zip.File, key, contentType string) error {
+	rc, err := zf.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	return store.Put(context.Background(), key, rc, int64(zf.UncompressedSize64), contentType)
+}
+
+// importTranscript carries a transcript as a person left it. One the family
+// already has is kept unless the archive's is a person's edit and the
+// family's isn't. Edited and removed transcripts come back settled, so the
+// video worker leaves them alone.
+func importTranscript(tx *vbolt.Tx, imageId, familyId, userId int, exported *ExportTranscript) {
+	if exported == nil {
+		return
+	}
+	existing, found := GetVideoTranscriptRecord(tx, imageId)
+	if found && (exported.Automatic || transcriptSettled(existing)) {
+		return
+	}
+	t := VideoTranscript{
+		ImageId: imageId, FamilyId: familyId, Model: exported.Model, Version: exported.Version,
+		Language: exported.Language, Status: TranscriptDone, Segments: exported.Segments,
+		EditedAt: exported.EditedAt, CreatedAt: exported.CreatedAt,
+	}
+	if exported.Removed {
+		t.Status, t.Segments = TranscriptRemoved, nil
+	}
+	if !exported.Automatic {
+		t.EditedBy = userId
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now()
+	}
+	writeVideoTranscriptTx(tx, &t)
+}
+
+type ExportFamily struct {
+	Name         string `json:"name"`
+	VideoEnabled bool   `json:"videoEnabled,omitempty"`
+}
+
+func exportFamilySettings(tx *vbolt.Tx, familyId int) *ExportFamily {
+	family := GetFamily(tx, familyId)
+	return &ExportFamily{Name: family.Name, VideoEnabled: family.VideoEnabled}
+}
+
+// importFamilySettings fills in what the family hasn't set: a name still the
+// default its creator was given, and video when the archive's family had it.
+func importFamilySettings(tx *vbolt.Tx, familyId int, settings *ExportFamily) {
+	if settings == nil {
+		return
+	}
+	family := GetFamily(tx, familyId)
+	changed := false
+	name := strings.TrimSpace(settings.Name)
+	if name != "" && family.Name != name && family.Name == GetUser(tx, family.CreatedBy).Name+"'s Family" {
+		family.Name, changed = name, true
+	}
+	if settings.VideoEnabled && !family.VideoEnabled {
+		family.VideoEnabled, changed = true, true
+	}
+	if changed {
+		vbolt.Write(tx, FamiliesBkt, family.Id, &family)
+	}
 }

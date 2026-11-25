@@ -52,16 +52,10 @@ func pointsAtVideo(row archiveRow) bool { return strings.HasPrefix(row["PhotoId"
 
 // Each later family archive ticket deletes the entries it fixes.
 var knownArchiveDrops = []archiveDrop{
-	{"images", "", isVideoRow, "videos and their files are not imported"},
-	{"photo_person", "", pointsAtVideo, "videos and their files are not imported"},
-	{"photo_tags", "", pointsAtVideo, "videos and their files are not imported"},
-	{"video_transcripts", "", nil, "transcripts are not imported"},
 	{"milestone_photos", "", nil, "moment-photo links are not exported"},
 	{"photo_faces", "", nil, "faces are not exported"},
 	{"images", "AnalysisVersion", nil, "faces are not exported"},
 	{"family_places", "", nil, "places are not exported"},
-	{"families", "Name", nil, "family settings are not exported"},
-	{"families", "VideoEnabled", nil, "family settings are not exported"},
 	{"interview_question_lists", "DismissedKeys", nil, "interview list settings are not exported"},
 	{"*", "CreatedAt", nil, "createdAt is reset"},
 	{"books", "UpdatedAt", nil, "book timestamps are reset"},

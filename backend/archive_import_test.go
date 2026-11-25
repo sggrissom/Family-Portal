@@ -286,8 +286,9 @@ func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
 	req := ImportDataRequest{FilterPersonIds: []int{chosen.Id}}
 
 	fromZip := fx.importBundle(t, fx.newUser(t, "zip"), bundle, req)
-	if fromZip.SkippedPhotos != 0 || fromZip.SkippedVideos != wantVideos {
-		t.Errorf("zip skipped %d photos and %d videos; want 0 and %d", fromZip.SkippedPhotos, fromZip.SkippedVideos, wantVideos)
+	if fromZip.SkippedPhotos != 0 || fromZip.SkippedVideos != 0 || fromZip.ImportedVideos != wantVideos {
+		t.Errorf("zip skipped %d photos and %d videos and imported %d videos; want 0, 0 and %d",
+			fromZip.SkippedPhotos, fromZip.SkippedVideos, fromZip.ImportedVideos, wantVideos)
 	}
 
 	req.JsonData = string(data)
