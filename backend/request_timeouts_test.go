@@ -17,7 +17,8 @@ func TestRequestDeadlinesByRoute(t *testing.T) {
 		{"RPC call", "/rpc/GetDashboard", defaultReadTimeout, defaultWriteTimeout},
 		{"login", "/api/login", defaultReadTimeout, defaultWriteTimeout},
 		{"photo upload", "/api/upload-photo", uploadReadTimeout, defaultWriteTimeout},
-		{"family import", "/api/import-bundle", importReadTimeout, importReadTimeout + defaultWriteTimeout},
+		{"old family import path", "/api/import-bundle", defaultReadTimeout, defaultWriteTimeout},
+		{"archive upload", localMediaUploadPrefix + "imports/abc/archive.zip", mediaUploadReadTimeout, mediaUploadReadTimeout + defaultWriteTimeout},
 		{"family export", "/api/export-bundle", defaultReadTimeout, downloadWriteTimeout},
 		{"database snapshot", SnapshotPath, defaultReadTimeout, downloadWriteTimeout},
 		{"photo download", "/api/photo/1234/medium", defaultReadTimeout, downloadWriteTimeout},
@@ -62,7 +63,7 @@ func TestUploadBudgetsCoverTheirSizeLimits(t *testing.T) {
 		uplink int64
 	}{
 		{"photo upload", maxPhotoRequestBytes, uploadReadTimeout, mobileUplinkBytesPerSecond},
-		{"family import", maxImportRequestBytes, importReadTimeout, broadbandUplinkBytesPerSecond},
+		{"archive upload", maxArchiveImportBytes, mediaUploadReadTimeout, broadbandUplinkBytesPerSecond},
 		{"video upload", maxVideoBytes, mediaUploadReadTimeout, mobileUplinkBytesPerSecond},
 	}
 

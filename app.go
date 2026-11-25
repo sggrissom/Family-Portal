@@ -339,6 +339,7 @@ func MakeApplication() *vbeam.Application {
 
 	// Upload sessions, expiry sweeps, and retried deletes for stored video
 	backend.InitializeVideoUploads(app.DB)
+	backend.InitializeArchiveImports(app.DB)
 	backend.InitializeVideoWorker(app.DB)
 	backend.InitializeVideoAnalysisWorker(app.DB)
 

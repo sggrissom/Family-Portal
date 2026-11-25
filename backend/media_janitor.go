@@ -66,7 +66,7 @@ var globalMediaJanitor *mediaJanitor
 
 func InitializeVideoUploads(db *vbolt.DB) {
 	if s, ok := activeMediaStore().(*localMediaStore); ok {
-		s.gate = videoUploadGate(db)
+		s.gate = mediaUploadGate(db)
 	}
 	if globalMediaJanitor != nil || activeMediaStore() == nil {
 		return

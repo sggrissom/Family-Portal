@@ -92,6 +92,8 @@ export const ErrLinkExists = "These families are already linked in that directio
 export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrArchiveImportNotFound = "That import could not be found.";
+export const ErrArchiveImportUnavailable = "Archive imports are not available on this server right now.";
 
 export interface CreateAccountRequest {
     name: string
@@ -1642,6 +1644,37 @@ export interface ImportDataResponse {
     availableFamilyIds: number[]
     availablePeople: ImportPerson[]
     matchedPeople: PersonMatch[]
+}
+
+export interface BeginArchiveImportRequest {
+    familyId: number
+    filename: string
+    size: number
+}
+
+export interface BeginArchiveImportResponse {
+    importId: number
+    upload: UploadInstructions
+}
+
+export interface CompleteArchiveImportRequest {
+    importId: number
+    options: ImportDataRequest
+}
+
+export interface ArchiveImportStatus {
+    importId: number
+    state: string
+    previewOnly: boolean
+    dryRun: boolean
+    records: number
+    media: number
+    result: ImportDataResponse | null
+    error: string
+}
+
+export interface GetArchiveImportStatusRequest {
+    importId: number
 }
 
 export interface ExportDataRequest {
@@ -4089,6 +4122,18 @@ export async function DeleteBook(data: DeleteBookRequest): Promise<rpc.Response<
 
 export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<ImportDataResponse>> {
     return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
+}
+
+export async function BeginArchiveImport(data: BeginArchiveImportRequest): Promise<rpc.Response<BeginArchiveImportResponse>> {
+    return await rpc.call<BeginArchiveImportResponse>('BeginArchiveImport', JSON.stringify(data));
+}
+
+export async function CompleteArchiveImport(data: CompleteArchiveImportRequest): Promise<rpc.Response<ArchiveImportStatus>> {
+    return await rpc.call<ArchiveImportStatus>('CompleteArchiveImport', JSON.stringify(data));
+}
+
+export async function GetArchiveImportStatus(data: GetArchiveImportStatusRequest): Promise<rpc.Response<ArchiveImportStatus>> {
+    return await rpc.call<ArchiveImportStatus>('GetArchiveImportStatus', JSON.stringify(data));
 }
 
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
