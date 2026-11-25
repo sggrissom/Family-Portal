@@ -206,7 +206,7 @@ func (v *contentView) indexKeys(t *testing.T) {
 	key("activity_entries", func(r any) (int, string) { e := r.(Entry); return e.Id, v.keys["seasons"][e.SeasonId] + "/" + e.Name })
 	key("appearances", func(r any) (int, string) {
 		a := r.(Appearance)
-		return a.Id, v.keys["activity_events"][a.EventId] + "/" + v.keys["activity_entries"][a.EntryId] + "/" + a.OccurredAt.UTC().Format(time.RFC3339)
+		return a.Id, v.keys["activity_events"][a.EventId] + "/" + v.keys["activity_entries"][a.EntryId] + "/" + a.OccurredAt.UTC().Format(time.RFC3339) + "/" + a.Round + "/" + a.Opponent
 	})
 }
 

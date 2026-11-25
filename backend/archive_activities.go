@@ -264,8 +264,7 @@ func importActivities(
 	tx *vbolt.Tx,
 	activities []ExportActivity,
 	familyId int,
-	personIdMapping map[int]int,
-	photoIdMapping map[int]int,
+	l *archiveLedger,
 ) (ActivityImportCounts, []string) {
 	var counts ActivityImportCounts
 	var warnings []string
@@ -285,15 +284,15 @@ func importActivities(
 		} else {
 			counts.Activities++
 		}
+		l.activities[source.Id] = activity.Id
 
 		for _, sourceSeason := range source.Seasons {
 			importSeason(tx, importSeasonArgs{
-				season:          sourceSeason,
-				activityId:      activity.Id,
-				familyId:        familyId,
-				personIdMapping: personIdMapping,
-				photoIdMapping:  photoIdMapping,
-				now:             now,
+				season:     sourceSeason,
+				activityId: activity.Id,
+				familyId:   familyId,
+				ledger:     l,
+				now:        now,
 			}, &counts, &warnings)
 		}
 	}
@@ -325,12 +324,11 @@ func findOrCreateActivity(
 }
 
 type importSeasonArgs struct {
-	season          ExportSeason
-	activityId      int
-	familyId        int
-	personIdMapping map[int]int
-	photoIdMapping  map[int]int
-	now             time.Time
+	season     ExportSeason
+	activityId int
+	familyId   int
+	ledger     *archiveLedger
+	now        time.Time
 }
 
 func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCounts, warnings *[]string) {
@@ -347,8 +345,8 @@ func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCou
 	} else {
 		counts.Seasons++
 	}
+	args.ledger.seasons[args.season.Id] = season.Id
 
-	entryIdMapping := make(map[int]int, len(args.season.Entries))
 	entryRosters := make(map[int]map[int]bool, len(args.season.Entries))
 	for _, sourceEntry := range args.season.Entries {
 		entryName := trimField(sourceEntry.Name, maxNameLength)
@@ -364,20 +362,18 @@ func importSeason(tx *vbolt.Tx, args importSeasonArgs, counts *ActivityImportCou
 		} else {
 			counts.Entries++
 		}
-		entryIdMapping[sourceEntry.Id] = entry.Id
-		entryRosters[entry.Id] = importRoster(tx, entry, sourceEntry, args.personIdMapping, entryReused, args.now, warnings)
+		args.ledger.entries[sourceEntry.Id] = entry.Id
+		entryRosters[entry.Id] = importRoster(tx, entry, sourceEntry, args.ledger.people, entryReused, args.now, warnings)
 	}
 
 	for _, sourceEvent := range args.season.Events {
 		importEvent(tx, importEventArgs{
-			event:           sourceEvent,
-			seasonId:        season.Id,
-			familyId:        args.familyId,
-			entryIdMapping:  entryIdMapping,
-			entryRosters:    entryRosters,
-			personIdMapping: args.personIdMapping,
-			photoIdMapping:  args.photoIdMapping,
-			now:             args.now,
+			event:        sourceEvent,
+			seasonId:     season.Id,
+			familyId:     args.familyId,
+			entryRosters: entryRosters,
+			ledger:       args.ledger,
+			now:          args.now,
 		}, counts, warnings)
 	}
 }
@@ -479,14 +475,12 @@ func importRoster(
 }
 
 type importEventArgs struct {
-	event           ExportEvent
-	seasonId        int
-	familyId        int
-	entryIdMapping  map[int]int
-	entryRosters    map[int]map[int]bool
-	personIdMapping map[int]int
-	photoIdMapping  map[int]int
-	now             time.Time
+	event        ExportEvent
+	seasonId     int
+	familyId     int
+	entryRosters map[int]map[int]bool
+	ledger       *archiveLedger
+	now          time.Time
 }
 
 func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCounts, warnings *[]string) {
@@ -498,11 +492,12 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 	}
 
 	event, reused := findOrCreateEvent(tx, args, name)
+	args.ledger.events[args.event.Id] = event.Id
 	if reused {
 		counts.Reused++
 	} else {
 		counts.Events++
-		attachPhotos(args.photoIdMapping, args.event.PhotoIds, func(photoId int) {
+		attachPhotos(args.ledger.photos, args.event.PhotoIds, func(photoId int) {
 			join := EventPhoto{
 				Id:        vbolt.NextIntId(tx, EventPhotoBkt),
 				EventId:   event.Id,
@@ -515,8 +510,8 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 	}
 
 	for _, sourceAppearance := range args.event.Appearances {
-		entryId, ok := args.entryIdMapping[sourceAppearance.EntryId]
-		if !ok {
+		entryId := args.ledger.entries[sourceAppearance.EntryId]
+		if _, inSeason := args.entryRosters[entryId]; !inSeason {
 			counts.Skipped++
 			*warnings = append(*warnings, fmt.Sprintf(
 				"%q: a performance named an entry that is not in this bundle's season", name))
@@ -554,7 +549,7 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 		writeAppearanceTx(tx, &appearance)
 		counts.Appearances++
 
-		attachPhotos(args.photoIdMapping, sourceAppearance.PhotoIds, func(photoId int) {
+		attachPhotos(args.ledger.photos, sourceAppearance.PhotoIds, func(photoId int) {
 			join := AppearancePhoto{
 				Id:           vbolt.NextIntId(tx, AppearancePhotoBkt),
 				AppearanceId: appearance.Id,
@@ -566,7 +561,7 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 		})
 
 		importResults(tx, appearance, sourceAppearance.Results,
-			args.personIdMapping, args.entryRosters[entryId], args.now, counts, warnings)
+			args.ledger.people, args.entryRosters[entryId], args.now, counts, warnings)
 	}
 }
 
