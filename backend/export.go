@@ -266,30 +266,45 @@ func GetArchiveExportSizes(ctx *vbeam.Context, req GetArchiveExportSizesRequest)
 	if err != nil {
 		return
 	}
-	jsonBytes, err := json.MarshalIndent(exportData, "", "  ")
-	if err != nil {
+	var records countingWriter
+	if err = encodeExportJSON(&records, exportData); err != nil {
 		return
 	}
+	resp.RecordsBytes = records.n
 
+	photos := buildPhotoExportMetadata(ctx.Tx, familyId)
+	exportData.Photos, exportData.TotalPhotos = photos, len(photos)
 	var compressed countingWriter
 	fw, _ := flate.NewWriter(&compressed, flate.DefaultCompression)
-	fw.Write(jsonBytes)
+	if err = encodeExportJSON(fw, exportData); err != nil {
+		return
+	}
 	fw.Close()
-
-	resp.RecordsBytes = len(jsonBytes)
 	resp.EverythingBytes = compressed.n + zipEntryOverhead
+
+	fileSizes := map[int]int{}
 	for _, img := range GetFamilyImages(ctx.Tx, familyId) {
-		if img.Status != PhotoReady {
-			continue
-		}
-		if img.IsVideo() {
+		fileSizes[img.Id] = img.FileSize
+	}
+	for _, photo := range photos {
+		resp.Photos++
+		resp.EverythingBytes += fileSizes[photo.Id] + zipEntryOverhead
+	}
+	if activeMediaStore() != nil {
+		for _, video := range exportData.Videos {
 			resp.Videos++
-		} else {
-			resp.Photos++
+			resp.EverythingBytes += video.FileSize + zipEntryOverhead
 		}
-		resp.EverythingBytes += img.FileSize + zipEntryOverhead
 	}
 	return
+}
+
+// encodeExportJSON writes what json.MarshalIndent would, without holding it
+// all in memory.
+func encodeExportJSON(w io.Writer, exportData ExportDataStructure) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(exportData)
 }
 
 const zipEntryOverhead = 150
