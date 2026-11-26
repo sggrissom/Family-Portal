@@ -191,15 +191,35 @@ func TestArchiveImportDeletesItsUploadWhenItEnds(t *testing.T) {
 		t.Error("the uploaded archive is still stored after its import")
 	}
 
-	failing := fx.uploadArchive(t, restorer, []byte("this is not a zip file"))
-	if status, _ := runArchiveImport(t, restorer, failing, importEverything); status.State != "failed" {
-		t.Fatalf("import of a broken file = %+v", status)
+}
+
+func TestArchiveImportThatFailsCanBeRetriedFromTheSameUpload(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	importId := fx.uploadArchive(t, restorer, bundle)
+	paused, release, _ := pauseArchiveStaging(t, errors.New("The server ran out of room while unpacking."))
+
+	if _, err := callProc(t, restorer, CompleteArchiveImport, CompleteArchiveImportRequest{ImportId: importId, Options: importEverything}); err != nil {
+		t.Fatal(err)
 	}
-	if fx.uploadStored(t, failing) {
-		t.Error("the uploaded archive is still stored after its import failed")
+	<-paused
+	release()
+	waitForArchiveImports()
+	if !fx.uploadStored(t, importId) {
+		t.Fatal("a failed import deleted the upload it could be retried from")
 	}
-	if _, err := callProc(t, restorer, CompleteArchiveImport, CompleteArchiveImportRequest{ImportId: failing, Options: importEverything}); err == nil {
-		t.Error("an import restarted from an upload that was deleted")
+
+	status, err := runArchiveImport(t, restorer, importId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drainPhotoJobs()
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
+		t.Fatalf("the retry finished as %+v", status)
+	}
+	if fx.uploadStored(t, importId) {
+		t.Error("the uploaded archive is still stored after the retry imported it")
 	}
 }
 

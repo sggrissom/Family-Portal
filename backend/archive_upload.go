@@ -454,13 +454,13 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 	req := job.options()
 	writes := !req.PreviewOnly && !req.DryRun
 	var staging *archiveStaging
+	committed := false
 	defer func() {
 		if r := recover(); r != nil {
 			failArchiveImport(db, id, fmt.Errorf("The import stopped unexpectedly: %v", r))
 		}
 		staging.cleanup()
-		// A preview or dry run keeps the upload for the import that follows it.
-		if writes {
+		if committed {
 			discardArchiveUpload(db, id)
 		}
 	}()
@@ -508,6 +508,7 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		}
 		markArchiveImportDone(tx, &job, resp, true)
 		vbolt.TxCommit(tx)
+		committed = true
 	})
 	if err != nil {
 		failArchiveImport(db, id, err)
