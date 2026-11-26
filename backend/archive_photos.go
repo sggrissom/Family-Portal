@@ -214,31 +214,18 @@ func importPhotos(
 	photos []ExportPhoto,
 	l *archiveLedger,
 	staged map[int]stagedMedia,
-	dryRun bool,
 ) (imported, skipped int, jobs []importedPhoto, warnings []string) {
 	// Going over stops the photo loop rather than failing the import: the people
 	// and measurements already written in this transaction are worth keeping.
 	used := FamilyStorageUsage(tx, familyId)
 	quotaReached := false
-	quotaSkipped := 0
+	quotaSkipped, noRoom := 0, 0
 
-	var scoped []ExportPhoto
-	var incoming int64
+	existing := familyMediaByHash(tx, familyId)
 	for _, photo := range photos {
 		if !inScope(photo.PersonIds, l) {
 			continue
 		}
-		scoped = append(scoped, photo)
-		incoming += staged[photo.Id].size
-	}
-	if diskErr := CheckDiskHeadroom(cfg.StaticDir, incoming, cfg.MinFreeDiskBytes); diskErr != nil && !dryRun {
-		return 0, len(scoped), nil, []string{
-			"The server is low on storage, so no photos were imported. Everything else in the bundle was.",
-		}
-	}
-
-	existing := familyMediaByHash(tx, familyId)
-	for _, photo := range scoped {
 		file, exists := staged[photo.Id]
 		if !exists {
 			skipped++
@@ -248,6 +235,11 @@ func importPhotos(
 		if id, ok := takeMediaByHash(existing, hash); ok {
 			l.photos[photo.Id] = id
 			skipped++
+			continue
+		}
+		if file.noRoom {
+			skipped++
+			noRoom++
 			continue
 		}
 
@@ -321,6 +313,12 @@ func importPhotos(
 		imported++
 	}
 
+	if noRoom > 0 {
+		warnings = append(warnings, fmt.Sprintf(
+			"The server is low on storage, so %d photo(s) were not imported. Everything else in the bundle was.",
+			noRoom,
+		))
+	}
 	if quotaReached {
 		warnings = append(warnings, fmt.Sprintf(
 			"Storage quota reached: %d photo(s) were not imported. Everything else in the bundle was.",

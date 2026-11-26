@@ -18,11 +18,13 @@ import (
 var archiveStagingRoot = filepath.Join(filepath.Dir(filepath.Clean(cfg.StaticDir)), "import-staging")
 
 // stagedMedia is one file from the archive, unpacked and hashed. A dry run
-// hashes without unpacking, so path is empty.
+// hashes without unpacking, so path is empty, and so does a file the disk
+// had no room for, which is marked noRoom.
 type stagedMedia struct {
-	path string
-	hash string
-	size int64
+	path   string
+	hash   string
+	size   int64
+	noRoom bool
 }
 
 // archiveStaging holds an import's staged photos and videos, by their id in
@@ -72,7 +74,11 @@ func (s *archiveStaging) stage(zf *zip.File, id int, personIds []int) error {
 	}
 	staged := stagedMedia{size: int64(zf.UncompressedSize64)}
 	if s.dir != "" {
-		staged.path = filepath.Join(s.dir, fmt.Sprintf("%d%s", id, filepath.Ext(zf.Name)))
+		if diskHasRoom(s.dir, staged.size) {
+			staged.path = filepath.Join(s.dir, fmt.Sprintf("%d%s", id, filepath.Ext(zf.Name)))
+		} else {
+			staged.noRoom = true
+		}
 	}
 	hash, err := unpackZipEntry(zf.Open, staged.path)
 	if err != nil {
@@ -86,6 +92,13 @@ func (s *archiveStaging) stage(zf *zip.File, id int, personIds []int) error {
 		return err
 	}
 	return nil
+}
+
+// diskHasRoom is CheckDiskHeadroom without the log line, since an import
+// asks once for every file.
+func diskHasRoom(dir string, n int64) bool {
+	free, err := freeDiskBytes(dir)
+	return err != nil || free-diskBudget.reservedBytes()-n >= cfg.MinFreeDiskBytes
 }
 
 func (s *archiveStaging) inFilter(personIds []int) bool {

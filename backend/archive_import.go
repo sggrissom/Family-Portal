@@ -223,7 +223,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	if archive.media != nil {
 		var warnings []string
 		resp.ImportedPhotos, resp.SkippedPhotos, done.photoJobs, warnings =
-			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged, req.DryRun)
+			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
 		resp.ImportedVideos, resp.SkippedVideos, done.videos, warnings =
