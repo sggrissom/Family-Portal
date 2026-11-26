@@ -200,6 +200,10 @@ func BeginArchiveImport(ctx *vbeam.Context, req BeginArchiveImportRequest) (resp
 		err = errors.New("Choose an archive to import.")
 		return
 	}
+	isRecords := strings.EqualFold(filepath.Ext(req.Filename), ".json")
+	if isRecords && req.Size > maxArchiveRecordsBytes {
+		return resp, errArchiveRecordsTooLarge
+	}
 	if req.Size > maxArchiveImportBytes {
 		err = fmt.Errorf("Archives can be at most %s.", formatBytes(maxArchiveImportBytes))
 		return
@@ -233,7 +237,7 @@ func BeginArchiveImport(ctx *vbeam.Context, req BeginArchiveImportRequest) (resp
 		return
 	}
 	name, contentType := "archive.zip", "application/zip"
-	if strings.EqualFold(filepath.Ext(req.Filename), ".json") {
+	if isRecords {
 		name, contentType = "records.json", "application/json"
 	}
 	now := time.Now()
@@ -271,8 +275,9 @@ type CompleteArchiveImportRequest struct {
 	Options ImportDataRequest `json:"options"`
 }
 
-// CompleteArchiveImport starts a job on an uploaded archive. A preview or dry
-// run leaves the upload in place, so the same archive can then be imported.
+// CompleteArchiveImport starts a job on an uploaded archive or retries
+// placement after the records have committed. A preview or dry run leaves
+// the upload in place so the same archive can then be imported.
 func CompleteArchiveImport(ctx *vbeam.Context, req CompleteArchiveImportRequest) (resp ArchiveImportStatus, err error) {
 	user, authErr := GetAuthUser(ctx)
 	if authErr != nil {
@@ -288,8 +293,26 @@ func CompleteArchiveImport(ctx *vbeam.Context, req CompleteArchiveImportRequest)
 	case job.State.running():
 		return archiveImportStatus(job), nil
 	case job.Imported:
-		err = errors.New("This archive has already been imported.")
-		return
+		if job.State != ArchiveImportFailed || job.FollowUp == "" {
+			return resp, errors.New("This archive has already been imported.")
+		}
+		if req.Options.PreviewOnly || req.Options.DryRun {
+			return archiveImportStatus(job), nil
+		}
+		vbeam.UseWriteTx(ctx)
+		job = getArchiveImport(ctx.Tx, req.ImportId)
+		if job.State != ArchiveImportFailed || job.FollowUp == "" {
+			return archiveImportStatus(job), nil
+		}
+		if _, err = ResolveActingFamily(ctx.Tx, user, job.FamilyId, AccessContribute); err != nil {
+			return
+		}
+		job.State, job.Error = ArchiveImportPlacing, ""
+		writeArchiveImport(ctx.Tx, &job)
+		db := ctx.Tx.DB()
+		vbolt.TxCommit(ctx.Tx)
+		startArchiveImportJob(db, job.Id)
+		return archiveImportStatus(job), nil
 	case job.Discarded:
 		err = errors.New("This upload has been cleared away. Please upload the archive again.")
 		return
@@ -445,7 +468,7 @@ func InitializeArchiveImports(db *vbolt.DB) {
 			if job.State.running() {
 				jobs = append(jobs, job)
 			}
-			if job.State == ArchiveImportPlacing && job.StagingDir != "" {
+			if job.Imported && job.FollowUp != "" && job.StagingDir != "" {
 				keep[filepath.Clean(job.StagingDir)] = true
 			}
 			return true
@@ -487,12 +510,7 @@ func failArchiveImport(db *vbolt.DB, id int, err error) {
 func runArchiveImportJob(db *vbolt.DB, id int) {
 	var job ArchiveImport
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
-	switch job.State {
-	case ArchiveImportPlacing:
-		placeArchiveImport(db, id)
-		return
-	case ArchiveImportQueued:
-	default:
+	if job.State != ArchiveImportQueued && job.State != ArchiveImportPlacing {
 		return
 	}
 	req := job.options()
@@ -503,7 +521,7 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		if r := recover(); r != nil {
 			err := fmt.Errorf("The import stopped unexpectedly: %v", r)
 			if committed {
-				LogErrorSimple(LogCategoryAPI, "Archive import stopped while placing its files", map[string]interface{}{"importId": id, "error": err.Error()})
+				failArchivePlacement(db, id, err)
 			} else {
 				failArchiveImport(db, id, err)
 			}
@@ -512,6 +530,11 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 			staging.cleanup()
 		}
 	}()
+	if job.State == ArchiveImportPlacing {
+		committed = true
+		placeArchiveImport(db, id)
+		return
+	}
 	job = setArchiveImportState(db, id, ArchiveImportStaging, nil)
 
 	archive, closeArchive, err := openUploadedArchive(activeMediaStore(), job.Key, int64(job.DeclaredBytes))
@@ -596,19 +619,32 @@ func placeArchiveImport(db *vbolt.DB, id int) {
 	var job ArchiveImport
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
 	var done archiveImported
-	if job.FollowUp != "" {
-		if err := json.Unmarshal([]byte(job.FollowUp), &done); err != nil {
-			LogErrorSimple(LogCategoryAPI, "Archive import could not read the files it has to place", map[string]interface{}{"importId": id, "error": err.Error()})
-		}
-	}
-	if !done.queue(archiveImportsStopping.Load) {
+	if err := json.Unmarshal([]byte(job.FollowUp), &done); err != nil {
+		failArchivePlacement(db, id, err)
 		return
 	}
+	if err := done.place(); err != nil {
+		if !errors.Is(err, errArchiveImportStopped) {
+			failArchivePlacement(db, id, err)
+		}
+		return
+	}
+	if archiveImportsStopping.Load() {
+		return
+	}
+	done.queue()
 	if job.StagingDir != "" {
 		os.RemoveAll(job.StagingDir)
 	}
 	setArchiveImportState(db, id, ArchiveImportDone, func(j *ArchiveImport) { j.FollowUp, j.StagingDir = "", "" })
 	discardArchiveUpload(db, id)
+}
+
+func failArchivePlacement(db *vbolt.DB, id int, err error) {
+	setArchiveImportState(db, id, ArchiveImportFailed, func(job *ArchiveImport) {
+		job.Error = "The records were imported, but some media could not be stored. Click Import Data again to retry placing the files."
+	})
+	LogErrorSimple(LogCategoryAPI, "Archive media placement failed", map[string]interface{}{"importId": id, "error": err.Error()})
 }
 
 // archiveStagingProgress records how many files are staged, at most about
@@ -665,7 +701,7 @@ const abandonedArchiveUploadAge = 24 * time.Hour
 func expireArchiveUploads(db *vbolt.DB, now time.Time) (expired int) {
 	cutoff := now.Add(-abandonedArchiveUploadAge)
 	abandoned := func(job ArchiveImport) bool {
-		return job.Id != 0 && !job.Discarded && !job.State.running() && job.UpdatedAt.Before(cutoff)
+		return job.Id != 0 && !job.Discarded && !job.State.running() && job.FollowUp == "" && job.UpdatedAt.Before(cutoff)
 	}
 	var ids []int
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
@@ -696,13 +732,25 @@ func expireArchiveUploads(db *vbolt.DB, now time.Time) (expired int) {
 	return
 }
 
-// openUploadedArchive reads a zip or a Records file from the media store. A
-// local store's file is read in place; a bucket's is copied to a temporary
-// file first, because a zip is read from its end.
+// openUploadedArchive reads Records directly from the media store. ZIPs
+// need random access, so a ZIP in object storage is copied to a temporary
+// file and a local ZIP is read in place.
 func openUploadedArchive(store MediaStore, key string, size int64) (archive familyArchive, closeFn func(), err error) {
 	closeFn = func() {}
 	if store == nil {
 		return archive, closeFn, ErrArchiveImportUnavailable
+	}
+	if strings.HasSuffix(key, ".json") {
+		if size > maxArchiveRecordsBytes {
+			return archive, closeFn, errArchiveRecordsTooLarge
+		}
+		body, openErr := store.Open(context.Background(), key)
+		if openErr != nil {
+			return archive, closeFn, errors.New("The uploaded archive could not be found. Please upload it again.")
+		}
+		defer body.Close()
+		archive, err = readArchiveRecordsFile(body)
+		return archive, closeFn, err
 	}
 	var file *os.File
 	if local, ok := store.(*localMediaStore); ok {
@@ -728,15 +776,6 @@ func openUploadedArchive(store MediaStore, key string, size int64) (archive fami
 			closeFn()
 			return archive, func() {}, err
 		}
-	}
-	if strings.HasSuffix(key, ".json") {
-		data, readErr := io.ReadAll(file)
-		closeFn()
-		if readErr != nil {
-			return archive, func() {}, readErr
-		}
-		archive, err = readArchiveRecords(data)
-		return archive, func() {}, err
 	}
 	zr, zipErr := zip.NewReader(file, size)
 	if zipErr != nil {

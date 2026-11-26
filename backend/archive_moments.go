@@ -611,20 +611,79 @@ func (in bookImport) mapPeople(source ExportBook) []int {
 	return mapped
 }
 
-func bookAlreadyImported(tx *vbolt.Tx, personId int, source ExportBook) bool {
+func findImportedBook(tx *vbolt.Tx, familyId, personId int, preset string, source ExportBook) Book {
 	for _, existing := range GetPersonBooks(tx, personId) {
-		if existing.Preset == source.Preset && existing.Title == source.Title && existing.StartDate.Equal(source.StartDate) {
-			return true
+		if existing.FamilyId == familyId && existing.Preset == preset && existing.Title == source.Title && existing.StartDate.Equal(source.StartDate) {
+			return existing
 		}
 	}
-	return false
+	return Book{}
+}
+
+func sameBookSource(a, b BookItem) bool {
+	return a.Kind == b.Kind && a.SourceId == b.SourceId
+}
+
+// Fill media references a Records-only restore could not resolve. Anchor
+// added photo items to the next matching item to preserve their archive order
+// without moving or overwriting items already in the destination book.
+func (in bookImport) fillBookMedia(book *Book, source ExportBook) bool {
+	changed := false
+	if coverId := in.ledger.photos[source.CoverPhotoId]; coverId != 0 && book.CoverPhotoId == 0 {
+		book.CoverPhotoId = coverId
+		changed = true
+	}
+
+	insertAt := len(book.Items)
+	for i := len(source.Items) - 1; i >= 0; i-- {
+		item, ok := in.mapItem(source.Items[i])
+		if !ok {
+			continue
+		}
+		matches := func(existing BookItem) bool { return sameBookSource(existing, item) }
+		if index := slices.IndexFunc(book.Items, matches); index >= 0 {
+			insertAt = index
+			if book.Items[index].PhotoId == 0 && item.PhotoId != 0 {
+				book.Items[index].PhotoId = item.PhotoId
+				changed = true
+			}
+		} else if item.Kind == BookItemPhoto && !slices.ContainsFunc(book.Excluded, matches) {
+			book.Items = slices.Insert(book.Items, insertAt, item)
+			changed = true
+		}
+	}
+
+	for _, excluded := range source.Excluded {
+		item, ok := in.mapItem(excluded)
+		if !ok || item.Kind != BookItemPhoto {
+			continue
+		}
+		matches := func(existing BookItem) bool { return sameBookSource(existing, item) }
+		if !slices.ContainsFunc(book.Excluded, matches) && !slices.ContainsFunc(book.Items, matches) {
+			book.Excluded = append(book.Excluded, BookItem{Kind: item.Kind, SourceId: item.SourceId})
+			changed = true
+		}
+	}
+	return changed
 }
 
 func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, skipped int, warnings []string) {
 	now := time.Now()
 	for _, source := range books {
 		personIds := in.mapPeople(source)
-		if len(personIds) == 0 || bookAlreadyImported(tx, personIds[0], source) {
+		if len(personIds) == 0 {
+			skipped++
+			continue
+		}
+		preset := source.Preset
+		if preset == "" {
+			preset = BookPresetFirstYear
+		}
+		if existing := findImportedBook(tx, in.familyId, personIds[0], preset, source); existing.Id != 0 {
+			if in.fillBookMedia(&existing, source) {
+				existing.Revision++
+				writeBookTx(tx, existing)
+			}
 			skipped++
 			continue
 		}
@@ -633,7 +692,7 @@ func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, ski
 			Id:           vbolt.NextIntId(tx, BookBkt),
 			FamilyId:     in.familyId,
 			PersonIds:    personIds,
-			Preset:       source.Preset,
+			Preset:       preset,
 			Title:        source.Title,
 			StartDate:    source.StartDate,
 			EndDate:      source.EndDate,
@@ -661,9 +720,6 @@ func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, ski
 			if !source.ReviewedAt.IsZero() {
 				book.ReviewedAt = source.ReviewedAt
 			}
-		}
-		if book.Preset == "" {
-			book.Preset = BookPresetFirstYear
 		}
 
 		unmatched := 0

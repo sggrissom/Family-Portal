@@ -20,7 +20,9 @@ mode names, `data_only` and `with_photos`, are still accepted.
 `GetArchiveExportSizes` estimates both downloads for the settings page.
 
 Only videos that have finished processing (or failed but kept their original)
-are exported. A photo is exported once it's ready.
+are exported. A photo is exported once it's ready. If an original can't be
+opened, the ZIP includes `INCOMPLETE-EXPORT.txt` listing the missing files.
+The import reports that warning when it reads such an archive.
 
 ## Format versions
 
@@ -120,7 +122,8 @@ run that reports the counts without writing anything.
   `BeginArchiveImport` `{familyId?, filename, size}` checks the size (40 GiB at
   most), the family's storage quota and the disk floor, and returns a signed
   upload URL. A filename ending in `.json` is read as a Records file; anything
-  else as a zip. Any zip with a `data.json` works, including the
+  else as a zip. Records JSON is limited to 64 MiB before compression,
+  whether uploaded by itself or as `data.json` in the zip. This includes the
   `?mode=records` download. The `import` rate rule applies here. The browser
   PUTs the file straight to the media store. The upload URL lasts 12 hours,
   and the PUT gets that long to finish. `CompleteArchiveImport`
@@ -149,8 +152,9 @@ The job runs in three steps, so the database write lock is held only briefly:
 3. **Place**, after the commit. Staged photos are renamed into the static
    directory and queued for processing. Videos are copied into the media store
    and queued; their disk check adds up every video's room across the import.
-   A file that can't be moved is logged and left to the stuck-photo or
-   stuck-video recovery. The records are already committed.
+   If a file can't be placed, the job reports the failure and keeps its
+   staged files and upload. Click Import Data again to retry placement
+   without merging the committed records again.
 
 On shutdown, archive imports are stopped first, at their next step, while the
 photo and video workers still run. A job stopped before its commit runs again
@@ -159,10 +163,10 @@ its files on the next start.
 
 The upload is deleted once its import has committed and placed its files. A
 preview, a dry run or a failed import keeps it, so the same upload can be
-imported or retried. A kept upload counts toward the family's storage quota
-until it's deleted. The media janitor expires an upload left unused for 24
-hours, whether it never finished uploading or its job ended without using it
-up, and deletes it.
+imported or retried. Before the records commit, the upload counts toward
+the family's storage quota and the media janitor expires it after 24 hours
+of inactivity. After the commit, the imported media count toward the quota
+and the upload remains available until placement succeeds.
 
 ### The staging directory
 
@@ -175,9 +179,9 @@ into place with a rename rather than a copy:
 | production | `/srv/apps/family/shared/import-staging/` |
 
 It's created when an import first stages. Each import gets its own
-`import-*` directory, removed when the import finishes or fails. At startup,
-every directory except those of jobs still placing their files is removed,
-so a crash doesn't leave staged files behind. It isn't in the snapshots.
+`import-*` directory, removed after successful placement or failure before
+the commit. At startup, staging is kept for committed jobs with pending
+placement so they can finish or be retried. It isn't in the snapshots.
 
 ## Merge rules
 

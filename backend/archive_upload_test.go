@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -500,6 +502,116 @@ func TestArchiveImportStoppedAfterItCommitsPlacesItsMediaOnRestart(t *testing.T)
 	}
 	if fx.uploadStored(t, importId) {
 		t.Error("the upload is still stored after the restart finished its import")
+	}
+}
+
+func TestArchiveRetriesFailedMediaPlacementWithoutMergingAgain(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	importId := fx.uploadArchive(t, restorer, bundle)
+	stagingDir := useStagingRoot(t)
+
+	var move stagedMove
+	var setupErr error
+	archiveImportCommittedHook = func() {
+		var job ArchiveImport
+		vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, importId) })
+		var followUp archiveImported
+		if setupErr = json.Unmarshal([]byte(job.FollowUp), &followUp); setupErr != nil {
+			return
+		}
+		if len(followUp.Photos) == 0 {
+			setupErr = errors.New("expected an imported photo")
+			return
+		}
+		move = followUp.Photos[0].File
+		setupErr = os.MkdirAll(move.To, 0755)
+	}
+	t.Cleanup(func() { archiveImportCommittedHook = nil })
+
+	status, err := runArchiveImport(t, restorer, importId, importEverything)
+	if setupErr != nil {
+		t.Fatal(setupErr)
+	}
+	if err != nil || status.State != "failed" || !strings.Contains(status.Error, "Click Import Data again") {
+		t.Fatalf("expected a retryable placement failure, got %+v, %v", status, err)
+	}
+	if _, err := os.Stat(move.From); err != nil {
+		t.Fatalf("staged original lost after placement failure: %v", err)
+	}
+	if !fx.uploadStored(t, importId) {
+		t.Fatal("upload deleted after placement failure")
+	}
+	if n := expireArchiveUploads(fx.db, time.Now().Add(25*time.Hour)); n != 0 {
+		t.Fatal("janitor expired a placement that can be retried")
+	}
+	InitializeArchiveImports(fx.db)
+	waitForArchiveImports()
+	if err := os.Remove(move.To); err != nil {
+		t.Fatal(err)
+	}
+
+	// A retry must finish the committed import even if the filters change.
+	status, err = runArchiveImport(t, restorer, importId, ImportDataRequest{FilterPersonIds: []int{-1}})
+	if err != nil || status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
+		t.Fatalf("placement retry finished as %+v, %v", status, err)
+	}
+	for _, job := range drainPhotoJobs() {
+		t.Cleanup(func() { deletePhotoFiles(Image{FilePath: job.FilePath}) })
+	}
+	assertArchiveMatches(t, readArchiveContents(t, fx.db, fx.familyId), readArchiveContents(t, fx.db, restorer.FamilyId))
+	if stagedFiles(t, stagingDir) != 0 || fx.uploadStored(t, importId) {
+		t.Fatal("successful placement retry left its staging or upload behind")
+	}
+}
+
+func TestUploadedRecordsReadFromObjectStore(t *testing.T) {
+	store := newFakeS3Store(t)
+	ctx := context.Background()
+	const key = "imports/example/records.json"
+	const records = `{"formatVersion":1,"people":[{"Id":2,"Name":"Ada","Birthday":"2020-03-04T00:00:00Z"}]}`
+	if err := store.Put(ctx, key, strings.NewReader(records), int64(len(records)), "application/json"); err != nil {
+		t.Fatal(err)
+	}
+
+	archive, closeArchive, err := openUploadedArchive(store, key, int64(len(records)))
+	defer closeArchive()
+	if err != nil || len(archive.People) != 1 || archive.People[0].Name != "Ada" {
+		t.Fatalf("uploaded records = %+v, %v", archive.People, err)
+	}
+}
+
+func TestArchiveRejectsOversizedRecords(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	_, err := callProc(t, fx.owner, BeginArchiveImport, BeginArchiveImportRequest{
+		Filename: "family.JSON", Size: maxArchiveRecordsBytes + 1,
+	})
+	if !errors.Is(err, errArchiveRecordsTooLarge) {
+		t.Fatalf("oversized JSON upload: %v", err)
+	}
+
+	var bundle bytes.Buffer
+	zw := zip.NewWriter(&bundle)
+	entry, err := zw.Create("data.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := make([]byte, 1<<20)
+	for i := 0; i <= maxArchiveRecordsBytes/len(chunk); i++ {
+		if _, err := entry.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(bundle.Bytes()), int64(bundle.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = readArchiveZip(zr); !errors.Is(err, errArchiveRecordsTooLarge) {
+		t.Fatalf("oversized data.json in ZIP: %v", err)
 	}
 }
 

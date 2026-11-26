@@ -13,11 +13,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
+
+const incompleteArchiveEntry = "INCOMPLETE-EXPORT.txt"
 
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
@@ -109,7 +112,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	var missing []string
 
 	dataEntry, err := zw.Create("data.json")
 	if err != nil {
@@ -125,6 +128,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		diskPath := filepath.Join(cfg.StaticDir, ep.ZipPath)
 		f, err := os.Open(diskPath)
 		if err != nil {
+			missing = append(missing, ep.ZipPath)
 			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a photo whose original is unreadable", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			continue
 		}
@@ -132,7 +136,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			LogWarnWithRequest(r, LogCategoryPhoto, "Export could not add a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
-			continue
+			return
 		}
 		if _, err := io.Copy(entry, f); err != nil {
 			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
@@ -145,10 +149,12 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	store := activeMediaStore()
 	for _, video := range exportData.Videos {
 		if store == nil {
-			break
+			missing = append(missing, video.zipPath())
+			continue
 		}
 		rc, err := store.Open(r.Context(), videoKeys[video.Id])
 		if err != nil {
+			missing = append(missing, video.zipPath())
 			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a video whose original is unreadable", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
 			continue
 		}
@@ -161,6 +167,21 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a video", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
 			return
 		}
+	}
+	if len(missing) > 0 {
+		entry, err := zw.Create(incompleteArchiveEntry)
+		if err == nil {
+			_, err = io.WriteString(entry, "This Family Record archive is incomplete. The following originals could not be read:\n\n"+strings.Join(missing, "\n")+"\n")
+		}
+		if err != nil {
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export could not write its list of missing originals", map[string]interface{}{"error": err.Error()})
+			return
+		}
+	}
+	// Only finalize if every entry was written. A stream interrupted mid-entry
+	// must not produce a valid ZIP containing a truncated original.
+	if err := zw.Close(); err != nil {
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not finish the ZIP", map[string]interface{}{"error": err.Error()})
 	}
 }
 

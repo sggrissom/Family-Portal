@@ -1133,7 +1133,8 @@ Buckets are per client and in-process; a restart resets them.
 Body sizes: 1 MiB for any JSON request, which includes a Records file sent to
 `ImportData`; 52 MiB for a photo upload; 1 GiB for a video and 40 GiB for an
 Everything archive, both checked when the upload begins and PUT to the signed
-media URL. Deadlines: 30s read for an ordinary request (a Records import too),
+media URL. Uploaded Records JSON and a ZIP's uncompressed `data.json` each
+have a 64 MiB limit. Deadlines: 30s read for an ordinary request (a Records import too),
 10 min for a photo upload, 12 hours to read a PUT to a signed media URL (a
 video's upload session still expires after 2 hours, an archive's after 12),
 2 min write for a response, 30 min for a download (the Everything archive

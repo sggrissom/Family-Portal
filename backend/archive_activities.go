@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -524,17 +525,17 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 		counts.Reused++
 	} else {
 		counts.Events++
-		attachPhotos(args.ledger.photos, args.event.PhotoIds, func(oldPhotoId, photoId int) {
-			join := EventPhoto{
-				Id:        vbolt.NextIntId(tx, EventPhotoBkt),
-				EventId:   event.Id,
-				PhotoId:   photoId,
-				FamilyId:  args.familyId,
-				CreatedAt: archiveCreatedAt(args.event.PhotosAddedAt[oldPhotoId]),
-			}
-			writeEventPhotoTx(tx, &join)
-		})
 	}
+	attachPhotos(args.ledger.photos, args.event.PhotoIds, GetEventPhotoIds(tx, event.Id), func(oldPhotoId, photoId int) {
+		join := EventPhoto{
+			Id:        vbolt.NextIntId(tx, EventPhotoBkt),
+			EventId:   event.Id,
+			PhotoId:   photoId,
+			FamilyId:  args.familyId,
+			CreatedAt: archiveCreatedAt(args.event.PhotosAddedAt[oldPhotoId]),
+		}
+		writeEventPhotoTx(tx, &join)
+	})
 
 	for _, sourceAppearance := range args.event.Appearances {
 		entryId := args.ledger.entries[sourceAppearance.EntryId]
@@ -567,16 +568,19 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 				"%q: dropped a performance's outcome or score: %v", name, err))
 		}
 
-		if appearanceExists(tx, appearance) {
+		existingId := matchingAppearanceId(tx, appearance)
+		if existingId != 0 {
+			appearance.Id = existingId
 			counts.Reused++
-			continue
+		} else {
+			appearance.Id = vbolt.NextIntId(tx, AppearanceBkt)
+			writeAppearanceTx(tx, &appearance)
+			counts.Appearances++
+			importResults(tx, appearance, sourceAppearance.Results,
+				args.ledger.people, args.entryRosters[entryId], counts, warnings)
 		}
 
-		appearance.Id = vbolt.NextIntId(tx, AppearanceBkt)
-		writeAppearanceTx(tx, &appearance)
-		counts.Appearances++
-
-		attachPhotos(args.ledger.photos, sourceAppearance.PhotoIds, func(oldPhotoId, photoId int) {
+		attachPhotos(args.ledger.photos, sourceAppearance.PhotoIds, GetAppearancePhotoIds(tx, appearance.Id), func(oldPhotoId, photoId int) {
 			join := AppearancePhoto{
 				Id:           vbolt.NextIntId(tx, AppearancePhotoBkt),
 				AppearanceId: appearance.Id,
@@ -586,9 +590,6 @@ func importEvent(tx *vbolt.Tx, args importEventArgs, counts *ActivityImportCount
 			}
 			writeAppearancePhotoTx(tx, &join)
 		})
-
-		importResults(tx, appearance, sourceAppearance.Results,
-			args.ledger.people, args.entryRosters[entryId], counts, warnings)
 	}
 }
 
@@ -614,16 +615,16 @@ func findOrCreateEvent(tx *vbolt.Tx, args importEventArgs, name string) (Event, 
 	return event, false
 }
 
-func appearanceExists(tx *vbolt.Tx, candidate Appearance) bool {
+func matchingAppearanceId(tx *vbolt.Tx, candidate Appearance) int {
 	for _, existing := range GetEventAppearances(tx, candidate.EventId) {
 		if existing.EntryId == candidate.EntryId &&
 			existing.OccurredAt.Equal(candidate.OccurredAt) &&
 			strings.EqualFold(existing.Round, candidate.Round) &&
 			strings.EqualFold(existing.Opponent, candidate.Opponent) {
-			return true
+			return existing.Id
 		}
 	}
-	return false
+	return 0
 }
 
 func importResults(
@@ -682,13 +683,14 @@ func importResults(
 	}
 }
 
-func attachPhotos(photoIdMapping map[int]int, photoIds []int, write func(oldPhotoId, photoId int)) {
+func attachPhotos(photoIdMapping map[int]int, photoIds, existing []int, write func(oldPhotoId, photoId int)) {
 	if len(photoIdMapping) == 0 {
 		return
 	}
 	for _, oldPhotoId := range photoIds {
-		if newPhotoId, ok := photoIdMapping[oldPhotoId]; ok {
+		if newPhotoId, ok := photoIdMapping[oldPhotoId]; ok && !slices.Contains(existing, newPhotoId) {
 			write(oldPhotoId, newPhotoId)
+			existing = append(existing, newPhotoId)
 		}
 	}
 }

@@ -64,6 +64,27 @@ func TestFamilyArchiveRoundTrip(t *testing.T) {
 	assertArchiveMatches(t, restored, reimported)
 }
 
+func TestRecordsThenEverythingRestoresMediaLinks(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	source := readArchiveContents(t, fx.db, fx.familyId)
+	records := fx.exportBundle(t, fx.owner, "records")
+	everything := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+
+	fx.importBundle(t, restorer, records, importEverything)
+	fx.importBundle(t, restorer, everything, importEverything)
+	restored := readArchiveContents(t, fx.db, restorer.FamilyId)
+	fx.importBundle(t, restorer, everything, importEverything)
+	assertArchiveMatches(t, restored, readArchiveContents(t, fx.db, restorer.FamilyId))
+
+	if books := restored["books"]; len(books) != 1 || books[0]["Revision"] != "2" {
+		t.Fatalf("filling the restored book should increment its revision once: %v", books)
+	}
+	// The first restore created the book and the second changed its media.
+	restored["books"][0]["Revision"] = source["books"][0]["Revision"]
+	assertArchiveMatches(t, source, restored)
+}
+
 func TestFormatV1ArchiveImports(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	data, err := os.ReadFile("testdata/archive_v1.json")

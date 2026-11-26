@@ -3,6 +3,8 @@ package backend
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -44,6 +46,36 @@ func TestEverythingArchiveHoldsPhotosAndVideos(t *testing.T) {
 	legacy := zipEntryNames(t, fx.exportBundle(t, fx.owner, "with_photos"))
 	if !slices.Equal(legacy, names) {
 		t.Errorf("the old with_photos mode exports %v; want the Everything archive %v", legacy, names)
+	}
+}
+
+func TestEverythingArchiveReportsMissingOriginals(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	videos := familyVideos(t, fx.db, fx.familyId)
+	if len(videos) == 0 {
+		t.Fatal("expected an exported video")
+	}
+	if err := fx.store.Delete(context.Background(), videos[0].OriginalKey); err != nil {
+		t.Fatal(err)
+	}
+
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	zr, err := zip.NewReader(bytes.NewReader(bundle), int64(len(bundle)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := zr.Open(incompleteArchiveEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer report.Close()
+	body, err := io.ReadAll(report)
+	if err != nil || !strings.Contains(string(body), "videos/"+videoExportFileName(videos[0])) {
+		t.Fatalf("missing video not in the report: %s, %v", body, err)
+	}
+	resp := fx.importBundle(t, fx.newUser(t, "restorer"), bundle, importEverything)
+	if !strings.Contains(strings.Join(resp.Warnings, " "), incompleteArchiveEntry) {
+		t.Fatalf("missing export warning: %v", resp.Warnings)
 	}
 }
 

@@ -15,6 +15,9 @@ import (
 // archiveFormatVersion is written into every export. Files from before it
 // existed carry none and are read as version 1.
 const archiveFormatVersion = 1
+const maxArchiveRecordsBytes = 64 << 20
+
+var errArchiveRecordsTooLarge = fmt.Errorf("Family Record data can be at most %s before compression.", formatBytes(maxArchiveRecordsBytes))
 
 var errUnreadableArchive = errors.New("That file is not a valid Family Record export. Check that you picked the right file.")
 
@@ -75,23 +78,36 @@ type importedVideo struct {
 	File    stagedUpload `json:"file"`
 }
 
-// queue places and queues the work, and reports false when stopping said to
-// stop before it was all done.
-func (done archiveImported) queue(stopping func() bool) bool {
-	stopped := func() bool { return stopping != nil && stopping() }
+// Place all originals before queueing workers. A retry can safely resume
+// placement, and workers only receive jobs once every original is in place.
+func (done archiveImported) place() error {
+	for _, photo := range done.Photos {
+		if archiveImportsStopping.Load() {
+			return errArchiveImportStopped
+		}
+		if err := photo.File.run(); err != nil {
+			return fmt.Errorf("place photo %d: %w", photo.ImageId, err)
+		}
+	}
+	for _, video := range done.Videos {
+		if archiveImportsStopping.Load() {
+			return errArchiveImportStopped
+		}
+		if err := video.File.run(); err != nil {
+			return fmt.Errorf("place video %d: %w", video.ImageId, err)
+		}
+	}
+	return nil
+}
+
+func (done archiveImported) queue() {
 	for _, id := range done.MilestoneIds {
 		QueueMilestoneEmbedding(id)
 	}
 	for _, photo := range done.Photos {
-		if stopped() {
-			return false
-		}
-		err := photo.File.run()
-		if err == nil {
-			err = QueuePhotoProcessing(PhotoProcessingJob{
-				ImageId: photo.ImageId, FamilyId: photo.FamilyId, FilePath: photo.FilePath, MimeType: photo.MimeType,
-			})
-		}
+		err := QueuePhotoProcessing(PhotoProcessingJob{
+			ImageId: photo.ImageId, FamilyId: photo.FamilyId, FilePath: photo.FilePath, MimeType: photo.MimeType,
+		})
 		if err != nil {
 			LogWarn(LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
 				"photoId": photo.ImageId,
@@ -100,19 +116,19 @@ func (done archiveImported) queue(stopping func() bool) bool {
 		}
 	}
 	for _, video := range done.Videos {
-		if stopped() {
-			return false
-		}
-		if err := video.File.run(); err != nil {
-			LogWarn(LogCategoryPhoto, "Imported video left for stuck-video recovery", map[string]interface{}{
-				"videoId": video.ImageId,
-				"error":   err.Error(),
-			})
-			continue
-		}
 		QueueVideoProcessing(video.ImageId)
 	}
-	return true
+}
+
+func readArchiveRecordsFile(r io.Reader) (archive familyArchive, err error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxArchiveRecordsBytes+1))
+	if err != nil {
+		return archive, errUnreadableArchive
+	}
+	if len(data) > maxArchiveRecordsBytes {
+		return archive, errArchiveRecordsTooLarge
+	}
+	return readArchiveRecords(data)
 }
 
 func readArchiveRecords(data []byte) (archive familyArchive, err error) {
@@ -164,29 +180,36 @@ func markLegacyPregnancies(people []ImportPerson) (warnings []string) {
 func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
 	media := make(map[string]*zip.File, len(zr.File))
 	var records *zip.File
+	incomplete := false
 	for _, zf := range zr.File {
-		if zf.Name == "data.json" {
+		switch zf.Name {
+		case "data.json":
 			records = zf
-		} else {
+		case incompleteArchiveEntry:
+			incomplete = true
+		default:
 			media[zf.Name] = zf
 		}
 	}
 	if records == nil {
 		return archive, errors.New("That zip has no data.json, so it isn't a Family Record export.")
 	}
+	if records.UncompressedSize64 > maxArchiveRecordsBytes {
+		return archive, errArchiveRecordsTooLarge
+	}
 	rc, err := records.Open()
 	if err != nil {
 		return archive, errUnreadableArchive
 	}
-	data, err := io.ReadAll(rc)
+	archive, err = readArchiveRecordsFile(rc)
 	rc.Close()
 	if err != nil {
-		return archive, errUnreadableArchive
-	}
-	if archive, err = readArchiveRecords(data); err != nil {
 		return archive, err
 	}
 	archive.media = media
+	if incomplete {
+		archive.warnings = append(archive.warnings, "This export is incomplete. Open "+incompleteArchiveEntry+" inside the ZIP for the list of missing originals.")
+	}
 	return archive, nil
 }
 
@@ -194,6 +217,7 @@ func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
 // familyId inside tx and leaves committing, or rolling back a dry run, to the
 // caller.
 func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyArchive, req ImportDataRequest) (resp ImportDataResponse, done archiveImported, err error) {
+	resp.Warnings = append(resp.Warnings, archive.warnings...)
 	resp.AvailableFamilyIds = getUniqueFamilyIds(archive.People)
 	resp.AvailablePeople = archive.People
 	people := filterPeople(archive.People, req.FilterFamilyIds, req.FilterPersonIds)
@@ -215,8 +239,9 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	l := newArchiveLedger()
 	importFamilySettings(tx, familyId, archive.Family)
-	resp.ImportedPeople, resp.MergedPeople, resp.Warnings = importPeople(tx, people, familyId, l)
-	resp.Warnings = append(archive.warnings, resp.Warnings...)
+	var peopleWarnings []string
+	resp.ImportedPeople, resp.MergedPeople, peopleWarnings = importPeople(tx, people, familyId, l)
+	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 	resp.SkippedPeople = len(people) - resp.ImportedPeople - resp.MergedPeople
 	resp.PersonIdMapping = l.people
 	resp.ImportedTags, resp.SkippedTags = importTags(tx, archive.Tags, familyId, l)
@@ -364,6 +389,6 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		return
 	}
 	vbolt.TxCommit(ctx.Tx)
-	done.queue(nil)
+	done.queue()
 	return
 }
