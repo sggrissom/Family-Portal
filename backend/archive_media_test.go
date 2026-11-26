@@ -224,3 +224,16 @@ func TestImportRecognisesMediaStoredBeforeImagesHadAHash(t *testing.T) {
 		}
 	}
 }
+
+func TestImportRecognisesUnhashedMediaBeforeTheBackfillReachesIt(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	before := readArchiveContents(t, fx.db, fx.familyId)
+
+	fx.importBundle(t, fx.owner, bundle, importEverything)
+
+	after := readArchiveContents(t, fx.db, fx.familyId)
+	for _, d := range diffArchiveContents(archiveContents{"images": before["images"]}, archiveContents{"images": after["images"]}) {
+		t.Errorf("an import right after a deploy duplicated the family's media: %s", d)
+	}
+}

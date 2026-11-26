@@ -478,6 +478,7 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 	})
 
 	if !req.PreviewOnly {
+		hashFamilyMedia(db, job.FamilyId)
 		staging, err = stageArchiveMedia(archive, req, writes, archiveStagingProgress(db, id))
 		if err != nil {
 			failArchiveImport(db, id, err)
