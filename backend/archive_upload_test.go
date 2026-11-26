@@ -401,3 +401,34 @@ func TestMediaJanitorExpiresAbandonedArchiveUploads(t *testing.T) {
 		t.Errorf("an expired upload still reserves %d bytes", reserved)
 	}
 }
+
+func TestAKeptArchiveUploadCountsTowardTheFamilyQuota(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	usage := func() (used int64) {
+		vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { used = FamilyStorageUsage(tx, restorer.FamilyId) })
+		return
+	}
+	importId := fx.uploadArchive(t, restorer, bundle)
+	if _, err := runArchiveImport(t, restorer, importId, ImportDataRequest{PreviewOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if used := usage(); used != int64(len(bundle)) {
+		t.Errorf("a previewed upload kept on the server counts %d bytes; want its %d", used, len(bundle))
+	}
+
+	if _, err := runArchiveImport(t, restorer, importId, importEverything); err != nil {
+		t.Fatal(err)
+	}
+	drainPhotoJobs()
+	var media int64
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, image := range GetFamilyImages(tx, restorer.FamilyId) {
+			media += imageStoredBytes(image)
+		}
+	})
+	if used := usage(); used != media {
+		t.Errorf("after the import the family uses %d bytes; want only its %d bytes of media", used, media)
+	}
+}

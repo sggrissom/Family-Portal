@@ -136,15 +136,15 @@ func archiveImportByKey(tx *vbolt.Tx, key string) (job ArchiveImport) {
 	return
 }
 
-// The zip holds its space while it uploads; the import itself counts the
-// media it writes.
+// A zip holds its space until it is deleted, except while its own import
+// runs, which counts the media it writes instead.
 func archiveImportReservedBytes(tx *vbolt.Tx, familyId int) (total int64) {
 	var ids []int
 	vbolt.ReadTermTargets(tx, ArchiveImportByFamilyIndex, familyId, &ids, vbolt.Window{})
 	var jobs []ArchiveImport
 	vbolt.ReadSlice(tx, ArchiveImportBkt, ids, &jobs)
 	for _, job := range jobs {
-		if job.State == ArchiveImportUploading {
+		if !job.Discarded && !job.Imported && job.State != ArchiveImportImporting {
 			total += int64(job.DeclaredBytes)
 		}
 	}
