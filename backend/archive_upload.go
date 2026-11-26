@@ -20,8 +20,9 @@ import (
 	"go.hasen.dev/vpack"
 )
 
-// An Everything archive is uploaded straight to the media store, then
-// imported by a background job. A records file stays a normal ImportData call.
+// An Everything archive or a Records file is uploaded straight to the media
+// store, then imported by a background job. Pasted records stay a normal
+// ImportData call.
 
 type ArchiveImportState int
 
@@ -231,19 +232,23 @@ func BeginArchiveImport(ctx *vbeam.Context, req BeginArchiveImportRequest) (resp
 		err = idErr
 		return
 	}
+	name, contentType := "archive.zip", "application/zip"
+	if strings.EqualFold(filepath.Ext(req.Filename), ".json") {
+		name, contentType = "records.json", "application/json"
+	}
 	now := time.Now()
 	job := ArchiveImport{
 		Id:            vbolt.NextIntId(ctx.Tx, ArchiveImportBkt),
 		FamilyId:      familyId,
 		UserId:        user.Id,
-		Key:           "imports/" + mediaId + "/archive.zip",
+		Key:           "imports/" + mediaId + "/" + name,
 		Filename:      filepath.Base(req.Filename),
 		DeclaredBytes: req.Size,
 		State:         ArchiveImportUploading,
 		CreatedAt:     now,
 		ExpiresAt:     now.Add(archiveUploadTTL),
 	}
-	inst, urlErr := store.UploadURL(job.Key, int64(job.DeclaredBytes), "application/zip", archiveUploadTTL)
+	inst, urlErr := store.UploadURL(job.Key, int64(job.DeclaredBytes), contentType, archiveUploadTTL)
 	if urlErr != nil {
 		err = urlErr
 		return
@@ -520,7 +525,7 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		job.Media = len(archive.media)
 	})
 
-	if !req.PreviewOnly {
+	if !req.PreviewOnly && archive.media != nil {
 		hashFamilyMedia(db, job.FamilyId)
 		dir := ""
 		if writes {
@@ -691,9 +696,9 @@ func expireArchiveUploads(db *vbolt.DB, now time.Time) (expired int) {
 	return
 }
 
-// openUploadedArchive reads a zip from the media store. A local store's file
-// is read in place; a bucket's is copied to a temporary file first, because
-// a zip is read from its end.
+// openUploadedArchive reads a zip or a Records file from the media store. A
+// local store's file is read in place; a bucket's is copied to a temporary
+// file first, because a zip is read from its end.
 func openUploadedArchive(store MediaStore, key string, size int64) (archive familyArchive, closeFn func(), err error) {
 	closeFn = func() {}
 	if store == nil {
@@ -723,6 +728,15 @@ func openUploadedArchive(store MediaStore, key string, size int64) (archive fami
 			closeFn()
 			return archive, func() {}, err
 		}
+	}
+	if strings.HasSuffix(key, ".json") {
+		data, readErr := io.ReadAll(file)
+		closeFn()
+		if readErr != nil {
+			return archive, func() {}, readErr
+		}
+		archive, err = readArchiveRecords(data)
+		return archive, func() {}, err
 	}
 	zr, zipErr := zip.NewReader(file, size)
 	if zipErr != nil {

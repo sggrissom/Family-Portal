@@ -89,8 +89,9 @@ const putArchive = (form: ImportForm, file: File, upload: server.UploadInstructi
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// An Everything archive uploads once, straight to storage; each preview, dry
-// run or import is then a background job on that upload.
+// A chosen file, an Everything archive or a Records file, uploads once,
+// straight to storage; each preview, dry run or import is then a background
+// job on that upload.
 const runArchiveJob = async (
   form: ImportForm,
   options: server.ImportDataRequest
@@ -141,7 +142,7 @@ const runArchiveJob = async (
 
 const JobProgress = ({ form }: { form: ImportForm }) => {
   const job = form.job;
-  if (!form.loading || !form.isZip || !job) {
+  if (!form.loading || !form.file || !job) {
     return null;
   }
   return (
@@ -152,7 +153,9 @@ const JobProgress = ({ form }: { form: ImportForm }) => {
       </p>
       {job.records > 0 && (
         <p>
-          {job.records} records and {job.media} photo and video files in this archive.
+          {job.media > 0
+            ? `${job.records} records and ${job.media} photo and video files in this archive.`
+            : `${job.records} records in this file.`}
         </p>
       )}
       {job.state === "staging" && job.stagedMedia > 0 && (
@@ -207,23 +210,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
       form.archiveImportId = 0;
       form.error = "";
       clearPreview(form);
-      form.isZip = file.name.endsWith(".zip");
-
-      if (form.isZip) {
-        form.jsonData = "";
-        vlens.scheduleRedraw();
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = e => {
-        const result = e.target?.result;
-        if (typeof result === "string") {
-          form.jsonData = result;
-          vlens.scheduleRedraw();
-        }
-      };
-      reader.readAsText(file);
+      form.isZip = file.name.toLowerCase().endsWith(".zip");
+      form.jsonData = "";
       vlens.scheduleRedraw();
     }
   };
@@ -231,14 +219,14 @@ const ImportPage = ({ form }: ImportPageProps) => {
   const runImport = async (
     options: Omit<server.ImportDataRequest, "jsonData">
   ): Promise<[server.ImportDataResponse | null, string]> => {
-    if (!form.isZip) {
+    if (!form.file) {
       const [resp, err] = await server.ImportData({ ...options, jsonData: form.jsonData });
       return [resp, err];
     }
     return runArchiveJob(form, { ...options, jsonData: "" });
   };
 
-  const hasInput = () => (form.isZip ? form.file !== null : form.jsonData.trim() !== "");
+  const hasInput = () => form.file !== null || form.jsonData.trim() !== "";
 
   const handleTextareaChange = (event: Event) => {
     const target = event.target as HTMLTextAreaElement;
@@ -273,7 +261,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
       return;
     }
 
-    if (!form.isZip) {
+    if (!form.file) {
       try {
         JSON.parse(form.jsonData);
       } catch (e) {
@@ -538,12 +526,17 @@ const ImportPage = ({ form }: ImportPageProps) => {
               </div>
             </div>
 
-            {form.isZip && form.file ? (
+            {form.file ? (
               <div className="zip-bundle-card">
                 <p>
-                  <strong>Everything archive selected:</strong> {form.file.name}
+                  <strong>{form.isZip ? "Everything archive" : "Records file"} selected:</strong>{" "}
+                  {form.file.name}
                 </p>
-                <p>Your records plus their photo and video files.</p>
+                <p>
+                  {form.isZip
+                    ? "Your records plus their photo and video files."
+                    : "Your records, without photo or video files."}
+                </p>
               </div>
             ) : (
               <>

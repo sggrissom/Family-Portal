@@ -27,8 +27,9 @@ async function download(page: Page, start: () => Promise<void>, dir: string): Pr
   return path;
 }
 
-async function previewAndImport(page: Page, file: string) {
+async function previewAndImport(page: Page, file: string, kind: string) {
   await page.locator("#json-file").setInputFiles(file);
+  await expect(page.locator(".zip-bundle-card")).toContainText(`${kind} selected`);
   await page.getByRole("button", { name: "Preview Data" }).click();
   await expect(page.getByRole("heading", { name: "Select Data to Import" })).toBeVisible();
   await expect(page.locator(".person-name", { hasText: child.name })).toBeVisible();
@@ -93,7 +94,7 @@ test("a family downloads Records and the Everything archive and imports them bac
   await test.step("import the Everything archive and follow its progress", async () => {
     await page.getByRole("link", { name: "Import Data" }).click();
     await expect(page.getByRole("heading", { name: "Import Family Data" })).toBeVisible();
-    await previewAndImport(page, everythingFile);
+    await previewAndImport(page, everythingFile, "Everything archive");
 
     await expect(
       page.getByRole("status").filter({ hasText: "the import keeps running" })
@@ -104,7 +105,7 @@ test("a family downloads Records and the Everything archive and imports them bac
 
   await test.step("import the Records file the same way", async () => {
     await page.getByRole("button", { name: "Import More Data" }).click();
-    await previewAndImport(page, recordsFile);
+    await previewAndImport(page, recordsFile, "Records file");
     await expect(page.getByRole("heading", { name: "Import Successful!" })).toBeVisible();
     await expect(page.locator(".stat", { hasText: "People Merged" })).toBeVisible();
   });

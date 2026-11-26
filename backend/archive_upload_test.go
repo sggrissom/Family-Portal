@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -516,5 +518,55 @@ func TestArchiveImportsClearStagingACrashLeftBehind(t *testing.T) {
 	waitForArchiveImports()
 	if n := stagedFiles(t, stagingDir); n != 0 {
 		t.Errorf("%d staged files a crashed import left are still there after a restart", n)
+	}
+}
+
+func TestARecordsFileTooBigForARequestImportsThroughTheUpload(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	var records ImportDataStructure
+	if err := json.Unmarshal([]byte(fx.exportRecords(t, fx.owner)), &records); err != nil {
+		t.Fatal(err)
+	}
+	if len(records.Books) == 0 {
+		t.Fatal("the seed has no book")
+	}
+	introduction := strings.Repeat("A long summer by the water. ", int(maxJSONRequestBytes/28)+1)
+	records.Books[0].Introduction = introduction
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	useArchiveUploadStore(t)
+	begun, err := callProc(t, restorer, BeginArchiveImport, BeginArchiveImportRequest{Filename: "family-records.json", Size: len(data)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if put := sendUpload(fx.store, begun.Upload, data); put.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %s", put.Code, put.Body.String())
+	}
+	preview, err := runArchiveImport(t, restorer, begun.ImportId, ImportDataRequest{PreviewOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.State != "done" || preview.Result == nil || len(preview.Result.AvailablePeople) != len(records.People) {
+		t.Fatalf("the preview finished as %+v", preview)
+	}
+	status, err := runArchiveImport(t, restorer, begun.ImportId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPeople != len(records.People) {
+		t.Fatalf("the import finished as %+v", status)
+	}
+	var books []Book
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, row := range archiveReaders["books"](tx, restorer.FamilyId) {
+			books = append(books, row.(Book))
+		}
+	})
+	if len(books) != 1 || books[0].Introduction != introduction {
+		t.Errorf("imported %d books; want the one with its %d-byte introduction", len(books), len(introduction))
 	}
 }
