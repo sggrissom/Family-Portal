@@ -80,6 +80,24 @@ func BackfillMediaContentHashes(db *vbolt.DB) (hashed int) {
 			return true
 		})
 	})
+	return hashMedia(db, pending)
+}
+
+// hashFamilyMedia hashes the family's media that has no hash yet, so an
+// import can recognise it before the startup backfill reaches it.
+func hashFamilyMedia(db *vbolt.DB, familyId int) (hashed int) {
+	var pending []Image
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
+		for _, img := range GetFamilyImages(tx, familyId) {
+			if img.ContentHash == "" {
+				pending = append(pending, img)
+			}
+		}
+	})
+	return hashMedia(db, pending)
+}
+
+func hashMedia(db *vbolt.DB, pending []Image) (hashed int) {
 	hashes := map[int]string{}
 	flush := func() {
 		vbolt.WithWriteTx(db, func(tx *vbolt.Tx) {

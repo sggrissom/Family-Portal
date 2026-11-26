@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,15 +193,35 @@ func TestArchiveImportDeletesItsUploadWhenItEnds(t *testing.T) {
 		t.Error("the uploaded archive is still stored after its import")
 	}
 
-	failing := fx.uploadArchive(t, restorer, []byte("this is not a zip file"))
-	if status, _ := runArchiveImport(t, restorer, failing, importEverything); status.State != "failed" {
-		t.Fatalf("import of a broken file = %+v", status)
+}
+
+func TestArchiveImportThatFailsCanBeRetriedFromTheSameUpload(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	importId := fx.uploadArchive(t, restorer, bundle)
+	paused, release, _ := pauseArchiveStaging(t, errors.New("The server ran out of room while unpacking."))
+
+	if _, err := callProc(t, restorer, CompleteArchiveImport, CompleteArchiveImportRequest{ImportId: importId, Options: importEverything}); err != nil {
+		t.Fatal(err)
 	}
-	if fx.uploadStored(t, failing) {
-		t.Error("the uploaded archive is still stored after its import failed")
+	<-paused
+	release()
+	waitForArchiveImports()
+	if !fx.uploadStored(t, importId) {
+		t.Fatal("a failed import deleted the upload it could be retried from")
 	}
-	if _, err := callProc(t, restorer, CompleteArchiveImport, CompleteArchiveImportRequest{ImportId: failing, Options: importEverything}); err == nil {
-		t.Error("an import restarted from an upload that was deleted")
+
+	status, err := runArchiveImport(t, restorer, importId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drainPhotoJobs()
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
+		t.Fatalf("the retry finished as %+v", status)
+	}
+	if fx.uploadStored(t, importId) {
+		t.Error("the uploaded archive is still stored after the retry imported it")
 	}
 }
 
@@ -379,5 +401,172 @@ func TestMediaJanitorExpiresAbandonedArchiveUploads(t *testing.T) {
 	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { reserved = archiveImportReservedBytes(tx, restorer.FamilyId) })
 	if reserved != 0 {
 		t.Errorf("an expired upload still reserves %d bytes", reserved)
+	}
+}
+
+func TestAKeptArchiveUploadCountsTowardTheFamilyQuota(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	usage := func() (used int64) {
+		vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) { used = FamilyStorageUsage(tx, restorer.FamilyId) })
+		return
+	}
+	importId := fx.uploadArchive(t, restorer, bundle)
+	if _, err := runArchiveImport(t, restorer, importId, ImportDataRequest{PreviewOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if used := usage(); used != int64(len(bundle)) {
+		t.Errorf("a previewed upload kept on the server counts %d bytes; want its %d", used, len(bundle))
+	}
+
+	if _, err := runArchiveImport(t, restorer, importId, importEverything); err != nil {
+		t.Fatal(err)
+	}
+	drainPhotoJobs()
+	var media int64
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, image := range GetFamilyImages(tx, restorer.FamilyId) {
+			media += imageStoredBytes(image)
+		}
+	})
+	if used := usage(); used != media {
+		t.Errorf("after the import the family uses %d bytes; want only its %d bytes of media", used, media)
+	}
+}
+
+func useStagingRoot(t *testing.T) string {
+	t.Helper()
+	dir, previous := t.TempDir(), archiveStagingRoot
+	archiveStagingRoot = dir
+	t.Cleanup(func() { archiveStagingRoot = previous })
+	return dir
+}
+
+func TestArchiveImportStoppedAfterItCommitsPlacesItsMediaOnRestart(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	importId := fx.uploadArchive(t, restorer, bundle)
+	stagingDir := useStagingRoot(t)
+	archiveImportCommittedHook = func() {
+		go StopArchiveImports(context.Background())
+		for !archiveImportsStopping.Load() {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	t.Cleanup(func() {
+		archiveImportCommittedHook = nil
+		archiveImportsStopping.Store(false)
+	})
+
+	status, err := runArchiveImport(t, restorer, importId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "placing" {
+		t.Fatalf("a job stopped right after its commit finished as %+v; want it left placing", status)
+	}
+	if stagedFiles(t, stagingDir) == 0 {
+		t.Fatal("the staged files were removed before they were placed")
+	}
+
+	archiveImportCommittedHook = nil
+	InitializeArchiveImports(fx.db)
+	waitForArchiveImports()
+	jobs := drainPhotoJobs()
+	for _, job := range jobs {
+		t.Cleanup(func() { deletePhotoFiles(Image{FilePath: job.FilePath}) })
+	}
+	status, _ = callProc(t, restorer, GetArchiveImportStatus, GetArchiveImportStatusRequest{ImportId: importId})
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
+		t.Fatalf("after the restart the job finished as %+v", status)
+	}
+	if len(jobs) != status.Result.ImportedPhotos {
+		t.Errorf("%d photos queued after the restart; %d imported", len(jobs), status.Result.ImportedPhotos)
+	}
+	for _, job := range jobs {
+		if _, err := os.Stat(photoOriginalPath(job.FilePath)); err != nil {
+			t.Errorf("photo %d has no file after the restart: %v", job.ImageId, err)
+		}
+	}
+	for _, video := range familyVideos(t, fx.db, restorer.FamilyId) {
+		if _, err := activeMediaStore().Stat(context.Background(), video.OriginalKey); err != nil {
+			t.Errorf("video %d has no file after the restart: %v", video.Id, err)
+		}
+	}
+	if n := stagedFiles(t, stagingDir); n != 0 {
+		t.Errorf("%d staged files left after the restart placed them", n)
+	}
+	if fx.uploadStored(t, importId) {
+		t.Error("the upload is still stored after the restart finished its import")
+	}
+}
+
+func TestArchiveImportsClearStagingACrashLeftBehind(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	stagingDir := useStagingRoot(t)
+	leftover := filepath.Join(stagingDir, "import-123")
+	if err := os.MkdirAll(leftover, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(leftover, "7.png"), []byte("half a photo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	InitializeArchiveImports(fx.db)
+	waitForArchiveImports()
+	if n := stagedFiles(t, stagingDir); n != 0 {
+		t.Errorf("%d staged files a crashed import left are still there after a restart", n)
+	}
+}
+
+func TestARecordsFileTooBigForARequestImportsThroughTheUpload(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	var records ImportDataStructure
+	if err := json.Unmarshal([]byte(fx.exportRecords(t, fx.owner)), &records); err != nil {
+		t.Fatal(err)
+	}
+	if len(records.Books) == 0 {
+		t.Fatal("the seed has no book")
+	}
+	introduction := strings.Repeat("A long summer by the water. ", int(maxJSONRequestBytes/28)+1)
+	records.Books[0].Introduction = introduction
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	useArchiveUploadStore(t)
+	begun, err := callProc(t, restorer, BeginArchiveImport, BeginArchiveImportRequest{Filename: "family-records.json", Size: len(data)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if put := sendUpload(fx.store, begun.Upload, data); put.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %s", put.Code, put.Body.String())
+	}
+	preview, err := runArchiveImport(t, restorer, begun.ImportId, ImportDataRequest{PreviewOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.State != "done" || preview.Result == nil || len(preview.Result.AvailablePeople) != len(records.People) {
+		t.Fatalf("the preview finished as %+v", preview)
+	}
+	status, err := runArchiveImport(t, restorer, begun.ImportId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPeople != len(records.People) {
+		t.Fatalf("the import finished as %+v", status)
+	}
+	var books []Book
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, row := range archiveReaders["books"](tx, restorer.FamilyId) {
+			books = append(books, row.(Book))
+		}
+	})
+	if len(books) != 1 || books[0].Introduction != introduction {
+		t.Errorf("imported %d books; want the one with its %d-byte introduction", len(books), len(introduction))
 	}
 }

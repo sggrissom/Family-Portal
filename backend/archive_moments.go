@@ -419,7 +419,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			interview = Interview{
 				Id: vbolt.NextIntId(tx, InterviewBkt), FamilyId: person.FamilyId, PersonId: personId, Date: date,
 				Title: ei.Title, Source: source, Status: status, QuestionIds: []int{}, SkippedIds: []int{},
-				PhotoId: in.ledger.photos[ei.PhotoId], Notes: ei.Notes, CreatedAt: ei.CreatedAt,
+				PhotoId: in.ledger.photos[ei.PhotoId], Notes: ei.Notes, CreatedAt: archiveCreatedAt(ei.CreatedAt),
 				CompletedAt: ei.CompletedAt, Version: 1,
 			}
 			for _, id := range ei.QuestionIds {
@@ -465,7 +465,7 @@ func (in interviewImport) run(tx *vbolt.Tx, questions []ExportInterviewQuestion,
 			in.ledger.moments[em.Id] = m.Id
 			for _, tagName := range em.TagNames {
 				if tagId, ok := in.ledger.tagByName[strings.ToLower(tagName)]; ok {
-					addTagToMilestone(tx, m.Id, tagId, person.FamilyId)
+					linkTagToMilestone(tx, m.Id, tagId, person.FamilyId, archiveCreatedAt(em.TagsAddedAt[strings.ToLower(tagName)]))
 				}
 			}
 			result.answerIds = append(result.answerIds, m.Id)
@@ -654,7 +654,13 @@ func importBooks(tx *vbolt.Tx, books []ExportBook, in bookImport) (imported, ski
 			ReviewedAt:   now,
 		}
 		if !source.CreatedAt.IsZero() {
-			book.CreatedAt, book.UpdatedAt, book.ReviewedAt = source.CreatedAt, source.UpdatedAt, source.ReviewedAt
+			book.CreatedAt, book.UpdatedAt, book.ReviewedAt = source.CreatedAt, source.CreatedAt, source.CreatedAt
+			if !source.UpdatedAt.IsZero() {
+				book.UpdatedAt, book.ReviewedAt = source.UpdatedAt, source.UpdatedAt
+			}
+			if !source.ReviewedAt.IsZero() {
+				book.ReviewedAt = source.ReviewedAt
+			}
 		}
 		if book.Preset == "" {
 			book.Preset = BookPresetFirstYear

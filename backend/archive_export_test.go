@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"go.hasen.dev/vbolt"
 )
 
 func zipEntryNames(t *testing.T, bundle []byte) []string {
@@ -68,6 +70,45 @@ func TestArchiveExportSizesEstimateTheDownloads(t *testing.T) {
 	if !withinPercent(sizes.EverythingBytes, everything, 25) {
 		t.Errorf("the Everything archive is estimated at %d bytes; the download is %d", sizes.EverythingBytes, everything)
 	}
+}
+
+func TestArchiveExportSizesCountTheVideosTheArchiveHolds(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	check := func(when string) {
+		t.Helper()
+		bundle := fx.exportBundle(t, fx.owner, "everything")
+		videos := 0
+		for _, name := range zipEntryNames(t, bundle) {
+			if strings.HasPrefix(name, "videos/") {
+				videos++
+			}
+		}
+		sizes, err := callProc(t, fx.owner, GetArchiveExportSizes, GetArchiveExportSizesRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sizes.Videos != videos {
+			t.Errorf("%s: the sizes count %d videos; the archive holds %d", when, sizes.Videos, videos)
+		}
+		if !withinPercent(sizes.EverythingBytes, len(bundle), 25) {
+			t.Errorf("%s: the Everything archive is estimated at %d bytes; the download is %d", when, sizes.EverythingBytes, len(bundle))
+		}
+	}
+	store := mediaStore
+	mediaStore = nil
+	check("with no media store")
+	mediaStore = store
+
+	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+		for _, image := range GetFamilyImages(tx, fx.familyId) {
+			if image.IsVideo() {
+				image.Status = PhotoFailed
+				writeImage(tx, &image)
+			}
+		}
+		vbolt.TxCommit(tx)
+	})
+	check("with a failed video that kept its original")
 }
 
 func TestArchiveExportSizesStayInTheFamily(t *testing.T) {

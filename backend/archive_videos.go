@@ -124,6 +124,7 @@ func importVideos(
 	used := FamilyStorageUsage(tx, familyId)
 	existing := familyMediaByHash(tx, familyId)
 	var unavailable, overQuota int
+	var pendingDisk int64
 
 	for _, video := range videos {
 		if !inScope(video.PersonIds, l) {
@@ -141,6 +142,11 @@ func importVideos(
 			skipped++
 			continue
 		}
+		if file.noRoom {
+			overQuota++
+			skipped++
+			continue
+		}
 
 		ext, supported := videoExtensions[video.MimeType]
 		if store == nil || !supported {
@@ -155,11 +161,12 @@ func importVideos(
 			skipped++
 			continue
 		}
-		if localStore && !dryRun && CheckDiskHeadroom(cfg.MediaDir, reservation, cfg.MinFreeDiskBytes) != nil {
+		if localStore && !dryRun && CheckDiskHeadroom(cfg.MediaDir, pendingDisk+reservation, cfg.MinFreeDiskBytes) != nil {
 			overQuota++
 			skipped++
 			continue
 		}
+		pendingDisk += reservation
 		mediaId, err := newMediaId()
 		if err != nil {
 			skipped++
@@ -201,8 +208,8 @@ func importVideos(
 		}, l)
 		importTranscript(tx, image.Id, familyId, ownerUserId, video.Transcript)
 		queued = append(queued, importedVideo{
-			id:   image.Id,
-			file: stagedUpload{store: store, from: file.path, key: key, size: size, contentType: video.MimeType},
+			ImageId: image.Id,
+			File:    stagedUpload{From: file.path, Key: key, Size: size, ContentType: video.MimeType},
 		})
 		imported++
 	}

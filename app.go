@@ -339,9 +339,9 @@ func MakeApplication() *vbeam.Application {
 
 	// Upload sessions, expiry sweeps, and retried deletes for stored video
 	backend.InitializeVideoUploads(app.DB)
-	backend.InitializeArchiveImports(app.DB)
 	backend.InitializeVideoWorker(app.DB)
 	backend.InitializeVideoAnalysisWorker(app.DB)
+	backend.InitializeArchiveImports(app.DB)
 
 	// Content hashes for media stored before images carried one; the family
 	// archive import recognises media it already has by them.
