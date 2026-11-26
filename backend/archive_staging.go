@@ -7,6 +7,7 @@ import (
 	"family/cfg"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -36,19 +37,34 @@ type archiveStaging struct {
 	progress func(staged int) error
 }
 
-// stageArchiveMedia unpacks the photos and videos the import will consider.
-// A file that can't be read is left out, and the import skips its media.
-// progress runs after each file; an error from it stops the staging.
-func stageArchiveMedia(archive familyArchive, req ImportDataRequest, keep bool, progress func(staged int) error) (staging *archiveStaging, err error) {
-	staging = &archiveStaging{files: map[int]stagedMedia{}, scope: map[int]bool{}, progress: progress}
-	if keep {
-		if err = os.MkdirAll(archiveStagingRoot, 0755); err != nil {
-			return staging, err
-		}
-		if staging.dir, err = os.MkdirTemp(archiveStagingRoot, "import-*"); err != nil {
-			return staging, err
+func newArchiveStagingDir() (string, error) {
+	if err := os.MkdirAll(archiveStagingRoot, 0755); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(archiveStagingRoot, "import-*")
+}
+
+// removeStrayStaging deletes the staging directories a crash left behind,
+// except those in keep.
+func removeStrayStaging(keep map[string]bool) {
+	entries, err := os.ReadDir(archiveStagingRoot)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		dir := filepath.Join(archiveStagingRoot, entry.Name())
+		if !keep[filepath.Clean(dir)] {
+			os.RemoveAll(dir)
 		}
 	}
+}
+
+// stageArchiveMedia unpacks the photos and videos the import will consider
+// into dir, or only hashes them when dir is empty. A file that can't be read
+// is left out, and the import skips its media. progress runs after each
+// file; an error from it stops the staging.
+func stageArchiveMedia(archive familyArchive, req ImportDataRequest, dir string, progress func(staged int) error) (staging *archiveStaging, err error) {
+	staging = &archiveStaging{dir: dir, files: map[int]stagedMedia{}, scope: map[int]bool{}, progress: progress}
 	for _, p := range filterPeople(archive.People, req.FilterFamilyIds, req.FilterPersonIds) {
 		staging.scope[p.Id] = true
 	}
@@ -138,23 +154,30 @@ func (s *archiveStaging) cleanup() {
 }
 
 // stagedMove puts a staged photo at its path once the import has committed.
+// Run again after it finished, it finds the photo in place and does nothing.
 type stagedMove struct {
-	from, to string
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 func (m stagedMove) run() error {
-	if err := os.MkdirAll(filepath.Dir(m.to), 0755); err != nil {
+	if _, err := os.Stat(m.From); errors.Is(err, fs.ErrNotExist) {
+		if _, err := os.Stat(m.To); err == nil {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(m.To), 0755); err != nil {
 		return err
 	}
-	if os.Rename(m.from, m.to) == nil {
+	if os.Rename(m.From, m.To) == nil {
 		return nil
 	}
-	in, err := os.Open(m.from)
+	in, err := os.Open(m.From)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(m.to)
+	out, err := os.Create(m.To)
 	if err != nil {
 		return err
 	}
@@ -163,7 +186,7 @@ func (m stagedMove) run() error {
 		err = closeErr
 	}
 	if err != nil {
-		os.Remove(m.to)
+		os.Remove(m.To)
 		return errors.Join(errors.New("could not move a staged photo"), err)
 	}
 	return nil
@@ -172,17 +195,24 @@ func (m stagedMove) run() error {
 // stagedUpload puts a staged video in the media store once the import has
 // committed.
 type stagedUpload struct {
-	store       MediaStore
-	from, key   string
-	size        int64
-	contentType string
+	From        string `json:"from"`
+	Key         string `json:"key"`
+	Size        int64  `json:"size"`
+	ContentType string `json:"contentType"`
 }
 
 func (u stagedUpload) run() error {
-	in, err := os.Open(u.from)
+	store := activeMediaStore()
+	if store == nil {
+		return ErrArchiveImportUnavailable
+	}
+	in, err := os.Open(u.From)
 	if err != nil {
+		if _, statErr := store.Stat(context.Background(), u.Key); statErr == nil {
+			return nil
+		}
 		return err
 	}
 	defer in.Close()
-	return u.store.Put(context.Background(), u.key, in, u.size, u.contentType)
+	return store.Put(context.Background(), u.Key, in, u.Size, u.ContentType)
 }

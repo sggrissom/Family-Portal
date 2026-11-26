@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.hasen.dev/vbeam"
@@ -31,6 +32,7 @@ const (
 	ArchiveImportImporting
 	ArchiveImportDone
 	ArchiveImportFailed
+	ArchiveImportPlacing
 )
 
 var archiveImportStateNames = map[ArchiveImportState]string{
@@ -40,10 +42,11 @@ var archiveImportStateNames = map[ArchiveImportState]string{
 	ArchiveImportImporting: "importing",
 	ArchiveImportDone:      "done",
 	ArchiveImportFailed:    "failed",
+	ArchiveImportPlacing:   "placing",
 }
 
 func (s ArchiveImportState) running() bool {
-	return s == ArchiveImportQueued || s == ArchiveImportStaging || s == ArchiveImportImporting
+	return s == ArchiveImportQueued || s == ArchiveImportStaging || s == ArchiveImportImporting || s == ArchiveImportPlacing
 }
 
 type ArchiveImport struct {
@@ -72,13 +75,18 @@ type ArchiveImport struct {
 	ResultJson string
 	Error      string
 
+	// StagingDir holds the unpacked media; FollowUp is the committed import's
+	// archiveImported, kept until its files are in place.
+	StagingDir string
+	FollowUp   string
+
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UpdatedAt time.Time
 }
 
 func PackArchiveImport(self *ArchiveImport, buf *vpack.Buffer) {
-	version := vpack.Version(2, buf)
+	version := vpack.Version(3, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.UserId, buf)
@@ -103,6 +111,10 @@ func PackArchiveImport(self *ArchiveImport, buf *vpack.Buffer) {
 	if version >= 2 {
 		vpack.Bool(&self.Discarded, buf)
 		vpack.Int(&self.Staged, buf)
+	}
+	if version >= 3 {
+		vpack.String(&self.StagingDir, buf)
+		vpack.String(&self.FollowUp, buf)
 	}
 }
 
@@ -373,9 +385,14 @@ func GetArchiveImportStatus(ctx *vbeam.Context, req GetArchiveImportStatusReques
 
 // Jobs run one at a time, so two large imports never compete for the lock.
 var (
-	archiveImportRunner sync.Mutex
-	archiveImportJobs   sync.WaitGroup
+	archiveImportRunner    sync.Mutex
+	archiveImportJobs      sync.WaitGroup
+	archiveImportsStopping atomic.Bool
 )
+
+// archiveImportCommittedHook, when a test sets it, runs right after an
+// import commits.
+var archiveImportCommittedHook func()
 
 func startArchiveImportJob(db *vbolt.DB, id int) {
 	archiveImportJobs.Add(1)
@@ -391,7 +408,12 @@ func waitForArchiveImports() {
 	archiveImportJobs.Wait()
 }
 
+var errArchiveImportStopped = errors.New("The server is restarting; the import will carry on when it's back.")
+
+// StopArchiveImports stops each job at its next step. A stopped job keeps its
+// state, and the next start runs it again or finishes placing its files.
 func StopArchiveImports(ctx context.Context) bool {
+	archiveImportsStopping.Store(true)
 	done := make(chan struct{})
 	go func() {
 		archiveImportJobs.Wait()
@@ -406,21 +428,30 @@ func StopArchiveImports(ctx context.Context) bool {
 }
 
 // InitializeArchiveImports restarts jobs a shutdown interrupted. An import
-// writes its records and its done state in one transaction, so a job that
-// had not finished left nothing behind and can run again.
+// writes its records in one transaction, so a job that had not committed
+// left nothing behind and runs again; one that had committed finishes
+// placing its files. Staging directories no job will use again are removed.
 func InitializeArchiveImports(db *vbolt.DB) {
-	var ids []int
+	archiveImportsStopping.Store(false)
+	var jobs []ArchiveImport
+	keep := map[string]bool{}
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) {
 		vbolt.IterateAll(tx, ArchiveImportBkt, func(id int, job ArchiveImport) bool {
 			if job.State.running() {
-				ids = append(ids, id)
+				jobs = append(jobs, job)
+			}
+			if job.State == ArchiveImportPlacing && job.StagingDir != "" {
+				keep[filepath.Clean(job.StagingDir)] = true
 			}
 			return true
 		})
 	})
-	for _, id := range ids {
-		setArchiveImportState(db, id, ArchiveImportQueued, nil)
-		startArchiveImportJob(db, id)
+	removeStrayStaging(keep)
+	for _, job := range jobs {
+		if job.State != ArchiveImportPlacing {
+			setArchiveImportState(db, job.Id, ArchiveImportQueued, nil)
+		}
+		startArchiveImportJob(db, job.Id)
 	}
 }
 
@@ -441,6 +472,9 @@ func setArchiveImportState(db *vbolt.DB, id int, state ArchiveImportState, updat
 }
 
 func failArchiveImport(db *vbolt.DB, id int, err error) {
+	if errors.Is(err, errArchiveImportStopped) {
+		return
+	}
 	setArchiveImportState(db, id, ArchiveImportFailed, func(job *ArchiveImport) { job.Error = err.Error() })
 	LogWarn(LogCategoryAPI, "Archive import failed", map[string]interface{}{"importId": id, "error": err.Error()})
 }
@@ -448,7 +482,12 @@ func failArchiveImport(db *vbolt.DB, id int, err error) {
 func runArchiveImportJob(db *vbolt.DB, id int) {
 	var job ArchiveImport
 	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
-	if job.State != ArchiveImportQueued {
+	switch job.State {
+	case ArchiveImportPlacing:
+		placeArchiveImport(db, id)
+		return
+	case ArchiveImportQueued:
+	default:
 		return
 	}
 	req := job.options()
@@ -457,11 +496,15 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 	committed := false
 	defer func() {
 		if r := recover(); r != nil {
-			failArchiveImport(db, id, fmt.Errorf("The import stopped unexpectedly: %v", r))
+			err := fmt.Errorf("The import stopped unexpectedly: %v", r)
+			if committed {
+				LogErrorSimple(LogCategoryAPI, "Archive import stopped while placing its files", map[string]interface{}{"importId": id, "error": err.Error()})
+			} else {
+				failArchiveImport(db, id, err)
+			}
 		}
-		staging.cleanup()
-		if committed {
-			discardArchiveUpload(db, id)
+		if !committed {
+			staging.cleanup()
 		}
 	}()
 	job = setArchiveImportState(db, id, ArchiveImportStaging, nil)
@@ -479,12 +522,23 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 
 	if !req.PreviewOnly {
 		hashFamilyMedia(db, job.FamilyId)
-		staging, err = stageArchiveMedia(archive, req, writes, archiveStagingProgress(db, id))
+		dir := ""
+		if writes {
+			if dir, err = newArchiveStagingDir(); err != nil {
+				failArchiveImport(db, id, err)
+				return
+			}
+			setArchiveImportState(db, id, ArchiveImportStaging, func(job *ArchiveImport) { job.StagingDir = dir })
+		}
+		staging, err = stageArchiveMedia(archive, req, dir, archiveStagingProgress(db, id))
 		if err != nil {
 			failArchiveImport(db, id, err)
 			return
 		}
 		archive.staged = staging.files
+	}
+	if archiveImportsStopping.Load() {
+		return
 	}
 	job = setArchiveImportState(db, id, ArchiveImportImporting, func(job *ArchiveImport) {
 		if staging != nil {
@@ -507,7 +561,11 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		if resp, done, err = importFamilyArchive(tx, user, familyId, archive, req); err != nil || !writes {
 			return
 		}
-		markArchiveImportDone(tx, &job, resp, true)
+		result, _ := json.Marshal(resp)
+		followUp, _ := json.Marshal(done)
+		job.State, job.Imported = ArchiveImportPlacing, true
+		job.ResultJson, job.FollowUp = string(result), string(followUp)
+		writeArchiveImport(tx, &job)
 		vbolt.TxCommit(tx)
 		committed = true
 	})
@@ -516,10 +574,36 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 		return
 	}
 	if !writes {
-		setArchiveImportState(db, id, ArchiveImportDone, func(j *ArchiveImport) { markArchiveImportDone(nil, j, resp, false) })
+		result, _ := json.Marshal(resp)
+		setArchiveImportState(db, id, ArchiveImportDone, func(j *ArchiveImport) { j.ResultJson = string(result) })
 		return
 	}
-	done.queue()
+	if archiveImportCommittedHook != nil {
+		archiveImportCommittedHook()
+	}
+	placeArchiveImport(db, id)
+}
+
+// placeArchiveImport puts a committed import's staged files in place and
+// queues them for processing. A job stopped partway picks up here on the
+// next start.
+func placeArchiveImport(db *vbolt.DB, id int) {
+	var job ArchiveImport
+	vbolt.WithReadTx(db, func(tx *vbolt.Tx) { job = getArchiveImport(tx, id) })
+	var done archiveImported
+	if job.FollowUp != "" {
+		if err := json.Unmarshal([]byte(job.FollowUp), &done); err != nil {
+			LogErrorSimple(LogCategoryAPI, "Archive import could not read the files it has to place", map[string]interface{}{"importId": id, "error": err.Error()})
+		}
+	}
+	if !done.queue(archiveImportsStopping.Load) {
+		return
+	}
+	if job.StagingDir != "" {
+		os.RemoveAll(job.StagingDir)
+	}
+	setArchiveImportState(db, id, ArchiveImportDone, func(j *ArchiveImport) { j.FollowUp, j.StagingDir = "", "" })
+	discardArchiveUpload(db, id)
 }
 
 // archiveStagingProgress records how many files are staged, at most about
@@ -527,6 +611,9 @@ func runArchiveImportJob(db *vbolt.DB, id int) {
 func archiveStagingProgress(db *vbolt.DB, id int) func(staged int) error {
 	var last time.Time
 	return func(staged int) error {
+		if archiveImportsStopping.Load() {
+			return errArchiveImportStopped
+		}
 		if time.Since(last) >= time.Second {
 			last = time.Now()
 			setArchiveImportState(db, id, ArchiveImportStaging, func(job *ArchiveImport) { job.Staged = staged })
@@ -602,18 +689,6 @@ func expireArchiveUploads(db *vbolt.DB, now time.Time) (expired int) {
 		})
 	}
 	return
-}
-
-// markArchiveImportDone records the result, inside the import's own
-// transaction when it wrote anything.
-func markArchiveImportDone(tx *vbolt.Tx, job *ArchiveImport, resp ImportDataResponse, imported bool) {
-	encoded, _ := json.Marshal(resp)
-	job.State = ArchiveImportDone
-	job.ResultJson = string(encoded)
-	job.Imported = imported
-	if tx != nil {
-		writeArchiveImport(tx, job)
-	}
 }
 
 // openUploadedArchive reads a zip from the media store. A local store's file

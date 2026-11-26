@@ -299,13 +299,11 @@ func importPhotos(
 		ReindexPhotoDates(tx, image.Id)
 		l.photos[photo.Id] = image.Id
 		jobs = append(jobs, importedPhoto{
-			PhotoProcessingJob: PhotoProcessingJob{
-				ImageId:  image.Id,
-				FamilyId: familyId,
-				FilePath: filePath,
-				MimeType: mimeType,
-			},
-			file: stagedMove{from: file.path, to: photoOriginalPath(filePath)},
+			ImageId:  image.Id,
+			FamilyId: familyId,
+			FilePath: filePath,
+			MimeType: mimeType,
+			File:     stagedMove{From: file.path, To: photoOriginalPath(filePath)},
 		})
 
 		importPhotoLinks(tx, image, photo, l)

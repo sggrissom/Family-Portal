@@ -432,3 +432,89 @@ func TestAKeptArchiveUploadCountsTowardTheFamilyQuota(t *testing.T) {
 		t.Errorf("after the import the family uses %d bytes; want only its %d bytes of media", used, media)
 	}
 }
+
+func useStagingRoot(t *testing.T) string {
+	t.Helper()
+	dir, previous := t.TempDir(), archiveStagingRoot
+	archiveStagingRoot = dir
+	t.Cleanup(func() { archiveStagingRoot = previous })
+	return dir
+}
+
+func TestArchiveImportStoppedAfterItCommitsPlacesItsMediaOnRestart(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	bundle := fx.exportBundle(t, fx.owner, "everything")
+	restorer := fx.newUser(t, "restorer")
+	importId := fx.uploadArchive(t, restorer, bundle)
+	stagingDir := useStagingRoot(t)
+	archiveImportCommittedHook = func() {
+		go StopArchiveImports(context.Background())
+		for !archiveImportsStopping.Load() {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	t.Cleanup(func() {
+		archiveImportCommittedHook = nil
+		archiveImportsStopping.Store(false)
+	})
+
+	status, err := runArchiveImport(t, restorer, importId, importEverything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "placing" {
+		t.Fatalf("a job stopped right after its commit finished as %+v; want it left placing", status)
+	}
+	if stagedFiles(t, stagingDir) == 0 {
+		t.Fatal("the staged files were removed before they were placed")
+	}
+
+	archiveImportCommittedHook = nil
+	InitializeArchiveImports(fx.db)
+	waitForArchiveImports()
+	jobs := drainPhotoJobs()
+	for _, job := range jobs {
+		t.Cleanup(func() { deletePhotoFiles(Image{FilePath: job.FilePath}) })
+	}
+	status, _ = callProc(t, restorer, GetArchiveImportStatus, GetArchiveImportStatusRequest{ImportId: importId})
+	if status.State != "done" || status.Result == nil || status.Result.ImportedPhotos == 0 {
+		t.Fatalf("after the restart the job finished as %+v", status)
+	}
+	if len(jobs) != status.Result.ImportedPhotos {
+		t.Errorf("%d photos queued after the restart; %d imported", len(jobs), status.Result.ImportedPhotos)
+	}
+	for _, job := range jobs {
+		if _, err := os.Stat(photoOriginalPath(job.FilePath)); err != nil {
+			t.Errorf("photo %d has no file after the restart: %v", job.ImageId, err)
+		}
+	}
+	for _, video := range familyVideos(t, fx.db, restorer.FamilyId) {
+		if _, err := activeMediaStore().Stat(context.Background(), video.OriginalKey); err != nil {
+			t.Errorf("video %d has no file after the restart: %v", video.Id, err)
+		}
+	}
+	if n := stagedFiles(t, stagingDir); n != 0 {
+		t.Errorf("%d staged files left after the restart placed them", n)
+	}
+	if fx.uploadStored(t, importId) {
+		t.Error("the upload is still stored after the restart finished its import")
+	}
+}
+
+func TestArchiveImportsClearStagingACrashLeftBehind(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	stagingDir := useStagingRoot(t)
+	leftover := filepath.Join(stagingDir, "import-123")
+	if err := os.MkdirAll(leftover, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(leftover, "7.png"), []byte("half a photo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	InitializeArchiveImports(fx.db)
+	waitForArchiveImports()
+	if n := stagedFiles(t, stagingDir); n != 0 {
+		t.Errorf("%d staged files a crashed import left are still there after a restart", n)
+	}
+}

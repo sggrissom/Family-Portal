@@ -52,51 +52,67 @@ func newArchiveLedger() *archiveLedger {
 	}
 }
 
-// archiveImported is the work left for after the import commits.
+// archiveImported is the work left for after the import commits. A job keeps
+// it on its record until the work is done, so the next start can finish it.
 type archiveImported struct {
-	milestoneIds []int
-	photoJobs    []importedPhoto
-	videos       []importedVideo
+	MilestoneIds []int           `json:"milestoneIds,omitempty"`
+	Photos       []importedPhoto `json:"photos,omitempty"`
+	Videos       []importedVideo `json:"videos,omitempty"`
 }
 
 // importedPhoto and importedVideo are committed media whose staged files
 // still have to be put in place before they are processed.
 type importedPhoto struct {
-	PhotoProcessingJob
-	file stagedMove
+	ImageId  int        `json:"imageId"`
+	FamilyId int        `json:"familyId"`
+	FilePath string     `json:"filePath"`
+	MimeType string     `json:"mimeType"`
+	File     stagedMove `json:"file"`
 }
 
 type importedVideo struct {
-	id   int
-	file stagedUpload
+	ImageId int          `json:"imageId"`
+	File    stagedUpload `json:"file"`
 }
 
-func (done archiveImported) queue() {
-	for _, id := range done.milestoneIds {
+// queue places and queues the work, and reports false when stopping said to
+// stop before it was all done.
+func (done archiveImported) queue(stopping func() bool) bool {
+	stopped := func() bool { return stopping != nil && stopping() }
+	for _, id := range done.MilestoneIds {
 		QueueMilestoneEmbedding(id)
 	}
-	for _, job := range done.photoJobs {
-		err := job.file.run()
+	for _, photo := range done.Photos {
+		if stopped() {
+			return false
+		}
+		err := photo.File.run()
 		if err == nil {
-			err = QueuePhotoProcessing(job.PhotoProcessingJob)
+			err = QueuePhotoProcessing(PhotoProcessingJob{
+				ImageId: photo.ImageId, FamilyId: photo.FamilyId, FilePath: photo.FilePath, MimeType: photo.MimeType,
+			})
 		}
 		if err != nil {
 			LogWarn(LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
-				"photoId": job.ImageId,
+				"photoId": photo.ImageId,
 				"error":   err.Error(),
 			})
 		}
 	}
-	for _, video := range done.videos {
-		if err := video.file.run(); err != nil {
+	for _, video := range done.Videos {
+		if stopped() {
+			return false
+		}
+		if err := video.File.run(); err != nil {
 			LogWarn(LogCategoryPhoto, "Imported video left for stuck-video recovery", map[string]interface{}{
-				"videoId": video.id,
+				"videoId": video.ImageId,
 				"error":   err.Error(),
 			})
 			continue
 		}
-		QueueVideoProcessing(video.id)
+		QueueVideoProcessing(video.ImageId)
 	}
+	return true
 }
 
 func readArchiveRecords(data []byte) (archive familyArchive, err error) {
@@ -213,7 +229,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	resp.Errors = append(resp.Errors, errs...)
 
 	if req.ImportMilestones {
-		resp.ImportedMilestones, resp.SkippedMilestones, errs, done.milestoneIds =
+		resp.ImportedMilestones, resp.SkippedMilestones, errs, done.MilestoneIds =
 			importMilestones(tx, filterMilestones(archive.Milestones, l.people), familyId, l)
 		resp.Errors = append(resp.Errors, errs...)
 	} else {
@@ -222,11 +238,11 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	if archive.media != nil {
 		var warnings []string
-		resp.ImportedPhotos, resp.SkippedPhotos, done.photoJobs, warnings =
+		resp.ImportedPhotos, resp.SkippedPhotos, done.Photos, warnings =
 			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
-		resp.ImportedVideos, resp.SkippedVideos, done.videos, warnings =
+		resp.ImportedVideos, resp.SkippedVideos, done.Videos, warnings =
 			importVideos(tx, familyId, user.Id, archive.Videos, l, archive.staged, req.DryRun)
 		resp.Warnings = append(resp.Warnings, warnings...)
 	} else {
@@ -245,7 +261,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 		resp.ImportedInterviews = interviews.imported
 		resp.SkippedInterviews = interviews.skipped
 		resp.Warnings = append(resp.Warnings, interviews.warnings...)
-		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
+		done.MilestoneIds = append(done.MilestoneIds, interviews.answerIds...)
 		linkMomentPhotos(tx, archive.Milestones, familyId, l)
 	} else {
 		mapExistingInterviews(tx, archive.Interviews, l)
@@ -348,6 +364,6 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 		return
 	}
 	vbolt.TxCommit(ctx.Tx)
-	done.queue()
+	done.queue(nil)
 	return
 }

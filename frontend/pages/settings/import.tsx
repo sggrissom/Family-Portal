@@ -63,6 +63,7 @@ const jobStateLabels: Record<string, string> = {
   queued: "Waiting to start",
   staging: "Reading the archive",
   importing: "Importing",
+  placing: "Putting photos and videos in place",
   done: "Finished",
   failed: "Failed",
 };

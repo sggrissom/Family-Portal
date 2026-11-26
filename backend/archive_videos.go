@@ -208,8 +208,8 @@ func importVideos(
 		}, l)
 		importTranscript(tx, image.Id, familyId, ownerUserId, video.Transcript)
 		queued = append(queued, importedVideo{
-			id:   image.Id,
-			file: stagedUpload{store: store, from: file.path, key: key, size: size, contentType: video.MimeType},
+			ImageId: image.Id,
+			File:    stagedUpload{From: file.path, Key: key, Size: size, ContentType: video.MimeType},
 		})
 		imported++
 	}
