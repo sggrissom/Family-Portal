@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 func (fx *archiveFixture) exportRecords(t *testing.T, user User) string {
@@ -462,5 +463,59 @@ func TestFutureBirthdayOnSomeoneNotExpectedIsRejected(t *testing.T) {
 	}
 	if people := fx.listPeople(t, restorer); len(people) != 0 {
 		t.Errorf("rejected import still added %d people", len(people))
+	}
+}
+
+func TestArchiveTimestampsFallBackWhenTheFileLacksThem(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	var records ImportDataStructure
+	if err := json.Unmarshal([]byte(fx.exportRecords(t, fx.owner)), &records); err != nil {
+		t.Fatal(err)
+	}
+	tagged := time.Date(2024, 9, 2, 8, 0, 0, 0, time.UTC)
+	answer := slices.IndexFunc(records.Milestones, func(m ExportMilestone) bool { return m.InterviewId != 0 })
+	if answer < 0 || len(records.Interviews) == 0 || len(records.Books) == 0 || len(records.Tags) == 0 {
+		t.Fatal("the seed has no interview answer, interview, book or tag")
+	}
+	tag := records.Tags[0].Name
+	records.Milestones[answer].TagNames = []string{tag}
+	records.Milestones[answer].TagsAddedAt = map[string]time.Time{strings.ToLower(tag): tagged}
+	for i := range records.Interviews {
+		records.Interviews[i].CreatedAt = time.Time{}
+	}
+	for i := range records.Books {
+		records.Books[i].UpdatedAt, records.Books[i].ReviewedAt = time.Time{}, time.Time{}
+	}
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	if _, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(data), ImportMilestones: true}); err != nil {
+		t.Fatal(err)
+	}
+	restored := map[string][]any{}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, bucket := range []string{"milestone_tags", "interviews", "books"} {
+			restored[bucket] = archiveReaders[bucket](tx, restorer.FamilyId)
+		}
+	})
+	answerTagged := false
+	for _, row := range restored["milestone_tags"] {
+		answerTagged = answerTagged || row.(MilestoneTag).CreatedAt.Equal(tagged)
+	}
+	if !answerTagged {
+		t.Errorf("the interview answer's tag was not stamped with when the archive says it was added")
+	}
+	for _, row := range restored["interviews"] {
+		if row.(Interview).CreatedAt.IsZero() {
+			t.Errorf("interview %d was imported with no createdAt", row.(Interview).Id)
+		}
+	}
+	for _, row := range restored["books"] {
+		if book := row.(Book); book.UpdatedAt.IsZero() || book.ReviewedAt.IsZero() {
+			t.Errorf("book %q was imported updated %v, reviewed %v", book.Title, book.UpdatedAt, book.ReviewedAt)
+		}
 	}
 }

@@ -187,7 +187,7 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 			{Kind: BookItemInterview, SourceId: interviews[0].Id},
 		},
 		Excluded: []BookItem{{Kind: BookItemPhoto, SourceId: portrait.Id}},
-		Revision: 1, CreatedBy: fx.owner.Id, CreatedAt: archiveSeedTime, UpdatedAt: archiveSeedTime,
+		Revision: 1, CreatedBy: fx.owner.Id, CreatedAt: archiveSeedTime, UpdatedAt: archiveSeedTime, ReviewedAt: archiveSeedTime,
 	})
 	if s.err != nil {
 		t.Fatal(s.err)
