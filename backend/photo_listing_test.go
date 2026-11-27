@@ -18,7 +18,7 @@ func TestListFamilyPhotosDateToIncludesTheWholeDay(t *testing.T) {
 		vbolt.Write(tx, ImagesBkt, late.Id, &late)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, late.Id, late.FamilyId)
 		AddPersonToPhoto(tx, late.Id, fx.kid.Id, late.FamilyId)
-		ReindexPhotoDates(tx, late.Id)
+		reindexImage(tx, late.Id)
 		vbolt.TxCommit(tx)
 	})
 
@@ -62,7 +62,7 @@ func TestSearchPagesThroughItsRankingWithFilters(t *testing.T) {
 		for _, image := range fx.photos {
 			image.Title = "Beach day"
 			vbolt.Write(tx, ImagesBkt, image.Id, &image)
-			ReindexPhotoDates(tx, image.Id)
+			reindexImage(tx, image.Id)
 		}
 		vbolt.TxCommit(tx)
 	})
@@ -111,7 +111,7 @@ func TestPlaceFilterHidesPhotosWhoseLocationIsNotYours(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		f := PhotoFeatures{PhotoId: fx.alicePhoto.Id, FamilyId: fx.famA, HasLocation: true, Latitude: 40.7608, Longitude: -111.8910, CityId: city.Id, PlaceVersion: placeAnalyzerVersion}
 		writeFeaturesTx(tx, &f)
-		ReindexPhotoDates(tx, fx.alicePhoto.Id)
+		reindexImage(tx, fx.alicePhoto.Id)
 		vbolt.TxCommit(tx)
 	})
 

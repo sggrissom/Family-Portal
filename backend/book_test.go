@@ -67,7 +67,7 @@ func setupBookFixture(t *testing.T) bookFixture {
 		fx.together = photo(fx.owner.FamilyId, "2024-06-01", &fx.baby)
 		tagPersonInPhoto(tx, fx.together.Id, fx.sibling.Id, fx.owner.FamilyId)
 		for _, image := range []Image{fx.early, fx.attached, fx.untagged, fx.otherBaby, fx.siblingOnly, fx.together} {
-			ReindexPhotoDates(tx, image.Id)
+			reindexImage(tx, image.Id)
 		}
 		photo(fx.owner.FamilyId, "2026-01-01", &fx.baby)
 

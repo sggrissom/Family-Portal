@@ -135,7 +135,7 @@ func TestArchiveExportSizesCountTheVideosTheArchiveHolds(t *testing.T) {
 		for _, image := range GetFamilyImages(tx, fx.familyId) {
 			if image.IsVideo() {
 				image.Status = PhotoFailed
-				writeImage(tx, &image)
+				saveImage(tx, &image)
 			}
 		}
 		vbolt.TxCommit(tx)

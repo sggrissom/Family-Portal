@@ -73,7 +73,7 @@ func TestSearchFindsAVideoByWhatIsMeant(t *testing.T) {
 		outsider.FamilyId = fx.familyId + 999
 		vbolt.Write(tx, ImagesBkt, outsider.Id, &outsider)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, outsider.Id, outsider.FamilyId)
-		ReindexPhotoDates(tx, outsider.Id)
+		reindexImage(tx, outsider.Id)
 		vbolt.TxCommit(tx)
 	})
 	fx.setTranscript(t, outsider, TranscriptSegment{StartMs: 0, EndMs: 4000, Text: "the T rex is my favorite"})

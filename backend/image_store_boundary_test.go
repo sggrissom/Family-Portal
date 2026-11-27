@@ -1,11 +1,11 @@
 package backend
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -35,10 +35,8 @@ var vboltReads = map[string]bool{
 
 var imageStoreReaders = map[string]bool{"approxPhotoIds": true, "newPhotoStream": true}
 
-var imageStoreBypasses = map[string]bool{
-	"photo_index.go:ReindexPhotoDates":             true,
-	"record_time_store.go:writeImage":              true,
-	"video_transcripts.go:deleteVideoTranscriptTx": true,
+var imageStoreInternals = map[string]bool{
+	"reindexImage": true, "writePhotoPersonRow": true, "indexPhotoPersonRow": true, "deletePhotoPersonRow": true,
 }
 
 func TestOnlyTheImageStoreWritesImages(t *testing.T) {
@@ -46,7 +44,7 @@ func TestOnlyTheImageStoreWritesImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := map[string]bool{}
+	var bypasses []string
 	fset := token.NewFileSet()
 	for _, file := range files {
 		if strings.HasSuffix(file, "_test.go") || file == "image_store.go" {
@@ -56,44 +54,28 @@ func TestOnlyTheImageStoreWritesImages(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %s: %v", file, err)
 		}
-		for _, decl := range parsed.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
-			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok || !passesGuarded(call) {
-					return true
-				}
-				callee := calleeName(call)
-				if name, ok := strings.CutPrefix(callee, "vbolt."); ok && vboltReads[name] || imageStoreReaders[callee] {
-					return true
-				}
-				found[file+":"+fn.Name.Name] = true
+		ast.Inspect(parsed, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
 				return true
-			})
-		}
+			}
+			callee := calleeName(call)
+			if imageStoreInternals[callee] {
+				bypasses = append(bypasses, fmt.Sprintf("%s calls the store's own %s", fset.Position(call.Pos()), callee))
+				return true
+			}
+			if !passesGuarded(call) {
+				return true
+			}
+			if name, ok := strings.CutPrefix(callee, "vbolt."); ok && vboltReads[name] || imageStoreReaders[callee] {
+				return true
+			}
+			bypasses = append(bypasses, fmt.Sprintf("%s writes an image, its people or its transcript through %s", fset.Position(call.Pos()), callee))
+			return true
+		})
 	}
-
-	var unexpected, gone []string
-	for site := range found {
-		if !imageStoreBypasses[site] {
-			unexpected = append(unexpected, site)
-		}
-	}
-	for site := range imageStoreBypasses {
-		if !found[site] {
-			gone = append(gone, site)
-		}
-	}
-	sort.Strings(unexpected)
-	sort.Strings(gone)
-	for _, site := range unexpected {
-		t.Errorf("%s writes an image, its people or its transcript outside image_store.go", site)
-	}
-	for _, site := range gone {
-		t.Errorf("%s no longer bypasses the image store; drop it from imageStoreBypasses", site)
+	for _, bypass := range bypasses {
+		t.Errorf("%s; use image_store.go", bypass)
 	}
 }
 
