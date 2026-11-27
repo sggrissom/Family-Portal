@@ -96,8 +96,15 @@ var archiveBuckets = map[string]archiveBucket{
 	"appearance_mutations":        excluded("appearance sync bookkeeping for offline clients"),
 	"appearance_tombstones":       excluded("appearance sync bookkeeping for offline clients"),
 	"video_uploads":               excluded("in-flight uploads, not finished media"),
+	"archive_imports":             excluded("in-flight imports, not family data"),
 	"media_deletions":             excluded(reasonSite),
 	"log_review":                  excluded(reasonSite),
 	"mobile_version":              excluded(reasonSite),
 	"seed_runs":                   excluded(reasonSite),
+}
+
+// archiveExcludedFields are fields of archived buckets that the archive
+// leaves out, keyed bucket.Field, with the reason.
+var archiveExcludedFields = map[string]string{
+	"families.VideoEnabled": reasonAccount + ": only an admin turns video on",
 }

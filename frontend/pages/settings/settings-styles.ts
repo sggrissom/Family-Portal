@@ -333,7 +333,7 @@ block(`
 `);
 
 block(`
-.export-mode-group {
+.archive-downloads {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -342,34 +342,19 @@ block(`
 `);
 
 block(`
-.export-mode-option {
+.archive-download {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s;
 }
 `);
 
 block(`
-.export-mode-option:hover {
-  border-color: var(--accent);
-}
-`);
-
-block(`
-.export-mode-option input[type="radio"] {
-  margin-top: 2px;
-  accent-color: var(--accent);
-  flex-shrink: 0;
-}
-`);
-
-block(`
-.export-mode-option .export-mode-label {
+.archive-download-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -377,9 +362,30 @@ block(`
 `);
 
 block(`
-.export-mode-option .export-mode-desc {
+.archive-download-name {
+  font-weight: 600;
+  color: var(--text);
+}
+`);
+
+block(`
+.archive-download-desc,
+.archive-download-size {
   font-size: 0.82rem;
   color: var(--muted);
+}
+`);
+
+block(`
+.archive-download-size {
+  font-weight: 600;
+}
+`);
+
+block(`
+.data-action p.archive-download-note {
+  font-size: 0.8rem;
+  margin-bottom: 0;
 }
 `);
 
@@ -624,83 +630,5 @@ block(`
   margin-top: 4px;
   color: var(--muted);
   line-height: 1.5;
-}
-`);
-
-block(`
-.save-videos-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0 0.5rem;
-}
-`);
-
-block(`
-.save-videos-hint {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-`);
-
-block(`
-.save-videos-list {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-`);
-
-block(`
-.save-video {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-`);
-
-block(`
-.save-video-name {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-`);
-
-block(`
-.save-video-name small {
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-`);
-
-block(`
-.save-video-status {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-`);
-
-block(`
-.save-video-failed .save-video-status {
-  color: var(--danger);
-}
-`);
-
-block(`
-.save-video-name a,
-.section-description a {
-  color: var(--accent);
 }
 `);

@@ -66,7 +66,7 @@ var globalMediaJanitor *mediaJanitor
 
 func InitializeVideoUploads(db *vbolt.DB) {
 	if s, ok := activeMediaStore().(*localMediaStore); ok {
-		s.gate = videoUploadGate(db)
+		s.gate = mediaUploadGate(db)
 	}
 	if globalMediaJanitor != nil || activeMediaStore() == nil {
 		return
@@ -112,11 +112,12 @@ func (j *mediaJanitor) run(quit <-chan struct{}, done chan struct{}) {
 }
 
 type mediaSweepResult struct {
-	Expired       int
-	SessionsFreed int
-	LateRemoved   int
-	Deleted       int
-	DeleteFailed  int
+	Expired        int
+	ImportsExpired int
+	SessionsFreed  int
+	LateRemoved    int
+	Deleted        int
+	DeleteFailed   int
 }
 
 func sweepMedia(db *vbolt.DB, store MediaStore, now time.Time) (result mediaSweepResult) {
@@ -124,6 +125,7 @@ func sweepMedia(db *vbolt.DB, store MediaStore, now time.Time) (result mediaSwee
 		return
 	}
 	ctx := context.Background()
+	result.ImportsExpired = expireArchiveUploads(db, now)
 
 	var uploads []VideoUpload
 	var deletions []MediaDeletion
@@ -200,7 +202,7 @@ func sweepMedia(db *vbolt.DB, store MediaStore, now time.Time) (result mediaSwee
 
 	if result != (mediaSweepResult{}) {
 		LogInfo(LogCategoryWorker, "Media sweep finished", map[string]interface{}{
-			"expired": result.Expired, "sessionsFreed": result.SessionsFreed,
+			"expired": result.Expired, "importsExpired": result.ImportsExpired, "sessionsFreed": result.SessionsFreed,
 			"lateRemoved": result.LateRemoved, "deleted": result.Deleted, "deleteFailed": result.DeleteFailed,
 		})
 	}

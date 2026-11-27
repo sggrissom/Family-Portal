@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.hasen.dev/vbeam"
+	"go.hasen.dev/vbolt"
 )
 
 func (fx *archiveFixture) exportRecords(t *testing.T, user User) string {
@@ -51,18 +52,14 @@ func bundleRecords(t *testing.T, bundle []byte) []byte {
 	return nil
 }
 
-// Each import stamps its own family name and creation times.
-var perImportFields = []archiveDrop{
-	{"families", "", nil, "each restorer has its own family"},
-	{"*", "CreatedAt", nil, "stamped at import"},
-	{"books", "UpdatedAt", nil, "stamped at import"},
-	{"books", "ReviewedAt", nil, "stamped at import"},
+var perImportFields = []archiveMask{
+	{"families", "", "each restorer has its own family"},
 }
 
 func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	records := fx.exportRecords(t, fx.owner)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 
 	fromRecords := fx.newUser(t, "records")
 	if _, err := fx.importRecords(t, fromRecords, ImportDataRequest{JsonData: records, ImportMilestones: true, ImportActivities: true}); err != nil {
@@ -83,7 +80,7 @@ func TestRecordsAndZipImportsGiveTheSameFamily(t *testing.T) {
 
 func TestZipImportHonoursTheImportOptions(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	var records ImportDataStructure
 	if err := json.Unmarshal(bundleRecords(t, bundle), &records); err != nil {
 		t.Fatal(err)
@@ -113,7 +110,7 @@ func TestZipImportHonoursTheImportOptions(t *testing.T) {
 
 func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	restorer := fx.newUser(t, "restorer")
 	before := readArchiveContents(t, fx.db, restorer.FamilyId)
 	photoDir := filepath.Dir(photoOriginalPath("photos/x.jpg"))
@@ -145,7 +142,7 @@ func TestZipImportPreviewAndDryRunWriteNothing(t *testing.T) {
 
 func TestRecordsImportReportsTheMediaItLeftOut(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "with_photos"))
+	data := bundleRecords(t, fx.exportBundle(t, fx.owner, "everything"))
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {
 		t.Fatal(err)
@@ -216,9 +213,53 @@ func TestImportRejectsFilesItCannotRead(t *testing.T) {
 	}
 }
 
+func TestImportRejectsRecordsThatDontHoldTogether(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	born := time.Date(2015, 7, 11, 0, 0, 0, 0, time.UTC)
+	ruth := ImportPerson{Id: 1, Name: "Ruth", Birthday: time.Date(1985, 3, 2, 0, 0, 0, 0, time.UTC)}
+	nora := ImportPerson{Id: 2, Name: "Nora", Birthday: born}
+	cases := []struct {
+		name    string
+		records ImportDataStructure
+		want    string
+	}{
+		{"no people", ImportDataStructure{}, "No people found"},
+		{"a person with no name", ImportDataStructure{People: []ImportPerson{{Id: 1, Birthday: born}}}, "has no name"},
+		{"a person with no birthday", ImportDataStructure{People: []ImportPerson{{Id: 1, Name: "Nora"}}}, "invalid birthday"},
+		{"a relation to someone not in the file", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 99, Kind: "parent"}},
+		}, "unknown person"},
+		{"a person related to themselves", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 1, Kind: "sibling"}},
+		}, "themselves"},
+		{"a relation of unknown kind", ImportDataStructure{
+			People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "godparent"}},
+		}, "unknown kind"},
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	for _, c := range cases {
+		data, _ := json.Marshal(c.records)
+		_, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(data)})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: import error = %v; want one mentioning %q", c.name, err, c.want)
+		}
+	}
+	if n := len(readArchiveContents(t, fx.db, restorer.FamilyId)["people"]); n != 0 {
+		t.Errorf("rejected files left %d people", n)
+	}
+
+	valid, _ := json.Marshal(ImportDataStructure{
+		People: []ImportPerson{ruth, nora}, Relations: []ExportRelation{{FromId: 1, ToId: 2, Kind: "parent"}},
+	})
+	if resp, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(valid)}); err != nil || resp.ImportedRelations != 1 {
+		t.Errorf("a valid file: imported %d relations, error %v; want 1 and none", resp.ImportedRelations, err)
+	}
+}
+
 func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "data_only")
+	bundle := fx.exportBundle(t, fx.owner, "records")
 	outsider := fx.newUser(t, "outsider")
 	before := readArchiveContents(t, fx.db, fx.familyId)
 
@@ -231,7 +272,7 @@ func TestZipImportCannotReachAnotherFamily(t *testing.T) {
 	}
 }
 
-func TestBooksFindMomentsAlreadyInTheFamily(t *testing.T) {
+func TestBooksFindMomentsAndInterviewsAlreadyInTheFamily(t *testing.T) {
 	fx := setupArchiveFixture(t)
 	records := fx.exportRecords(t, fx.owner)
 	var withoutBooks map[string]any
@@ -254,15 +295,25 @@ func TestBooksFindMomentsAlreadyInTheFamily(t *testing.T) {
 	}
 	source := readArchiveContents(t, fx.db, fx.familyId)["books"]
 	restored := readArchiveContents(t, fx.db, restorer.FamilyId)["books"]
-	want := source[0]["Items.0.SourceId"]
-	if len(restored) != 1 || want == "" || restored[0]["Items.0.SourceId"] != want {
-		t.Errorf("restored books %v; want their first item to be the moment %s", restored, want)
+	if len(restored) != 1 {
+		t.Fatalf("restored %d books, want 1", len(restored))
+	}
+	kept := map[string]bool{}
+	for k, v := range restored[0] {
+		if strings.HasPrefix(k, "Items.") && strings.HasSuffix(k, ".SourceId") {
+			kept[v] = true
+		}
+	}
+	for _, item := range []string{"Items.0", "Items.2"} {
+		if want := source[0][item+".SourceId"]; want == "" || !kept[want] {
+			t.Errorf("restored book %v lost the item %q", restored[0], want)
+		}
 	}
 }
 
 func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
 	fx := setupArchiveFixture(t)
-	bundle := fx.exportBundle(t, fx.owner, "with_photos")
+	bundle := fx.exportBundle(t, fx.owner, "everything")
 	data := bundleRecords(t, bundle)
 	var records ImportDataStructure
 	if err := json.Unmarshal(data, &records); err != nil {
@@ -286,8 +337,9 @@ func TestFilteredOutMediaIsNotReportedAsSkipped(t *testing.T) {
 	req := ImportDataRequest{FilterPersonIds: []int{chosen.Id}}
 
 	fromZip := fx.importBundle(t, fx.newUser(t, "zip"), bundle, req)
-	if fromZip.SkippedPhotos != 0 || fromZip.SkippedVideos != wantVideos {
-		t.Errorf("zip skipped %d photos and %d videos; want 0 and %d", fromZip.SkippedPhotos, fromZip.SkippedVideos, wantVideos)
+	if fromZip.SkippedPhotos != 0 || fromZip.SkippedVideos != 0 || fromZip.ImportedVideos != wantVideos {
+		t.Errorf("zip skipped %d photos and %d videos and imported %d videos; want 0, 0 and %d",
+			fromZip.SkippedPhotos, fromZip.SkippedVideos, fromZip.ImportedVideos, wantVideos)
 	}
 
 	req.JsonData = string(data)
@@ -326,5 +378,144 @@ func TestReimportMatchesPeopleWhoseBirthdayIsNotAtMidnight(t *testing.T) {
 	}
 	if again.ImportedPeople != 0 || again.MergedPeople != first.ImportedPeople {
 		t.Errorf("second import added %d and merged %d people; want 0 and %d", again.ImportedPeople, again.MergedPeople, first.ImportedPeople)
+	}
+}
+
+func (fx *archiveFixture) listPeople(t *testing.T, user User) map[string]Person {
+	t.Helper()
+	var resp ListPeopleResponse
+	var err error
+	fx.call(t, user, func(ctx *vbeam.Context) { resp, err = ListPeople(ctx, Empty{}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	people := map[string]Person{}
+	for _, p := range resp.People {
+		people[p.Name] = p
+	}
+	return people
+}
+
+// withFutureBirthday moves one person's birthday a few months ahead and
+// returns the file with formatVersion set to version (0 leaves it out).
+func withFutureBirthday(t *testing.T, data []byte, name string, version int) string {
+	t.Helper()
+	var file map[string]any
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	due := time.Now().AddDate(0, 4, 0).UTC().Truncate(24 * time.Hour)
+	found := false
+	for _, p := range file["people"].([]any) {
+		person := p.(map[string]any)
+		if person["Name"] == name {
+			person["Birthday"] = due.Format(time.RFC3339)
+			delete(person, "IsPregnancy")
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no person %q in the file", name)
+	}
+	delete(file, "formatVersion")
+	if version > 0 {
+		file["formatVersion"] = version
+	}
+	out, err := json.Marshal(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func TestLegacyFileWithAFutureBirthdayImportsItAsAPregnancy(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	data, err := os.ReadFile("testdata/archive_v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restorer := fx.newUser(t, "restorer")
+	resp, err := fx.importRecords(t, restorer, ImportDataRequest{
+		JsonData: withFutureBirthday(t, data, "Bump", 0), ImportMilestones: true, ImportActivities: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ImportedPeople != 3 || resp.ImportedMeasurements != 2 {
+		t.Errorf("imported %d people and %d measurements; want 3 and 2", resp.ImportedPeople, resp.ImportedMeasurements)
+	}
+	if bump, ok := fx.listPeople(t, restorer)["Bump"]; !ok || !bump.IsPregnancy {
+		t.Errorf("Bump = %+v; want a pregnancy", bump)
+	}
+	if !slices.ContainsFunc(resp.Warnings, func(w string) bool { return strings.Contains(w, "Bump") && strings.Contains(w, "pregnancy") }) {
+		t.Errorf("warnings %q don't say Bump was imported as a pregnancy", resp.Warnings)
+	}
+}
+
+func TestFutureBirthdayOnSomeoneNotExpectedIsRejected(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	restorer := fx.newUser(t, "restorer")
+	_, err := fx.importRecords(t, restorer, ImportDataRequest{
+		JsonData: withFutureBirthday(t, []byte(fx.exportRecords(t, fx.owner)), "Ben", archiveFormatVersion),
+	})
+	if err == nil || !strings.Contains(err.Error(), "Ben") {
+		t.Errorf("import err = %v; want Ben's future birthday rejected", err)
+	}
+	if people := fx.listPeople(t, restorer); len(people) != 0 {
+		t.Errorf("rejected import still added %d people", len(people))
+	}
+}
+
+func TestArchiveTimestampsFallBackWhenTheFileLacksThem(t *testing.T) {
+	fx := setupArchiveFixture(t)
+	var records ImportDataStructure
+	if err := json.Unmarshal([]byte(fx.exportRecords(t, fx.owner)), &records); err != nil {
+		t.Fatal(err)
+	}
+	tagged := time.Date(2024, 9, 2, 8, 0, 0, 0, time.UTC)
+	answer := slices.IndexFunc(records.Milestones, func(m ExportMilestone) bool { return m.InterviewId != 0 })
+	if answer < 0 || len(records.Interviews) == 0 || len(records.Books) == 0 || len(records.Tags) == 0 {
+		t.Fatal("the seed has no interview answer, interview, book or tag")
+	}
+	tag := records.Tags[0].Name
+	records.Milestones[answer].TagNames = []string{tag}
+	records.Milestones[answer].TagsAddedAt = map[string]time.Time{strings.ToLower(tag): tagged}
+	for i := range records.Interviews {
+		records.Interviews[i].CreatedAt = time.Time{}
+	}
+	for i := range records.Books {
+		records.Books[i].UpdatedAt, records.Books[i].ReviewedAt = time.Time{}, time.Time{}
+	}
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restorer := fx.newUser(t, "restorer")
+	if _, err := fx.importRecords(t, restorer, ImportDataRequest{JsonData: string(data), ImportMilestones: true}); err != nil {
+		t.Fatal(err)
+	}
+	restored := map[string][]any{}
+	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
+		for _, bucket := range []string{"milestone_tags", "interviews", "books"} {
+			restored[bucket] = archiveReaders[bucket](tx, restorer.FamilyId)
+		}
+	})
+	answerTagged := false
+	for _, row := range restored["milestone_tags"] {
+		answerTagged = answerTagged || row.(MilestoneTag).CreatedAt.Equal(tagged)
+	}
+	if !answerTagged {
+		t.Errorf("the interview answer's tag was not stamped with when the archive says it was added")
+	}
+	for _, row := range restored["interviews"] {
+		if row.(Interview).CreatedAt.IsZero() {
+			t.Errorf("interview %d was imported with no createdAt", row.(Interview).Id)
+		}
+	}
+	for _, row := range restored["books"] {
+		if book := row.(Book); book.UpdatedAt.IsZero() || book.ReviewedAt.IsZero() {
+			t.Errorf("book %q was imported updated %v, reviewed %v", book.Title, book.UpdatedAt, book.ReviewedAt)
+		}
 	}
 }

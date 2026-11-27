@@ -28,6 +28,10 @@ type ImportForm = {
   importActivities: boolean;
   dryRun: boolean;
   targetFamilyId: number;
+  archiveImportId: number;
+  archiveFamilyId: number;
+  uploadPercent: number;
+  job: server.ArchiveImportStatus | null;
 };
 
 const useImportForm = vlens.declareHook(
@@ -47,8 +51,120 @@ const useImportForm = vlens.declareHook(
     importActivities: true,
     dryRun: false,
     targetFamilyId: 0,
+    archiveImportId: 0,
+    archiveFamilyId: 0,
+    uploadPercent: 0,
+    job: null,
   })
 );
+
+const jobStateLabels: Record<string, string> = {
+  uploading: "Uploading",
+  queued: "Waiting to start",
+  staging: "Reading the archive",
+  importing: "Importing",
+  placing: "Putting photos and videos in place",
+  done: "Finished",
+  failed: "Failed",
+};
+
+const putArchive = (form: ImportForm, file: File, upload: server.UploadInstructions) =>
+  new Promise<string>(resolve => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(upload.method, upload.url);
+    for (const [name, value] of Object.entries(upload.headers || {})) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        form.uploadPercent = Math.round((e.loaded / e.total) * 100);
+        vlens.scheduleRedraw();
+      }
+    };
+    xhr.onload = () =>
+      resolve(xhr.status >= 200 && xhr.status < 300 ? "" : "Upload failed: " + xhr.responseText);
+    xhr.onerror = () => resolve("The upload did not finish. Check your connection and try again.");
+    xhr.send(file);
+  });
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// A chosen file, an Everything archive or a Records file, uploads once,
+// straight to storage; each preview, dry run or import is then a background
+// job on that upload.
+const runArchiveJob = async (
+  form: ImportForm,
+  options: server.ImportDataRequest
+): Promise<[server.ImportDataResponse | null, string]> => {
+  const file = form.file!;
+  if (!form.archiveImportId || form.archiveFamilyId !== form.targetFamilyId) {
+    form.uploadPercent = 0;
+    form.job = null;
+    const [begun, err] = await server.BeginArchiveImport({
+      familyId: form.targetFamilyId,
+      filename: file.name,
+      size: file.size,
+    });
+    if (!begun) {
+      return [null, err];
+    }
+    form.job = { state: "uploading" } as server.ArchiveImportStatus;
+    vlens.scheduleRedraw();
+    const putErr = await putArchive(form, file, begun.upload);
+    if (putErr) {
+      return [null, putErr];
+    }
+    form.archiveImportId = begun.importId;
+    form.archiveFamilyId = form.targetFamilyId;
+  }
+
+  form.job = { state: "queued" } as server.ArchiveImportStatus;
+  vlens.scheduleRedraw();
+  let [status, err] = await server.CompleteArchiveImport({
+    importId: form.archiveImportId,
+    options,
+  });
+  while (status && status.state !== "done" && status.state !== "failed") {
+    form.job = status;
+    vlens.scheduleRedraw();
+    await sleep(1000);
+    [status, err] = await server.GetArchiveImportStatus({ importId: form.archiveImportId });
+  }
+  form.job = status;
+  if (!status) {
+    return [null, err];
+  }
+  if (status.state === "failed") {
+    return [null, status.error || "Import failed"];
+  }
+  return [status.result, ""];
+};
+
+const JobProgress = ({ form }: { form: ImportForm }) => {
+  const job = form.job;
+  if (!form.loading || !form.file || !job) {
+    return null;
+  }
+  return (
+    <div className="zip-bundle-card" role="status">
+      <p>
+        <strong>{jobStateLabels[job.state] || job.state}</strong>
+        {job.state === "uploading" && ` ${form.uploadPercent}%`}
+      </p>
+      {job.records > 0 && (
+        <p>
+          {job.media > 0
+            ? `${job.records} records and ${job.media} photo and video files in this archive.`
+            : `${job.records} records in this file.`}
+        </p>
+      )}
+      {job.state === "staging" && job.stagedMedia > 0 && (
+        <p>{job.stagedMedia} files unpacked so far.</p>
+      )}
+      <p>You can leave this page; the import keeps running.</p>
+    </div>
+  );
+};
 
 export async function fetch(route: string, prefix: string) {
   return rpc.ok<Data>({});
@@ -91,25 +207,11 @@ const ImportPage = ({ form }: ImportPageProps) => {
 
     if (file) {
       form.file = file;
+      form.archiveImportId = 0;
       form.error = "";
       clearPreview(form);
-      form.isZip = file.name.endsWith(".zip");
-
-      if (form.isZip) {
-        form.jsonData = "";
-        vlens.scheduleRedraw();
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = e => {
-        const result = e.target?.result;
-        if (typeof result === "string") {
-          form.jsonData = result;
-          vlens.scheduleRedraw();
-        }
-      };
-      reader.readAsText(file);
+      form.isZip = file.name.toLowerCase().endsWith(".zip");
+      form.jsonData = "";
       vlens.scheduleRedraw();
     }
   };
@@ -117,25 +219,14 @@ const ImportPage = ({ form }: ImportPageProps) => {
   const runImport = async (
     options: Omit<server.ImportDataRequest, "jsonData">
   ): Promise<[server.ImportDataResponse | null, string]> => {
-    if (!form.isZip) {
+    if (!form.file) {
       const [resp, err] = await server.ImportData({ ...options, jsonData: form.jsonData });
       return [resp, err];
     }
-    const formData = new FormData();
-    formData.append("file", form.file!);
-    formData.append("options", JSON.stringify(options));
-    const resp = await window.fetch("/api/import-bundle", {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-    if (!resp.ok) {
-      return [null, "Import failed: " + (await resp.text())];
-    }
-    return [(await resp.json()) as server.ImportDataResponse, ""];
+    return runArchiveJob(form, { ...options, jsonData: "" });
   };
 
-  const hasInput = () => (form.isZip ? form.file !== null : form.jsonData.trim() !== "");
+  const hasInput = () => form.file !== null || form.jsonData.trim() !== "";
 
   const handleTextareaChange = (event: Event) => {
     const target = event.target as HTMLTextAreaElement;
@@ -170,7 +261,7 @@ const ImportPage = ({ form }: ImportPageProps) => {
       return;
     }
 
-    if (!form.isZip) {
+    if (!form.file) {
       try {
         JSON.parse(form.jsonData);
       } catch (e) {
@@ -260,6 +351,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
     form.jsonData = "";
     form.file = null;
     form.isZip = false;
+    form.archiveImportId = 0;
+    form.job = null;
     form.error = "";
     form.success = false;
     form.result = null;
@@ -287,7 +380,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
       {form.success && form.result ? (
         <div className="import-success">
           <h2>
-            <Icon symbol={CircleCheck} /> Import Successful!
+            <Icon symbol={CircleCheck} />{" "}
+            {form.dryRun ? "Dry Run Finished: Nothing Was Saved" : "Import Successful!"}
           </h2>
           <div className="import-stats">
             <div className="stat">
@@ -364,6 +458,12 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 <span className="stat-label">Photos Skipped</span>
               </div>
             )}
+            {form.result.importedVideos > 0 && (
+              <div className="stat">
+                <span className="stat-number">{form.result.importedVideos}</span>
+                <span className="stat-label">Videos Imported</span>
+              </div>
+            )}
             {form.result.skippedVideos > 0 && (
               <div className="stat">
                 <span className="stat-number">{form.result.skippedVideos}</span>
@@ -426,12 +526,17 @@ const ImportPage = ({ form }: ImportPageProps) => {
               </div>
             </div>
 
-            {form.isZip && form.file ? (
+            {form.file ? (
               <div className="zip-bundle-card">
                 <p>
-                  <strong>ZIP bundle selected:</strong> {form.file.name}
+                  <strong>{form.isZip ? "Everything archive" : "Records file"} selected:</strong>{" "}
+                  {form.file.name}
                 </p>
-                <p>This bundle contains family data and photos.</p>
+                <p>
+                  {form.isZip
+                    ? "Your records plus their photo and video files."
+                    : "Your records, without photo or video files."}
+                </p>
               </div>
             ) : (
               <>
@@ -453,6 +558,8 @@ const ImportPage = ({ form }: ImportPageProps) => {
                 </div>
               </>
             )}
+
+            <JobProgress form={form} />
 
             {form.error && (
               <div className="error-message" role="alert">
@@ -550,7 +657,10 @@ const ImportPage = ({ form }: ImportPageProps) => {
               <Icon symbol={ClipboardList} /> Import Instructions
             </h3>
             <ul>
-              <li>Upload a JSON or ZIP file exported from Family Record</li>
+              <li>
+                Upload a Records file (JSON) or an Everything archive (ZIP) exported from Family
+                Record
+              </li>
               <li>Or paste the JSON data directly into the text area</li>
               <li>
                 People already in the family are matched and have missing details filled in rather

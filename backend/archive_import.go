@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
+	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
@@ -15,14 +15,21 @@ import (
 // archiveFormatVersion is written into every export. Files from before it
 // existed carry none and are read as version 1.
 const archiveFormatVersion = 1
+const maxArchiveRecordsBytes = 64 << 20
+
+var errArchiveRecordsTooLarge = fmt.Errorf("Family Record data can be at most %s before compression.", formatBytes(maxArchiveRecordsBytes))
 
 var errUnreadableArchive = errors.New("That file is not a valid Family Record export. Check that you picked the right file.")
 
 // familyArchive is one archive in the current shape, whichever file it came
-// from. media holds the files a zip carries; a Records file has none.
+// from. media holds the files a zip carries; a Records file has none. staged
+// holds the photos unpacked for this import, by their id in the archive.
+// warnings are what reading it changed, for the import to report.
 type familyArchive struct {
 	ImportDataStructure
-	media map[string]*zip.File
+	media    map[string]*zip.File
+	staged   map[int]stagedMedia
+	warnings []string
 }
 
 // archiveLedger maps the archive's ids to the target family's. Each step of
@@ -34,33 +41,94 @@ type archiveLedger struct {
 	moments    map[int]int
 	photos     map[int]int
 	interviews map[int]int
+	activities map[int]int
+	seasons    map[int]int
+	entries    map[int]int
+	events     map[int]int
 }
 
 func newArchiveLedger() *archiveLedger {
 	return &archiveLedger{
 		people: map[int]int{}, tags: map[int]int{}, tagByName: map[string]int{},
 		moments: map[int]int{}, photos: map[int]int{}, interviews: map[int]int{},
+		activities: map[int]int{}, seasons: map[int]int{}, entries: map[int]int{}, events: map[int]int{},
 	}
 }
 
-// archiveImported is the work left for after the import commits.
+// archiveImported is the work left for after the import commits. A job keeps
+// it on its record until the work is done, so the next start can finish it.
 type archiveImported struct {
-	milestoneIds []int
-	photoJobs    []PhotoProcessingJob
+	MilestoneIds []int           `json:"milestoneIds,omitempty"`
+	Photos       []importedPhoto `json:"photos,omitempty"`
+	Videos       []importedVideo `json:"videos,omitempty"`
+}
+
+// importedPhoto and importedVideo are committed media whose staged files
+// still have to be put in place before they are processed.
+type importedPhoto struct {
+	ImageId  int        `json:"imageId"`
+	FamilyId int        `json:"familyId"`
+	FilePath string     `json:"filePath"`
+	MimeType string     `json:"mimeType"`
+	File     stagedMove `json:"file"`
+}
+
+type importedVideo struct {
+	ImageId int          `json:"imageId"`
+	File    stagedUpload `json:"file"`
+}
+
+// Place all originals before queueing workers. A retry can safely resume
+// placement, and workers only receive jobs once every original is in place.
+func (done archiveImported) place() error {
+	for _, photo := range done.Photos {
+		if archiveImportsStopping.Load() {
+			return errArchiveImportStopped
+		}
+		if err := photo.File.run(); err != nil {
+			return fmt.Errorf("place photo %d: %w", photo.ImageId, err)
+		}
+	}
+	for _, video := range done.Videos {
+		if archiveImportsStopping.Load() {
+			return errArchiveImportStopped
+		}
+		if err := video.File.run(); err != nil {
+			return fmt.Errorf("place video %d: %w", video.ImageId, err)
+		}
+	}
+	return nil
 }
 
 func (done archiveImported) queue() {
-	for _, id := range done.milestoneIds {
+	for _, id := range done.MilestoneIds {
 		QueueMilestoneEmbedding(id)
 	}
-	for _, job := range done.photoJobs {
-		if err := QueuePhotoProcessing(job); err != nil {
+	for _, photo := range done.Photos {
+		err := QueuePhotoProcessing(PhotoProcessingJob{
+			ImageId: photo.ImageId, FamilyId: photo.FamilyId, FilePath: photo.FilePath, MimeType: photo.MimeType,
+		})
+		if err != nil {
 			LogWarn(LogCategoryPhoto, "Imported photo left for stuck-photo recovery", map[string]interface{}{
-				"photoId": job.ImageId,
+				"photoId": photo.ImageId,
 				"error":   err.Error(),
 			})
 		}
 	}
+	for _, video := range done.Videos {
+		QueueVideoProcessing(video.ImageId)
+	}
+}
+
+func readArchiveRecordsFile(r io.Reader) (archive familyArchive, err error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxArchiveRecordsBytes+1))
+	if err != nil {
+		return archive, errUnreadableArchive
+	}
+	if len(data) > maxArchiveRecordsBytes {
+		return archive, errArchiveRecordsTooLarge
+	}
+	return readArchiveRecords(data)
 }
 
 func readArchiveRecords(data []byte) (archive familyArchive, err error) {
@@ -73,6 +141,9 @@ func readArchiveRecords(data []byte) (archive familyArchive, err error) {
 	switch {
 	case header.FormatVersion <= 1:
 		archive.ImportDataStructure, err = readArchiveV1(data)
+		if err == nil && header.FormatVersion == 0 {
+			archive.warnings = markLegacyPregnancies(archive.People)
+		}
 	default:
 		return archive, errors.New("That file was exported by a newer version of Family Record, so it can't be imported here yet.")
 	}
@@ -92,32 +163,53 @@ func readArchiveV1(data []byte) (records ImportDataStructure, err error) {
 	return records, nil
 }
 
+// markLegacyPregnancies treats a future birthday in an unversioned file as a
+// due date: those files don't carry the pregnancy flag, and only a pregnancy
+// can have a birthday in the future.
+func markLegacyPregnancies(people []ImportPerson) (warnings []string) {
+	now := time.Now()
+	for i := range people {
+		if people[i].Birthday.After(now) && !people[i].IsPregnancy {
+			people[i].IsPregnancy = true
+			warnings = append(warnings, people[i].Name+"'s birthday is in the future, so they were imported as a pregnancy.")
+		}
+	}
+	return
+}
+
 func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
 	media := make(map[string]*zip.File, len(zr.File))
 	var records *zip.File
+	incomplete := false
 	for _, zf := range zr.File {
-		if zf.Name == "data.json" {
+		switch zf.Name {
+		case "data.json":
 			records = zf
-		} else {
+		case incompleteArchiveEntry:
+			incomplete = true
+		default:
 			media[zf.Name] = zf
 		}
 	}
 	if records == nil {
 		return archive, errors.New("That zip has no data.json, so it isn't a Family Record export.")
 	}
+	if records.UncompressedSize64 > maxArchiveRecordsBytes {
+		return archive, errArchiveRecordsTooLarge
+	}
 	rc, err := records.Open()
 	if err != nil {
 		return archive, errUnreadableArchive
 	}
-	data, err := io.ReadAll(rc)
+	archive, err = readArchiveRecordsFile(rc)
 	rc.Close()
 	if err != nil {
-		return archive, errUnreadableArchive
-	}
-	if archive, err = readArchiveRecords(data); err != nil {
 		return archive, err
 	}
 	archive.media = media
+	if incomplete {
+		archive.warnings = append(archive.warnings, "This export is incomplete. Open "+incompleteArchiveEntry+" inside the ZIP for the list of missing originals.")
+	}
 	return archive, nil
 }
 
@@ -125,6 +217,7 @@ func readArchiveZip(zr *zip.Reader) (archive familyArchive, err error) {
 // familyId inside tx and leaves committing, or rolling back a dry run, to the
 // caller.
 func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyArchive, req ImportDataRequest) (resp ImportDataResponse, done archiveImported, err error) {
+	resp.Warnings = append(resp.Warnings, archive.warnings...)
 	resp.AvailableFamilyIds = getUniqueFamilyIds(archive.People)
 	resp.AvailablePeople = archive.People
 	people := filterPeople(archive.People, req.FilterFamilyIds, req.FilterPersonIds)
@@ -145,7 +238,10 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	}
 
 	l := newArchiveLedger()
-	resp.ImportedPeople, resp.MergedPeople, resp.Warnings = importPeople(tx, people, familyId, l)
+	importFamilySettings(tx, familyId, archive.Family)
+	var peopleWarnings []string
+	resp.ImportedPeople, resp.MergedPeople, peopleWarnings = importPeople(tx, people, familyId, l)
+	resp.Warnings = append(resp.Warnings, peopleWarnings...)
 	resp.SkippedPeople = len(people) - resp.ImportedPeople - resp.MergedPeople
 	resp.PersonIdMapping = l.people
 	resp.ImportedTags, resp.SkippedTags = importTags(tx, archive.Tags, familyId, l)
@@ -158,7 +254,7 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 	resp.Errors = append(resp.Errors, errs...)
 
 	if req.ImportMilestones {
-		resp.ImportedMilestones, resp.SkippedMilestones, errs, done.milestoneIds =
+		resp.ImportedMilestones, resp.SkippedMilestones, errs, done.MilestoneIds =
 			importMilestones(tx, filterMilestones(archive.Milestones, l.people), familyId, l)
 		resp.Errors = append(resp.Errors, errs...)
 	} else {
@@ -167,32 +263,39 @@ func importFamilyArchive(tx *vbolt.Tx, user User, familyId int, archive familyAr
 
 	if archive.media != nil {
 		var warnings []string
-		resp.ImportedPhotos, resp.SkippedPhotos, done.photoJobs, warnings =
-			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.media, req.DryRun)
+		resp.ImportedPhotos, resp.SkippedPhotos, done.Photos, warnings =
+			importPhotos(tx, familyId, user.Id, archive.Photos, l, archive.staged)
 		resp.Warnings = append(resp.Warnings, warnings...)
 		setImportedProfilePhotos(tx, archive.People, l)
+		resp.ImportedVideos, resp.SkippedVideos, done.Videos, warnings =
+			importVideos(tx, familyId, user.Id, archive.Videos, l, archive.staged, req.DryRun)
+		resp.Warnings = append(resp.Warnings, warnings...)
 	} else {
 		resp.SkippedPhotos = missingPhotoFiles(archive, l)
+		resp.SkippedVideos = missingVideoFiles(archive, l)
 	}
-	resp.SkippedVideos = videosInScope(archive.Videos, l)
-	if photos := missingPhotoFiles(archive, l); photos+resp.SkippedVideos > 0 {
+	if photos, videos := missingPhotoFiles(archive, l), missingVideoFiles(archive, l); photos+videos > 0 {
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf(
 			"%d photo(s) and %d video(s) were not imported because their files aren't in this file.",
-			photos, resp.SkippedVideos))
+			photos, videos))
 	}
 
+	importInterviewListSettings(tx, familyId, archive.InterviewCadence, archive.InterviewDismissed)
 	if req.ImportMilestones {
 		interviews := interviewImport{familyId: familyId, ledger: l}.run(tx, archive.InterviewQuestions, archive.Interviews, archive.Milestones)
 		resp.ImportedInterviews = interviews.imported
 		resp.SkippedInterviews = interviews.skipped
 		resp.Warnings = append(resp.Warnings, interviews.warnings...)
-		done.milestoneIds = append(done.milestoneIds, interviews.answerIds...)
+		done.MilestoneIds = append(done.MilestoneIds, interviews.answerIds...)
+		linkMomentPhotos(tx, archive.Milestones, familyId, l)
+	} else {
+		mapExistingInterviews(tx, archive.Interviews, l)
 	}
-	importInterviewCadence(tx, familyId, archive.InterviewCadence)
+	importPlaces(tx, archive.Places, familyId)
 
 	if req.ImportActivities && len(archive.Activities) > 0 {
 		var warnings []string
-		resp.ImportedActivities, warnings = importActivities(tx, archive.Activities, familyId, l.people, l.photos)
+		resp.ImportedActivities, warnings = importActivities(tx, archive.Activities, familyId, l)
 		resp.Warnings = append(resp.Warnings, warnings...)
 	}
 
@@ -214,10 +317,10 @@ func inScope(personIds []int, l *archiveLedger) bool {
 	return len(personIds) == 0
 }
 
-func videosInScope(videos []ExportVideo, l *archiveLedger) (n int) {
-	for _, video := range videos {
-		if inScope(video.PersonIds, l) {
-			n++
+func missingVideoFiles(archive familyArchive, l *archiveLedger) (missing int) {
+	for _, video := range archive.Videos {
+		if inScope(video.PersonIds, l) && archive.media[video.zipPath()] == nil {
+			missing++
 		}
 	}
 	return
@@ -230,18 +333,6 @@ func missingPhotoFiles(archive familyArchive, l *archiveLedger) (missing int) {
 		}
 	}
 	return
-}
-
-// mapExistingMoments links the moments a family already has, so books can
-// point at them when the import leaves moments out.
-func mapExistingMoments(tx *vbolt.Tx, milestones []ExportMilestone, l *archiveLedger) {
-	for _, m := range milestones {
-		if personId, ok := l.people[m.PersonId]; ok {
-			if id := existingMilestoneId(tx, personId, m.MilestoneDate, m.Description); id != 0 {
-				l.moments[m.Id] = id
-			}
-		}
-	}
 }
 
 func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLedger) {
@@ -257,9 +348,12 @@ func setImportedProfilePhotos(tx *vbolt.Tx, people []ImportPerson, l *archiveLed
 			continue
 		}
 		person.ProfilePhotoId = photoId
-		person.ProfileCropX = 50
-		person.ProfileCropY = 50
-		person.ProfileCropScale = 1.0
+		person.ProfileCropX, person.ProfileCropY, person.ProfileCropScale = 50, 50, 1.0
+		if importPerson.ProfileCropScale > 0 {
+			person.ProfileCropX = importPerson.ProfileCropX
+			person.ProfileCropY = importPerson.ProfileCropY
+			person.ProfileCropScale = importPerson.ProfileCropScale
+		}
 		vbolt.Write(tx, PeopleBkt, person.Id, &person)
 	}
 }
@@ -297,66 +391,4 @@ func ImportData(ctx *vbeam.Context, req ImportDataRequest) (resp ImportDataRespo
 	vbolt.TxCommit(ctx.Tx)
 	done.queue()
 	return
-}
-
-// importBundleHandler imports a zip. Its "options" field carries the same
-// choices as ImportDataRequest, without jsonData.
-func importBundleHandler(w http.ResponseWriter, r *http.Request) {
-	user, ok := GetUserFromContext(r)
-	if !ok {
-		RespondAuthError(w, r, "Authentication required")
-		return
-	}
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		RespondValidationError(w, r, "Failed to parse multipart form", err.Error())
-		return
-	}
-	var req ImportDataRequest
-	if err := json.Unmarshal([]byte(r.FormValue("options")), &req); err != nil {
-		RespondValidationError(w, r, "The import options are missing. Reload the page and try again.", err.Error())
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		RespondValidationError(w, r, "No file provided", err.Error())
-		return
-	}
-	defer file.Close()
-	zipReader, err := zip.NewReader(file, header.Size)
-	if err != nil {
-		RespondValidationError(w, r, "Invalid ZIP file", err.Error())
-		return
-	}
-	archive, err := readArchiveZip(zipReader)
-	if err != nil {
-		RespondValidationError(w, r, err.Error())
-		return
-	}
-
-	var resp ImportDataResponse
-	var done archiveImported
-	withTx := vbolt.WithWriteTx
-	if req.PreviewOnly {
-		withTx = vbolt.WithReadTx
-	}
-	withTx(appDb, func(tx *vbolt.Tx) {
-		var familyId int
-		if familyId, err = ResolveActingFamily(tx, user, req.FamilyId, AccessContribute); err != nil {
-			return
-		}
-		resp, done, err = importFamilyArchive(tx, user, familyId, archive, req)
-		if err == nil && !req.PreviewOnly && !req.DryRun {
-			vbolt.TxCommit(tx)
-		}
-	})
-	if err != nil {
-		RespondValidationError(w, r, "Failed to import bundle", err.Error())
-		return
-	}
-	if !req.PreviewOnly && !req.DryRun {
-		done.queue()
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
 }

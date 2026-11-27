@@ -478,7 +478,7 @@ func (p *perfAccumulator) add(entry logEntry) {
 	// Timing logs contain the request URI, including query parameters.
 	path, _, _ := strings.Cut(entry.HTTPPath, "?")
 	switch {
-	case path == "/api/upload-photo", path == "/api/import-bundle", path == vbeam.PREFIX_RPC+"ImportData",
+	case path == "/api/upload-photo", path == vbeam.PREFIX_RPC+"ImportData",
 		strings.HasPrefix(path, localMediaUploadPrefix):
 		p.uploadDurations = append(p.uploadDurations, duration)
 	case path == "/api/export-bundle", path == SnapshotPath, path == vbeam.PREFIX_RPC+"ExportData",

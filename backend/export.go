@@ -3,6 +3,7 @@ package backend
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"encoding/json"
 	"errors"
 	"family/cfg"
@@ -12,16 +13,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
+const incompleteArchiveEntry = "INCOMPLETE-EXPORT.txt"
+
 func RegisterExportMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, ExportData)
-	vbeam.RegisterProc(app, ListVideoOriginals)
-	vbeam.RegisterProc(app, GetVideoOriginalLink)
+	vbeam.RegisterProc(app, GetArchiveExportSizes)
 	app.HandleFunc("GET /api/export-bundle", AuthMiddleware(exportBundleHandler))
 }
 
@@ -33,11 +36,13 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mode := r.URL.Query().Get("mode")
-	if mode == "" {
+	switch mode {
+	case "", "data_only", "records":
 		mode = "data_only"
-	}
-	if mode != "data_only" && mode != "with_photos" {
-		RespondValidationError(w, r, "Choose either a data-only export or one with photos.", mode)
+	case "with_photos", "everything":
+		mode = "with_photos"
+	default:
+		RespondValidationError(w, r, "Choose either the Records file or the Everything archive.", mode)
 		return
 	}
 
@@ -53,6 +58,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 
 	var exportData ExportDataStructure
 	var buildErr error
+	videoKeys := map[int]string{}
 	vbolt.WithReadTx(appDb, func(tx *vbolt.Tx) {
 		familyId, resolveErr := ResolveActingFamily(tx, user, requestedFamilyId, AccessView)
 		if resolveErr != nil {
@@ -67,6 +73,9 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 			photos := buildPhotoExportMetadata(tx, familyId)
 			exportData.Photos = photos
 			exportData.TotalPhotos = len(photos)
+			for _, video := range exportData.Videos {
+				videoKeys[video.Id] = GetImageById(tx, video.Id).OriginalKey
+			}
 		}
 	})
 	if buildErr != nil {
@@ -103,7 +112,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	var missing []string
 
 	dataEntry, err := zw.Create("data.json")
 	if err != nil {
@@ -119,6 +128,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		diskPath := filepath.Join(cfg.StaticDir, ep.ZipPath)
 		f, err := os.Open(diskPath)
 		if err != nil {
+			missing = append(missing, ep.ZipPath)
 			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a photo whose original is unreadable", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			continue
 		}
@@ -126,7 +136,7 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			LogWarnWithRequest(r, LogCategoryPhoto, "Export could not add a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
 			f.Close()
-			continue
+			return
 		}
 		if _, err := io.Copy(entry, f); err != nil {
 			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a photo", map[string]interface{}{"photoId": ep.Id, "error": err.Error()})
@@ -135,67 +145,44 @@ func exportBundleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		f.Close()
 	}
-}
 
-func buildPhotoExportMetadata(tx *vbolt.Tx, familyId int) []ExportPhoto {
-	images := GetFamilyImages(tx, familyId)
-	result := make([]ExportPhoto, 0, len(images))
-	for _, img := range images {
-		if img.Status != PhotoReady || img.IsVideo() {
+	store := activeMediaStore()
+	for _, video := range exportData.Videos {
+		if store == nil {
+			missing = append(missing, video.zipPath())
 			continue
 		}
-		zipPath := "photos/" + originalFileName(img.FilePath)
-
-		photoPersons := GetPhotoPersonsByPhoto(tx, img.Id)
-		personIds := make([]int, 0, len(photoPersons))
-		for _, pp := range photoPersons {
-			personIds = append(personIds, pp.PersonId)
+		rc, err := store.Open(r.Context(), videoKeys[video.Id])
+		if err != nil {
+			missing = append(missing, video.zipPath())
+			LogWarnWithRequest(r, LogCategoryPhoto, "Export skipped a video whose original is unreadable", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
+			continue
 		}
-
-		result = append(result, ExportPhoto{
-			Id:          img.Id,
-			Title:       img.Title,
-			Description: img.Description,
-			PhotoDate:   img.PhotoDate,
-			RecordTime:  &img.RecordTime,
-			DateLabel:   img.RecordTime.Label(),
-			ZipPath:     zipPath,
-			PersonIds:   personIds,
-			TagIds:      GetPhotoTagIds(tx, img.Id),
-		})
+		entry, err := zw.CreateHeader(&zip.FileHeader{Name: video.zipPath(), Method: zip.Store})
+		if err == nil {
+			_, err = io.Copy(entry, rc)
+		}
+		rc.Close()
+		if err != nil {
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export stopped writing a video", map[string]interface{}{"videoId": video.Id, "error": err.Error()})
+			return
+		}
 	}
-	return result
-}
-
-type ExportTag struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-}
-
-// ExportRelation is one stored relationship edge. Kind is spelled out rather
-// than numbered so the file does not depend on the enum's ordering. For a
-// "parent" edge From is the parent of To; "sibling" and "partner" are
-// symmetric and stored once, in the direction they were entered.
-type ExportRelation struct {
-	Id       int    `json:"id"`
-	FromId   int    `json:"fromId"`
-	ToId     int    `json:"toId"`
-	Kind     string `json:"kind"`
-	FromName string `json:"fromName,omitempty"`
-	ToName   string `json:"toName,omitempty"`
-}
-
-type ExportPhoto struct {
-	Id          int         `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	PhotoDate   time.Time   `json:"photo_date"`
-	RecordTime  *RecordTime `json:"record_time,omitempty"`
-	DateLabel   string      `json:"date_label,omitempty"`
-	ZipPath     string      `json:"zip_path"`
-	PersonIds   []int       `json:"person_ids"`
-	TagIds      []int       `json:"tag_ids"`
+	if len(missing) > 0 {
+		entry, err := zw.Create(incompleteArchiveEntry)
+		if err == nil {
+			_, err = io.WriteString(entry, "This Family Record archive is incomplete. The following originals could not be read:\n\n"+strings.Join(missing, "\n")+"\n")
+		}
+		if err != nil {
+			LogErrorWithRequest(r, LogCategoryPhoto, "Export could not write its list of missing originals", map[string]interface{}{"error": err.Error()})
+			return
+		}
+	}
+	// Only finalize if every entry was written. A stream interrupted mid-entry
+	// must not produce a valid ZIP containing a truncated original.
+	if err := zw.Close(); err != nil {
+		LogErrorWithRequest(r, LogCategoryAPI, "Export could not finish the ZIP", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 type ExportDataStructure struct {
@@ -208,13 +195,16 @@ type ExportDataStructure struct {
 	Milestones []ExportMilestone `json:"milestones"`
 	Tags       []ExportTag       `json:"tags"`
 	Photos     []ExportPhoto     `json:"photos,omitempty"`
+	Places     []ExportPlace     `json:"places,omitempty"`
 	Videos     []ExportVideo     `json:"videos,omitempty"`
+	Family     *ExportFamily     `json:"family,omitempty"`
 	Activities []ExportActivity  `json:"activities,omitempty"`
 	Books      []ExportBook      `json:"books,omitempty"`
 
 	InterviewQuestions []ExportInterviewQuestion `json:"interviewQuestions,omitempty"`
 	Interviews         []ExportInterview         `json:"interviews,omitempty"`
 	InterviewCadence   *InterviewCadence         `json:"interviewCadence,omitempty"`
+	InterviewDismissed []string                  `json:"interviewDismissedKeys,omitempty"`
 
 	ExportDate      time.Time `json:"export_date"`
 	TotalHeights    int       `json:"total_heights"`
@@ -234,25 +224,6 @@ type ExportDataStructure struct {
 	TotalResults     int `json:"total_results,omitempty"`
 	TotalBooks       int `json:"total_books,omitempty"`
 	TotalInterviews  int `json:"total_interviews,omitempty"`
-}
-
-type ExportMilestone struct {
-	Id            int         `json:"id"`
-	PersonId      int         `json:"personId"`
-	FamilyId      int         `json:"familyId"`
-	Description   string      `json:"description"`
-	Category      string      `json:"category"`
-	Context       string      `json:"context,omitempty"`
-	MilestoneDate time.Time   `json:"milestoneDate"`
-	RecordTime    *RecordTime `json:"recordTime,omitempty"`
-	DateLabel     string      `json:"dateLabel,omitempty"`
-	CreatedAt     time.Time   `json:"createdAt"`
-	PersonName    string      `json:"personName"`
-	TagNames      []string    `json:"tagNames,omitempty"`
-	InterviewId   int         `json:"interviewId,omitempty"`
-	QuestionId    int         `json:"questionId,omitempty"`
-	Note          string      `json:"note,omitempty"`
-	RecordedBy    string      `json:"recordedBy,omitempty"`
 }
 
 type ExportDataRequest struct {
@@ -289,147 +260,99 @@ func ExportData(ctx *vbeam.Context, req ExportDataRequest) (resp ExportDataRespo
 	return
 }
 
+type GetArchiveExportSizesRequest struct {
+	FamilyId int `json:"familyId,omitempty"`
+}
+
+type GetArchiveExportSizesResponse struct {
+	RecordsBytes    int `json:"recordsBytes"`
+	EverythingBytes int `json:"everythingBytes"`
+	Photos          int `json:"photos"`
+	Videos          int `json:"videos"`
+}
+
+func GetArchiveExportSizes(ctx *vbeam.Context, req GetArchiveExportSizesRequest) (resp GetArchiveExportSizesResponse, err error) {
+	user, authErr := GetAuthUser(ctx)
+	if authErr != nil {
+		err = ErrAuthFailure
+		return
+	}
+
+	familyId, err := ResolveActingFamily(ctx.Tx, user, req.FamilyId, AccessView)
+	if err != nil {
+		return
+	}
+
+	exportData, err := buildExportData(ctx.Tx, familyId)
+	if err != nil {
+		return
+	}
+	var records countingWriter
+	if err = encodeExportJSON(&records, exportData); err != nil {
+		return
+	}
+	resp.RecordsBytes = records.n
+
+	photos := buildPhotoExportMetadata(ctx.Tx, familyId)
+	exportData.Photos, exportData.TotalPhotos = photos, len(photos)
+	var compressed countingWriter
+	fw, _ := flate.NewWriter(&compressed, flate.DefaultCompression)
+	if err = encodeExportJSON(fw, exportData); err != nil {
+		return
+	}
+	fw.Close()
+	resp.EverythingBytes = compressed.n + zipEntryOverhead
+
+	fileSizes := map[int]int{}
+	for _, img := range GetFamilyImages(ctx.Tx, familyId) {
+		fileSizes[img.Id] = img.FileSize
+	}
+	for _, photo := range photos {
+		resp.Photos++
+		resp.EverythingBytes += fileSizes[photo.Id] + zipEntryOverhead
+	}
+	if activeMediaStore() != nil {
+		for _, video := range exportData.Videos {
+			resp.Videos++
+			resp.EverythingBytes += video.FileSize + zipEntryOverhead
+		}
+	}
+	return
+}
+
+// encodeExportJSON writes what json.MarshalIndent would, without holding it
+// all in memory.
+func encodeExportJSON(w io.Writer, exportData ExportDataStructure) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(exportData)
+}
+
+const zipEntryOverhead = 150
+
+type countingWriter struct{ n int }
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	c.n += len(p)
+	return len(p), nil
+}
+
 func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData := ExportDataStructure{FormatVersion: archiveFormatVersion}
 
 	tags := getTagsByFamily(tx, familyId)
 	tagIdToName := make(map[int]string, len(tags))
-	exportTags := make([]ExportTag, len(tags))
-	for i, tag := range tags {
+	for _, tag := range tags {
 		tagIdToName[tag.Id] = tag.Name
-		exportTags[i] = ExportTag{Id: tag.Id, Name: tag.Name, Color: tag.Color}
 	}
+	exportTags := exportTagRecords(tags)
 
 	people := GetFamilyOwnPeople(tx, familyId)
 	recorderOf := exportRecorders(tx)
+	exportData.People = exportPeople(people)
+	heights, weights := exportMeasurements(tx, familyId, people, recorderOf)
 
-	exportData.People = make([]ImportPerson, len(people))
-	for i, person := range people {
-		exportData.People[i] = ImportPerson{
-			Id:       person.Id,
-			FamilyId: person.FamilyId,
-			Gender:   int(person.Gender),
-			Name:     person.Name,
-			Birthday: person.Birthday,
-			Age:      person.Age,
-			ImageId:  person.ProfilePhotoId,
-
-			BirthTime:  person.BirthTime,
-			BirthPlace: person.BirthPlace,
-		}
-	}
-
-	var growthDataIds []int
-	vbolt.ReadTermTargets(tx, GrowthDataByFamilyIndex, familyId, &growthDataIds, vbolt.Window{})
-
-	var growthData []GrowthData
-	if len(growthDataIds) > 0 {
-		vbolt.ReadSlice(tx, GrowthDataBkt, growthDataIds, &growthData)
-	}
-
-	var heights []ImportHeight
-	var weights []ImportWeight
-
-	for _, gd := range growthData {
-		var personName string
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		var personBirthday time.Time
-		for _, person := range people {
-			if person.Id == gd.PersonId {
-				personBirthday = person.Birthday
-				break
-			}
-		}
-
-		age := calculateAgeAtDate(personBirthday, gd.MeasurementDate)
-		dateString := gd.MeasurementDate.Format("2006-01-02")
-
-		if gd.MeasurementType == Height {
-			inches := gd.Value
-			if gd.Unit == "cm" {
-				inches = gd.Value / 2.54
-			}
-
-			heights = append(heights, ImportHeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Inches:     inches,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		} else if gd.MeasurementType == Weight {
-			pounds := gd.Value
-			if gd.Unit == "kg" {
-				pounds = gd.Value * 2.20462
-			}
-
-			weights = append(weights, ImportWeight{
-				Id:         gd.Id,
-				PersonId:   gd.PersonId,
-				Pounds:     pounds,
-				Date:       gd.MeasurementDate,
-				DateString: dateString,
-				Age:        age,
-				PersonName: personName,
-				RecordedBy: recorderOf(gd.CreatedBy),
-			})
-		}
-	}
-
-	var milestoneIds []int
-	vbolt.ReadTermTargets(tx, MilestoneByFamilyIndex, familyId, &milestoneIds, vbolt.Window{})
-
-	var milestones []Milestone
-	if len(milestoneIds) > 0 {
-		vbolt.ReadSlice(tx, MilestoneBkt, milestoneIds, &milestones)
-	}
-
-	exportMilestones := make([]ExportMilestone, len(milestones))
-	for i, milestone := range milestones {
-		var personName string
-		for _, person := range people {
-			if person.Id == milestone.PersonId {
-				personName = person.Name
-				break
-			}
-		}
-
-		tagIds := GetMilestoneTagIds(tx, milestone.Id)
-		var tagNames []string
-		for _, tagId := range tagIds {
-			if name, ok := tagIdToName[tagId]; ok {
-				tagNames = append(tagNames, name)
-			}
-		}
-
-		exportMilestones[i] = ExportMilestone{
-			Id:            milestone.Id,
-			PersonId:      milestone.PersonId,
-			FamilyId:      milestone.FamilyId,
-			Description:   milestone.Description,
-			Category:      milestone.Category,
-			Context:       milestone.Context,
-			MilestoneDate: milestone.MilestoneDate,
-			RecordTime:    &milestone.RecordTime,
-			DateLabel:     milestone.RecordTime.Label(),
-			CreatedAt:     milestone.CreatedAt,
-			PersonName:    personName,
-			TagNames:      tagNames,
-			InterviewId:   milestone.InterviewId,
-			QuestionId:    milestone.QuestionId,
-			Note:          milestone.Note,
-			RecordedBy:    recorderOf(milestone.CreatedBy),
-		}
-	}
+	exportMilestones := buildMilestoneExport(tx, familyId, people, tagIdToName, recorderOf)
 
 	personNames := make(map[int]string, len(people))
 	for _, person := range people {
@@ -440,6 +363,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 
 	exportData.Videos = buildVideoExport(tx, familyId)
 	exportData.TotalVideos = len(exportData.Videos)
+	exportData.Family = exportFamilySettings(tx, familyId)
 
 	exportData.Activities = buildActivityExport(tx, familyId, personNames)
 	seasonCount, eventCount, entryCount, appearanceCount, resultCount :=
@@ -451,6 +375,8 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.InterviewQuestions, exportData.Interviews = buildInterviewExport(tx, familyId)
 	exportData.TotalInterviews = len(exportData.Interviews)
 	exportData.InterviewCadence = exportInterviewCadence(tx, familyId)
+	exportData.Places = buildPlaceExport(tx, familyId)
+	exportData.InterviewDismissed = familyQuestionList(tx, familyId).DismissedKeys
 
 	exportData.Heights = heights
 	exportData.Weights = weights
@@ -461,7 +387,7 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalWeights = len(weights)
 	exportData.TotalPeople = len(people)
 	exportData.TotalRelations = len(exportData.Relations)
-	exportData.TotalMilestones = len(milestones)
+	exportData.TotalMilestones = len(exportMilestones)
 	exportData.TotalTags = len(tags)
 	exportData.TotalActivities = len(exportData.Activities)
 	exportData.TotalSeasons = seasonCount
@@ -471,43 +397,4 @@ func buildExportData(tx *vbolt.Tx, familyId int) (ExportDataStructure, error) {
 	exportData.TotalResults = resultCount
 
 	return exportData, nil
-}
-
-// buildRelationExport lists the edges whose endpoints are both people in this
-// export. An edge to someone in another family is left out, since the import
-// side has no record to reattach it to.
-func buildRelationExport(tx *vbolt.Tx, people []Person, personNames map[int]string) []ExportRelation {
-	rows := relationsAmong(tx, people)
-	result := make([]ExportRelation, 0, len(rows))
-	for _, row := range rows {
-		kind := row.Kind.exportName()
-		if kind == "" {
-			continue
-		}
-		result = append(result, ExportRelation{
-			Id:       row.Id,
-			FromId:   row.FromId,
-			ToId:     row.ToId,
-			Kind:     kind,
-			FromName: personNames[row.FromId],
-			ToName:   personNames[row.ToId],
-		})
-	}
-	return result
-}
-
-func calculateAgeAtDate(birthday, targetDate time.Time) float64 {
-	years := targetDate.Year() - birthday.Year()
-	months := int(targetDate.Month()) - int(birthday.Month())
-	days := targetDate.Day() - birthday.Day()
-
-	if days < 0 {
-		months--
-	}
-	if months < 0 {
-		years--
-		months += 12
-	}
-
-	return float64(years) + float64(months)/12.0
 }
