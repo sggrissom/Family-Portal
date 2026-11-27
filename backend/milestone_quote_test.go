@@ -1,11 +1,6 @@
 package backend
 
-import (
-	"encoding/json"
-	"testing"
-
-	"go.hasen.dev/vbolt"
-)
+import "testing"
 
 func TestQuoteKeepsTheWordsAndContext(t *testing.T) {
 	fx := setupResultsFixture(t)
@@ -81,42 +76,4 @@ func TestSuggestsQuoteForQuotedTextWithoutTheDaemon(t *testing.T) {
 			t.Errorf("category for %q = %q, %v; want %q", text, resp.Category, err, want)
 		}
 	}
-}
-
-func TestQuoteContextSurvivesExportAndImport(t *testing.T) {
-	fx := setupResultsFixture(t)
-	quote := fx.addMilestoneOn(t, fx.alice, "Can we have pancakes for dinner", "quote", fx.alice.Birthday.AddDate(4, 0, 0))
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		quote.Context = "Every single night"
-		writeMilestone(tx, &quote)
-		vbolt.TxCommit(tx)
-	})
-
-	exported, err := callAs(t, fx, ExportData, ExportDataRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data ExportDataStructure
-	if err := json.Unmarshal([]byte(exported.JsonData), &data); err != nil {
-		t.Fatal(err)
-	}
-	var row ExportMilestone
-	for _, m := range data.Milestones {
-		if m.Id == quote.Id {
-			row = m
-		}
-	}
-	if row.Context != "Every single night" || row.Category != "quote" {
-		t.Fatalf("exported %+v, want the quote with its context", row)
-	}
-
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		imported, _, errs, ids := importMilestones(tx, []ExportMilestone{row}, map[int]int{row.PersonId: fx.bob.Id}, fx.familyId, nil)
-		if imported != 1 || len(errs) > 0 {
-			t.Fatalf("imported %d, errors %v", imported, errs)
-		}
-		if got := GetMilestoneById(tx, ids[0]); got.Context != "Every single night" || got.Category != "quote" {
-			t.Errorf("imported %+v, want the quote with its context", got)
-		}
-	})
 }

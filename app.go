@@ -341,6 +341,15 @@ func MakeApplication() *vbeam.Application {
 	backend.InitializeVideoUploads(app.DB)
 	backend.InitializeVideoWorker(app.DB)
 	backend.InitializeVideoAnalysisWorker(app.DB)
+	backend.InitializeArchiveImports(app.DB)
+
+	// Content hashes for media stored before images carried one; the family
+	// archive import recognises media it already has by them.
+	go func() {
+		if n := backend.BackfillMediaContentHashes(app.DB); n > 0 {
+			log.Printf("Backfilled content hashes for %d photos and videos", n)
+		}
+	}()
 
 	// Initialize background push notification worker
 	backend.InitializePushWorker(100, app.DB) // Queue size of 100 jobs

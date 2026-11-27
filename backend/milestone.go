@@ -321,6 +321,10 @@ func deleteMilestonePhotoLink(tx *vbolt.Tx, link MilestonePhoto) {
 }
 
 func addPhotoToMilestone(tx *vbolt.Tx, milestoneId int, photoId int, familyId int) error {
+	return linkPhotoToMilestone(tx, milestoneId, photoId, familyId, time.Now())
+}
+
+func linkPhotoToMilestone(tx *vbolt.Tx, milestoneId int, photoId int, familyId int, createdAt time.Time) error {
 	if err := validatePhotoAccess(tx, photoId, familyId); err != nil {
 		return err
 	}
@@ -335,7 +339,7 @@ func addPhotoToMilestone(tx *vbolt.Tx, milestoneId int, photoId int, familyId in
 		MilestoneId: milestoneId,
 		PhotoId:     photoId,
 		FamilyId:    familyId,
-		CreatedAt:   time.Now(),
+		CreatedAt:   createdAt,
 	}
 	vbolt.Write(tx, MilestonePhotoBkt, link.Id, &link)
 	vbolt.SetTargetSingleTerm(tx, MilestonePhotoByMilestoneIndex, link.Id, milestoneId)
@@ -381,12 +385,16 @@ func deleteMilestoneTagLink(tx *vbolt.Tx, link MilestoneTag) {
 }
 
 func addTagToMilestone(tx *vbolt.Tx, milestoneId int, tagId int, familyId int) {
+	linkTagToMilestone(tx, milestoneId, tagId, familyId, time.Now())
+}
+
+func linkTagToMilestone(tx *vbolt.Tx, milestoneId int, tagId int, familyId int, createdAt time.Time) {
 	link := MilestoneTag{
 		Id:          vbolt.NextIntId(tx, MilestoneTagBkt),
 		MilestoneId: milestoneId,
 		TagId:       tagId,
 		FamilyId:    familyId,
-		CreatedAt:   time.Now(),
+		CreatedAt:   createdAt,
 	}
 	vbolt.Write(tx, MilestoneTagBkt, link.Id, &link)
 	vbolt.SetTargetSingleTerm(tx, MilestoneTagByMilestoneIndex, link.Id, milestoneId)

@@ -16,6 +16,7 @@ var workerShutdownOrder = []struct {
 	stop   func(context.Context) bool
 	queued func() int
 }{
+	{"An archive import was still running at shutdown", StopArchiveImports, nil},
 	{"Photo worker still had queued photos at shutdown", func(ctx context.Context) bool {
 		return globalPhotoWorker == nil || globalPhotoWorker.StopAndDrain(ctx)
 	}, GetQueueLength},

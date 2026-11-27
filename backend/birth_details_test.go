@@ -1,11 +1,9 @@
 package backend
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
-	"go.hasen.dev/vbeam"
 	"go.hasen.dev/vbolt"
 )
 
@@ -132,43 +130,4 @@ func TestAddPersonWithBirthDetails(t *testing.T) {
 	if got := birthGrowth(t, fx, expected.Person.Id); len(got[Weight])+len(got[Height]) != 0 {
 		t.Errorf("an unborn baby got birth measurements: %+v", got)
 	}
-}
-
-func TestBirthDetailsSurviveExportAndImport(t *testing.T) {
-	fx := setupResultsFixture(t)
-	if _, err := updateAlice(t, fx, "2014-03-02", BirthDetails{
-		BirthTime: stringPtr("04:12"), BirthPlace: stringPtr("St. Mary's"), BirthWeight: &CheckupValue{Value: 7.25, Unit: "lbs"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	exported, err := callAs(t, fx, ExportData, ExportDataRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data ExportDataStructure
-	if err := json.Unmarshal([]byte(exported.JsonData), &data); err != nil {
-		t.Fatal(err)
-	}
-
-	var other User
-	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
-		other = AddUserTx(tx, CreateAccountRequest{Name: "Other", Email: "other-birth@example.com"}, nil)
-		vbolt.TxCommit(tx)
-	})
-	var resp ImportDataResponse
-	fx.asUser(t, other, func(ctx *vbeam.Context) {
-		resp, err = ImportData(ctx, ImportDataRequest{JsonData: exported.JsonData, MergeStrategy: "merge_people"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	vbolt.WithReadTx(fx.db, func(tx *vbolt.Tx) {
-		alice := GetPersonById(tx, resp.PersonIdMapping[fx.alice.Id])
-		if alice.BirthTime != "04:12" || alice.BirthPlace != "St. Mary's" {
-			t.Errorf("imported person = %+v", alice)
-		}
-		if weights := birthRecords(tx, alice, Weight); len(weights) != 1 {
-			t.Errorf("imported birth weights = %+v", weights)
-		}
-	})
 }

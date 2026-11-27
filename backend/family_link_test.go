@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"family/cfg"
 	"os"
 	"testing"
@@ -650,24 +651,43 @@ func TestOwnPeopleExcludesSharedIn(t *testing.T) {
 		if len(ownedA) != 2 {
 			t.Errorf("A still owns both its people, got %d", len(ownedA))
 		}
-
-		data, err := buildExportData(tx, fx.famB)
-		if err != nil {
-			t.Fatalf("buildExportData: %v", err)
-		}
-		for _, person := range data.People {
-			if person.Id == fx.alice.Id {
-				t.Error("a shared person was written into the host family's export")
-			}
-		}
-
-		match := findExistingPerson(tx, ImportPerson{
-			Name:     fx.alice.Name,
-			Birthday: fx.alice.Birthday,
-			Gender:   int(fx.alice.Gender),
-		}, fx.famB)
-		if match != nil {
-			t.Error("an import into B matched a person A owns")
-		}
 	})
+
+	asB := func(fn func(ctx *vbeam.Context)) {
+		token := testAuthToken(t, fx.userB)
+		vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
+			fn(&vbeam.Context{Tx: tx, Token: token})
+			vbolt.TxCommit(tx)
+		})
+	}
+	var exported ExportDataResponse
+	var imported ImportDataResponse
+	var err error
+	asB(func(ctx *vbeam.Context) { exported, err = ExportData(ctx, ExportDataRequest{}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data ExportDataStructure
+	if err := json.Unmarshal([]byte(exported.JsonData), &data); err != nil {
+		t.Fatal(err)
+	}
+	for _, person := range data.People {
+		if person.Id == fx.alice.Id {
+			t.Error("a shared person was written into the host family's export")
+		}
+	}
+
+	records, _ := json.Marshal(ImportDataStructure{People: []ImportPerson{{
+		Id: 1, Name: fx.alice.Name, Birthday: fx.alice.Birthday, Gender: int(fx.alice.Gender),
+	}}})
+	asB(func(ctx *vbeam.Context) {
+		imported, err = ImportData(ctx, ImportDataRequest{JsonData: string(records)})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported.MergedPeople != 0 || imported.ImportedPeople != 1 {
+		t.Errorf("an import into B merged %d and added %d; want a new person, not a match with one A owns",
+			imported.MergedPeople, imported.ImportedPeople)
+	}
 }

@@ -239,6 +239,11 @@ func (w *videoWorker) process(imageId int) error {
 		return errRetryLater
 	}
 
+	contentHash, err := fileContentHash(source)
+	if err != nil {
+		return errRetryLater
+	}
+
 	probe, err := w.tools.probe(w.ctx, source)
 	if w.ctx.Err() != nil {
 		return nil
@@ -328,6 +333,7 @@ func (w *videoWorker) process(imageId int) error {
 			current.PhotoDate = probe.CreatedAt
 		}
 		current.Status = PhotoReady
+		current.ContentHash = contentHash
 		current.ProcessingError = ""
 		current.FilePath = outputs.posterPath
 		current.PlaybackKey = outputs.playbackKey

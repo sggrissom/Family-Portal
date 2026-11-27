@@ -14,6 +14,7 @@ import { FamilyMembersSection } from "../../components/FamilyMembers";
 import { FamilyPlacesSection } from "../../components/FamilyPlaces";
 import { copy } from "../../lib/copy";
 import { formatLongDate } from "../../lib/dateUtils";
+import { formatBytes } from "../../lib/formatBytes";
 import { isValidBirthday } from "../../lib/growthPercentiles";
 import "./settings-styles";
 
@@ -25,6 +26,7 @@ type Data = {
   members: server.FamilyMemberView[];
   callerIsOwner: boolean;
   notifications: server.NotificationPreferencesResponse;
+  exportSizes: server.GetArchiveExportSizesResponse | null;
 };
 
 type JoinFamilyForm = {
@@ -38,8 +40,8 @@ type ExportForm = {
   loading: boolean;
   error: string;
   success: boolean;
-  exportMode: "data_only" | "with_photos";
   familyId: number;
+  sizes: server.GetArchiveExportSizesResponse | null;
 };
 
 type MergeForm = {
@@ -74,8 +76,8 @@ const useExportForm = vlens.declareHook(
     loading: false,
     error: "",
     success: false,
-    exportMode: "data_only",
     familyId: 0,
+    sizes: null,
   })
 );
 
@@ -213,6 +215,7 @@ export async function fetch(route: string, prefix: string) {
       members: [],
       callerIsOwner: false,
       notifications: notificationDefaults,
+      exportSizes: null,
     });
   }
 
@@ -221,6 +224,7 @@ export async function fetch(route: string, prefix: string) {
   const [linksResp] = await server.ListFamilyLinks({ familyId: 0 });
   const [membersResp] = await server.ListFamilyMembers({ familyId: 0 });
   const [notificationsResp] = await server.GetNotificationPreferences({});
+  const [exportSizes] = await server.GetArchiveExportSizes({ familyId: 0 });
 
   return vlens.rpcOk({
     familyInfo: familyInfo || { id: 0, name: "", inviteCode: "", families: [] },
@@ -230,6 +234,7 @@ export async function fetch(route: string, prefix: string) {
     members: membersResp?.members || [],
     callerIsOwner: membersResp?.callerIsOwner || false,
     notifications: notificationsResp || notificationDefaults,
+    exportSizes: exportSizes || null,
   });
 }
 
@@ -406,46 +411,36 @@ async function onRotateInviteCode(familyId: number, familyName: string) {
   alert(resp?.error || err || "Could not generate a new invite code");
 }
 
-async function onExportDataClicked(exportForm: ExportForm) {
+async function onExportFamilyChanged(exportForm: ExportForm, familyId: number) {
+  exportForm.familyId = familyId;
+  exportForm.sizes = null;
+  const [sizes] = await server.GetArchiveExportSizes({ familyId });
+  if (exportForm.familyId === familyId) {
+    exportForm.sizes = sizes || null;
+    vlens.scheduleRedraw();
+  }
+}
+
+async function onDownloadRecordsClicked(exportForm: ExportForm) {
   exportForm.loading = true;
   exportForm.error = "";
   exportForm.success = false;
   vlens.scheduleRedraw();
   try {
-    const timestamp = new Date().toISOString().split("T")[0];
-
-    if (exportForm.exportMode === "data_only") {
-      const [resp, err] = await server.ExportData({ familyId: exportForm.familyId });
-      if (!resp || !resp.jsonData) {
-        throw new Error(err || "Failed to export data");
-      }
-      const blob = new Blob([resp.jsonData], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `family-data-${timestamp}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } else {
-      const familyQuery = exportForm.familyId ? `&familyId=${exportForm.familyId}` : "";
-      const resp = await window.fetch(`/api/export-bundle?mode=with_photos${familyQuery}`, {
-        credentials: "include",
-      });
-      if (!resp.ok) {
-        throw new Error(`Export failed: ${resp.statusText}`);
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `family-export-${timestamp}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+    const [resp, err] = await server.ExportData({ familyId: exportForm.familyId });
+    if (!resp || !resp.jsonData) {
+      throw new Error(err || "Failed to export data");
     }
+    const timestamp = new Date().toISOString().split("T")[0];
+    const blob = new Blob([resp.jsonData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `family-records-${timestamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     exportForm.success = true;
     vlens.scheduleRedraw();
@@ -461,6 +456,12 @@ async function onExportDataClicked(exportForm: ExportForm) {
     vlens.scheduleRedraw();
   }
 }
+
+const mediaCount = (sizes: server.GetArchiveExportSizesResponse) => {
+  const photos = sizes.photos === 1 ? "1 photo" : `${sizes.photos} photos`;
+  const videos = sizes.videos === 1 ? "1 video" : `${sizes.videos} videos`;
+  return `${photos} and ${videos}`;
+};
 
 function mergeDetail(person: server.Person, data: Data): string {
   const born = isValidBirthday(person.birthday)
@@ -575,6 +576,7 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
         : [];
   const joinForm = useJoinFamilyForm();
   const exportForm = useExportForm();
+  const exportSizes = exportForm.familyId ? exportForm.sizes : data.exportSizes;
   const mergeForm = useMergeForm();
   const mergeable = data.people.filter(person => auth.canAdmin(person.familyId));
   const passwordForm = useChangePasswordForm();
@@ -863,11 +865,9 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
               <div className="data-management-actions">
                 <div className="data-action">
                   <h4>Export Data</h4>
-                  <p>Download your family's data including people, moments, and measurements.</p>
+                  <p>Download a family archive: your own copy of everything you have entered.</p>
 
-                  {exportForm.success && (
-                    <div className="success-message">Data exported successfully!</div>
-                  )}
+                  {exportForm.success && <div className="success-message">Records downloaded.</div>}
 
                   {exportForm.error && (
                     <div className="error-message" role="alert">
@@ -880,63 +880,63 @@ const SettingsPage = ({ data }: SettingsPageProps) => {
                     label="Family to export"
                     minRole={auth.ROLE_VIEW}
                     value={exportForm.familyId}
-                    onChange={familyId => {
-                      exportForm.familyId = familyId;
-                    }}
+                    onChange={familyId => onExportFamilyChanged(exportForm, familyId)}
                     disabled={exportForm.loading}
                   />
 
-                  <div className="export-mode-group">
-                    <label className="export-mode-option">
-                      <input
-                        type="radio"
-                        name="exportMode"
-                        checked={exportForm.exportMode === "data_only"}
-                        onChange={() => {
-                          exportForm.exportMode = "data_only";
-                          vlens.scheduleRedraw();
-                        }}
-                      />
-                      <div className="export-mode-label">
-                        <span>Data only</span>
-                        <span className="export-mode-desc">
-                          JSON file — people, relationships, heights, weights, moments, tags
+                  <div className="archive-downloads">
+                    <div className="archive-download">
+                      <div className="archive-download-text">
+                        <span className="archive-download-name">Records</span>
+                        <span className="archive-download-desc">
+                          One small file with every person, moment, measurement, activity, interview
+                          and book. No photos or videos.
                         </span>
+                        {exportSizes && (
+                          <span className="archive-download-size">
+                            About {formatBytes(exportSizes.recordsBytes)}
+                          </span>
+                        )}
                       </div>
-                    </label>
-                    <label className="export-mode-option">
-                      <input
-                        type="radio"
-                        name="exportMode"
-                        checked={exportForm.exportMode === "with_photos"}
-                        onChange={() => {
-                          exportForm.exportMode = "with_photos";
-                          vlens.scheduleRedraw();
-                        }}
-                      />
-                      <div className="export-mode-label">
-                        <span>With photos</span>
-                        <span className="export-mode-desc">
-                          ZIP — all data + original photo files. Videos are too large for the ZIP;{" "}
-                          <a href="/save-videos">save them separately</a>.
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={vlens.cachePartial(onDownloadRecordsClicked, exportForm)}
+                        disabled={exportForm.loading}
+                      >
+                        <Icon symbol={Download} />{" "}
+                        {exportForm.loading ? "Preparing..." : "Download Records"}
+                      </button>
+                    </div>
+                    <div className="archive-download">
+                      <div className="archive-download-text">
+                        <span className="archive-download-name">Everything archive</span>
+                        <span className="archive-download-desc">
+                          A ZIP with your records plus every photo and video file.
                         </span>
+                        {exportSizes && (
+                          <span className="archive-download-size">
+                            About {formatBytes(exportSizes.everythingBytes)}
+                          </span>
+                        )}
+                        {exportSizes && (
+                          <span className="archive-download-desc">{mediaCount(exportSizes)}</span>
+                        )}
                       </div>
-                    </label>
+                      <a
+                        className="btn btn-primary"
+                        href={`${window.location.origin}/api/export-bundle?mode=everything${
+                          exportForm.familyId ? `&familyId=${exportForm.familyId}` : ""
+                        }`}
+                        download
+                      >
+                        <Icon symbol={Download} /> Download Everything archive
+                      </a>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={vlens.cachePartial(onExportDataClicked, exportForm)}
-                    disabled={exportForm.loading}
-                  >
-                    {exportForm.loading ? (
-                      "Exporting..."
-                    ) : (
-                      <>
-                        <Icon symbol={Download} /> Export Data
-                      </>
-                    )}
-                  </button>
+                  <p className="archive-download-note">
+                    Neither includes chat, the family page, recap links or who can see the family.
+                  </p>
                 </div>
 
                 <div className="data-action">

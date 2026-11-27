@@ -632,12 +632,10 @@ To play, call **`GetVideoPlayback`** `{id}` →
 
 ### Saving every original
 
-The family export's `data.json` lists videos under `videos`, with stable ids,
-metadata, and a `file_name` unique within the family. The files are not in the
-ZIP. **`ListVideoOriginals`** `{familyId?}` returns every original with a
-download link that expires; **`GetVideoOriginalLink`** `{id}` returns a fresh
-link for one file, named `file_name`. A client saving many files should ask
-for a fresh link whenever one has lapsed rather than restarting the whole set.
+The Everything archive (`/api/export-bundle?mode=everything`) carries every
+video original under `videos/<file_name>`, next to the photos and
+`data.json`. For a single video, use `downloadUrl` from `GetVideoPlayback`.
+Exporting and importing archives is described in `docs/family-archive.md`.
 
 ---
 
@@ -1123,7 +1121,7 @@ header; there is no faster path.
 | password-reset | 5 | 15 min | request, validate, reset |
 | invite-code | 10 | 15 min | `JoinFamily`, `AcceptFamilyLink` |
 | refresh | 30 | 5 min | `/api/refresh` |
-| import | 5 | 1 hour | `ImportData`, `/api/import-bundle` |
+| import | 5 | 1 hour | `ImportData`, `BeginArchiveImport` |
 | upload | 120 | 10 min | `/api/upload-photo`, `/api/media/upload/*` |
 | websocket | 30 | 5 min | `/ws/chat` connects |
 | photo-read | 600 | 5 min | `/api/photo/*`, `/api/media/object/*` |
@@ -1132,11 +1130,16 @@ header; there is no faster path.
 
 Buckets are per client and in-process; a restart resets them.
 
-Body sizes: 1 MiB for any JSON request, 52 MiB for a photo upload, 1 GiB for a
-video, 512 MiB for an import bundle. Deadlines: 30s read for an ordinary
-request, 10 min for a photo upload, 2 hours for a video upload, 30 min for an
-import, 2 min write for a response, 30 min for a download, 2 hours for video
-playback.
+Body sizes: 1 MiB for any JSON request, which includes a Records file sent to
+`ImportData`; 52 MiB for a photo upload; 1 GiB for a video and 40 GiB for an
+Everything archive, both checked when the upload begins and PUT to the signed
+media URL. Uploaded Records JSON and a ZIP's uncompressed `data.json` each
+have a 64 MiB limit. Deadlines: 30s read for an ordinary request (a Records import too),
+10 min for a photo upload, 12 hours to read a PUT to a signed media URL (a
+video's upload session still expires after 2 hours, an archive's after 12),
+2 min write for a response, 30 min for a download (the Everything archive
+included), 2 hours for video playback. An archive import then runs in the
+background, with no request deadline; poll `GetArchiveImportStatus`.
 
 A photo grid firing 600 requests in five minutes is not a hypothetical — it is
 one reason the app needs an image cache rather than a fresh request per

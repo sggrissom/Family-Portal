@@ -92,6 +92,8 @@ export const ErrLinkExists = "These families are already linked in that directio
 export const ErrRelationToSelf = "A person cannot be related to themselves";
 export const ErrCannotRemoveHomeRoster = "Cannot remove a person from their home family";
 export const ErrFaceNotFound = "Face not found or access denied";
+export const ErrArchiveImportNotFound = "That import could not be found.";
+export const ErrArchiveImportUnavailable = "Archive imports are not available on this server right now.";
 
 export interface CreateAccountRequest {
     name: string
@@ -1610,7 +1612,6 @@ export interface ImportDataRequest {
     filterFamilyIds: number[]
     filterPersonIds: number[]
     previewOnly: boolean
-    mergeStrategy: string
     importMilestones: boolean
     importActivities: boolean
     dryRun: boolean
@@ -1631,6 +1632,8 @@ export interface ImportDataResponse {
     skippedTags: number
     importedPhotos: number
     skippedPhotos: number
+    importedVideos: number
+    skippedVideos: number
     importedActivities: ActivityImportCounts
     importedBooks: number
     skippedBooks: number
@@ -1644,6 +1647,38 @@ export interface ImportDataResponse {
     matchedPeople: PersonMatch[]
 }
 
+export interface BeginArchiveImportRequest {
+    familyId: number
+    filename: string
+    size: number
+}
+
+export interface BeginArchiveImportResponse {
+    importId: number
+    upload: UploadInstructions
+}
+
+export interface CompleteArchiveImportRequest {
+    importId: number
+    options: ImportDataRequest
+}
+
+export interface ArchiveImportStatus {
+    importId: number
+    state: string
+    previewOnly: boolean
+    dryRun: boolean
+    records: number
+    media: number
+    stagedMedia: number
+    result: ImportDataResponse | null
+    error: string
+}
+
+export interface GetArchiveImportStatusRequest {
+    importId: number
+}
+
 export interface ExportDataRequest {
     familyId: number
 }
@@ -1652,24 +1687,15 @@ export interface ExportDataResponse {
     jsonData: string
 }
 
-export interface ListVideoOriginalsRequest {
+export interface GetArchiveExportSizesRequest {
     familyId: number
 }
 
-export interface ListVideoOriginalsResponse {
-    videos: VideoOriginal[]
-    totalBytes: number
-    expiresAt: string
-}
-
-export interface GetVideoOriginalLinkRequest {
-    id: number
-}
-
-export interface GetVideoOriginalLinkResponse {
-    downloadUrl: string
-    fileName: string
-    expiresAt: string
+export interface GetArchiveExportSizesResponse {
+    recordsBytes: number
+    everythingBytes: number
+    photos: number
+    videos: number
 }
 
 export interface ListAllUsersResponse {
@@ -2839,6 +2865,10 @@ export interface ImportPerson {
     ImageId: number
     BirthTime: string
     BirthPlace: string
+    ProfileCropX: number
+    ProfileCropY: number
+    ProfileCropScale: number
+    IsPregnancy: boolean
 }
 
 export interface PersonMatch {
@@ -2846,11 +2876,6 @@ export interface PersonMatch {
     existingPerson: Person | null
     matchType: string
     confidence: number
-}
-
-export interface VideoOriginal {
-    video: ExportVideo
-    downloadUrl: string
 }
 
 export interface AdminUserInfo {
@@ -3309,24 +3334,6 @@ export interface BookItem {
     pinned: boolean
 }
 
-export interface ExportVideo {
-    id: number
-    title: string
-    description: string
-    photo_date: string
-    record_time: RecordTime | null
-    date_label: string
-    original_filename: string
-    file_name: string
-    mime_type: string
-    file_size: number
-    duration_ms: number
-    person_ids: number[]
-    tag_ids: number[]
-    available: boolean
-    transcript: ExportTranscript | null
-}
-
 export interface PerformanceStats {
     totalRequests: number
     averageResponse: number
@@ -3425,12 +3432,6 @@ export interface BookInterviewChange {
     questionId: number
     before: string
     after: string
-}
-
-export interface ExportTranscript {
-    automatic: boolean
-    language: string
-    segments: TranscriptSegment[]
 }
 
 export interface EndpointStats {
@@ -4091,16 +4092,24 @@ export async function ImportData(data: ImportDataRequest): Promise<rpc.Response<
     return await rpc.call<ImportDataResponse>('ImportData', JSON.stringify(data));
 }
 
+export async function BeginArchiveImport(data: BeginArchiveImportRequest): Promise<rpc.Response<BeginArchiveImportResponse>> {
+    return await rpc.call<BeginArchiveImportResponse>('BeginArchiveImport', JSON.stringify(data));
+}
+
+export async function CompleteArchiveImport(data: CompleteArchiveImportRequest): Promise<rpc.Response<ArchiveImportStatus>> {
+    return await rpc.call<ArchiveImportStatus>('CompleteArchiveImport', JSON.stringify(data));
+}
+
+export async function GetArchiveImportStatus(data: GetArchiveImportStatusRequest): Promise<rpc.Response<ArchiveImportStatus>> {
+    return await rpc.call<ArchiveImportStatus>('GetArchiveImportStatus', JSON.stringify(data));
+}
+
 export async function ExportData(data: ExportDataRequest): Promise<rpc.Response<ExportDataResponse>> {
     return await rpc.call<ExportDataResponse>('ExportData', JSON.stringify(data));
 }
 
-export async function ListVideoOriginals(data: ListVideoOriginalsRequest): Promise<rpc.Response<ListVideoOriginalsResponse>> {
-    return await rpc.call<ListVideoOriginalsResponse>('ListVideoOriginals', JSON.stringify(data));
-}
-
-export async function GetVideoOriginalLink(data: GetVideoOriginalLinkRequest): Promise<rpc.Response<GetVideoOriginalLinkResponse>> {
-    return await rpc.call<GetVideoOriginalLinkResponse>('GetVideoOriginalLink', JSON.stringify(data));
+export async function GetArchiveExportSizes(data: GetArchiveExportSizesRequest): Promise<rpc.Response<GetArchiveExportSizesResponse>> {
+    return await rpc.call<GetArchiveExportSizesResponse>('GetArchiveExportSizes', JSON.stringify(data));
 }
 
 export async function ListAllUsers(data: Empty): Promise<rpc.Response<ListAllUsersResponse>> {

@@ -200,6 +200,7 @@ type Image struct {
 	PlaybackKey      string     `json:"-"`
 	DerivedBytes     int        `json:"-"`
 	RecordTime       RecordTime `json:"recordTime"`
+	ContentHash      string     `json:"-"`
 }
 
 type PhotoPerson struct {
@@ -212,7 +213,7 @@ type PhotoPerson struct {
 }
 
 func PackImage(self *Image, buf *vpack.Buffer) {
-	version := vpack.Version(6, buf)
+	version := vpack.Version(7, buf)
 	vpack.Int(&self.Id, buf)
 	vpack.Int(&self.FamilyId, buf)
 	vpack.Int(&self.OwnerUserId, buf)
@@ -245,6 +246,9 @@ func PackImage(self *Image, buf *vpack.Buffer) {
 	}
 	if version >= 6 {
 		PackRecordTime(&self.RecordTime, buf)
+	}
+	if version >= 7 {
+		vpack.String(&self.ContentHash, buf)
 	}
 	if !buf.Writing && self.RecordTime.Version == 0 {
 		self.RecordTime = legacyRecordTime(self.PhotoDate)
@@ -748,6 +752,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			OriginalFilename: fileHeader.Filename,
 			MimeType:         mimeType,
 			FileSize:         int(fileHeader.Size),
+			ContentHash:      bytesContentHash(fileData),
 			Width:            width,
 			Height:           height,
 			FilePath:         filePath,
