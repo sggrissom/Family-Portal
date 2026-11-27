@@ -65,7 +65,7 @@ func NormalizeStoredRecordDates(tx *vbolt.Tx) (changed int) {
 	changed += photos
 
 	if photos > 0 {
-		BackfillPhotoDateIndexes(tx)
+		RebuildImageIndexes(tx)
 	}
 	return changed
 }

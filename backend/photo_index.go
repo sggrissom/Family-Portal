@@ -104,17 +104,6 @@ func approxPhotoIds(tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], term
 	return
 }
 
-func BackfillPhotoDateIndexes(tx *vbolt.Tx) {
-	var ids []int
-	vbolt.IterateAll(tx, ImagesBkt, func(id int, _ Image) bool {
-		ids = append(ids, id)
-		return true
-	})
-	for _, id := range ids {
-		ReindexPhotoDates(tx, id)
-	}
-}
-
 // photoKey is a position in the newest-first order both indexes share.
 type photoKey struct {
 	seconds int64

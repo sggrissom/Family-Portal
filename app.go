@@ -133,7 +133,7 @@ func OpenDB(dbpath string) *vbolt.DB {
 	// Migration: date-ordered photo indexes, which ListFamilyPhotos pages over.
 	vbolt.ApplyDBProcess(dbConnection, "2026-0925-index-photo-dates", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
-			backend.BackfillPhotoDateIndexes(tx)
+			backend.RebuildImageIndexes(tx)
 			vbolt.TxCommit(tx)
 		})
 	})
@@ -150,7 +150,7 @@ func OpenDB(dbpath string) *vbolt.DB {
 	// Migration: photo text search finds its matches in the photo word index.
 	vbolt.ApplyDBProcess(dbConnection, "2026-1015-index-photo-words", func() {
 		vbolt.WithWriteTx(dbConnection, func(tx *vbolt.Tx) {
-			backend.BackfillPhotoDateIndexes(tx)
+			backend.RebuildImageIndexes(tx)
 			vbolt.TxCommit(tx)
 		})
 	})
