@@ -48,7 +48,7 @@ func TestNormalizeStoredRecordDates(t *testing.T) {
 			{Id: 3, FamilyId: 1, PhotoDate: day(2024, 7, 4)},
 		}
 		for i := range images {
-			vbolt.Write(tx, ImagesBkt, images[i].Id, &images[i])
+			createImage(tx, &images[i])
 		}
 
 		if changed := NormalizeStoredRecordDates(tx); changed != 9 {

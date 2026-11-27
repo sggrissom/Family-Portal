@@ -36,20 +36,9 @@ var vboltReads = map[string]bool{
 var imageStoreReaders = map[string]bool{"approxPhotoIds": true, "newPhotoStream": true}
 
 var imageStoreBypasses = map[string]bool{
-	"account_deletion.go:deletePersonRecordTx":     true,
-	"archive_photos.go:importPhotoLinks":           true,
-	"archive_photos.go:importPhotos":               true,
-	"archive_videos.go:importVideos":               true,
-	"calendar_dates.go:NormalizeStoredRecordDates": true,
-	"faces.go:ensurePhotoPersonTx":                 true,
-	"person.go:MergePeople":                        true,
 	"photo_index.go:ReindexPhotoDates":             true,
-	"photos.go:deletePhotoRecordTx":                true,
-	"photos.go:uploadPhotoHandler":                 true,
 	"record_time_store.go:writeImage":              true,
-	"seed_photos.go:photo":                         true,
 	"video_transcripts.go:deleteVideoTranscriptTx": true,
-	"video_uploads.go:CompleteVideoUpload":         true,
 }
 
 func TestOnlyTheImageStoreWritesImages(t *testing.T) {

@@ -697,27 +697,9 @@ func MergePeople(ctx *vbeam.Context, req MergePeopleRequest) (resp MergePeopleRe
 	photoPersons := GetPhotoPersonsByPerson(ctx.Tx, req.SourcePersonId)
 	mergedPhotoCount := 0
 	for _, photoPerson := range photoPersons {
-		existingPhotoPersons := GetPhotoPersonsByPhoto(ctx.Tx, photoPerson.PhotoId)
-		alreadyAssociated := false
-		for _, existing := range existingPhotoPersons {
-			if existing.PersonId == req.TargetPersonId {
-				alreadyAssociated = true
-				break
-			}
-		}
-
-		if alreadyAssociated {
-			vbolt.Delete(ctx.Tx, PhotoPersonBkt, photoPerson.Id)
-			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
-			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
-			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
-		} else {
-			photoPerson.PersonId = req.TargetPersonId
-			vbolt.Write(ctx.Tx, PhotoPersonBkt, photoPerson.Id, &photoPerson)
-			vbolt.SetTargetSingleTerm(ctx.Tx, PhotoPersonByPersonIndex, photoPerson.Id, req.TargetPersonId)
+		if movePhotoPerson(ctx.Tx, photoPerson, req.TargetPersonId) {
 			mergedPhotoCount++
 		}
-		ReindexPhotoDates(ctx.Tx, photoPerson.PhotoId)
 	}
 	resp.MergedPhotos = mergedPhotoCount
 

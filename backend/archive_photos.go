@@ -157,14 +157,10 @@ func importPhotoLinks(tx *vbolt.Tx, image Image, photo ExportPhoto, l *archiveLe
 			continue
 		}
 		detail := people[oldPersonId]
-		pp := PhotoPerson{
-			Id: vbolt.NextIntId(tx, PhotoPersonBkt), PhotoId: image.Id, PersonId: newPersonId,
-			FamilyId: image.FamilyId, CreatedAt: orNow(detail.CreatedAt), AutoTagged: detail.AutoTagged,
-		}
-		vbolt.Write(tx, PhotoPersonBkt, pp.Id, &pp)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, pp.Id, image.Id)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, pp.Id, newPersonId)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, pp.Id, image.FamilyId)
+		insertPhotoPerson(tx, &PhotoPerson{
+			PhotoId: image.Id, PersonId: newPersonId, FamilyId: image.FamilyId,
+			CreatedAt: orNow(detail.CreatedAt), AutoTagged: detail.AutoTagged,
+		})
 	}
 
 	tags := map[int]time.Time{}
@@ -204,7 +200,6 @@ func importPhotoLinks(tx *vbolt.Tx, image Image, photo ExportPhoto, l *archiveLe
 		}
 		writeFace(tx, &face)
 	}
-	ReindexPhotoDates(tx, image.Id)
 }
 
 func importPhotos(
@@ -270,7 +265,6 @@ func importPhotos(
 		mimeType := zipExtToMime(filepath.Ext(filePath))
 
 		var image Image
-		image.Id = vbolt.NextIntId(tx, ImagesBkt)
 		image.FamilyId = familyId
 		image.OwnerUserId = ownerUserId
 		image.FilePath = filePath
@@ -294,9 +288,7 @@ func importPhotos(
 			image.AnalysisVersion = photo.AnalysisVersion
 		}
 
-		writeImage(tx, &image)
-		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
-		ReindexPhotoDates(tx, image.Id)
+		createImage(tx, &image)
 		l.photos[photo.Id] = image.Id
 		jobs = append(jobs, importedPhoto{
 			ImageId:  image.Id,

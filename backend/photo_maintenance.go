@@ -247,7 +247,7 @@ func ReanalyzeAllPhotos(ctx *vbeam.Context, req ReanalyzeAllPhotosRequest) (resp
 		for _, image := range toQueue {
 			if image.AnalysisStatus == AnalysisFailed {
 				image.AnalysisStatus = AnalysisPending
-				writeImage(ctx.Tx, &image)
+				saveImage(ctx.Tx, &image)
 			}
 		}
 		vbolt.TxCommit(ctx.Tx)
