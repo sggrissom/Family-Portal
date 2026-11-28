@@ -69,7 +69,7 @@ func BenchmarkSearch(b *testing.B) {
 				if i%2 == 0 {
 					AddPersonToPhoto(tx, image.Id, people[i%4].Id, user.FamilyId)
 				}
-				ReindexPhotoDates(tx, image.Id)
+				reindexImage(tx, image.Id)
 				if i%3 == 0 {
 					lat, lng := 36.16+float64(i%7), -86.78+float64(i%5)
 					f := PhotoFeatures{PhotoId: image.Id, FamilyId: user.FamilyId, HasLocation: true, Latitude: lat, Longitude: lng}

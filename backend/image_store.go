@@ -18,19 +18,22 @@ func createImage(tx *vbolt.Tx, image *Image) {
 }
 
 func saveImage(tx *vbolt.Tx, image *Image) {
-	writeImage(tx, image)
-	ReindexPhotoDates(tx, image.Id)
+	syncRecordTime(tx, &image.RecordTime, &image.PhotoDate)
+	vbolt.Write(tx, ImagesBkt, image.Id, image)
+	vbolt.SetTargetTermsPlain(tx, ImageByAnchorIndex, image.Id, anchorTerm(image.RecordTime))
+	reindexImage(tx, image.Id)
 }
 
 func deleteImage(tx *vbolt.Tx, imageId int) {
-	deleteVideoTranscriptTx(tx, imageId)
+	vbolt.Delete(tx, VideoTranscriptBkt, imageId)
+	deleteSpeechVectorsTx(tx, imageId)
 	for _, pp := range GetPhotoPersonsByPhoto(tx, imageId) {
 		deletePhotoPersonRow(tx, pp)
 	}
 	vbolt.Delete(tx, ImagesBkt, imageId)
 	vbolt.DeleteTargetTerms(tx, ImageByFamilyIndex, imageId)
 	vbolt.DeleteTargetTerms(tx, ImageByAnchorIndex, imageId)
-	ReindexPhotoDates(tx, imageId)
+	reindexImage(tx, imageId)
 }
 
 func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (photoPersonId int) {
@@ -44,7 +47,7 @@ func insertPhotoPerson(tx *vbolt.Tx, pp *PhotoPerson) {
 		pp.Id = vbolt.NextIntId(tx, PhotoPersonBkt)
 	}
 	writePhotoPersonRow(tx, pp)
-	ReindexPhotoDates(tx, pp.PhotoId)
+	reindexImage(tx, pp.PhotoId)
 }
 
 func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
@@ -58,7 +61,7 @@ func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
 
 func deletePhotoPerson(tx *vbolt.Tx, pp PhotoPerson) {
 	deletePhotoPersonRow(tx, pp)
-	ReindexPhotoDates(tx, pp.PhotoId)
+	reindexImage(tx, pp.PhotoId)
 }
 
 // movePhotoPerson puts toPersonId in pp's place. A photo that already has
@@ -72,14 +75,14 @@ func movePhotoPerson(tx *vbolt.Tx, pp PhotoPerson, toPersonId int) (moved bool) 
 	}
 	pp.PersonId = toPersonId
 	writePhotoPersonRow(tx, &pp)
-	ReindexPhotoDates(tx, pp.PhotoId)
+	reindexImage(tx, pp.PhotoId)
 	return true
 }
 
 func setPhotoPersonAutoTagged(tx *vbolt.Tx, pp PhotoPerson, auto bool) {
 	pp.AutoTagged = auto
 	writePhotoPersonRow(tx, &pp)
-	ReindexPhotoDates(tx, pp.PhotoId)
+	reindexImage(tx, pp.PhotoId)
 }
 
 func writePhotoPersonRow(tx *vbolt.Tx, pp *PhotoPerson) {
@@ -103,7 +106,42 @@ func deletePhotoPersonRow(tx *vbolt.Tx, pp PhotoPerson) {
 func writeVideoTranscriptTx(tx *vbolt.Tx, t *VideoTranscript) {
 	vbolt.Write(tx, VideoTranscriptBkt, t.ImageId, t)
 	dropStaleSpeechVectorsTx(tx, *t)
-	ReindexPhotoDates(tx, t.ImageId)
+	reindexImage(tx, t.ImageId)
+}
+
+func reindexImage(tx *vbolt.Tx, photoId int) {
+	image := GetImageById(tx, photoId)
+	if image.Id == 0 {
+		vbolt.DeleteTargetTerms(tx, ImageByFamilyDateIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, ImageByPersonDateIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, PhotoWordIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, photoId)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, photoId)
+		return
+	}
+	words := searchFieldWords(image.Title, image.Description)
+	if image.IsVideo() {
+		words = append(words, transcriptWords(tx, image.Id)...)
+	}
+	vbolt.SetTargetTermsPlain(tx, PhotoWordIndex, image.Id, words)
+
+	seconds := image.PhotoDate.Unix()
+	vbolt.SetTargetSingleTermExt(tx, ImageByFamilyDateIndex, image.Id, seconds, image.FamilyId)
+
+	photoPersons := GetPhotoPersonsByPhoto(tx, image.Id)
+	personIds := make([]int, 0, len(photoPersons))
+	for _, photoPerson := range photoPersons {
+		personIds = append(personIds, photoPerson.PersonId)
+	}
+	vbolt.SetTargetTermsUniform(tx, ImageByPersonDateIndex, image.Id, personIds, seconds)
+
+	if image.RecordTime.ExactDay() {
+		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, image.Id)
+		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, image.Id)
+	} else {
+		vbolt.SetTargetSingleTerm(tx, ImageApproxByFamilyIndex, image.Id, image.FamilyId)
+		vbolt.SetTargetTermsPlain(tx, ImageApproxByPersonIndex, image.Id, personIds)
+	}
 }
 
 // RebuildImageIndexes recomputes every index the store keeps from the stored
@@ -126,6 +164,6 @@ func RebuildImageIndexes(tx *vbolt.Tx) {
 	for _, image := range images {
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, image.FamilyId)
 		vbolt.SetTargetTermsPlain(tx, ImageByAnchorIndex, image.Id, anchorTerm(image.RecordTime))
-		ReindexPhotoDates(tx, image.Id)
+		reindexImage(tx, image.Id)
 	}
 }

@@ -180,7 +180,7 @@ func TestSameAgePortraitsRespectLinkScopes(t *testing.T) {
 		photo.PhotoDate = firstBirthday
 		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
 		AddPersonToPhoto(tx, photo.Id, fx.alice.Id, fx.famA)
-		ReindexPhotoDates(tx, photo.Id)
+		reindexImage(tx, photo.Id)
 		vbolt.TxCommit(tx)
 	})
 

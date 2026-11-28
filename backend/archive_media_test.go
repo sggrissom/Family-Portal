@@ -137,7 +137,7 @@ func TestArchiveVideosShareTheDiskTheyNeed(t *testing.T) {
 			if err := fx.store.Put(context.Background(), second.OriginalKey, bytes.NewReader(upper), int64(len(upper)), second.MimeType); err != nil {
 				t.Fatal(err)
 			}
-			writeImage(tx, &second)
+			saveImage(tx, &second)
 			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, second.Id, fx.familyId)
 		}
 		vbolt.TxCommit(tx)

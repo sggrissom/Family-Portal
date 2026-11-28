@@ -396,8 +396,3 @@ func RegisterVideoTranscriptMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, UpdateVideoTranscript)
 	vbeam.RegisterProc(app, RemoveVideoTranscript)
 }
-
-func deleteVideoTranscriptTx(tx *vbolt.Tx, imageId int) {
-	vbolt.Delete(tx, VideoTranscriptBkt, imageId)
-	deleteSpeechVectorsTx(tx, imageId)
-}

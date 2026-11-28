@@ -32,7 +32,7 @@ func (fx resultsFixture) addFamilyPhoto(t *testing.T, familyId int, mutate func(
 		if mutate != nil {
 			mutate(&image)
 		}
-		writeImage(tx, &image)
+		saveImage(tx, &image)
 		vbolt.TxCommit(tx)
 	})
 	return image

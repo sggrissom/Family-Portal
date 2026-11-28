@@ -75,7 +75,7 @@ func setupPagingFixture(t *testing.T) (pagingFixture, func()) {
 			if i%3 == 0 {
 				addTagToPhoto(tx, i, 50, user.FamilyId)
 			}
-			ReindexPhotoDates(tx, i)
+			reindexImage(tx, i)
 			fx.photos = append(fx.photos, image)
 		}
 
@@ -292,7 +292,7 @@ func TestFamilyTimelineUntaggedPhotos(t *testing.T) {
 		} {
 			vbolt.Write(tx, ImagesBkt, image.Id, &image)
 			vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, image.FamilyId)
-			ReindexPhotoDates(tx, image.Id)
+			reindexImage(tx, image.Id)
 		}
 		addTagToPhoto(tx, 100, 50, familyId)
 		vbolt.TxCommit(tx)
@@ -388,12 +388,12 @@ func TestPhotoDateIndexOrdersPre1970AndFollowsEdits(t *testing.T) {
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		old := Image{Id: 8, FamilyId: fx.kid.FamilyId, PhotoDate: time.Date(1958, 5, 5, 0, 0, 0, 0, time.UTC)}
 		vbolt.Write(tx, ImagesBkt, old.Id, &old)
-		ReindexPhotoDates(tx, old.Id)
+		reindexImage(tx, old.Id)
 
 		moved := GetImageById(tx, 1)
 		moved.PhotoDate = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		vbolt.Write(tx, ImagesBkt, moved.Id, &moved)
-		ReindexPhotoDates(tx, moved.Id)
+		reindexImage(tx, moved.Id)
 
 		vbolt.TxCommit(tx)
 	})

@@ -71,12 +71,6 @@ func anchorTerm(rt RecordTime) []int {
 	return nil
 }
 
-func writeImage(tx *vbolt.Tx, image *Image) {
-	syncRecordTime(tx, &image.RecordTime, &image.PhotoDate)
-	vbolt.Write(tx, ImagesBkt, image.Id, image)
-	vbolt.SetTargetTermsPlain(tx, ImageByAnchorIndex, image.Id, anchorTerm(image.RecordTime))
-}
-
 func anchoredMilestoneIds(tx *vbolt.Tx, personId int) (ids []int) {
 	vbolt.ReadTermTargets(tx, MilestoneByAnchorIndex, personId, &ids, vbolt.Window{})
 	return

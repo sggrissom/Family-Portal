@@ -114,7 +114,7 @@ func seedArchiveFamily(t *testing.T, tx *vbolt.Tx, fx *archiveFixture) {
 		vbolt.Write(tx, PhotoPersonBkt, pp.Id, &pp)
 	}
 	sandcastle.AnalysisVersion = currentAnalysisVersion
-	writeImage(tx, &sandcastle)
+	saveImage(tx, &sandcastle)
 	face := PhotoFace{
 		Id: vbolt.NextIntId(tx, PhotoFaceBkt), PhotoId: sandcastle.Id, FamilyId: familyId,
 		PersonId: ada.Id, Status: FaceConfirmed, Box: FaceBox{Left: 0.1, Top: 0.2, Right: 0.4, Bottom: 0.6},
@@ -213,9 +213,9 @@ func (fx *archiveFixture) seedPhoto(t *testing.T, tx *vbolt.Tx, s *seeder, filen
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { deletePhotoFiles(photo) })
-	writeImage(tx, &photo)
+	saveImage(tx, &photo)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, fx.familyId)
-	ReindexPhotoDates(tx, photo.Id)
+	reindexImage(tx, photo.Id)
 	for _, person := range people {
 		AddPersonToPhoto(tx, photo.Id, person.Id, fx.familyId)
 	}
@@ -239,9 +239,9 @@ func (fx *archiveFixture) seedVideo(t *testing.T, tx *vbolt.Tx, filename string,
 	if err := fx.store.Put(context.Background(), video.OriginalKey, bytes.NewReader(data), int64(len(data)), video.MimeType); err != nil {
 		t.Fatal(err)
 	}
-	writeImage(tx, &video)
+	saveImage(tx, &video)
 	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, video.Id, fx.familyId)
-	ReindexPhotoDates(tx, video.Id)
+	reindexImage(tx, video.Id)
 	for _, person := range people {
 		AddPersonToPhoto(tx, video.Id, person.Id, fx.familyId)
 	}
