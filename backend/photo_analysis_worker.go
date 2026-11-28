@@ -205,7 +205,7 @@ func (aw *photoAnalysisWorker) processAnalysisJob(job PhotoAnalysisJob) error {
 		img = GetImageById(tx, job.ImageId)
 		img.AnalysisStatus = AnalysisDone
 		img.AnalysisVersion = currentAnalysisVersion
-		writeImage(tx, &img)
+		saveImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
 	LogInfo(LogCategoryWorker, "Face analysis finished", map[string]interface{}{
@@ -346,7 +346,7 @@ func (aw *photoAnalysisWorker) setAnalysisStatus(imageId int, status int) error 
 			return
 		}
 		img.AnalysisStatus = status
-		writeImage(tx, &img)
+		saveImage(tx, &img)
 		vbolt.TxCommit(tx)
 	})
 	return updateErr

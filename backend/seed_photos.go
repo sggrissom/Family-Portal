@@ -38,7 +38,6 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 	}
 
 	photo := Image{
-		Id:               vbolt.NextIntId(s.tx, ImagesBkt),
 		FamilyId:         familyId,
 		OwnerUserId:      owner.Id,
 		OriginalFilename: file,
@@ -53,9 +52,7 @@ func (s *seeder) photo(familyId int, owner User, file, title, description string
 		CreatedAt:        s.now,
 		Status:           PhotoProcessing,
 	}
-	writeImage(s.tx, &photo)
-	vbolt.SetTargetSingleTerm(s.tx, ImageByFamilyIndex, photo.Id, familyId)
-	ReindexPhotoDates(s.tx, photo.Id)
+	createImage(s.tx, &photo)
 
 	for _, person := range people {
 		AddPersonToPhoto(s.tx, photo.Id, person.Id, familyId)

@@ -176,7 +176,6 @@ func importVideos(
 		used += reservation
 
 		image := Image{
-			Id:               vbolt.NextIntId(tx, ImagesBkt),
 			FamilyId:         familyId,
 			OwnerUserId:      ownerUserId,
 			OriginalFilename: video.OriginalFilename,
@@ -198,9 +197,7 @@ func importVideos(
 			recordTime, photoDate = unknownRecordTime(SourceLegacy), time.Time{}
 		}
 		image.RecordTime, image.PhotoDate = recordTime, photoDate
-		writeImage(tx, &image)
-		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
-		ReindexPhotoDates(tx, image.Id)
+		createImage(tx, &image)
 		l.photos[video.Id] = image.Id
 
 		importPhotoLinks(tx, image, ExportPhoto{

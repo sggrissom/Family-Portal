@@ -220,7 +220,7 @@ func (w *videoWorker) process(imageId int) error {
 				return
 			}
 			current.OriginalKey = finalKey
-			writeImage(tx, &current)
+			saveImage(tx, &current)
 			vbolt.TxCommit(tx)
 		})
 		if gone {
@@ -342,8 +342,7 @@ func (w *videoWorker) process(imageId int) error {
 		current.VideoCodec = playbackProbe.VideoMime
 		current.AudioCodec = playbackProbe.AudioMime
 		current.DerivedBytes = int(remuxInfo.Size() + posterBytes)
-		writeImage(tx, &current)
-		ReindexPhotoDates(tx, current.Id)
+		saveImage(tx, &current)
 		vbolt.TxCommit(tx)
 		published = true
 	})
@@ -373,7 +372,7 @@ func (w *videoWorker) reject(image Image, start time.Time, reason string, cause 
 		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		writeImage(tx, &current)
+		saveImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	kickMediaJanitor()
@@ -399,7 +398,7 @@ func (w *videoWorker) fail(image Image, start time.Time, reason string, keepOrig
 		current.Status = PhotoFailed
 		current.ProcessingError = reason
 		current.DerivedBytes = 0
-		writeImage(tx, &current)
+		saveImage(tx, &current)
 		vbolt.TxCommit(tx)
 	})
 	detail := reason
@@ -550,7 +549,7 @@ func RetryFailedVideos(ctx *vbeam.Context, req Empty) (resp RetryFailedVideosRes
 		image.Status = PhotoProcessing
 		image.ProcessingError = ""
 		image.DerivedBytes = image.FileSize + videoPosterAllowance
-		writeImage(ctx.Tx, &image)
+		saveImage(ctx.Tx, &image)
 	}
 	vbolt.TxCommit(ctx.Tx)
 	globalVideoWorker.add(ids...)

@@ -183,7 +183,7 @@ func (w *videoAnalysisWorker) analyzeFrames(image Image, sampled sampledFrames) 
 		}
 		previous, _ := GetVideoFrames(tx, image.Id)
 		current.DerivedBytes += thumbs - previous.ThumbBytes
-		writeImage(tx, &current)
+		saveImage(tx, &current)
 		writeVideoFramesTx(tx, &VideoFrames{
 			ImageId: current.Id, FamilyId: current.FamilyId,
 			Model: clipModelId, Version: videoFramesVersion,

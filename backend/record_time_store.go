@@ -104,8 +104,7 @@ func rewriteAnchoredRecords(tx *vbolt.Tx, personId int, edit func(*RecordTime)) 
 			continue
 		}
 		edit(&image.RecordTime)
-		writeImage(tx, &image)
-		ReindexPhotoDates(tx, image.Id)
+		saveImage(tx, &image)
 	}
 }
 
@@ -153,7 +152,7 @@ func BackfillRecordTimes(tx *vbolt.Tx) (milestones, images int) {
 		return true
 	})
 	for _, image := range imageUpdates {
-		writeImage(tx, &image)
+		saveImage(tx, &image)
 	}
 	return len(milestoneUpdates), len(imageUpdates)
 }

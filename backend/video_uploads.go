@@ -408,7 +408,6 @@ func CompleteVideoUpload(ctx *vbeam.Context, req CompleteVideoUploadRequest) (re
 		title = generateDefaultVideoTitle(upload.OriginalFilename, upload.FallbackDate)
 	}
 	image := Image{
-		Id:               vbolt.NextIntId(ctx.Tx, ImagesBkt),
 		FamilyId:         upload.FamilyId,
 		OwnerUserId:      user.Id,
 		OriginalFilename: upload.OriginalFilename,
@@ -423,9 +422,7 @@ func CompleteVideoUpload(ctx *vbeam.Context, req CompleteVideoUploadRequest) (re
 		DerivedBytes:     upload.DeclaredBytes + videoPosterAllowance,
 	}
 	setExactDate(&image.RecordTime, &image.PhotoDate, upload.FallbackDate, SourceMetadata, user.Id)
-	writeImage(ctx.Tx, &image)
-	vbolt.SetTargetSingleTerm(ctx.Tx, ImageByFamilyIndex, image.Id, image.FamilyId)
-	ReindexPhotoDates(ctx.Tx, image.Id)
+	createImage(ctx.Tx, &image)
 	for _, person := range people {
 		AddPersonToPhoto(ctx.Tx, image.Id, person.Id, image.FamilyId)
 	}

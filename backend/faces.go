@@ -253,18 +253,14 @@ func ensurePhotoPersonTx(tx *vbolt.Tx, photo Image, personId int, auto bool) {
 	for _, pp := range GetPhotoPersonsByPhoto(tx, photo.Id) {
 		if pp.PersonId == personId {
 			if pp.AutoTagged && !auto {
-				pp.AutoTagged = false
-				vbolt.Write(tx, PhotoPersonBkt, pp.Id, &pp)
+				setPhotoPersonAutoTagged(tx, pp, false)
 			}
 			return
 		}
 	}
-	id := AddPersonToPhoto(tx, photo.Id, personId, photo.FamilyId)
-	if auto {
-		pp := GetPhotoPersonById(tx, id)
-		pp.AutoTagged = true
-		vbolt.Write(tx, PhotoPersonBkt, pp.Id, &pp)
-	}
+	insertPhotoPerson(tx, &PhotoPerson{
+		PhotoId: photo.Id, PersonId: personId, FamilyId: photo.FamilyId, CreatedAt: time.Now(), AutoTagged: auto,
+	})
 }
 
 func dropAutoTagIfUnbackedTx(tx *vbolt.Tx, photoId int, personId int) {
