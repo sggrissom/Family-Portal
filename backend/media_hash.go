@@ -105,7 +105,7 @@ func hashMedia(db *vbolt.DB, pending []Image) (hashed int) {
 				current := GetImageById(tx, id)
 				if current.Id != 0 && current.ContentHash == "" {
 					current.ContentHash = hash
-					writeImage(tx, &current)
+					saveImage(tx, &current)
 					hashed++
 				}
 			}

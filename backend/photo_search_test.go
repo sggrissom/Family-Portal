@@ -58,7 +58,7 @@ func (fx resultsFixture) tagPerson(t *testing.T, photo Image, person Person) {
 	t.Helper()
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		AddPersonToPhoto(tx, photo.Id, person.Id, photo.FamilyId)
-		ReindexPhotoDates(tx, photo.Id)
+		reindexImage(tx, photo.Id)
 		vbolt.TxCommit(tx)
 	})
 }
@@ -127,8 +127,8 @@ func TestSearchFallsBackToTextWithoutTheDaemon(t *testing.T) {
 		vbolt.Write(tx, ImagesBkt, beach.Id, &beach)
 		other.Title = "Snow day"
 		vbolt.Write(tx, ImagesBkt, other.Id, &other)
-		ReindexPhotoDates(tx, beach.Id)
-		ReindexPhotoDates(tx, other.Id)
+		reindexImage(tx, beach.Id)
+		reindexImage(tx, other.Id)
 		vbolt.TxCommit(tx)
 	})
 

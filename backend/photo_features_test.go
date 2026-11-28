@@ -22,7 +22,7 @@ func (fx resultsFixture) addPhotoAt(t *testing.T, filename string, at time.Time)
 	vbolt.WithWriteTx(fx.db, func(tx *vbolt.Tx) {
 		photo.PhotoDate = at
 		vbolt.Write(tx, ImagesBkt, photo.Id, &photo)
-		ReindexPhotoDates(tx, photo.Id)
+		reindexImage(tx, photo.Id)
 		vbolt.TxCommit(tx)
 	})
 	return photo

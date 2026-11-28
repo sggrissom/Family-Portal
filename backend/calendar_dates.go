@@ -59,15 +59,17 @@ func NormalizeStoredRecordDates(tx *vbolt.Tx) (changed int) {
 	changed += normalizeBucket(tx, AppearanceBkt, func(a *Appearance) bool {
 		return normalizedDay(&a.OccurredAt)
 	})
-	photos := normalizeBucket(tx, ImagesBkt, func(i *Image) bool {
-		return normalizedWallClock(&i.PhotoDate)
+	var photos []Image
+	vbolt.IterateAll(tx, ImagesBkt, func(_ int, image Image) bool {
+		if normalizedWallClock(&image.PhotoDate) {
+			photos = append(photos, image)
+		}
+		return true
 	})
-	changed += photos
-
-	if photos > 0 {
-		BackfillPhotoDateIndexes(tx)
+	for i := range photos {
+		saveImage(tx, &photos[i])
 	}
-	return changed
+	return changed + len(photos)
 }
 
 func normalizeBucket[T any](tx *vbolt.Tx, bucket *vbolt.BucketInfo[int, T], normalize func(*T) bool) int {

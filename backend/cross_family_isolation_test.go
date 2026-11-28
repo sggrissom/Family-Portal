@@ -100,7 +100,7 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		}
 		vbolt.Write(tx, ImagesBkt, fx.photo.Id, &fx.photo)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, fx.photo.Id, fx.ownerFamily)
-		ReindexPhotoDates(tx, fx.photo.Id)
+		reindexImage(tx, fx.photo.Id)
 
 		ownPhoto := Image{
 			Id: vbolt.NextIntId(tx, ImagesBkt), FamilyId: fx.theirFamily,
@@ -109,7 +109,7 @@ func setupIsolationFixture(t *testing.T) (isolationFixture, func()) {
 		}
 		vbolt.Write(tx, ImagesBkt, ownPhoto.Id, &ownPhoto)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, ownPhoto.Id, fx.theirFamily)
-		ReindexPhotoDates(tx, ownPhoto.Id)
+		reindexImage(tx, ownPhoto.Id)
 		fx.ownPhotoId = ownPhoto.Id
 
 		fx.tag = Tag{

@@ -71,12 +71,6 @@ func anchorTerm(rt RecordTime) []int {
 	return nil
 }
 
-func writeImage(tx *vbolt.Tx, image *Image) {
-	syncRecordTime(tx, &image.RecordTime, &image.PhotoDate)
-	vbolt.Write(tx, ImagesBkt, image.Id, image)
-	vbolt.SetTargetTermsPlain(tx, ImageByAnchorIndex, image.Id, anchorTerm(image.RecordTime))
-}
-
 func anchoredMilestoneIds(tx *vbolt.Tx, personId int) (ids []int) {
 	vbolt.ReadTermTargets(tx, MilestoneByAnchorIndex, personId, &ids, vbolt.Window{})
 	return
@@ -104,8 +98,7 @@ func rewriteAnchoredRecords(tx *vbolt.Tx, personId int, edit func(*RecordTime)) 
 			continue
 		}
 		edit(&image.RecordTime)
-		writeImage(tx, &image)
-		ReindexPhotoDates(tx, image.Id)
+		saveImage(tx, &image)
 	}
 }
 
@@ -153,7 +146,7 @@ func BackfillRecordTimes(tx *vbolt.Tx) (milestones, images int) {
 		return true
 	})
 	for _, image := range imageUpdates {
-		writeImage(tx, &image)
+		saveImage(tx, &image)
 	}
 	return len(milestoneUpdates), len(imageUpdates)
 }

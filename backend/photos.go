@@ -477,39 +477,6 @@ func removePhotoTagsByTag(tx *vbolt.Tx, tagId int) {
 	}
 }
 
-func AddPersonToPhoto(tx *vbolt.Tx, photoId int, personId int, familyId int) (photoPersonId int) {
-	photoPerson := PhotoPerson{
-		Id:        vbolt.NextIntId(tx, PhotoPersonBkt),
-		PhotoId:   photoId,
-		PersonId:  personId,
-		FamilyId:  familyId,
-		CreatedAt: time.Now(),
-	}
-
-	vbolt.Write(tx, PhotoPersonBkt, photoPerson.Id, &photoPerson)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, photoId)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, personId)
-	vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, familyId)
-	ReindexPhotoDates(tx, photoId)
-
-	return photoPerson.Id
-}
-
-func RemovePersonFromPhoto(tx *vbolt.Tx, photoId int, personId int) {
-	photoPersons := GetPhotoPersonsByPhoto(tx, photoId)
-
-	for _, photoPerson := range photoPersons {
-		if photoPerson.PersonId == personId {
-			vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
-			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
-			vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
-			vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
-			ReindexPhotoDates(tx, photoId)
-			break
-		}
-	}
-}
-
 func generateUniqueFilename(originalFilename string) (string, error) {
 	ext := filepath.Ext(originalFilename)
 	bytes := make([]byte, 16)
@@ -746,7 +713,6 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		image = Image{
-			Id:               vbolt.NextIntId(tx, ImagesBkt),
 			FamilyId:         familyId,
 			OwnerUserId:      user.Id,
 			OriginalFilename: fileHeader.Filename,
@@ -764,9 +730,7 @@ func uploadPhotoHandler(w http.ResponseWriter, r *http.Request) {
 			Status:           PhotoProcessing,
 		}
 
-		writeImage(tx, &image)
-		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, familyId)
-		ReindexPhotoDates(tx, image.Id)
+		createImage(tx, &image)
 
 		for _, person := range validPersons {
 			AddPersonToPhoto(tx, image.Id, person.Id, familyId)
@@ -832,7 +796,7 @@ func markPhotoFailed(imageId int) {
 			return
 		}
 		image.Status = PhotoFailed
-		writeImage(tx, &image)
+		saveImage(tx, &image)
 		vbolt.TxCommit(tx)
 	})
 }
@@ -1089,8 +1053,7 @@ func UpdatePhoto(ctx *vbeam.Context, req UpdatePhotoRequest) (resp UpdatePhotoRe
 		photo.Title = defaultMediaTitle(photo)
 	}
 
-	writeImage(ctx.Tx, &photo)
-	ReindexPhotoDates(ctx.Tx, photo.Id)
+	saveImage(ctx.Tx, &photo)
 
 	resp.Image = photo
 	resp.Image.TagIds = GetPhotoTagIds(ctx.Tx, photo.Id)
@@ -1132,14 +1095,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	deletePhotoFeaturesTx(tx, photo.Id)
 	deletePhotoEmbeddingTx(tx, photo.Id)
 	deleteVideoFramesTx(tx, photo.Id)
-	deleteVideoTranscriptTx(tx, photo.Id)
 	deletePhotoSuggestionsTx(tx, photo.Id)
-	for _, photoPerson := range GetPhotoPersonsByPhoto(tx, photo.Id) {
-		vbolt.Delete(tx, PhotoPersonBkt, photoPerson.Id)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPhotoIndex, photoPerson.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByPersonIndex, photoPerson.Id, -1)
-		vbolt.SetTargetSingleTerm(tx, PhotoPersonByFamilyIndex, photoPerson.Id, -1)
-	}
 
 	removePhotoFromMilestones(tx, photo.Id)
 	removePhotoFromActivities(tx, photo.Id)
@@ -1147,10 +1103,7 @@ func deletePhotoRecordTx(tx *vbolt.Tx, photo Image) {
 	removeAllPhotoTags(tx, photo.Id)
 	queueVideoObjectDeletionsTx(tx, photo)
 
-	vbolt.Delete(tx, ImagesBkt, photo.Id)
-	vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, photo.Id, -1)
-	vbolt.DeleteTargetTerms(tx, ImageByAnchorIndex, photo.Id)
-	ReindexPhotoDates(tx, photo.Id)
+	deleteImage(tx, photo.Id)
 }
 
 func validateUpdatePhotoRequest(req UpdatePhotoRequest) error {

@@ -61,58 +61,9 @@ func packDateKey(seconds *int64, buf *vpack.Buffer) {
 	*seconds = int64(u ^ (1 << 63))
 }
 
-// ReindexPhotoDates brings the date and word indexes in line with the stored
-// photo and its people. Call it after any write to the photo, its date, or who
-// is in it.
-func ReindexPhotoDates(tx *vbolt.Tx, photoId int) {
-	image := GetImageById(tx, photoId)
-	if image.Id == 0 {
-		vbolt.DeleteTargetTerms(tx, ImageByFamilyDateIndex, photoId)
-		vbolt.DeleteTargetTerms(tx, ImageByPersonDateIndex, photoId)
-		vbolt.DeleteTargetTerms(tx, PhotoWordIndex, photoId)
-		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, photoId)
-		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, photoId)
-		return
-	}
-	words := searchFieldWords(image.Title, image.Description)
-	if image.IsVideo() {
-		words = append(words, transcriptWords(tx, image.Id)...)
-	}
-	vbolt.SetTargetTermsPlain(tx, PhotoWordIndex, image.Id, words)
-
-	seconds := image.PhotoDate.Unix()
-	vbolt.SetTargetSingleTermExt(tx, ImageByFamilyDateIndex, image.Id, seconds, image.FamilyId)
-
-	photoPersons := GetPhotoPersonsByPhoto(tx, image.Id)
-	personIds := make([]int, 0, len(photoPersons))
-	for _, photoPerson := range photoPersons {
-		personIds = append(personIds, photoPerson.PersonId)
-	}
-	vbolt.SetTargetTermsUniform(tx, ImageByPersonDateIndex, image.Id, personIds, seconds)
-
-	if image.RecordTime.ExactDay() {
-		vbolt.DeleteTargetTerms(tx, ImageApproxByFamilyIndex, image.Id)
-		vbolt.DeleteTargetTerms(tx, ImageApproxByPersonIndex, image.Id)
-	} else {
-		vbolt.SetTargetSingleTerm(tx, ImageApproxByFamilyIndex, image.Id, image.FamilyId)
-		vbolt.SetTargetTermsPlain(tx, ImageApproxByPersonIndex, image.Id, personIds)
-	}
-}
-
 func approxPhotoIds(tx *vbolt.Tx, index *vbolt.IndexInfo[int, int, uint16], term int) (ids []int) {
 	vbolt.ReadTermTargets(tx, index, term, &ids, vbolt.Window{})
 	return
-}
-
-func BackfillPhotoDateIndexes(tx *vbolt.Tx) {
-	var ids []int
-	vbolt.IterateAll(tx, ImagesBkt, func(id int, _ Image) bool {
-		ids = append(ids, id)
-		return true
-	})
-	for _, id := range ids {
-		ReindexPhotoDates(tx, id)
-	}
 }
 
 // photoKey is a position in the newest-first order both indexes share.

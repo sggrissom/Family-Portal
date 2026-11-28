@@ -131,7 +131,7 @@ func TestAnchoredRecordsFollowTheirPerson(t *testing.T) {
 		writeMilestone(tx, &m)
 		photo := Image{Id: 1, FamilyId: 1, RecordTime: agePeriod(1, 4)}
 		photo.RecordTime.Meaning = MeaningOccurrence
-		writeImage(tx, &photo)
+		saveImage(tx, &photo)
 
 		child := GetPersonById(tx, 1)
 		child.Birthday = day("2020-07-01")

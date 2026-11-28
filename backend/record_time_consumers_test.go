@@ -32,10 +32,10 @@ func (fx rtConsumerFixture) addPhoto(title string, rt RecordTime, at time.Time) 
 		image = Image{Id: vbolt.NextIntId(tx, ImagesBkt), FamilyId: fx.ownerFamily, OwnerUserId: fx.owner.Id,
 			Title: title, MimeType: "image/jpeg", FilePath: "photos/x.jpg", CreatedAt: time.Now(),
 			PhotoDate: at, RecordTime: rt}
-		writeImage(tx, &image)
+		saveImage(tx, &image)
 		vbolt.SetTargetSingleTerm(tx, ImageByFamilyIndex, image.Id, fx.ownerFamily)
 		AddPersonToPhoto(tx, image.Id, fx.person.Id, fx.ownerFamily)
-		ReindexPhotoDates(tx, image.Id)
+		reindexImage(tx, image.Id)
 		vbolt.TxCommit(tx)
 	})
 	return image
