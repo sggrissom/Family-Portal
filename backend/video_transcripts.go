@@ -94,17 +94,6 @@ func videoNeedsTranscript(tx *vbolt.Tx, image Image) bool {
 	return transcriptOutdated(t, found)
 }
 
-func writeVideoTranscriptTx(tx *vbolt.Tx, t *VideoTranscript) {
-	vbolt.Write(tx, VideoTranscriptBkt, t.ImageId, t)
-	dropStaleSpeechVectorsTx(tx, *t)
-	ReindexPhotoDates(tx, t.ImageId)
-}
-
-func deleteVideoTranscriptTx(tx *vbolt.Tx, imageId int) {
-	vbolt.Delete(tx, VideoTranscriptBkt, imageId)
-	deleteSpeechVectorsTx(tx, imageId)
-}
-
 // transcriptWords are the words search indexes for a video, without filler,
 // which queries drop anyway.
 func transcriptWords(tx *vbolt.Tx, imageId int) []string {
@@ -406,4 +395,9 @@ func RegisterVideoTranscriptMethods(app *vbeam.Application) {
 	vbeam.RegisterProc(app, GetVideoTranscript)
 	vbeam.RegisterProc(app, UpdateVideoTranscript)
 	vbeam.RegisterProc(app, RemoveVideoTranscript)
+}
+
+func deleteVideoTranscriptTx(tx *vbolt.Tx, imageId int) {
+	vbolt.Delete(tx, VideoTranscriptBkt, imageId)
+	deleteSpeechVectorsTx(tx, imageId)
 }
